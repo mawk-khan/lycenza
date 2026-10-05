@@ -61,6 +61,8 @@ class DatabaseRoleVerifier
         'users',
         // OPF.1 (ADR 0067 §12): Transport's fee-selection provenance is insert-only Finance evidence.
         'transport_fee_selections',
+        // OPF.2 (ADR 0067 §28): so is Hostel's.
+        'hostel_fee_selections',
     ];
 
     /**
@@ -74,6 +76,8 @@ class DatabaseRoleVerifier
         'payroll_lwf_annual_charges',
         // OPF.1 (ADR 0067 §12): Transport's fee-selection provenance is insert-only.
         'transport_fee_selections',
+        // OPF.2 (ADR 0067 §28): so is Hostel's.
+        'hostel_fee_selections',
     ];
 
     /**

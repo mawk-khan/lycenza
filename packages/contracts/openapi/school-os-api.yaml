@@ -9935,6 +9935,128 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /schools/{schoolId}/hostels/{hostelId}/fee-head:
+    get:
+      operationId: getHostelFeeHead
+      summary: The FEE fee head a Hostel's default accommodation tier bills through, or null (OPF.2, ADR 0067). Requires hostel.directory.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/HostelId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { allOf: [{ $ref: "#/components/schemas/HostelFeeHead" }], nullable: true } } }
+    put:
+      operationId: setHostelFeeHead
+      summary: Maps a Hostel's default accommodation tier to an active fee head of the School, or clears it with null (OPF.2, ADR 0067 D7). Configuration only -- no amount; FEE structure instalments own every Hostel fee amount. Requires hostel.directory.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/HostelId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fee_head_id]
+              properties:
+                fee_head_id: { type: string, format: uuid, nullable: true }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { allOf: [{ $ref: "#/components/schemas/HostelFeeHead" }], nullable: true } } }
+        "422":
+          description: Not an active fee head of this School (HOSTEL_FEE_HEAD_NOT_SELECTABLE), or invalid input.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/hostel-rooms/{hostelRoomId}/fee-head:
+    get:
+      operationId: getHostelRoomFeeHead
+      summary: The fee head overriding the Hostel default for this room, or null when the room follows its Hostel's default (OPF.2, ADR 0067). Requires hostel.directory.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/HostelRoomId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { allOf: [{ $ref: "#/components/schemas/HostelFeeHead" }], nullable: true } } }
+    put:
+      operationId: setHostelRoomFeeHead
+      summary: Overrides the accommodation tier for one room with an active fee head of the School, or clears the override with null (OPF.2, ADR 0067 D7). Configuration only -- no amount. Requires hostel.directory.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/HostelRoomId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fee_head_id]
+              properties:
+                fee_head_id: { type: string, format: uuid, nullable: true }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { allOf: [{ $ref: "#/components/schemas/HostelFeeHead" }], nullable: true } } }
+        "422":
+          description: Not an active fee head of this School (HOSTEL_FEE_HEAD_NOT_SELECTABLE), or invalid input.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/hostel-residency-assignments/{hostelResidencyAssignmentId}/fee-selections:
+    get:
+      operationId: listHostelResidencyFeeSelections
+      summary: The fee selection intent this residency recorded, one row per academic year (OPF.2, ADR 0067). Requires hostel.residency.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/HostelResidencyAssignmentId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/HostelFeeSelection" } } } }
+
+  /schools/{schoolId}/hostel-fee-selections/carry-forward:
+    post:
+      operationId: carryForwardHostelFeeSelections
+      summary: Records Hostel fee selection intent in a named draft or active academic year for every still-active residency (OPF.2, ADR 0067 D8). Idempotent and race-safe; never assesses money. Requires hostel.residency.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [academic_year_id]
+              properties:
+                academic_year_id: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/HostelFeeCarryForwardResult" } } }
+        "422":
+          description: Not a draft or active academic year of this School (HOSTEL_CARRY_FORWARD_YEAR_INVALID), or invalid input.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /schools/{schoolId}/inventory-items:
     get:
       operationId: listInventoryItems
@@ -15564,6 +15686,37 @@ components:
         code: { type: string, maxLength: 64 }
         status: { type: string, enum: [active, inactive] }
 
+    HostelFeeHead:
+      type: object
+      required: [feeHeadId, code, name]
+      description: The fee head a Hostel accommodation tier (Hostel default or room override) bills through (OPF.2). No amount -- FEE owns it.
+      properties:
+        feeHeadId: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+    HostelFeeSelection:
+      type: object
+      required: [id, academicYearId, feeHeadId, feeOptionalSelectionId, mappingScope, linkReason, selectionOutcome]
+      description: Insert-only provenance of the FEE optional selection a Hostel residency recorded intent for, in one academic year (OPF.2).
+      properties:
+        id: { type: string, format: uuid }
+        academicYearId: { type: string, format: uuid }
+        feeHeadId: { type: string, format: uuid }
+        feeOptionalSelectionId: { type: string, format: uuid }
+        mappingScope: { type: string, enum: [room, hostel] }
+        linkReason: { type: string, enum: [residency, carry_forward] }
+        selectionOutcome: { type: string, enum: [created, reused] }
+        createdAt: { type: string, format: date-time, nullable: true }
+    HostelFeeCarryForwardResult:
+      type: object
+      required: [academicYearId, linked, alreadyLinked, unmapped, ended, notApplicable]
+      properties:
+        academicYearId: { type: string, format: uuid }
+        linked: { type: integer }
+        alreadyLinked: { type: integer }
+        unmapped: { type: integer }
+        ended: { type: integer }
+        notApplicable: { type: integer }
     HostelResidencyAssignment:
       type: object
       required: [id, status, startsOn, student, bed]

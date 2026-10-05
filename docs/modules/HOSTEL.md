@@ -551,8 +551,36 @@ counts with the same rule.
 
 ## Fee integration (OPF, ADR 0067)
 
-Contract only (OPF.0, 2026-10-05); **OPF.2 implements it, and nothing below
-is built yet.**
+**Implemented by OPF.2 (2026-10-05; ADR 0067 §28).** As built:
+- **Tier:** a Hostel default with an optional per-room override (Hostel has
+  no room-category concept). A residency's tier is its bed's room override,
+  else its Hostel's default; beds and rooms never move, so the tier inputs
+  are fixed for the residency.
+- **Tables:** `hostel_fee_heads` (tier → fee head, no amount; one default
+  per Hostel, one override per room, the room pinned to its Hostel by a
+  composite key on the new `hostel_rooms (id, hostel_id, school_id)`
+  constraint) and `hostel_fee_selections` (insert-only provenance, unique
+  per residency × year, database-checked against FEE's selection, recording
+  the matched scope).
+- **Writer:** `HostelFeeSelectionService`, called from
+  `HostelResidencyService::assign()` / `end()` in the same transaction.
+- **Year:** a new residency uses the School's active academic year; FEE
+  picks the line from the Student's enrollment in that year.
+- **Move:** end + assign. The old intent is withdrawn and the new tier
+  recorded; no charge is touched, nothing is prorated.
+- **API:** `GET` / `PUT /hostels/{hostel}/fee-head`, `GET` / `PUT
+  /hostel-rooms/{room}/fee-head` (`hostel.directory.view` / `.manage`),
+  `GET /hostel-residency-assignments/{id}/fee-selections`
+  (`hostel.residency.view`), and `POST /hostel-fee-selections/carry-forward`
+  (`hostel.residency.manage`, idempotent).
+- **Audit:** `hostel.fee_selection.linked` / `.withdrawn` /
+  `.not_applicable` / `.carried_forward`, `hostel.hostel_fee_head.set` /
+  `.cleared` and `hostel.room_fee_head.set` / `.cleared`. No outbox event.
+- **Retention:** the provenance rows are Finance ledger evidence (retained;
+  they keep their residency, so the residency unit reports it
+  `dependency_blocked`); the mapping is Finance configuration.
+
+The contract:
 - **Recurring Hostel fee through selections.**
   - Residency start selects, and residency end withdraws, the Student's
     optional Hostel fee line for the academic year. It goes through the

@@ -30,6 +30,7 @@ class HostelResidencyService
 {
     public function __construct(
         private readonly AuditRecorder $audit,
+        private readonly HostelFeeSelectionService $fees,
     ) {}
 
     /**
@@ -104,6 +105,11 @@ class HostelResidencyService
                     'hostelBedId' => $bed->id,
                 ]);
 
+                // OPF.2 (ADR 0067 §15): fee intent for the active year, in the
+                // same transaction; an unmapped or not-applicable case never
+                // fails the residency.
+                $this->fees->recordForNewResidency($assignment, $actor);
+
                 return $assignment;
             });
         } catch (UniqueConstraintViolationException) {
@@ -137,6 +143,9 @@ class HostelResidencyService
                 'studentId' => $assignment->student_id,
                 'hostelBedId' => $assignment->hostel_bed_id,
             ]);
+
+            // OPF.2: withdraws future fee intent only; no charge is touched.
+            $this->fees->withdrawForEndedResidency($fresh, $actor);
 
             return $fresh;
         });

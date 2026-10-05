@@ -17,12 +17,14 @@ use Illuminate\Support\Facades\DB;
 /**
  * OPF (ADR 0067 §8, D9): the trusted source-selection seam. An operational
  * module's application service -- after checking its OWN capability (for
- * Transport, `transport.assignments.manage`) -- records or withdraws optional
+ * Transport, `transport.assignments.manage`; for Hostel,
+ * `hostel.residency.manage`) -- records or withdraws optional
  * fee selection INTENT for one Student, academic year and fee head.
  *
  * - **Trusted, authorization-neutral** like ChargeService: it performs no
- *   `finance.*` check and grants none. Only source-module application
- *   services call it (architecture-guarded); it has no route.
+ *   `finance.*` check and grants none. Only an explicit allow-list of
+ *   source-module application services calls it
+ *   (OperationalFeeSourceArchitectureGuardTest); it has no route.
  * - **Intent, never money.** It never assesses, cancels, voids or adjusts
  *   anything. Only FEE assessment runs (`finance.fee_assessments.run`) turn
  *   an active selection into a charge.

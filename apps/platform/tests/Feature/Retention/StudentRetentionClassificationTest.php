@@ -82,7 +82,11 @@ class StudentRetentionClassificationTest extends TestCase
             // as the selection keeps its Student.
             'transport_fee_selections' => 'retained, blocks: Finance D8 (OPF fee-selection provenance)',
         ],
-        'hostel_residency_assignments' => [],
+        'hostel_residency_assignments' => [
+            // OPF.2 (ADR 0067 §28): the provenance of the fee selection the residency recorded; it keeps the residency
+            // as the selection keeps its Student.
+            'hostel_fee_selections' => 'retained, blocks: Finance D8 (OPF fee-selection provenance)',
+        ],
         'identity_account_invitations' => [],
     ];
 

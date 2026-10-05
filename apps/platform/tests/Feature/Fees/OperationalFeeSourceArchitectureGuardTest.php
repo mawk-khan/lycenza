@@ -12,8 +12,25 @@ use Tests\TestCase;
  */
 class OperationalFeeSourceArchitectureGuardTest extends TestCase
 {
-    /** OPF source modules implemented so far (OPF.1). */
-    private const SOURCE_MODULES = ['Transport'];
+    /** OPF source modules implemented so far (OPF.1 Transport, OPF.2 Hostel), with their table prefix. */
+    private const SOURCE_MODULES = ['Transport' => 'transport', 'Hostel' => 'hostel'];
+
+    /**
+     * The explicit allow-list of the trusted selection seam's callers: one
+     * reviewed Application service per approved source module. Admissions,
+     * Library or any other caller is a failure until its own OPF slice adds
+     * it here (ADR 0067 §8).
+     */
+    private const APPROVED_SEAM_CALLERS = [
+        'Domain/Hostel/Application/HostelFeeSelectionService.php',
+        'Domain/Transport/Application/TransportFeeSelectionService.php',
+    ];
+
+    /** Each source module's fee-integration tables and their one writer. */
+    private const TABLE_WRITERS = [
+        'Domain/Transport/Application/TransportFeeSelectionService.php' => ['TransportFeeSelection', 'TransportRouteFeeHead'],
+        'Domain/Hostel/Application/HostelFeeSelectionService.php' => ['HostelFeeSelection', 'HostelFeeHead'],
+    ];
 
     /** @return list<string> */
     private function files(string $relativeDirectory): array
@@ -36,16 +53,16 @@ class OperationalFeeSourceArchitectureGuardTest extends TestCase
         foreach (['Domain/Fees', 'Domain/Finance', 'Domain/Payments'] as $domain) {
             foreach ($this->files($domain) as $file) {
                 $code = (string) file_get_contents($file);
-                foreach (self::SOURCE_MODULES as $module) {
+                foreach (self::SOURCE_MODULES as $module => $prefix) {
                     $this->assertStringNotContainsString("App\\Domain\\{$module}\\", $code, "{$file} must not depend on {$module} (ADR 0067 §4)");
+                    $this->assertDoesNotMatchRegularExpression("/'{$prefix}_[a-z_]+'/", $code, "{$file} must not read a {$module} table (ADR 0067 §4)");
                 }
-                $this->assertDoesNotMatchRegularExpression("/'transport_[a-z_]+'/", $code, "{$file} must not read a Transport table (ADR 0067 §4)");
             }
         }
     }
 
     #[Test]
-    public function only_source_module_application_services_call_the_trusted_seam(): void
+    public function only_the_approved_source_module_services_call_the_trusted_seam(): void
     {
         $callers = [];
         foreach ($this->files('') as $file) {
@@ -56,33 +73,52 @@ class OperationalFeeSourceArchitectureGuardTest extends TestCase
                 $callers[] = substr($file, strlen(app_path()) + 1);
             }
         }
+        sort($callers);
 
-        $this->assertSame(['Domain/Transport/Application/TransportFeeSelectionService.php'], $callers, 'the seam has no route and no other caller (ADR 0067 §8)');
+        $this->assertSame(self::APPROVED_SEAM_CALLERS, $callers, 'the seam has no route and only the approved callers (ADR 0067 §8)');
     }
 
     #[Test]
-    public function transport_reaches_fees_only_through_its_application_seam(): void
+    public function the_seam_allow_list_admits_no_module_without_an_opf_slice(): void
     {
-        foreach ($this->files('Domain/Transport') as $file) {
-            $code = (string) file_get_contents($file);
-            $this->assertStringNotContainsString('App\\Domain\\Fees\\Infrastructure', $code, "{$file} must not touch FEE models (ADR 0067 §4)");
-            $this->assertStringNotContainsString('App\\Domain\\Finance\\', $code, $file);
-            $this->assertStringNotContainsString('App\\Domain\\Payments\\', $code, $file);
-            $this->assertDoesNotMatchRegularExpression("/'(charges|fee_optional_selections|fee_assessments)'/", $code, "{$file} must not read FEE tables");
+        foreach (['Admissions', 'Library'] as $excluded) {
+            foreach (self::APPROVED_SEAM_CALLERS as $caller) {
+                $this->assertStringStartsNotWith("Domain/{$excluded}/", $caller, "{$excluded} is not an approved OPF source yet");
+            }
+            foreach ($this->files("Domain/{$excluded}") as $file) {
+                $this->assertStringNotContainsString('FeeSourceSelectionService', (string) file_get_contents($file), "{$file} must not call the seam");
+                $this->assertStringNotContainsString('FeeSelectionSource', (string) file_get_contents($file), "{$file} must not name a selection source");
+            }
         }
     }
 
     #[Test]
-    public function only_the_transport_fee_service_writes_the_transport_fee_tables(): void
+    public function source_modules_reach_fees_only_through_their_application_seam(): void
+    {
+        foreach (array_keys(self::SOURCE_MODULES) as $module) {
+            foreach ($this->files("Domain/{$module}") as $file) {
+                $code = (string) file_get_contents($file);
+                $this->assertStringNotContainsString('App\\Domain\\Fees\\Infrastructure', $code, "{$file} must not touch FEE models (ADR 0067 §4)");
+                $this->assertStringNotContainsString('App\\Domain\\Finance\\', $code, $file);
+                $this->assertStringNotContainsString('App\\Domain\\Payments\\', $code, $file);
+                $this->assertDoesNotMatchRegularExpression("/'(charges|fee_optional_selections|fee_assessments)'/", $code, "{$file} must not read FEE tables");
+            }
+        }
+    }
+
+    #[Test]
+    public function only_each_source_fee_service_writes_its_fee_tables(): void
     {
         foreach ($this->files('') as $file) {
             $relative = substr($file, strlen(app_path()) + 1);
-            if ($relative === 'Domain/Transport/Application/TransportFeeSelectionService.php') {
-                continue;
-            }
             $code = (string) file_get_contents($file);
-            foreach (['TransportFeeSelection::query()->create', 'TransportRouteFeeHead::query()->create'] as $write) {
-                $this->assertStringNotContainsString($write, $code, "{$relative} must not write Transport fee intent");
+            foreach (self::TABLE_WRITERS as $writer => $models) {
+                if ($relative === $writer) {
+                    continue;
+                }
+                foreach ($models as $model) {
+                    $this->assertStringNotContainsString("{$model}::query()->create", $code, "{$relative} must not write {$model}");
+                }
             }
         }
     }

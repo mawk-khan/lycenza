@@ -4560,6 +4560,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/hostels/{hostelId}/fee-head": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The FEE fee head a Hostel's default accommodation tier bills through, or null (OPF.2, ADR 0067). Requires hostel.directory.view. */
+        get: operations["getHostelFeeHead"];
+        /** Maps a Hostel's default accommodation tier to an active fee head of the School, or clears it with null (OPF.2, ADR 0067 D7). Configuration only -- no amount; FEE structure instalments own every Hostel fee amount. Requires hostel.directory.manage. */
+        put: operations["setHostelFeeHead"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/hostel-rooms/{hostelRoomId}/fee-head": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The fee head overriding the Hostel default for this room, or null when the room follows its Hostel's default (OPF.2, ADR 0067). Requires hostel.directory.view. */
+        get: operations["getHostelRoomFeeHead"];
+        /** Overrides the accommodation tier for one room with an active fee head of the School, or clears the override with null (OPF.2, ADR 0067 D7). Configuration only -- no amount. Requires hostel.directory.manage. */
+        put: operations["setHostelRoomFeeHead"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/hostel-residency-assignments/{hostelResidencyAssignmentId}/fee-selections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The fee selection intent this residency recorded, one row per academic year (OPF.2, ADR 0067). Requires hostel.residency.view. */
+        get: operations["listHostelResidencyFeeSelections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/hostel-fee-selections/carry-forward": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Records Hostel fee selection intent in a named draft or active academic year for every still-active residency (OPF.2, ADR 0067 D8). Idempotent and race-safe; never assesses money. Requires hostel.residency.manage. Idempotency-Key required. */
+        post: operations["carryForwardHostelFeeSelections"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/inventory-items": {
         parameters: {
             query?: never;
@@ -7379,6 +7449,41 @@ export interface components {
             code?: string;
             /** @enum {string} */
             status?: "active" | "inactive";
+        };
+        /** @description The fee head a Hostel accommodation tier (Hostel default or room override) bills through (OPF.2). No amount -- FEE owns it. */
+        HostelFeeHead: {
+            /** Format: uuid */
+            feeHeadId: string;
+            code: string;
+            name: string;
+        };
+        /** @description Insert-only provenance of the FEE optional selection a Hostel residency recorded intent for, in one academic year (OPF.2). */
+        HostelFeeSelection: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            academicYearId: string;
+            /** Format: uuid */
+            feeHeadId: string;
+            /** Format: uuid */
+            feeOptionalSelectionId: string;
+            /** @enum {string} */
+            mappingScope: "room" | "hostel";
+            /** @enum {string} */
+            linkReason: "residency" | "carry_forward";
+            /** @enum {string} */
+            selectionOutcome: "created" | "reused";
+            /** Format: date-time */
+            createdAt?: string | null;
+        };
+        HostelFeeCarryForwardResult: {
+            /** Format: uuid */
+            academicYearId: string;
+            linked: number;
+            alreadyLinked: number;
+            unmapped: number;
+            ended: number;
+            notApplicable: number;
         };
         /** @description A Student's Hostel residency assignment to a Bed. At most one assignment per Bed AND one per Student has status=active at a time (database-enforced, docs/modules/HOSTEL.md "ResidencyAssignment lifecycle"). */
         HostelResidencyAssignment: {
@@ -26813,6 +26918,206 @@ export interface operations {
                 };
             };
             /** @description This residency assignment already ended (HOSTEL_RESIDENCY_ALREADY_ENDED). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getHostelFeeHead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                hostelId: components["parameters"]["HostelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["HostelFeeHead"] | null;
+                    };
+                };
+            };
+        };
+    };
+    setHostelFeeHead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                hostelId: components["parameters"]["HostelId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    fee_head_id: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["HostelFeeHead"] | null;
+                    };
+                };
+            };
+            /** @description Not an active fee head of this School (HOSTEL_FEE_HEAD_NOT_SELECTABLE), or invalid input. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getHostelRoomFeeHead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                hostelRoomId: components["parameters"]["HostelRoomId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["HostelFeeHead"] | null;
+                    };
+                };
+            };
+        };
+    };
+    setHostelRoomFeeHead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                hostelRoomId: components["parameters"]["HostelRoomId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    fee_head_id: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["HostelFeeHead"] | null;
+                    };
+                };
+            };
+            /** @description Not an active fee head of this School (HOSTEL_FEE_HEAD_NOT_SELECTABLE), or invalid input. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listHostelResidencyFeeSelections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                hostelResidencyAssignmentId: components["parameters"]["HostelResidencyAssignmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["HostelFeeSelection"][];
+                    };
+                };
+            };
+        };
+    };
+    carryForwardHostelFeeSelections: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    academic_year_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["HostelFeeCarryForwardResult"];
+                    };
+                };
+            };
+            /** @description Not a draft or active academic year of this School (HOSTEL_CARRY_FORWARD_YEAR_INVALID), or invalid input. */
             422: {
                 headers: {
                     [name: string]: unknown;

@@ -3,7 +3,8 @@
 - Status: **Accepted (OPF.0, 2026-10-05).** Owner decisions D1–D9 (§25)
   are adopted. OPF.1–OPF.5 (§26) implement it, each behind its own
   checkpoint. **OPF.1 implemented (2026-10-05, §27):** Transport fee
-  selection through the trusted FEE seam.
+  selection through the trusted FEE seam. **OPF.2 implemented (2026-10-05,
+  §28):** Hostel fee selection through the same seam.
 - Date: 2026-10-05
 - Programme: **OPF — Operational Fee Integrations** (Transport, Hostel,
   Library fines, Admissions fee). Roadmap "Post-foundation product
@@ -562,3 +563,142 @@ clarifications below record how the contract was realized.
 - **Migration:** rollback drops both tables and the guard function;
   reapplying reproduces the identical schema snapshot. `platform:verify-database`
   passes.
+
+## 28. OPF.2 as built (2026-10-05)
+
+**Hostel records FEE optional-selection intent from the residency lifecycle
+through the same trusted seam as Transport. Only Finance assessment runs
+make money. FEE never reads Hostel.** §1–§27 are unchanged. The dated
+clarifications below record how §15 was realized. Deposits, refunds,
+credits, damage charges and proration remain excluded (§3, D2, D5).
+
+### 28.1 The seam (FEE)
+- **`FeeSelectionSource`** admits `hostel` (`FeeSelectionSource::hostel($residencyId)`)
+  beside `transport`. Nothing else in FEE changed: no second, Hostel-specific
+  FEE API, no FEE schema change, the human path untouched.
+- **Clarification of §8, callers:** the seam's callers are an explicit
+  allow-list pinned by `OperationalFeeSourceArchitectureGuardTest`:
+  `TransportFeeSelectionService` and `HostelFeeSelectionService`. Any other
+  caller fails the guard, and Admissions and Library are asserted not to
+  call the seam or name a selection source until their own slice adds them.
+
+### 28.2 Hostel (`2026_12_03_090000_create_hostel_fee_selection_tables`)
+- **Clarification of §15, the tier:** Hostel has no room-category concept,
+  and adding one would be a Hostel schema change beyond this slice. The
+  accommodation tier is therefore a **Hostel default** with an optional
+  **per-room override**. A residency's tier is its bed's room override,
+  else its Hostel's default. Beds and rooms cannot move (no update path
+  changes `hostel_room_id` or `hostel_id`), so a residency's tier inputs are
+  fixed for its lifetime.
+- **`hostel_fee_heads`:** the tier → fee head mapping. **No amount column.**
+  - `hostel_room_id` NULL is the Hostel default, one per Hostel
+    (`hostel_fee_heads_one_per_hostel`, partial unique); a room override is
+    one per room (`hostel_fee_heads_one_per_room`).
+  - Composite foreign keys keep it in one School: `hostels (id, school_id)`,
+    `fee_heads (id, school_id)`, and the room through
+    `hostel_rooms (id, hostel_id, school_id)`, so an override is provably a
+    room of the mapped Hostel. That key is a new unique constraint on
+    `hostel_rooms` (`hostel_rooms_id_hostel_school_unique`); it adds no
+    column, and rollback drops it.
+  - RLS.
+- **`hostel_fee_selections`:** provenance, unique per residency × year
+  (`hostel_fee_selections_one_per_year`). It holds the residency, year, fee
+  head, the FEE selection, `mapping_scope` (`room` / `hostel`), `link_reason`
+  (`residency` / `carry_forward`) and `selection_outcome` (`created` /
+  `reused`).
+  - A BEFORE INSERT trigger proves the selection is the residency Student's
+    selection of that year and head.
+  - It is insert-only for the runtime role (`makeAppendOnly`; the
+    verifier's no-runtime-DELETE and no-runtime-UPDATE lists), with no actor
+    column, as in §27.2.
+- **`HostelFeeSelectionService`** is the only writer, mirroring §27.2:
+  - **`recordForNewResidency()`** runs inside `HostelResidencyService::assign()`'s
+    transaction, after the residency row (with its Student and Bed locked).
+  - **`withdrawForEndedResidency()`** runs inside `end()`'s transaction and
+    withdraws every still-active selection the residency recorded. It never
+    touches a charge.
+  - **`carryForward(School, academicYearId, ?User)`** into a named draft or
+    active year, each active residency locked in its own transaction;
+    linked / already_linked / unmapped / ended / not_applicable counts.
+  - **`setHostelFeeHead()` / `setRoomFeeHead()`** set or clear a mapping
+    (null clears it) under a lock on the Hostel or room row. A change affects
+    only residencies started afterwards and later carry-forwards; recorded
+    intent is never rewritten.
+- **Clarification of §15, a move:** a move is `end()` + `assign()`. The old
+  residency's intent is withdrawn and the new residency's tier is recorded.
+  Charges already assessed stay as they are; the next period is billed for
+  the new tier in full. Nothing is prorated or credited.
+- **"Says so" (§14, as for Transport):** an unmapped tier records and audits
+  nothing. A mapped tier whose intent can't be recorded audits
+  `hostel.fee_selection.not_applicable` with the reason (no active year, no
+  enrollment, no active structure, no optional line, fee head unavailable),
+  and the residency still proceeds.
+- **API**, Hostel capabilities only:
+  - `GET` / `PUT /hostels/{hostel}/fee-head` and
+    `GET` / `PUT /hostel-rooms/{room}/fee-head` (`hostel.directory.view` /
+    `.manage`);
+  - `GET /hostel-residency-assignments/{id}/fee-selections`
+    (`hostel.residency.view`);
+  - `POST /hostel-fee-selections/carry-forward` (`hostel.residency.manage`,
+    `idempotent`).
+
+  These are documented in the OpenAPI contract, with regenerated shared
+  types. There is no Inertia page in OPF.2.
+- **Audit (Hostel):** `hostel.fee_selection.linked` / `.withdrawn` /
+  `.not_applicable` / `.carried_forward`, and `hostel.hostel_fee_head.set` /
+  `.cleared` and `hostel.room_fee_head.set` / `.cleared`, with ids only. FEE
+  audits `fee_optional_selection.created` / `.withdrawn` with source module
+  `hostel`. **No outbox event** (§20).
+
+### 28.3 Retention (as §27.3)
+- `hostel_fee_selections` is **Finance ledger**: E21-RH.7 anchor (its four
+  links tracked), retention delete guard, `RetentionAnchors::TABLES`, and
+  classified in `StudentRetentionClassificationTest` as keeping its residency
+  (`dependency_blocked` for the Hostel residency retention unit), as the
+  selection keeps its Student. It references no `charges` row.
+- `hostel_fee_heads` is **Finance configuration** (tenant lifetime),
+  catalogued only.
+- The forced-RLS table count is 195.
+
+### 28.4 Proof
+- **Behaviour (`HostelFeeSelectionTest`):**
+  - a room override wins over the Hostel default; one selection, with actor
+    and source (`hostel`) recorded, and no charge; a retry records nothing;
+  - the Hostel default applies without an override; an unmapped Hostel
+    records nothing; an existing manual selection is reused;
+  - not-applicable cases (no enrollment, no optional line, no active year)
+    are audited and never fail the residency.
+- **Finance lifecycle:** the run charges the full T1 instalment; ending the
+  residency withdraws intent (idempotently) and never cancels the charge;
+  T2 is not assessed. A move (end + assign into a premium room) withdraws the
+  old tier, records the new one, mutates no charge, and T2 bills the new tier
+  in full.
+- **Carry-forward:** links once with the room scope, a rerun is idempotent,
+  the prior year is untouched, ended residencies are skipped, and closed or
+  foreign years are refused.
+- **Mapping in the database:** no amount; a foreign School's head, a second
+  Hostel default, a second room override, or a room of another Hostel are all
+  refused.
+- **Provenance in the database:** unique, consistency-checked,
+  scope-checked, insert-only, and both its residency and selection foreign
+  keys RESTRICT a delete.
+- **Authorization:**
+  - Hostel managers configure and carry forward;
+  - Hostel viewers and Finance staff without Hostel capabilities can't;
+  - Hostel staff can't create an assessment run or make a human selection;
+  - another School gets 404.
+- **Concurrency (`HostelFeeSelectionConcurrencyTest`)**, real processes with
+  an observed lock wait:
+  - a residency link racing a carry-forward into the same year produces one
+    link and one selection;
+  - two carry-forwards produce one link and one selection;
+  - two Hostel-source seam selections produce one selection, the loser
+    `reused`, with no error.
+- **Architecture:** Fees, Finance and Payments never reference Transport,
+  Hostel or their tables; the seam's callers are exactly the allow-list;
+  Hostel never touches FEE infrastructure, Finance or Payments; each
+  source's fee service is the only writer of its tables. The Transport OPF
+  suites pass unchanged.
+- **Migration:** rollback drops both tables, the guard function and the
+  rooms key; reapplying reproduces the identical schema snapshot.
+  `platform:verify-database` passes.

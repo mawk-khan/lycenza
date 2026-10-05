@@ -14,7 +14,10 @@ final readonly class FeeSelectionSource
 {
     public const TRANSPORT = 'transport';
 
-    public const MODULES = [self::TRANSPORT];
+    /** OPF.2 (ADR 0067 §15): a Hostel residency. */
+    public const HOSTEL = 'hostel';
+
+    public const MODULES = [self::TRANSPORT, self::HOSTEL];
 
     private function __construct(
         public string $module,
@@ -33,6 +36,11 @@ final readonly class FeeSelectionSource
     public static function transport(string $assignmentId): self
     {
         return self::of(self::TRANSPORT, $assignmentId);
+    }
+
+    public static function hostel(string $residencyId): self
+    {
+        return self::of(self::HOSTEL, $residencyId);
     }
 
     /** @return array{sourceModule: string, sourceId: string} */

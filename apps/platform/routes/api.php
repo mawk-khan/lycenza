@@ -37,6 +37,7 @@ use App\Domain\Guardians\Http\Controllers\GuardianController;
 use App\Domain\Guardians\Http\Controllers\StudentGuardianRelationshipController;
 use App\Domain\Hostel\Http\Controllers\HostelBedController;
 use App\Domain\Hostel\Http\Controllers\HostelController;
+use App\Domain\Hostel\Http\Controllers\HostelFeeController;
 use App\Domain\Hostel\Http\Controllers\HostelResidencyAssignmentController;
 use App\Domain\Hostel\Http\Controllers\HostelRoomController;
 use App\Domain\HR\Http\Controllers\DepartmentController;
@@ -1474,6 +1475,27 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/hostel-residency-assignments/{hostelResidencyAssignment}/end', [HostelResidencyAssignmentController::class, 'end'])
                 ->middleware(['capability:hostel.residency.manage', 'throttle:school-api-mutations'])
                 ->name('schools.hostel-residency-assignments.end');
+
+            // --- OPF.2 (ADR 0067 §15): Hostel fee integration. Hostel
+            // capabilities only -- the accommodation tier -> fee head
+            // mapping (Hostel default + room override; no amounts), a
+            // residency's recorded fee intent, and the explicit academic-
+            // year carry-forward (idempotent by construction and by key).
+            Route::get('/hostels/{hostel}/fee-head', [HostelFeeController::class, 'showHostelFeeHead'])
+                ->name('schools.hostels.fee-head.show');
+            Route::put('/hostels/{hostel}/fee-head', [HostelFeeController::class, 'updateHostelFeeHead'])
+                ->middleware(['capability:hostel.directory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.hostels.fee-head.update');
+            Route::get('/hostel-rooms/{hostelRoom}/fee-head', [HostelFeeController::class, 'showRoomFeeHead'])
+                ->name('schools.hostel-rooms.fee-head.show');
+            Route::put('/hostel-rooms/{hostelRoom}/fee-head', [HostelFeeController::class, 'updateRoomFeeHead'])
+                ->middleware(['capability:hostel.directory.manage', 'throttle:school-api-mutations'])
+                ->name('schools.hostel-rooms.fee-head.update');
+            Route::get('/hostel-residency-assignments/{hostelResidencyAssignment}/fee-selections', [HostelFeeController::class, 'residencyFeeSelections'])
+                ->name('schools.hostel-residency-assignments.fee-selections.index');
+            Route::post('/hostel-fee-selections/carry-forward', [HostelFeeController::class, 'carryForward'])
+                ->middleware(['capability:hostel.residency.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.hostel-fee-selections.carry-forward');
 
             // --- Phase 10E: Inventory (Item/Location directory,
             // quantity stock lifecycle). `receive`/`issue`/`transfer`
