@@ -2489,6 +2489,18 @@ parallel, and the email provider tail) — not started.
   - **Tenant destruction is NOT AUTHORIZED.**
 
   E21.2A–E21.2F are closed.
+- **E21-RH — retention privilege hardening (ADR 0066): a pre-production
+  security blocker, open until RH.6.**
+  - RH.1–RH.3 published (dedicated `school_os_retention` identity; HRX on
+    it; authoritative database holds).
+  - **RH.4 (2026-10-05, ADR 0066 §12):** the eleven standalone legacy
+    functions run only as the retention identity, with the platform and
+    School holds enforced in the database. On a feature branch, not
+    merged.
+  - **Open:** RH.5 (Payroll evidence and run, LMS content and assignment)
+    and RH.6 (Finance unit, Student and Guardian core evidence,
+    eligibility-source guards, the LMS runtime DELETE review, holds for
+    PHP direct-delete paths).
 - **E21.4 — User Identity Minimization & Database Safety (2026-10-03):
   published / closed.** `docs/security/E21-RETENTION-DETERMINATION.md`
   §5.11, E21-L1 §10:

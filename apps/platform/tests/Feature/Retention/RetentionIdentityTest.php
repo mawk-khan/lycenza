@@ -11,6 +11,7 @@ use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\PurgesCommittedHrxFixtures;
 use Tests\Feature\Retention\Concerns\CreatesHrxRetentionFixtures;
@@ -161,7 +162,8 @@ class RetentionIdentityTest extends TestCase
         $count = (int) $this->asRetention($w['school'], fn () => DB::selectOne('select retention_expire_leave_employee_evidence(?, ?, ?, true) as n', [$w['school']->id, $leaver['employeeId'], '2018-01-01'])->n);
         $this->assertGreaterThan(0, $count);
         // ... but a legacy destructive function is not.
-        $this->assertStringContainsString('permission denied for function retention_expire_school_audit_events', (string) $this->asRetention($w['school'], fn () => DB::select('select retention_expire_school_audit_events(?, ?, 10, true)', [$w['school']->id, now()->subYears(9)->format('Y-m-d H:i:s')])));
+        // (E21-RH.4 moved the standalone functions to it; a coupled RH.5/RH.6 one stays out of reach.)
+        $this->assertStringContainsString('permission denied for function retention_expire_finance_unit', (string) $this->asRetention($w['school'], fn () => DB::select("select retention_expire_finance_unit(?, '{}', '{}', ?, true)", [$w['school']->id, (string) Str::uuid7()])));
         $this->assertStringContainsString('permission denied for function retention_expire_payroll_employee_evidence', (string) $this->asRetention($w['school'], fn () => DB::select('select retention_expire_payroll_employee_evidence(?, ?, ?, true)', [$w['school']->id, $leaver['employeeId'], '2018-01-01'])));
 
         // The owner / migration login is refused by the exact identity check (no fallback identity).
@@ -234,7 +236,8 @@ class RetentionIdentityTest extends TestCase
 
         $admin = DB::connection(RetentionHolds::MAINTENANCE_CONNECTION);
         $regressions = [
-            'retention_role_functions_exact' => ['GRANT EXECUTE ON FUNCTION retention_expire_school_audit_events(uuid, timestamp, integer, boolean) TO school_os_retention', 'REVOKE EXECUTE ON FUNCTION retention_expire_school_audit_events(uuid, timestamp, integer, boolean) FROM school_os_retention'],
+            // A function outside the approved set (RH.6's Finance unit) -- never one RH.4 legitimately granted.
+            'retention_role_functions_exact' => ['GRANT EXECUTE ON FUNCTION retention_expire_finance_unit(uuid, uuid[], uuid[], uuid, boolean) TO school_os_retention', 'REVOKE EXECUTE ON FUNCTION retention_expire_finance_unit(uuid, uuid[], uuid[], uuid, boolean) FROM school_os_retention'],
             'retention_role_read_only' => ['GRANT DELETE ON leave_requests TO school_os_retention', 'REVOKE DELETE ON leave_requests FROM school_os_retention'],
             'privileged_retention_functions_closed' => ['GRANT EXECUTE ON FUNCTION retention_expire_leave_employee_evidence(uuid, uuid, date, boolean) TO school_os_app', 'REVOKE EXECUTE ON FUNCTION retention_expire_leave_employee_evidence(uuid, uuid, date, boolean) FROM school_os_app'],
             'retention_role_narrow' => ['ALTER ROLE school_os_retention BYPASSRLS', 'ALTER ROLE school_os_retention NOBYPASSRLS'],

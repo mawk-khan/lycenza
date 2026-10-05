@@ -6,11 +6,15 @@ use App\Domain\LMS\Infrastructure\LearningContentSectionAudience;
 use App\Domain\TeachingAssignments\Application\TeachingOwnership;
 use App\Models\School;
 use App\Support\Retention\EmbeddedAuthorityRetention;
+use App\Support\Retention\RetentionExpiry;
+use App\Support\Retention\RetentionHolds;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesLmsOwnershipFixtures;
 use Tests\Concerns\CreatesTeacherDeliveryFixtures;
 use Tests\Concerns\CreatesTeacherLearningContentFixtures;
@@ -28,7 +32,7 @@ use Tests\TestCase;
  */
 class AuthorityHistoryRetentionPruneTest extends TestCase
 {
-    use CreatesLmsOwnershipFixtures, CreatesTeacherDeliveryFixtures, CreatesTeacherLearningContentFixtures, CreatesTeachingAssignmentFixtures, CreatesTenancyFixtures, GroupTestHelpers;
+    use CommitsRetentionFixtures, CreatesLmsOwnershipFixtures, CreatesTeacherDeliveryFixtures, CreatesTeacherLearningContentFixtures, CreatesTeachingAssignmentFixtures, CreatesTenancyFixtures, GroupTestHelpers;
 
     protected function setUp(): void
     {
@@ -154,6 +158,41 @@ class AuthorityHistoryRetentionPruneTest extends TestCase
         // Current teaching authority is unchanged.
         $periods = app(TeachingOwnership::class)->periods($w['school'], $w['employee']->id);
         $this->assertSame([$current->id], array_map(fn ($p) => $p->assignmentId, $periods));
+    }
+
+    #[Test]
+    public function a_held_schools_teaching_history_survives_even_a_direct_call_by_the_retention_login(): void
+    {
+        // E21-RH.4: the hold is enforced inside the function; the 7-year floor and the ends_on rule are unchanged.
+        $w = $this->teachingWorld();
+        $ended = $this->teaching($w, '2014-01-01');
+        $boundary = $this->teaching($w, '2017-06-15');
+        $holds = app(RetentionHolds::class);
+        $direct = fn (string $cutoff, bool $dryRun): mixed => (function () use ($w, $cutoff, $dryRun) {
+            try {
+                return DB::usingConnection(RetentionExpiry::PRIVILEGED_CONNECTION, fn () => $this->inSchool($w['school'], fn () => (int) DB::selectOne(
+                    'SELECT retention_expire_teaching_assignments(?, ?, 500, ?) AS n', [$w['school']->id, $cutoff, $dryRun ? 'true' : 'false'],
+                )->n));
+            } catch (QueryException $e) {
+                return $e->getMessage();
+            }
+        })();
+
+        $holds->place($w['school']->id, 'litigation', 'TA-HOLD-1');
+        $this->assertStringContainsString('retention_hold', (string) $direct('2017-06-15', false));
+        $this->assertSame(1, $direct('2017-06-15', true), 'a dry run only counts');
+        $this->artisan('platform:authority-history-prune')->assertSuccessful();
+        $this->assertTrue($this->teachingExists($w['school'], $ended), 'held: kept');
+
+        $holds->place(null, 'regulatory_inquiry', 'TA-HOLD-2');
+        $holds->release($w['school']->id, 'matter_concluded', 'TA-HOLD-1');
+        $this->assertStringContainsString('retention_hold', (string) $direct('2017-06-15', false), 'the platform hold blocks School history too');
+
+        $holds->release(null, 'inquiry_closed', 'TA-HOLD-2');
+        $this->assertStringContainsString('retention_floor', (string) $direct('2023-01-01', false), 'the inline 7-year floor is unchanged');
+        $this->assertSame(1, $direct('2017-06-15', false));
+        $this->assertFalse($this->teachingExists($w['school'], $ended));
+        $this->assertTrue($this->teachingExists($w['school'], $boundary), 'ends_on < cutoff, strictly');
     }
 
     #[Test]

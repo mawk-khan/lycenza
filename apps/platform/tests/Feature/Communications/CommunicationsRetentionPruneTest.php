@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
@@ -26,7 +27,7 @@ use Tests\TestCase;
  */
 class CommunicationsRetentionPruneTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CommitsRetentionFixtures, CreatesCommunicationFixtures, CreatesTenancyFixtures;
 
     private string $disk;
 

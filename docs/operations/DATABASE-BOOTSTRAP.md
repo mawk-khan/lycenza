@@ -46,6 +46,11 @@ stricter for both connections; the application refuses to boot otherwise).
    - Without the retention credential, destructive retention units refuse
      (counted as errors, nothing deleted). They never fall back to the
      migration or runtime login.
+   - Since E21-RH.4 (ADR 0066 §12) that includes the standalone expiries of
+     `platform:audit-prune`, `platform:authority-history-prune`,
+     `platform:email-suppressions-prune` and the policy-decision step of
+     `platform:communications-prune`. Each reports one error per category
+     and deletes nothing there.
    - Retention holds are database state (E21-RH.3, ADR 0066 §6). See
      [RETENTION-HOLDS.md](RETENTION-HOLDS.md) for placing, releasing and
      reconciling them; configuration removal never releases one.

@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
@@ -31,7 +32,7 @@ use Tests\TestCase;
  */
 class ResidualRetentionTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CommitsRetentionFixtures, CreatesTenancyFixtures;
 
     private string $disk;
 
@@ -347,12 +348,16 @@ class ResidualRetentionTest extends TestCase
         $this->assertSame(1, DB::table('api_client_credentials')->where('id', $foreign)->count(), 'another School is untouched');
         $this->assertSame(4, DB::table('api_clients')->where('school_id', $school->id)->count(), 'API clients (configuration) stay');
 
-        // The runtime role cannot delete a credential, the floor refuses a young cutoff, and only the tenant's own rows are reachable.
+        // The runtime role cannot delete a credential nor (E21-RH.4) run the function; as the retention
+        // identity the floor refuses a young cutoff, and only the tenant's own rows are reachable.
         $this->in($school, function () use ($school, $recent): void {
             $this->refused(fn () => DB::table('api_client_credentials')->where('id', $recent)->delete(), 'permission denied');
-            $this->refused(fn () => DB::select('select retention_expire_api_client_credentials(?, ?, 10, false)', [$school->id, '2025-01-01 00:00:00']), 'retention_floor');
+            $this->refused(fn () => DB::select('select retention_expire_api_client_credentials(?, ?, 10, false)', [$school->id, '2018-01-01 00:00:00']), 'permission denied for function');
         });
-        $this->in($other, fn () => $this->refused(fn () => DB::select('select retention_expire_api_client_credentials(?, ?, 10, false)', [$school->id, '2018-01-01 00:00:00']), 'retention_tenant'));
+        DB::usingConnection(RetentionExpiry::PRIVILEGED_CONNECTION, function () use ($school, $other): void {
+            $this->in($school, fn () => $this->refused(fn () => DB::select('select retention_expire_api_client_credentials(?, ?, 10, false)', [$school->id, '2025-01-01 00:00:00']), 'retention_floor'));
+            $this->in($other, fn () => $this->refused(fn () => DB::select('select retention_expire_api_client_credentials(?, ?, 10, false)', [$school->id, '2018-01-01 00:00:00']), 'retention_tenant'));
+        });
 
         // Held: counted only.
         config(['retention.hold_school_ids' => [$other->id]]);

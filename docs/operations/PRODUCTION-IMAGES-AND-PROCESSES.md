@@ -80,7 +80,8 @@ health endpoints and the **secret groups** it receives. Guarded by
   `release` and `operator-console` do;
 - only `scheduler` and `operator-console` receive `database_retention`
   (E21-RH.2, ADR 0066): the scheduler runs retention without the migration
-  credential;
+  credential (since E21-RH.4, also the audit, authority-history,
+  email-suppression and communications policy-decision expiries);
 - every secret-shaped setting the configuration reads is in a secret group;
 - every recovery sweep (`RecoverQueuedWork::SOURCES`) is scheduled.
 

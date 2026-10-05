@@ -21,6 +21,8 @@ use Tests\Support\Concurrency\HeldTransaction;
 //   php hrx-retention-op.php correct <schoolId> <recordId> <version> <userId> (a late attendance correction)
 //   php hrx-retention-op.php place-platform   <schoolId>  (E21-RH.3: place the platform hold, maintenance connection)
 //   php hrx-retention-op.php release-platform <schoolId>  (E21-RH.3: release it)
+//   php hrx-retention-op.php audit-prune      <schoolId>  (E21-RH.4: the standalone School-audit expiry, as the retention identity)
+//   php hrx-retention-op.php place-school     <schoolId>  (E21-RH.4: place that School's hold, maintenance connection)
 
 require __DIR__.'/../../vendor/autoload.php';
 
@@ -52,6 +54,14 @@ try {
             $app->make(RetentionHolds::class)->release(null, 'inquiry_closed', 'RACE-1');
 
             return 'released';
+        })),
+        'audit-prune' => DB::usingConnection(RetentionExpiry::PRIVILEGED_CONNECTION, fn () => $held(function () use ($app, $school): string {
+            $r = $app->make(RetentionExpiry::class)->forSchool(RetentionExpiry::SCHOOL_AUDIT, $school, CarbonImmutable::now()->subYears(7), 500, false);
+
+            return "audit:deleted:{$r['deleted']} held:{$r['held']}";
+        })),
+        'place-school' => DB::usingConnection(RetentionHolds::MAINTENANCE_CONNECTION, fn () => $held(function () use ($app, $school): string {
+            return $app->make(RetentionHolds::class)->place($school->id, 'litigation', 'RACE-2')['created'] ? 'placed:created' : 'placed:existing';
         })),
         'correct' => $held(function () use ($app, $school, $args): string {
             $app->make(StaffAttendanceService::class)->correct($school, $args[1], (int) $args[2], 'present', 'present', 'late_information', User::query()->findOrFail($args[3]));

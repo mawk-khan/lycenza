@@ -6,7 +6,10 @@
   **E21-RH.2 implemented (2026-10-04, §10):** the dedicated retention
   identity exists, and HRX runs on it. **E21-RH.3 implemented (2026-10-04,
   §11):** PostgreSQL retention holds are authoritative, and the platform
-  hold is global (amends §6.3).
+  hold is global (amends §6.3). **E21-RH.4 implemented (2026-10-05,
+  §12):** the eleven standalone legacy functions run only as the retention
+  identity and enforce holds in the database; the eight coupled ones are
+  unchanged (RH.5/RH.6).
 - Date: 2026-10-04
 - Programme: **E21-RH — retention privilege hardening.** A
   pre-production security blocker, separate from HRX (closed at
@@ -399,3 +402,170 @@ Release requires an explicit, audited operator action.**
   `RETENTION_READ_FUNCTIONS`.
 - **Unchanged.** The 18 legacy functions (owners, ACLs, bodies) and their
   PHP-only hold behaviour, which is still an RH.4–RH.6 blocker.
+  *(E21-RH.4, §12: eleven of them are now hardened; eight remain.)*
+
+## 12. E21-RH.4 as built (2026-10-05)
+**The eleven standalone legacy functions run only as the retention
+identity and refuse an active hold inside PostgreSQL. The eight coupled
+functions are unchanged. E21-RH remains a pre-production blocker.**
+
+### 12.1 Re-audit and inclusion
+The 18 legacy functions were re-inventoried from the installed database
+and the source tree. A function was included only when its retention
+operation is genuinely standalone:
+- no PHP transaction must span it and runtime-role writes;
+- no lock on the runtime connection must stay held across it;
+- no PHP mutation must be atomic with it;
+- no shared orchestration needs the same connection;
+- it already performs the destructive mutation itself.
+
+| Function | Scope | Caller | Slice | Reason |
+|---|---|---|---|---|
+| `retention_expire_school_audit_events` | School | `platform:audit-prune` | **RH.4** | bulk autocommit batches, `SKIP LOCKED` only |
+| `retention_expire_membership_role_assignments` | School | `platform:authority-history-prune` | **RH.4** | same |
+| `retention_expire_teaching_assignments` | School | `platform:authority-history-prune` | **RH.4** | same; inline 7-year floor and `ends_on < cutoff` kept |
+| `retention_expire_school_elevations` | School | `platform:authority-history-prune` | **RH.4** | same; the audit-reference dependency is in the function |
+| `retention_expire_communication_delivery_policy_decisions` | School | `platform:communications-prune` | **RH.4** | called after, never inside, the deliveries' own transactions |
+| `retention_expire_api_client_credentials` | School | `platform:authority-history-prune` | **RH.4** | same as above |
+| `retention_expire_platform_audit_events` | School-less | `platform:audit-prune` | **RH.4** | same |
+| `retention_expire_released_email_suppressions` | School-less | `platform:email-suppressions-prune` | **RH.4** | same |
+| `retention_expire_group_role_assignments` | School-less | `platform:authority-history-prune` | **RH.4** | same; the elevation dependency is in the function |
+| `retention_expire_platform_role_assignments` | School-less | `platform:authority-history-prune` | **RH.4** | same |
+| `retention_expire_erasure_cases` | School-less | `platform:audit-prune` | **RH.4** | same (see §12.6) |
+| `retention_expire_payroll_employee_evidence` | School | Payroll evidence unit | RH.5 | one Employee unit; its locks and transaction belong to the HR/Payroll orchestration |
+| `retention_expire_payroll_run` | School | Payroll run unit | RH.5 | row lock on `payroll_runs` taken by PHP in the same transaction |
+| `retention_expire_learning_content` | School | `LmsResourceRetention` | RH.5 | PHP row lock and Document purge in the same unit transaction |
+| `retention_expire_assignment` | School | `LmsResourceRetention` | RH.5 | same |
+| `retention_expire_finance_unit` | School | Finance retention | RH.6 | REPEATABLE READ transaction, period-maintenance advisory lock, before/after accounting readings |
+| `retention_expire_student_processing_authorizations` | School | Student core purge | RH.6 | runtime DELETEs of the Student and its enrollments in the same transaction |
+| `retention_expire_student_consent_events` | School | Student core participant | RH.6 | same Student transaction; runtime DELETE of preferences |
+| `retention_expire_guardian_consent_events` | School | Guardian purge participant | RH.6 | Guardian transaction; runtime DELETE of preferences |
+
+The re-audit confirmed the E21-RH.1 classification; nothing moved between
+slices.
+
+### 12.2 Database
+Migration `2026_11_28_090000_harden_standalone_retention_functions`:
+- **`retention_assert_retention_identity()`** (new): invoker, `STABLE`,
+  search path pinned, owner-executable only (in
+  `HOLD_MAINTENANCE_FUNCTIONS`). It refuses unless `session_user =
+  'school_os_retention'` (`retention_privilege`), the same exact-login
+  rule as HRX (§10). Neither `current_user`, role membership,
+  `app.current_school_id` nor any client setting can satisfy it.
+- **Prologue.** Injected right after `BEGIN` in each of the eleven,
+  before every existing check:
+  - `PERFORM public.retention_assert_retention_identity();`
+  - for a destructive call only (`NOT p_dry_run`),
+    `retention_assert_not_held(p_school_id)` for the six School-scoped
+    functions and `retention_assert_not_held(NULL)` for the five
+    School-less ones. The RH.3 helper is reused; no hold SQL is
+    duplicated.
+- **A dry run still counts under a hold.** It deletes nothing, and the
+  PHP path needs the count to report rows as `held`.
+- **Everything else is byte for byte.** The body diff is pure additions:
+  floors, cutoffs, `retention_assert_tenant`, every `school_id =
+  p_school_id` predicate, dependency checks, the `5000` batch cap and
+  `FOR UPDATE SKIP LOCKED`.
+- **ACLs** (owner unchanged, SECURITY DEFINER, `search_path = pg_catalog,
+  pg_temp`):
+
+  | | Before | After |
+  |---|---|---|
+  | owner | EXECUTE | EXECUTE (refused by the prologue: not the retention login) |
+  | `school_os_app` | EXECUTE | **none** |
+  | `school_os_retention` | none | **EXECUTE** |
+  | PUBLIC | none | none |
+
+- **No new table privilege.** The retention identity gains no SELECT,
+  UPDATE or DELETE. Every read and write is inside the definers.
+
+### 12.3 Holds
+- **School-scoped:** refuses while a platform hold OR a hold of
+  `p_school_id` is active. Another School stays processable.
+- **School-less:** refuses while a platform hold is active. A School hold
+  does not hold School-less rows (§6.3).
+- Release is explicit (RH.3), and a released scope is processed again,
+  subject to every floor and dependency.
+- **Serialization** is the RH.3 hold lock: each batch statement takes it
+  shared until it commits. A placement in flight makes the waiting batch
+  refuse; a batch already past the check finishes before the placement
+  lands.
+
+### 12.4 Application
+- `RetentionExpiry::forSchool()` / `forPlatform()` run the whole category
+  (count and batches) on `pgsql_retention`. The School's tenant context is
+  set on that connection. They first prove the connection authenticates
+  as exactly `school_os_retention`, unelevated.
+- With an unset, unreachable or mismatched credential, nothing runs. It
+  logs `retention.unit_refused` with a closed reason and counts one
+  `error`. It never falls back to `pgsql` or `pgsql_admin`. The
+  non-destructive phases of the same command still run.
+- A hold placed after the PHP check (between the count and a batch) is
+  refused by the database. The run reports the remaining rows as `held`.
+- **PHP checks kept as defence in depth:** `RetentionHolds::isHeld()` /
+  `platformHeld()` (configured OR database hold, fail closed) still skip
+  a held scope before any destructive call. They also keep the
+  unreconciled-configuration reading of §6.3. The database is
+  authoritative.
+- **Attribution:** each run with any outcome logs
+  `retention.standalone_expired`: category, School (null when
+  School-less), `dry_run`, counts, and `identity` = the maintenance login.
+  That names the execution identity, never a person. The existing command
+  logs and metrics are unchanged.
+- **Credential:** these commands now need the `database_retention`
+  credential (scheduler, operator console): `platform:audit-prune`,
+  `platform:authority-history-prune`, `platform:email-suppressions-prune`,
+  and the policy-decision step of `platform:communications-prune`.
+
+### 12.5 Verifier
+- New `STANDALONE_RETENTION_FUNCTIONS` (the eleven).
+- `RETENTION_FUNCTIONS` (runtime-executable, temporary) now holds only the
+  eight coupled functions.
+- `privileged_retention_functions_closed` covers HRX plus the eleven:
+  - definer, pinned search path, not owned by the runtime role;
+  - no runtime or PUBLIC EXECUTE;
+  - for the eleven, the identity and hold prologue present.
+- `retention_role_functions_exact` = HRX + the eleven +
+  `retention_hold_active_scopes`.
+- `retention_functions_narrow` = exactly the eight still runtime-executable.
+- `retention_role_read_only` is unchanged: no destructive table grant.
+
+### 12.6 `erasure_cases`
+- Migrated for EXECUTE and the platform hold only.
+- `erasure_cases` is a platform compliance record (E21 §5.5).
+  School-scope cases are expired by the School-less function, so a School
+  hold does not hold them; only the platform hold does. This is unchanged
+  from before RH.4 and is recorded for the RH.6 review.
+- **Eligibility forgery stays open (RH.6):** the runtime role can still
+  UPDATE `status`, `decided_at` and `completed_at`, the columns the
+  function's eligibility reads (`status IN ('denied','completed')` and
+  `COALESCE(completed_at, decided_at) < cutoff`). The function's own
+  7-year floor and the hold still apply.
+
+### 12.7 Rollback
+- `down()` removes exactly the injected prologue (refusing if it is not
+  present exactly once), revokes the retention EXECUTE and drops the
+  identity helper.
+- It deliberately does **not** re-grant EXECUTE to the runtime role (the
+  RH.1 convention: an unsafe privilege is never restored by a rollback).
+  After a rollback only the owner holds EXECUTE, so these categories fail
+  closed until migrated again.
+- Verified on the DDEV test database:
+  - migrate, then rollback: bodies equal the RH.3 bodies byte for byte
+    (md5 of `pg_get_functiondef`), and the eleven are owner-only;
+  - migrate again: ACLs, bodies, ownership and settings equal the first
+    migration;
+  - `platform:verify-database` passes.
+
+### 12.8 Still open
+- **RH.5:** Payroll employee evidence, payroll run, learning content,
+  assignment.
+- **RH.6:**
+  - Finance unit, Student processing authorizations, Student consent and
+    Guardian consent events;
+  - the eligibility-source guards (`employment_records` separation, the
+    `erasure_cases` columns of §12.6);
+  - the LMS runtime DELETE review;
+  - the decision on database holds for PHP direct-delete retention paths.
+- E21-RH stays a pre-production blocker until RH.6 closes. HRX closure is
+  unchanged.

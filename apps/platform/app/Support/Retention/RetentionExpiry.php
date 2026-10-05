@@ -19,8 +19,14 @@ use Symfony\Component\Uid\UuidV7;
  * functions (migration 2026_11_06_090000; architecture guard).
  *
  * The functions are SECURITY DEFINER with fixed tables and predicates, an
- * age floor and a tenant tie. The runtime role holds EXECUTE on them, but
- * no DELETE on the ledgers.
+ * age floor and a tenant tie. The runtime role holds no DELETE on the
+ * ledgers. E21-RH.2-RH.4 (ADR 0066): the HRX pair and the eleven standalone
+ * bulk functions (SCHOOL_FUNCTIONS, PLATFORM_FUNCTIONS) are executable only
+ * by the dedicated retention identity, on PRIVILEGED_CONNECTION, and refuse
+ * any other session user and (destructively) any active retention hold
+ * themselves. The coupled ones (Finance unit, Student/Guardian core
+ * evidence, LMS, Payroll) still run on the runtime connection until
+ * E21-RH.5/RH.6.
  *
  * This class adds the application half:
  * - a closed category map (no caller-supplied table, function or SQL);
@@ -117,13 +123,14 @@ final class RetentionExpiry
     {
         $function = self::SCHOOL_FUNCTIONS[$category] ?? throw new InvalidArgumentException("Not a School-scoped retention category: {$category}");
 
-        return $this->context->withSchool($school, fn () => $this->run(
+        // E21-RH.4: the whole run as the retention identity (the runtime role has no EXECUTE).
+        return $this->asRetentionIdentity($category, $school->id, $dryRun, fn (): array => $this->context->withSchool($school, fn () => $this->run(
             $category,
             fn (int $limit, bool $count) => $this->call($function, [$school->id, $this->cutoffFor($category, $cutoff), $limit, $count]),
             $batch,
             $dryRun,
             $this->holds->isHeld($school->id),
-        ));
+        )));
     }
 
     /**
@@ -136,13 +143,46 @@ final class RetentionExpiry
     {
         $function = self::PLATFORM_FUNCTIONS[$category] ?? throw new InvalidArgumentException("Not a platform retention category: {$category}");
 
-        return $this->run(
+        // E21-RH.4: the whole run as the retention identity (the runtime role has no EXECUTE).
+        return $this->asRetentionIdentity($category, null, $dryRun, fn (): array => $this->run(
             $category,
             fn (int $limit, bool $count) => $this->call($function, [$this->cutoffFor($category, $cutoff), $limit, $count]),
             $batch,
             $dryRun,
             $this->holds->platformHeld(),
-        );
+        ));
+    }
+
+    /**
+     * E21-RH.4: runs a standalone bulk expiry entirely on the dedicated
+     * retention connection after proving it authenticates as exactly the
+     * retention identity. Otherwise nothing runs (logged, one `error`
+     * metric) and no other connection is ever tried.
+     *
+     * A run with any outcome is logged with its category, School (null:
+     * School-less), counts and the execution identity -- the maintenance
+     * login, never a person (ADR 0066 §4.4).
+     *
+     * @param  callable(): array{eligible: int, deleted: int, held: int}  $work
+     * @return array{eligible: int, deleted: int, held: int}
+     */
+    private function asRetentionIdentity(string $category, ?string $schoolId, bool $dryRun, callable $work): array
+    {
+        try {
+            $this->assertRetentionIdentity();
+        } catch (RetentionRefused $e) {
+            Log::warning('retention.unit_refused', ['category' => $category, 'reason' => $e->reason]);
+            $this->metrics->counter('lycenza_retention_rows_total', 1, ['operation' => RetentionMetrics::family($category), 'outcome' => 'error']);
+
+            return ['eligible' => 0, 'deleted' => 0, 'held' => 0];
+        }
+
+        $result = DB::usingConnection(self::PRIVILEGED_CONNECTION, $work);
+        if (array_sum($result) > 0) {
+            Log::info('retention.standalone_expired', ['category' => $category, 'school_id' => $schoolId, 'identity' => self::RETENTION_ROLE, 'dry_run' => $dryRun, ...$result]);
+        }
+
+        return $result;
     }
 
     /**
@@ -412,10 +452,18 @@ final class RetentionExpiry
         if ($held) {
             $result['held'] = $eligible;
         } elseif (! $dryRun) {
-            do {
-                $deleted = $expire($batch, false);
-                $result['deleted'] += $deleted;
-            } while ($deleted === $batch);
+            try {
+                do {
+                    $deleted = $expire($batch, false);
+                    $result['deleted'] += $deleted;
+                } while ($deleted === $batch);
+            } catch (QueryException $e) {
+                // E21-RH.4: the database refused on an authoritative hold (placed after the PHP check): keep the rest.
+                if (! str_contains($e->getMessage(), self::REFUSED_HELD)) {
+                    throw $e;
+                }
+                $result['held'] = max(0, $eligible - $result['deleted']);
+            }
         }
 
         foreach ($result as $outcome => $count) {

@@ -12,6 +12,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
@@ -23,7 +24,7 @@ use Tests\TestCase;
  */
 class AuditRetentionPruneTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CommitsRetentionFixtures, CreatesTenancyFixtures;
 
     protected function setUp(): void
     {

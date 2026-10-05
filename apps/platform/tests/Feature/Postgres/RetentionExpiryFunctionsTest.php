@@ -4,6 +4,7 @@ namespace Tests\Feature\Postgres;
 
 use App\Support\Operations\CheckResult;
 use App\Support\Operations\DatabaseRoleVerifier;
+use App\Support\Retention\RetentionExpiry;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -44,12 +45,40 @@ class RetentionExpiryFunctionsTest extends TestCase
         }
     }
 
+    /** E21-RH.4: the standalone functions run only as the retention identity, on its own connection. */
+    private function asRetention(callable $statements): void
+    {
+        DB::usingConnection(RetentionExpiry::PRIVILEGED_CONNECTION, $statements);
+    }
+
+    #[Test]
+    public function the_runtime_role_cannot_execute_any_standalone_retention_function(): void
+    {
+        $school = $this->createSchool();
+        $old = now('UTC')->subYears(10)->format('Y-m-d H:i:s');
+
+        app(TenantContext::class)->withSchool($school, function () use ($school, $old) {
+            foreach (['school_audit_events', 'membership_role_assignments', 'school_elevations', 'communication_delivery_policy_decisions', 'api_client_credentials'] as $f) {
+                $this->refused(fn () => DB::select("select retention_expire_{$f}(?, ?, 10, true)", [$school->id, $old]), 'permission denied for function');
+            }
+            $this->refused(fn () => DB::select('select retention_expire_teaching_assignments(?, ?, 10, true)', [$school->id, '2010-01-01']), 'permission denied for function');
+        });
+        foreach (['platform_audit_events', 'released_email_suppressions', 'group_role_assignments', 'platform_role_assignments', 'erasure_cases'] as $f) {
+            $this->refused(fn () => DB::select("select retention_expire_{$f}(?, 10, true)", [$old]), 'permission denied for function');
+        }
+    }
+
     #[Test]
     public function no_caller_can_expire_a_row_before_its_adopted_period(): void
     {
         $school = $this->createSchool();
         $young = now('UTC')->subYears(7)->addDay()->format('Y-m-d H:i:s');
 
+        $this->asRetention(fn () => $this->expectFloors($school, $young));
+    }
+
+    private function expectFloors($school, string $young): void
+    {
         app(TenantContext::class)->withSchool($school, function () use ($school, $young) {
             $this->refused(fn () => DB::select('select retention_expire_school_audit_events(?, ?, 10, false)', [$school->id, $young]), 'retention_floor');
             $this->refused(fn () => DB::select('select retention_expire_membership_role_assignments(?, ?, 10, false)', [$school->id, $young]), 'retention_floor');
@@ -75,6 +104,11 @@ class RetentionExpiryFunctionsTest extends TestCase
     {
         $a = $this->createSchool();
         $b = $this->createSchool();
+        $this->asRetention(fn () => $this->expectTenants($a, $b));
+    }
+
+    private function expectTenants($a, $b): void
+    {
         $old = now('UTC')->subYears(10)->format('Y-m-d H:i:s');
 
         // No context, or another School's context: refused before anything runs.

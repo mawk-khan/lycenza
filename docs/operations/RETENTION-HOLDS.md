@@ -10,7 +10,12 @@ action.
 - **Platform hold:** no destructive retention anywhere -- every School and
   every School-less record.
 - **HRX functions** (Leave, Staff Attendance) refuse in the database
-  itself.
+  itself, and so do (E21-RH.4) the eleven standalone expiries: School and
+  platform audit, School/Group/platform role grants, teaching assignments,
+  School elevations, delivery policy decisions, API credentials, released
+  suppressions and erasure cases. A School hold does not hold the
+  School-less ones (erasure cases included); the platform hold holds them
+  all.
 - **Legacy retention commands** count a held School (or, under a platform
   hold, everything) as `held` and delete nothing.
 - **Fail closed:** if the hold state cannot be read, everything counts as
@@ -66,9 +71,10 @@ the scheduler or a web request.
   **add-only** input. After changing them, run
   `platform:retention-holds-reconcile`, which places what they name and
   releases nothing.
-- **Until you reconcile**, destructive runs of the migrated functions
-  refuse (`retention_hold_state_stale`), and legacy commands still treat
-  the configured value as held.
+- **Until you reconcile**, destructive HRX runs refuse
+  (`retention_hold_state_stale`), and the other retention commands
+  (including the E21-RH.4 standalone expiries) still treat the configured
+  value as held.
 - **Removing a value from configuration** keeps the database hold active
   until `platform:retention-hold-release`.
 - **A configured id that is not an existing School** makes the reconcile

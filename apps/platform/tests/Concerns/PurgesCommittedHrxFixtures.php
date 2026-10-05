@@ -6,22 +6,25 @@ use App\Models\School;
 use Illuminate\Support\Facades\DB;
 
 /**
- * HRX.6: hermetic cleanup for the HRX race tests, which COMMIT their
- * fixtures (two real OS processes must see them).
+ * HRX.6 / E21-RH: hermetic cleanup for tests that COMMIT their fixtures
+ * (two real OS processes must see them, or -- E21-RH.2+ -- the dedicated
+ * retention connection, a separate session, must see them).
  *
- * Every durable row a race test creates goes in tearDown, through the
- * migration role in replica mode (test database only; the ledgers are
- * append-only and every Employee link is RESTRICT):
- * - every School-scoped row of the test's Schools, and the Schools;
- * - the Users the test created (members of those Schools, or created since
- *   setUp);
+ * Every durable row such a test creates goes in tearDown, through the
+ * migration role in replica mode (test database only: it also bypasses the
+ * history guards of append-only tables such as `retention_holds`):
+ * - every School-scoped row of the test's Schools -- the ones passed in AND
+ *   every School created since setUp -- and those Schools;
+ * - the Users created since setUp (and members of those Schools);
  * - the `test.capability_grant.*` roles `createUserWithCapabilities()`
  *   minted since setUp, with their `role_capabilities`;
- * - School-less platform audit rows written since setUp (e.g. an erasure
- *   case's `platform.erasure_case.*` events);
- * - E21-RH.3: retention hold rows placed since setUp (a platform hold has
- *   no School, so the School purge does not reach it; replica mode lets the
- *   cleanup bypass the history guard -- test database only).
+ * - rows of the School-less platform tables (GLOBAL_TABLES) written since
+ *   setUp: platform audit events, retention holds (a platform hold has no
+ *   School), suppressions, platform/Group grants, Groups, platform-level
+ *   erasure cases;
+ * - rows of the trigger-maintained `operational_work_backlog` projection
+ *   created since setUp (replica mode skips its sync trigger), and the
+ *   scheduler heartbeats a committed command run recorded since setUp.
  *
  * Shared baseline fixtures of the canonical seed (capabilities, the seeded
  * roles and their grants, the seeded User) existed before setUp and are
@@ -30,20 +33,32 @@ use Illuminate\Support\Facades\DB;
  */
 trait PurgesCommittedHrxFixtures
 {
-    /** @var array{users: list<string>, roles: list<string>, platform_audit: list<string>, holds: list<string>, counts: array<string, int>}|null */
+    /** @var array{schools: list<string>, users: list<string>, roles: list<string>, global: array<string, list<string>>, backlog: list<string>, heartbeats: list<string>, counts: array<string, int>}|null */
     private ?array $durableSnapshot = null;
 
-    /** Global tables a committed race fixture can leave rows in. */
-    private const DURABLE_TABLES = ['schools', 'users', 'roles', 'role_capabilities', 'school_memberships', 'membership_role_assignments', 'platform_audit_events', 'retention_holds'];
+    /** School-less tables a committed fixture can leave rows in (cleaned by id difference). */
+    private const GLOBAL_TABLES = ['platform_audit_events', 'retention_holds', 'email_suppressions', 'platform_role_assignments', 'group_role_assignments', 'school_groups', 'erasure_cases'];
+
+    /** Global tables whose counts must be restored. */
+    private const DURABLE_TABLES = ['schools', 'users', 'roles', 'role_capabilities', 'school_memberships', 'membership_role_assignments', 'operational_work_backlog', 'scheduler_heartbeats', ...self::GLOBAL_TABLES];
+
+    /**
+     * The trigger-maintained `operational_work_backlog` projection (no id, no
+     * School): replica mode skips its sync trigger, so rows projected from
+     * the purged deliveries are removed by key difference.
+     */
+    private const BACKLOG_KEY = "source || ':' || item_id::text";
 
     protected function snapshotDurableFixtures(): void
     {
         $admin = DB::connection('pgsql_admin');
         $this->durableSnapshot = [
+            'schools' => $admin->table('schools')->pluck('id')->all(),
             'users' => $admin->table('users')->pluck('id')->all(),
             'roles' => $admin->table('roles')->pluck('id')->all(),
-            'platform_audit' => $admin->table('platform_audit_events')->pluck('id')->all(),
-            'holds' => $admin->table('retention_holds')->pluck('id')->all(),
+            'global' => array_combine(self::GLOBAL_TABLES, array_map(fn (string $t) => $admin->table($t)->pluck('id')->all(), self::GLOBAL_TABLES)),
+            'backlog' => $admin->table('operational_work_backlog')->selectRaw(self::BACKLOG_KEY.' AS k')->pluck('k')->all(),
+            'heartbeats' => $admin->table('scheduler_heartbeats')->pluck('name')->all(),
             'counts' => $this->durableCounts(),
         ];
     }
@@ -52,17 +67,20 @@ trait PurgesCommittedHrxFixtures
     protected function purgeCommittedHrxSchools(array $schools): void
     {
         $admin = DB::connection('pgsql_admin');
-        $snapshot = $this->durableSnapshot ?? ['users' => [], 'roles' => [], 'platform_audit' => null, 'holds' => null];
-        $schoolIds = array_map(fn (School $s) => $s->id, $schools);
+        $snapshot = $this->durableSnapshot;
+        $schoolIds = array_values(array_unique([
+            ...array_map(fn (School $s) => $s->id, $schools),
+            ...($snapshot === null ? [] : $admin->table('schools')->whereNotIn('id', $snapshot['schools'])->pluck('id')->all()),
+        ]));
 
         $users = array_values(array_unique([
             ...$admin->table('school_memberships')->whereIn('school_id', $schoolIds)->pluck('user_id')->all(),
-            ...$admin->table('users')->whereNotIn('id', $snapshot['users'])->pluck('id')->all(),
+            ...$admin->table('users')->whereNotIn('id', $snapshot['users'] ?? [])->pluck('id')->all(),
         ]));
         $roles = array_values(array_unique([
             ...$admin->table('membership_role_assignments as a')->join('roles as r', 'r.id', '=', 'a.role_id')
                 ->whereIn('a.school_id', $schoolIds)->where('r.key', 'like', 'test.capability_grant.%')->pluck('r.id')->all(),
-            ...$admin->table('roles')->where('key', 'like', 'test.capability_grant.%')->whereNotIn('id', $snapshot['roles'])->pluck('id')->all(),
+            ...$admin->table('roles')->where('key', 'like', 'test.capability_grant.%')->whereNotIn('id', $snapshot['roles'] ?? [])->pluck('id')->all(),
         ]));
 
         $admin->transaction(function () use ($admin, $schoolIds, $users, $roles, $snapshot): void {
@@ -78,15 +96,16 @@ trait PurgesCommittedHrxFixtures
                 }
                 $admin->table('schools')->whereIn('id', $schoolIds)->delete();
             }
+            if ($snapshot !== null) {
+                foreach (self::GLOBAL_TABLES as $table) {
+                    $admin->table($table)->whereNotIn('id', $snapshot['global'][$table])->delete();
+                }
+                $admin->table('operational_work_backlog')->whereNotIn($admin->raw(self::BACKLOG_KEY), $snapshot['backlog'])->delete();
+                $admin->table('scheduler_heartbeats')->whereNotIn('name', $snapshot['heartbeats'])->delete();
+            }
             $admin->table('role_capabilities')->whereIn('role_id', $roles)->delete();
             $admin->table('roles')->whereIn('id', $roles)->delete();
             $admin->table('users')->whereIn('id', $users)->delete();
-            if ($snapshot['platform_audit'] !== null) {
-                $admin->table('platform_audit_events')->whereNotIn('id', $snapshot['platform_audit'])->delete();
-            }
-            if ($snapshot['holds'] !== null) {
-                $admin->table('retention_holds')->whereNotIn('id', $snapshot['holds'])->delete();
-            }
         });
     }
 
@@ -94,7 +113,7 @@ trait PurgesCommittedHrxFixtures
     protected function assertDurableFixturesRestored(): void
     {
         if ($this->durableSnapshot !== null) {
-            $this->assertSame($this->durableSnapshot['counts'], $this->durableCounts(), 'the committed race fixtures left durable rows behind');
+            $this->assertSame($this->durableSnapshot['counts'], $this->durableCounts(), 'the committed fixtures left durable rows behind');
         }
     }
 

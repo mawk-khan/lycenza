@@ -85,26 +85,36 @@ class DatabaseRoleVerifier
      * runtime role, executable by it and never by PUBLIC.
      */
     public const RETENTION_FUNCTIONS = [
-        'retention_expire_school_audit_events', 'retention_expire_platform_audit_events',
-        'retention_expire_released_email_suppressions', 'retention_expire_membership_role_assignments',
-        'retention_expire_teaching_assignments', 'retention_expire_school_elevations',
-        'retention_expire_group_role_assignments', 'retention_expire_platform_role_assignments',
-        // E21.2C
-        'retention_expire_communication_delivery_policy_decisions',
-        // E21.2F
-        'retention_expire_erasure_cases',
-        // E21.3A2 (E21-D8): one settled Finance unit, period-floored in the database
+        // E21-RH.4 moved the eleven standalone functions to STANDALONE_RETENTION_FUNCTIONS; what remains
+        // here is the coupled set the runtime role still executes until E21-RH.5 / RH.6 (temporary).
+        // E21.3A2 (E21-D8): one settled Finance unit, period-floored in the database -- RH.6
         'retention_expire_finance_unit',
-        // E21.3B (E21-D7 core): one Student's append-only core evidence, core-floored in the database
+        // E21.3B (E21-D7 core): one Student's append-only core evidence, core-floored in the database -- RH.6
         'retention_expire_student_processing_authorizations', 'retention_expire_student_consent_events',
-        // E21.3C (E21.2G G1): one Guardian's consent events, Guardian-floored in the database
+        // E21.3C (E21.2G G1): one Guardian's consent events, Guardian-floored in the database -- RH.6
         'retention_expire_guardian_consent_events',
-        // E21.3D (E21.2G A1): one LMS resource with its audiences, year- and D6-floored in the database
+        // E21.3D (E21.2G A1): one LMS resource with its audiences, year- and D6-floored in the database -- RH.5
         'retention_expire_learning_content', 'retention_expire_assignment',
-        // E21.3E (E21.2G I3, E21-D6): ended API client credentials, 7-year floor
-        'retention_expire_api_client_credentials',
-        // E21.3F (E21-D9): one Employee's posted payroll evidence, separation-floored; one emptied payroll run
+        // E21.3F (E21-D9): one Employee's posted payroll evidence, separation-floored; one emptied payroll run -- RH.5
         'retention_expire_payroll_employee_evidence', 'retention_expire_payroll_run',
+    ];
+
+    /**
+     * E21-RH.4: the standalone legacy functions now executable only by the
+     * retention identity. Each refuses any other session user
+     * (`retention_assert_retention_identity()`) and, destructively, any
+     * active platform hold -- and, School-scoped, its School's hold
+     * (`retention_assert_not_held()`).
+     */
+    public const STANDALONE_RETENTION_FUNCTIONS = [
+        // School-scoped
+        'retention_expire_school_audit_events', 'retention_expire_membership_role_assignments',
+        'retention_expire_teaching_assignments', 'retention_expire_school_elevations',
+        'retention_expire_communication_delivery_policy_decisions', 'retention_expire_api_client_credentials',
+        // School-less
+        'retention_expire_platform_audit_events', 'retention_expire_released_email_suppressions',
+        'retention_expire_group_role_assignments', 'retention_expire_platform_role_assignments',
+        'retention_expire_erasure_cases',
     ];
 
     /**
@@ -128,7 +138,7 @@ class DatabaseRoleVerifier
     public const RETENTION_READ_FUNCTIONS = ['retention_hold_active_scopes'];
 
     /** E21-RH.3: the hold writers -- owner (operator maintenance) only, never PUBLIC, runtime or retention. */
-    public const HOLD_MAINTENANCE_FUNCTIONS = ['retention_hold_place', 'retention_hold_release', 'retention_assert_not_held'];
+    public const HOLD_MAINTENANCE_FUNCTIONS = ['retention_hold_place', 'retention_hold_release', 'retention_assert_not_held', 'retention_assert_retention_identity'];
 
     /**
      * @return list<CheckResult>
@@ -211,7 +221,7 @@ class DatabaseRoleVerifier
         $results[] = CheckResult::of('platform_root_boundary', $boundary !== null && $boundary->enabled && $boundary->owner_check);
 
         $functions = DB::select(
-            "select p.proname, p.prosecdef, coalesce(array_to_string(p.proconfig, ','), '') as config,
+            "select p.proname, p.prosecdef, coalesce(array_to_string(p.proconfig, ','), '') as config, p.prosrc as src,
                     pg_get_userbyid(p.proowner) as owner, has_function_privilege(?, p.oid, 'EXECUTE') as runtime_exec,
                     (p.proacl is null or exists (select 1 from aclexplode(p.proacl) a where a.grantee = 0 and a.privilege_type = 'EXECUTE')) as public_exec
              from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'retention\\_%'",
@@ -223,10 +233,12 @@ class DatabaseRoleVerifier
         // of the sanctioned, narrow ones (the assert helpers are not executable).
         $unexpected = array_filter($functions, fn ($f) => $f->runtime_exec && ! in_array($f->proname, self::RETENTION_FUNCTIONS, true));
         $results[] = CheckResult::of('retention_functions_narrow', count($narrow) === count(self::RETENTION_FUNCTIONS) && $unexpected === []);
-        $closed = array_filter($functions, fn ($f) => in_array($f->proname, self::PRIVILEGED_RETENTION_FUNCTIONS, true)
-            && $f->prosecdef && str_contains($f->config, 'search_path=') && $f->owner !== $role && ! $f->runtime_exec && ! $f->public_exec);
+        $privileged = [...self::PRIVILEGED_RETENTION_FUNCTIONS, ...self::STANDALONE_RETENTION_FUNCTIONS];
+        $closed = array_filter($functions, fn ($f) => in_array($f->proname, $privileged, true)
+            && $f->prosecdef && str_contains($f->config, 'search_path=') && $f->owner !== $role && ! $f->runtime_exec && ! $f->public_exec
+            && (! in_array($f->proname, self::STANDALONE_RETENTION_FUNCTIONS, true) || (str_contains($f->src, 'retention_assert_retention_identity()') && str_contains($f->src, 'retention_assert_not_held('))));
         $holds = DB::selectOne("select has_table_privilege(?, 'retention_holds', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') as any", [$role]);
-        $results[] = CheckResult::of('privileged_retention_functions_closed', count($closed) === count(self::PRIVILEGED_RETENTION_FUNCTIONS) && ! $holds->any);
+        $results[] = CheckResult::of('privileged_retention_functions_closed', count($closed) === count($privileged) && ! $holds->any);
         $results = [...$results, ...$this->retentionIdentityChecks()];
 
         $finance = DB::select(
@@ -290,7 +302,7 @@ class DatabaseRoleVerifier
             [$role],
         ), 'proname');
         sort($executable);
-        $approved = [...self::PRIVILEGED_RETENTION_FUNCTIONS, ...self::RETENTION_READ_FUNCTIONS];
+        $approved = [...self::PRIVILEGED_RETENTION_FUNCTIONS, ...self::STANDALONE_RETENTION_FUNCTIONS, ...self::RETENTION_READ_FUNCTIONS];
         sort($approved);
         $results[] = CheckResult::of('retention_role_functions_exact', $executable === $approved, $executable === $approved ? '' : count(array_diff($executable, $approved)).' unexpected, '.count(array_diff($approved, $executable)).' missing');
 
