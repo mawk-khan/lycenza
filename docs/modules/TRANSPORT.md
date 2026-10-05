@@ -391,10 +391,11 @@ this module emits will use the existing transactional outbox (ADR
   future checkpoint attempts it.
 - Bus boarding/attendance: RFID/QR/NFC/biometric scanning, "student on
   bus" attendance, parent pickup confirmation.
-- Transport fees/billing: no fee fields, payment status, receivable
-  tables, or ledger entries on any Transport table. A future
-  integration must use the real Finance/Fees domain (not yet built),
-  never parallel financial logic in Transport.
+- Transport fees/billing in this checkpoint: no fee fields, payment
+  status, receivable tables, or ledger entries on any Transport table.
+  The integration is the OPF programme (ADR 0067, contract published
+  2026-10-05; OPF.1 not yet built). It never adds parallel financial
+  logic in Transport. See "Fee integration (OPF, ADR 0067)" below.
 - Fuel logs, vehicle maintenance, insurance workflow, accident/
   insurance claims.
 - Driver mobile app, Student/Guardian Transport portal (this
@@ -552,3 +553,28 @@ An ended driver (route) assignment is deleted 7 calendar years after its
 (`DriverAssignmentRetentionService`). Ending is one-way (a new assignment is
 a new row); an active assignment is never eligible. The driver reference
 goes with the row; routes, stops and vehicles stay. Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md` §5.9).
+
+## Fee integration (OPF, ADR 0067)
+
+Contract only (OPF.0, 2026-10-05); **OPF.1 implements it, and nothing below
+is built yet.**
+- **Selections, not money.** Starting a Student assignment selects, and
+  ending it withdraws, the Student's optional Transport fee line for the
+  academic year. It goes through a trusted FEE source-selection seam,
+  under `transport.assignments.manage`. Transport never assesses money,
+  never cancels or alters a charge, and never stores an amount. Only FEE
+  assessment runs (`finance.fee_assessments.run`) turn a selection into a
+  charge, a full billing period at a time (no proration).
+- **Route tiers.** Different prices are different fee heads / lines in FEE.
+  Transport owns only a route (or route-tier) → fee-head mapping, with no
+  amount. An unmapped route selects nothing, and never blocks the
+  assignment.
+- **Academic year.** Assignments carry none. The year comes from the
+  Student's enrollment at the event. Carrying active assignments into the
+  next year is an **explicit, audited, idempotent** operation; nothing
+  carries itself silently.
+- **Evidence and retention.** Transport-owned link rows record the
+  assignment × year → selection provenance. They are append-only Finance
+  evidence (D8), registered with the retention anchors and the catalog.
+  While they exist, the linked assignment stays `dependency_blocked`.
+- **Fees never reads Transport.**

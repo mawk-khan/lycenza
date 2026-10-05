@@ -287,6 +287,8 @@ public catalogue — all explicitly out of scope (§14).
 
 - Fines, fine balances, payment tables, ledger postings, any Finance/Fees
   integration (Finance was not yet on `main` when this checkpoint closed).
+  Fines are now the OPF programme's OPF.4 (ADR 0067; contract only, not
+  built). See "Fines (OPF.4, ADR 0067)" below.
 - Reservations, holds, waiting lists, renewals, recurring loans,
   inter-library transfers.
 - Documents module integration (no new owner arm added to the
@@ -351,3 +353,38 @@ one Student per transaction under the Student-row lock.
 Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md`
 §5.6). Holds (`RETENTION_HOLD_SCHOOL_IDS`) keep everything; `--dry-run`
 counts with the same rule.
+
+## Fines (OPF.4, ADR 0067)
+
+Contract only (OPF.0, 2026-10-05); **OPF.4 implements it, and nothing below
+is built yet.** Until then, Library has no fines, fees or Finance link.
+- **Library-owned versioned fine policy.** Rate, grace and cap semantics,
+  as immutable versions, snapshotted on each assessment. Library calculates
+  the amount.
+- **Not the tuition late-fee policy.** FEE's late-fee rules
+  (`fee_late_fee_rules`, structure-scoped, legal item E31) are not the
+  Library fine engine.
+- **Event charge through FEE.**
+  - An overdue loan is assessed once per loan and fine kind: at check-in,
+    or explicitly under a narrow `library.fines.*` capability.
+  - It goes through `ChargeService::assess()`, with a Library-owned link
+    row (unique per loan and kind, unique charge) created in the same
+    transaction, under the loan-row lock.
+  - There is no daily accumulation of separate charges.
+  - The ledger destination is a fee head / account mapping, validated as
+    FEE validates accounts.
+- **Corrections:**
+  - a FEE `waiver` concession (maker/checker);
+  - an explicit Library void path that voids the fine evidence and cancels
+    the charge while it is cancellable and unpaid.
+
+  No refunds.
+- **Excluded:** lost or damaged loan states and replacement-cost charging.
+  No new loan states are added.
+- **Retention.** The link rows are Finance evidence (D8). They are
+  registered with the anchors and the catalog, and the Finance retention
+  expiry function is amended to handle them (as for `canteen_orders`). While
+  a fine exists, its loan stays `dependency_blocked`.
+- **Legal.** New register item **E34** (Library fine / penalty regulation),
+  separate from E31. Development is permitted; production use waits for a
+  qualified answer.

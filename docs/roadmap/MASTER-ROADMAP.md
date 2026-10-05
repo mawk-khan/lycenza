@@ -76,7 +76,7 @@ contract checkpoint.
 | 1 | **FEE — Fee Management** (fee heads, structures, bulk assessment, concessions, receipts, staff statements, late fees) | **DEVELOPMENT CLOSED** (FEE.0–FEE.5, 2026-09-30; ADR 0062). **Not production-ready:** legal E21, E30, E31, E32 and governance/release E03, E02/E15, E16 remain open |
 | 2 | **TCH — Teacher Identity & Ownership-Based Authorization** | **DEVELOPMENT CLOSED** (TCH.0–TCH.6, 2026-10-01; ADR 0063 §38). Built: ActingEmployee identity (TCH.1), TeachingAssignment ownership (TCH.2), the production `teacher` role (four owned-scope capabilities, never a role-name check) and owned teacher access to Curriculum Delivery (TCH.3), Attendance (TCH.4), Learning Content (TCH.5C) and Assignments (TCH.5D) on the LMS owner/audience persistence (TCH.5B). Every owned access needs capability AND verified ActingEmployee AND TeachingAssignment; the role alone grants nothing, and Timetable is never authority. **Production readiness (ADR 0063 §39, 2026-10-01): PRODUCTION READY EXCEPT DOCUMENTED EXTERNAL GATES** — teacher Attendance is **BLOCKED by open legal/compliance determination TCH-L1** (now ADR 0058 register **E33**), enforced by process only. The one `teacher` role also carries `attendance.teacher`. **Owner decision (ADR 0063 §40): no production `teacher` role grants while E33 / TCH-L1 is OPEN**, and no role split or Attendance gate. The role is implemented and production-capable; the blocker is external, not a technical deficiency. TCH history retention waits on the platform-wide legal item **E21** (ADR 0058). TCH.6 fixed one closure defect (non-identical not-found bodies on owned surfaces). LMS Submission remains cancelled and outside TCH |
 | 3 | HRX — Leave & staff attendance | **HRX.0 CONTRACT — PUBLISHED / CLOSED** (ADR 0065, 2026-10-03, docs only). **HRX.1 LEAVE FOUNDATION — PUBLISHED / CLOSED** (2026-10-03; ADR 0065 §22 final owner decisions). **HRX.2 LEAVE REQUESTS & APPROVAL — PUBLISHED / CLOSED** (2026-10-03; ADR 0065 §23). **HRX.3 STAFF ATTENDANCE — PUBLISHED / CLOSED** (2026-10-03; ADR 0065 §24: exact half-day evidence, CAS corrections with append-only history, Leave ↔ Attendance through application contracts). **HRX.4 STAFF SELF-SERVICE — PUBLISHED / CLOSED** (2026-10-04; ADR 0065 §25: ActingEmployee-only identity, own leave view/submit/withdraw/cancel, read-only own attendance, posted own payslips, separate `staff_self_service` bundle). **HRX.5 PAYROLL LOSS-OF-PAY INTEGRATION — MECHANISM PUBLISHED / CLOSED** (2026-10-04; ADR 0065 §26: HRX→Payroll evidence contract implemented, versioned, fingerprinted and snapshotted; posted payroll immutable; differences detected; **automatic wage deduction disabled / not legally activated; EPFO NCP conversion pending current-rule validation; HRX-L4 legal activation pending**). **HRX.6 RETENTION, READINESS & CLOSURE — PUBLISHED / CLOSED** (2026-10-04; ADR 0065 §27: Leave and Staff Attendance evidence join the existing E21-D9 employee retention run through two narrow, separation-floored database functions; no runtime DELETE, no cascade; Payroll's HRX snapshot follows Payroll retention). **HRX — LEAVE & STAFF ATTENDANCE IMPLEMENTATION PUBLISHED / CLOSED. HRX.5 MECHANISM CLOSED / LEGAL ACTIVATION GATED.** HRX-L1–L4 remain OPEN; E21 qualified ratification and production retention configuration pending (`docs/modules/HRX-READINESS-AND-CLOSURE.md`). Health-data features and biometric attendance stay out of v1 behind legal gates; Payroll loss-of-pay is HRX.5. No TCH/E33 change |
-| 4 | OPF — Operational fee integrations (Transport, Hostel, Library fines, Admissions fee) | Not started; needs FEE.1–FEE.2 |
+| 4 | OPF — Operational fee integrations (Transport, Hostel, Library fines, Admissions fee) | **OPF.0 CONTRACT — PUBLISHED** (ADR 0067, 2026-10-05, docs only; owner decisions D1–D9 adopted). OPF.1–OPF.5 not started. Prerequisite FEE.1–FEE.2 satisfied. Production gated by E21, E30, E31, E32 and the new E34 (Library fines); development permitted |
 | 5 | RES — Assessment & results (P3 → StudentMark → results → report cards → transcripts) | Not started; needs the ADR 0061 reopening audit and legal revalidation |
 | 6 | POR — Guardian/Student portal | Not started; legal (children's data) and security gates |
 
@@ -572,6 +572,37 @@ production readiness. Still open:
   contains FEE, and a fresh E16 decision;
 - per-School onboarding: the concession account, the receipt prefix and
   the start month (FINANCE.md "FEE onboarding").
+
+**OPF checkpoints (ADR 0067 §26)** -- OPF.0 published; OPF.1–OPF.5 not
+started:
+- **OPF.0 — Operational Fee Integrations contract** (ADR 0067, docs only).
+  Published (2026-10-05).
+  - **Dependency rule.** Operational modules call trusted FEE seams; FEE
+    never reads Transport, Hostel, Library or Admissions to infer intent.
+    There is no parallel ledger or charge.
+  - **Charges** stay Student-only.
+  - **Amounts** stay in FEE instalments (Transport, Hostel, Admission fee)
+    or a Library-owned versioned fine policy.
+  - **Primitives:** optional selections for Transport, Hostel and the
+    Admission fee at conversion; an event charge through `assess()` for
+    Library fines.
+  - **Lifecycle:** no proration. Ending an operational relationship never
+    cancels a charge. Academic-year carry-forward is explicit and audited.
+  - **Authorization:** the operational capability creates selection intent
+    through a trusted seam; only `finance.fee_assessments.run` makes money.
+  - **Retention:** every new link table is registered (anchors, catalog,
+    classification), and the Finance expiry function is amended for any
+    `charges` link. E21-RH is extended, never reopened.
+  - **Deferred:** Hostel deposits, refunds and credits, pre-conversion
+    application fees, Library lost or damaged charging, proration.
+  - **New legal row:** E34 (Library fine regulation).
+- **OPF.1 — Transport fee selection** (the trusted seam, Transport link
+  rows, the route → fee-head mapping, carry-forward). Not started.
+- **OPF.2 — Hostel fee selection** (no deposits). Not started.
+- **OPF.3 — Admission fee at Student conversion.** Not started.
+- **OPF.4 — Library overdue fines** (versioned policy, event charge, waiver
+  and void path, Finance retention amendment; E34). Not started.
+- **OPF.5 — Closure audit.** Not started.
 
 ## Phase 0A — Architectural Foundation (complete)
 

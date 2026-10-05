@@ -15,7 +15,13 @@ for why that label is informal, not a `MASTER-ROADMAP.md` phase).
 
 This is an **architecture document only**. Nothing described here has
 been implemented yet — no migration, model, service, controller,
-route, capability, or Vue page exists on this branch. Every section
+route, capability, or Vue page exists on this branch.
+
+> *Note (OPF.0, 2026-10-05):* the paragraph above is historical. It was true
+> when this document was written. The Admissions module has since been
+> implemented: applicants, applications, decisions and conversion to a
+> Student (`AdmissionConversionService`), with terminal retention. The fee
+> boundary is ADR 0067 (§16 below). Every section
 below is DECIDED (a real architectural commitment for the first
 implementation slice), DEFERRED (explicitly out of v1, named so a
 later checkpoint doesn't have to rediscover it), or OPEN QUESTION
@@ -574,9 +580,18 @@ established for Phase 1C's subject enrollment guards.
   subsystem as a workaround (unlike HR's narrow scoped table for
   Employee Documents, which was justified by HR's own urgent need —
   Admissions v1 has no comparably urgent need to attach files).
-- **Application fees / payment** — belongs to a future Finance/Fees
-  module; no `fee_paid`/`payment_status`/`transaction_id` fields exist
-  on `AdmissionApplication`.
+- **Application fees / payment.** No `fee_paid`/`payment_status`/
+  `transaction_id` fields exist on `AdmissionApplication`, and none will.
+  - **Finance/Fees exist** (Phase 0G, FEE ADR 0062). Every charge has a
+    Student subject (`charges.student_id` NOT NULL), so an applicant who is
+    not yet a Student cannot be charged.
+  - **OPF (ADR 0067 D1, contract published 2026-10-05; OPF.3 not yet
+    built):** an **Admission fee applies only after conversion**. Inside
+    the conversion transaction, `AdmissionConversionService` may select the
+    School's optional Admission fee line for the new Student, through the
+    trusted FEE source-selection seam. FEE assessment runs make the charge.
+  - **A genuine pre-conversion application fee is deferred:** it needs its
+    own ADR for an applicant financial subject, and is not implemented.
 - **Public/self-service applicant portal, Applicant/Guardian login,
   email verification, OTP** — Phase 1A already deferred Student/
   Guardian portal login repo-wide; Admissions v1 is a staff-operated

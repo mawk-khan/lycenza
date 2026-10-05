@@ -32,7 +32,7 @@ Proven in this checkpoint:
 Explicitly NOT in scope: any Fees/billing/deposit/payment-status,
 warden/staff management, meal plans, visitor/curfew/disciplinary
 rules, Health/Safety/medical data, Documents/Communications
-integration, Guardian/Student self-service. See §18 "Explicit
+integration, Guardian/Student self-service. See §16 "Explicit
 non-scope" for the full list and reasoning.
 
 **P2 assumption**: no local Phase 10 / Hostel planning document was
@@ -340,9 +340,10 @@ Communications domain.
 ## 16. Explicit non-scope (deferred, not forgotten)
 
 - Hostel fees, deposits, billing, payment status, or any cost field of
-  any kind — a future Fees/Finance module would integrate with Hostel
-  by referencing `hostel_residency_assignments` by id, never by adding
-  financial columns to this module's own tables.
+  any kind on Hostel's own tables. The FEE integration (OPF, ADR 0067)
+  references `hostel_residency_assignments` by id from separate,
+  Hostel-owned link rows; it never adds financial columns to this
+  module's tables. See "Fee integration (OPF, ADR 0067)" below.
 - Warden/staff assignment, a dedicated "Warden" role — the existing
   `hostel.directory.manage`/`hostel.residency.manage` capabilities
   already let a School compose whatever staffing role it needs.
@@ -547,3 +548,30 @@ residency rows explicitly, never by cascade.
 Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md`
 §5.6). Holds (`RETENTION_HOLD_SCHOOL_IDS`) keep everything; `--dry-run`
 counts with the same rule.
+
+## Fee integration (OPF, ADR 0067)
+
+Contract only (OPF.0, 2026-10-05); **OPF.2 implements it, and nothing below
+is built yet.**
+- **Recurring Hostel fee through selections.**
+  - Residency start selects, and residency end withdraws, the Student's
+    optional Hostel fee line for the academic year. It goes through the
+    trusted FEE source-selection seam, under `hostel.residency.manage`.
+  - Only FEE assessment runs (`finance.fee_assessments.run`) charge, a full
+    billing period at a time (no proration).
+  - Ending or transferring a residency never cancels or alters a charge.
+    Corrections are explicit Finance actions.
+- **Pricing tiers.** A room-category or hostel price is its own fee head /
+  line in FEE. Hostel owns only the tier → fee-head mapping (no amount;
+  `hostel.directory.manage`).
+- **Academic year.** Carrying active residencies into the next year is an
+  explicit, audited, idempotent operation.
+- **Excluded:**
+  - **Deposits and refunds** (ADR 0067 D2): a refundable deposit is a
+    liability and needs its own liability / refund / credit contract. It is
+    never modelled as fee revenue.
+  - **Damage charges:** stay manual ad-hoc Finance charges. No inspection
+    concept is introduced.
+- **No financial columns** are added to Hostel's own tables; the link rows
+  are separate, Hostel-owned Finance evidence (D8), registered for
+  retention.

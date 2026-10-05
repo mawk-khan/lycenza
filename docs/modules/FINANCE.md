@@ -629,6 +629,12 @@ every other cross-module relationship in this repository follows.
 Nothing about this checkpoint requires the active
 `feature/phase-1d-admissions-foundation` branch to change.
 
+*OPF note (ADR 0067 D1, 2026-10-05):* OPF does **not** add the
+`applicant_id` subject sketched above. An Admission fee applies only after
+conversion, as an optional selection for the new Student. A genuine
+pre-conversion application fee or enrollment deposit stays deferred to its
+own ADR, which would use the exclusive-arc pattern above.
+
 ## Student/enrollment boundary
 
 Phase 1B/1C (Student Enrollment/Subject Enrollment) are complete and
@@ -5220,3 +5226,41 @@ Finance's expiry changed:
   years. Payroll never deletes a journal entry.
 - Account balances, charge outstanding, Student dues and receipt series are
   unchanged across both expiries (E21.3F matrix test).
+
+## Operational fee integrations (OPF, ADR 0067)
+
+Contract only (OPF.0, 2026-10-05). No OPF code exists yet; OPF.1–OPF.4
+build it.
+- **Operational-source boundary.** Transport, Hostel, Admissions and
+  Library call trusted FEE seams. **Fees, Finance and Payments never read
+  those modules** to infer whether a fee applies. There is no parallel
+  ledger or charge: every amount still reaches the books through
+  `ChargeService::assess()`.
+- **Charge subject: Student only, unchanged.** `charges.student_id` stays
+  NOT NULL. OPF adds no applicant or polymorphic subject.
+- **Trusted source-selection seam (planned for OPF.1).** It sits beside the
+  human `FeeOptionalSelectionService::select`/`withdraw`
+  (`finance.fee_structures.manage`, unchanged), as something like
+  `selectForSource()` / `withdrawForSource()`:
+  - called only by a source module's application service, after it checked
+    its own operational capability;
+  - it records the initiating actor and source, and is idempotent on the
+    active-selection key (a lost race resolves to the winner);
+  - it validates the line as the existing trigger does;
+  - it never assesses, cancels or adjusts anything.
+
+  **A selection is intent, not money:** only assessment runs
+  (`finance.fee_assessments.run`) create charges.
+- **Amounts.** FEE instalments stay the single source for the Transport,
+  Hostel and Admission fees. Price tiers are separate fee heads or lines;
+  the operational module maps tier → fee head, with no amount. Library
+  fines come from a Library-owned versioned fine policy, charged as event
+  charges. Late-fee rules are not reused.
+- **History.** Operational lifecycle changes never cancel or alter an
+  assessed charge. Corrections stay explicit Finance actions (void and
+  cancel while unpaid, or a concession; a Library fine void path in OPF.4).
+  No refunds, credits or deposits.
+- **Retention.** Every OPF link table that references Finance evidence is
+  registered (anchors, `TenantRetentionCatalog`, classification tests). A
+  table referencing `charges` requires a forward amendment of
+  `retention_expire_finance_unit`, as `canteen_orders` has.
