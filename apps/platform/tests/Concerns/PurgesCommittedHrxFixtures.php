@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\DB;
  * - rows of the School-less platform tables (GLOBAL_TABLES) written since
  *   setUp: platform audit events, retention holds (a platform hold has no
  *   School), suppressions, platform/Group grants, Groups, platform-level
- *   erasure cases;
+ *   erasure cases, API tokens (replica mode skips their User cascade);
  * - rows of the trigger-maintained `operational_work_backlog` projection
  *   created since setUp (replica mode skips its sync trigger), and the
  *   scheduler heartbeats a committed command run recorded since setUp.
@@ -37,7 +37,7 @@ trait PurgesCommittedHrxFixtures
     private ?array $durableSnapshot = null;
 
     /** School-less tables a committed fixture can leave rows in (cleaned by id difference). */
-    private const GLOBAL_TABLES = ['platform_audit_events', 'retention_holds', 'email_suppressions', 'platform_role_assignments', 'group_role_assignments', 'school_groups', 'erasure_cases'];
+    private const GLOBAL_TABLES = ['platform_audit_events', 'retention_holds', 'email_suppressions', 'platform_role_assignments', 'group_role_assignments', 'school_groups', 'erasure_cases', 'personal_access_tokens'];
 
     /** Global tables whose counts must be restored. */
     private const DURABLE_TABLES = ['schools', 'users', 'roles', 'role_capabilities', 'school_memberships', 'membership_role_assignments', 'operational_work_backlog', 'scheduler_heartbeats', ...self::GLOBAL_TABLES];

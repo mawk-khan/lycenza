@@ -8,6 +8,7 @@ use App\Models\School;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -31,13 +32,19 @@ use InvalidArgumentException;
  *   open one keeps it. Both clocks are computed independently; the longer
  *   one wins. The owner and audience are never removed on their own.
  * - One resource per transaction: lock it, recheck, remove its Documents
- *   (DocumentParentRetention; bytes after commit, a failed byte delete is
+ *   (the database function since E21-RH.5; bytes after commit, a failed byte delete is
  *   left to the orphan run), then the audience and the resource through
  *   the fixed, floored database function (RetentionExpiry). A Document or
  *   audience attached concurrently either commits first (it is seen and
  *   handled, or blocks) or waits and then fails on its foreign key.
  * - Any other referencing row keeps it (`dependency_blocked`). A held
  *   School is counted only. Counts only, never a title.
+ * - E21-RH.5 (ADR 0066 §13): the whole unit runs as the dedicated retention
+ *   identity, on its own connection (RetentionExpiry::privileged()). The
+ *   recheck is a plain read; the LMS unit function (RetentionExpiry::lmsResource()) locks the
+ *   resource, deletes its Document rows and expires it in the same
+ *   transaction, refusing an active School or platform hold itself, so the
+ *   retention identity holds no DELETE on `documents`.
  */
 final class LmsResourceRetention
 {
@@ -59,7 +66,10 @@ final class LmsResourceRetention
     {
         [$table, $bridge, $fk] = self::KINDS[$kind] ?? throw new InvalidArgumentException("Not an LMS resource kind: {$kind}");
 
-        return $this->context->withSchool($school, function () use ($kind, $school, $table, $bridge, $fk, $cutoffDate, $batch, $dryRun, $held): array {
+        $category = $kind === 'learning_content' ? RetentionMetrics::LEARNING_CONTENT : RetentionMetrics::ASSIGNMENT;
+
+        // A refused unit (no retention identity) carries no `held`.
+        return $this->expiry->privileged($category, $dryRun || $held, fn (): array => $this->context->withSchool($school, function () use ($kind, $school, $table, $bridge, $fk, $cutoffDate, $batch, $dryRun, $held): array {
             $result = ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0];
 
             $this->yearEnded(DB::table($table.' as r')->where('r.school_id', $school->id), $cutoffDate)->select('r.id')
@@ -68,14 +78,10 @@ final class LmsResourceRetention
                         RetentionUnit::purge(
                             $result,
                             $dryRun || $held,
-                            fn (): bool => $this->yearEnded(DB::table($table.' as r')->where('r.id', $resource->id), $cutoffDate)->lockForUpdate()->first(['r.id']) !== null,
+                            // A plain read: the function locks the resource itself.
+                            fn (): bool => $this->yearEnded(DB::table($table.' as r')->where('r.school_id', $school->id)->where('r.id', $resource->id), $cutoffDate)->first(['r.id']) !== null,
                             fn (): array => array_filter([$this->blocker($kind, $school->id, $resource->id, $table, $bridge, $fk)]),
-                            function () use ($kind, $school, $resource, $cutoffDate): array {
-                                $objects = $this->documents->purgeWithOwner($kind, $resource->id);
-                                $this->expiry->lmsResource($kind, $school, $resource->id, $cutoffDate, false);
-
-                                return $objects;
-                            },
+                            fn (): ?array => $this->expire($kind, $school, $resource->id, $cutoffDate),
                         );
                     }
                 }, 'r.id', 'id');
@@ -87,7 +93,28 @@ final class LmsResourceRetention
             }
 
             return $result;
-        });
+        }), $school->id) + ['held' => 0];
+    }
+
+    /**
+     * E21-RH.5: the database unit, in a savepoint. The plain recheck takes no
+     * lock, so the function may find, once it holds the resource lock, that a
+     * concurrent purge already removed it (`retention_lms`) or that a hold was
+     * placed meanwhile (`retention_hold`): the unit is kept, never an error.
+     *
+     * @return list<object{storage_disk: string, storage_path: string}>|null
+     */
+    private function expire(string $kind, School $school, string $id, string $cutoffDate): ?array
+    {
+        try {
+            return DB::transaction(fn (): array => $this->expiry->lmsResource($kind, $school, $id, $cutoffDate));
+        } catch (QueryException $e) {
+            if (str_contains($e->getMessage(), '(retention_lms)') || str_contains($e->getMessage(), '('.RetentionExpiry::REFUSED_HELD.')')) {
+                return null;
+            }
+
+            throw $e;
+        }
     }
 
     /** Narrows `r` to resources whose Offering's Academic Year ended strictly before the cutoff. */
@@ -118,7 +145,7 @@ final class LmsResourceRetention
         // D6: when the owner's authority over this resource last applied.
         $assignments = DB::table('teaching_assignments as t')->join($bridge.' as a', fn ($j) => $j->on('a.section_id', '=', 't.section_id')->on('a.school_id', '=', 't.school_id'))
             ->where('a.'.$fk, $id)->where('t.employee_id', $resource->owner_employee_id)->where('t.subject_offering_id', $resource->subject_offering_id);
-        if ((clone $assignments)->whereNull('t.ends_on')->exists()) {
+        if ((clone $assignments)->whereNull('t.ends_on')->select('t.section_id')->exists()) {
             return 'teaching_assignments';
         }
         $ended = max((string) $resource->ends_on, (string) ((clone $assignments)->max('t.ends_on') ?? $resource->ends_on));

@@ -24,8 +24,9 @@ use Tests\TestCase;
  * run only as the dedicated retention identity, refuse any other session
  * user themselves, and -- destructively -- refuse an active platform hold
  * and, School-scoped, their School's hold, inside PostgreSQL. Every
- * existing floor, predicate and dry-run semantic is unchanged; the eight
- * coupled RH.5/RH.6 functions are untouched.
+ * existing floor, predicate and dry-run semantic is unchanged; the coupled
+ * functions were untouched (E21-RH.5 has since moved Payroll and LMS; the
+ * four RH.6 ones remain).
  *
  * COMMITTED fixtures (the retention connection is its own session).
  */
@@ -48,10 +49,10 @@ class StandaloneRetentionHardeningTest extends TestCase
         'retention_expire_group_role_assignments', 'retention_expire_platform_role_assignments', 'retention_expire_erasure_cases',
     ];
 
+    /** The coupled functions still runtime-executable: E21-RH.6 (E21-RH.5 moved Payroll and LMS). */
     private const COUPLED = [
         'retention_expire_finance_unit', 'retention_expire_student_processing_authorizations', 'retention_expire_student_consent_events',
-        'retention_expire_guardian_consent_events', 'retention_expire_learning_content', 'retention_expire_assignment',
-        'retention_expire_payroll_employee_evidence', 'retention_expire_payroll_run',
+        'retention_expire_guardian_consent_events',
     ];
 
     protected function setUp(): void
@@ -100,7 +101,7 @@ class StandaloneRetentionHardeningTest extends TestCase
     }
 
     #[Test]
-    public function the_eleven_move_to_the_retention_identity_and_the_coupled_eight_stay_exactly_where_they_were(): void
+    public function the_eleven_move_to_the_retention_identity_and_the_rh6_four_stay_exactly_where_they_were(): void
     {
         $acl = fn (string $f) => DB::selectOne("SELECT pg_get_userbyid(p.proowner) AS owner, p.prosecdef, array_to_string(p.proconfig, ',') AS cfg,
                 has_function_privilege('school_os_app', p.oid, 'EXECUTE') AS runtime, has_function_privilege('school_os_retention', p.oid, 'EXECUTE') AS retention,
@@ -118,7 +119,7 @@ class StandaloneRetentionHardeningTest extends TestCase
         }
         foreach (self::COUPLED as $function) {
             $f = $acl($function);
-            $this->assertSame([true, false], [(bool) $f->runtime, (bool) $f->retention], "{$function}: RH.5/RH.6, unchanged");
+            $this->assertSame([true, false], [(bool) $f->runtime, (bool) $f->retention], "{$function}: RH.6, unchanged");
             $this->assertStringNotContainsString('retention_assert_retention_identity', $f->src, $function);
         }
         $this->assertSame(count(DatabaseRoleVerifier::STANDALONE_RETENTION_FUNCTIONS), count(self::SCHOOL) + count(self::PLATFORM));
@@ -156,8 +157,8 @@ class StandaloneRetentionHardeningTest extends TestCase
                 return '';
             })(), $function);
         }
-        // A coupled function stays out of the retention login's reach.
-        $this->assertStringContainsString('permission denied for function retention_expire_payroll_run', (string) $this->asRetention($school, fn () => DB::select('SELECT retention_expire_payroll_run(?, ?, ?, true)', [$school->id, (string) Str::uuid7(), '2010-01-01 00:00:00'])));
+        // A coupled (RH.6) function stays out of the retention login's reach.
+        $this->assertStringContainsString('permission denied for function retention_expire_student_consent_events', (string) $this->asRetention($school, fn () => DB::select('SELECT retention_expire_student_consent_events(?, ?, ?, true)', [$school->id, (string) Str::uuid7(), '2000-01-01'])));
     }
 
     #[Test]

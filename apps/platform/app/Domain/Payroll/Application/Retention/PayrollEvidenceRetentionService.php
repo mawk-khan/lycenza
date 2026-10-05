@@ -3,8 +3,10 @@
 namespace App\Domain\Payroll\Application\Retention;
 
 use App\Domain\HR\Application\Retention\EmployeeRetentionEligibility;
+use App\Domain\HR\Application\Retention\EmployeeSeparation;
 use App\Models\School;
 use App\Support\Retention\RetentionExpiry;
+use App\Support\Retention\RetentionMetrics;
 use App\Support\Retention\RetentionUnit;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonInterface;
@@ -50,6 +52,13 @@ use Illuminate\Support\Facades\DB;
  * (components, structures, accounting, statutory rule versions) are
  * School configuration and are untouched.
  *
+ * E21-RH.5 (ADR 0066 §13): both phases run WHOLE as the dedicated retention
+ * identity, on its own connection (RetentionExpiry::privileged()): reads,
+ * unit transactions, savepoints and the function calls share one session.
+ * The rechecks are plain reads; the functions take every row lock (the
+ * Employee, its EmploymentRecords, the runs) and re-prove everything, and
+ * they refuse an active School or platform hold themselves.
+ *
  * Counts only; no identifier, amount or name leaves this class.
  */
 final class PayrollEvidenceRetentionService
@@ -57,7 +66,8 @@ final class PayrollEvidenceRetentionService
     /** Database refusals that mean "keep it" rather than "something failed". */
     private const KEEP = [
         'retention_payroll_dependency' => 'payroll_runs',
-        'retention_payroll_employee' => 'employment_records',
+        RetentionExpiry::REFUSED_EMPLOYEE_NOT_SEPARATED => 'employment_records',
+        RetentionExpiry::REFUSED_HELD => 'retention_holds',
     ];
 
     public function __construct(
@@ -69,7 +79,7 @@ final class PayrollEvidenceRetentionService
     /** @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int} */
     public function pruneEvidence(School $school, string $cutoffDate, int $batch, bool $dryRun): array
     {
-        return $this->employees->purgeSeparatedBefore(
+        return $this->expiry->privileged(RetentionMetrics::PAYROLL_EVIDENCE, $dryRun, fn (): array => $this->employees->purgeSeparatedBefore(
             $school,
             $cutoffDate,
             $batch,
@@ -82,7 +92,9 @@ final class PayrollEvidenceRetentionService
                         ->orWhereExists(fn (Builder $l) => $l->selectRaw('1')->from('payroll_lwf_annual_charges as l')->whereColumn('l.employment_record_id', 'er.id'))))),
             fn (string $employeeId): array => $this->kept(fn () => $this->expiry->payrollEmployeeEvidence($school, $employeeId, $cutoffDate, true)),
             fn (string $employeeId): ?array => $this->expiry->payrollEmployeeEvidence($school, $employeeId, $cutoffDate, false) > 0 ? [] : null,
-        );
+            null,
+            fn (string $employeeId): ?EmployeeSeparation => $this->employees->readSeparation($employeeId),
+        ), $school->id);
     }
 
     /**
@@ -90,6 +102,12 @@ final class PayrollEvidenceRetentionService
      * @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int}
      */
     public function pruneRuns(School $school, CarbonInterface $cutoff, int $batch, bool $dryRun): array
+    {
+        return $this->expiry->privileged(RetentionMetrics::PAYROLL_RUN, $dryRun, fn (): array => $this->runs($school, $cutoff, $batch, $dryRun), $school->id);
+    }
+
+    /** @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int} */
+    private function runs(School $school, CarbonInterface $cutoff, int $batch, bool $dryRun): array
     {
         $result = ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0];
         $at = $cutoff->copy()->utc()->format('Y-m-d H:i:s');
@@ -104,7 +122,8 @@ final class PayrollEvidenceRetentionService
                         RetentionUnit::purge(
                             $result,
                             $dryRun,
-                            fn (): bool => DB::table('payroll_runs')->where('id', $run->id)->lockForUpdate()->first(['id']) !== null,
+                            // A plain read: the function locks the run and its corrections itself.
+                            fn (): bool => DB::table('payroll_runs')->where('school_id', $school->id)->where('id', $run->id)->first(['id']) !== null,
                             fn (): array => $this->kept(fn () => $this->expiry->payrollRun($school, $run->id, $cutoff, true)),
                             function () use ($school, $run, $cutoff): array {
                                 $this->expiry->payrollRun($school, $run->id, $cutoff, false);

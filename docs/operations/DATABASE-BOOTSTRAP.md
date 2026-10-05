@@ -51,6 +51,10 @@ stricter for both connections; the application refuses to boot otherwise).
      `platform:email-suppressions-prune` and the policy-decision step of
      `platform:communications-prune`. Each reports one error per category
      and deletes nothing there.
+   - Since E21-RH.5 (ADR 0066 §13) it also includes
+     `platform:payroll-retention-prune` and the LMS steps of
+     `platform:academic-retention-prune`. Their destructive runs also refuse
+     while a configured hold is not yet reconciled into the database.
    - Retention holds are database state (E21-RH.3, ADR 0066 §6). See
      [RETENTION-HOLDS.md](RETENTION-HOLDS.md) for placing, releasing and
      reconciling them; configuration removal never releases one.

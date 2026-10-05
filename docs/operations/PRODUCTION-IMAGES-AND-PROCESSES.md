@@ -81,7 +81,8 @@ health endpoints and the **secret groups** it receives. Guarded by
 - only `scheduler` and `operator-console` receive `database_retention`
   (E21-RH.2, ADR 0066): the scheduler runs retention without the migration
   credential (since E21-RH.4, also the audit, authority-history,
-  email-suppression and communications policy-decision expiries);
+  email-suppression and communications policy-decision expiries; since
+  E21-RH.5, Payroll evidence and runs and the LMS academic expiries);
 - every secret-shaped setting the configuration reads is in a secret group;
 - every recovery sweep (`RecoverQueuedWork::SOURCES`) is scheduled.
 

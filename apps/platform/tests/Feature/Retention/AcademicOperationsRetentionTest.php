@@ -14,13 +14,17 @@ use App\Support\Operations\CheckResult;
 use App\Support\Operations\DatabaseRoleVerifier;
 use App\Support\Retention\LmsResourceRetention;
 use App\Support\Retention\RetentionExpiry;
+use App\Support\Retention\RetentionHolds;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Testing\PendingCommand;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Feature\Attendance\Concerns\CreatesAttendanceFixtures;
 use Tests\TestCase;
 
@@ -37,7 +41,7 @@ use Tests\TestCase;
  */
 class AcademicOperationsRetentionTest extends TestCase
 {
-    use CreatesAttendanceFixtures;
+    use CommitsRetentionFixtures, CreatesAttendanceFixtures;
 
     private string $disk;
 
@@ -168,7 +172,8 @@ class AcademicOperationsRetentionTest extends TestCase
     {
         [$table, $bridge, $fk] = ['learning_content' => ['learning_content', 'learning_content_section_audiences', 'learning_content_id'], 'assignment' => ['assignments', 'assignment_section_audiences', 'assignment_id']][$kind];
         $id = (string) Str::uuid7();
-        $this->inSchool($w['school'], function () use ($w, $kind, $table, $bridge, $fk, $id, $owner, $taEndsOn): void {
+        // One transaction: an owned resource needs its audience at commit (deferred check; fixtures are committed).
+        $this->inSchool($w['school'], fn () => DB::transaction(function () use ($w, $kind, $table, $bridge, $fk, $id, $owner, $taEndsOn): void {
             DB::table($table)->insert(array_merge([
                 'id' => $id, 'school_id' => $w['school']->id, 'subject_offering_id' => $w['offering']->id, 'title' => 'Material', 'status' => 'published',
                 'owner_employee_id' => $owner?->id, 'created_at' => now(), 'updated_at' => now(),
@@ -184,7 +189,7 @@ class AcademicOperationsRetentionTest extends TestCase
                     'starts_on' => $w['year']->starts_on, 'ends_on' => $taEndsOn, 'created_by_user_id' => $this->createUser()->id, 'created_at' => now(), 'updated_at' => now(),
                 ]);
             }
-        });
+        }));
 
         return $id;
     }
@@ -377,12 +382,19 @@ class AcademicOperationsRetentionTest extends TestCase
         $w = $this->year(null, '2017-04-01', '2018-03-31', 'AY17');
         $later = $this->year($w['school'], '2018-04-01', '2019-03-31', 'AY18');
         $owner = $this->createEmployee($w['school'], ['record_status' => 'active']);
-        $id = $this->lms($w, 'learning_content', $owner, '2018-03-31');
+        $id = (string) Str::uuid7();
 
-        $this->inSchool($w['school'], fn () => $this->refused(fn () => DB::table('learning_content_section_audiences')->insert([
-            'id' => (string) Str::uuid7(), 'school_id' => $w['school']->id, 'learning_content_id' => $id, 'subject_offering_id' => $w['offering']->id,
-            'academic_year_id' => $later['year']->id, 'campus_id' => $later['campus']->id, 'grade_level_id' => $later['grade']->id, 'section_id' => $later['section']->id, 'created_at' => now(),
-        ]), 'foreign key'));
+        // In the resource's creating transaction (an audience is immutable afterwards; fixtures are committed).
+        $this->inSchool($w['school'], fn () => $this->refused(fn () => DB::transaction(function () use ($w, $later, $owner, $id): void {
+            DB::table('learning_content')->insert([
+                'id' => $id, 'school_id' => $w['school']->id, 'subject_offering_id' => $w['offering']->id, 'title' => 'Material', 'status' => 'published',
+                'owner_employee_id' => $owner->id, 'sequence' => 1, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            DB::table('learning_content_section_audiences')->insert([
+                'id' => (string) Str::uuid7(), 'school_id' => $w['school']->id, 'learning_content_id' => $id, 'subject_offering_id' => $w['offering']->id,
+                'academic_year_id' => $later['year']->id, 'campus_id' => $later['campus']->id, 'grade_level_id' => $later['grade']->id, 'section_id' => $later['section']->id, 'created_at' => now(),
+            ]);
+        }), 'foreign key'));
     }
 
     #[Test]
@@ -397,22 +409,107 @@ class AcademicOperationsRetentionTest extends TestCase
         $withDocument = $this->lms($w, 'learning_content');
         $this->lmsDocument($w, 'learning_content', $withDocument);
         $youngResource = $this->lms($young, 'assignment');
-        $expiry = app(RetentionExpiry::class);
         $cutoff = '2019-01-01';
+        $fn = fn (string $kind, string $id, string $cutoff, bool $dryRun) => (int) DB::selectOne(
+            'SELECT '.($kind === 'learning_content' ? 'retention_expire_learning_content' : 'retention_expire_assignment').'(?, ?, ?, ?) AS n',
+            [$w['school']->id, $id, $cutoff, $dryRun ? 'true' : 'false'],
+        )->n;
 
-        $this->inSchool($w['school'], function () use ($w, $owned, $open, $withDocument, $youngResource, $expiry, $cutoff): void {
+        // The runtime role can neither delete an audience nor (E21-RH.5) run the function.
+        $this->inSchool($w['school'], function () use ($owned, $fn, $cutoff): void {
             $this->refused(fn () => DB::table('learning_content_section_audiences')->where('learning_content_id', $owned)->delete(), 'permission denied');
-            $this->refused(fn () => $expiry->lmsResource('learning_content', $w['school'], $owned, now('UTC')->subYears(7)->addDays(3)->toDateString(), true), 'retention_floor');
-            $this->refused(fn () => $expiry->lmsResource('assignment', $w['school'], $youngResource, $cutoff, true), 'retention_floor');
-            $this->refused(fn () => $expiry->lmsResource('assignment', $w['school'], $open, $cutoff, true), 'retention_lms_authority');
-            $this->refused(fn () => $expiry->lmsResource('learning_content', $w['school'], $withDocument, $cutoff, true), 'retention_lms_dependency');
-            $this->assertSame(2, DB::transaction(fn () => $expiry->lmsResource('learning_content', $w['school'], $owned, $cutoff, true)), 'a dry run counts the resource and its audience');
+            $this->refused(fn () => $fn('learning_content', $owned, $cutoff, true), 'permission denied for function');
         });
-        $this->inSchool($b, fn () => $this->refused(fn () => $expiry->lmsResource('learning_content', $w['school'], $owned, $cutoff, false), 'retention_tenant'));
+        // As the retention identity, the database still refuses every ineligible unit.
+        DB::usingConnection(RetentionExpiry::PRIVILEGED_CONNECTION, function () use ($w, $b, $owned, $open, $withDocument, $youngResource, $fn, $cutoff): void {
+            $this->inSchool($w['school'], function () use ($owned, $open, $withDocument, $youngResource, $fn, $cutoff): void {
+                $this->refused(fn () => $fn('learning_content', $owned, now('UTC')->subYears(7)->addDays(3)->toDateString(), true), 'retention_floor');
+                $this->refused(fn () => $fn('assignment', $youngResource, $cutoff, true), 'retention_floor');
+                $this->refused(fn () => $fn('assignment', $open, $cutoff, true), 'retention_lms_authority');
+                $this->refused(fn () => $fn('learning_content', $withDocument, $cutoff, true), 'retention_lms_dependency');
+                $this->assertSame(2, DB::transaction(fn () => $fn('learning_content', $owned, $cutoff, true)), 'a dry run counts the resource and its audience');
+            });
+            $this->inSchool($b, fn () => $this->refused(fn () => $fn('learning_content', $owned, $cutoff, false), 'retention_tenant'));
+        });
 
         $this->assertSame(1, $this->rows($w['school'], 'learning_content', $owned));
         $check = collect(app(DatabaseRoleVerifier::class)->verify())->keyBy('code');
         $this->assertSame(CheckResult::PASS, $check['retention_functions_narrow']->status);
+        $this->assertSame(CheckResult::PASS, $check['privileged_retention_functions_closed']->status);
+    }
+
+    /** E21-RH.5: the whole LMS unit through its database function, as $connection: its result or the refusal. */
+    private function unit(School $school, string $kind, string $id, string $cutoff, string $connection = RetentionExpiry::PRIVILEGED_CONNECTION): mixed
+    {
+        try {
+            return DB::usingConnection($connection, fn () => $this->inSchool($school, fn () => DB::transaction(
+                fn () => DB::select('SELECT o_disk, o_path FROM retention_expire_lms_resource(?, ?, ?, ?)', [$kind, $school->id, $id, $cutoff]),
+            )));
+        } catch (QueryException $e) {
+            return $e->getMessage();
+        }
+    }
+
+    #[Test]
+    public function lms_units_run_whole_as_the_retention_identity_with_their_documents_and_obey_database_holds(): void
+    {
+        $this->at('2026-06-15');
+        $a = $this->year(null, '2017-04-01', '2018-03-31', 'AYA');
+        $b = $this->year(null, '2017-04-01', '2018-03-31', 'AYB');
+        $young = $this->year($a['school'], '2024-04-01', '2025-03-31', 'AYY');
+        $contentA = $this->lms($a, 'learning_content');
+        $pathA = $this->lmsDocument($a, 'learning_content', $contentA);
+        $contentB = $this->lms($b, 'learning_content');
+        $youngContent = $this->lms($young, 'learning_content');
+        $this->lmsDocument($young, 'learning_content', $youngContent);
+        $cutoff = AcademicYearRetention::cutoff($a['school'], 7);
+        $documents = fn (School $school, string $id): int => $this->inSchool($school, fn () => DB::table('documents')->where('learning_content_id', $id)->count());
+        $holds = app(RetentionHolds::class);
+
+        // The runtime role cannot run the unit; the owner login is refused by the identity check.
+        $this->assertStringContainsString('permission denied for function retention_expire_lms_resource', (string) $this->unit($a['school'], 'learning_content', $contentA, $cutoff, 'pgsql'));
+        $this->assertStringContainsString('retention_privilege', (string) $this->unit($a['school'], 'learning_content', $contentA, $cutoff, RetentionHolds::MAINTENANCE_CONNECTION));
+        // ... nor can the retention identity delete a Document directly: only the unit does.
+        $this->assertStringContainsString('permission denied', (string) (function () use ($a, $contentA) {
+            try {
+                return DB::usingConnection(RetentionExpiry::PRIVILEGED_CONNECTION, fn () => $this->inSchool($a['school'], fn () => DB::table('documents')->where('learning_content_id', $contentA)->delete()));
+            } catch (QueryException $e) {
+                return $e->getMessage();
+            }
+        })());
+
+        // An ineligible unit (young year) is refused and its Document deletion rolls back with it.
+        $this->assertStringContainsString('retention_floor', (string) $this->unit($a['school'], 'learning_content', $youngContent, $cutoff));
+        $this->assertSame(1, $documents($a['school'], $youngContent), 'the Document deletion rolled back');
+
+        // School A held in the database only: refused inside PostgreSQL; the PHP unit keeps it (never an error).
+        $holds->place($a['school']->id, 'litigation', 'LMS-HOLD-1');
+        $this->assertStringContainsString('retention_hold', (string) $this->unit($a['school'], 'learning_content', $contentA, $cutoff));
+        $this->assertRun(['content' => ['eligible' => 1, 'deleted' => 0, 'errors' => 0]], $this->schoolRun($a['school']));
+        $this->assertSame(1, $this->rows($a['school'], 'learning_content', $contentA));
+        $this->assertSame(1, $documents($a['school'], $contentA));
+
+        // The platform hold blocks School B too.
+        $holds->place(null, 'regulatory_inquiry', 'LMS-HOLD-2');
+        $this->assertStringContainsString('retention_hold', (string) $this->unit($b['school'], 'learning_content', $contentB, AcademicYearRetention::cutoff($b['school'], 7)));
+        $holds->release(null, 'inquiry_closed', 'LMS-HOLD-2');
+        $this->assertRun(['content' => ['deleted' => 1, 'errors' => 0]], $this->schoolRun($b['school']));
+
+        // Released: the whole unit, every statement on the retention session; Document rows and bytes go with it.
+        $holds->release($a['school']->id, 'matter_concluded', 'LMS-HOLD-1');
+        $used = [];
+        Event::listen(QueryExecuted::class, function (QueryExecuted $e) use (&$used): void {
+            $used[] = $e->connectionName;
+        });
+        $this->assertSame(['deleted' => 1, 'errors' => 0], array_intersect_key(app(LmsResourceRetention::class)->prune('learning_content', $a['school'], $cutoff, 500, false, false), ['deleted' => 0, 'errors' => 0]));
+        $this->assertSame([RetentionExpiry::PRIVILEGED_CONNECTION], array_values(array_unique($used)));
+        $this->assertSame(0, $this->rows($a['school'], 'learning_content', $contentA));
+        $this->assertSame(0, $documents($a['school'], $contentA));
+        Storage::disk($this->disk)->assertMissing($pathA);
+        $this->assertSame(1, $this->rows($a['school'], 'learning_content', $youngContent), 'the young resource stays');
+
+        // A duplicate run (the resource already gone) changes nothing and reports nothing as an error.
+        $this->assertStringContainsString('retention_lms', (string) $this->unit($a['school'], 'learning_content', $contentA, $cutoff));
     }
 
     #[Test]

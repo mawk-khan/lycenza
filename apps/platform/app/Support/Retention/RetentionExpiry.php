@@ -20,13 +20,13 @@ use Symfony\Component\Uid\UuidV7;
  *
  * The functions are SECURITY DEFINER with fixed tables and predicates, an
  * age floor and a tenant tie. The runtime role holds no DELETE on the
- * ledgers. E21-RH.2-RH.4 (ADR 0066): the HRX pair and the eleven standalone
- * bulk functions (SCHOOL_FUNCTIONS, PLATFORM_FUNCTIONS) are executable only
- * by the dedicated retention identity, on PRIVILEGED_CONNECTION, and refuse
- * any other session user and (destructively) any active retention hold
- * themselves. The coupled ones (Finance unit, Student/Guardian core
- * evidence, LMS, Payroll) still run on the runtime connection until
- * E21-RH.5/RH.6.
+ * ledgers. E21-RH.2-RH.5 (ADR 0066): the HRX pair, the eleven standalone
+ * bulk functions (SCHOOL_FUNCTIONS, PLATFORM_FUNCTIONS) and the Payroll and
+ * LMS unit functions are executable only by the dedicated retention
+ * identity, on PRIVILEGED_CONNECTION, and refuse any other session user and
+ * any active retention hold themselves. The coupled ones (Finance unit,
+ * Student/Guardian core evidence) still run on the runtime connection until
+ * E21-RH.6.
  *
  * This class adds the application half:
  * - a closed category map (no caller-supplied table, function or SQL);
@@ -260,7 +260,7 @@ final class RetentionExpiry
      * least 8 calendar years back; every run holding the evidence locked,
      * posted, and with every posting older than the cutoff. Journal entries
      * are never touched. Runs inside the caller's School context and unit
-     * transaction.
+     * transaction, as the retention identity (E21-RH.5).
      *
      * @param  string  $cutoffDate  the School-local cutoff (Y-m-d)
      */
@@ -304,10 +304,16 @@ final class RetentionExpiry
      * §6.1, add-only transition). Otherwise it deletes nothing and reports
      * one error. There is no fallback to any other connection.
      *
-     * @param  callable(): array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int}  $participant
-     * @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int}
+     * E21-RH.5: with `$schoolId`, a run with any outcome is logged
+     * (`retention.unit_run`: category, School, counts, dry run and the
+     * execution identity -- the maintenance login, never a person).
+     *
+     * @template TResult of array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int}
+     *
+     * @param  callable(): TResult  $participant
+     * @return TResult|array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int}
      */
-    public function privileged(string $category, bool $dryRun, callable $participant): array
+    public function privileged(string $category, bool $dryRun, callable $participant, ?string $schoolId = null): array
     {
         try {
             $this->assertRetentionIdentity();
@@ -321,7 +327,12 @@ final class RetentionExpiry
             return self::REFUSED_UNIT;
         }
 
-        return DB::usingConnection(self::PRIVILEGED_CONNECTION, $participant);
+        $result = DB::usingConnection(self::PRIVILEGED_CONNECTION, $participant);
+        if ($schoolId !== null && array_sum($result) > 0) {
+            Log::info('retention.unit_run', ['category' => $category, 'school_id' => $schoolId, 'identity' => self::RETENTION_ROLE, 'dry_run' => $dryRun, ...$result]);
+        }
+
+        return $result;
     }
 
     /** The retention connection is configured and authenticates as exactly the retention identity, unelevated. */
@@ -404,7 +415,8 @@ final class RetentionExpiry
      * releases their journal entries to Finance's own D8 expiry. The
      * database re-proves: tenant context; every run posted before a cutoff
      * at least 8 years back, emptied by payroll retention, holding no
-     * result or adjustment; every posting older than the cutoff.
+     * result or adjustment; every posting older than the cutoff. Runs as the
+     * retention identity (E21-RH.5); the function takes every run lock.
      *
      * @return int the postings removed (each one journal entry released)
      */
@@ -418,26 +430,33 @@ final class RetentionExpiry
     }
 
     /**
-     * E21.3D (E21.2G A1): removes ONE LMS resource (`learning_content` or
-     * `assignment`) with its Section audiences through its fixed function,
-     * which re-proves in the database: tenant context; the resource locked;
-     * its Academic Year ended before a cutoff at least 7 calendar years
-     * back; for an owned resource no TeachingAssignment of the owner over
-     * an audience Section open or ended on/after the cutoff (D6); no
-     * Document left. Runs inside the caller's School context and unit
-     * transaction.
+     * E21.3D (E21.2G A1) / E21-RH.5: removes ONE LMS resource
+     * (`learning_content` or `assignment`) with its Documents and Section
+     * audiences through `retention_expire_lms_resource`, which locks the
+     * resource, deletes its Document rows and then re-proves in the
+     * database: tenant context; its Academic Year ended before a cutoff at
+     * least 7 calendar years back; for an owned resource no TeachingAssignment
+     * of the owner over an audience Section open or ended on/after the cutoff
+     * (D6); no Document left. Runs as the retention identity inside the
+     * caller's School context and unit transaction.
      *
      * @param  string  $cutoffDate  the School-local cutoff (Y-m-d)
+     * @return list<object{storage_disk: string, storage_path: string}> the deleted Documents' bytes, for deletion after commit
      */
-    public function lmsResource(string $kind, School $school, string $id, string $cutoffDate, bool $dryRun): int
+    public function lmsResource(string $kind, School $school, string $id, string $cutoffDate): array
     {
-        $function = ['learning_content' => 'retention_expire_learning_content', 'assignment' => 'retention_expire_assignment'][$kind]
-            ?? throw new InvalidArgumentException("Not an LMS resource kind: {$kind}");
+        if (! in_array($kind, ['learning_content', 'assignment'], true)) {
+            throw new InvalidArgumentException("Not an LMS resource kind: {$kind}");
+        }
         if (! Str::isUuid($id)) {
             throw new InvalidArgumentException('Not a uuid.');
         }
 
-        return $this->call($function, [$school->id, $id, $cutoffDate, $dryRun]);
+        /** @var list<object{storage_disk: string, storage_path: string}> */
+        return DB::select(
+            'SELECT o_disk AS storage_disk, o_path AS storage_path FROM retention_expire_lms_resource(?, ?, ?, ?)',
+            [$kind, $school->id, $id, $cutoffDate],
+        );
     }
 
     /**

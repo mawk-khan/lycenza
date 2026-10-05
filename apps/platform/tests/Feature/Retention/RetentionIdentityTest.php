@@ -110,8 +110,8 @@ class RetentionIdentityTest extends TestCase
         $this->assertSame([], $tableGrants, 'no table-level grant at all (only column-level SELECTs)');
 
         $columns = collect(DB::select('select c.relname, t.attname, a.privilege_type from pg_attribute t join pg_class c on c.oid = t.attrelid cross join lateral aclexplode(t.attacl) a where a.grantee = ? order by 1, 2', [$oid]))
-            ->groupBy('relname')->map(fn ($rows) => $rows->pluck('attname')->sort()->values()->all())->all();
-        $this->assertSame([
+            ->groupBy('relname')->map(fn ($rows) => $rows->pluck('attname')->sort()->values()->all())->sortKeys()->all();
+        $expected = [
             'employees' => ['id', 'school_id'],
             'employment_records' => ['employee_id', 'ends_on', 'id', 'status'],
             'leave_ledger_entries' => ['employment_record_id'],
@@ -119,10 +119,25 @@ class RetentionIdentityTest extends TestCase
             'leave_requests' => ['employee_id'],
             'leave_year_close_items' => ['employment_record_id'],
             'staff_attendance_records' => ['employee_id'],
-        ], $columns);
+            // E21-RH.5: what the Payroll and LMS units read
+            'payroll_adjustments' => ['employment_record_id'],
+            'payroll_lwf_annual_charges' => ['employment_record_id'],
+            'payroll_run_results' => ['employee_id', 'payroll_run_id'],
+            'payroll_runs' => ['id', 'posted_at', 'results_expired_at', 'run_kind', 'school_id', 'status'],
+            'academic_years' => ['ends_on', 'id', 'school_id'],
+            'assignment_section_audiences' => ['assignment_id', 'school_id', 'section_id'],
+            'assignments' => ['id', 'owner_employee_id', 'school_id', 'subject_offering_id'],
+            'documents' => ['assignment_id', 'id', 'learning_content_id'],
+            'learning_content' => ['id', 'owner_employee_id', 'school_id', 'subject_offering_id'],
+            'learning_content_section_audiences' => ['learning_content_id', 'school_id', 'section_id'],
+            'subject_offerings' => ['academic_year_id', 'id', 'school_id'],
+            'teaching_assignments' => ['employee_id', 'ends_on', 'school_id', 'section_id', 'subject_offering_id'],
+        ];
+        ksort($expected);
+        $this->assertSame($expected, $columns);
         $this->assertSame(0, (int) DB::selectOne("select count(*) as n from pg_attribute t cross join lateral aclexplode(t.attacl) a where a.grantee = ? and a.privilege_type <> 'SELECT'", [$oid])->n);
 
-        foreach (['employees', 'employment_records', 'leave_requests', 'staff_attendance_records', 'payroll_run_results', 'school_audit_events'] as $table) {
+        foreach (['employees', 'employment_records', 'leave_requests', 'staff_attendance_records', 'payroll_run_results', 'payroll_runs', 'documents', 'learning_content', 'assignments', 'school_audit_events'] as $table) {
             foreach (['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE'] as $privilege) {
                 $this->assertFalse((bool) DB::selectOne('select has_table_privilege(?, ?, ?) as p', [self::ROLE, $table, $privilege])->p, "{$table}: no {$privilege}");
             }
@@ -162,9 +177,9 @@ class RetentionIdentityTest extends TestCase
         $count = (int) $this->asRetention($w['school'], fn () => DB::selectOne('select retention_expire_leave_employee_evidence(?, ?, ?, true) as n', [$w['school']->id, $leaver['employeeId'], '2018-01-01'])->n);
         $this->assertGreaterThan(0, $count);
         // ... but a legacy destructive function is not.
-        // (E21-RH.4 moved the standalone functions to it; a coupled RH.5/RH.6 one stays out of reach.)
+        // (E21-RH.4/RH.5 moved the standalone and Payroll/LMS functions to it; an RH.6 one stays out of reach.)
         $this->assertStringContainsString('permission denied for function retention_expire_finance_unit', (string) $this->asRetention($w['school'], fn () => DB::select("select retention_expire_finance_unit(?, '{}', '{}', ?, true)", [$w['school']->id, (string) Str::uuid7()])));
-        $this->assertStringContainsString('permission denied for function retention_expire_payroll_employee_evidence', (string) $this->asRetention($w['school'], fn () => DB::select('select retention_expire_payroll_employee_evidence(?, ?, ?, true)', [$w['school']->id, $leaver['employeeId'], '2018-01-01'])));
+        $this->assertStringContainsString('permission denied for function retention_expire_guardian_consent_events', (string) $this->asRetention($w['school'], fn () => DB::select('select retention_expire_guardian_consent_events(?, ?, ?, true)', [$w['school']->id, (string) Str::uuid7(), '2018-01-01 00:00:00'])));
 
         // The owner / migration login is refused by the exact identity check (no fallback identity).
         $admin = DB::connection(RetentionHolds::MAINTENANCE_CONNECTION);

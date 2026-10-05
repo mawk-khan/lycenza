@@ -8,6 +8,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\PendingCommand;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Feature\Retention\Concerns\CreatesPayrollRetentionFixtures;
 use Tests\TestCase;
 
@@ -29,7 +30,7 @@ use Tests\TestCase;
  */
 class PayrollFinanceRetentionMatrixTest extends TestCase
 {
-    use CreatesPayrollRetentionFixtures;
+    use CommitsRetentionFixtures, CreatesPayrollRetentionFixtures;
 
     protected function setUp(): void
     {

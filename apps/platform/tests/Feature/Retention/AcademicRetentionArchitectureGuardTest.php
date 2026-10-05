@@ -100,7 +100,9 @@ class AcademicRetentionArchitectureGuardTest extends TestCase
         $code = $this->code(app_path('Support/Retention/LmsResourceRetention.php'));
         $this->assertStringNotContainsString('section_audiences\')->delete', $code);
         $this->assertStringNotContainsString("'owner_employee_id' =>", $code, 'the owner is never nulled');
-        $this->assertStringContainsString('purgeWithOwner($kind', $code, 'Documents go through the parent seam');
+        // E21-RH.5: Documents go with the resource inside the one database unit (no PHP Document delete).
+        $this->assertStringContainsString('->lmsResource($kind', $code, 'Documents go through the database LMS unit');
+        $this->assertStringNotContainsString('purgeWithOwner', $code);
         $this->assertStringNotContainsString("table('documents')", $code);
     }
 

@@ -9,7 +9,9 @@
   hold is global (amends §6.3). **E21-RH.4 implemented (2026-10-05,
   §12):** the eleven standalone legacy functions run only as the retention
   identity and enforce holds in the database; the eight coupled ones are
-  unchanged (RH.5/RH.6).
+  unchanged (RH.5/RH.6). **E21-RH.5 implemented (2026-10-05, §13):** the
+  Payroll and LMS units run whole as the retention identity; the four RH.6
+  functions are unchanged.
 - Date: 2026-10-04
 - Programme: **E21-RH — retention privilege hardening.** A
   pre-production security blocker, separate from HRX (closed at
@@ -567,5 +569,210 @@ Migration `2026_11_28_090000_harden_standalone_retention_functions`:
     `erasure_cases` columns of §12.6);
   - the LMS runtime DELETE review;
   - the decision on database holds for PHP direct-delete retention paths.
+- E21-RH stays a pre-production blocker until RH.6 closes. HRX closure is
+  unchanged.
+- *(E21-RH.5, §13: the RH.5 functions are done.)*
+
+## 13. E21-RH.5 as built (2026-10-05)
+**The Payroll and LMS retention units run WHOLE as the retention identity,
+on one connection, and their functions refuse any other session user and
+any active platform or School hold. The four RH.6 functions are unchanged.
+E21-RH remains a pre-production blocker.**
+
+### 13.1 Before (re-audited from the live database and source)
+Payroll evidence (`platform:payroll-retention-prune`, phase 1, one Employee):
+```
+pgsql (runtime): read Employees with evidence
+  BEGIN
+    SELECT employees ... FOR UPDATE                (PHP lock)
+    read employment_records (separation recheck)
+    SAVEPOINT; retention_expire_payroll_employee_evidence(dry)  (locks Employee,
+      EmploymentRecords, runs FOR UPDATE; re-proves floor, posting, statutory)
+    RELEASE
+    retention_expire_payroll_employee_evidence(destructive)
+      (sets app.payroll_retention; the freeze guard also needs the owner's
+       privileges -> only the definer's current_user passes)
+  COMMIT
+```
+Payroll run (phase 2, one regular run with its corrections):
+```
+pgsql (runtime): read posted, emptied, old regular runs
+  BEGIN
+    SELECT payroll_runs ... FOR UPDATE             (PHP lock)
+    SAVEPOINT; retention_expire_payroll_run(dry); RELEASE
+    retention_expire_payroll_run(destructive)      (locks the group, deletes postings and runs)
+  COMMIT
+```
+LMS Learning Content / Assignment (`platform:academic-retention-prune`, one
+resource):
+```
+pgsql (runtime): read resources of ended years
+  BEGIN
+    SELECT resource ... FOR UPDATE                 (PHP lock)
+    PHP blockers: references, Documents, D6 owner authority (reads)
+    DELETE FROM documents ... (runtime DELETE)     (DocumentParentRetention)
+    retention_expire_<kind>(destructive)           (locks resource; floor, year, D6,
+                                                    no Document left; audiences, resource)
+  COMMIT; then Document bytes deleted (ObjectDeletion)
+```
+No advisory lock in any of them; READ COMMITTED; tenant context per School
+(`app.current_school_id`); every table under forced RLS. No audit events
+(counts-only logs and metrics). Documents: no FK cascade (the function
+refuses while one remains), no Document service event.
+
+### 13.2 Database
+Migration `2026_11_29_090000_harden_payroll_lms_retention_units`:
+- **Prologue** right after `BEGIN` in the four functions, before every
+  existing check:
+  - `PERFORM public.retention_assert_retention_identity();` (the RH.4
+    helper: `session_user = 'school_os_retention'`);
+  - `PERFORM public.retention_assert_not_held(p_school_id);`
+    **unconditionally, dry runs included**, as HRX does.
+
+  These are unit functions whose dry run validates the unit inside the
+  destructive transaction. The shared hold lock is therefore taken at the
+  first check and held to commit, and a held unit is kept as a whole. RH.4's
+  bulk counts, by contrast, still count under a hold.
+- **Everything else byte for byte:** the body diff is the three added lines.
+  The Employee/EmploymentRecord/run locks, the 8- and 7-year floors,
+  separation, posting age, statutory postings, `results_expired_at`,
+  Academic Year, D6 authority, the Document dependency, School predicates,
+  dry-run counts, the freeze-guard interaction
+  (`payroll_retention_delete_allowed()` still requires the owner's
+  privileges) and `retention_assert_payroll_employee_floor` are unchanged.
+- **`retention_expire_lms_resource(kind, school, id, cutoff)`** (new, SECURITY
+  DEFINER, search path pinned, retention identity only) is the whole
+  destructive LMS unit, so the retention identity needs no DELETE on
+  `documents`. In order:
+  1. the identity and hold prologue, then the tenant check;
+  2. lock the resource `FOR UPDATE` (a concurrent Document attach waits,
+     then fails on its FK);
+  3. delete the resource's Document rows, keeping their storage locations;
+  4. call the LMS function above, which re-proves the floor, year, D6
+     authority and "no Document left" and deletes audiences and resource;
+  5. return the deleted storage locations.
+
+  Any refusal rolls the Document deletion back with it, so a direct call can
+  never strip an ineligible resource.
+- **ACLs** (owner unchanged):
+
+  | | Before | After |
+  |---|---|---|
+  | owner | EXECUTE | EXECUTE (refused by the prologue) |
+  | `school_os_app` | EXECUTE | **none** |
+  | `school_os_retention` | none | **EXECUTE** (the four, and the new unit function) |
+  | PUBLIC | none | none |
+
+- **Column-level SELECT only, for exactly what the moved PHP reads.** No
+  table-level grant, no write.
+
+  | Table | Columns | Read by |
+  |---|---|---|
+  | `payroll_run_results` | `employee_id, payroll_run_id` | the Employees-with-evidence filter; the emptied-run filter |
+  | `payroll_adjustments`, `payroll_lwf_annual_charges` | `employment_record_id` | the Employees-with-evidence filter |
+  | `payroll_runs` | `id, school_id, run_kind, status, results_expired_at, posted_at` | the run selection and its plain recheck |
+  | `learning_content`, `assignments` | `id, school_id, subject_offering_id, owner_employee_id` | the selection, plain recheck and D6 blocker |
+  | `subject_offerings` | `id, school_id, academic_year_id` | the ended-year filter |
+  | `academic_years` | `id, school_id, ends_on` | the ended-year filter and D6 year end |
+  | `documents` | `id, learning_content_id, assignment_id` | the Document blocker (`idsOwnedBy`) |
+  | `*_section_audiences` | `school_id, <resource>_id, section_id` | the D6 blocker |
+  | `teaching_assignments` | `school_id, employee_id, subject_offering_id, section_id, ends_on` | the D6 blocker |
+
+  Narrower designs were rejected. Moving these reads into new definers would
+  duplicate the PHP eligibility rules, and table-level SELECT would expose
+  every column. The functions take every row lock, so the role needs no
+  UPDATE (`FOR UPDATE` would require it).
+
+### 13.3 After
+Every statement of both Payroll phases and of each LMS unit runs on
+`pgsql_retention` (`RetentionExpiry::privileged()`): reads, unit
+transactions, savepoints and function calls. There is no split connection.
+- The PHP rechecks are plain reads that only decide whether to call. The
+  functions lock and re-prove.
+- The School's tenant context is set on that connection. It is visibility
+  only, never authorization.
+- LMS calls the unit function in a savepoint. A resource a concurrent
+  worker already removed (`retention_lms`), or a hold placed after the PHP
+  check (`retention_hold`), is kept, never counted as an error.
+- A Payroll hold refusal is kept as `dependency_blocked` (`retention_holds`),
+  as HRX does.
+- Like HRX, a destructive run now refuses while a configured hold is not yet
+  recorded in the database (`retention_hold_state_stale`). Reconcile with
+  `platform:retention-holds-reconcile`.
+- **Attribution:** `retention.unit_run` (category, School, counts, dry run,
+  `identity` = the maintenance login, never a person) per School and
+  category with any outcome. The command logs and metrics are unchanged.
+- **PHP checks kept as defence in depth:** the commands' `isHeld()` (a held
+  School is counted only). The database is authoritative.
+- **Credential:** `platform:payroll-retention-prune` and the LMS steps of
+  `platform:academic-retention-prune` need `database_retention`. Without
+  it, those units refuse (one error each) and the other academic categories
+  still run.
+
+### 13.4 Proof
+- **Raw identity:** on the retention session, `session_user = current_user =
+  school_os_retention`.
+  - It can neither DELETE `payroll_run_results` (even with
+    `app.payroll_retention=on`), nor UPDATE or lock `payroll_runs`, nor
+    DELETE `documents`.
+  - Yet the definers' deletes pass the freeze guard, which needs the owner's
+    privileges. Inside them `current_user` is the owner.
+- A query listener sees every unit statement on `pgsql_retention`.
+- **RLS:** another School's context, or none, sees no row on the retention
+  connection.
+- **Runtime:** all five functions return "permission denied for function".
+  The owner/migration login is refused by the prologue
+  (`retention_privilege`). `SET ROLE school_os_retention` is denied.
+- **Holds:** a database-only School hold refuses the four functions and
+  the unit function, dry runs included. The platform hold blocks every
+  School. Release restores; another School is independent.
+- **Atomicity:** an ineligible LMS unit (young year) is refused, and its
+  Document deletion rolls back.
+- **Races** (two real OS processes, an observed lock wait):
+  - Payroll: two retention workers on one unit (the second waits, then
+    deletes nothing; no error); a hold placed first (the waiting unit keeps
+    everything); a unit past the hold check (the placement waits); plus the
+    existing rehire, reversal, correction and Finance in-flight races, now
+    on the retention identity.
+  - LMS: two workers on one resource (the second keeps quietly); hold
+    placement in both orders (never half-purged); a Document attach in both
+    orders; another School's unit runs to completion while one is in flight.
+  - No self-deadlock: every step of a unit is on one session.
+
+### 13.5 Verifier
+- `UNIT_RETENTION_FUNCTIONS` = the four plus `retention_expire_lms_resource`:
+  closed (definer, pinned path, no runtime or PUBLIC EXECUTE, prologue
+  present).
+- `RETENTION_FUNCTIONS` (still runtime-executable, temporary) = the four RH.6
+  functions only.
+- `retention_role_functions_exact` = HRX + RH.4 + RH.5 + the read helper.
+- **New `retention_role_selects_exact`:** the retention identity's SELECTs
+  equal `RETENTION_SELECTS` (RH.2 + RH.5 columns) exactly, with no
+  table-level grant.
+
+### 13.6 Rollback
+- `down()` removes the column SELECTs, drops the unit function, removes
+  exactly the injected prologue (refusing if it is not present exactly once)
+  and revokes the retention EXECUTE.
+- It deliberately does **not** re-grant runtime EXECUTE. Payroll and LMS
+  retention fail closed (owner only) until migrated again.
+- Verified on the DDEV test database:
+  - rollback: bodies byte-identical to the RH.4 state; the four functions
+    owner-only;
+  - migrate again: identical function and table/column ACL snapshots;
+  - the verifier passes.
+
+### 13.7 Still open (RH.6) — RH.5 does NOT close these
+- **EmploymentRecord eligibility-source integrity.** The runtime role can
+  still UPDATE `employment_records` (`status`, `ends_on`), which the D9 floor
+  reads. Payroll's invocation and hold boundary is hardened; the source of
+  its separation is not.
+- **`erasure_cases` eligibility source** (§12.6).
+- **The LMS runtime DELETE review.** `school_os_app` still holds DELETE on
+  `learning_content` and `assignments` (and `documents`). No application
+  path uses those grants on the LMS tables, but they remain.
+- **The Finance unit, Student processing authorizations, Student consent and
+  Guardian consent functions and their orchestration.**
+- **The decision on database holds for PHP direct-delete retention paths.**
 - E21-RH stays a pre-production blocker until RH.6 closes. HRX closure is
   unchanged.

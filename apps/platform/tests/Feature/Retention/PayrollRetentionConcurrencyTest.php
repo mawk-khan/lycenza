@@ -7,11 +7,13 @@ use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\Payroll\Application\Retention\PayrollEvidenceRetentionService;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Models\School;
+use App\Support\Retention\RetentionExpiry;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\ForcesConcurrentOverlap;
 use Tests\Feature\Retention\Concerns\CreatesPayrollRetentionFixtures;
 use Tests\TestCase;
@@ -41,13 +43,7 @@ use Tests\TestCase;
  */
 class PayrollRetentionConcurrencyTest extends TestCase
 {
-    use CreatesPayrollRetentionFixtures, ForcesConcurrentOverlap;
-
-    /** @var array<int, string> */
-    protected $connectionsToTransact = [];
-
-    /** @var list<School> */
-    private array $schools = [];
+    use CommitsRetentionFixtures, CreatesPayrollRetentionFixtures, ForcesConcurrentOverlap;
 
     protected function setUp(): void
     {
@@ -58,8 +54,8 @@ class PayrollRetentionConcurrencyTest extends TestCase
 
     protected function tearDown(): void
     {
+        // Committed fixtures (Schools, Users, holds) go in CommitsRetentionFixtures' hermetic cleanup.
         DB::purge('pgsql_race');
-        $this->purgeCommittedSchools($this->schools);
 
         parent::tearDown();
     }
@@ -68,7 +64,6 @@ class PayrollRetentionConcurrencyTest extends TestCase
     private function world(): array
     {
         $school = $this->createSchool();
-        $this->schools[] = $school;
         $setup = $this->payrollSetup($school);
         $employee = $this->paidEmployee($school, $setup);
         $run = $this->postedRun($school, '2015-08-01', '2015-08-31');
@@ -194,7 +189,7 @@ class PayrollRetentionConcurrencyTest extends TestCase
         app(PayrollEvidenceRetentionService::class)->pruneEvidence($w['school'], $cutoff->toDateString(), 100, false);
         $golden = $this->balances($w['school']);
 
-        // The release, uncommitted on a second runtime connection.
+        // The release, uncommitted on a second connection -- the retention identity's (E21-RH.5).
         $race = $this->race($w['school']);
         $this->assertSame(1, (int) $race->selectOne('SELECT retention_expire_payroll_run(?, ?, ?, false) AS n', [$w['school']->id, $w['run']->id, $cutoff->utc()->format('Y-m-d H:i:s')])->n);
 
@@ -209,10 +204,60 @@ class PayrollRetentionConcurrencyTest extends TestCase
         $this->assertSame($golden, $this->balances($w['school']));
     }
 
-    /** A second, independent runtime connection, in the School's context, with an open transaction. */
+    #[Test]
+    public function two_retention_workers_on_the_same_unit_serialize_and_the_second_deletes_nothing(): void
+    {
+        // E21-RH.5: both whole units on their own retention sessions; the second waits on the Employee lock
+        // the first's function holds, then finds nothing left (no error, no double delete).
+        $w = $this->world();
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->script('payroll-prune', $w['school']->id),
+            $this->script('payroll-prune', $w['school']->id),
+        );
+
+        $this->assertSame('deleted:1/1 errors:0', $holder);
+        $this->assertSame('deleted:0/0 errors:0', $contender);
+        $this->assertSame(0, $this->admin('payroll_run_results', 'employee_id', $w['employee']->id));
+        $this->assertSame(0, $this->admin('payroll_runs', 'id', $w['run']->id));
+    }
+
+    #[Test]
+    public function a_hold_placed_concurrently_makes_the_waiting_payroll_unit_keep_everything(): void
+    {
+        // E21-RH.3 lock order: the placement holds the hold lock exclusively; the unit's first function call
+        // waits on it (shared), then refuses inside PostgreSQL -- the unit is kept, never half-done.
+        $w = $this->world();
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            ['php', __DIR__.'/../../Support/hrx-retention-op.php', 'place-school', $w['school']->id],
+            $this->script('payroll-prune', $w['school']->id),
+        );
+
+        $this->assertSame('placed:created', $holder);
+        $this->assertSame('deleted:0/0 errors:0', $contender);
+        $this->assertSame(1, $this->admin('payroll_run_results', 'employee_id', $w['employee']->id));
+    }
+
+    #[Test]
+    public function a_payroll_unit_past_the_hold_check_finishes_before_the_placement_lands(): void
+    {
+        $w = $this->world();
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->script('payroll-prune', $w['school']->id),
+            ['php', __DIR__.'/../../Support/hrx-retention-op.php', 'place-school', $w['school']->id],
+        );
+
+        $this->assertSame('deleted:1/1 errors:0', $holder);
+        $this->assertSame('placed:created', $contender, 'the placement waited for the in-flight unit');
+        $this->assertSame(0, $this->admin('payroll_run_results', 'employee_id', $w['employee']->id));
+    }
+
+    /** A second, independent retention-identity connection (E21-RH.5), in the School's context, with an open transaction. */
     private function race(School $school): Connection
     {
-        Config::set('database.connections.pgsql_race', config('database.connections.pgsql'));
+        Config::set('database.connections.pgsql_race', config('database.connections.'.RetentionExpiry::PRIVILEGED_CONNECTION));
         $race = DB::connection('pgsql_race');
         $race->beginTransaction();
         $race->select("select set_config('app.current_school_id', ?, true)", [$school->id]);

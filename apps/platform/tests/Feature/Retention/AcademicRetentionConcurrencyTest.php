@@ -5,6 +5,7 @@ namespace Tests\Feature\Retention;
 use App\Domain\Attendance\Application\Retention\AttendanceSessionRetentionService;
 use App\Domain\Timetable\Application\Retention\TimetableEntryRetentionService;
 use App\Models\School;
+use App\Support\Retention\LmsResourceRetention;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Connection;
 use Illuminate\Database\QueryException;
@@ -12,6 +13,8 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Symfony\Component\Process\Process;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\ForcesConcurrentOverlap;
 use Tests\Feature\Attendance\Concerns\CreatesAttendanceFixtures;
 use Tests\TestCase;
@@ -35,29 +38,19 @@ use Tests\TestCase;
  */
 class AcademicRetentionConcurrencyTest extends TestCase
 {
-    use CreatesAttendanceFixtures, ForcesConcurrentOverlap;
-
-    /** @var array<int, string> */
-    protected $connectionsToTransact = [];
-
-    /** @var list<string> */
-    private array $schoolIds = [];
+    use CommitsRetentionFixtures, CreatesAttendanceFixtures, ForcesConcurrentOverlap;
 
     protected function tearDown(): void
     {
+        // Committed fixtures (Schools, Users, holds) go in CommitsRetentionFixtures' hermetic cleanup.
         DB::purge('pgsql_race');
-        foreach ($this->schoolIds as $schoolId) {
-            $this->deleteSchoolAsAdmin($schoolId);
-        }
 
         parent::tearDown();
     }
 
-    /** @return array<string, mixed> */
     private function oldYear(): array
     {
         $school = $this->createSchool();
-        $this->schoolIds[] = $school->id;
         $campus = $this->createCampus($school);
         $year = $this->createAcademicYear($school, ['status' => 'closed', 'starts_on' => '2010-04-01', 'ends_on' => '2011-03-31', 'code' => 'AY10']);
         $grade = $this->createGradeLevel($school);
@@ -168,7 +161,7 @@ class AcademicRetentionConcurrencyTest extends TestCase
         );
 
         $this->assertSame('attached', $holder);
-        $this->assertSame('deleted:1', $contender);
+        $this->assertSame('deleted:1 errors:0', $contender);
         $this->assertSame(0, $this->admin('learning_content', $id));
         $this->assertSame(0, DB::connection('pgsql_admin')->table('documents')->where('learning_content_id', $id)->count());
     }
@@ -184,8 +177,109 @@ class AcademicRetentionConcurrencyTest extends TestCase
             $this->script('attach-document', $w['school']->id, $id),
         );
 
-        $this->assertSame('deleted:1', $holder);
+        $this->assertSame('deleted:1 errors:0', $holder);
         $this->assertStringStartsWith('rejected:', $contender);
         $this->assertSame(0, DB::connection('pgsql_admin')->table('documents')->where('learning_content_id', $id)->count());
+    }
+
+    #[Test]
+    public function two_workers_purging_the_same_resource_serialize_and_the_second_keeps_quietly(): void
+    {
+        // E21-RH.5: the second unit waits on the resource lock the first's function holds, then finds it gone:
+        // nothing deleted twice, not counted as an error.
+        $w = $this->oldYear();
+        $id = $this->learningContent($w);
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->script('lms-prune', $w['school']->id, '2019-01-01'),
+            $this->script('lms-prune', $w['school']->id, '2019-01-01'),
+        );
+
+        $this->assertSame('deleted:1 errors:0', $holder);
+        $this->assertSame('deleted:0 errors:0', $contender);
+        $this->assertSame(0, $this->admin('learning_content', $id));
+    }
+
+    #[Test]
+    public function a_hold_placed_concurrently_makes_the_waiting_lms_unit_keep_the_resource_and_its_documents(): void
+    {
+        $w = $this->oldYear();
+        $id = $this->learningContent($w);
+        $this->document($w, $id);
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            ['php', __DIR__.'/../../Support/hrx-retention-op.php', 'place-school', $w['school']->id],
+            $this->script('lms-prune', $w['school']->id, '2019-01-01'),
+        );
+
+        $this->assertSame('placed:created', $holder);
+        $this->assertSame('deleted:0 errors:0', $contender);
+        $this->assertSame(1, $this->admin('learning_content', $id));
+        $this->assertSame(1, DB::connection('pgsql_admin')->table('documents')->where('learning_content_id', $id)->count(), 'no half-purged unit');
+    }
+
+    #[Test]
+    public function an_lms_unit_past_the_hold_check_finishes_before_the_placement_lands(): void
+    {
+        $w = $this->oldYear();
+        $id = $this->learningContent($w);
+        $this->document($w, $id);
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->script('lms-prune', $w['school']->id, '2019-01-01'),
+            ['php', __DIR__.'/../../Support/hrx-retention-op.php', 'place-school', $w['school']->id],
+        );
+
+        $this->assertSame('deleted:1 errors:0', $holder);
+        $this->assertSame('placed:created', $contender, 'the placement waited for the in-flight unit');
+        $this->assertSame(0, $this->admin('learning_content', $id));
+        $this->assertSame(0, DB::connection('pgsql_admin')->table('documents')->where('learning_content_id', $id)->count());
+    }
+
+    #[Test]
+    public function another_schools_unit_runs_while_one_school_unit_is_in_flight_and_neither_sees_the_other(): void
+    {
+        $a = $this->oldYear();
+        $b = $this->oldYear();
+        $idA = $this->learningContent($a);
+        $idB = $this->learningContent($b);
+
+        $dir = sys_get_temp_dir().'/race_'.bin2hex(random_bytes(8));
+        mkdir($dir);
+        $holder = new Process($this->script('lms-prune', $a['school']->id, '2019-01-01'), null, ['CONCURRENCY_HOLD_DIR' => $dir]);
+        $holder->setTimeout(180);
+        try {
+            $holder->start();
+            $deadline = microtime(true) + 90;
+            while (! file_exists($dir.'/acted')) {
+                $this->assertTrue($holder->isRunning() && microtime(true) < $deadline, 'the holder never acted: '.$holder->getOutput().$holder->getErrorOutput());
+                usleep(2_000);
+            }
+
+            // School A's unit is deleted but uncommitted; School B's unit runs to completion meanwhile.
+            $r = app(LmsResourceRetention::class)->prune('learning_content', $b['school'], '2019-01-01', 100, false, false);
+            $this->assertSame([1, 0], [$r['deleted'], $r['errors']], 'School B never waits on School A');
+            $this->assertSame(1, $this->admin('learning_content', $idA), 'A is uncommitted: still visible');
+            $this->assertSame(0, $this->admin('learning_content', $idB));
+        } finally {
+            touch($dir.'/release');
+            $holder->wait();
+            @unlink($dir.'/acted');
+            @unlink($dir.'/release');
+            @rmdir($dir);
+        }
+
+        $this->assertSame('deleted:1 errors:0', trim($holder->getOutput()));
+        $this->assertSame(0, $this->admin('learning_content', $idA));
+    }
+
+    private function document(array $w, string $id): void
+    {
+        app(TenantContext::class)->withSchool($w['school'], fn () => DB::table('documents')->insert([
+            'id' => (string) Str::uuid7(), 'school_id' => $w['school']->id, 'learning_content_id' => $id, 'classification_tier' => 'internal',
+            'storage_disk' => 'local', 'storage_path' => "schools/{$w['school']->id}/documents/learning_content/{$id}/race.pdf",
+            'original_filename' => 'race.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 5, 'uploaded_at' => now(), 'status' => 'active',
+            'created_at' => now(), 'updated_at' => now(),
+        ]));
     }
 }

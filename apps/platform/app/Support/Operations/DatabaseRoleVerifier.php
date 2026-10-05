@@ -85,18 +85,59 @@ class DatabaseRoleVerifier
      * runtime role, executable by it and never by PUBLIC.
      */
     public const RETENTION_FUNCTIONS = [
-        // E21-RH.4 moved the eleven standalone functions to STANDALONE_RETENTION_FUNCTIONS; what remains
-        // here is the coupled set the runtime role still executes until E21-RH.5 / RH.6 (temporary).
+        // E21-RH.4 moved the eleven standalone functions to STANDALONE_RETENTION_FUNCTIONS and E21-RH.5 the
+        // Payroll/LMS units to UNIT_RETENTION_FUNCTIONS; what remains here is the coupled set the runtime role
+        // still executes until E21-RH.6 (temporary).
         // E21.3A2 (E21-D8): one settled Finance unit, period-floored in the database -- RH.6
         'retention_expire_finance_unit',
         // E21.3B (E21-D7 core): one Student's append-only core evidence, core-floored in the database -- RH.6
         'retention_expire_student_processing_authorizations', 'retention_expire_student_consent_events',
         // E21.3C (E21.2G G1): one Guardian's consent events, Guardian-floored in the database -- RH.6
         'retention_expire_guardian_consent_events',
-        // E21.3D (E21.2G A1): one LMS resource with its audiences, year- and D6-floored in the database -- RH.5
-        'retention_expire_learning_content', 'retention_expire_assignment',
-        // E21.3F (E21-D9): one Employee's posted payroll evidence, separation-floored; one emptied payroll run -- RH.5
+    ];
+
+    /**
+     * E21-RH.5: the Payroll and LMS unit functions, executable only by the
+     * retention identity and called inside its whole-unit transaction. Each
+     * refuses any other session user and any active platform or School hold
+     * (dry runs included). `retention_expire_lms_resource` is the whole
+     * destructive LMS unit (its Documents, then the LMS function).
+     */
+    public const UNIT_RETENTION_FUNCTIONS = [
+        // E21.3F (E21-D9): one Employee's posted payroll evidence, separation-floored; one emptied payroll run
         'retention_expire_payroll_employee_evidence', 'retention_expire_payroll_run',
+        // E21.3D (E21.2G A1): one LMS resource with its audiences, year- and D6-floored; the unit with its Documents
+        'retention_expire_learning_content', 'retention_expire_assignment', 'retention_expire_lms_resource',
+    ];
+
+    /**
+     * E21-RH.2 / RH.5: the exact column-level SELECTs of the retention
+     * identity -- what its whole-unit PHP reads need, nothing else (no
+     * table-level grant, no write). table => sorted columns.
+     */
+    public const RETENTION_SELECTS = [
+        // E21-RH.2: the HRX units
+        'employees' => ['id', 'school_id'],
+        'employment_records' => ['employee_id', 'ends_on', 'id', 'status'],
+        'leave_ledger_entries' => ['employment_record_id'],
+        'leave_policy_assignments' => ['employment_record_id'],
+        'leave_requests' => ['employee_id'],
+        'leave_year_close_items' => ['employment_record_id'],
+        'staff_attendance_records' => ['employee_id'],
+        // E21-RH.5: the Payroll units
+        'payroll_adjustments' => ['employment_record_id'],
+        'payroll_lwf_annual_charges' => ['employment_record_id'],
+        'payroll_run_results' => ['employee_id', 'payroll_run_id'],
+        'payroll_runs' => ['id', 'posted_at', 'results_expired_at', 'run_kind', 'school_id', 'status'],
+        // E21-RH.5: the LMS units
+        'academic_years' => ['ends_on', 'id', 'school_id'],
+        'assignment_section_audiences' => ['assignment_id', 'school_id', 'section_id'],
+        'assignments' => ['id', 'owner_employee_id', 'school_id', 'subject_offering_id'],
+        'documents' => ['assignment_id', 'id', 'learning_content_id'],
+        'learning_content' => ['id', 'owner_employee_id', 'school_id', 'subject_offering_id'],
+        'learning_content_section_audiences' => ['learning_content_id', 'school_id', 'section_id'],
+        'subject_offerings' => ['academic_year_id', 'id', 'school_id'],
+        'teaching_assignments' => ['employee_id', 'ends_on', 'school_id', 'section_id', 'subject_offering_id'],
     ];
 
     /**
@@ -233,10 +274,11 @@ class DatabaseRoleVerifier
         // of the sanctioned, narrow ones (the assert helpers are not executable).
         $unexpected = array_filter($functions, fn ($f) => $f->runtime_exec && ! in_array($f->proname, self::RETENTION_FUNCTIONS, true));
         $results[] = CheckResult::of('retention_functions_narrow', count($narrow) === count(self::RETENTION_FUNCTIONS) && $unexpected === []);
-        $privileged = [...self::PRIVILEGED_RETENTION_FUNCTIONS, ...self::STANDALONE_RETENTION_FUNCTIONS];
+        $privileged = [...self::PRIVILEGED_RETENTION_FUNCTIONS, ...self::STANDALONE_RETENTION_FUNCTIONS, ...self::UNIT_RETENTION_FUNCTIONS];
+        $prologued = [...self::STANDALONE_RETENTION_FUNCTIONS, ...self::UNIT_RETENTION_FUNCTIONS];
         $closed = array_filter($functions, fn ($f) => in_array($f->proname, $privileged, true)
             && $f->prosecdef && str_contains($f->config, 'search_path=') && $f->owner !== $role && ! $f->runtime_exec && ! $f->public_exec
-            && (! in_array($f->proname, self::STANDALONE_RETENTION_FUNCTIONS, true) || (str_contains($f->src, 'retention_assert_retention_identity()') && str_contains($f->src, 'retention_assert_not_held('))));
+            && (! in_array($f->proname, $prologued, true) || (str_contains($f->src, 'retention_assert_retention_identity()') && str_contains($f->src, 'retention_assert_not_held('))));
         $holds = DB::selectOne("select has_table_privilege(?, 'retention_holds', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') as any", [$role]);
         $results[] = CheckResult::of('privileged_retention_functions_closed', count($closed) === count($privileged) && ! $holds->any);
         $results = [...$results, ...$this->retentionIdentityChecks()];
@@ -295,6 +337,27 @@ class DatabaseRoleVerifier
         )->n;
         $results[] = CheckResult::of('retention_role_read_only', (int) $writes === 0, (int) $writes === 0 ? '' : $writes.' grant(s)');
 
+        // E21-RH.5: and its reads are exactly the approved columns (no table-level SELECT at all).
+        $selects = [];
+        foreach (DB::select(
+            "select c.relname as tbl, t.attname as col from pg_attribute t join pg_class c on c.oid = t.attrelid
+               cross join lateral aclexplode(t.attacl) a where a.grantee = ? and a.privilege_type = 'SELECT' and c.relnamespace = 'public'::regnamespace
+              union all
+             select c.relname, '*' from pg_class c cross join lateral aclexplode(c.relacl) a where a.grantee = ? and a.privilege_type = 'SELECT'",
+            [$attrs->oid, $attrs->oid],
+        ) as $row) {
+            $selects[$row->tbl][] = $row->col;
+        }
+        ksort($selects);
+        $selects = array_map(function (array $columns): array {
+            sort($columns);
+
+            return $columns;
+        }, $selects);
+        $approvedSelects = self::RETENTION_SELECTS;
+        ksort($approvedSelects);
+        $results[] = CheckResult::of('retention_role_selects_exact', $selects === $approvedSelects, $selects === $approvedSelects ? '' : 'differs from the approved column set');
+
         // EXECUTE on exactly the approved destructive retention functions; never a legacy one.
         $executable = array_column(DB::select(
             "select p.proname from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'retention\\_%'
@@ -302,7 +365,7 @@ class DatabaseRoleVerifier
             [$role],
         ), 'proname');
         sort($executable);
-        $approved = [...self::PRIVILEGED_RETENTION_FUNCTIONS, ...self::STANDALONE_RETENTION_FUNCTIONS, ...self::RETENTION_READ_FUNCTIONS];
+        $approved = [...self::PRIVILEGED_RETENTION_FUNCTIONS, ...self::STANDALONE_RETENTION_FUNCTIONS, ...self::UNIT_RETENTION_FUNCTIONS, ...self::RETENTION_READ_FUNCTIONS];
         sort($approved);
         $results[] = CheckResult::of('retention_role_functions_exact', $executable === $approved, $executable === $approved ? '' : count(array_diff($executable, $approved)).' unexpected, '.count(array_diff($approved, $executable)).' missing');
 

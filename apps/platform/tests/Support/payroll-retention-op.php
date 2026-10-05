@@ -9,6 +9,7 @@ use App\Domain\Payroll\Infrastructure\PayrollPeriod;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Retention\RetentionExpiry;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
@@ -37,7 +38,7 @@ $context = $app->make(TenantContext::class);
 try {
     $school = School::query()->findOrFail($args[0]);
     // The School context wraps the held transaction: deferred checks (journal balance) run at COMMIT.
-    echo $context->withSchool($school, fn () => HeldTransaction::run(function () use ($app, $operation, $args, $context, $school): string {
+    $run = fn () => $context->withSchool($school, fn () => HeldTransaction::run(function () use ($app, $operation, $args, $context, $school): string {
         return match ($operation) {
             'payroll-prune' => (function () use ($app, $school): string {
                 $payroll = $app->make(PayrollEvidenceRetentionService::class);
@@ -72,6 +73,9 @@ try {
             default => throw new InvalidArgumentException("unknown operation {$operation}"),
         };
     }));
+    // E21-RH.5: the purge runs as the retention identity, so its held transaction is on that connection
+    // too (the unit transactions nest in it); the late writes are ordinary runtime writes.
+    echo $operation === 'payroll-prune' ? DB::usingConnection(RetentionExpiry::PRIVILEGED_CONNECTION, $run) : $run();
 } catch (Throwable $e) {
     echo 'rejected:'.class_basename($e);
 }

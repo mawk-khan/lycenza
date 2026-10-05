@@ -8,12 +8,14 @@ use App\Domain\Payroll\Application\PayrollRunService;
 use App\Domain\Payroll\Application\Retention\PayrollEvidenceRetentionService;
 use App\Domain\Payroll\Infrastructure\PayrollPeriod;
 use App\Models\School;
+use App\Support\Retention\RetentionHolds;
 use App\Support\Retention\TenantClosureReadiness;
 use App\Support\Retention\TenantRetentionCatalog;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\PendingCommand;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Feature\Retention\Concerns\CreatesPayrollRetentionFixtures;
 use Tests\TestCase;
 
@@ -26,7 +28,7 @@ use Tests\TestCase;
  */
 class PayrollEvidenceRetentionTest extends TestCase
 {
-    use CreatesPayrollRetentionFixtures;
+    use CommitsRetentionFixtures, CreatesPayrollRetentionFixtures;
 
     protected function setUp(): void
     {
@@ -215,6 +217,9 @@ class PayrollEvidenceRetentionTest extends TestCase
         $this->postedRun($free, '2015-08-01', '2015-08-31');
         $this->separate($b, '2015-12-31');
         config(['retention.hold_school_ids' => [$held->id]]);
+        // E21-RH.5: the units run as the retention identity, which refuses destructive work while a configured hold
+        // is not yet recorded in the database (as HRX does); record it, as platform:retention-holds-reconcile would.
+        app(RetentionHolds::class)->place($held->id, 'litigation', 'PAYROLL-HOLD');
 
         $this->prune()->expectsOutputToContain('Deleted the payroll evidence of 1 Employee(s) (unresolved separation: 0, dependency-blocked: 0, held: 1')->assertSuccessful();
 

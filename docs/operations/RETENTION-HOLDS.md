@@ -15,7 +15,8 @@ action.
   School elevations, delivery policy decisions, API credentials, released
   suppressions and erasure cases. A School hold does not hold the
   School-less ones (erasure cases included); the platform hold holds them
-  all.
+  all. Since E21-RH.5, the Payroll evidence and run units and the LMS
+  Learning Content and Assignment units refuse in the database too.
 - **Legacy retention commands** count a held School (or, under a platform
   hold, everything) as `held` and delete nothing.
 - **Fail closed:** if the hold state cannot be read, everything counts as
@@ -71,7 +72,7 @@ the scheduler or a web request.
   **add-only** input. After changing them, run
   `platform:retention-holds-reconcile`, which places what they name and
   releases nothing.
-- **Until you reconcile**, destructive HRX runs refuse
+- **Until you reconcile**, destructive HRX, Payroll and LMS runs refuse
   (`retention_hold_state_stale`), and the other retention commands
   (including the E21-RH.4 standalone expiries) still treat the configured
   value as held.

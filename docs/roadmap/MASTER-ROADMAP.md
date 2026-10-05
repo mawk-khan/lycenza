@@ -2495,12 +2495,16 @@ parallel, and the email provider tail) — not started.
     it; authoritative database holds).
   - **RH.4 (2026-10-05, ADR 0066 §12):** the eleven standalone legacy
     functions run only as the retention identity, with the platform and
-    School holds enforced in the database. On a feature branch, not
-    merged.
-  - **Open:** RH.5 (Payroll evidence and run, LMS content and assignment)
-    and RH.6 (Finance unit, Student and Guardian core evidence,
-    eligibility-source guards, the LMS runtime DELETE review, holds for
-    PHP direct-delete paths).
+    School holds enforced in the database. Published.
+  - **RH.5 (2026-10-05, ADR 0066 §13):** the Payroll and LMS units run whole
+    on the retention identity (Documents through one database unit), with
+    database holds. On a feature branch, not merged.
+  - **Open, RH.6:**
+    - Finance unit, Student and Guardian core evidence;
+    - the eligibility-source guards (EmploymentRecord separation,
+      `erasure_cases`);
+    - the LMS runtime DELETE review;
+    - holds for PHP direct-delete paths.
 - **E21.4 — User Identity Minimization & Database Safety (2026-10-03):
   published / closed.** `docs/security/E21-RETENTION-DETERMINATION.md`
   §5.11, E21-L1 §10:

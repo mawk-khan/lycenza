@@ -150,7 +150,7 @@ Its rows are counted as held, and nothing of it is deleted.
   hold policy and its semantics are unchanged.
   - The other E21 functions keep the original model (runtime EXECUTE, hold
     checked by the command), pending a separate E21 decision.
-    *(E21-RH.4: eleven of them no longer do; see below.)*
+    *(E21-RH.4/RH.5: fifteen of them no longer do; see below.)*
 - **E21-RH.3 (2026-10-04, ADR 0066 §11): PostgreSQL hold state is
   authoritative.**
   - Holds live in `retention_holds`, with indefinite history.
@@ -180,6 +180,19 @@ Its rows are counted as held, and nothing of it is deleted.
   - A School hold does not hold `erasure_cases` (a platform record); the
     platform hold does. Runtime-writable eligibility columns of
     `erasure_cases` remain an RH.6 item.
+- **E21-RH.5 (2026-10-05, ADR 0066 §13): the Payroll and LMS units are
+  hardened.**
+  - Payroll evidence and runs, and LMS Learning Content and Assignments, run
+    whole as `school_os_retention` on its own connection, Documents
+    included (through one database unit function).
+  - Their functions refuse any other session user, and any active platform
+    hold or hold of their School, dry runs included.
+  - Periods, floors, triggers and dependencies are unchanged.
+  - Still open (RH.6): the runtime-writable EmploymentRecord separation the
+    D9 floor reads, and the runtime DELETE grants on `learning_content` /
+    `assignments`.
+  - Finance unit, Student and Guardian core evidence keep runtime EXECUTE
+    and the PHP-only hold for now.
 - **E21-RH.2 (2026-10-04, ADR 0066 §10).**
   - The HRX purge functions are executed only by the dedicated
     `school_os_retention` login.
