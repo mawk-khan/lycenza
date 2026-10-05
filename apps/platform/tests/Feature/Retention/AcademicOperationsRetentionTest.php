@@ -249,7 +249,11 @@ class AcademicOperationsRetentionTest extends TestCase
         });
 
         // Once the Student record is gone (its own D7 clock), the header and then the entry follow.
-        $this->inSchool($old['school'], fn () => DB::table('attendance_records')->where('attendance_session_id', $busy)->delete());
+        // (Simulated through the schema owner: since E21-RH.6 only the retention identity deletes attendance records.)
+        DB::connection('pgsql_admin')->transaction(function () use ($old, $busy): void {
+            DB::connection('pgsql_admin')->select("select set_config('app.current_school_id', ?, true)", [$old['school']->id]);
+            DB::connection('pgsql_admin')->table('attendance_records')->where('attendance_session_id', $busy)->delete();
+        });
         $this->assertRun(['header' => ['deleted' => 1, 'dependency_blocked' => 0], 'entry' => ['deleted' => 1, 'dependency_blocked' => 0]], $this->schoolRun($old['school']));
         $this->assertSame(0, $this->rows($old['school'], 'timetable_entries', $old['entry']->id));
         $this->assertSame(1, $this->rows($old['school'], 'employees', $old['teacher']->id), 'the teacher is never deleted here; only its references are released');
@@ -303,6 +307,8 @@ class AcademicOperationsRetentionTest extends TestCase
         $held = $this->year(null, '2026-04-01', '2027-03-31', 'AY26');
         $other = $this->year(null, '2026-04-01', '2027-03-31', 'AY26');
         config(['retention.hold_school_ids' => [$held['school']->id]]);
+        // E21-RH.6: destructive retention refuses while a configured hold is unrecorded; record it (as reconcile does).
+        app(RetentionHolds::class)->place($held['school']->id, 'litigation', 'TEST-HOLD');
         $heldDelivery = $this->delivery($held);
         $otherDelivery = $this->delivery($other);
 
@@ -469,14 +475,9 @@ class AcademicOperationsRetentionTest extends TestCase
         // The runtime role cannot run the unit; the owner login is refused by the identity check.
         $this->assertStringContainsString('permission denied for function retention_expire_lms_resource', (string) $this->unit($a['school'], 'learning_content', $contentA, $cutoff, 'pgsql'));
         $this->assertStringContainsString('retention_privilege', (string) $this->unit($a['school'], 'learning_content', $contentA, $cutoff, RetentionHolds::MAINTENANCE_CONNECTION));
-        // ... nor can the retention identity delete a Document directly: only the unit does.
-        $this->assertStringContainsString('permission denied', (string) (function () use ($a, $contentA) {
-            try {
-                return DB::usingConnection(RetentionExpiry::PRIVILEGED_CONNECTION, fn () => $this->inSchool($a['school'], fn () => DB::table('documents')->where('learning_content_id', $contentA)->delete()));
-            } catch (QueryException $e) {
-                return $e->getMessage();
-            }
-        })());
+        // (E21-RH.5 also proved here that the retention identity could not delete a Document directly. Since
+        // E21-RH.6 it may -- the Student/Guardian/Employee units remove their Documents -- and every such
+        // delete passes its hold guard: RetentionDeleteBoundaryTest.)
 
         // An ineligible unit (young year) is refused and its Document deletion rolls back with it.
         $this->assertStringContainsString('retention_floor', (string) $this->unit($a['school'], 'learning_content', $youngContent, $cutoff));

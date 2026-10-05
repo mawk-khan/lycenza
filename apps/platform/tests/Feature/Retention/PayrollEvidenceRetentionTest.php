@@ -128,7 +128,9 @@ class PayrollEvidenceRetentionTest extends TestCase
         $run = $this->postedRun($school, '2015-08-01', '2015-08-31');
         $cutoff = $this->cutoff($school);
 
-        $this->inSchool($school, fn () => DB::table('employment_records')->where('employee_id', $staff['notice']->id)->update(['status' => 'notice_period', 'ends_on' => '2015-12-31']));
+        // A notice-period record with an end date (written through the schema owner: since E21-RH.6 no workflow
+        // ends a record without a terminal status, and the guard refuses the runtime role).
+        $this->separate($staff['notice'], '2015-12-31', 'notice_period');
         $this->separate($staff['rehired'], '2015-12-31');
         $this->createEmploymentRecord($staff['rehired'], ['status' => 'active', 'starts_on' => '2022-01-01', 'ends_on' => null]);
         $this->separate($staff['young'], '2020-06-30');

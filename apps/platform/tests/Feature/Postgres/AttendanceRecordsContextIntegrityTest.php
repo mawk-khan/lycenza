@@ -464,12 +464,16 @@ class AttendanceRecordsContextIntegrityTest extends TestCase
         // Attendance alone, so those accept either constraint. The
         // Attendance FKs' existence and exact shape are asserted
         // independently by `attendance_context_foreign_keys_exist()`.
+        // E21-RH.6: the runtime role holds no DELETE on TimetableEntries,
+        // StudentEnrollments or Employees any more (only retention deletes
+        // them), so for those it is refused by privilege before any FK.
+        $revoked = 'permission denied for table';
         $cases = [
-            ['timetable_entries', $w['entry']->id, ['attendance_sessions_timetable_entry_fk']],
-            ['student_enrollments', $own->id, ['attendance_records_enrollment_context_fk']],
+            ['timetable_entries', $w['entry']->id, ['attendance_sessions_timetable_entry_fk', $revoked]],
+            ['student_enrollments', $own->id, ['attendance_records_enrollment_context_fk', $revoked]],
             ['sections', $w['section']->id, ['attendance_sessions_section_fk', 'student_enrollments_section_id_school_id_foreign', 'timetable_entries_section_fk']],
             ['subject_offerings', $w['offering']->id, ['attendance_sessions_subject_offering_fk', 'timetable_entries_subject_offering_fk']],
-            ['employees', $w['teacher']->id, ['attendance_sessions_teacher_fk', 'timetable_entries_teacher_fk']],
+            ['employees', $w['teacher']->id, ['attendance_sessions_teacher_fk', 'timetable_entries_teacher_fk', $revoked]],
             ['timetable_periods', $w['period']->id, ['attendance_sessions_period_fk', 'timetable_entries_period_fk']],
         ];
 
@@ -481,9 +485,10 @@ class AttendanceRecordsContextIntegrityTest extends TestCase
             );
         }
 
-        // The Session itself is protected by its own records.
-        $this->assertRejectedBy(
-            'attendance_records_session_context_fk',
+        // The Session itself is protected by its own records (E21-RH.6: and
+        // the runtime role no longer deletes Sessions at all).
+        $this->assertRejectedByAnyOf(
+            ['attendance_records_session_context_fk', $revoked],
             fn () => DB::connection('pgsql')->table('attendance_sessions')->where('id', $sessionId)->delete(),
             'Deleting a Session that still has records must be rejected.',
         );

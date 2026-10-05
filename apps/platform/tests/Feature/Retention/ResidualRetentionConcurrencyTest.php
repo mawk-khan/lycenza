@@ -8,6 +8,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\Concerns\ForcesConcurrentOverlap;
 use Tests\TestCase;
@@ -30,7 +31,7 @@ use Tests\TestCase;
  */
 class ResidualRetentionConcurrencyTest extends TestCase
 {
-    use CreatesTenancyFixtures, ForcesConcurrentOverlap;
+    use CommitsRetentionFixtures, CreatesTenancyFixtures, ForcesConcurrentOverlap;
 
     /** @var array<int, string> */
     protected $connectionsToTransact = [];
@@ -82,6 +83,7 @@ class ResidualRetentionConcurrencyTest extends TestCase
         $school = $this->school();
         $thread = $this->emptyThread($school);
 
+        $this->backdateEndRecording();
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->script('message', $school->id, $thread, $this->createUser()->id),
             $this->script('thread-prune', $school->id, '2020-01-01 00:00:00'),
@@ -98,6 +100,7 @@ class ResidualRetentionConcurrencyTest extends TestCase
         $school = $this->school();
         $thread = $this->emptyThread($school);
 
+        $this->backdateEndRecording();
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->script('thread-prune', $school->id, '2020-01-01 00:00:00'),
             $this->script('message', $school->id, $thread, $this->createUser()->id),
@@ -118,6 +121,7 @@ class ResidualRetentionConcurrencyTest extends TestCase
             DB::table('communication_approval_requests')->insert(['id' => (string) Str::uuid7(), 'school_id' => $school->id, 'announcement_id' => $id, 'requested_by_user_id' => $this->createUser()->id, 'requested_at' => '2015-01-01 00:00:00', 'fingerprint' => str_repeat('a', 64), 'snapshot' => '{}', 'status' => 'rejected', 'decided_by_user_id' => $this->createUser()->id, 'decided_at' => '2015-01-02 00:00:00', 'created_at' => now(), 'updated_at' => now()]);
         });
 
+        $this->backdateEndRecording();
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->script('edit', $school->id, $id),
             $this->script('never-sent-prune', $school->id, '2020-01-01 00:00:00'),
@@ -136,6 +140,7 @@ class ResidualRetentionConcurrencyTest extends TestCase
         $visitor = $this->createVisitor($school);
         $this->createVisitorVisit($visitor, $campus, ['status' => 'checked_out', 'checked_in_at' => '2015-01-01 09:00:00', 'checked_out_at' => '2015-01-01 10:00:00']);
 
+        $this->backdateEndRecording();
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->script('visit', $school->id, $visitor->id, $campus->id),
             $this->script('visitor-prune', $school->id, '2020-01-01 00:00:00'),

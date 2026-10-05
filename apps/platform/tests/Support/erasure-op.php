@@ -2,6 +2,7 @@
 
 use App\Models\School;
 use App\Support\Retention\Erasure\ErasureCaseService;
+use App\Support\Retention\RetentionExpiry;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
@@ -30,6 +31,18 @@ $args = array_slice($argv, 1);
 $operation = array_shift($args);
 $context = $app->make(TenantContext::class);
 
+// E21-RH.6: an erasure's purge units run as the retention identity on their own connection, while the case
+// itself is a runtime write. Both transactions are held: the units nest (as savepoints) in the open retention
+// transaction, which commits once the held runtime transaction is released.
+$retention = $operation === 'execute' ? DB::connection(RetentionExpiry::PRIVILEGED_CONNECTION) : null;
+// As a contender, the session that waits is the retention one: it carries the observed session name.
+$sessionName = getenv('CONCURRENCY_SESSION_NAME');
+if ($retention !== null && $sessionName !== false && $sessionName !== '') {
+    $retention->statement('SET application_name TO '.$retention->getPdo()->quote($sessionName));
+    putenv('CONCURRENCY_SESSION_NAME');
+}
+$retention?->beginTransaction();
+
 try {
     echo HeldTransaction::run(function () use ($app, $operation, $args, $context): string {
         return match ($operation) {
@@ -55,6 +68,8 @@ try {
             default => throw new InvalidArgumentException("unknown operation {$operation}"),
         };
     });
+    $retention?->commit();
 } catch (Throwable $e) {
+    $retention?->rollBack();
     echo 'rejected:'.class_basename($e);
 }

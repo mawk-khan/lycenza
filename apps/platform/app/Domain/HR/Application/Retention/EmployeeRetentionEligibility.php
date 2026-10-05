@@ -3,6 +3,7 @@
 namespace App\Domain\HR\Application\Retention;
 
 use App\Models\School;
+use App\Support\Retention\RetentionLocks;
 use App\Support\Retention\RetentionUnit;
 use App\Support\Tenancy\TenantContext;
 use Closure;
@@ -52,7 +53,12 @@ final class EmployeeRetentionEligibility
     /**
      * The pure rule. The dry run and every purge use it, so they always agree.
      *
-     * @param  list<array{status: string, ends_on: ?string}>  $employments  every EmploymentRecord of the Employee
+     * E21-RH.6 (owner decision 2026-10-05): the separation date is the
+     * latest `ends_on`, or -- if later -- the latest date the database
+     * recorded an end (`recorded_on`, from `ended_recorded_at`, which no
+     * caller can set). A backdated separation never shortens the period.
+     *
+     * @param  list<array{status: string, ends_on: ?string, recorded_on?: ?string}>  $employments  every EmploymentRecord of the Employee
      */
     public static function resolve(array $employments): EmployeeSeparation
     {
@@ -72,7 +78,10 @@ final class EmployeeRetentionEligibility
             }
         }
 
-        return EmployeeSeparation::separated(max(array_map(fn (array $e): string => (string) $e['ends_on'], $employments)));
+        $ended = max(array_map(fn (array $e): string => (string) $e['ends_on'], $employments));
+        $recorded = array_filter(array_map(fn (array $e): ?string => $e['recorded_on'] ?? null, $employments));
+
+        return EmployeeSeparation::separated($recorded === [] ? $ended : max($ended, max($recorded)));
     }
 
     /**
@@ -110,7 +119,7 @@ final class EmployeeRetentionEligibility
 
             $query->orderBy('id')->chunkById($batch, function ($employees) use ($cutoffDate, $dryRun, $blockers, $purge, $recheck, &$result): void {
                 $employments = DB::table('employment_records')->whereIn('employee_id', $employees->pluck('id')->all())
-                    ->get(['employee_id', 'status', 'ends_on'])->groupBy('employee_id');
+                    ->get(['employee_id', 'status', 'ends_on', 'ended_recorded_at'])->groupBy('employee_id');
 
                 foreach ($employees as $employee) {
                     $separation = self::resolve($this->rows($employments->get($employee->id)?->all() ?? []));
@@ -147,7 +156,7 @@ final class EmployeeRetentionEligibility
             $pending = 0;
 
             DB::table('employees')->where('school_id', $school->id)->select('id')->orderBy('id')->chunkById($batch, function ($employees) use (&$latest, &$pending): void {
-                $employments = DB::table('employment_records')->whereIn('employee_id', $employees->pluck('id')->all())->get(['employee_id', 'status', 'ends_on'])->groupBy('employee_id');
+                $employments = DB::table('employment_records')->whereIn('employee_id', $employees->pluck('id')->all())->get(['employee_id', 'status', 'ends_on', 'ended_recorded_at'])->groupBy('employee_id');
 
                 foreach ($employees as $employee) {
                     $separation = self::resolve($this->rows($employments->get($employee->id)?->all() ?? []));
@@ -173,7 +182,7 @@ final class EmployeeRetentionEligibility
     {
         return $this->context->withSchool($school, function () use ($userId): bool {
             foreach (DB::table('employees')->where('user_id', $userId)->pluck('id') as $employeeId) {
-                $separation = self::resolve($this->rows(DB::table('employment_records')->where('employee_id', $employeeId)->get(['status', 'ends_on'])->all()));
+                $separation = self::resolve($this->rows(DB::table('employment_records')->where('employee_id', $employeeId)->get(['status', 'ends_on', 'ended_recorded_at'])->all()));
                 if ($separation->state !== EmployeeSeparation::SEPARATED) {
                     return true;
                 }
@@ -195,7 +204,7 @@ final class EmployeeRetentionEligibility
                 return null;
             }
 
-            return self::resolve($this->rows(DB::table('employment_records')->where('employee_id', $employeeId)->get(['status', 'ends_on'])->all()));
+            return self::resolve($this->rows(DB::table('employment_records')->where('employee_id', $employeeId)->get(['status', 'ends_on', 'ended_recorded_at'])->all()));
         });
     }
 
@@ -211,11 +220,12 @@ final class EmployeeRetentionEligibility
             throw new LogicException('lockSeparation() must run inside the purge transaction.');
         }
 
-        if (DB::table('employees')->where('id', $employeeId)->lockForUpdate()->first(['id']) === null) {
+        // E21-RH.6: the retention identity locks through the lock-only definer (FOR UPDATE).
+        if (! RetentionLocks::lockOne('employees', $employeeId)) {
             return null;
         }
 
-        return self::resolve($this->rows(DB::table('employment_records')->where('employee_id', $employeeId)->get(['status', 'ends_on'])->all()));
+        return self::resolve($this->rows(DB::table('employment_records')->where('employee_id', $employeeId)->get(['status', 'ends_on', 'ended_recorded_at'])->all()));
     }
 
     /**
@@ -231,15 +241,19 @@ final class EmployeeRetentionEligibility
             return null;
         }
 
-        return self::resolve($this->rows(DB::table('employment_records')->where('employee_id', $employeeId)->get(['status', 'ends_on'])->all()));
+        return self::resolve($this->rows(DB::table('employment_records')->where('employee_id', $employeeId)->get(['status', 'ends_on', 'ended_recorded_at'])->all()));
     }
 
     /**
      * @param  array<int, object>  $rows
-     * @return list<array{status: string, ends_on: ?string}>
+     * @return list<array{status: string, ends_on: ?string, recorded_on: ?string}>
      */
     private function rows(array $rows): array
     {
-        return array_values(array_map(fn (object $row): array => ['status' => (string) $row->status, 'ends_on' => $row->ends_on === null ? null : substr((string) $row->ends_on, 0, 10)], $rows));
+        return array_values(array_map(fn (object $row): array => [
+            'status' => (string) $row->status,
+            'ends_on' => $row->ends_on === null ? null : substr((string) $row->ends_on, 0, 10),
+            'recorded_on' => ($row->ended_recorded_at ?? null) === null ? null : substr((string) $row->ended_recorded_at, 0, 10),
+        ], $rows));
     }
 }

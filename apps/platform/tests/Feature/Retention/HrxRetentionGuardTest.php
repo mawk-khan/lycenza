@@ -270,7 +270,6 @@ class HrxRetentionGuardTest extends TestCase
         }
         foreach (['retention_expire_leave_employee_evidence', 'retention_expire_staff_attendance_employee_evidence'] as $function) {
             $this->assertContains($function, DatabaseRoleVerifier::PRIVILEGED_RETENTION_FUNCTIONS);
-            $this->assertNotContains($function, DatabaseRoleVerifier::RETENTION_FUNCTIONS);
         }
         $checks = collect(app(DatabaseRoleVerifier::class)->verify())->keyBy('code');
         $this->assertSame(CheckResult::PASS, $checks['privileged_retention_functions_closed']->status);

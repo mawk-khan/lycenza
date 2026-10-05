@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\AssertsRuntimeDeleteRevoked;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
@@ -49,7 +50,7 @@ use Tests\TestCase;
  */
 class AdmissionApplicationIntegrityTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use AssertsRuntimeDeleteRevoked, CreatesTenancyFixtures;
 
     private function setSchool(string $schoolId): void
     {
@@ -228,10 +229,10 @@ class AdmissionApplicationIntegrityTest extends TestCase
             "update admission_applications set status = 'withdrawn' where id = ?",
             [$applicationB->id],
         ));
-        $this->assertSame(0, DB::connection('pgsql')->delete(
+        $this->assertRuntimeDeleteRevoked(
             'delete from admission_applications where id = ?',
             [$applicationB->id],
-        ));
+        );
     }
 
     #[Test]

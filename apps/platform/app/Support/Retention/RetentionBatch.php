@@ -53,10 +53,12 @@ final class RetentionBatch
 
         do {
             try {
-                [$selected, $deleted] = DB::transaction(function () use ($deletable, $batch): array {
-                    $ids = $deletable()->orderBy('t.id')->limit($batch)->lock('FOR UPDATE SKIP LOCKED')->pluck('t.id')->all();
+                [$selected, $deleted] = DB::transaction(function () use ($deletable, $batch, $table): array {
+                    // E21-RH.6: the retention identity locks through the lock-only definer (FOR UPDATE SKIP LOCKED).
+                    $candidates = $deletable()->orderBy('t.id')->limit($batch)->pluck('t.id')->map(fn ($id) => (string) $id)->all();
+                    $ids = RetentionLocks::lock($table, $candidates, skipLocked: true);
 
-                    return [count($ids), $ids === [] ? 0 : $deletable()->whereIn('t.id', $ids)->delete()];
+                    return [count($candidates), $ids === [] ? 0 : $deletable()->whereIn('t.id', $ids)->delete()];
                 });
             } catch (QueryException) {
                 $result['errors']++;

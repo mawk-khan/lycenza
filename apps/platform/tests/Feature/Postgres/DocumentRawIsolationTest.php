@@ -6,6 +6,7 @@ use App\Support\Tenancy\TenantRls;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\AssertsRuntimeDeleteRevoked;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
@@ -22,7 +23,7 @@ use Tests\TestCase;
  */
 class DocumentRawIsolationTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use AssertsRuntimeDeleteRevoked, CreatesTenancyFixtures;
 
     private function setSchool(string $schoolId): void
     {
@@ -86,10 +87,10 @@ class DocumentRawIsolationTest extends TestCase
             "update documents set status = 'archived' where id = ?",
             [$documentB->id],
         ));
-        $this->assertSame(0, DB::connection('pgsql')->delete(
+        $this->assertRuntimeDeleteRevoked(
             'delete from documents where id = ?',
             [$documentB->id],
-        ));
+        );
     }
 
     #[Test]

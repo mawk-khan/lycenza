@@ -4,6 +4,7 @@ namespace Tests\Concerns;
 
 use App\Models\School;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Testing\PendingCommand;
 
 /**
  * HRX.6 / E21-RH: hermetic cleanup for tests that COMMIT their fixtures
@@ -21,7 +22,8 @@ use Illuminate\Support\Facades\DB;
  * - rows of the School-less platform tables (GLOBAL_TABLES) written since
  *   setUp: platform audit events, retention holds (a platform hold has no
  *   School), suppressions, platform/Group grants, Groups, platform-level
- *   erasure cases, API tokens (replica mode skips their User cascade);
+ *   erasure cases, API tokens (replica mode skips their User cascade),
+ *   and (E21-RH.6) School-less email, outbox, receipt and failed-job rows;
  * - rows of the trigger-maintained `operational_work_backlog` projection
  *   created since setUp (replica mode skips its sync trigger), and the
  *   scheduler heartbeats a committed command run recorded since setUp.
@@ -37,7 +39,11 @@ trait PurgesCommittedHrxFixtures
     private ?array $durableSnapshot = null;
 
     /** School-less tables a committed fixture can leave rows in (cleaned by id difference). */
-    private const GLOBAL_TABLES = ['platform_audit_events', 'retention_holds', 'email_suppressions', 'platform_role_assignments', 'group_role_assignments', 'school_groups', 'erasure_cases', 'personal_access_tokens'];
+    private const GLOBAL_TABLES = [
+        'platform_audit_events', 'retention_holds', 'email_suppressions', 'platform_role_assignments', 'group_role_assignments', 'school_groups', 'erasure_cases', 'personal_access_tokens',
+        // E21-RH.6: the housekeeping prunes' School-less rows (platform email, School-less outbox events, failed jobs)
+        'email_messages', 'email_events', 'domain_event_outbox', 'event_consumer_receipts', 'failed_jobs',
+    ];
 
     /** Global tables whose counts must be restored. */
     private const DURABLE_TABLES = ['schools', 'users', 'roles', 'role_capabilities', 'school_memberships', 'membership_role_assignments', 'operational_work_backlog', 'scheduler_heartbeats', ...self::GLOBAL_TABLES];
@@ -100,6 +106,8 @@ trait PurgesCommittedHrxFixtures
                 foreach (self::GLOBAL_TABLES as $table) {
                     $admin->table($table)->whereNotIn('id', $snapshot['global'][$table])->delete();
                 }
+                // No id of its own: a provider reference whose (purged) message is gone (replica mode skips the cascade).
+                $admin->table('email_provider_references as r')->whereNotExists(fn ($m) => $m->selectRaw('1')->from('email_messages as m')->whereColumn('m.id', 'r.email_message_id'))->delete();
                 $admin->table('operational_work_backlog')->whereNotIn($admin->raw(self::BACKLOG_KEY), $snapshot['backlog'])->delete();
                 $admin->table('scheduler_heartbeats')->whereNotIn('name', $snapshot['heartbeats'])->delete();
             }
@@ -107,6 +115,52 @@ trait PurgesCommittedHrxFixtures
             $admin->table('roles')->whereIn('id', $roles)->delete();
             $admin->table('users')->whereIn('id', $users)->delete();
         });
+    }
+
+    /**
+     * E21-RH.6: the database stamps when an employment record or enrollment
+     * ended (`ended_recorded_at`, the guard trigger's clock), and retention
+     * counts from the later of that and `ends_on`. A fixture that ends a
+     * record "years ago" therefore also says it was RECORDED then: through
+     * the schema owner (exempt from the guard), one School context at a
+     * time (forced RLS applies to the owner outside DDEV), for every ended
+     * record of the Schools created since setUp. Test database only.
+     */
+    protected function backdateEndRecording(): void
+    {
+        // Fixture setup, not the run under test: a distinct alias of the
+        // owner connection, so a test watching which connections a command
+        // used never mistakes this for the command reaching pgsql_admin.
+        config(['database.connections.fixtures_owner' => config('database.connections.pgsql_admin')]);
+        $admin = DB::connection('fixtures_owner');
+        $schools = $admin->table('schools')->whereNotIn('id', $this->durableSnapshot['schools'] ?? [])->pluck('id')->all();
+        foreach ($schools as $schoolId) {
+            $admin->transaction(function () use ($admin, $schoolId): void {
+                $admin->select("SELECT set_config('app.current_school_id', ?, true)", [$schoolId]);
+                foreach (['employment_records', 'student_enrollments'] as $table) {
+                    $admin->table($table)->where('school_id', $schoolId)->whereNotNull('ends_on')
+                        ->update(['ended_recorded_at' => DB::raw('ends_on::timestamp')]);
+                }
+            });
+        }
+    }
+
+    /**
+     * E21-RH.6: a fixture that ends an employment or an enrollment "years
+     * ago" means it was also recorded then (the database counts from the
+     * later of the two). Before every command, the test's ended records are
+     * recorded as of their end; RetentionDeleteBoundaryTest proves the
+     * recorded-date rule itself with direct SQL.
+     *
+     * @param  string  $command
+     * @param  array<string, mixed>  $parameters
+     * @return PendingCommand|int
+     */
+    public function artisan($command, $parameters = [])
+    {
+        $this->backdateEndRecording();
+
+        return parent::artisan($command, $parameters);
     }
 
     /** The committed run left nothing durable behind (call after purgeCommittedHrxSchools()). */

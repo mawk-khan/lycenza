@@ -7,6 +7,7 @@ use App\Domain\Communications\Infrastructure\CommunicationAttachment;
 use App\Domain\Communications\Infrastructure\CommunicationMessage;
 use App\Domain\Communications\Infrastructure\CommunicationThread;
 use App\Models\School;
+use App\Support\Retention\RetentionHolds;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -212,6 +213,8 @@ class CommunicationsRetentionPruneTest extends TestCase
         $a = $this->schoolWithYears();
         $held = $this->schoolWithYears();
         config(['retention.hold_school_ids' => [$held->id]]);
+        // E21-RH.6: the database hold is authoritative (a configured hold must also be recorded).
+        app(RetentionHolds::class)->place($held->id, 'litigation', 'TEST-HOLD');
         $oldA = $this->thread($a, ['2022-05-01 06:00:00']);
         $youngA = $this->thread($a, ['2024-01-01 06:00:00']);
         $oldHeld = $this->thread($held, ['2022-05-01 06:00:00'], attachment: true);

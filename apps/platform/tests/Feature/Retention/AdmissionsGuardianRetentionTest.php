@@ -15,6 +15,7 @@ use App\Models\School;
 use App\Support\Operations\CheckResult;
 use App\Support\Operations\DatabaseRoleVerifier;
 use App\Support\Retention\RetentionExpiry;
+use App\Support\Retention\RetentionHolds;
 use App\Support\Retention\RetentionPeriod;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
@@ -23,6 +24,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
@@ -42,7 +44,7 @@ use Tests\TestCase;
  */
 class AdmissionsGuardianRetentionTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CommitsRetentionFixtures, CreatesTenancyFixtures;
 
     private string $disk;
 
@@ -170,7 +172,8 @@ class AdmissionsGuardianRetentionTest extends TestCase
 
         $this->in($w['school'], function () use ($rejected, $accepted): void {
             $this->refused(fn () => DB::table('admission_applications')->where('id', $rejected->id)->update(['terminal_at' => '2001-01-01 00:00:00']), 'immutable');
-            $this->refused(fn () => DB::table('admission_applications')->where('id', $accepted->id)->update(['terminal_at' => '2001-01-01 00:00:00']), 'admission_applications_terminal_at_check');
+            // (E21-RH.6: the guard refuses a runtime backfill before the CHECK is reached.)
+            $this->refused(fn () => DB::table('admission_applications')->where('id', $accepted->id)->update(['terminal_at' => '2001-01-01 00:00:00']), 'set only by the terminal transition');
             // Touching updated_at never moves the clock.
             DB::table('admission_applications')->where('id', $rejected->id)->update(['updated_at' => '2001-01-01 00:00:00']);
         });
@@ -213,6 +216,8 @@ class AdmissionsGuardianRetentionTest extends TestCase
         $w = $this->admissionsWorld();
         $other = $this->admissionsWorld();
         config(['retention.hold_school_ids' => [$other['school']->id]]);
+        // E21-RH.6: destructive retention refuses while a configured hold is unrecorded; record it (as reconcile does).
+        app(RetentionHolds::class)->place($other['school']->id, 'litigation', 'TEST-HOLD');
         $student = $this->createStudent($w['school'], ['status' => 'inactive']);
         $this->createStudentEnrollment($student, $this->createSection($w['year'], $w['campus'], $w['grade']), ['status' => 'withdrawn', 'starts_on' => $w['year']->starts_on, 'ends_on' => $w['year']->starts_on]);
         $enrollmentId = $this->in($w['school'], fn () => DB::table('student_enrollments')->where('student_id', $student->id)->value('id'));
@@ -262,7 +267,15 @@ class AdmissionsGuardianRetentionTest extends TestCase
             $this->refused(fn () => DB::table('guardians')->where('id', $guardian->id)->update(['no_relationship_since' => '2001-01-01 00:00:00']), 'maintained by the relationship trigger');
             $unresolved = $this->guardian($school, null);
             $this->refused(fn () => DB::table('guardians')->where('id', $unresolved->id)->update(['no_relationship_since' => '2099-01-01 00:00:00']), 'maintained by the relationship trigger');
-            $this->assertSame(1, DB::table('guardians')->where('id', $unresolved->id)->update(['no_relationship_since' => '2020-01-01 00:00:00']));
+            // E21-RH.6: a past-dated backfill is the schema owner's alone (the runtime role could otherwise age a
+            // Guardian into eligibility); the operator command runs on the maintenance connection.
+            $this->refused(fn () => DB::table('guardians')->where('id', $unresolved->id)->update(['no_relationship_since' => '2020-01-01 00:00:00']), 'maintained by the relationship trigger');
+            $admin = DB::connection('pgsql_admin');
+            $this->assertSame(1, $admin->transaction(function () use ($admin, $school, $unresolved): int {
+                $admin->select("select set_config('app.current_school_id', ?, true)", [$school->id]);
+
+                return $admin->table('guardians')->where('id', $unresolved->id)->update(['no_relationship_since' => '2020-01-01 00:00:00']);
+            }));
         });
     }
 
@@ -325,6 +338,8 @@ class AdmissionsGuardianRetentionTest extends TestCase
             'invited_by_user_id' => $user->id, 'created_at' => now(), 'updated_at' => now(),
         ]));
         config(['retention.hold_school_ids' => [$other->id]]);
+        // E21-RH.6: destructive retention refuses while a configured hold is unrecorded; record it (reconcile).
+        app(RetentionHolds::class)->place($other->id, 'litigation', 'GUARDIAN-HOLD');
         $held = $this->guardian($other, '2020-01-01 00:00:00');
 
         $this->at('2026-06-15 12:00:00');
@@ -377,14 +392,19 @@ class AdmissionsGuardianRetentionTest extends TestCase
         $expiry = app(RetentionExpiry::class);
         $cutoff = Carbon::parse('2024-01-01 00:00:00', 'UTC');
 
-        $this->in($school, function () use ($school, $old, $young, $related, $expiry, $cutoff): void {
+        $this->in($school, function () use ($school, $old, $expiry, $cutoff): void {
             $this->refused(fn () => DB::table('communication_domain_consent_events')->where('guardian_id', $old->id)->delete(), 'permission denied');
+            // E21-RH.6: the runtime role cannot run the function at all.
+            $this->refused(fn () => $expiry->guardianConsentEvents($school, $old->id, $cutoff, true), 'permission denied for function');
+        });
+        // As the retention identity, the database still refuses every ineligible unit.
+        DB::usingConnection(RetentionExpiry::PRIVILEGED_CONNECTION, fn () => $this->in($school, function () use ($school, $old, $young, $related, $expiry, $cutoff): void {
             $this->refused(fn () => $expiry->guardianConsentEvents($school, $old->id, now('UTC')->subMonths(6), true), 'retention_floor');
             $this->refused(fn () => $expiry->guardianConsentEvents($school, $young->id, $cutoff, true), 'retention_guardian');
             $this->refused(fn () => $expiry->guardianConsentEvents($school, $related->id, $cutoff, true), 'retention_guardian');
             $this->assertSame(1, DB::transaction(fn () => $expiry->guardianConsentEvents($school, $old->id, $cutoff, true)));
-        });
-        $this->in($b, fn () => $this->refused(fn () => $expiry->guardianConsentEvents($school, $old->id, $cutoff, false), 'retention_tenant'));
+        }));
+        DB::usingConnection(RetentionExpiry::PRIVILEGED_CONNECTION, fn () => $this->in($b, fn () => $this->refused(fn () => $expiry->guardianConsentEvents($school, $old->id, $cutoff, false), 'retention_tenant')));
 
         $this->assertSame(1, $this->rows($school, 'communication_domain_consent_events', 'guardian_id', $old->id));
         $check = collect(app(DatabaseRoleVerifier::class)->verify())->keyBy('code');

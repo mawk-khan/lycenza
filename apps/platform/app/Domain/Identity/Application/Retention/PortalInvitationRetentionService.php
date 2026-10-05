@@ -4,6 +4,8 @@ namespace App\Domain\Identity\Application\Retention;
 
 use App\Models\School;
 use App\Support\Retention\ReferencingRows;
+use App\Support\Retention\RetentionExpiry;
+use App\Support\Retention\RetentionLocks;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Query\Builder;
@@ -54,6 +56,13 @@ final class PortalInvitationRetentionService
      */
     public function prune(School $school, CarbonInterface $cutoff, int $batch, bool $dryRun, bool $held): array
     {
+        // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
+        return app(RetentionExpiry::class)->retained('portal_invitation', $dryRun || $held, $school->id, ['eligible' => 0, 'deleted' => 0, 'held' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneUnit($school, $cutoff, $batch, $dryRun, $held));
+    }
+
+    /** @return array{eligible: int, deleted: int, held: int, dependency_blocked: int, errors: int} */
+    private function pruneUnit(School $school, CarbonInterface $cutoff, int $batch, bool $dryRun, bool $held): array
+    {
         return $this->context->withSchool($school, function () use ($school, $cutoff, $batch, $dryRun, $held): array {
             $at = $cutoff->copy()->utc()->format('Y-m-d H:i:s');
             $ended = fn (Builder $q): Builder => $q->where('i.school_id', $school->id)->where(fn (Builder $e) => $e
@@ -76,10 +85,12 @@ final class PortalInvitationRetentionService
             do {
                 try {
                     [$selected, $deleted] = DB::transaction(function () use ($ended, $batch): array {
-                        $ids = $this->unreferenced($ended(DB::table(self::TABLE.' as i')))
-                            ->orderBy('i.id')->limit($batch)->lock('FOR UPDATE SKIP LOCKED')->pluck('i.id')->all();
+                        // E21-RH.6: the retention identity locks through the lock-only definer (FOR UPDATE SKIP LOCKED).
+                        $candidates = $this->unreferenced($ended(DB::table(self::TABLE.' as i')))
+                            ->orderBy('i.id')->limit($batch)->pluck('i.id')->map(fn ($id) => (string) $id)->all();
+                        $ids = RetentionLocks::lock(self::TABLE, $candidates, skipLocked: true);
 
-                        return [count($ids), $ids === [] ? 0 : $this->unreferenced($ended(DB::table(self::TABLE.' as i')))->whereIn('i.id', $ids)->delete()];
+                        return [count($candidates), $ids === [] ? 0 : $this->unreferenced($ended(DB::table(self::TABLE.' as i')))->whereIn('i.id', $ids)->delete()];
                     });
                 } catch (QueryException) {
                     $result['errors']++;

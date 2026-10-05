@@ -5,6 +5,7 @@ namespace Tests\Feature\Email;
 use App\Models\EmailEvent;
 use App\Models\EmailSuppression;
 use App\Support\Email\Suppression\EmailSuppressionService;
+use App\Support\Retention\RetentionHolds;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -120,6 +121,7 @@ class ReleasedSuppressionRetentionTest extends TestCase
 
         $this->artisan('platform:email-suppressions-prune', ['--dry-run' => true])->expectsOutputToContain('Dry run: would delete 1')->assertSuccessful();
         config(['retention.hold_platform' => true]);
+        app(RetentionHolds::class)->place(null, 'regulatory_inquiry', 'TEST-HOLD');
         $this->artisan('platform:email-suppressions-prune')->expectsOutputToContain('held: 1')->assertSuccessful();
 
         $this->assertTrue($this->exists($id));

@@ -79,24 +79,6 @@ class DatabaseRoleVerifier
     public const FINANCE_FUNCTIONS = ['finance_assign_journal_entry_period'];
 
     /**
-     * E21.2B: the narrow retention functions (migration 2026_11_06_090000).
-     * They are the ONLY sanctioned way the runtime role removes protected
-     * history: SECURITY DEFINER, `search_path` pinned, not owned by the
-     * runtime role, executable by it and never by PUBLIC.
-     */
-    public const RETENTION_FUNCTIONS = [
-        // E21-RH.4 moved the eleven standalone functions to STANDALONE_RETENTION_FUNCTIONS and E21-RH.5 the
-        // Payroll/LMS units to UNIT_RETENTION_FUNCTIONS; what remains here is the coupled set the runtime role
-        // still executes until E21-RH.6 (temporary).
-        // E21.3A2 (E21-D8): one settled Finance unit, period-floored in the database -- RH.6
-        'retention_expire_finance_unit',
-        // E21.3B (E21-D7 core): one Student's append-only core evidence, core-floored in the database -- RH.6
-        'retention_expire_student_processing_authorizations', 'retention_expire_student_consent_events',
-        // E21.3C (E21.2G G1): one Guardian's consent events, Guardian-floored in the database -- RH.6
-        'retention_expire_guardian_consent_events',
-    ];
-
-    /**
      * E21-RH.5: the Payroll and LMS unit functions, executable only by the
      * retention identity and called inside its whole-unit transaction. Each
      * refuses any other session user and any active platform or School hold
@@ -108,6 +90,62 @@ class DatabaseRoleVerifier
         'retention_expire_payroll_employee_evidence', 'retention_expire_payroll_run',
         // E21.3D (E21.2G A1): one LMS resource with its audiences, year- and D6-floored; the unit with its Documents
         'retention_expire_learning_content', 'retention_expire_assignment', 'retention_expire_lms_resource',
+        // E21-RH.6: one settled Finance unit (D8); one Student's core evidence (D7); one Guardian's consent events
+        'retention_expire_finance_unit', 'retention_expire_student_processing_authorizations', 'retention_expire_student_consent_events',
+        'retention_expire_guardian_consent_events',
+        // E21-RH.6: the one UPDATE the Communications purge needs (break the announcement <-> message cycle)
+        'retention_unlink_announcement_message',
+    ];
+
+    /**
+     * E21-RH.6 (ADR 0066 §14): the tables the PHP retention units delete
+     * from as the retention identity. The role holds DELETE (and SELECT) on
+     * exactly these, never INSERT or UPDATE, and each carries the hold guard
+     * `retention_guard_retention_delete` (a retention-session delete of a
+     * held School or under a platform hold is refused in PostgreSQL).
+     */
+    public const RETENTION_DELETES = [
+        'students', 'student_enrollments', 'student_subject_enrollments', 'student_guardian_relationships', 'student_guardian_account_links',
+        'attendance_records', 'enrollment_rollover_items', 'library_loans', 'transport_student_assignments', 'hostel_residency_assignments',
+        'admission_applications', 'applicants', 'communication_domain_preferences', 'documents',
+        'guardians', 'guardian_contacts',
+        'employees', 'employment_records', 'employee_assignments', 'employee_addresses', 'employee_emergency_contacts', 'employee_notes',
+        'employee_qualifications', 'employee_experience_records', 'employee_certifications', 'employee_personal_details', 'employee_documents',
+        'employee_compensation_assignments', 'employee_statutory_identifiers', 'employee_tax_profile', 'employee_pf_status', 'employee_esi_coverage',
+        'curriculum_deliveries', 'attendance_sessions', 'timetable_entries', 'transport_route_assignments', 'automation_executions',
+        'visitors', 'visitor_visits', 'identity_account_invitations',
+        'communication_deliveries', 'communication_messages', 'communication_announcements', 'communication_threads',
+        'email_messages', 'email_provider_references', 'email_events', 'domain_event_outbox', 'event_consumer_receipts', 'webhook_deliveries', 'failed_jobs',
+    ];
+
+    /** E21-RH.6: where the product (or the framework) deletes too, so the runtime role keeps DELETE. */
+    public const RUNTIME_PRODUCT_DELETES = [
+        'student_guardian_relationships', 'employee_addresses', 'employee_emergency_contacts', 'employee_notes',
+        'employee_qualifications', 'employee_experience_records', 'employee_certifications', 'failed_jobs',
+    ];
+
+    /** E21-RH.6: tables whose rows only retention removes, in the database since E21-RH.5 (runtime DELETE revoked). */
+    public const RUNTIME_DELETES_REVOKED_EXTRA = ['learning_content', 'assignments', 'student_processing_authorizations'];
+
+    /** E21-RH.6: read-only tables the moved units read whole (production readers); table-level SELECT only. */
+    public const RETENTION_TABLE_READS = [
+        'schools', 'academic_years', 'subject_offerings', 'sections', 'school_memberships', 'school_settings',
+        'student_processing_authorizations', 'communication_domain_consent_events',
+        'financial_periods', 'financial_period_account_balances', 'financial_period_expiries', 'financial_period_charge_states',
+        'journal_entries', 'journal_lines', 'ledger_accounts', 'charges', 'payments', 'payment_allocations', 'payment_receipt_counters',
+        'late_fee_assessments', 'payroll_run_postings', 'payroll_statutory_run_postings',
+        'fee_adjustments', 'fee_assessments', 'fee_heads', 'fee_structure_installments',
+        'communication_approval_requests', 'communication_attachments',
+        // The email prune keeps an event a current suppression still rests on (it reads only whether one exists)
+        'email_suppressions',
+    ];
+
+    /** E21-RH.6: the database guards against manufactured retention eligibility and the User-erasure hold boundary. */
+    public const ELIGIBILITY_GUARDS = [
+        'employment_records' => 'trg_employment_records_eligibility_guard',
+        'student_enrollments' => 'trg_student_enrollments_eligibility_guard',
+        'erasure_cases' => 'trg_erasure_cases_guard_transition',
+        'users' => 'users_guard_minimization_hold',
     ];
 
     /**
@@ -176,7 +214,11 @@ class DatabaseRoleVerifier
      * E21-RH.3: read-only functions the retention identity also executes:
      * the active hold scopes (no history, no attribution) its PHP side reads.
      */
-    public const RETENTION_READ_FUNCTIONS = ['retention_hold_active_scopes'];
+    public const RETENTION_READ_FUNCTIONS = [
+        'retention_hold_active_scopes',
+        // E21-RH.6: the lock-only row locker and the read-only dependency probe (identity-checked, never mutate)
+        'retention_lock_rows', 'retention_first_reference',
+    ];
 
     /** E21-RH.3: the hold writers -- owner (operator maintenance) only, never PUBLIC, runtime or retention. */
     public const HOLD_MAINTENANCE_FUNCTIONS = ['retention_hold_place', 'retention_hold_release', 'retention_assert_not_held', 'retention_assert_retention_identity'];
@@ -268,12 +310,10 @@ class DatabaseRoleVerifier
              from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'retention\\_%'",
             [$role],
         );
-        $narrow = array_filter($functions, fn ($f) => in_array($f->proname, self::RETENTION_FUNCTIONS, true)
-            && $f->prosecdef && str_contains($f->config, 'search_path=') && $f->owner !== $role && $f->runtime_exec && ! $f->public_exec);
-        // Every retention_* function the runtime role can execute must be one
-        // of the sanctioned, narrow ones (the assert helpers are not executable).
-        $unexpected = array_filter($functions, fn ($f) => $f->runtime_exec && ! in_array($f->proname, self::RETENTION_FUNCTIONS, true));
-        $results[] = CheckResult::of('retention_functions_narrow', count($narrow) === count(self::RETENTION_FUNCTIONS) && $unexpected === []);
+        // E21-RH.6 (H1 closed): the runtime role executes NO retention_* function -- every destructive one
+        // belongs to the retention identity, the helpers to their owner or the retention identity.
+        $unexpected = array_filter($functions, fn ($f) => $f->runtime_exec);
+        $results[] = CheckResult::of('retention_functions_narrow', $unexpected === [], $unexpected === [] ? '' : count($unexpected).' runtime-executable');
         $privileged = [...self::PRIVILEGED_RETENTION_FUNCTIONS, ...self::STANDALONE_RETENTION_FUNCTIONS, ...self::UNIT_RETENTION_FUNCTIONS];
         $prologued = [...self::STANDALONE_RETENTION_FUNCTIONS, ...self::UNIT_RETENTION_FUNCTIONS];
         $closed = array_filter($functions, fn ($f) => in_array($f->proname, $privileged, true)
@@ -281,6 +321,12 @@ class DatabaseRoleVerifier
             && (! in_array($f->proname, $prologued, true) || (str_contains($f->src, 'retention_assert_retention_identity()') && str_contains($f->src, 'retention_assert_not_held('))));
         $holds = DB::selectOne("select has_table_privilege(?, 'retention_holds', 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE') as any", [$role]);
         $results[] = CheckResult::of('privileged_retention_functions_closed', count($closed) === count($privileged) && ! $holds->any);
+        // E21-RH.6: the retention identity's read helpers are definers, pinned, identity-checked, never runtime/PUBLIC.
+        $helpers = array_filter($functions, fn ($f) => in_array($f->proname, ['retention_lock_rows', 'retention_first_reference'], true)
+            && $f->prosecdef && str_contains($f->config, 'search_path=') && ! $f->runtime_exec && ! $f->public_exec
+            && str_contains($f->src, 'retention_assert_retention_identity()'));
+        $results[] = CheckResult::of('retention_read_helpers_closed', count($helpers) === 2);
+        $results = [...$results, ...$this->retentionBoundaryChecks($role)];
         $results = [...$results, ...$this->retentionIdentityChecks()];
 
         $finance = DB::select(
@@ -306,6 +352,37 @@ class DatabaseRoleVerifier
      *
      * @return list<CheckResult>
      */
+    /**
+     * E21-RH.6 (ADR 0066 §14): the retention-delete hold boundary, the end of
+     * runtime retention-only DELETE, and the eligibility-source guards.
+     *
+     * @return list<CheckResult>
+     */
+    private function retentionBoundaryChecks(string $runtime): array
+    {
+        $guarded = DB::select(
+            "select c.relname from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_proc p on p.oid = t.tgfoid
+              where p.proname = 'retention_guard_retention_delete' and t.tgenabled = 'O' and c.relnamespace = 'public'::regnamespace",
+        );
+        $guardedTables = array_column($guarded, 'relname');
+        $guardFn = DB::selectOne("select p.prosecdef, coalesce(array_to_string(p.proconfig, ','), '') as config,
+                (p.proacl is null or exists (select 1 from aclexplode(p.proacl) a where a.grantee = 0 and a.privilege_type = 'EXECUTE')) as public_exec
+             from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = 'retention_guard_retention_delete'");
+        $results = [CheckResult::of('retention_deletes_guarded', $guardFn !== null && $guardFn->prosecdef && str_contains($guardFn->config, 'search_path=') && ! $guardFn->public_exec
+            && array_diff(self::RETENTION_DELETES, $guardedTables) === [])];
+
+        $revoked = array_values(array_diff([...self::RETENTION_DELETES, ...self::RUNTIME_DELETES_REVOKED_EXTRA], self::RUNTIME_PRODUCT_DELETES));
+        $stillDeletable = array_filter($revoked, fn (string $table) => (bool) DB::selectOne('select has_table_privilege(?, ?, ?) as p', [$runtime, 'public.'.$table, 'DELETE'])->p);
+        $results[] = CheckResult::of('runtime_retention_deletes_revoked', $stillDeletable === [], $stillDeletable === [] ? '' : count($stillDeletable).' table(s)');
+
+        $missing = array_filter(self::ELIGIBILITY_GUARDS, fn (string $trigger, string $table) => DB::selectOne(
+            "select exists (select 1 from pg_trigger where tgrelid = ('public.'||?)::regclass and tgname = ? and tgenabled = 'O') as x", [$table, $trigger],
+        )->x === false, ARRAY_FILTER_USE_BOTH);
+        $results[] = CheckResult::of('retention_eligibility_guards', $missing === [], $missing === [] ? '' : count($missing).' missing or disabled');
+
+        return $results;
+    }
+
     private function retentionIdentityChecks(): array
     {
         $role = self::RETENTION_ROLE;
@@ -328,14 +405,20 @@ class DatabaseRoleVerifier
         $results = [CheckResult::of('retention_role_narrow', $attrs->rolcanlogin && ! $attrs->rolsuper && ! $attrs->rolbypassrls && ! $attrs->rolcreatedb
             && ! $attrs->rolcreaterole && ! $attrs->rolinherit && ! $attrs->rolreplication && ! $shared->any && ! $shared->reach && (int) $owns === 0)];
 
-        // Read-only: no table-level grant at all beyond SELECT, and no column-level write.
-        // Raw ACLs: information_schema only shows grants involving the CURRENT role.
+        // E21-RH.6: no write privilege except DELETE on exactly RETENTION_DELETES (never INSERT, UPDATE,
+        // TRUNCATE, REFERENCES or TRIGGER; no column-level write).
+        $deletes = array_column(DB::select(
+            "select c.relname from pg_class c cross join lateral aclexplode(c.relacl) a where a.grantee = ? and a.privilege_type = 'DELETE' order by 1",
+            [$attrs->oid],
+        ), 'relname');
+        $approvedDeletes = self::RETENTION_DELETES;
+        sort($approvedDeletes);
         $writes = DB::selectOne(
-            "select (select count(*) from pg_class c cross join lateral aclexplode(c.relacl) a where a.grantee = ? and a.privilege_type <> 'SELECT')
+            "select (select count(*) from pg_class c cross join lateral aclexplode(c.relacl) a where a.grantee = ? and a.privilege_type not in ('SELECT', 'DELETE'))
                   + (select count(*) from pg_attribute t cross join lateral aclexplode(t.attacl) a where a.grantee = ? and a.privilege_type <> 'SELECT') as n",
             [$attrs->oid, $attrs->oid],
-        )->n;
-        $results[] = CheckResult::of('retention_role_read_only', (int) $writes === 0, (int) $writes === 0 ? '' : $writes.' grant(s)');
+        )->n + ($deletes === $approvedDeletes ? 0 : 1);
+        $results[] = CheckResult::of('retention_role_writes_exact', (int) $writes === 0, (int) $writes === 0 ? '' : $writes.' unexpected write grant(s)');
 
         // E21-RH.5: and its reads are exactly the approved columns (no table-level SELECT at all).
         $selects = [];
@@ -355,8 +438,16 @@ class DatabaseRoleVerifier
             return $columns;
         }, $selects);
         $approvedSelects = self::RETENTION_SELECTS;
+        foreach ([...self::RETENTION_DELETES, ...self::RETENTION_TABLE_READS] as $table) {
+            $approvedSelects[$table] = [...($approvedSelects[$table] ?? []), '*'];
+        }
+        $approvedSelects = array_map(function (array $columns): array {
+            sort($columns);
+
+            return $columns;
+        }, $approvedSelects);
         ksort($approvedSelects);
-        $results[] = CheckResult::of('retention_role_selects_exact', $selects === $approvedSelects, $selects === $approvedSelects ? '' : 'differs from the approved column set');
+        $results[] = CheckResult::of('retention_role_selects_exact', $selects === $approvedSelects, $selects === $approvedSelects ? '' : 'differs from the approved read set');
 
         // EXECUTE on exactly the approved destructive retention functions; never a legacy one.
         $executable = array_column(DB::select(

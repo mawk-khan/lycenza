@@ -5,9 +5,9 @@ namespace Tests\Feature\Payments;
 use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Application\Exceptions\ChargeHasPaymentAllocationsException;
 use App\Domain\Fees\Infrastructure\Charge;
-use App\Models\DomainEventOutbox;
 use App\Models\School;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Process\Process;
 use Tests\Concerns\CreatesFeesFixtures;
@@ -44,7 +44,8 @@ class ChargeCancellationInterlockTest extends TestCase
             // accumulate across the suite and compete with a LATER
             // test's own rows for DispatchOutboxEvents' fixed --batch
             // window.
-            DomainEventOutbox::query()->where('school_id', $this->school->id)->delete();
+            // E21-RH.6: the runtime role no longer deletes outbox rows.
+            DB::connection('pgsql_admin')->table('domain_event_outbox')->where('school_id', $this->school->id)->delete();
             $this->deleteSchoolAsAdmin($this->school);
         }
 

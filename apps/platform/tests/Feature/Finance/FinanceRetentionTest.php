@@ -6,10 +6,12 @@ use App\Domain\Finance\Application\Periods\FinanceRetentionReadiness;
 use App\Domain\Finance\Application\Periods\FinancialPeriodSummary;
 use App\Domain\Finance\Application\Retention\FinanceRetentionEligibility;
 use App\Domain\Payments\Application\StudentFeeStatementReadService;
+use App\Support\Retention\RetentionHolds;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Feature\Finance\Concerns\CreatesFinanceRetentionFixtures;
 use Tests\TestCase;
 
@@ -21,7 +23,7 @@ use Tests\TestCase;
  */
 class FinanceRetentionTest extends TestCase
 {
-    use CreatesFinanceRetentionFixtures;
+    use CommitsRetentionFixtures, CreatesFinanceRetentionFixtures;
 
     private function charges(array $w): array
     {
@@ -136,6 +138,8 @@ class FinanceRetentionTest extends TestCase
         $other = $this->d8World();
         $this->enableFinanceRetention();
         config(['retention.hold_school_ids' => [$held['school']->id]]);
+        // E21-RH.6: destructive retention refuses while a configured hold is unrecorded; record it (as reconcile does).
+        app(RetentionHolds::class)->place($held['school']->id, 'litigation', 'TEST-HOLD');
         $heldBefore = $this->golden($held, $this->charges($held));
 
         $this->artisan('platform:finance-retention-prune')

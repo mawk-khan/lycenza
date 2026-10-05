@@ -81,6 +81,13 @@ final class StudentRecordRetentionService
     /** @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int} */
     public function pruneRolloverItems(School $school, string $cutoffDate, int $batch, bool $dryRun, ?string $only = null): array
     {
+        // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
+        return app(RetentionExpiry::class)->retained('rollover_item', $dryRun, $school->id, ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneRolloverItemsUnit($school, $cutoffDate, $batch, $dryRun, $only));
+    }
+
+    /** @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int} */
+    private function pruneRolloverItemsUnit(School $school, string $cutoffDate, int $batch, bool $dryRun, ?string $only = null): array
+    {
         $items = fn (string $studentId): Builder => DB::table('enrollment_rollover_items')->where('student_id', $studentId);
 
         return $this->students->purgeExitedBefore(
@@ -102,6 +109,13 @@ final class StudentRecordRetentionService
      * @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int}
      */
     public function pruneCore(School $school, string $cutoffDate, ?CarbonInterface $authorityCutoff, int $batch, bool $dryRun, array $participants = [], array $cleared = [], ?string $only = null): array
+    {
+        // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
+        return app(RetentionExpiry::class)->retained('student_core', $dryRun, $school->id, ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneCoreUnit($school, $cutoffDate, $authorityCutoff, $batch, $dryRun, $participants, $cleared, $only));
+    }
+
+    /** @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int} */
+    private function pruneCoreUnit(School $school, string $cutoffDate, ?CarbonInterface $authorityCutoff, int $batch, bool $dryRun, array $participants = [], array $cleared = [], ?string $only = null): array
     {
         $cleared = $dryRun ? $cleared : [];
 

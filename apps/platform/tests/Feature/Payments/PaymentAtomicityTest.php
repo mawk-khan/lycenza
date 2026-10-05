@@ -55,7 +55,8 @@ class PaymentAtomicityTest extends TestCase
             // for the remainder of the suite run and compete with later
             // tests' own rows for App\Console\Commands\DispatchOutboxEvents'
             // fixed --batch window.
-            DomainEventOutbox::query()->where('school_id', $this->school->id)->delete();
+            // E21-RH.6: the runtime role no longer deletes outbox rows.
+            DB::connection('pgsql_admin')->table('domain_event_outbox')->where('school_id', $this->school->id)->delete();
             $this->deleteSchoolAsAdmin($this->school);
             DB::connection('pgsql_admin')->table('school_memberships')->whereIn('user_id', $this->userIds)->delete();
             DB::connection('pgsql_admin')->table('users')->whereIn('id', $this->userIds)->delete();

@@ -39,9 +39,9 @@ trait CreatesSelfServiceFixtures
      * @param  list<string>|null  $capabilities  null = all three self capabilities
      * @return array{user: User, employment: EmploymentRecord, assignment: EmployeeAssignment}
      */
-    protected function selfMember(array $w, ?array $capabilities = null): array
+    protected function selfMember(array $w, ?array $capabilities = null, string $startsOn = '2024-01-01'): array
     {
-        $member = $this->staffMember($w['school'], $capabilities ?? self::SELF_CAPABILITIES);
+        $member = $this->staffMember($w['school'], $capabilities ?? self::SELF_CAPABILITIES, $startsOn);
         app(LeavePolicyAssignmentService::class)->assign($w['school'], $member['employment']->id, $w['policy']->id, '2026-04-01', null, $w['admin']);
         $this->allocate($w, 24, null, $member['employment']);
 

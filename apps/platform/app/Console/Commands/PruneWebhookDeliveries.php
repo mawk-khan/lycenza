@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\School;
 use App\Models\WebhookDelivery;
+use App\Support\Retention\RetentionExpiry;
 use App\Support\Retention\RetentionHolds;
 use App\Support\Retention\RetentionPeriod;
 use App\Support\Tenancy\TenantContext;
@@ -54,7 +55,7 @@ class PruneWebhookDeliveries extends Command
 
     protected $description = 'Deletes terminal webhook deliveries (and, by cascade, their attempts) older than their configured retention period, per School in bounded batches.';
 
-    public function handle(TenantContext $context, RetentionHolds $holds): int
+    public function handle(TenantContext $context, RetentionHolds $holds, RetentionExpiry $retention): int
     {
         try {
             $periods = array_filter([
@@ -87,7 +88,7 @@ class PruneWebhookDeliveries extends Command
         $total = 0;
         $heldSchools = 0;
 
-        School::query()->orderBy('id')->chunk(100, function ($schools) use ($context, $holds, $groups, $batchSize, $dryRun, &$total, &$heldSchools): void {
+        School::query()->orderBy('id')->chunk(100, function ($schools) use ($context, $holds, $retention, $groups, $batchSize, $dryRun, &$total, &$heldSchools): void {
             foreach ($schools as $school) {
                 if ($holds->isHeld($school->id)) {
                     $heldSchools++;
@@ -95,7 +96,8 @@ class PruneWebhookDeliveries extends Command
                     continue;
                 }
 
-                $affected = $context->withSchool($school, function () use ($school, $groups, $batchSize, $dryRun): int {
+                // E21-RH.6: as the retention identity (its delete guard re-checks the School's hold in the database).
+                $affected = $retention->retained('webhook_delivery', $dryRun, $school->id, ['deleted' => 0, 'errors' => 0], fn (): array => ['errors' => 0, 'deleted' => $context->withSchool($school, function () use ($school, $groups, $batchSize, $dryRun): int {
                     $deletedForSchool = 0;
 
                     foreach ($groups as $group) {
@@ -122,7 +124,7 @@ class PruneWebhookDeliveries extends Command
                     }
 
                     return $deletedForSchool;
-                });
+                })])['deleted'];
 
                 if ($affected > 0) {
                     Log::info($dryRun ? 'webhooks.deliveries_prune.would_prune' : 'webhooks.deliveries_prune.pruned', [

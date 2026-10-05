@@ -6,6 +6,7 @@ use App\Http\Middleware\RequireSchoolContext;
 use App\Models\School;
 use App\Models\User;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Feature\Finance\Concerns\CreatesFinanceRetentionFixtures;
 use Tests\TestCase;
 
@@ -19,7 +20,7 @@ use Tests\TestCase;
  */
 class FinanceRetentionUiTest extends TestCase
 {
-    use CreatesFinanceRetentionFixtures;
+    use CommitsRetentionFixtures, CreatesFinanceRetentionFixtures;
 
     private function enter(User $user, School $school): void
     {

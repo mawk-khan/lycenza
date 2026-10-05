@@ -6,6 +6,7 @@ use App\Domain\AcademicStructure\Application\AcademicYearCalendar;
 use App\Models\School;
 use App\Support\Retention\ObjectDeletion;
 use App\Support\Retention\RetentionExpiry;
+use App\Support\Retention\RetentionLocks;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
@@ -64,6 +65,13 @@ final class CommunicationRetentionService
     /** @return array{eligible: int, deleted: int, skipped: int, errors: int} */
     public function pruneDeliveries(School $school, CarbonImmutable $cutoff, int $batch, bool $dryRun): array
     {
+        // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
+        return app(RetentionExpiry::class)->retained('communication_delivery', $dryRun, $school->id, ['eligible' => 0, 'deleted' => 0, 'skipped' => 0, 'errors' => 0], fn (): array => $this->pruneDeliveriesUnit($school, $cutoff, $batch, $dryRun));
+    }
+
+    /** @return array{eligible: int, deleted: int, skipped: int, errors: int} */
+    private function pruneDeliveriesUnit(School $school, CarbonImmutable $cutoff, int $batch, bool $dryRun): array
+    {
         $result = $this->context->withSchool($school, function () use ($school, $cutoff, $batch, $dryRun): array {
             $eligible = fn (): Builder => DB::table('communication_deliveries')
                 ->where('school_id', $school->id)
@@ -78,7 +86,8 @@ final class CommunicationRetentionService
             if (! $dryRun) {
                 do {
                     $removed = DB::transaction(function () use ($eligible, $batch): int {
-                        $ids = $eligible()->orderBy('id')->limit($batch)->lock('for update skip locked')->pluck('id')->all();
+                        // E21-RH.6: the retention identity locks through the lock-only definer (FOR UPDATE SKIP LOCKED).
+                        $ids = RetentionLocks::lock('communication_deliveries', $eligible()->orderBy('id')->limit($batch)->pluck('id')->all(), skipLocked: true);
 
                         return $ids === [] ? 0 : $eligible()->whereIn('id', $ids)->delete();
                     });
@@ -101,6 +110,13 @@ final class CommunicationRetentionService
      * @return array{eligible: int, deleted: int, unresolved: int, skipped: int, errors: int}
      */
     public function pruneContent(School $school, string $cutoffDate, int $batch, bool $dryRun): array
+    {
+        // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
+        return app(RetentionExpiry::class)->retained('communication_content', $dryRun, $school->id, ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'skipped' => 0, 'errors' => 0], fn (): array => $this->pruneContentUnit($school, $cutoffDate, $batch, $dryRun));
+    }
+
+    /** @return array{eligible: int, deleted: int, unresolved: int, skipped: int, errors: int} */
+    private function pruneContentUnit(School $school, string $cutoffDate, int $batch, bool $dryRun): array
     {
         return $this->context->withSchool($school, function () use ($school, $cutoffDate, $batch, $dryRun): array {
             $years = $this->calendar->years($school);
@@ -206,7 +222,10 @@ final class CommunicationRetentionService
     private function purgeAnnouncement(string $id, array $years, \DateTimeZone $tz, string $cutoffDate): array
     {
         $objects = DB::transaction(function () use ($id, $years, $tz, $cutoffDate): ?array {
-            $row = DB::table('communication_announcements')->where('id', $id)->lockForUpdate()->first();
+            // E21-RH.6: the retention identity locks through the lock-only definer (FOR UPDATE), then reads.
+            $row = RetentionLocks::lockOne('communication_announcements', $id)
+                ? DB::table('communication_announcements')->where('id', $id)->first(['id', 'school_id', 'published_at', 'message_id'])
+                : null;
 
             if ($row === null || $row->published_at === null || $row->message_id === null
                 || $this->verdict($years, [$this->localDate($row->published_at, $tz)], $cutoffDate) !== 'eligible') {
@@ -214,9 +233,9 @@ final class CommunicationRetentionService
             }
 
             $objects = DB::table('communication_attachments')->where('communication_announcement_id', $id)->get(['storage_disk', 'storage_path'])->all();
-            // Break the announcement <-> message RESTRICT cycle, then let the
-            // cascades remove everything under each.
-            DB::table('communication_announcements')->where('id', $id)->update(['message_id' => null]);
+            // Break the announcement <-> message RESTRICT cycle (E21-RH.6: through the narrow definer -- the
+            // retention identity has no UPDATE), then let the cascades remove everything under each.
+            DB::select('SELECT retention_unlink_announcement_message(?, ?)', [$row->school_id, $id]);
             DB::table('communication_messages')->where('id', $row->message_id)->delete();
             DB::table('communication_announcements')->where('id', $id)->delete();
 
@@ -236,7 +255,7 @@ final class CommunicationRetentionService
             // FOR UPDATE conflicts with the FOR KEY SHARE a concurrent message
             // insert takes on its thread, so eligibility below is recomputed
             // after any such message has committed (and then keeps the thread).
-            if (DB::table('communication_threads')->where('id', $id)->lockForUpdate()->first() === null) {
+            if (! RetentionLocks::lockOne('communication_threads', $id)) {
                 return null;
             }
 

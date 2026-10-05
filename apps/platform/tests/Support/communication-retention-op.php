@@ -2,6 +2,7 @@
 
 use App\Domain\Communications\Application\Retention\CommunicationRetentionService;
 use App\Models\School;
+use App\Support\Retention\RetentionExpiry;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
@@ -25,7 +26,7 @@ $operation = array_shift($args);
 $context = $app->make(TenantContext::class);
 
 try {
-    echo HeldTransaction::run(function () use ($app, $operation, $args, $context): string {
+    $run = fn () => HeldTransaction::run(function () use ($app, $operation, $args, $context): string {
         $school = School::query()->findOrFail($args[0]);
 
         return match ($operation) {
@@ -42,6 +43,9 @@ try {
             default => throw new InvalidArgumentException("unknown operation {$operation}"),
         };
     });
+    // E21-RH.6: the retention operations run as the retention identity, their held transaction on that
+    // connection (the unit transactions nest in it); the racing writes stay ordinary runtime writes.
+    echo in_array($operation, ['purge-content'], true) ? DB::usingConnection(RetentionExpiry::PRIVILEGED_CONNECTION, $run) : $run();
 } catch (Throwable $e) {
     echo 'rejected:'.class_basename($e);
 }

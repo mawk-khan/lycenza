@@ -9,6 +9,8 @@ use App\Domain\Students\Application\Retention\StudentRetentionEligibility;
 use App\Domain\Students\Application\StudentEnrollmentService;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\School;
+use App\Support\Retention\RetentionExpiry;
+use App\Support\Retention\RetentionHolds;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +18,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Testing\PendingCommand;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesFeesFixtures;
 use Tests\Concerns\CreatesFinanceFixtures;
 use Tests\Feature\Attendance\Concerns\CreatesAttendanceFixtures;
@@ -30,7 +33,7 @@ use Tests\TestCase;
  */
 class StudentRetentionPruneTest extends TestCase
 {
-    use CreatesAttendanceFixtures, CreatesFeesFixtures, CreatesFinanceFixtures;
+    use CommitsRetentionFixtures, CreatesAttendanceFixtures, CreatesFeesFixtures, CreatesFinanceFixtures;
 
     private string $disk;
 
@@ -67,6 +70,11 @@ class StudentRetentionPruneTest extends TestCase
     {
         $student = $this->createStudent($w['school'], ['status' => $studentStatus]);
         $this->createStudentEnrollment($student, $w['section'], ['status' => $status, 'starts_on' => '2026-06-01', 'ends_on' => $endsOn]);
+
+        // E21-RH.6: the end was also RECORDED back then (the database counts from the later of the two).
+        if (method_exists($this, 'backdateEndRecording')) {
+            $this->backdateEndRecording();
+        }
 
         return $student;
     }
@@ -314,6 +322,8 @@ class StudentRetentionPruneTest extends TestCase
         $held = $this->world();
         $other = $this->world();
         config(['retention.hold_school_ids' => [$held['school']->id]]);
+        // E21-RH.6: destructive retention refuses while a configured hold is unrecorded; record it (as reconcile does).
+        app(RetentionHolds::class)->place($held['school']->id, 'litigation', 'TEST-HOLD');
         $heldStudent = $this->leaver($held, '2026-09-30');
         $this->guardianOf($heldStudent);
         $heldDocument = $this->documentOf($heldStudent);
@@ -382,8 +392,11 @@ class StudentRetentionPruneTest extends TestCase
         $eligibility = app(StudentRetentionEligibility::class);
 
         // Under School A's context, B's Student does not exist (RLS), so nothing of it can be purged.
-        $this->assertNull($this->inSchool($a['school'], fn () => DB::transaction(fn () => $eligibility->lockExit($studentOfB->id))));
-        $this->assertSame('2026-09-30', $this->inSchool($b['school'], fn () => DB::transaction(fn () => $eligibility->lockExit($studentOfB->id)))?->exitDate);
+        // E21-RH.6: the unit lock is the retention identity's (lock-only definer), so this runs on its connection.
+        DB::usingConnection(RetentionExpiry::PRIVILEGED_CONNECTION, function () use ($a, $b, $eligibility, $studentOfB): void {
+            $this->assertNull($this->inSchool($a['school'], fn () => DB::transaction(fn () => $eligibility->lockExit($studentOfB->id))));
+            $this->assertSame('2026-09-30', $this->inSchool($b['school'], fn () => DB::transaction(fn () => $eligibility->lockExit($studentOfB->id)))?->exitDate);
+        });
     }
 
     #[Test]

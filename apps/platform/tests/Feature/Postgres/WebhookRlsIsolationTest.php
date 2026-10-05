@@ -7,6 +7,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\AssertsRuntimeDeleteRevoked;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
@@ -21,7 +22,7 @@ use Tests\TestCase;
  */
 class WebhookRlsIsolationTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use AssertsRuntimeDeleteRevoked, CreatesTenancyFixtures;
 
     private function setSchool(string $schoolId): void
     {
@@ -145,7 +146,7 @@ class WebhookRlsIsolationTest extends TestCase
         $this->assertSame(0, DB::connection('pgsql')->update("update webhook_endpoints set status = 'disabled' where id = ?", [$endpointB]));
         $this->assertSame(0, DB::connection('pgsql')->update('update webhook_subscriptions set enabled = false where id = ?', [$subB]));
         $this->assertSame(0, DB::connection('pgsql')->update("update webhook_deliveries set status = 'abandoned' where id = ?", [$deliveryB]));
-        $this->assertSame(0, DB::connection('pgsql')->delete('delete from webhook_deliveries where id = ?', [$deliveryB]));
+        $this->assertRuntimeDeleteRevoked('delete from webhook_deliveries where id = ?', [$deliveryB]);
     }
 
     #[Test]

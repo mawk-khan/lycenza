@@ -5,6 +5,7 @@ namespace App\Domain\Guardians\Application\Retention;
 use App\Domain\Documents\Application\Retention\DocumentParentRetention;
 use App\Models\School;
 use App\Support\Retention\ReferencingRows;
+use App\Support\Retention\RetentionExpiry;
 use App\Support\Retention\RetentionUnit;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonInterface;
@@ -59,6 +60,13 @@ final class GuardianRecordRetentionService
      * @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int}
      */
     public function prune(School $school, CarbonInterface $cutoff, ?CarbonInterface $authorityCutoff, int $batch, bool $dryRun, array $participants, ?string $only = null): array
+    {
+        // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
+        return app(RetentionExpiry::class)->retained('guardian_core', $dryRun, $school->id, ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneUnit($school, $cutoff, $authorityCutoff, $batch, $dryRun, $participants, $only));
+    }
+
+    /** @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int} */
+    private function pruneUnit(School $school, CarbonInterface $cutoff, ?CarbonInterface $authorityCutoff, int $batch, bool $dryRun, array $participants, ?string $only = null): array
     {
         $at = $cutoff->copy()->utc()->format('Y-m-d H:i:s');
         $result = ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0];

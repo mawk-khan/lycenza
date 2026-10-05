@@ -5,6 +5,7 @@ namespace Tests\Feature\Documents;
 use App\Domain\Documents\Application\Retention\DocumentRetentionEligibility;
 use App\Domain\Documents\Infrastructure\Document;
 use App\Models\School;
+use App\Support\Retention\RetentionHolds;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Carbon;
@@ -12,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
@@ -24,7 +26,7 @@ use Tests\TestCase;
  */
 class StorageOrphanRetentionTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CommitsRetentionFixtures, CreatesCommunicationFixtures, CreatesTenancyFixtures;
 
     private string $docs;
 
@@ -137,6 +139,8 @@ class StorageOrphanRetentionTest extends TestCase
         $held = $this->createSchool();
         $other = $this->createSchool();
         config(['retention.hold_school_ids' => [$held->id]]);
+        // E21-RH.6: the database hold is authoritative (a configured hold must also be recorded).
+        app(RetentionHolds::class)->place($held->id, 'litigation', 'TEST-HOLD');
         $heldOrphan = $this->putObject($this->docs, "schools/{$held->id}/documents/employee/e/".Str::uuid7().'.pdf');
         $otherOrphan = $this->putObject($this->docs, "schools/{$other->id}/documents/employee/e/".Str::uuid7().'.pdf');
         $this->age(60);

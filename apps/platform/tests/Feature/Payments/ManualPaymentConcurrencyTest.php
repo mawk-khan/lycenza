@@ -4,7 +4,6 @@ namespace Tests\Feature\Payments;
 
 use App\Domain\Payments\Infrastructure\Payment;
 use App\Domain\Payments\Infrastructure\PaymentAllocation;
-use App\Models\DomainEventOutbox;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
@@ -67,7 +66,8 @@ class ManualPaymentConcurrencyTest extends TestCase
     protected function tearDown(): void
     {
         if ($this->school !== null) {
-            DomainEventOutbox::query()->where('school_id', $this->school->id)->delete();
+            // E21-RH.6: the runtime role no longer deletes outbox rows.
+            DB::connection('pgsql_admin')->table('domain_event_outbox')->where('school_id', $this->school->id)->delete();
             $this->deleteSchoolAsAdmin($this->school);
             $admin = DB::connection('pgsql_admin');
             $admin->table('school_memberships')->whereIn('user_id', $this->userIds)->delete();

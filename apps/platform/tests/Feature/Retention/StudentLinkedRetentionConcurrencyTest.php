@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\Concerns\ForcesConcurrentOverlap;
 use Tests\TestCase;
@@ -37,7 +38,7 @@ use Tests\TestCase;
  */
 class StudentLinkedRetentionConcurrencyTest extends TestCase
 {
-    use CreatesTenancyFixtures, ForcesConcurrentOverlap;
+    use CommitsRetentionFixtures, CreatesTenancyFixtures, ForcesConcurrentOverlap;
 
     /** @var array<int, string> */
     protected $connectionsToTransact = [];
@@ -72,6 +73,11 @@ class StudentLinkedRetentionConcurrencyTest extends TestCase
         $student = $this->createStudent($school, ['status' => 'inactive']);
         $this->createStudentEnrollment($student, $this->createSection($year, $campus, $grade, ['code' => 'A']), ['status' => 'withdrawn', 'starts_on' => substr($endsOn, 0, 4).'-02-01', 'ends_on' => $endsOn]);
 
+        // E21-RH.6: the end was also RECORDED back then (the database counts from the later of the two).
+        if (method_exists($this, 'backdateEndRecording')) {
+            $this->backdateEndRecording();
+        }
+
         return [$school, $student, $this->createSection($next, $campus, $grade, ['code' => 'B'])->id];
     }
 
@@ -86,6 +92,7 @@ class StudentLinkedRetentionConcurrencyTest extends TestCase
         [$school, $student, $sectionId] = $this->leaver('2026-09-30');
         $this->createLibraryLoan($this->createLibraryCopy($this->createLibraryTitle($school)), $student, ['status' => 'returned', 'checked_out_at' => '2026-07-01 09:00:00', 'due_at' => '2026-07-15 09:00:00', 'checked_in_at' => '2026-07-10 09:00:00']);
 
+        $this->backdateEndRecording();
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->script('re-enroll', $school->id, $student->id, $sectionId),
             $this->script('operational-prune', $school->id, '2060-01-01'),
@@ -101,6 +108,7 @@ class StudentLinkedRetentionConcurrencyTest extends TestCase
     {
         [$school, $student] = $this->leaver('2000-09-30');
 
+        $this->backdateEndRecording();
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->script('record-authorization', $school->id, $student->id, $this->createUser()->id),
             $this->script('core-prune', $school->id, '2001-01-01'),
@@ -117,6 +125,7 @@ class StudentLinkedRetentionConcurrencyTest extends TestCase
     {
         [$school, $student] = $this->leaver('2000-09-30');
 
+        $this->backdateEndRecording();
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->script('core-prune', $school->id, '2001-01-01'),
             $this->script('record-authorization', $school->id, $student->id, $this->createUser()->id),

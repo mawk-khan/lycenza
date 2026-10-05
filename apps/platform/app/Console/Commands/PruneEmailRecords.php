@@ -9,6 +9,7 @@ use App\Models\School;
 use App\Support\Email\EmailState;
 use App\Support\Email\PlatformEmailScope;
 use App\Support\Observability\SchedulerHeartbeatRecorder;
+use App\Support\Retention\RetentionExpiry;
 use App\Support\Retention\RetentionHolds;
 use App\Support\Retention\RetentionPeriod;
 use App\Support\Tenancy\TenantContext;
@@ -51,8 +52,11 @@ class PruneEmailRecords extends Command
 
     protected $description = 'Apply the configured email metadata retention (ADR 0055; E21-D2; nothing is deleted while unset).';
 
-    public function handle(SchedulerHeartbeatRecorder $heartbeats, TenantContext $context, PlatformEmailScope $platformScope, RetentionHolds $holds): int
+    private RetentionExpiry $retention;
+
+    public function handle(SchedulerHeartbeatRecorder $heartbeats, TenantContext $context, PlatformEmailScope $platformScope, RetentionHolds $holds, RetentionExpiry $retention): int
     {
+        $this->retention = $retention;
         try {
             $days = RetentionPeriod::days(config('email.retention_days'));
         } catch (InvalidArgumentException $e) {
@@ -85,7 +89,9 @@ class PruneEmailRecords extends Command
                     continue;
                 }
 
-                $messages += $context->withSchool($school, fn () => $this->pruneMessages($cutoff, $batch, $dryRun));
+                // E21-RH.6: as the retention identity (its delete guard re-checks the School's hold in the database).
+                $messages += $this->retention->retained('email_message', $dryRun, $school->id, ['deleted' => 0, 'errors' => 0],
+                    fn (): array => ['deleted' => $context->withSchool($school, fn () => $this->pruneMessages($cutoff, $batch, $dryRun)), 'errors' => 0])['deleted'];
             }
         });
 
@@ -93,8 +99,10 @@ class PruneEmailRecords extends Command
         // Provider events belong to no School either. Both are held by
         // RETENTION_HOLD_PLATFORM (E21.2B).
         $platformHeld = $holds->platformHeld();
-        $identityMessages = $platformHeld ? 0 : $platformScope->run(fn () => $this->pruneMessages($cutoff, $batch, $dryRun));
-        $events = $platformHeld ? 0 : $this->pruneEvents($cutoff, $batch, $dryRun);
+        $identityMessages = $platformHeld ? 0 : $this->retention->retained('email_message', $dryRun, null, ['deleted' => 0, 'errors' => 0],
+            fn (): array => ['deleted' => $platformScope->run(fn () => $this->pruneMessages($cutoff, $batch, $dryRun)), 'errors' => 0])['deleted'];
+        $events = $platformHeld ? 0 : $this->retention->retained('email_event', $dryRun, null, ['deleted' => 0, 'errors' => 0],
+            fn (): array => ['deleted' => $this->pruneEvents($cutoff, $batch, $dryRun), 'errors' => 0])['deleted'];
 
         $heartbeats->recordSuccess('email-prune');
         Log::info($dryRun ? 'platform.email_prune.dry_run' : 'platform.email_prune.completed', [

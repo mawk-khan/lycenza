@@ -49,6 +49,13 @@ final class AutomationExecutionRetention
      */
     public function prune(School $school, CarbonInterface $cutoff, int $batch, bool $dryRun, bool $held): array
     {
+        // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
+        return app(RetentionExpiry::class)->retained('automation_execution', $dryRun || $held, $school->id, ['eligible' => 0, 'deleted' => 0, 'held' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneUnit($school, $cutoff, $batch, $dryRun, $held));
+    }
+
+    /** @return array{eligible: int, deleted: int, held: int, unresolved: int, dependency_blocked: int, errors: int} */
+    private function pruneUnit(School $school, CarbonInterface $cutoff, int $batch, bool $dryRun, bool $held): array
+    {
         $at = $cutoff->copy()->utc()->format('Y-m-d H:i:s');
 
         return $this->context->withSchool($school, fn (): array => $this->batches->prune(

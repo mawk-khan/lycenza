@@ -9,6 +9,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\AssertsRuntimeDeleteRevoked;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
@@ -28,7 +29,7 @@ use Tests\TestCase;
  */
 class HrRawIsolationTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use AssertsRuntimeDeleteRevoked, CreatesTenancyFixtures;
 
     #[Test]
     public function employees_table_has_rls_enabled_and_forced(): void
@@ -132,9 +133,7 @@ class HrRawIsolationTest extends TestCase
 
         DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
 
-        $affected = DB::connection('pgsql')->delete('delete from employees where id = ?', [$employeeB->id]);
-
-        $this->assertSame(0, $affected);
+        $this->assertRuntimeDeleteRevoked('delete from employees where id = ?', [$employeeB->id]);
     }
 
     #[Test]
@@ -247,9 +246,7 @@ class HrRawIsolationTest extends TestCase
 
         DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
 
-        $affected = DB::connection('pgsql')->delete('delete from employee_personal_details where id = ?', [$detailB->id]);
-
-        $this->assertSame(0, $affected);
+        $this->assertRuntimeDeleteRevoked('delete from employee_personal_details where id = ?', [$detailB->id]);
     }
 
     // --- Phase 8A.2: employee_addresses ----------------------------------
@@ -730,9 +727,7 @@ class HrRawIsolationTest extends TestCase
 
         DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
 
-        $affected = DB::connection('pgsql')->delete('delete from employment_records where id = ?', [$employmentB->id]);
-
-        $this->assertSame(0, $affected);
+        $this->assertRuntimeDeleteRevoked('delete from employment_records where id = ?', [$employmentB->id]);
     }
 
     // --- Phase 8A.4: employee_assignments ----------------------------------
@@ -841,9 +836,7 @@ class HrRawIsolationTest extends TestCase
 
         DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
 
-        $affected = DB::connection('pgsql')->delete('delete from employee_assignments where id = ?', [$assignmentB->id]);
-
-        $this->assertSame(0, $affected);
+        $this->assertRuntimeDeleteRevoked('delete from employee_assignments where id = ?', [$assignmentB->id]);
     }
 
     // --- Phase 8A.5: employee_assignments.manager_assignment_id -----------
@@ -1293,9 +1286,7 @@ class HrRawIsolationTest extends TestCase
 
         DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
 
-        $affected = DB::connection('pgsql')->delete('delete from employee_documents where id = ?', [$documentB->id]);
-
-        $this->assertSame(0, $affected);
+        $this->assertRuntimeDeleteRevoked('delete from employee_documents where id = ?', [$documentB->id]);
     }
 
     // --- Phase 8A closure correction: employee_categories ------------------

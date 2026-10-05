@@ -8,6 +8,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\Concerns\ForcesConcurrentOverlap;
 use Tests\TestCase;
@@ -33,7 +34,7 @@ use Tests\TestCase;
  */
 class AdmissionsGuardianRetentionConcurrencyTest extends TestCase
 {
-    use CreatesTenancyFixtures, ForcesConcurrentOverlap;
+    use CommitsRetentionFixtures, CreatesTenancyFixtures, ForcesConcurrentOverlap;
 
     /** @var array<int, string> */
     protected $connectionsToTransact = [];
@@ -80,6 +81,7 @@ class AdmissionsGuardianRetentionConcurrencyTest extends TestCase
         $guardian = $this->unlinkedGuardian($school);
         $student = $this->createStudent($school);
 
+        $this->backdateEndRecording();
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->script('link', $school->id, $guardian->id, $student->id),
             $this->script('guardian-prune', $school->id, '2024-01-01 00:00:00'),
@@ -98,6 +100,7 @@ class AdmissionsGuardianRetentionConcurrencyTest extends TestCase
         $guardian = $this->unlinkedGuardian($school);
         $student = $this->createStudent($school);
 
+        $this->backdateEndRecording();
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->script('guardian-prune', $school->id, '2024-01-01 00:00:00'),
             $this->script('link', $school->id, $guardian->id, $student->id),
@@ -117,6 +120,7 @@ class AdmissionsGuardianRetentionConcurrencyTest extends TestCase
         $user = $this->createUser();
         $membership = $this->createMembership($user, $school);
 
+        $this->backdateEndRecording();
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->script('account-link', $school->id, $guardian->id, $membership->id, $user->id),
             $this->script('guardian-prune', $school->id, '2024-01-01 00:00:00'),
@@ -141,6 +145,7 @@ class AdmissionsGuardianRetentionConcurrencyTest extends TestCase
             'grade_level_id' => $grade->id, 'status' => 'rejected', 'terminal_at' => '2020-01-01 00:00:00', 'created_at' => now(), 'updated_at' => now(),
         ]));
 
+        $this->backdateEndRecording();
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->script('apply', $school->id, $applicant->id, $year->id, $campus->id, $grade->id),
             $this->script('admissions-prune', $school->id, '2024-01-01 00:00:00'),
@@ -166,6 +171,7 @@ class AdmissionsGuardianRetentionConcurrencyTest extends TestCase
             'grade_level_id' => $grade->id, 'status' => 'withdrawn', 'terminal_at' => '2020-01-01 00:00:00', 'created_at' => now(), 'updated_at' => now(),
         ]));
 
+        $this->backdateEndRecording();
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->script('admissions-prune', $school->id, '2024-01-01 00:00:00'),
             $this->script('apply', $school->id, $applicant->id, $year->id, $campus->id, $grade->id),

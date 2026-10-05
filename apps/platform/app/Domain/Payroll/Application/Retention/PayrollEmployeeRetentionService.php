@@ -5,6 +5,7 @@ namespace App\Domain\Payroll\Application\Retention;
 use App\Domain\HR\Application\Retention\EmployeeRetentionEligibility;
 use App\Models\School;
 use App\Support\Retention\ReferencingRows;
+use App\Support\Retention\RetentionExpiry;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -42,6 +43,13 @@ final class PayrollEmployeeRetentionService
 
     /** @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int} */
     public function prune(School $school, string $cutoffDate, int $batch, bool $dryRun, ?string $only = null): array
+    {
+        // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
+        return app(RetentionExpiry::class)->retained('payroll_employee_configuration', $dryRun, $school->id, ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneUnit($school, $cutoffDate, $batch, $dryRun, $only));
+    }
+
+    /** @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int} */
+    private function pruneUnit(School $school, string $cutoffDate, int $batch, bool $dryRun, ?string $only = null): array
     {
         $employments = fn (string $employeeId): array => DB::table('employment_records')->where('employee_id', $employeeId)->pluck('id')->all();
 

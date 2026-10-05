@@ -6,12 +6,14 @@ use App\Domain\Identity\Application\Exceptions\InvitationNotUsableException;
 use App\Domain\Identity\Application\GuardianAccountActivationService;
 use App\Domain\Identity\Infrastructure\GuardianAccountInvitation;
 use App\Models\School;
+use App\Support\Retention\RetentionHolds;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Testing\PendingCommand;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
@@ -24,7 +26,7 @@ use Tests\TestCase;
  */
 class PortalInvitationRetentionTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CommitsRetentionFixtures, CreatesTenancyFixtures;
 
     private const NOW = '2026-05-20 12:00:00';
 
@@ -128,6 +130,8 @@ class PortalInvitationRetentionTest extends TestCase
         $held = $this->createSchool();
         $other = $this->createSchool();
         config(['retention.hold_school_ids' => [$held->id]]);
+        // E21-RH.6: destructive retention refuses while a configured hold is unrecorded; record it (as reconcile does).
+        app(RetentionHolds::class)->place($held->id, 'litigation', 'TEST-HOLD');
         $heldId = $this->invitation($held, ['status' => 'revoked', 'revoked_at' => '2026-01-01 00:00:00']);
         $otherId = $this->invitation($other, ['status' => 'revoked', 'revoked_at' => '2026-01-01 00:00:00']);
 

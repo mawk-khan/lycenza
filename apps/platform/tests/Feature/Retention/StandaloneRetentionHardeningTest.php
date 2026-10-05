@@ -49,7 +49,7 @@ class StandaloneRetentionHardeningTest extends TestCase
         'retention_expire_group_role_assignments', 'retention_expire_platform_role_assignments', 'retention_expire_erasure_cases',
     ];
 
-    /** The coupled functions still runtime-executable: E21-RH.6 (E21-RH.5 moved Payroll and LMS). */
+    /** The four coupled functions RH.4 left on the runtime role (E21-RH.6 moved them; E21-RH.5 moved Payroll and LMS). */
     private const COUPLED = [
         'retention_expire_finance_unit', 'retention_expire_student_processing_authorizations', 'retention_expire_student_consent_events',
         'retention_expire_guardian_consent_events',
@@ -101,7 +101,7 @@ class StandaloneRetentionHardeningTest extends TestCase
     }
 
     #[Test]
-    public function the_eleven_move_to_the_retention_identity_and_the_rh6_four_stay_exactly_where_they_were(): void
+    public function the_eleven_move_to_the_retention_identity_and_since_rh6_so_do_the_coupled_four(): void
     {
         $acl = fn (string $f) => DB::selectOne("SELECT pg_get_userbyid(p.proowner) AS owner, p.prosecdef, array_to_string(p.proconfig, ',') AS cfg,
                 has_function_privilege('school_os_app', p.oid, 'EXECUTE') AS runtime, has_function_privilege('school_os_retention', p.oid, 'EXECUTE') AS retention,
@@ -117,13 +117,14 @@ class StandaloneRetentionHardeningTest extends TestCase
             $scope = array_key_exists($function, self::SCHOOL) ? 'p_school_id' : 'NULL';
             $this->assertStringContainsString("IF NOT p_dry_run THEN\n        PERFORM public.retention_assert_not_held({$scope});", $f->src, $function);
         }
+        // E21-RH.6 moved the four coupled functions too: none is runtime-executable any more.
         foreach (self::COUPLED as $function) {
             $f = $acl($function);
-            $this->assertSame([true, false], [(bool) $f->runtime, (bool) $f->retention], "{$function}: RH.6, unchanged");
-            $this->assertStringNotContainsString('retention_assert_retention_identity', $f->src, $function);
+            $this->assertSame([false, true], [(bool) $f->runtime, (bool) $f->retention], "{$function}: retention-only since E21-RH.6");
+            $this->assertStringContainsString('retention_assert_retention_identity', $f->src, $function);
         }
         $this->assertSame(count(DatabaseRoleVerifier::STANDALONE_RETENTION_FUNCTIONS), count(self::SCHOOL) + count(self::PLATFORM));
-        $this->assertEqualsCanonicalizing(self::COUPLED, DatabaseRoleVerifier::RETENTION_FUNCTIONS);
+        $this->assertSame([], array_diff(self::COUPLED, DatabaseRoleVerifier::UNIT_RETENTION_FUNCTIONS));
     }
 
     #[Test]
@@ -157,8 +158,8 @@ class StandaloneRetentionHardeningTest extends TestCase
                 return '';
             })(), $function);
         }
-        // A coupled (RH.6) function stays out of the retention login's reach.
-        $this->assertStringContainsString('permission denied for function retention_expire_student_consent_events', (string) $this->asRetention($school, fn () => DB::select('SELECT retention_expire_student_consent_events(?, ?, ?, true)', [$school->id, (string) Str::uuid7(), '2000-01-01'])));
+        // The hold writers stay out of the retention login's reach.
+        $this->assertStringContainsString('permission denied for function retention_hold_place', (string) $this->asRetention($school, fn () => DB::select("SELECT * FROM retention_hold_place('school', ?, 'litigation', 'X', 'operator_command')", [$school->id])));
     }
 
     #[Test]
@@ -324,7 +325,7 @@ class StandaloneRetentionHardeningTest extends TestCase
     public function the_verifier_distinguishes_the_migrated_set_and_detects_a_regrant(): void
     {
         $checks = fn () => collect(app(DatabaseRoleVerifier::class)->verify())->keyBy('code');
-        foreach (['privileged_retention_functions_closed', 'retention_role_functions_exact', 'retention_functions_narrow', 'retention_holds_authoritative', 'retention_role_read_only'] as $code) {
+        foreach (['privileged_retention_functions_closed', 'retention_role_functions_exact', 'retention_functions_narrow', 'retention_holds_authoritative', 'retention_role_writes_exact'] as $code) {
             $this->assertSame(CheckResult::PASS, $checks()[$code]->status, $code);
         }
 

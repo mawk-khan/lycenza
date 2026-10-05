@@ -60,7 +60,7 @@ class PayrollLmsRetentionHardeningTest extends TestCase
     }
 
     #[Test]
-    public function the_unit_functions_are_retention_only_definers_and_the_rh6_functions_are_untouched(): void
+    public function the_unit_functions_and_since_rh6_the_coupled_four_are_retention_only_definers(): void
     {
         $catalog = fn (string $f) => DB::selectOne("SELECT pg_get_userbyid(p.proowner) AS owner, p.prosecdef, array_to_string(p.proconfig, ',') AS cfg, p.prosrc AS src,
                 has_function_privilege('school_os_app', p.oid, 'EXECUTE') AS runtime, has_function_privilege('school_os_retention', p.oid, 'EXECUTE') AS retention,
@@ -74,13 +74,13 @@ class PayrollLmsRetentionHardeningTest extends TestCase
             $this->assertNotContains($f->owner, ['school_os_app', 'school_os_retention'], $function);
             $this->assertMatchesRegularExpression('/BEGIN\s+(--[^\n]*\n\s*)?PERFORM public\.retention_assert_retention_identity\(\);\s+PERFORM public\.retention_assert_not_held\(p_school_id\);/', (string) $f->src, "{$function}: identity and hold first, dry runs included");
         }
+        // E21-RH.6 moved the four remaining functions the same way.
         foreach (self::RH6 as $function) {
             $f = $catalog($function);
-            $this->assertSame([true, false], [(bool) $f->runtime, (bool) $f->retention], "{$function}: RH.6, unchanged");
-            $this->assertStringNotContainsString('retention_assert_retention_identity', (string) $f->src, $function);
+            $this->assertSame([false, true], [(bool) $f->runtime, (bool) $f->retention], "{$function}: retention-only since E21-RH.6");
+            $this->assertMatchesRegularExpression('/BEGIN\s+(--[^\n]*\n\s*)?PERFORM public\.retention_assert_retention_identity\(\);\s+PERFORM public\.retention_assert_not_held\(p_school_id\);/', (string) $f->src, $function);
         }
-        $this->assertEqualsCanonicalizing(self::RH6, DatabaseRoleVerifier::RETENTION_FUNCTIONS);
-        $this->assertEqualsCanonicalizing(array_keys(self::UNITS), DatabaseRoleVerifier::UNIT_RETENTION_FUNCTIONS);
+        $this->assertSame([], array_diff([...array_keys(self::UNITS), ...self::RH6], DatabaseRoleVerifier::UNIT_RETENTION_FUNCTIONS));
     }
 
     #[Test]
@@ -95,8 +95,9 @@ class PayrollLmsRetentionHardeningTest extends TestCase
             $this->assertStringNotContainsString('permission denied', $reached, $function);
             $this->assertStringNotContainsString('retention_privilege', $reached, $function);
         }
+        // E21-RH.6: the four remaining functions are now the retention identity's too.
         foreach (self::RH6 as $function) {
-            $this->assertFalse((bool) DB::selectOne("SELECT has_function_privilege('school_os_retention', p.oid, 'EXECUTE') AS x FROM pg_proc p WHERE p.proname = ?", [$function])->x, "{$function}: out of the retention identity's reach");
+            $this->assertTrue((bool) DB::selectOne("SELECT has_function_privilege('school_os_retention', p.oid, 'EXECUTE') AS x FROM pg_proc p WHERE p.proname = ?", [$function])->x, $function);
         }
 
         // A School hold, in the database only, refuses every unit function before anything else.
@@ -110,7 +111,7 @@ class PayrollLmsRetentionHardeningTest extends TestCase
     public function the_verifier_proves_the_rh5_state_and_detects_a_regrant_or_a_wider_read(): void
     {
         $checks = fn () => collect(app(DatabaseRoleVerifier::class)->verify())->keyBy('code');
-        foreach (['privileged_retention_functions_closed', 'retention_role_functions_exact', 'retention_functions_narrow', 'retention_role_read_only', 'retention_role_selects_exact', 'retention_holds_authoritative'] as $code) {
+        foreach (['privileged_retention_functions_closed', 'retention_role_functions_exact', 'retention_functions_narrow', 'retention_role_writes_exact', 'retention_role_selects_exact', 'retention_holds_authoritative'] as $code) {
             $this->assertSame(CheckResult::PASS, $checks()[$code]->status, $code);
         }
 
@@ -118,7 +119,7 @@ class PayrollLmsRetentionHardeningTest extends TestCase
         $regressions = [
             'privileged_retention_functions_closed' => ['GRANT EXECUTE ON FUNCTION retention_expire_payroll_run(uuid, uuid, timestamp, boolean) TO school_os_app', 'REVOKE EXECUTE ON FUNCTION retention_expire_payroll_run(uuid, uuid, timestamp, boolean) FROM school_os_app'],
             'retention_role_selects_exact' => ['GRANT SELECT (title) ON learning_content TO school_os_retention', 'REVOKE SELECT (title) ON learning_content FROM school_os_retention'],
-            'retention_role_functions_exact' => ['GRANT EXECUTE ON FUNCTION retention_expire_guardian_consent_events(uuid, uuid, timestamp, boolean) TO school_os_retention', 'REVOKE EXECUTE ON FUNCTION retention_expire_guardian_consent_events(uuid, uuid, timestamp, boolean) FROM school_os_retention'],
+            'retention_role_functions_exact' => ['GRANT EXECUTE ON FUNCTION retention_assert_tenant(uuid) TO school_os_retention', 'REVOKE EXECUTE ON FUNCTION retention_assert_tenant(uuid) FROM school_os_retention'],
         ];
         foreach ($regressions as $code => [$break, $restore]) {
             $admin->statement($break);

@@ -8,6 +8,7 @@ use App\Models\WebhookDelivery;
 use App\Models\WebhookDeliveryAttempt;
 use App\Models\WebhookEndpoint;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Retention\RetentionHolds;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
@@ -15,6 +16,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
@@ -25,7 +27,7 @@ use Tests\TestCase;
  */
 class PruneWebhookDeliveriesTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CommitsRetentionFixtures, CreatesTenancyFixtures;
 
     private const RETENTION_DAYS = 30;
 
@@ -310,6 +312,8 @@ class PruneWebhookDeliveriesTest extends TestCase
         $held = $this->createSchool();
         $other = $this->createSchool();
         config(['retention.hold_school_ids' => [$held->id]]);
+        // E21-RH.6: the database hold is authoritative (a configured hold must also be recorded).
+        app(RetentionHolds::class)->place($held->id, 'litigation', 'TEST-HOLD');
         $heldOld = $this->delivery($this->endpoint($held), 'delivered', $this->days(400));
         $otherOld = $this->delivery($this->endpoint($other), 'delivered', $this->days(400));
 

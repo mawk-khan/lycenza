@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Support\Retention\RetentionExpiry;
 use App\Support\Retention\RetentionHolds;
 use App\Support\Retention\RetentionPeriod;
 use Illuminate\Console\Command;
@@ -32,7 +33,7 @@ class PruneFailedJobs extends Command
 
     protected $description = 'Deletes failed_jobs rows older than FAILED_JOBS_RETENTION_DAYS after their failure (E21-D13; nothing while unset).';
 
-    public function handle(FailedJobProviderInterface $failer, RetentionHolds $holds): int
+    public function handle(FailedJobProviderInterface $failer, RetentionHolds $holds, RetentionExpiry $retention): int
     {
         try {
             $days = RetentionPeriod::days(config('retention.failed_jobs_days'));
@@ -73,7 +74,24 @@ class PruneFailedJobs extends Command
             return self::SUCCESS;
         }
 
-        $deleted = $failer->prune($cutoff);
+        // E21-RH.6: the delete runs as the retention identity (its delete guard re-checks the platform hold in
+        // the database), in bounded batches, as the provider's own prune does.
+        /** @var array{deleted: int, errors: int} $result */
+        $result = $retention->retained('failed_job', false, null, ['deleted' => 0, 'errors' => 0], function () use ($cutoff): array {
+            $deleted = 0;
+            do {
+                $batch = DB::table((string) config('queue.failed.table'))->where('failed_at', '<', $cutoff)->limit(1000)->delete();
+                $deleted += $batch;
+            } while ($batch > 0);
+
+            return ['deleted' => $deleted, 'errors' => 0];
+        });
+        if ($result['errors'] > 0) {
+            $this->error('The retention identity is not available; nothing was deleted.');
+
+            return self::FAILURE;
+        }
+        $deleted = $result['deleted'];
 
         Log::info('retention.failed_jobs_prune.completed', ['retention_days' => $days, 'failed_jobs' => $deleted]);
         $this->info("Deleted {$deleted} failed job(s).");

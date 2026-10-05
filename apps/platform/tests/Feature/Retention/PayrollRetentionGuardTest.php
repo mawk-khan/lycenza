@@ -238,7 +238,9 @@ class PayrollRetentionGuardTest extends TestCase
         $this->closeOldYear($w['school']);
         $entries = $this->runEntries($w['school'], $w['run']->id);
 
-        $this->assertStringContainsString('retention_finance_dependency', $this->refusal($w['school'], fn () => app(RetentionExpiry::class)->financeUnit($w['school'], [], $entries, true)));
+        // E21-RH.6: the Finance unit function runs as the retention identity only.
+        $this->assertStringContainsString('permission denied for function retention_expire_finance_unit', $this->refusal($w['school'], fn () => app(RetentionExpiry::class)->financeUnit($w['school'], [], $entries, true)));
+        $this->assertStringContainsString('retention_finance_dependency', $this->asRetention($w['school'], fn () => app(RetentionExpiry::class)->financeUnit($w['school'], [], $entries, true)));
     }
 
     #[Test]

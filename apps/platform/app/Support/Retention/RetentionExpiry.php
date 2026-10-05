@@ -315,6 +315,30 @@ final class RetentionExpiry
      */
     public function privileged(string $category, bool $dryRun, callable $participant, ?string $schoolId = null): array
     {
+        return $this->underRetentionIdentity($category, $dryRun, $participant, self::REFUSED_UNIT, $schoolId);
+    }
+
+    /**
+     * E21-RH.6: privileged() for a retention operation with its own result
+     * shape. On refusal it returns `$zero` with one error.
+     *
+     * @template TResult of array<string, int>
+     *
+     * @param  array<string, int>  $zero  the operation's result with every count at 0 (it has an `errors` key)
+     * @param  callable(): TResult  $operation
+     * @return TResult
+     */
+    public function retained(string $category, bool $dryRun, ?string $schoolId, array $zero, callable $operation): array
+    {
+        return $this->underRetentionIdentity($category, $dryRun, $operation, ['errors' => 1] + $zero, $schoolId);
+    }
+
+    /**
+     * @param  array<string, int>  $refused
+     * @return array<string, int>
+     */
+    private function underRetentionIdentity(string $category, bool $dryRun, callable $participant, array $refused, ?string $schoolId): array
+    {
         try {
             $this->assertRetentionIdentity();
             if (! $dryRun) {
@@ -324,7 +348,7 @@ final class RetentionExpiry
             // The caller's totals carry the one error into the metrics; the log names the closed reason only.
             Log::warning('retention.unit_refused', ['category' => $category, 'reason' => $e->reason]);
 
-            return self::REFUSED_UNIT;
+            return $refused;
         }
 
         $result = DB::usingConnection(self::PRIVILEGED_CONNECTION, $participant);

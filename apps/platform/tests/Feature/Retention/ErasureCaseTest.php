@@ -11,11 +11,13 @@ use App\Models\School;
 use App\Support\Retention\Erasure\ErasureCaseException;
 use App\Support\Retention\Erasure\ErasureCaseService;
 use App\Support\Retention\Erasure\ErasureCategory;
+use App\Support\Retention\RetentionHolds;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesFeesFixtures;
 use Tests\Concerns\CreatesFinanceFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -29,7 +31,7 @@ use Tests\TestCase;
  */
 class ErasureCaseTest extends TestCase
 {
-    use CreatesFeesFixtures, CreatesFinanceFixtures, CreatesTenancyFixtures;
+    use CommitsRetentionFixtures, CreatesFeesFixtures, CreatesFinanceFixtures, CreatesTenancyFixtures;
 
     protected function setUp(): void
     {
@@ -65,6 +67,11 @@ class ErasureCaseTest extends TestCase
         $this->createStudentEnrollment($student, $section, ['status' => 'withdrawn', 'starts_on' => '2026-06-01', 'ends_on' => '2026-09-30']);
         $this->createStudentGuardianRelationship($student, $this->createGuardian($school));
 
+        // E21-RH.6: the end was also RECORDED back then (the database counts from the later of the two).
+        if (method_exists($this, 'backdateEndRecording')) {
+            $this->backdateEndRecording();
+        }
+
         return [$school, $student, $year];
     }
 
@@ -76,6 +83,8 @@ class ErasureCaseTest extends TestCase
 
     private function approved(?School $school, string $type, string $id): ErasureCase
     {
+        // E21-RH.6: the fixtures' ends were recorded when they say (execution runs the purges directly).
+        $this->backdateEndRecording();
         $case = $this->cases()->open($school, $type, $id, 'written');
 
         return $this->cases()->decide($case->id, 'approve', 'request_valid');
@@ -212,10 +221,14 @@ class ErasureCaseTest extends TestCase
         $this->assertSame('student_guardian_account_links', $blocked->reason);
 
         config(['retention.hold_school_ids' => [$school->id]]);
+        // E21-RH.6: destructive retention refuses while a configured hold is unrecorded; record it (as reconcile does).
+        app(RetentionHolds::class)->place($school->id, 'litigation', 'TEST-HOLD');
         $this->assertSame(ErasureCategory::LEGAL_HOLD, $plan($gone)->outcome);
         $this->assertTrue($this->inSchool($school, fn () => DB::table('guardians')->where('id', $gone->id)->exists()));
 
         config(['retention.hold_school_ids' => []]);
+        // Configuration removal never releases a database hold (E21-RH.3): release it explicitly.
+        app(RetentionHolds::class)->release($school->id, 'matter_concluded', 'TEST-HOLD');
         $this->assertNull($plan($gone), 'executed: only the absent-subject category is left');
         $this->assertFalse($this->inSchool($school, fn () => DB::table('guardians')->where('id', $gone->id)->exists()));
         foreach ([$related, $unmarked, $recent, $linked] as $kept) {
@@ -239,6 +252,8 @@ class ErasureCaseTest extends TestCase
 
         [$heldSchool, $heldStudent] = $this->leaver();
         config(['retention.hold_school_ids' => [$heldSchool->id]]);
+        // E21-RH.6: destructive retention refuses while a configured hold is unrecorded; record it (as reconcile does).
+        app(RetentionHolds::class)->place($heldSchool->id, 'litigation', 'TEST-HOLD');
         $held = $this->approved($heldSchool, 'student', $heldStudent->id);
         foreach ($this->cases()->execute($held->id, false) as $category) {
             $this->assertSame(ErasureCategory::LEGAL_HOLD, $category->outcome);

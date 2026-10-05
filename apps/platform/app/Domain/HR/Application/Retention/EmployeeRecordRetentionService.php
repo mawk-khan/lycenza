@@ -5,6 +5,7 @@ namespace App\Domain\HR\Application\Retention;
 use App\Domain\Documents\Application\Retention\DocumentParentRetention;
 use App\Models\School;
 use App\Support\Retention\ReferencingRows;
+use App\Support\Retention\RetentionExpiry;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -64,6 +65,13 @@ final class EmployeeRecordRetentionService
     /** @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int} */
     public function pruneAncillary(School $school, string $cutoffDate, int $batch, bool $dryRun, ?string $only = null): array
     {
+        // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
+        return app(RetentionExpiry::class)->retained('employee_ancillary', $dryRun, $school->id, ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneAncillaryUnit($school, $cutoffDate, $batch, $dryRun, $only));
+    }
+
+    /** @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int} */
+    private function pruneAncillaryUnit(School $school, string $cutoffDate, int $batch, bool $dryRun, ?string $only = null): array
+    {
         return $this->employees->purgeSeparatedBefore(
             $school,
             $cutoffDate,
@@ -101,6 +109,13 @@ final class EmployeeRecordRetentionService
      * @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int}
      */
     public function pruneEvidence(School $school, string $cutoffDate, int $batch, bool $dryRun, array $clearedFirst = [], ?string $only = null): array
+    {
+        // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
+        return app(RetentionExpiry::class)->retained('employee_evidence', $dryRun, $school->id, ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneEvidenceUnit($school, $cutoffDate, $batch, $dryRun, $clearedFirst, $only));
+    }
+
+    /** @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int} */
+    private function pruneEvidenceUnit(School $school, string $cutoffDate, int $batch, bool $dryRun, array $clearedFirst = [], ?string $only = null): array
     {
         $cleared = $dryRun ? $clearedFirst : [];
 

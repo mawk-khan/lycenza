@@ -11,10 +11,12 @@ use App\Support\Email\EmailPurpose;
 use App\Support\Email\OutboundEmailGateway;
 use App\Support\Email\PlatformEmailScope;
 use App\Support\Email\Suppression\EmailSuppressionService;
+use App\Support\Retention\RetentionHolds;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesEmailFixtures;
 use Tests\TestCase;
 
@@ -24,7 +26,7 @@ use Tests\TestCase;
  */
 class EmailRetentionPruneTest extends TestCase
 {
-    use CreatesEmailFixtures;
+    use CommitsRetentionFixtures, CreatesEmailFixtures;
 
     private const DAYS = 180;
 
@@ -191,6 +193,8 @@ class EmailRetentionPruneTest extends TestCase
         $b = $this->createSchool();
         $held = $this->createSchool();
         config(['retention.hold_school_ids' => [$held->id]]);
+        // E21-RH.6: the database hold is authoritative (a configured hold must also be recorded).
+        app(RetentionHolds::class)->place($held->id, 'litigation', 'TEST-HOLD');
         $oldA = $this->finished($a, $this->days(200));
         $youngB = $this->finished($b, $this->days(2));
         $oldB = $this->finished($b, $this->days(250));
@@ -210,6 +214,7 @@ class EmailRetentionPruneTest extends TestCase
     {
         // E21.2B: records that belong to no School are held as one group.
         config(['retention.hold_platform' => true]);
+        app(RetentionHolds::class)->place(null, 'regulatory_inquiry', 'TEST-HOLD');
         $identity = $this->identityMessage($this->days(400));
         $event = $this->event($this->days(400));
 

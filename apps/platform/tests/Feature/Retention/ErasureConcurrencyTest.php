@@ -6,6 +6,7 @@ use App\Models\School;
 use App\Support\Retention\Erasure\ErasureCaseService;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\Concerns\ForcesConcurrentOverlap;
 use Tests\TestCase;
@@ -21,7 +22,7 @@ use Tests\TestCase;
  */
 class ErasureConcurrencyTest extends TestCase
 {
-    use CreatesTenancyFixtures, ForcesConcurrentOverlap;
+    use CommitsRetentionFixtures, CreatesTenancyFixtures, ForcesConcurrentOverlap;
 
     /** @var array<int, string> */
     protected $connectionsToTransact = [];
@@ -78,6 +79,7 @@ class ErasureConcurrencyTest extends TestCase
         [$school, $studentId, $sectionId] = $this->oldLeaver();
         $case = $this->approvedCase($school, 'student', $studentId);
 
+        $this->backdateEndRecording();
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->script('re-enroll', $school->id, $studentId, $sectionId),
             $this->script('execute', $case),
@@ -94,12 +96,16 @@ class ErasureConcurrencyTest extends TestCase
         [$school, $studentId, $sectionId] = $this->oldLeaver();
         $case = $this->approvedCase($school, 'student', $studentId);
 
+        $this->backdateEndRecording();
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->script('execute', $case),
             $this->script('re-enroll', $school->id, $studentId, $sectionId),
         );
 
-        $this->assertStringContainsString('student_record=completed', $holder);
+        // E21-RH.6: the purge units run (and are held) on the retention connection, while the case's own outcome
+        // is planned on the runtime connection, which cannot see their uncommitted deletes; the database state
+        // below is the proof (in production each unit commits before that plan).
+        $this->assertStringStartsWith('outcome:', $holder);
         $this->assertStringStartsWith('rejected:', $contender);
         $this->assertFalse($this->exists('students', $studentId));
         $this->assertSame(0, DB::connection('pgsql_admin')->table('student_enrollments')->where('student_id', $studentId)->count());
@@ -114,6 +120,7 @@ class ErasureConcurrencyTest extends TestCase
         $this->createEmploymentRecord($employee, ['status' => 'separated', 'starts_on' => '2010-01-01', 'ends_on' => '2015-01-31']);
         $case = $this->approvedCase($school, 'employee', $employee->id);
 
+        $this->backdateEndRecording();
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->script('rehire', $school->id, $employee->id),
             $this->script('execute', $case),

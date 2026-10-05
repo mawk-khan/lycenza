@@ -113,10 +113,12 @@ class StaffSelfServiceAuthorizationTest extends TestCase
         $this->as($me['user'])->getJson("{$base}/payslips")->assertNotFound();
         $this->as($me['user'])->getJson("{$base}/staff-attendance")->assertNotFound();
 
-        $this->inSchool($w['school'], fn () => DB::table('employment_records')->where('id', $me['employment']->id)->update(['status' => 'notice_period', 'ends_on' => null]));
+        // E21-RH.6: an ended employment is never reopened, so the notice-period case is another member's current record.
+        $serving = $this->selfMember($w);
+        $this->inSchool($w['school'], fn () => DB::table('employment_records')->where('id', $serving['employment']->id)->update(['status' => 'notice_period']));
         $this->assertContains('notice_period', EmploymentCoverage::CURRENT_STATUSES);
-        $this->as($me['user'])->getJson("{$base}/leave")->assertOk();
-        SchoolMembership::query()->where('school_id', $w['school']->id)->where('user_id', $me['user']->id)->update(['status' => 'suspended']);
-        $this->as($me['user'])->getJson("{$base}/leave")->assertNotFound();
+        $this->as($serving['user'])->getJson("{$base}/leave")->assertOk();
+        SchoolMembership::query()->where('school_id', $w['school']->id)->where('user_id', $serving['user']->id)->update(['status' => 'suspended']);
+        $this->as($serving['user'])->getJson("{$base}/leave")->assertNotFound();
     }
 }

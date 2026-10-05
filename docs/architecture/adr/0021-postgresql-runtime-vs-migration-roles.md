@@ -138,3 +138,11 @@ migration/owner role.
   baseline, and individual tables are narrowed by verifier-guarded
   REVOKEs (`DatabaseRoleVerifier::NO_RUNTIME_DELETE` /
   `NO_RUNTIME_UPDATE`).
+- **E21-RH.6 (2026-10-05, ADR 0066 §14):** the runtime role holds no
+  EXECUTE on any `retention_*` function, and its DELETE is revoked on every
+  table only retention deleted from (verifier:
+  `runtime_retention_deletes_revoked`). The retention identity holds SELECT
+  and DELETE (never INSERT or UPDATE) on the tables its units delete from,
+  each of its deletes refused in the database under an active hold.
+  `platform:lifecycle-markers-backfill` is operator-run maintenance on this
+  migration role; no scheduled path selects it.

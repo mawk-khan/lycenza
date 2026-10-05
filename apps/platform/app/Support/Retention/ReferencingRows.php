@@ -83,6 +83,11 @@ final class ReferencingRows
      * Only existence decides, so it stops at the first hit. The explicit
      * `school_id` predicate lets the `(school_id, ...)` indexes serve it.
      *
+     * E21-RH.6: as the retention identity (on its own connection) the same
+     * question goes to the read-only database probe
+     * `retention_first_reference()`, which applies exactly this rule -- that
+     * identity reads none of the referencing tables itself.
+     *
      * @param  list<string>  $ids
      * @param  list<string>  $handled  tables the caller removes itself
      */
@@ -90,6 +95,16 @@ final class ReferencingRows
     {
         if ($ids === []) {
             return null;
+        }
+        if (! in_array($parent, self::PARENTS, true)) {
+            throw new InvalidArgumentException("Not a retention parent: {$parent}");
+        }
+        if (DB::connection()->getName() === RetentionExpiry::PRIVILEGED_CONNECTION) {
+            $hit = DB::selectOne('SELECT retention_first_reference(?, ?, ?::uuid[], ?::text[]) AS t', [
+                $parent, $schoolId, '{'.implode(',', $ids).'}', '{'.implode(',', array_map(fn (string $t) => '"'.str_replace(['\\', '"'], ['\\\\', '\\"'], $t).'"', $handled)).'}',
+            ])->t;
+
+            return $hit === null ? null : (string) $hit;
         }
 
         foreach ($this->to($parent) as $reference) {

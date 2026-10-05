@@ -4,7 +4,9 @@ namespace App\Console\Commands;
 
 use App\Models\DomainEventOutbox;
 use App\Models\School;
+use App\Support\Retention\RetentionExpiry;
 use App\Support\Retention\RetentionHolds;
+use App\Support\Retention\RetentionLocks;
 use App\Support\Retention\RetentionPeriod;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Console\Command;
@@ -47,8 +49,11 @@ class PruneOutboxEvents extends Command
 
     protected $description = 'Deletes processed domain-event outbox rows (and their consumer receipts) older than OUTBOX_RETENTION_DAYS (E21-D4; nothing while unset).';
 
-    public function handle(TenantContext $context, RetentionHolds $holds): int
+    private RetentionExpiry $retention;
+
+    public function handle(TenantContext $context, RetentionHolds $holds, RetentionExpiry $retention): int
     {
+        $this->retention = $retention;
         try {
             $days = RetentionPeriod::days(config('retention.outbox_days'));
         } catch (InvalidArgumentException $e) {
@@ -78,12 +83,15 @@ class PruneOutboxEvents extends Command
                     continue;
                 }
 
-                $schoolRows += $context->withSchool($school, fn () => $this->prune(fn () => $this->eligible($cutoff)->where('school_id', $school->id), $batch, $dryRun));
+                // E21-RH.6: as the retention identity (its delete guard re-checks the School's hold in the database).
+                $schoolRows += $this->retention->retained('outbox', $dryRun, $school->id, ['deleted' => 0, 'errors' => 0],
+                    fn (): array => ['deleted' => $context->withSchool($school, fn () => $this->prune(fn () => $this->eligible($cutoff)->where('school_id', $school->id), $batch, $dryRun)), 'errors' => 0])['deleted'];
             }
         });
 
         // School-less rows are held by RETENTION_HOLD_PLATFORM (E21.2B).
-        $platformRows = $holds->platformHeld() ? 0 : $this->prune(fn () => $this->eligible($cutoff)->whereNull('school_id'), $batch, $dryRun);
+        $platformRows = $holds->platformHeld() ? 0 : $this->retention->retained('outbox', $dryRun, null, ['deleted' => 0, 'errors' => 0],
+            fn (): array => ['deleted' => $this->prune(fn () => $this->eligible($cutoff)->whereNull('school_id'), $batch, $dryRun), 'errors' => 0])['deleted'];
 
         Log::info($dryRun ? 'retention.outbox_prune.dry_run' : 'retention.outbox_prune.completed', [
             'retention_days' => $days,
@@ -113,7 +121,8 @@ class PruneOutboxEvents extends Command
             }
 
             $deleted += DB::transaction(function () use ($eligible, $ids): int {
-                $rows = $eligible()->whereIn('id', $ids)->lockForUpdate()->pluck('id')->all();
+                // E21-RH.6: lock (lock-only definer), then keep only what is still eligible.
+                $rows = $eligible()->whereIn('id', RetentionLocks::lock('domain_event_outbox', array_map('strval', $ids)))->pluck('id')->all();
                 DB::table('event_consumer_receipts')->whereIn('event_id', $rows)->delete();
 
                 return DomainEventOutbox::query()->whereIn('id', $rows)->delete();

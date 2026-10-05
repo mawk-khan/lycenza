@@ -5,6 +5,7 @@ namespace App\Domain\Timetable\Application\Retention;
 use App\Domain\AcademicStructure\Application\Retention\AcademicYearRetention;
 use App\Models\School;
 use App\Support\Retention\RetentionBatch;
+use App\Support\Retention\RetentionExpiry;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -39,6 +40,13 @@ final class TimetableEntryRetentionService
 
     /** @return array{eligible: int, deleted: int, held: int, unresolved: int, dependency_blocked: int, errors: int} */
     public function prune(School $school, string $cutoffDate, int $batch, bool $dryRun, bool $held): array
+    {
+        // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
+        return app(RetentionExpiry::class)->retained('timetable_entry', $dryRun || $held, $school->id, ['eligible' => 0, 'deleted' => 0, 'held' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneUnit($school, $cutoffDate, $batch, $dryRun, $held));
+    }
+
+    /** @return array{eligible: int, deleted: int, held: int, unresolved: int, dependency_blocked: int, errors: int} */
+    private function pruneUnit(School $school, string $cutoffDate, int $batch, bool $dryRun, bool $held): array
     {
         return $this->context->withSchool($school, fn (): array => $this->batches->prune(
             self::TABLE,

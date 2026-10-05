@@ -169,7 +169,8 @@ abstract class TestCase extends BaseTestCase
 
         $startedAt = $this->testStartedAt;
 
-        DB::table('domain_event_outbox')
+        // E21-RH.6: the runtime role no longer deletes outbox rows (retention runs as the retention identity).
+        DB::connection('pgsql_admin')->table('domain_event_outbox')
             ->whereNotNull('school_id')
             ->where(fn (Builder $query) => $query
                 ->whereNotExists(fn (Builder $schools) => $schools

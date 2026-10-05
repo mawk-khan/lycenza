@@ -139,6 +139,11 @@ trait CreatesHrxRetentionFixtures
         }
         $this->travelBack();
 
+        // E21-RH.6: the end was also RECORDED back then (the database counts from the later of the two).
+        if (method_exists($this, 'backdateEndRecording')) {
+            $this->backdateEndRecording();
+        }
+
         return $leavers;
     }
 

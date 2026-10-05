@@ -193,14 +193,41 @@ Its rows are counted as held, and nothing of it is deleted.
     `assignments`.
   - Finance unit, Student and Guardian core evidence keep runtime EXECUTE
     and the PHP-only hold for now.
+- **E21-RH.6 (2026-10-05, ADR 0066 §14): the remaining boundaries are
+  hardened. E21-RH is NOT closed (E21-RH.7 below).**
+  - No destructive retention function is executable by the runtime role:
+    the Finance unit, Student processing authorizations, Student and
+    Guardian consent functions moved to `school_os_retention` with the
+    identity and hold prologue.
+  - Every PHP retention unit (Students, Guardians, Employees, the academic
+    and operational residuals, Communications, Admissions, portal
+    invitations, the Finance unit, erasure execution, and the email, outbox,
+    webhook-delivery and failed-job prunes) runs whole as the retention
+    identity. PostgreSQL refuses each of its deletes while a platform hold,
+    or a hold of an affected School, is active. Runtime DELETE is revoked
+    wherever only retention used it.
+  - Idempotency keys, account-recovery requests and staff credentials stay
+    hold-exempt (owner decision, 2026-10-05).
+  - **Recorded-date amendment (owner decision, 2026-10-05).** The D9
+    separation and the D7 exit count from the LATER of `ends_on` and the
+    database-recorded date of that end (`ended_recorded_at`). An end is
+    recorded once and never changes. A separation or completion entered
+    after the fact is therefore retained in full from when it was recorded.
+    The periods themselves are unchanged; the rule only ever retains longer.
+  - `erasure_cases` dates and transitions, and the Guardian and Admissions
+    lifecycle-marker backfills, are database-guarded.
+  - **Still open, E21-RH.7 (pre-production blocker):** other retention
+    periods count from application-written times (`created_at`,
+    `occurred_at`, `sent_at`, ...) that the runtime role can set. Every
+    retention-relevant time must become database-stamped.
 - **E21-RH.2 (2026-10-04, ADR 0066 §10).**
   - The HRX purge functions are executed only by the dedicated
     `school_os_retention` login.
   - The configured School holds are recorded in the database by the
     operator command `platform:retention-holds-sync`. A destructive HRX run
     refuses while one is unrecorded.
-- **Target hold and identity model (E21-RH.1, ADR 0066; RH.3–RH.6 not yet
-  implemented).**
+- **Target hold and identity model (E21-RH.1, ADR 0066; implemented by
+  RH.2–RH.6, see above).**
   - PostgreSQL hold state becomes authoritative, for School and platform
     holds alike. It is placed and released only by an audited operator
     command; the configuration values become an add-only input; and

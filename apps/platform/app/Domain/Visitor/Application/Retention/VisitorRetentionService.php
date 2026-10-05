@@ -4,6 +4,8 @@ namespace App\Domain\Visitor\Application\Retention;
 
 use App\Models\School;
 use App\Support\Retention\ReferencingRows;
+use App\Support\Retention\RetentionExpiry;
+use App\Support\Retention\RetentionLocks;
 use App\Support\Retention\RetentionUnit;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonInterface;
@@ -42,6 +44,13 @@ final class VisitorRetentionService
      */
     public function prune(School $school, CarbonInterface $cutoff, int $batch, bool $dryRun, bool $held): array
     {
+        // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
+        return app(RetentionExpiry::class)->retained('visitor', $dryRun || $held, $school->id, ['eligible' => 0, 'deleted' => 0, 'held' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneUnit($school, $cutoff, $batch, $dryRun, $held));
+    }
+
+    /** @return array{eligible: int, deleted: int, held: int, unresolved: int, dependency_blocked: int, errors: int} */
+    private function pruneUnit(School $school, CarbonInterface $cutoff, int $batch, bool $dryRun, bool $held): array
+    {
         return $this->context->withSchool($school, function () use ($school, $cutoff, $batch, $dryRun, $held): array {
             $at = $cutoff->copy()->utc()->format('Y-m-d H:i:s');
             $result = ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0];
@@ -54,7 +63,7 @@ final class VisitorRetentionService
                         RetentionUnit::purge(
                             $result,
                             $dryRun || $held,
-                            fn (): bool => DB::table('visitors')->where('id', $visitor->id)->lockForUpdate()->first(['id']) !== null
+                            fn (): bool => RetentionLocks::lockOne('visitors', $visitor->id)
                                 && $this->expired(DB::table('visitor_visits as x')->where('x.visitor_id', $visitor->id), $at)->exists(),
                             fn (): array => array_filter([$this->blocker($school->id, $visitor->id, $at)]),
                             function () use ($school, $visitor, $at): ?array {

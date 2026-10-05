@@ -11,7 +11,13 @@
   identity and enforce holds in the database; the eight coupled ones are
   unchanged (RH.5/RH.6). **E21-RH.5 implemented (2026-10-05, §13):** the
   Payroll and LMS units run whole as the retention identity; the four RH.6
-  functions are unchanged.
+  functions are unchanged. **E21-RH.6 implemented (2026-10-05, §14):** no
+  retention function is runtime-executable; every PHP retention unit runs
+  whole as the retention identity, and PostgreSQL refuses each of its
+  deletes under an active hold; the named eligibility sources are
+  database-guarded. **E21-RH is NOT closed:** E21-RH.7 (§14.9,
+  database-stamped write times on the remaining retention tables) is a new
+  pre-production blocker.
 - Date: 2026-10-04
 - Programme: **E21-RH — retention privilege hardening.** A
   pre-production security blocker, separate from HRX (closed at
@@ -776,3 +782,190 @@ transactions, savepoints and function calls. There is no split connection.
 - **The decision on database holds for PHP direct-delete retention paths.**
 - E21-RH stays a pre-production blocker until RH.6 closes. HRX closure is
   unchanged.
+
+## 14. E21-RH.6 as built (2026-10-05)
+**No destructive retention function is executable by the runtime role. Every
+PHP retention unit runs WHOLE as the retention identity, and PostgreSQL
+itself refuses each of its deletes while a platform hold or a hold of the
+affected School is active. The named eligibility sources (EmploymentRecord
+separation, Student exit, `erasure_cases`, the Guardian and Admissions
+lifecycle-marker backfills) can no longer be forged by the runtime role.
+E21-RH is NOT closed: E21-RH.7 (§14.9) is a new pre-production blocker.**
+
+Owner decisions (2026-10-05): retention counts from the LATER of an end date
+and the database-recorded date of that end (§14.3); the E21.2A housekeeping
+prunes (email, outbox, webhook deliveries, failed jobs) are held in the
+database too, while idempotency keys, account-recovery requests and staff
+credentials stay hold-exempt (short-lived security state that a hold must
+not keep alive); the hold boundary for
+PHP deletes is a retention-session statement guard (§14.4); the general
+"database-stamped write time on every retention table" is split out as
+E21-RH.7.
+
+### 14.1 The last four functions
+Migration `2026_11_30_090000_harden_finance_student_guardian_retention_functions`
+moves `retention_expire_finance_unit`,
+`retention_expire_student_processing_authorizations`,
+`retention_expire_student_consent_events` and
+`retention_expire_guardian_consent_events` exactly as §13.2 moved Payroll and
+LMS: the identity and hold prologue right after `BEGIN` (dry runs included),
+EXECUTE from `school_os_app` to `school_os_retention`, every other line byte
+for byte. The Finance unit's plan, dual-read verification and readings run
+on the retention connection with SELECT on the D8 tables (§14.4 READS).
+
+### 14.2 Every PHP retention unit on the retention identity
+`RetentionExpiry::retained(category, dryRun, school, zero, operation)` runs a
+whole unit on `pgsql_retention` (the `privileged()` contract of §13.3: no
+fallback, the configured-hold stale check, `retention.unit_run`
+attribution) and returns one error, with nothing done, when it refuses.
+Wrapped:
+- Students (core, enrollment rollover), Guardians (record, relationship),
+  Employees (ancillary, evidence), Payroll per-employment configuration;
+- Attendance records and sessions, Library loans, Transport and Hostel
+  assignments, Driver assignments, Curriculum deliveries, Timetable entries,
+  Automation executions, Visitors;
+- Communications (deliveries, content, both residual paths), terminal
+  Admissions applications, portal invitations, the Finance unit;
+- the commands `platform:email-prune` (School and platform scopes),
+  `platform:outbox-prune`, `platform:webhook-deliveries-prune` and
+  `platform:failed-jobs-prune`;
+- erasure execution, through the same unit services (`ErasureCaseService`
+  → `DataSubjectErasurePlanner`).
+
+Row locks the units took with `FOR UPDATE` (which needs UPDATE) go through
+`retention_lock_rows`; `ReferencingRows::first()` uses
+`retention_first_reference` on the retention connection; the published
+announcement ↔ message cycle is broken by
+`retention_unlink_announcement_message`. `platform:lifecycle-markers-backfill`
+runs on the maintenance (owner) connection (§14.3).
+
+### 14.3 Eligibility sources (`2026_11_30_090100_guard_retention_eligibility_sources`)
+- **EmploymentRecord / StudentEnrollment.** `ended_recorded_at` is stamped
+  from the database clock when `ends_on` is first set and never changes.
+  Once ended, `ends_on` and `status` are fixed and the end is never
+  reopened; an end needs a terminal status (Employee: separated,
+  terminated, retired, deceased; Student: not `active`); identity columns
+  and `starts_on` are fixed (`retention_guard_end_record`,
+  `retention_eligibility_guard`). The D9 floor
+  (`retention_assert_payroll_employee_floor`, shared by Payroll and HRX) and
+  the D7 core floor additionally require `ended_recorded_at < cutoff`; the
+  PHP eligibility (`EmployeeRetentionEligibility`,
+  `StudentRetentionEligibility`) counts from the later of the two dates.
+  Existing ended rows are backfilled from `updated_at`, else `created_at`.
+- **`erasure_cases`.** `erasure_cases_guard_transition` admits only the
+  workflow's transitions, stamps `requested_at`, `decided_at`,
+  `execution_started_at` and `completed_at` from the database clock once
+  each, and fixes the decision after it. A case can no longer be backdated
+  or reopened to reach `retention_expire_erasure_cases` early (closes
+  §12.6).
+- **Lifecycle markers.** The past-dated backfill branches of the Guardian
+  `no_relationship_since` and Admissions `terminal_at` guards are the schema
+  owner's only.
+- The schema owner is exempt from these guards (migrations, operator data
+  repair).
+
+### 14.4 The database hold boundary for PHP deletes (`2026_11_30_090200_bound_retention_deletes`)
+- **`retention_guard_retention_delete()`**: an `AFTER DELETE … FOR EACH
+  STATEMENT` trigger with a transition table on each of the 51 tables the
+  units delete from. When `session_user` is the retention identity it calls
+  `retention_assert_not_held` for every School among the deleted rows (or
+  the platform hold for a School-less table) and refuses the whole
+  statement under a hold, whatever PHP decided. It takes the shared hold
+  lock, so a placement waits for an in-flight unit and a unit after a
+  placement is refused (RH.3 semantics). Deletes by any other role (product
+  actions where the runtime keeps DELETE) are not retention and pass.
+- **Grants.** `school_os_retention` gets SELECT + DELETE on those 51
+  tables (never INSERT or UPDATE; table-level SELECT because the units read
+  whole rows of what they may delete) and SELECT on 29 read-only tables.
+- **Runtime DELETE revoked** wherever only retention used it — the 51 tables
+  minus `student_guardian_relationships`, six HR profile tables and
+  `failed_jobs` (product or framework deletes), plus `learning_content`,
+  `assignments` (closes the §13.7 LMS review) and
+  `student_processing_authorizations`.
+- **Owner-run triggers.** `guardians_sync_no_relationship_since`,
+  `sync_operational_work_backlog` and `sync_email_work_backlog` become SECURITY DEFINER (search path
+  pinned; `public` precedes only `pg_temp`, and only the owner can create
+  objects in `public`), so a retention delete keeps their projections without
+  the role holding UPDATE.
+- **User minimization** stays on the runtime role (it touches credential
+  tables). `users_guard_minimization_hold` refuses setting `minimized_at`
+  while the platform, or any School the User belongs to, is held.
+- **PHP checks kept as defence in depth** (`isHeld()`); the database is
+  authoritative. Object-storage bytes are deleted only after their rows'
+  deletion committed, so a held row keeps its bytes.
+
+### 14.5 Verifier (`platform:verify-database`)
+- `retention_functions_narrow`: no `retention_*` function is
+  runtime-executable (`RETENTION_FUNCTIONS` is gone);
+  `UNIT_RETENTION_FUNCTIONS` adds the RH.6 four and
+  `retention_unlink_announcement_message`.
+- `retention_read_helpers_closed`: `retention_lock_rows`,
+  `retention_first_reference`.
+- `retention_deletes_guarded` (the guard is a pinned definer, enabled on
+  every RETENTION_DELETES table), `runtime_retention_deletes_revoked`,
+  `retention_eligibility_guards` (the four guard triggers present and
+  enabled).
+- `retention_role_writes_exact`: SELECT and DELETE only, the DELETE set
+  exactly RETENTION_DELETES; `retention_role_selects_exact` includes the
+  table-level grants.
+
+### 14.6 Proof
+`RetentionDeleteBoundaryTest` (raw sessions): the runtime role executes no
+retention function and deletes from none of the revoked tables; every
+retention-session delete is refused under an active School or platform hold
+and passes after release; the lock and probe helpers refuse other sessions
+and unlisted tables; the runtime role cannot forge or reopen an end, and the
+floors count from the recorded date; erasure cases and lifecycle markers
+cannot be backdated; minimization honours every member School's hold; the
+verifier passes and detects each regression. The existing race classes now
+hold their transactions on the retention identity (an observed lock wait).
+- **Runtime boundary in the RLS suites.** A raw cross-School DELETE through
+  the runtime role on a revoked table is now refused by privilege
+  (`AssertsRuntimeDeleteRevoked`), before RLS is consulted; the retention
+  identity's own RLS confinement is proven in the Retention suite.
+- **Product paths unchanged.** HR `update()` already strips `starts_on`,
+  `ends_on` and `status`, and `end()` refuses an ended record, so the
+  eligibility guard refuses nothing the product does. The two
+  self-service tests that rewrote an employment by hand now build the state
+  they need instead.
+- **Test harness.** Every test that runs a retention unit commits its
+  fixtures (`CommitsRetentionFixtures`), because the retention connection is
+  a separate session. `PurgesCommittedHrxFixtures` also removes the
+  School-less email, outbox, receipt and failed-job rows and orphaned
+  provider references a run left behind, and records a fixture's
+  "years ago" end as recorded then (through the owner, a distinct
+  connection alias). A configured test hold is also placed in the database.
+
+### 14.7 Rollback
+None of the three `down()` methods re-grants a runtime privilege: retention
+fails closed (owner only) until migrated again. A table-level `REVOKE SELECT`
+also strips column-level SELECTs, so the boundary migration's `down()`
+captures the retention identity's earlier column grants (RH.2/RH.5) first
+and restores them exactly. Verified on the DDEV test database (rollback of
+the three migrations, then migrate):
+- after rollback: the four function bodies are byte-identical to RH.5 and
+  owner-only; every table and column ACL equals the RH.5 snapshot except
+  the runtime DELETEs deliberately not restored; no RH.6 function, trigger
+  or column remains;
+- after migrating again: functions (owner, definer, config, ACL, body),
+  table and column ACLs, triggers and columns are identical to the first
+  migration;
+- `platform:verify-database`: no failure. Rolling
+back the eligibility guards drops `ended_recorded_at`; a re-migration
+backfills it from `updated_at`, which can only retain longer.
+
+### 14.8 Credentials
+Every unit in §14.2 needs `database_retention`. Without it each refuses
+(one error, nothing deleted). `platform:lifecycle-markers-backfill` needs
+the maintenance connection.
+
+### 14.9 Still open — E21-RH.7 (new pre-production blocker)
+Retention periods elsewhere still count from application-written times that
+the runtime role can set (for example `created_at`, `occurred_at`,
+`sent_at`, `closed_at` on communications, attendance, visitors, audit-like
+and housekeeping tables). A compromised runtime could backdate such a row
+into eligibility. RH.6 closed the named sources and their class (separation,
+exit, erasure, lifecycle markers); RH.7 is the general rule: every
+retention-relevant time on a retention table is database-stamped, never
+caller-supplied. **E21-RH stays a pre-production blocker until RH.7 closes.**
+HRX closure and the E21-L1 ratification status are unchanged.

@@ -4,6 +4,8 @@ namespace App\Domain\Communications\Application\Retention;
 
 use App\Models\School;
 use App\Support\Retention\ReferencingRows;
+use App\Support\Retention\RetentionExpiry;
+use App\Support\Retention\RetentionLocks;
 use App\Support\Retention\RetentionUnit;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonInterface;
@@ -66,6 +68,13 @@ final class CommunicationResidualRetentionService
      */
     public function pruneNeverSent(School $school, CarbonInterface $cutoff, int $batch, bool $dryRun, bool $held): array
     {
+        // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
+        return app(RetentionExpiry::class)->retained('communication_never_sent', $dryRun || $held, $school->id, ['eligible' => 0, 'deleted' => 0, 'held' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneNeverSentUnit($school, $cutoff, $batch, $dryRun, $held));
+    }
+
+    /** @return array{eligible: int, deleted: int, held: int, unresolved: int, dependency_blocked: int, errors: int} */
+    private function pruneNeverSentUnit(School $school, CarbonInterface $cutoff, int $batch, bool $dryRun, bool $held): array
+    {
         return $this->context->withSchool($school, function () use ($school, $cutoff, $batch, $dryRun, $held): array {
             $at = $cutoff->copy()->utc()->format('Y-m-d H:i:s');
             $result = ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0];
@@ -81,8 +90,9 @@ final class CommunicationResidualRetentionService
                     RetentionUnit::purge(
                         $result,
                         $dryRun || $held,
-                        fn (): bool => $this->ended(DB::table('communication_announcements as a')->where('a.id', $row->id)
-                            ->whereNull('a.published_at')->whereNull('a.message_id'), $at)->lockForUpdate()->first(['a.id']) !== null,
+                        // E21-RH.6: lock (lock-only definer), then recheck under the lock.
+                        fn (): bool => RetentionLocks::lockOne('communication_announcements', $row->id) && $this->ended(DB::table('communication_announcements as a')->where('a.id', $row->id)
+                            ->whereNull('a.published_at')->whereNull('a.message_id'), $at)->first(['a.id']) !== null,
                         fn (): array => array_filter([$this->references->first('communication_announcements', $school->id, [$row->id], self::ANNOUNCEMENT_OWNED)]),
                         function () use ($row): array {
                             $objects = DB::table('communication_attachments')->where('communication_announcement_id', $row->id)->get(['storage_disk', 'storage_path'])->all();
@@ -104,6 +114,13 @@ final class CommunicationResidualRetentionService
      */
     public function pruneEmptyThreads(School $school, CarbonInterface $cutoff, int $batch, bool $dryRun, bool $held): array
     {
+        // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
+        return app(RetentionExpiry::class)->retained('communication_empty_thread', $dryRun || $held, $school->id, ['eligible' => 0, 'deleted' => 0, 'held' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneEmptyThreadsUnit($school, $cutoff, $batch, $dryRun, $held));
+    }
+
+    /** @return array{eligible: int, deleted: int, held: int, unresolved: int, dependency_blocked: int, errors: int} */
+    private function pruneEmptyThreadsUnit(School $school, CarbonInterface $cutoff, int $batch, bool $dryRun, bool $held): array
+    {
         return $this->context->withSchool($school, function () use ($school, $cutoff, $batch, $dryRun, $held): array {
             $at = $cutoff->copy()->utc()->format('Y-m-d H:i:s');
             $result = ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0];
@@ -118,7 +135,7 @@ final class CommunicationResidualRetentionService
                         RetentionUnit::purge(
                             $result,
                             $dryRun || $held,
-                            fn (): bool => $empty(DB::table('communication_threads as t')->where('t.id', $row->id))->where('t.last_activity_at', '<', $at)->lockForUpdate()->first(['t.id']) !== null,
+                            fn (): bool => RetentionLocks::lockOne('communication_threads', $row->id) && $empty(DB::table('communication_threads as t')->where('t.id', $row->id))->where('t.last_activity_at', '<', $at)->first(['t.id']) !== null,
                             fn (): array => array_filter([$this->references->first('communication_threads', $school->id, [$row->id], self::THREAD_OWNED)]),
                             fn (): ?array => DB::table('communication_threads')->where('id', $row->id)->delete() > 0 ? [] : null,
                         );

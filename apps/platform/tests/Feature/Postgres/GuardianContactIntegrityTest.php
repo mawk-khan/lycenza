@@ -9,6 +9,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\AssertsRuntimeDeleteRevoked;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
@@ -23,7 +24,7 @@ use Tests\TestCase;
  */
 class GuardianContactIntegrityTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use AssertsRuntimeDeleteRevoked, CreatesTenancyFixtures;
 
     private function setSchool(string $schoolId): void
     {
@@ -98,10 +99,10 @@ class GuardianContactIntegrityTest extends TestCase
             'update guardian_contacts set is_primary = true where id = ?',
             [$contactB->id],
         ));
-        $this->assertSame(0, DB::connection('pgsql')->delete(
+        $this->assertRuntimeDeleteRevoked(
             'delete from guardian_contacts where id = ?',
             [$contactB->id],
-        ));
+        );
     }
 
     #[Test]

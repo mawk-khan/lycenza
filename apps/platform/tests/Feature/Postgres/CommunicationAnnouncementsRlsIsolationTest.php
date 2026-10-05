@@ -8,6 +8,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Uid\UuidV7;
+use Tests\Concerns\AssertsRuntimeDeleteRevoked;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
@@ -20,7 +21,7 @@ use Tests\TestCase;
  */
 class CommunicationAnnouncementsRlsIsolationTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use AssertsRuntimeDeleteRevoked, CreatesCommunicationFixtures, CreatesTenancyFixtures;
 
     private const TABLES = [
         'communication_announcements',
@@ -108,7 +109,7 @@ class CommunicationAnnouncementsRlsIsolationTest extends TestCase
         $this->setSchool($schoolA->id);
 
         $this->assertSame(0, DB::connection('pgsql')->update("update communication_announcements set status = 'cancelled' where id = ?", [$announcementB->id]));
-        $this->assertSame(0, DB::connection('pgsql')->delete('delete from communication_announcements where id = ?', [$announcementB->id]));
+        $this->assertRuntimeDeleteRevoked('delete from communication_announcements where id = ?', [$announcementB->id]);
     }
 
     #[Test]

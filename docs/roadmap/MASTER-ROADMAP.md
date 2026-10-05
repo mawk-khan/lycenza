@@ -2490,7 +2490,7 @@ parallel, and the email provider tail) — not started.
 
   E21.2A–E21.2F are closed.
 - **E21-RH — retention privilege hardening (ADR 0066): a pre-production
-  security blocker, open until RH.6.**
+  security blocker, open until RH.7.**
   - RH.1–RH.3 published (dedicated `school_os_retention` identity; HRX on
     it; authoritative database holds).
   - **RH.4 (2026-10-05, ADR 0066 §12):** the eleven standalone legacy
@@ -2498,13 +2498,21 @@ parallel, and the email provider tail) — not started.
     School holds enforced in the database. Published.
   - **RH.5 (2026-10-05, ADR 0066 §13):** the Payroll and LMS units run whole
     on the retention identity (Documents through one database unit), with
-    database holds. On a feature branch, not merged.
-  - **Open, RH.6:**
-    - Finance unit, Student and Guardian core evidence;
-    - the eligibility-source guards (EmploymentRecord separation,
-      `erasure_cases`);
-    - the LMS runtime DELETE review;
-    - holds for PHP direct-delete paths.
+    database holds. Published.
+  - **RH.6 (2026-10-05, ADR 0066 §14):**
+    - no retention function is runtime-executable (the Finance unit, Student
+      and Guardian core evidence moved);
+    - every PHP retention unit, including erasure and the email, outbox,
+      webhook-delivery and failed-job prunes, runs whole as the retention
+      identity, and PostgreSQL refuses its deletes under a hold;
+    - runtime DELETE is revoked where only retention used it (LMS included);
+    - the separation, exit, `erasure_cases` and lifecycle-marker sources are
+      database-guarded, and D7/D9 count from the recorded end date.
+
+    Published.
+  - **Open, E21-RH.7 (new pre-production blocker):** database-stamped write
+    times on every remaining retention table (ADR 0066 §14.9). **E21-RH is
+    NOT closed.** Not started; never auto-started.
 - **E21.4 — User Identity Minimization & Database Safety (2026-10-03):
   published / closed.** `docs/security/E21-RETENTION-DETERMINATION.md`
   §5.11, E21-L1 §10:

@@ -270,7 +270,7 @@ class RetentionHoldsTest extends TestCase
     public function the_verifier_proves_the_authoritative_store_and_detects_a_grant(): void
     {
         $checks = fn () => collect(app(DatabaseRoleVerifier::class)->verify())->keyBy('code');
-        foreach (['retention_holds_authoritative', 'retention_role_functions_exact', 'retention_role_read_only', 'privileged_retention_functions_closed'] as $code) {
+        foreach (['retention_holds_authoritative', 'retention_role_functions_exact', 'retention_role_writes_exact', 'privileged_retention_functions_closed'] as $code) {
             $this->assertSame(CheckResult::PASS, $checks()[$code]->status, $code);
         }
 

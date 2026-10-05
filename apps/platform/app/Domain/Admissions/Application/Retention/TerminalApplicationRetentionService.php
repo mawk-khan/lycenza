@@ -4,6 +4,8 @@ namespace App\Domain\Admissions\Application\Retention;
 
 use App\Models\School;
 use App\Support\Retention\ReferencingRows;
+use App\Support\Retention\RetentionExpiry;
+use App\Support\Retention\RetentionLocks;
 use App\Support\Retention\RetentionUnit;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonInterface;
@@ -53,6 +55,13 @@ final class TerminalApplicationRetentionService
      */
     public function prune(School $school, CarbonInterface $cutoff, int $batch, bool $dryRun, bool $held): array
     {
+        // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
+        return app(RetentionExpiry::class)->retained('admission_application', $dryRun || $held, $school->id, ['eligible' => 0, 'deleted' => 0, 'held' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneUnit($school, $cutoff, $batch, $dryRun, $held));
+    }
+
+    /** @return array{eligible: int, deleted: int, held: int, unresolved: int, dependency_blocked: int, errors: int} */
+    private function pruneUnit(School $school, CarbonInterface $cutoff, int $batch, bool $dryRun, bool $held): array
+    {
         return $this->context->withSchool($school, function () use ($school, $cutoff, $batch, $dryRun, $held): array {
             $at = $cutoff->copy()->utc()->format('Y-m-d H:i:s');
             $result = ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0];
@@ -90,10 +99,11 @@ final class TerminalApplicationRetentionService
 
     private function lock(string $applicantId, string $at): bool
     {
-        if (DB::table('applicants')->where('id', $applicantId)->lockForUpdate()->first(['id']) === null) {
+        // E21-RH.6: the retention identity locks through the lock-only definer (FOR UPDATE).
+        if (! RetentionLocks::lockOne('applicants', $applicantId)) {
             return false;
         }
-        DB::table(self::TABLE)->where('applicant_id', $applicantId)->orderBy('id')->lockForUpdate()->get(['id']);
+        RetentionLocks::lock(self::TABLE, DB::table(self::TABLE)->where('applicant_id', $applicantId)->orderBy('id')->pluck('id')->map(fn ($id) => (string) $id)->all());
 
         return $this->expired(DB::table(self::TABLE.' as a')->where('a.applicant_id', $applicantId), $at)->exists();
     }

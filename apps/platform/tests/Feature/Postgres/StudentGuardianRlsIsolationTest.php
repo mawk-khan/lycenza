@@ -5,6 +5,7 @@ namespace Tests\Feature\Postgres;
 use App\Support\Tenancy\TenantRls;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\AssertsRuntimeDeleteRevoked;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
@@ -18,7 +19,7 @@ use Tests\TestCase;
  */
 class StudentGuardianRlsIsolationTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use AssertsRuntimeDeleteRevoked, CreatesTenancyFixtures;
 
     private const TABLES = ['students', 'guardians'];
 
@@ -108,7 +109,7 @@ class StudentGuardianRlsIsolationTest extends TestCase
 
         $this->assertSame(0, DB::connection('pgsql')->update("update students set status = 'inactive' where id = ?", [$studentB->id]));
         $this->assertSame(0, DB::connection('pgsql')->update("update guardians set status = 'inactive' where id = ?", [$guardianB->id]));
-        $this->assertSame(0, DB::connection('pgsql')->delete('delete from students where id = ?', [$studentB->id]));
-        $this->assertSame(0, DB::connection('pgsql')->delete('delete from guardians where id = ?', [$guardianB->id]));
+        $this->assertRuntimeDeleteRevoked('delete from students where id = ?', [$studentB->id]);
+        $this->assertRuntimeDeleteRevoked('delete from guardians where id = ?', [$guardianB->id]);
     }
 }

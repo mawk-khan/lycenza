@@ -9,7 +9,7 @@ privileges on a real database is performed by an authorized operator.
 |---|---|---|---|
 | Migration/admin | any name the deployment chooses (e.g. the managed service's owner role) — **not** `school_os_app` | owns the schema; can CREATE in `public` | `pgsql_admin`: the release step and the operator console only |
 | Runtime | **exactly `school_os_app`** (fixed v1 contract, O6) | `LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION`, never a member of the migration role | `pgsql`: web, workers, scheduler |
-| Retention (E21-RH.2, ADR 0066) | **exactly `school_os_retention`** | same attributes; a member of no role (nor the migration role nor `school_os_app`); owns nothing; **no default privileges** -- migrations grant it only column-level SELECTs and EXECUTE on the approved retention functions | `pgsql_retention`: the destructive steps of scheduled retention (scheduler) and reviewed erasure cases (operator console) |
+| Retention (E21-RH.2, ADR 0066) | **exactly `school_os_retention`** | same attributes; a member of no role (nor the migration role nor `school_os_app`); owns nothing; **no default privileges** -- migrations grant it only EXECUTE on the approved retention functions, SELECT on what its units read, and SELECT + DELETE (never INSERT or UPDATE) on the tables its units delete from, each delete held in the database (E21-RH.6) | `pgsql_retention`: the destructive steps of scheduled retention (scheduler) and reviewed erasure cases (operator console) |
 
 Production requires PostgreSQL 16+ and TLS (`DB_SSLMODE=require` or
 stricter for both connections; the application refuses to boot otherwise).
@@ -55,6 +55,15 @@ stricter for both connections; the application refuses to boot otherwise).
      `platform:payroll-retention-prune` and the LMS steps of
      `platform:academic-retention-prune`. Their destructive runs also refuse
      while a configured hold is not yet reconciled into the database.
+   - Since E21-RH.6 (ADR 0066 §14) every retention unit needs it:
+     `platform:student-retention-prune`, `platform:employee-retention-prune`,
+     the Guardian, academic, operational, Communications, Admissions,
+     portal-invitation and Finance prunes, erasure execution, and
+     `platform:email-prune`, `platform:outbox-prune`,
+     `platform:webhook-deliveries-prune`, `platform:failed-jobs-prune`.
+     The runtime login no longer holds DELETE on the tables only retention
+     deleted from. `platform:lifecycle-markers-backfill` runs on the
+     migration connection (operator console only).
    - Retention holds are database state (E21-RH.3, ADR 0066 §6). See
      [RETENTION-HOLDS.md](RETENTION-HOLDS.md) for placing, releasing and
      reconciling them; configuration removal never releases one.

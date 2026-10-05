@@ -9,6 +9,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Uid\UuidV7;
+use Tests\Concerns\AssertsRuntimeDeleteRevoked;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
@@ -19,7 +20,7 @@ use Tests\TestCase;
  */
 class StudentGuardianAccountLinksRlsIsolationTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use AssertsRuntimeDeleteRevoked, CreatesCommunicationFixtures, CreatesTenancyFixtures;
 
     private function setSchool(string $schoolId): void
     {
@@ -167,9 +168,7 @@ class StudentGuardianAccountLinksRlsIsolationTest extends TestCase
         $schoolA = $this->createSchool();
         $this->setSchool($schoolA->id);
 
-        $deleted = DB::connection('pgsql')->delete('delete from student_guardian_account_links where id = ?', [$linkB->id]);
-
-        $this->assertSame(0, $deleted);
+        $this->assertRuntimeDeleteRevoked('delete from student_guardian_account_links where id = ?', [$linkB->id]);
     }
 
     #[Test]

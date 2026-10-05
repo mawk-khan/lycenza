@@ -5,6 +5,7 @@ namespace Tests\Feature\Events;
 use App\Models\School;
 use App\Models\WebhookDelivery;
 use App\Models\WebhookEndpoint;
+use App\Support\Retention\RetentionHolds;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
@@ -12,6 +13,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
@@ -22,7 +24,7 @@ use Tests\TestCase;
  */
 class OutboxRetentionPruneTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CommitsRetentionFixtures, CreatesTenancyFixtures;
 
     private Carbon $now;
 
@@ -141,6 +143,8 @@ class OutboxRetentionPruneTest extends TestCase
         $held = $this->createSchool();
         $other = $this->createSchool();
         config(['retention.hold_school_ids' => [$held->id]]);
+        // E21-RH.6: the database hold is authoritative (a configured hold must also be recorded).
+        app(RetentionHolds::class)->place($held->id, 'litigation', 'TEST-HOLD');
         $heldRow = $this->outbox($held, 'dispatched', 200);
         $otherRow = $this->outbox($other, 'dispatched', 200);
 
@@ -155,6 +159,7 @@ class OutboxRetentionPruneTest extends TestCase
     public function the_platform_hold_keeps_school_less_rows(): void
     {
         config(['retention.hold_platform' => true]);
+        app(RetentionHolds::class)->place(null, 'regulatory_inquiry', 'TEST-HOLD');
         $platform = $this->outbox(null, 'dispatched', 200);
 
         $this->artisan('platform:outbox-prune')->assertSuccessful();

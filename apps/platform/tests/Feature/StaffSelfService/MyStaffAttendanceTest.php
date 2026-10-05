@@ -70,8 +70,8 @@ class MyStaffAttendanceTest extends TestCase
     public function the_view_is_clipped_to_my_employment_read_only_and_never_names_anyone(): void
     {
         $w = $this->attendanceWorld();
-        $me = $this->selfMember($w);
-        $this->inSchool($w['school'], fn () => DB::table('employment_records')->where('id', $me['employment']->id)->update(['starts_on' => '2026-10-01']));
+        // E21-RH.6: an employment's start is fixed once recorded, so this one starts on 2026-10-01 from the outset.
+        $me = $this->selfMember($w, null, '2026-10-01');
 
         $days = $this->days($w, $me['user'], '2026-09-28', '2026-10-04');
         $this->assertSame(['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04'], array_keys($days), 'nothing before my employment started');

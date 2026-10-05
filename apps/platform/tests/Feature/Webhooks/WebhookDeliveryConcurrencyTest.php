@@ -51,7 +51,8 @@ class WebhookDeliveryConcurrencyTest extends TestCase
         $this->receiver?->stop();
 
         if ($this->school !== null) {
-            DomainEventOutbox::query()->where('school_id', $this->school->id)->delete();
+            // E21-RH.6: the runtime role no longer deletes outbox rows.
+            DB::connection('pgsql_admin')->table('domain_event_outbox')->where('school_id', $this->school->id)->delete();
             $this->deleteSchoolAsAdmin($this->school); // cascades endpoint/subscription/delivery/attempts
         }
         // E21.4 (F1): only the migration role can delete a User (test cleanup).

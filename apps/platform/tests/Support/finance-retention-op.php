@@ -4,8 +4,10 @@ use App\Domain\Fees\Application\FeeConcessionService;
 use App\Domain\Finance\Application\Retention\FinanceRetentionService;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Retention\RetentionExpiry;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Support\Facades\DB;
 use Tests\Support\Concurrency\HeldTransaction;
 
 // E21.3A2 (E21-D8): one Finance retention operation in a GENUINELY separate
@@ -29,7 +31,7 @@ $school = School::query()->findOrFail($args[0]);
 $context->set($school);
 
 try {
-    echo HeldTransaction::run(function () use ($app, $operation, $args, $school): string {
+    $run = fn () => HeldTransaction::run(function () use ($app, $operation, $args, $school): string {
         switch ($operation) {
             case 'prune':
                 $r = $app->make(FinanceRetentionService::class)->prune($school, 500, false, 8);
@@ -43,6 +45,9 @@ try {
 
         throw new InvalidArgumentException("Unknown operation {$operation}");
     });
+    // E21-RH.6: the retention operations run as the retention identity, their held transaction on that
+    // connection (the unit transactions nest in it); the racing writes stay ordinary runtime writes.
+    echo in_array($operation, ['prune'], true) ? DB::usingConnection(RetentionExpiry::PRIVILEGED_CONNECTION, $run) : $run();
 } catch (Throwable $e) {
     echo 'rejected:'.$e::class.':'.$e->getMessage();
 } finally {

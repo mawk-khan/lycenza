@@ -3,6 +3,7 @@
 namespace App\Domain\Students\Application\Retention;
 
 use App\Models\School;
+use App\Support\Retention\RetentionLocks;
 use App\Support\Retention\RetentionUnit;
 use App\Support\Tenancy\TenantContext;
 use Closure;
@@ -59,7 +60,12 @@ final class StudentRetentionEligibility
     /**
      * The pure rule. The dry run and every purge use it, so they always agree.
      *
-     * @param  list<array{status: string, ends_on: ?string}>  $enrollments  every Enrollment of the Student
+     * E21-RH.6 (owner decision 2026-10-05): the exit date is the latest
+     * `ends_on`, or -- if later -- the latest date the database recorded an
+     * end (`recorded_on`, from `ended_recorded_at`, which no caller can set).
+     * A backdated end therefore never shortens the period.
+     *
+     * @param  list<array{status: string, ends_on: ?string, recorded_on?: ?string}>  $enrollments  every Enrollment of the Student
      */
     public static function resolve(string $studentStatus, array $enrollments, bool $hasActiveSubjectEnrollment): StudentExit
     {
@@ -87,7 +93,9 @@ final class StudentRetentionEligibility
             }
         }
 
-        return StudentExit::exited($last);
+        $recorded = array_filter(array_map(fn (array $e): ?string => $e['recorded_on'] ?? null, $placements));
+
+        return StudentExit::exited($recorded === [] ? $last : max($last, max($recorded)));
     }
 
     /**
@@ -115,7 +123,7 @@ final class StudentRetentionEligibility
 
             $query->orderBy('id')->chunkById($batch, function ($students) use ($cutoffDate, $each, &$unresolved): void {
                 $ids = $students->pluck('id')->all();
-                $enrollments = DB::table('student_enrollments')->whereIn('student_id', $ids)->get(['student_id', 'status', 'ends_on'])->groupBy('student_id');
+                $enrollments = DB::table('student_enrollments')->whereIn('student_id', $ids)->get(['student_id', 'status', 'ends_on', 'ended_recorded_at'])->groupBy('student_id');
                 $activeSubjects = DB::table('student_subject_enrollments')->whereIn('student_id', $ids)->where('status', 'active')->distinct()->pluck('student_id')->flip();
 
                 foreach ($students as $student) {
@@ -189,7 +197,7 @@ final class StudentRetentionEligibility
 
             DB::table('students')->where('school_id', $school->id)->select('id', 'status')->orderBy('id')->chunkById($batch, function ($students) use (&$latest, &$pending): void {
                 $ids = $students->pluck('id')->all();
-                $enrollments = DB::table('student_enrollments')->whereIn('student_id', $ids)->get(['student_id', 'status', 'ends_on'])->groupBy('student_id');
+                $enrollments = DB::table('student_enrollments')->whereIn('student_id', $ids)->get(['student_id', 'status', 'ends_on', 'ended_recorded_at'])->groupBy('student_id');
                 $activeSubjects = DB::table('student_subject_enrollments')->whereIn('student_id', $ids)->where('status', 'active')->distinct()->pluck('student_id')->flip();
 
                 foreach ($students as $student) {
@@ -220,7 +228,7 @@ final class StudentRetentionEligibility
 
             return self::resolve(
                 $student->status,
-                $this->rows(DB::table('student_enrollments')->where('student_id', $studentId)->get(['status', 'ends_on'])->all()),
+                $this->rows(DB::table('student_enrollments')->where('student_id', $studentId)->get(['status', 'ends_on', 'ended_recorded_at'])->all()),
                 DB::table('student_subject_enrollments')->where('student_id', $studentId)->where('status', 'active')->exists(),
             );
         });
@@ -237,12 +245,13 @@ final class StudentRetentionEligibility
             throw new LogicException('lockExit() must run inside the purge transaction.');
         }
 
-        $student = DB::table('students')->where('id', $studentId)->lockForUpdate()->first(['status']);
+        // E21-RH.6: the retention identity locks through the lock-only definer (FOR UPDATE), then reads.
+        $student = RetentionLocks::lockOne('students', $studentId) ? DB::table('students')->where('id', $studentId)->first(['status']) : null;
         if ($student === null) {
             return null;
         }
 
-        $enrollments = DB::table('student_enrollments')->where('student_id', $studentId)->get(['status', 'ends_on'])->all();
+        $enrollments = DB::table('student_enrollments')->where('student_id', $studentId)->get(['status', 'ends_on', 'ended_recorded_at'])->all();
         $activeSubject = DB::table('student_subject_enrollments')->where('student_id', $studentId)->where('status', 'active')->exists();
 
         return self::resolve($student->status, $this->rows($enrollments), $activeSubject);
@@ -250,10 +259,14 @@ final class StudentRetentionEligibility
 
     /**
      * @param  array<int, object>  $rows
-     * @return list<array{status: string, ends_on: ?string}>
+     * @return list<array{status: string, ends_on: ?string, recorded_on: ?string}>
      */
     private function rows(array $rows): array
     {
-        return array_values(array_map(fn (object $row): array => ['status' => (string) $row->status, 'ends_on' => $row->ends_on === null ? null : substr((string) $row->ends_on, 0, 10)], $rows));
+        return array_values(array_map(fn (object $row): array => [
+            'status' => (string) $row->status,
+            'ends_on' => $row->ends_on === null ? null : substr((string) $row->ends_on, 0, 10),
+            'recorded_on' => ($row->ended_recorded_at ?? null) === null ? null : substr((string) $row->ended_recorded_at, 0, 10),
+        ], $rows));
     }
 }

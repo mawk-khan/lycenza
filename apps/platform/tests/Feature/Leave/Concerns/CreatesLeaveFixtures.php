@@ -75,12 +75,12 @@ trait CreatesLeaveFixtures
      * @param  list<string>  $capabilities
      * @return array{user: User, employment: EmploymentRecord, assignment: EmployeeAssignment}
      */
-    protected function staffMember(School $school, array $capabilities = []): array
+    protected function staffMember(School $school, array $capabilities = [], string $startsOn = '2024-01-01'): array
     {
         $user = $this->createUserWithCapabilities($school, $capabilities);
         $employee = $this->createEmployee($school, ['user_id' => $user->id]);
-        $employment = $this->createEmploymentRecord($employee, ['status' => 'active', 'starts_on' => '2024-01-01', 'ends_on' => null]);
-        $assignment = $this->createEmployeeAssignment($employment, $this->createPosition($school), ['starts_on' => '2024-01-01', 'ends_on' => null, 'is_primary' => true]);
+        $employment = $this->createEmploymentRecord($employee, ['status' => 'active', 'starts_on' => $startsOn, 'ends_on' => null]);
+        $assignment = $this->createEmployeeAssignment($employment, $this->createPosition($school), ['starts_on' => $startsOn, 'ends_on' => null, 'is_primary' => true]);
 
         return compact('user', 'employment', 'assignment');
     }

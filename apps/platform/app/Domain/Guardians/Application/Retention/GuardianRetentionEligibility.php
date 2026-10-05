@@ -3,6 +3,7 @@
 namespace App\Domain\Guardians\Application\Retention;
 
 use App\Models\School;
+use App\Support\Retention\RetentionLocks;
 use App\Support\Tenancy\TenantContext;
 use Closure;
 use Illuminate\Database\Query\Builder;
@@ -91,7 +92,8 @@ final class GuardianRetentionEligibility
             throw new LogicException('lockLifecycle() must run inside the purge transaction.');
         }
 
-        $guardian = DB::table('guardians')->where('id', $guardianId)->lockForUpdate()->first(['no_relationship_since']);
+        // E21-RH.6: the retention identity locks through the lock-only definer (FOR UPDATE), then reads.
+        $guardian = RetentionLocks::lockOne('guardians', $guardianId) ? DB::table('guardians')->where('id', $guardianId)->first(['no_relationship_since']) : null;
         if ($guardian === null) {
             return null;
         }

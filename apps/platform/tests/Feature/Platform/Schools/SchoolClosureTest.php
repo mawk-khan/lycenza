@@ -12,6 +12,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
@@ -23,7 +24,7 @@ use Tests\TestCase;
  */
 class SchoolClosureTest extends TestCase
 {
-    use CreatesTenancyFixtures, SchoolLifecycleTestHelpers;
+    use CommitsRetentionFixtures, CreatesTenancyFixtures, SchoolLifecycleTestHelpers;
 
     /** @return array{0: User, 1: School} */
     private function activeSchool(): array

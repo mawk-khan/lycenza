@@ -6,6 +6,7 @@ use App\Support\Tenancy\TenantRls;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\AssertsRuntimeDeleteRevoked;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
@@ -18,7 +19,7 @@ use Tests\TestCase;
  */
 class CommunicationsRlsIsolationTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use AssertsRuntimeDeleteRevoked, CreatesCommunicationFixtures, CreatesTenancyFixtures;
 
     private const TABLES = [
         'communication_threads', 'communication_thread_participants',
@@ -112,7 +113,7 @@ class CommunicationsRlsIsolationTest extends TestCase
         $this->setSchool($schoolA->id);
 
         $this->assertSame(0, DB::connection('pgsql')->update("update communication_threads set status = 'closed' where id = ?", [$threadB->id]));
-        $this->assertSame(0, DB::connection('pgsql')->delete('delete from communication_threads where id = ?', [$threadB->id]));
+        $this->assertRuntimeDeleteRevoked('delete from communication_threads where id = ?', [$threadB->id]);
     }
 
     #[Test]

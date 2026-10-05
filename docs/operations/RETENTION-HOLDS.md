@@ -17,8 +17,20 @@ action.
   School-less ones (erasure cases included); the platform hold holds them
   all. Since E21-RH.5, the Payroll evidence and run units and the LMS
   Learning Content and Assignment units refuse in the database too.
-- **Legacy retention commands** count a held School (or, under a platform
-  hold, everything) as `held` and delete nothing.
+- **Since E21-RH.6 every retention delete is held in the database.** The
+  Finance unit and the Student and Guardian core-evidence functions refuse
+  like the others. Every PHP retention unit runs as the retention identity,
+  and PostgreSQL refuses any of its deletes that touch a held School (or
+  anything under a platform hold), whatever the command decided. This covers
+  Students, Guardians, Employees, the academic and operational residuals,
+  Communications, Admissions, portal invitations, erasure execution and the
+  email, outbox, webhook-delivery and failed-job prunes. User minimization
+  refuses while the platform or any School the User belongs to is held.
+- **Not held, by design:** idempotency keys, account-recovery requests and
+  staff credentials (short-lived security state).
+- **Retention commands** still count a held School (or, under a platform
+  hold, everything) as `held` and delete nothing; the database refusal is
+  the backstop.
 - **Fail closed:** if the hold state cannot be read, everything counts as
   held.
 
@@ -72,10 +84,9 @@ the scheduler or a web request.
   **add-only** input. After changing them, run
   `platform:retention-holds-reconcile`, which places what they name and
   releases nothing.
-- **Until you reconcile**, destructive HRX, Payroll and LMS runs refuse
-  (`retention_hold_state_stale`), and the other retention commands
-  (including the E21-RH.4 standalone expiries) still treat the configured
-  value as held.
+- **Until you reconcile**, every destructive retention unit refuses
+  (`retention_hold_state_stale`; since E21-RH.6 the PHP units too), and the
+  E21-RH.4 standalone expiries still treat the configured value as held.
 - **Removing a value from configuration** keeps the database hold active
   until `platform:retention-hold-release`.
 - **A configured id that is not an existing School** makes the reconcile

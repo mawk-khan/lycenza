@@ -6,6 +6,7 @@ use App\Domain\HR\Infrastructure\Employee;
 use App\Models\School;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\Concerns\ForcesConcurrentOverlap;
 use Tests\TestCase;
@@ -22,7 +23,7 @@ use Tests\TestCase;
  */
 class EmployeeRetentionConcurrencyTest extends TestCase
 {
-    use CreatesTenancyFixtures, ForcesConcurrentOverlap;
+    use CommitsRetentionFixtures, CreatesTenancyFixtures, ForcesConcurrentOverlap;
 
     /** @var array<int, string> */
     protected $connectionsToTransact = [];
@@ -53,6 +54,11 @@ class EmployeeRetentionConcurrencyTest extends TestCase
         $this->createEmploymentRecord($employee, ['status' => 'separated', 'starts_on' => '2015-01-01', 'ends_on' => '2020-06-30']);
         $this->createEmployeeAddress($employee);
 
+        // E21-RH.6: the end was also RECORDED back then (the database counts from the later of the two).
+        if (method_exists($this, 'backdateEndRecording')) {
+            $this->backdateEndRecording();
+        }
+
         return [$school, $employee];
     }
 
@@ -66,6 +72,7 @@ class EmployeeRetentionConcurrencyTest extends TestCase
     {
         [$school, $employee] = $this->leaver();
 
+        $this->backdateEndRecording();
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->script('rehire', $school->id, $employee->id),
             $this->script('evidence-prune', $school->id, '2060-01-01'),
@@ -82,6 +89,7 @@ class EmployeeRetentionConcurrencyTest extends TestCase
     {
         [$school, $employee] = $this->leaver();
 
+        $this->backdateEndRecording();
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->script('evidence-prune', $school->id, '2060-01-01'),
             $this->script('rehire', $school->id, $employee->id),
@@ -98,6 +106,7 @@ class EmployeeRetentionConcurrencyTest extends TestCase
     {
         [$school, $employee] = $this->leaver();
 
+        $this->backdateEndRecording();
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->script('rehire', $school->id, $employee->id),
             $this->script('ancillary-prune', $school->id, '2060-01-01'),

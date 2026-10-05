@@ -18,6 +18,7 @@ use App\Domain\Payroll\Application\PayrollRunService;
 use App\Domain\Payroll\Application\SalaryComponentService;
 use App\Domain\Payroll\Application\SalaryStructureService;
 use App\Models\School;
+use App\Support\Retention\RetentionHolds;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -25,6 +26,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Testing\PendingCommand;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\Feature\Timetable\Concerns\CreatesTimetableFixtures;
 use Tests\TestCase;
@@ -38,7 +40,7 @@ use Tests\TestCase;
  */
 class EmployeeRetentionPruneTest extends TestCase
 {
-    use CreatesTenancyFixtures, CreatesTimetableFixtures;
+    use CommitsRetentionFixtures, CreatesTenancyFixtures, CreatesTimetableFixtures;
 
     private string $disk;
 
@@ -69,6 +71,11 @@ class EmployeeRetentionPruneTest extends TestCase
     {
         $employee = $this->createEmployee($school);
         $this->createEmploymentRecord($employee, ['status' => $status, 'starts_on' => '2015-01-01', 'ends_on' => $endsOn]);
+
+        // E21-RH.6: the end was also RECORDED back then (the database counts from the later of the two).
+        if (method_exists($this, 'backdateEndRecording')) {
+            $this->backdateEndRecording();
+        }
 
         return $employee;
     }
@@ -304,6 +311,8 @@ class EmployeeRetentionPruneTest extends TestCase
         $held = $this->createSchool();
         $other = $this->createSchool();
         config(['retention.hold_school_ids' => [$held->id]]);
+        // E21-RH.6: destructive retention refuses while a configured hold is unrecorded; record it (as reconcile does).
+        app(RetentionHolds::class)->place($held->id, 'litigation', 'TEST-HOLD');
         $heldEmployee = $this->leaver($held, '2024-06-30');
         $this->withAncillary($heldEmployee);
         [$heldPath] = $this->withDocuments($heldEmployee);

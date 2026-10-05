@@ -3,12 +3,14 @@
 namespace Tests\Feature\Postgres;
 
 use App\Domain\Fees\Infrastructure\FeeAssessmentRunItem;
+use App\Support\Retention\RetentionExpiry;
 use App\Support\Tenancy\TenantRls;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Uid\UuidV7;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Feature\Finance\Concerns\CreatesFinanceRetentionFixtures;
 use Tests\TestCase;
 
@@ -18,19 +20,26 @@ use Tests\TestCase;
  * floor (real database clock), settled, closed under every reference. The
  * runtime role still has no DELETE on any Finance ledger, and the patched
  * guards open only inside the definer function.
+ *
+ * E21-RH.6: the function is the retention identity's only, so it is called
+ * on `pgsql_retention` (a separate session: committed fixtures).
  */
 class FinanceRetentionFunctionTest extends TestCase
 {
-    use CreatesFinanceRetentionFixtures;
+    use CommitsRetentionFixtures, CreatesFinanceRetentionFixtures;
 
     private function setSchool(?string $schoolId): void
     {
-        DB::select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolId ?? '']);
+        foreach (['pgsql', RetentionExpiry::PRIVILEGED_CONNECTION] as $connection) {
+            DB::connection($connection)->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolId ?? '']);
+        }
     }
 
     private function expire(string $schoolId, array $charges, array $entries, bool $dryRun = false): int
     {
-        return (int) DB::transaction(fn () => DB::selectOne(
+        $retention = DB::connection(RetentionExpiry::PRIVILEGED_CONNECTION);
+
+        return (int) $retention->transaction(fn () => $retention->selectOne(
             'SELECT retention_expire_finance_unit(?, ?::uuid[], ?::uuid[], ?, ?) AS n',
             [$schoolId, '{'.implode(',', $charges).'}', '{'.implode(',', $entries).'}', (string) new UuidV7, $dryRun ? 'true' : 'false'],
         )->n);
@@ -62,13 +71,18 @@ class FinanceRetentionFunctionTest extends TestCase
         $acl = DB::connection('pgsql_admin')->selectOne(
             "SELECT p.prosecdef, array_to_string(p.proconfig, ',') AS config,
                     exists (select 1 from aclexplode(p.proacl) a where a.grantee = 0) AS public_exec,
-                    has_function_privilege('school_os_app', p.oid, 'EXECUTE') AS runtime_exec
+                    has_function_privilege('school_os_app', p.oid, 'EXECUTE') AS runtime_exec,
+                    has_function_privilege('school_os_retention', p.oid, 'EXECUTE') AS retention_exec
                FROM pg_proc p WHERE p.proname = 'retention_expire_finance_unit'",
         );
         $this->assertTrue($acl->prosecdef);
         $this->assertStringContainsString('search_path=pg_catalog, pg_temp', $acl->config);
         $this->assertFalse($acl->public_exec);
-        $this->assertTrue($acl->runtime_exec);
+        $this->assertFalse($acl->runtime_exec, 'E21-RH.6: the retention identity only');
+        $this->assertTrue($acl->retention_exec);
+        $this->refused('permission denied', fn () => DB::transaction(fn () => DB::selectOne(
+            'SELECT retention_expire_finance_unit(?, ?::uuid[], ?::uuid[], ?, false) AS n', [$w['school']->id, '{}', '{}', (string) new UuidV7],
+        )), 'the runtime role cannot call it');
     }
 
     #[Test]

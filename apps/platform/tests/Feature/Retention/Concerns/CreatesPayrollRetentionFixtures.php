@@ -143,7 +143,21 @@ trait CreatesPayrollRetentionFixtures
     /** Ends every employment of the Employee on `$endsOn`. */
     protected function separate(Employee $employee, ?string $endsOn, string $status = 'separated'): void
     {
-        $this->inSchool($employee->school, fn () => DB::table('employment_records')->where('employee_id', $employee->id)->update(['status' => $status, 'ends_on' => $endsOn]));
+        if (in_array($status, ['separated', 'terminated', 'retired', 'deceased'], true)) {
+            $this->inSchool($employee->school, fn () => DB::table('employment_records')->where('employee_id', $employee->id)->update(['status' => $status, 'ends_on' => $endsOn]));
+        } else {
+            // E21-RH.6: no workflow ends a record with a non-terminal status (the guard refuses it); the fixture
+            // writes that state through the schema owner.
+            $admin = DB::connection('pgsql_admin');
+            $admin->transaction(function () use ($admin, $employee, $status, $endsOn): void {
+                $admin->select("select set_config('app.current_school_id', ?, true)", [$employee->school_id]);
+                $admin->table('employment_records')->where('employee_id', $employee->id)->update(['status' => $status, 'ends_on' => $endsOn]);
+            });
+        }
+        // E21-RH.6: the end was also RECORDED back then (the database counts from the later of the two).
+        if (method_exists($this, 'backdateEndRecording')) {
+            $this->backdateEndRecording();
+        }
     }
 
     /** Closes the School's financial year 2015-16 on 2016-04-05 (8+ years before the real today). */

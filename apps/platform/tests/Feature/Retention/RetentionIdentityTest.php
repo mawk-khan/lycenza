@@ -11,7 +11,6 @@ use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
-use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\PurgesCommittedHrxFixtures;
 use Tests\Feature\Retention\Concerns\CreatesHrxRetentionFixtures;
@@ -106,8 +105,12 @@ class RetentionIdentityTest extends TestCase
     public function the_retention_role_reads_only_the_demonstrated_columns_and_writes_nothing(): void
     {
         $oid = DB::selectOne('select oid from pg_roles where rolname = ?', [self::ROLE])->oid;
-        $tableGrants = DB::select('select c.relname, a.privilege_type from pg_class c cross join lateral aclexplode(c.relacl) a where a.grantee = ? order by 1, 2', [$oid]);
-        $this->assertSame([], $tableGrants, 'no table-level grant at all (only column-level SELECTs)');
+        // E21-RH.6: table-level grants are exactly SELECT + DELETE on the tables its PHP units delete from, and
+        // SELECT on the tables they read whole; never INSERT, UPDATE, TRUNCATE, REFERENCES or TRIGGER.
+        $tableGrants = collect(DB::select('select c.relname, a.privilege_type from pg_class c cross join lateral aclexplode(c.relacl) a where a.grantee = ? order by 1, 2', [$oid]));
+        $this->assertEqualsCanonicalizing(DatabaseRoleVerifier::RETENTION_DELETES, $tableGrants->where('privilege_type', 'DELETE')->pluck('relname')->all());
+        $this->assertEqualsCanonicalizing([...DatabaseRoleVerifier::RETENTION_DELETES, ...DatabaseRoleVerifier::RETENTION_TABLE_READS], $tableGrants->where('privilege_type', 'SELECT')->pluck('relname')->all());
+        $this->assertSame([], $tableGrants->whereNotIn('privilege_type', ['SELECT', 'DELETE'])->all());
 
         $columns = collect(DB::select('select c.relname, t.attname, a.privilege_type from pg_attribute t join pg_class c on c.oid = t.attrelid cross join lateral aclexplode(t.attacl) a where a.grantee = ? order by 1, 2', [$oid]))
             ->groupBy('relname')->map(fn ($rows) => $rows->pluck('attname')->sort()->values()->all())->sortKeys()->all();
@@ -137,8 +140,14 @@ class RetentionIdentityTest extends TestCase
         $this->assertSame($expected, $columns);
         $this->assertSame(0, (int) DB::selectOne("select count(*) as n from pg_attribute t cross join lateral aclexplode(t.attacl) a where a.grantee = ? and a.privilege_type <> 'SELECT'", [$oid])->n);
 
-        foreach (['employees', 'employment_records', 'leave_requests', 'staff_attendance_records', 'payroll_run_results', 'payroll_runs', 'documents', 'learning_content', 'assignments', 'school_audit_events'] as $table) {
+        foreach (['leave_requests', 'staff_attendance_records', 'payroll_run_results', 'payroll_runs', 'learning_content', 'assignments', 'school_audit_events'] as $table) {
             foreach (['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE'] as $privilege) {
+                $this->assertFalse((bool) DB::selectOne('select has_table_privilege(?, ?, ?) as p', [self::ROLE, $table, $privilege])->p, "{$table}: no {$privilege}");
+            }
+        }
+        // E21-RH.6: where its PHP units delete (employees, documents, ...) it may DELETE, but never write.
+        foreach (DatabaseRoleVerifier::RETENTION_DELETES as $table) {
+            foreach (['INSERT', 'UPDATE', 'TRUNCATE'] as $privilege) {
                 $this->assertFalse((bool) DB::selectOne('select has_table_privilege(?, ?, ?) as p', [self::ROLE, $table, $privilege])->p, "{$table}: no {$privilege}");
             }
         }
@@ -155,9 +164,8 @@ class RetentionIdentityTest extends TestCase
             $this->assertSame([false, true, false, true], [(bool) $acl->runtime, (bool) $acl->retention, (bool) $acl->public, (bool) $acl->prosecdef], $function);
             $this->assertNotContains($acl->owner, ['school_os_app', self::ROLE], "{$function}: owned by the controlled owner");
         }
-        foreach (DatabaseRoleVerifier::RETENTION_FUNCTIONS as $legacy) {
-            $this->assertFalse((bool) DB::selectOne("select bool_or(has_function_privilege(?, p.oid, 'EXECUTE')) as e from pg_proc p where p.proname = ?", [self::ROLE, $legacy])->e, "{$legacy}: not the retention identity's");
-        }
+        // E21-RH.6: no retention function is runtime-executable any more (the H1 closure).
+        $this->assertSame(0, (int) DB::selectOne("select count(*) as n from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'retention\\_%' and has_function_privilege('school_os_app', p.oid, 'EXECUTE')")->n);
         $this->assertFalse((bool) DB::selectOne("select has_function_privilege(?, 'retention_lock_hrx_employee(uuid, uuid, date)', 'EXECUTE') as e", [self::ROLE])->e, 'the prologue is reached only through the pair');
     }
 
@@ -176,10 +184,9 @@ class RetentionIdentityTest extends TestCase
         // The body is reachable as the retention login (a dry run counts the unit) ...
         $count = (int) $this->asRetention($w['school'], fn () => DB::selectOne('select retention_expire_leave_employee_evidence(?, ?, ?, true) as n', [$w['school']->id, $leaver['employeeId'], '2018-01-01'])->n);
         $this->assertGreaterThan(0, $count);
-        // ... but a legacy destructive function is not.
-        // (E21-RH.4/RH.5 moved the standalone and Payroll/LMS functions to it; an RH.6 one stays out of reach.)
-        $this->assertStringContainsString('permission denied for function retention_expire_finance_unit', (string) $this->asRetention($w['school'], fn () => DB::select("select retention_expire_finance_unit(?, '{}', '{}', ?, true)", [$w['school']->id, (string) Str::uuid7()])));
-        $this->assertStringContainsString('permission denied for function retention_expire_guardian_consent_events', (string) $this->asRetention($w['school'], fn () => DB::select('select retention_expire_guardian_consent_events(?, ?, ?, true)', [$w['school']->id, (string) Str::uuid7(), '2018-01-01 00:00:00'])));
+        // ... but the hold writers are not (since E21-RH.6 every destructive retention function is its own).
+        $this->assertStringContainsString('permission denied for function retention_hold_place', (string) $this->asRetention($w['school'], fn () => DB::select("select * from retention_hold_place('school', ?, 'litigation', 'X', 'operator_command')", [$w['school']->id])));
+        $this->assertStringContainsString('permission denied for function retention_assert_not_held', (string) $this->asRetention($w['school'], fn () => DB::select('select retention_assert_not_held(?)', [$w['school']->id])));
 
         // The owner / migration login is refused by the exact identity check (no fallback identity).
         $admin = DB::connection(RetentionHolds::MAINTENANCE_CONNECTION);
@@ -245,15 +252,16 @@ class RetentionIdentityTest extends TestCase
     public function the_verifier_proves_the_identity_and_detects_regressions(): void
     {
         $checks = fn () => collect(app(DatabaseRoleVerifier::class)->verify())->keyBy('code');
-        foreach (['retention_role_narrow', 'retention_role_read_only', 'retention_role_functions_exact', 'retention_connection_identity', 'privileged_retention_functions_closed', 'retention_functions_narrow'] as $code) {
+        foreach (['retention_role_narrow', 'retention_role_writes_exact', 'retention_role_functions_exact', 'retention_connection_identity', 'privileged_retention_functions_closed', 'retention_functions_narrow'] as $code) {
             $this->assertSame(CheckResult::PASS, $checks()[$code]->status, $code);
         }
 
         $admin = DB::connection(RetentionHolds::MAINTENANCE_CONNECTION);
         $regressions = [
             // A function outside the approved set (RH.6's Finance unit) -- never one RH.4 legitimately granted.
-            'retention_role_functions_exact' => ['GRANT EXECUTE ON FUNCTION retention_expire_finance_unit(uuid, uuid[], uuid[], uuid, boolean) TO school_os_retention', 'REVOKE EXECUTE ON FUNCTION retention_expire_finance_unit(uuid, uuid[], uuid[], uuid, boolean) FROM school_os_retention'],
-            'retention_role_read_only' => ['GRANT DELETE ON leave_requests TO school_os_retention', 'REVOKE DELETE ON leave_requests FROM school_os_retention'],
+            // A function outside the approved set -- never one a slice legitimately granted (a REVOKE would remove it).
+            'retention_role_functions_exact' => ['GRANT EXECUTE ON FUNCTION retention_assert_payroll_employee_floor(uuid, uuid, date) TO school_os_retention', 'REVOKE EXECUTE ON FUNCTION retention_assert_payroll_employee_floor(uuid, uuid, date) FROM school_os_retention'],
+            'retention_role_writes_exact' => ['GRANT DELETE ON leave_requests TO school_os_retention', 'REVOKE DELETE ON leave_requests FROM school_os_retention'],
             'privileged_retention_functions_closed' => ['GRANT EXECUTE ON FUNCTION retention_expire_leave_employee_evidence(uuid, uuid, date, boolean) TO school_os_app', 'REVOKE EXECUTE ON FUNCTION retention_expire_leave_employee_evidence(uuid, uuid, date, boolean) FROM school_os_app'],
             'retention_role_narrow' => ['ALTER ROLE school_os_retention BYPASSRLS', 'ALTER ROLE school_os_retention NOBYPASSRLS'],
         ];

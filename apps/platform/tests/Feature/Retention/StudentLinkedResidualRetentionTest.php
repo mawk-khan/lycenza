@@ -7,6 +7,7 @@ use App\Models\School;
 use App\Support\Operations\CheckResult;
 use App\Support\Operations\DatabaseRoleVerifier;
 use App\Support\Retention\RetentionExpiry;
+use App\Support\Retention\RetentionHolds;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Testing\PendingCommand;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
 
@@ -35,7 +37,7 @@ use Tests\TestCase;
  */
 class StudentLinkedResidualRetentionTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CommitsRetentionFixtures, CreatesTenancyFixtures;
 
     protected function setUp(): void
     {
@@ -95,6 +97,11 @@ class StudentLinkedResidualRetentionTest extends TestCase
         $student = $this->createStudent($w['school'], ['status' => $studentStatus]);
         $section = $endsOn < '2026-01-01' ? $w['oldSection'] : $w['section'];
         $this->createStudentEnrollment($student, $section, ['status' => 'withdrawn', 'starts_on' => $endsOn < '2026-01-01' ? '2000-06-01' : '2026-06-01', 'ends_on' => $endsOn]);
+
+        // E21-RH.6: the end was also RECORDED back then (the database counts from the later of the two).
+        if (method_exists($this, 'backdateEndRecording')) {
+            $this->backdateEndRecording();
+        }
 
         return $student;
     }
@@ -257,6 +264,8 @@ class StudentLinkedResidualRetentionTest extends TestCase
         $held = $this->world();
         $other = $this->world();
         config(['retention.hold_school_ids' => [$held['school']->id]]);
+        // E21-RH.6: destructive retention refuses while a configured hold is unrecorded; record it (as reconcile does).
+        app(RetentionHolds::class)->place($held['school']->id, 'litigation', 'TEST-HOLD');
         $heldStudent = $this->leaver($held);
         $this->moduleHistory($held, $heldStudent);
         $otherStudent = $this->leaver($other);
@@ -350,6 +359,8 @@ class StudentLinkedResidualRetentionTest extends TestCase
         $held = $this->world();
         $other = $this->world();
         config(['retention.hold_school_ids' => [$held['school']->id]]);
+        // E21-RH.6: destructive retention refuses while a configured hold is unrecorded; record it (as reconcile does).
+        app(RetentionHolds::class)->place($held['school']->id, 'litigation', 'TEST-HOLD');
         $heldStudent = $this->leaver($held, '2001-02-14');
         $this->authorization($heldStudent, 'statutory_school_purpose');
         $this->consent($held['school'], 'student_id', $heldStudent->id);
@@ -401,16 +412,22 @@ class StudentLinkedResidualRetentionTest extends TestCase
         $expiry = app(RetentionExpiry::class);
         $oldCutoff = '2001-03-01';
 
-        $this->in($w['school'], function () use ($w, $old, $recent, $active, $expiry, $oldCutoff): void {
+        $this->in($w['school'], function () use ($w, $old, $expiry, $oldCutoff): void {
             // The runtime role: no direct delete, not even with the flag set.
-            $this->refused(fn () => DB::table('student_processing_authorizations')->where('student_id', $old->id)->delete(), 'append-only');
+            // (E21-RH.6: its DELETE privilege is gone too; before, the append-only guard refused it.)
+            $this->refused(fn () => DB::table('student_processing_authorizations')->where('student_id', $old->id)->delete(), 'permission denied');
             $this->refused(function () use ($old): void {
                 DB::select("select set_config('app.student_core_retention', 'on', true)");
                 DB::table('student_processing_authorizations')->where('student_id', $old->id)->delete();
-            }, 'append-only');
+            }, 'permission denied');
             $this->refused(fn () => DB::table('communication_domain_consent_events')->where('student_id', $old->id)->delete(), 'permission denied');
 
-            // The database floor: a young cutoff, a recent exit, a current Student.
+            // E21-RH.6: the runtime role cannot run the functions at all.
+            $this->refused(fn () => $expiry->studentCoreEvidence(RetentionExpiry::STUDENT_PROCESSING_AUTHORIZATION, $w['school'], $old->id, $oldCutoff, true), 'permission denied for function');
+        });
+
+        // As the retention identity, the database floor: a young cutoff, a recent exit, a current Student.
+        DB::usingConnection(RetentionExpiry::PRIVILEGED_CONNECTION, fn () => $this->in($w['school'], function () use ($w, $expiry, $old, $recent, $active, $oldCutoff): void {
             $young = now('UTC')->subYears(25)->addDays(3)->toDateString();
             $this->refused(fn () => $expiry->studentCoreEvidence(RetentionExpiry::STUDENT_PROCESSING_AUTHORIZATION, $w['school'], $old->id, $young, true), 'retention_floor');
             $this->refused(fn () => $expiry->studentCoreEvidence(RetentionExpiry::STUDENT_CONSENT_EVENT, $w['school'], $recent->id, $oldCutoff, true), 'retention_student_core');
@@ -420,11 +437,13 @@ class StudentLinkedResidualRetentionTest extends TestCase
             $this->assertSame(1, DB::transaction(fn () => $expiry->studentCoreEvidence(RetentionExpiry::STUDENT_PROCESSING_AUTHORIZATION, $w['school'], $old->id, $oldCutoff, true)));
             $this->assertSame(2, DB::transaction(fn () => $expiry->studentCoreEvidence(RetentionExpiry::STUDENT_CONSENT_EVENT, $w['school'], $old->id, $oldCutoff, true)));
             $this->assertSame(1, DB::table('student_processing_authorizations')->where('student_id', $old->id)->count());
-        });
+        }));
 
         // Another School's context, or none: refused before anything runs.
-        $this->in($b, fn () => $this->refused(fn () => $expiry->studentCoreEvidence(RetentionExpiry::STUDENT_PROCESSING_AUTHORIZATION, $w['school'], $old->id, $oldCutoff, false), 'retention_tenant'));
-        $this->refused(fn () => $expiry->studentCoreEvidence(RetentionExpiry::STUDENT_CONSENT_EVENT, $w['school'], $old->id, $oldCutoff, false), 'retention_tenant');
+        DB::usingConnection(RetentionExpiry::PRIVILEGED_CONNECTION, function () use ($b, $w, $expiry, $old, $oldCutoff): void {
+            $this->in($b, fn () => $this->refused(fn () => $expiry->studentCoreEvidence(RetentionExpiry::STUDENT_PROCESSING_AUTHORIZATION, $w['school'], $old->id, $oldCutoff, false), 'retention_tenant'));
+            $this->refused(fn () => $expiry->studentCoreEvidence(RetentionExpiry::STUDENT_CONSENT_EVENT, $w['school'], $old->id, $oldCutoff, false), 'retention_tenant');
+        });
         $this->refused(fn () => DB::select('select retention_assert_student_core_floor(?, ?, ?)', [$w['school']->id, $old->id, $oldCutoff]), 'permission denied');
 
         $this->assertSame(1, $this->rows($w['school'], 'student_processing_authorizations', 'student_id', $old->id));

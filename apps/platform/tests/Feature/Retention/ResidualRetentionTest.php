@@ -10,6 +10,7 @@ use App\Support\Operations\CheckResult;
 use App\Support\Operations\DatabaseRoleVerifier;
 use App\Support\Retention\AutomationExecutionRetention;
 use App\Support\Retention\RetentionExpiry;
+use App\Support\Retention\RetentionHolds;
 use App\Support\Retention\RetentionPeriod;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
@@ -299,6 +300,8 @@ class ResidualRetentionTest extends TestCase
         $held = $this->createSchool();
         $other = $this->createSchool();
         config(['retention.hold_school_ids' => [$held->id]]);
+        // E21-RH.6: destructive retention refuses while a configured hold is unrecorded; record it (as reconcile does).
+        app(RetentionHolds::class)->place($held->id, 'litigation', 'TEST-HOLD');
         $assignments = [];
         foreach ([$held, $other] as $school) {
             $assignments[] = $this->createTransportRouteAssignment($this->createTransportRoute($school), $this->createTransportVehicle($school), $this->createEmployee($school), ['status' => 'ended', 'starts_on' => '2000-01-01 00:00:00', 'ends_on' => '2001-01-01 00:00:00']);
@@ -361,6 +364,8 @@ class ResidualRetentionTest extends TestCase
 
         // Held: counted only.
         config(['retention.hold_school_ids' => [$other->id]]);
+        // E21-RH.6: destructive retention refuses while a configured hold is unrecorded; record it (as reconcile does).
+        app(RetentionHolds::class)->place($other->id, 'litigation', 'TEST-HOLD');
         $this->assertCounts(['eligible' => 1, 'held' => 1, 'deleted' => 0], $expiry->forSchool(RetentionExpiry::SCHOOL_API_CREDENTIAL, $other, $cutoff, 500, false));
         $this->assertSame(1, DB::table('api_client_credentials')->where('id', $foreign)->count());
 

@@ -68,6 +68,13 @@ class FinanceRetentionService
      */
     public function prune(School $school, int $limit, bool $dryRun, ?int $years): array
     {
+        // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
+        return app(RetentionExpiry::class)->retained('finance_unit', $dryRun, $school->id, ['periods_eligible' => 0, 'eligible' => 0, 'deleted' => 0, 'held' => 0, 'dependency_blocked' => 0, 'errors' => 0, 'verification_failed' => 0], fn (): array => $this->pruneUnit($school, $limit, $dryRun, $years));
+    }
+
+    /** @return array{periods_eligible: int, eligible: int, deleted: int, held: int, dependency_blocked: int, errors: int, verification_failed: int} */
+    private function pruneUnit(School $school, int $limit, bool $dryRun, ?int $years): array
+    {
         $result = ['periods_eligible' => 0, 'eligible' => 0, 'deleted' => 0, 'held' => 0, 'dependency_blocked' => 0, 'errors' => 0, 'verification_failed' => 0];
         $held = $this->holds->isHeld($school->id);
         $now = CarbonImmutable::now('UTC');
