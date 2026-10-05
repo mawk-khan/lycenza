@@ -133,6 +133,8 @@ final class RetentionAnchors
         'late_fee_assessments' => ['charge_id', 'fee_late_fee_rule_id', 'late_fee_run_id', 'source_charge_id'],
         'late_fee_run_items' => ['late_fee_assessment_id', 'late_fee_run_id', 'source_charge_id', 'academic_year_id', 'fee_head_id', 'student_id'],
         'financial_period_charge_states' => ['charge_id', 'financial_period_id'],
+        // OPF.1 (ADR 0067 §21): Transport's insert-only fee-selection provenance (Finance evidence).
+        'transport_fee_selections' => ['transport_student_assignment_id', 'academic_year_id', 'fee_head_id', 'fee_optional_selection_id'],
     ];
 
     /** The inputs no retention path deletes from (anchored, not delete-guarded). */

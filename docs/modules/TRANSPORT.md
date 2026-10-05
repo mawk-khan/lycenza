@@ -393,9 +393,9 @@ this module emits will use the existing transactional outbox (ADR
   bus" attendance, parent pickup confirmation.
 - Transport fees/billing in this checkpoint: no fee fields, payment
   status, receivable tables, or ledger entries on any Transport table.
-  The integration is the OPF programme (ADR 0067, contract published
-  2026-10-05; OPF.1 not yet built). It never adds parallel financial
-  logic in Transport. See "Fee integration (OPF, ADR 0067)" below.
+  The integration is OPF.1 (ADR 0067; implemented 2026-10-05). It never
+  adds parallel financial logic or amounts to Transport. See "Fee
+  integration (OPF, ADR 0067)" below.
 - Fuel logs, vehicle maintenance, insurance workflow, accident/
   insurance claims.
 - Driver mobile app, Student/Guardian Transport portal (this
@@ -556,8 +556,25 @@ goes with the row; routes, stops and vehicles stay. Project-adopted, pending leg
 
 ## Fee integration (OPF, ADR 0067)
 
-Contract only (OPF.0, 2026-10-05); **OPF.1 implements it, and nothing below
-is built yet.**
+**Implemented by OPF.1 (2026-10-05; ADR 0067 §27).** As built:
+- **Tables:** `transport_route_fee_heads` (route → fee head, no amount) and
+  `transport_fee_selections` (insert-only provenance, unique per assignment
+  × year, database-checked against FEE's selection).
+- **Writer:** `TransportFeeSelectionService`, called from
+  `TransportStudentAssignmentService::assign()` / `end()` in the same
+  transaction.
+- **Year:** a new assignment uses the School's active academic year; FEE
+  picks the line from the Student's enrollment in that year.
+- **API:** `GET` / `PUT /transport-routes/{route}/fee-head`, `GET
+  /transport-student-assignments/{id}/fee-selections`, and `POST
+  /transport-fee-selections/carry-forward` (idempotent).
+- **Audit:** `transport.fee_selection.linked` / `.withdrawn` /
+  `.not_applicable` / `.carried_forward` and `transport.route_fee_head.set`
+  / `.cleared`. No outbox event.
+- **Retention:** the provenance rows are Finance ledger evidence (retained;
+  they keep their assignment); the mapping is Finance configuration.
+
+The contract:
 - **Selections, not money.** Starting a Student assignment selects, and
   ending it withdraws, the Student's optional Transport fee line for the
   academic year. It goes through a trusted FEE source-selection seam,

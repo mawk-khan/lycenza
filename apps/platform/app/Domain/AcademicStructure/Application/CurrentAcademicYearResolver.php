@@ -36,4 +36,17 @@ class CurrentAcademicYearResolver
             fn () => AcademicYear::query()->where('school_id', $school->id)->where('status', 'active')->first(),
         );
     }
+
+    /**
+     * OPF.1 (ADR 0067 D8): a named Academic Year of this School that is
+     * still open -- `draft` (being prepared) or `active` -- or null (unknown,
+     * another School's, or `closed`). Same School-authoritative resolution.
+     */
+    public function openYear(School $school, string $academicYearId): ?AcademicYear
+    {
+        return $this->context->withSchool(
+            $school,
+            fn () => AcademicYear::query()->where('school_id', $school->id)->whereIn('status', ['draft', 'active'])->find($academicYearId),
+        );
+    }
 }

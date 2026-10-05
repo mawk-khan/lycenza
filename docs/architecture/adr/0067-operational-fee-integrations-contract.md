@@ -1,8 +1,9 @@
 # ADR 0067: Operational Fee Integrations Contract (OPF)
 
-- Status: **Accepted (OPF.0, 2026-10-05). Contract only — no OPF code
-  exists yet.** Owner decisions D1–D9 (§25) are adopted. OPF.1–OPF.5 (§26)
-  implement it, each behind its own checkpoint.
+- Status: **Accepted (OPF.0, 2026-10-05).** Owner decisions D1–D9 (§25)
+  are adopted. OPF.1–OPF.5 (§26) implement it, each behind its own
+  checkpoint. **OPF.1 implemented (2026-10-05, §27):** Transport fee
+  selection through the trusted FEE seam.
 - Date: 2026-10-05
 - Programme: **OPF — Operational Fee Integrations** (Transport, Hostel,
   Library fines, Admissions fee). Roadmap "Post-foundation product
@@ -410,8 +411,154 @@ Student-facing fee views (POR); gateway payments; GST / tax.
 | Slice | Scope | Status |
 |---|---|---|
 | OPF.0 | This contract; module, roadmap and register alignment | **Published (2026-10-05)** |
-| OPF.1 | Transport fee selection: the trusted seam, Transport link rows, route → fee-head mapping, carry-forward, retention registration | Not started |
+| OPF.1 | Transport fee selection: the trusted seam, Transport link rows, route → fee-head mapping, carry-forward, retention registration | **Published (2026-10-05, §27)** |
 | OPF.2 | Hostel fee selection (reuses the seam; no deposits) | Not started |
 | OPF.3 | Admission fee at Student conversion | Not started |
 | OPF.4 | Library overdue fines: versioned policy, event charge, waiver and void, Finance retention amendment, E34 | Not started |
 | OPF.5 | Closure audit and full regression | Not started |
+
+## 27. OPF.1 as built (2026-10-05)
+
+**Transport records FEE optional-selection intent from the Student
+assignment lifecycle through the trusted seam. Only Finance assessment runs
+make money. FEE never reads Transport.** §1–§26 are unchanged. The dated
+clarifications below record how the contract was realized.
+
+### 27.1 The trusted seam (FEE)
+`App\Domain\Fees\Application\Sources\FeeSourceSelectionService`:
+- **`selectForSource(School, studentId, academicYearId, feeHeadId,
+  FeeSelectionSource, ?User)`** returns `FeeSourceSelectionResult`:
+  `created` or `reused` with the selection id, or `not_applicable` with one
+  of `fee_head_unavailable`, `no_enrollment_in_year`, `no_active_structure`
+  or `no_optional_line`.
+- **`withdrawForSource(School, selectionId, FeeSelectionSource, ?User)`**
+  returns `false` when the selection was already withdrawn.
+- **`selectableFeeHead(School, feeHeadId)`:** an active head's summary (no
+  accounts, no amounts), for tier-mapping validation.
+- **`FeeSelectionSource`** is a closed catalogue (`transport` only so far).
+  Its module and source id are written into FEE's own
+  `fee_optional_selection.created` / `.withdrawn` audit events with the
+  actor, who is also recorded as `selected_by_user_id` /
+  `withdrawn_by_user_id`.
+- **Clarification of §8, line resolution:** FEE resolves the line exactly
+  as an assessment run does. It takes the Student's current open enrollment
+  in that year (new `StudentEnrollmentFeeTargetReadService::currentForYear()`,
+  Students' read boundary), then the active structure for its grade and
+  campus (`FeeStructureResolver`), then that structure's optional line of
+  the fee head. A source never names a line.
+- **Race safety:** the seam inserts in a savepoint. Losing the
+  `fee_optional_selections_one_active` race resolves to the committed
+  winner (`reused`) and never surfaces an error.
+- **Unchanged:** the human path, `FeeOptionalSelectionService`
+  (`finance.fee_structures.manage`). The seam adds no FEE schema.
+
+### 27.2 Transport (`2026_12_02_090000_create_transport_fee_selection_tables`)
+- **`transport_route_fee_heads`:** route → fee head, one per route
+  (`transport_route_fee_heads_one_per_route`), composite foreign keys to
+  `transport_routes` and `fee_heads` in the same School, **no amount
+  column**, RLS.
+- **`transport_fee_selections`:** provenance, unique per assignment × year
+  (`transport_fee_selections_one_per_year`). It holds the assignment, year,
+  fee head, the FEE selection, `link_reason` (`assignment` /
+  `carry_forward`) and `selection_outcome` (`created` / `reused`).
+  - A BEFORE INSERT trigger proves the selection is the assignment
+    Student's selection of that year and head.
+  - It is insert-only for the runtime role (`makeAppendOnly`; the
+    verifier's no-runtime-DELETE and no-runtime-UPDATE lists).
+  - It has no actor column: the actor is in the audit trail and on FEE's
+    selection, as Transport assignments carry none.
+- **`TransportFeeSelectionService`** is the only writer:
+  - **`recordForNewAssignment()`** runs inside
+    `TransportStudentAssignmentService::assign()`'s transaction.
+  - **`withdrawForEndedAssignment()`** runs inside `end()`'s transaction and
+    withdraws every still-active selection the assignment recorded.
+  - **`carryForward(School, academicYearId, ?User)`** locks each active
+    assignment in its own transaction and returns linked / already_linked /
+    unmapped / ended / not_applicable counts.
+  - **`setRouteFeeHead()`** sets or clears the mapping (null clears it).
+- **Clarification of §14, the year:** a new assignment records intent for
+  the School's single active academic year (`CurrentAcademicYearResolver`,
+  database-enforced as one per School). The Student's enrollment in that
+  year then selects the structure (§27.1). Carry-forward names its target
+  year explicitly: a draft or active year of the School (new
+  `CurrentAcademicYearResolver::openYear()`).
+- **"Says so" (§14):**
+  - An **unmapped** route records nothing and audits nothing; the
+    assignment proceeds as before.
+  - A **mapped** route whose intent can't be recorded audits
+    `transport.fee_selection.not_applicable` with the reason, for example
+    no active year, no enrollment or no optional line. The assignment still
+    proceeds.
+- **API**, Transport capabilities only:
+  - `GET` / `PUT /transport-routes/{route}/fee-head` (`transport.routes.view`
+    / `.manage`);
+  - `GET /transport-student-assignments/{id}/fee-selections`
+    (`transport.assignments.view`);
+  - `POST /transport-fee-selections/carry-forward`
+    (`transport.assignments.manage`, `idempotent`).
+
+  These are documented in the OpenAPI contract, with regenerated shared
+  types. There is no Inertia page in OPF.1.
+- **Audit (Transport):** `transport.fee_selection.linked` / `.withdrawn` /
+  `.not_applicable` / `.carried_forward`, and
+  `transport.route_fee_head.set` / `.cleared`, with ids only. **No outbox
+  event** (§20).
+
+### 27.3 Retention (clarification of §21)
+- `transport_fee_selections` is **Finance ledger** in
+  `TenantRetentionCatalog`. It is retained with the selection it explains:
+  FEE's selections are already "retained, blocks: Finance D8" and are not
+  deleted by the D8 unit.
+  - It carries the E21-RH.7 anchor (its four links tracked) and the
+    retention delete guard, and is registered in `RetentionAnchors::TABLES`.
+  - It is classified in `StudentRetentionClassificationTest` as keeping its
+    Transport assignment, as the selection keeps its Student.
+  - It references no `charges` row, so `retention_expire_finance_unit` is
+    unchanged.
+- `transport_route_fee_heads` is **Finance configuration** (tenant
+  lifetime), like `canteen_billing_configurations`.
+- **Clarification:** the E21-RH.7 anchor applies to tables a retention path
+  may delete or read for eligibility, and to Finance-evidence link rows.
+  Tenant-lifetime configuration is registered in the catalog only, as
+  `fee_heads` and `canteen_billing_configurations` are.
+
+### 27.4 Proof
+- **Behaviour (`TransportFeeSelectionTest`):**
+  - one selection per Student × year × head, with actor and source
+    recorded, and no charge;
+  - a retry records nothing new;
+  - an existing manual selection is reused;
+  - an unmapped route records nothing;
+  - a mapped route with no enrollment is audited and never fails the
+    assignment.
+- **Finance lifecycle:**
+  - the Finance run charges the full T1 instalment, with no proration;
+  - ending the assignment withdraws intent (idempotently) and never cancels
+    the T1 charge;
+  - T2 is not assessed;
+  - withdrawing before a run means that run never assesses Transport.
+- **Carry-forward:** links once, a rerun is idempotent, the prior year is
+  untouched, ended assignments are skipped, and closed or foreign years are
+  refused.
+- **Mapping:** only an active head of the same School, enforced by the
+  service and by the database foreign key.
+- **Provenance in the database:** unique, consistency-checked and
+  insert-only.
+- **Authorization:**
+  - Transport staff configure and carry forward;
+  - Finance staff without Transport capabilities can't;
+  - Transport staff can't create an assessment run;
+  - another School gets 404.
+- **Concurrency (`TransportFeeSelectionConcurrencyTest`)**, real processes
+  with an observed lock wait:
+  - two carry-forwards produce one link and one selection;
+  - two seam selections produce one selection, with the loser `reused` and
+    no error.
+- **Architecture (`OperationalFeeSourceArchitectureGuardTest`):**
+  - Fees, Finance and Payments never reference Transport or its tables;
+  - only `TransportFeeSelectionService` calls the seam;
+  - Transport never touches FEE infrastructure, Finance or Payments;
+  - only the Transport fee service writes the two tables.
+- **Migration:** rollback drops both tables and the guard function;
+  reapplying reproduces the identical schema snapshot. `platform:verify-database`
+  passes.

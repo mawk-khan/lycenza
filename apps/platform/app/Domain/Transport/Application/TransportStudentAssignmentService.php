@@ -31,6 +31,7 @@ class TransportStudentAssignmentService
 {
     public function __construct(
         private readonly AuditRecorder $audit,
+        private readonly TransportFeeSelectionService $fees,
     ) {}
 
     /**
@@ -104,6 +105,9 @@ class TransportStudentAssignmentService
                     'dropoffStopId' => $dropoffStop?->id,
                 ]);
 
+                // OPF.1 (ADR 0067 §14): Transport fee intent for the active year, in this same transaction.
+                $this->fees->recordForNewAssignment($assignment, $actor);
+
                 return $assignment;
             });
         } catch (UniqueConstraintViolationException) {
@@ -134,6 +138,9 @@ class TransportStudentAssignmentService
                 'studentId' => $assignment->student_id,
                 'transportRouteId' => $assignment->route_id,
             ]);
+
+            // OPF.1 (ADR 0067 D5): future fee intent only; an assessed charge is never touched.
+            $this->fees->withdrawForEndedAssignment($fresh, $actor);
 
             return $fresh;
         });

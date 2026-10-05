@@ -5229,8 +5229,16 @@ Finance's expiry changed:
 
 ## Operational fee integrations (OPF, ADR 0067)
 
-Contract only (OPF.0, 2026-10-05). No OPF code exists yet; OPF.1–OPF.4
-build it.
+Contract published by OPF.0 (2026-10-05). **The trusted seam is built
+(OPF.1, ADR 0067 §27.1):**
+- `App\Domain\Fees\Application\Sources\FeeSourceSelectionService`, with
+  `selectForSource()`, `withdrawForSource()` and `selectableFeeHead()`;
+- `FeeSelectionSource`, a closed catalogue (`transport` so far);
+- `FeeSourceSelectionResult`.
+
+It resolves the line from the Student's enrollment in the year (Students'
+`currentForYear()`) and `FeeStructureResolver`. Transport is its first
+caller. OPF.2–OPF.4 are not built.
 - **Operational-source boundary.** Transport, Hostel, Admissions and
   Library call trusted FEE seams. **Fees, Finance and Payments never read
   those modules** to infer whether a fee applies. There is no parallel

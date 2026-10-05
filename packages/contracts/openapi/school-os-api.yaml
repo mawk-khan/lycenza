@@ -5729,6 +5729,88 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /schools/{schoolId}/transport-routes/{transportRouteId}/fee-head:
+    get:
+      operationId: getTransportRouteFeeHead
+      summary: The FEE fee head a Transport route (pricing tier) bills through, or null (OPF.1, ADR 0067). Requires transport.routes.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TransportRouteId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { allOf: [{ $ref: "#/components/schemas/TransportRouteFeeHead" }], nullable: true } } }
+    put:
+      operationId: setTransportRouteFeeHead
+      summary: Maps a Transport route to an active fee head of the School, or clears it with null (OPF.1, ADR 0067 D7). Configuration only -- no amount; FEE structure instalments own every Transport fee amount. Requires transport.routes.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TransportRouteId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fee_head_id]
+              properties:
+                fee_head_id: { type: string, format: uuid, nullable: true }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { allOf: [{ $ref: "#/components/schemas/TransportRouteFeeHead" }], nullable: true } } }
+        "422":
+          description: Not an active fee head of this School (TRANSPORT_FEE_HEAD_NOT_SELECTABLE), or invalid input.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/transport-student-assignments/{transportStudentAssignmentId}/fee-selections:
+    get:
+      operationId: listTransportStudentAssignmentFeeSelections
+      summary: The fee selection intent this assignment recorded, one row per academic year (OPF.1, ADR 0067). Requires transport.assignments.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/TransportStudentAssignmentId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/TransportFeeSelection" } } } }
+
+  /schools/{schoolId}/transport-fee-selections/carry-forward:
+    post:
+      operationId: carryForwardTransportFeeSelections
+      summary: Records Transport fee selection intent in a named draft or active academic year for every still-active Student assignment (OPF.1, ADR 0067 D8). Idempotent and race-safe; never assesses money. Requires transport.assignments.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [academic_year_id]
+              properties:
+                academic_year_id: { type: string, format: uuid }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/TransportFeeCarryForwardResult" } } }
+        "422":
+          description: Not a draft or active academic year of this School (TRANSPORT_CARRY_FORWARD_YEAR_INVALID), or invalid input.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /schools/{schoolId}/visitors:
     get:
       operationId: listVisitors
@@ -15292,6 +15374,36 @@ components:
         vehicle_id: { type: string, format: uuid }
         driver_employee_id: { type: string, format: uuid }
 
+    TransportRouteFeeHead:
+      type: object
+      required: [feeHeadId, code, name]
+      description: The fee head a Transport route bills through (OPF.1). No amount -- FEE owns it.
+      properties:
+        feeHeadId: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+    TransportFeeSelection:
+      type: object
+      required: [id, academicYearId, feeHeadId, feeOptionalSelectionId, linkReason, selectionOutcome]
+      description: Insert-only provenance of the FEE optional selection a Transport assignment recorded intent for, in one academic year (OPF.1).
+      properties:
+        id: { type: string, format: uuid }
+        academicYearId: { type: string, format: uuid }
+        feeHeadId: { type: string, format: uuid }
+        feeOptionalSelectionId: { type: string, format: uuid }
+        linkReason: { type: string, enum: [assignment, carry_forward] }
+        selectionOutcome: { type: string, enum: [created, reused] }
+        createdAt: { type: string, format: date-time, nullable: true }
+    TransportFeeCarryForwardResult:
+      type: object
+      required: [academicYearId, linked, alreadyLinked, unmapped, ended, notApplicable]
+      properties:
+        academicYearId: { type: string, format: uuid }
+        linked: { type: integer }
+        alreadyLinked: { type: integer }
+        unmapped: { type: integer }
+        ended: { type: integer }
+        notApplicable: { type: integer }
     TransportStudentAssignment:
       type: object
       required: [id, status, startsOn, student, route]

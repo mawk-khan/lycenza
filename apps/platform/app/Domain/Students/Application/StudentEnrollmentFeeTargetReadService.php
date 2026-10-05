@@ -87,6 +87,41 @@ class StudentEnrollmentFeeTargetReadService
         return $this->toTarget($enrollment, $studentActive);
     }
 
+    /**
+     * OPF (ADR 0067 §8): the Student's current placement in one
+     * AcademicYear -- its latest open (not ended, not cancelled) enrollment
+     * there -- so Fees can resolve which structure (and optional line) a
+     * source module's selection belongs to. Null when the Student has none.
+     * Read under FOR SHARE, like lockForFeeAssessment(); inside a
+     * transaction.
+     */
+    public function currentForYear(School $school, string $studentId, string $academicYearId): ?FeeTargetEnrollment
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new LogicException('currentForYear() must run inside a database transaction.');
+        }
+
+        $enrollment = StudentEnrollment::query()
+            ->where('school_id', $school->id)
+            ->where('student_id', $studentId)
+            ->where('academic_year_id', $academicYearId)
+            ->whereNull('ends_on')
+            ->where('status', '<>', 'cancelled')
+            ->orderByDesc('starts_on')
+            ->orderByDesc('id')
+            ->sharedLock()
+            ->first();
+
+        if ($enrollment === null) {
+            return null;
+        }
+
+        $studentActive = Student::query()->where('school_id', $school->id)->sharedLock()
+            ->whereKey($enrollment->student_id)->value('status') === 'active';
+
+        return $this->toTarget($enrollment, $studentActive);
+    }
+
     private function toTarget(StudentEnrollment $e, bool $studentIsActive): FeeTargetEnrollment
     {
         return new FeeTargetEnrollment(

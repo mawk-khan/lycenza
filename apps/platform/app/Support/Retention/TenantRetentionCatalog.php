@@ -67,6 +67,8 @@ final class TenantRetentionCatalog
             'fee_assessment_run_items', 'fee_concessions', 'fee_optional_selections', 'late_fee_assessments', 'late_fee_runs',
             'late_fee_run_items', 'payments', 'payment_allocations', 'payment_provider_events', 'payment_receipts',
             'payment_receipt_counters', 'canteen_orders', 'canteen_order_lines', 'canteen_order_stock_consumptions',
+            // OPF.1 (ADR 0067 §21): provenance of Transport-recorded fee selections, retained with them.
+            'transport_fee_selections',
         ]],
         'finance_period_evidence' => [self::TENANT_LIFETIME, 'D8: financial periods, their cumulative account baselines and the expiry lineage carry every later balance; kept with the School', [
             'financial_periods', 'financial_period_account_balances', 'financial_period_expiries',
@@ -83,6 +85,8 @@ final class TenantRetentionCatalog
             'fee_settings', 'payroll_accounting_configurations', 'payroll_statutory_accounting_configurations',
             'payroll_salary_component_statutory_classifications', 'salary_components', 'salary_structures', 'salary_structure_components',
             'canteen_billing_configurations',
+            // OPF.1 (ADR 0067 D7): the route -> fee head mapping (no amounts).
+            'transport_route_fee_heads',
         ]],
         'audit' => [self::ADOPTED, 'D1: 7 y after the event', ['school_audit_events']],
         'erasure_cases' => [self::ADOPTED, 'D10: a closed erasure case, 7 y after it closed', ['erasure_cases']],

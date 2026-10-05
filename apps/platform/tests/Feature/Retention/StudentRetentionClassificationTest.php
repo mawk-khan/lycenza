@@ -77,7 +77,11 @@ class StudentRetentionClassificationTest extends TestCase
         'communication_domain_consent_events' => [],
         'communication_domain_preferences' => [],
         'library_loans' => [],
-        'transport_student_assignments' => [],
+        'transport_student_assignments' => [
+            // OPF.1 (ADR 0067 §21): the provenance of the fee selection the assignment recorded; it keeps the assignment
+            // as the selection keeps its Student.
+            'transport_fee_selections' => 'retained, blocks: Finance D8 (OPF fee-selection provenance)',
+        ],
         'hostel_residency_assignments' => [],
         'identity_account_invitations' => [],
     ];

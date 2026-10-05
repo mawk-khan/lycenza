@@ -59,6 +59,8 @@ class DatabaseRoleVerifier
         'payroll_lwf_annual_charges',
         // E21.4 (F1): a User is never hard-deleted; a raw delete would null audit/grant actors and cascade memberships.
         'users',
+        // OPF.1 (ADR 0067 §12): Transport's fee-selection provenance is insert-only Finance evidence.
+        'transport_fee_selections',
     ];
 
     /**
@@ -70,6 +72,8 @@ class DatabaseRoleVerifier
     public const NO_RUNTIME_UPDATE = [
         // E21-RH.1: posted LWF annual charges are insert-once evidence.
         'payroll_lwf_annual_charges',
+        // OPF.1 (ADR 0067 §12): Transport's fee-selection provenance is insert-only.
+        'transport_fee_selections',
     ];
 
     /**

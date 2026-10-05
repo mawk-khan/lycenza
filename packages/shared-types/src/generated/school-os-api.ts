@@ -2675,6 +2675,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/transport-routes/{transportRouteId}/fee-head": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The FEE fee head a Transport route (pricing tier) bills through, or null (OPF.1, ADR 0067). Requires transport.routes.view. */
+        get: operations["getTransportRouteFeeHead"];
+        /** Maps a Transport route to an active fee head of the School, or clears it with null (OPF.1, ADR 0067 D7). Configuration only -- no amount; FEE structure instalments own every Transport fee amount. Requires transport.routes.manage. */
+        put: operations["setTransportRouteFeeHead"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/transport-student-assignments/{transportStudentAssignmentId}/fee-selections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The fee selection intent this assignment recorded, one row per academic year (OPF.1, ADR 0067). Requires transport.assignments.view. */
+        get: operations["listTransportStudentAssignmentFeeSelections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/transport-fee-selections/carry-forward": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Records Transport fee selection intent in a named draft or active academic year for every still-active Student assignment (OPF.1, ADR 0067 D8). Idempotent and race-safe; never assesses money. Requires transport.assignments.manage. Idempotency-Key required. */
+        post: operations["carryForwardTransportFeeSelections"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/visitors": {
         parameters: {
             query?: never;
@@ -7145,6 +7197,39 @@ export interface components {
             vehicle_id: string;
             /** Format: uuid */
             driver_employee_id: string;
+        };
+        /** @description The fee head a Transport route bills through (OPF.1). No amount -- FEE owns it. */
+        TransportRouteFeeHead: {
+            /** Format: uuid */
+            feeHeadId: string;
+            code: string;
+            name: string;
+        };
+        /** @description Insert-only provenance of the FEE optional selection a Transport assignment recorded intent for, in one academic year (OPF.1). */
+        TransportFeeSelection: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            academicYearId: string;
+            /** Format: uuid */
+            feeHeadId: string;
+            /** Format: uuid */
+            feeOptionalSelectionId: string;
+            /** @enum {string} */
+            linkReason: "assignment" | "carry_forward";
+            /** @enum {string} */
+            selectionOutcome: "created" | "reused";
+            /** Format: date-time */
+            createdAt?: string | null;
+        };
+        TransportFeeCarryForwardResult: {
+            /** Format: uuid */
+            academicYearId: string;
+            linked: number;
+            alreadyLinked: number;
+            unmapped: number;
+            ended: number;
+            notApplicable: number;
         };
         /** @description One Student's Transport assignment. At most one assignment per Student has status=active at a time (database-enforced, docs/modules/TRANSPORT.md "Student assignment model"). */
         TransportStudentAssignment: {
@@ -19511,6 +19596,140 @@ export interface operations {
                 };
             };
             /** @description This assignment already ended (TRANSPORT_STUDENT_ASSIGNMENT_ALREADY_ENDED). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getTransportRouteFeeHead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                transportRouteId: components["parameters"]["TransportRouteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TransportRouteFeeHead"] | null;
+                    };
+                };
+            };
+        };
+    };
+    setTransportRouteFeeHead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                transportRouteId: components["parameters"]["TransportRouteId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    fee_head_id: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TransportRouteFeeHead"] | null;
+                    };
+                };
+            };
+            /** @description Not an active fee head of this School (TRANSPORT_FEE_HEAD_NOT_SELECTABLE), or invalid input. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listTransportStudentAssignmentFeeSelections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                transportStudentAssignmentId: components["parameters"]["TransportStudentAssignmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TransportFeeSelection"][];
+                    };
+                };
+            };
+        };
+    };
+    carryForwardTransportFeeSelections: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    academic_year_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TransportFeeCarryForwardResult"];
+                    };
+                };
+            };
+            /** @description Not a draft or active academic year of this School (TRANSPORT_CARRY_FORWARD_YEAR_INVALID), or invalid input. */
             422: {
                 headers: {
                     [name: string]: unknown;

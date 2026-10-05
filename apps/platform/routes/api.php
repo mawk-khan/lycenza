@@ -106,6 +106,7 @@ use App\Domain\Syllabus\Http\Controllers\SyllabusUnitController;
 use App\Domain\TeachingAssignments\Http\Controllers\TeachingAssignmentController;
 use App\Domain\Timetable\Http\Controllers\TimetableEntryController;
 use App\Domain\Timetable\Http\Controllers\TimetablePeriodController;
+use App\Domain\Transport\Http\Controllers\TransportFeeController;
 use App\Domain\Transport\Http\Controllers\TransportRouteAssignmentController;
 use App\Domain\Transport\Http\Controllers\TransportRouteController;
 use App\Domain\Transport\Http\Controllers\TransportStopController;
@@ -1101,6 +1102,21 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/transport-student-assignments/{transportStudentAssignment}/end', [TransportStudentAssignmentController::class, 'end'])
                 ->middleware(['capability:transport.assignments.manage', 'throttle:school-api-mutations'])
                 ->name('schools.transport-student-assignments.end');
+
+            // --- OPF.1 (ADR 0067 §14): Transport fee integration. Transport
+            // capabilities only -- the route -> fee head mapping (no amounts),
+            // an assignment's recorded fee intent, and the explicit academic-
+            // year carry-forward (idempotent by construction and by key).
+            Route::get('/transport-routes/{transportRoute}/fee-head', [TransportFeeController::class, 'showRouteFeeHead'])
+                ->name('schools.transport-routes.fee-head.show');
+            Route::put('/transport-routes/{transportRoute}/fee-head', [TransportFeeController::class, 'updateRouteFeeHead'])
+                ->middleware(['capability:transport.routes.manage', 'throttle:school-api-mutations'])
+                ->name('schools.transport-routes.fee-head.update');
+            Route::get('/transport-student-assignments/{transportStudentAssignment}/fee-selections', [TransportFeeController::class, 'assignmentFeeSelections'])
+                ->name('schools.transport-student-assignments.fee-selections.index');
+            Route::post('/transport-fee-selections/carry-forward', [TransportFeeController::class, 'carryForward'])
+                ->middleware(['capability:transport.assignments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.transport-fee-selections.carry-forward');
 
             // --- Phase 10C: Visitor (directory, check-in/check-out
             // Visit lifecycle). `idempotent` is applied only to the
