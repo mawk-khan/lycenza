@@ -51,6 +51,8 @@ class CurriculumDeliveryArchitectureGuardTest extends TestCase
             'id', 'school_id', 'section_id', 'syllabus_unit_id', 'subject_offering_id',
             'academic_year_id', 'campus_id', 'grade_level_id',
             'started_on', 'completed_on', 'status', 'created_at', 'updated_at',
+            // E21-RH.7 (ADR 0066 §15): the database-recorded retention anchor (no person, lesson or LMS data).
+            'retention_recorded_at',
         ], $columns, 'The curriculum_deliveries column set is closed and reviewed; adding one is an architecture decision.');
 
         foreach ([

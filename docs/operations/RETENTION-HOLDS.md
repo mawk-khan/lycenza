@@ -28,6 +28,11 @@ action.
   refuses while the platform or any School the User belongs to is held.
 - **Not held, by design:** idempotency keys, account-recovery requests and
   staff credentials (short-lived security state).
+- **E21-RH.7:** independently of holds, PostgreSQL deletes only rows it
+  recorded before the unit's cutoff (ADR 0066 §15). A row written or
+  re-linked within the period keeps its unit, reported as
+  `dependency_blocked` and logged as `retention.recorded_within_period`.
+  That is not a hold, and releasing a hold does not change it.
 - **Retention commands** still count a held School (or, under a platform
   hold, everything) as `held` and delete nothing; the database refusal is
   the backstop.

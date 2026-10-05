@@ -332,7 +332,7 @@ class ErasureCaseTest extends TestCase
 
         $row = (array) DB::table('erasure_cases')->where('id', $case->id)->first();
         $this->assertEqualsCanonicalizing(['id', 'scope', 'school_id', 'subject_type', 'subject_id', 'request_channel', 'status', 'requested_at', 'decided_at',
-            'decision_reason', 'target_on', 'execution_started_at', 'completed_at', 'outcome', 'created_at', 'updated_at'], array_keys($row));
+            'decision_reason', 'target_on', 'execution_started_at', 'completed_at', 'outcome', 'created_at', 'updated_at', 'retention_recorded_at'], array_keys($row));
         foreach (json_decode((string) $row['outcome'], true) as $category) {
             $this->assertEqualsCanonicalizing(['category', 'outcome', 'reason', 'not_before'], array_keys($category));
         }

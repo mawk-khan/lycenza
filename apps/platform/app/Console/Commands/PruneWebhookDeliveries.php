@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\School;
 use App\Models\WebhookDelivery;
+use App\Support\Retention\RetentionAnchors;
 use App\Support\Retention\RetentionExpiry;
 use App\Support\Retention\RetentionHolds;
 use App\Support\Retention\RetentionPeriod;
@@ -124,7 +125,7 @@ class PruneWebhookDeliveries extends Command
                     }
 
                     return $deletedForSchool;
-                })])['deleted'];
+                })], recordedBefore: RetentionExpiry::recordedBefore(...array_column($groups, 'cutoff')))['deleted'];
 
                 if ($affected > 0) {
                     Log::info($dryRun ? 'webhooks.deliveries_prune.would_prune' : 'webhooks.deliveries_prune.pruned', [
@@ -157,7 +158,8 @@ class PruneWebhookDeliveries extends Command
      */
     private function eligible(string $schoolId, array $statuses, Carbon $cutoff): Builder
     {
-        return WebhookDelivery::query()
+        // E21-RH.7: only rows the database recorded (and last changed) before the declared cutoff.
+        return RetentionAnchors::recordedBefore(WebhookDelivery::query(), 'webhook_deliveries')
             ->where('school_id', $schoolId)
             ->whereIn('status', $statuses)
             ->where(fn (Builder $query) => $query

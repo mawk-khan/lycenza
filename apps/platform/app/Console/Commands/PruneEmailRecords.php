@@ -9,6 +9,7 @@ use App\Models\School;
 use App\Support\Email\EmailState;
 use App\Support\Email\PlatformEmailScope;
 use App\Support\Observability\SchedulerHeartbeatRecorder;
+use App\Support\Retention\RetentionAnchors;
 use App\Support\Retention\RetentionExpiry;
 use App\Support\Retention\RetentionHolds;
 use App\Support\Retention\RetentionPeriod;
@@ -91,7 +92,7 @@ class PruneEmailRecords extends Command
 
                 // E21-RH.6: as the retention identity (its delete guard re-checks the School's hold in the database).
                 $messages += $this->retention->retained('email_message', $dryRun, $school->id, ['deleted' => 0, 'errors' => 0],
-                    fn (): array => ['deleted' => $context->withSchool($school, fn () => $this->pruneMessages($cutoff, $batch, $dryRun)), 'errors' => 0])['deleted'];
+                    fn (): array => ['deleted' => $context->withSchool($school, fn () => $this->pruneMessages($cutoff, $batch, $dryRun)), 'errors' => 0], recordedBefore: $cutoff)['deleted'];
             }
         });
 
@@ -100,9 +101,9 @@ class PruneEmailRecords extends Command
         // RETENTION_HOLD_PLATFORM (E21.2B).
         $platformHeld = $holds->platformHeld();
         $identityMessages = $platformHeld ? 0 : $this->retention->retained('email_message', $dryRun, null, ['deleted' => 0, 'errors' => 0],
-            fn (): array => ['deleted' => $platformScope->run(fn () => $this->pruneMessages($cutoff, $batch, $dryRun)), 'errors' => 0])['deleted'];
+            fn (): array => ['deleted' => $platformScope->run(fn () => $this->pruneMessages($cutoff, $batch, $dryRun)), 'errors' => 0], recordedBefore: $cutoff)['deleted'];
         $events = $platformHeld ? 0 : $this->retention->retained('email_event', $dryRun, null, ['deleted' => 0, 'errors' => 0],
-            fn (): array => ['deleted' => $this->pruneEvents($cutoff, $batch, $dryRun), 'errors' => 0])['deleted'];
+            fn (): array => ['deleted' => $this->pruneEvents($cutoff, $batch, $dryRun), 'errors' => 0], recordedBefore: $cutoff)['deleted'];
 
         $heartbeats->recordSuccess('email-prune');
         Log::info($dryRun ? 'platform.email_prune.dry_run' : 'platform.email_prune.completed', [
@@ -150,14 +151,15 @@ class PruneEmailRecords extends Command
     /** @return Builder<EmailMessage> */
     private function finishedBefore(Carbon $cutoff): Builder
     {
-        return EmailMessage::query()
+        // E21-RH.7: only rows the database recorded (and last changed) before the declared cutoff.
+        return RetentionAnchors::recordedBefore(EmailMessage::query(), 'email_messages')
             ->whereIn('status', array_map(fn (EmailState $s) => $s->value, array_filter(EmailState::cases(), fn (EmailState $s) => $s->isFinal())))
             ->where('finished_at', '<', $cutoff);
     }
 
     private function pruneEvents(Carbon $cutoff, int $batch, bool $dryRun): int
     {
-        $eligible = fn () => EmailEvent::query()
+        $eligible = fn () => RetentionAnchors::recordedBefore(EmailEvent::query(), 'email_events')
             ->where('result', '!=', 'received')
             ->where('received_at', '<', $cutoff)
             ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('email_suppressions')->whereColumn('email_suppressions.source_event_id', 'email_events.id'));

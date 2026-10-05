@@ -146,3 +146,9 @@ migration/owner role.
   each of its deletes refused in the database under an active hold.
   `platform:lifecycle-markers-backfill` is operator-run maintenance on this
   migration role; no scheduled path selects it.
+- **E21-RH.7 (2026-10-05, ADR 0066 §15):** the migration/owner LOGIN
+  (`session_user`) is the only one that may set a row's database-recorded
+  retention anchor explicitly (reviewed import/backfill). The runtime and
+  retention roles never can; a SECURITY DEFINER function called by them is
+  not exempt. Two retention-security migrations are fenced against rollback
+  (`docs/operations/DATABASE-BOOTSTRAP.md`, "Retention security fences").

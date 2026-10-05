@@ -26,6 +26,10 @@ trait ForcesConcurrentOverlap
      */
     protected function raceWithHeldHolder(array $holderCommand, array $contenderCommand, ?callable $whileContenderBlocked = null): array
     {
+        // E21-RH.7: committed retention fixtures are recorded "long ago" before the real processes see them.
+        if (method_exists($this, 'backdateEndRecording')) {
+            $this->backdateEndRecording();
+        }
         $dir = sys_get_temp_dir().'/race_'.bin2hex(random_bytes(8));
         mkdir($dir);
         $sessionName = 'race_contender_'.bin2hex(random_bytes(6));

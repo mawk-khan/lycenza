@@ -4,6 +4,7 @@ namespace App\Domain\Identity\Application\Retention;
 
 use App\Models\School;
 use App\Support\Retention\ReferencingRows;
+use App\Support\Retention\RetentionAnchors;
 use App\Support\Retention\RetentionExpiry;
 use App\Support\Retention\RetentionLocks;
 use App\Support\Tenancy\TenantContext;
@@ -57,7 +58,7 @@ final class PortalInvitationRetentionService
     public function prune(School $school, CarbonInterface $cutoff, int $batch, bool $dryRun, bool $held): array
     {
         // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
-        return app(RetentionExpiry::class)->retained('portal_invitation', $dryRun || $held, $school->id, ['eligible' => 0, 'deleted' => 0, 'held' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneUnit($school, $cutoff, $batch, $dryRun, $held));
+        return app(RetentionExpiry::class)->retained('portal_invitation', $dryRun || $held, $school->id, ['eligible' => 0, 'deleted' => 0, 'held' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneUnit($school, $cutoff, $batch, $dryRun, $held), recordedBefore: $cutoff);
     }
 
     /** @return array{eligible: int, deleted: int, held: int, dependency_blocked: int, errors: int} */
@@ -65,7 +66,8 @@ final class PortalInvitationRetentionService
     {
         return $this->context->withSchool($school, function () use ($school, $cutoff, $batch, $dryRun, $held): array {
             $at = $cutoff->copy()->utc()->format('Y-m-d H:i:s');
-            $ended = fn (Builder $q): Builder => $q->where('i.school_id', $school->id)->where(fn (Builder $e) => $e
+            // E21-RH.7: only invitations the database recorded (and last changed) before the cutoff.
+            $ended = fn (Builder $q): Builder => RetentionAnchors::recordedBefore($q, 'i')->where('i.school_id', $school->id)->where(fn (Builder $e) => $e
                 ->where(fn (Builder $a) => $a->where('i.status', 'accepted')->whereNotNull('i.accepted_at')->where('i.accepted_at', '<', $at))
                 ->orWhere(fn (Builder $r) => $r->where('i.status', 'revoked')->whereNotNull('i.revoked_at')->where('i.revoked_at', '<', $at))
                 ->orWhere(fn (Builder $p) => $p->where('i.status', 'pending')->where('i.expires_at', '<', $at)));

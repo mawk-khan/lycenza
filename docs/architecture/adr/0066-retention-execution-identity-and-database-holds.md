@@ -17,7 +17,9 @@
   deletes under an active hold; the named eligibility sources are
   database-guarded. **E21-RH is NOT closed:** E21-RH.7 (§14.9,
   database-stamped write times on the remaining retention tables) is a new
-  pre-production blocker.
+  pre-production blocker. **E21-RH.7 implemented (2026-10-05, §15):**
+  retention eligibility counts only from times PostgreSQL recorded; the
+  RH.6 eligibility guards and the RH.7 anchors are fenced against rollback.
 - Date: 2026-10-04
 - Programme: **E21-RH — retention privilege hardening.** A
   pre-production security blocker, separate from HRX (closed at
@@ -937,6 +939,9 @@ hold their transactions on the retention identity (an observed lock wait).
   connection alias). A configured test hold is also placed in the database.
 
 ### 14.7 Rollback
+*Amended by §15.1 (E21-RH.7): the RH.6 eligibility guards are now fenced; a
+rollback cannot reach `2026_11_30_090100`'s `down()`.*
+
 None of the three `down()` methods re-grants a runtime privilege: retention
 fails closed (owner only) until migrated again. A table-level `REVOKE SELECT`
 also strips column-level SELECTs, so the boundary migration's `down()`
@@ -969,3 +974,184 @@ exit, erasure, lifecycle markers); RH.7 is the general rule: every
 retention-relevant time on a retention table is database-stamped, never
 caller-supplied. **E21-RH stays a pre-production blocker until RH.7 closes.**
 HRX closure and the E21-L1 ratification status are unchanged.
+
+## 15. E21-RH.7 as built (2026-10-05)
+**Retention eligibility counts only from times PostgreSQL recorded. Every
+table a retention path deletes from, and every eligibility input it reads,
+carries a database-stamped anchor that the runtime role can neither choose
+nor rewrite, and PostgreSQL refuses to delete a row recorded within the
+unit's period. The RH.6 eligibility guards and the RH.7 anchors are fenced
+against rollback.**
+
+### 15.1 The RH.6 rollback fence (owner decision, 2026-10-05)
+Security eligibility guards fail closed on rollback. `2026_11_30_090100` is
+published and its `down()` drops its guards; published migration history is
+not rewritten. Instead `2026_12_01_090000_fence_retention_eligibility_guards`
+sits after it:
+- `up()` verifies the five RH.6 guard triggers are enabled, both owner-only
+  marker branches and the two guard functions are present, and both
+  `ended_recorded_at` columns exist. It refuses to record itself otherwise.
+- `down()` always throws. `migrate:rollback` stops there.
+
+`2026_12_01_090100` (§15.3) is itself irreversible in the same way.
+`migrate:fresh` (test and development resets) drops tables and never runs
+`down()`. The operator recovery path is in
+`docs/operations/DATABASE-BOOTSTRAP.md` ("Retention security fences"): a
+defective guard is replaced by a reviewed forward migration and an ADR
+amendment. Disabling a guard by hand is an incident, and the verifier fails.
+
+### 15.2 Inventory and classification
+Re-audited from the live database and source (every `retention_expire_*`
+function, every PHP unit, the RH.6 direct-delete paths). Every
+retention-relevant clock was application-written, and the runtime role could
+INSERT it with any value. Most were also UPDATE-able, or immutable only
+*after* a caller-chosen first write: `revoked_at`, `ended_at`, `released_at`,
+`closed_at`, `posted_at`, `occurred_at`, `created_at`, `processed_at`,
+`delivered_at`, `finished_at`, `completed_at`, `checked_out_at`,
+`last_activity_at`, `updated_at`, ...
+
+The foreign keys that place a row on an eligibility path (`academic_year_id`,
+`subject_offering_id`, `student_enrollment_id`, ...) and the logical links
+without a constraint (an outbox `event_id`) were re-linkable too.
+
+| Model | Meaning | Treatment |
+|---|---|---|
+| A, event time | when the row was written (`created_at`, `occurred_at`, `processed_at`, `received_at`, ...) | the anchor is the database's own record; the domain column keeps its value |
+| B, transition time | when a state ended (`revoked_at`, `ended_at`, `closed_at`, `posted_at`, `released_at`, `completed_at`, ...) | the anchor is re-recorded at the transition; a value written in the past buys nothing |
+| C, business date | a legitimately historical date (`academic_years.ends_on`, `teaching_assignments.ends_on`, `transport_route_assignments.ends_on`, Student/Employment `ends_on`) | kept as is; eligibility needs the business date AND the anchor (RH.6's `ended_recorded_at` for exits and separations) |
+| D, maintenance/import | a legacy time with provenance | only the schema-owner login may set the anchor explicitly; the lifecycle-marker backfill carries the anchor of the audit event it maps from |
+
+### 15.3 Database architecture (`2026_12_01_090100_anchor_retention_eligibility_clocks`)
+- **`retention_recorded_at`** on 91 tables (`RetentionAnchors::TABLES`): the
+  88 tables a retention path deletes from (the RH.6 51, minus the eight the
+  runtime may delete for a product reason, plus the 45 the expiry functions
+  delete from), and three inputs no retention path deletes
+  (`subject_offerings`, `communication_approval_requests`,
+  `financial_periods`). NOT NULL, defaulting to the database clock.
+- **`retention_stamp_anchor()`** (one trigger, `zzz_retention_anchor`, firing
+  after every other BEFORE trigger; search path pinned; not a definer):
+  - INSERT records the database clock, whatever the caller supplied.
+  - An UPDATE that sets a tracked column to a new non-NULL value re-records
+    it. Tracked columns are the table's clocks and statuses, plus every link:
+    each foreign key and each logical `*_id` link, other than user, role,
+    request or provider attribution.
+  - Any other UPDATE keeps the old record. A caller-supplied anchor is
+    ignored.
+  - Clearing a value (an `ON DELETE SET NULL` action, an unlink) can only
+    remove eligibility, so it does not re-record. Setting a value again does.
+  - Only a session whose **login** (`session_user`) is a member of the table
+    owner may set the anchor explicitly. A SECURITY DEFINER function called
+    by a lower role is never exempt.
+- **The delete guard, extended:** `retention_guard_retention_delete()` now
+  sits on all 96 tables a retention path deletes from (the RH.6 51 plus the
+  45 function-deleted). For a retention-session delete of an anchored table:
+  - the unit must have declared its cutoff (`app.retention_anchor_cutoff`) on
+    its own session;
+  - every deleted row must have been recorded before it;
+  - otherwise PostgreSQL refuses (`retention_anchor`).
+
+  Cascaded deletes are checked the same way.
+- **Declarations:**
+  - Every `retention_expire_*` function declares `p_cutoff` right after its
+    identity and hold prologue. The two HRX functions, whose identity check
+    is their lock call, declare right after `BEGIN`. The Finance unit
+    declares `now() - 8 years`.
+  - `RetentionExpiry::retained()` takes a required `$recordedBefore`, which
+    is the most recent cutoff a unit applies (Student and Guardian core:
+    their authority cutoff). It sets the declaration on the retention session
+    for the unit and resets it in `finally`.
+  - `privileged()` units (Payroll, LMS, HRX) delete only inside functions,
+    which declare their own.
+- **Selection** (skip, rather than fail a batch):
+  - the eleven bulk expiry functions require `retention_recorded_at < p_cutoff`
+    beside each clock;
+  - the LMS functions require the offering's anchor, and treat a teaching
+    assignment recorded on or after the cutoff as still open;
+  - the Finance unit refuses a period recorded within eight years;
+  - in PHP, `RetentionAnchors::recordedBefore()` / `recordedOnOrAfter()` (the
+    declared cutoff) in `RetentionBatch` and the visitor, portal-invitation,
+    admissions, Communications, email, outbox and webhook selections, an
+    explicit anchor comparison in the LMS pre-checks, and the Finance
+    `period_too_young` blocker.
+- **Refusal semantics:** a `retention_anchor` refusal (a late child, or a
+  clock written in the past) keeps the unit as `dependency_blocked`, logged as
+  `retention.recorded_within_period`. It is never an error.
+- **Grants:** the retention identity reads the two new anchor columns the PHP
+  LMS checks need (`subject_offerings`, `teaching_assignments`, column-level).
+  It has no INSERT or UPDATE anywhere.
+
+### 15.4 Existing rows
+There is no trustworthy record of when an existing row was written, so every
+pre-existing anchor is this migration's time. Nothing existing becomes
+eligible before a full period after RH.7. Uncertainty extends retention; it
+never shortens it. (RH.6's `ended_recorded_at` backfill, from `updated_at`,
+is superseded in effect: an end now also needs the anchor.)
+
+### 15.5 Behaviour preserved, and the deliberate change
+- Product writes are untouched: no clock is rejected or rewritten, and
+  business dates keep their meaning.
+- A row written in the normal course (before its eligibility event) is
+  eligible exactly as before.
+- **Deliberate:** a row written or re-linked *recently* now keeps its unit for
+  the full period from that write. A Document attached today to an old
+  resource keeps it, as does a processing authorization recorded today for a
+  long-gone Student.
+- **Backfills** (`platform:lifecycle-markers-backfill`) carry the database
+  record of their audit evidence, so a genuine legacy decision keeps its true
+  age.
+- **Hold exemptions are unchanged:** idempotency keys, account recovery and
+  staff credentials. The runtime role deletes those itself, so a forged clock
+  adds nothing.
+
+### 15.6 Verifier
+New checks:
+- `retention_anchors_recorded`: every registered table has the anchor, NOT
+  NULL, with the one enabled trigger carrying exactly its tracked columns;
+  the stamping function is pinned, not a definer, not PUBLIC-executable, and
+  checks `session_user`.
+- `retention_functions_declare_cutoff`: every expiry function declares its
+  cutoff.
+- `retention_rollback_fences`: both fence migrations are recorded.
+
+`retention_deletes_guarded` now covers every anchored table that is deleted,
+and requires the anchor check in the guard. `retention_role_selects_exact`
+includes the two anchor columns.
+
+### 15.7 Rollback
+- Both RH.7 migrations throw in `down()` and change nothing. Proven by calling
+  each `down()`: the migrations row count and the verifier are unchanged.
+- The verifier detects each regression:
+  - a disabled anchor trigger or guard trigger;
+  - restored runtime EXECUTE on an expiry function;
+  - a restored runtime DELETE;
+  - a missing fence row.
+
+### 15.8 Remaining runtime DELETE (re-audited)
+- **Product deletes:** `student_guardian_relationships`, six HR profile
+  tables, `failed_jobs` (RH.6).
+- **Inputs never retention-deleted** (`subject_offerings`,
+  `communication_approval_requests`): history is kept by RESTRICT
+  references, and a runtime delete is a product action, not a retention.
+- **Guarded by their own DELETE triggers:** `payroll_run_results` (freeze),
+  `fee_assessment_run_items`, `late_fee_run_items`.
+- **`payroll_runs`:** an unposted run is discarded by the product; a posted
+  run is referenced by its postings (RESTRICT).
+- **No TRUNCATE anywhere.**
+- **Runtime-executable definers:**
+  - `finance_assign_journal_entry_period` (L3, out of scope);
+  - `guardians_sync_no_relationship_since`, which stamps the database clock
+    or clears, never backdates;
+  - the two backlog trigger functions, callable only as triggers.
+
+**E21-RH is closed** when the closure gate (§15.9) is met.
+
+### 15.9 Closure gate
+- runtime destructive retention EXECUTE: none (`retention_functions_narrow`);
+- runtime direct retention bypass: none known (§15.8);
+- holds: enforced in the database on every destructive retention path (§14.4);
+- eligibility: cannot be accelerated by a runtime-written clock or re-link
+  (§15.3);
+- retention identity: narrow, consumes and never records;
+- rollback: fenced (§15.1);
+- production verification and the full isolated regression: recorded in the
+  E21-RH.7 completion report.

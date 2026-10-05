@@ -57,6 +57,8 @@ class LearningContentArchitectureGuardTest extends TestCase
             // teacher-owned row (NULL = Offering-wide) and its creating
             // transaction id -- the reviewed exception to the rule below.
             'owner_employee_id', 'ownership_txid',
+            // E21-RH.7 (ADR 0066 §15): the database-recorded retention anchor (no person or grading data).
+            'retention_recorded_at',
         ], $columns, 'The learning_content column set is closed and reviewed; adding one is an architecture decision.');
 
         foreach ([

@@ -104,7 +104,7 @@ class StudentLinkedRetentionConcurrencyTest extends TestCase
     }
 
     #[Test]
-    public function an_authorization_recorded_first_goes_with_the_record_it_explains(): void
+    public function an_authorization_recorded_first_keeps_the_record_it_explains_as_recorded_within_the_period(): void
     {
         [$school, $student] = $this->leaver('2000-09-30');
 
@@ -114,10 +114,12 @@ class StudentLinkedRetentionConcurrencyTest extends TestCase
             $this->script('core-prune', $school->id, '2001-01-01'),
         );
 
+        // E21-RH.7: the authorization was recorded by the database just now, so the core unit keeps the Student with
+        // it (a retained dependent, never an error) until that recording, too, is past the period.
         $this->assertSame('recorded', $holder);
-        $this->assertSame('deleted:1', $contender);
-        $this->assertSame(0, $this->admin('students', 'id', $student->id));
-        $this->assertSame(0, $this->admin('student_processing_authorizations', 'student_id', $student->id));
+        $this->assertSame('deleted:0', $contender);
+        $this->assertSame(1, $this->admin('students', 'id', $student->id));
+        $this->assertSame(1, $this->admin('student_processing_authorizations', 'student_id', $student->id));
     }
 
     #[Test]

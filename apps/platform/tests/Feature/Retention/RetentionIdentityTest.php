@@ -133,8 +133,9 @@ class RetentionIdentityTest extends TestCase
             'documents' => ['assignment_id', 'id', 'learning_content_id'],
             'learning_content' => ['id', 'owner_employee_id', 'school_id', 'subject_offering_id'],
             'learning_content_section_audiences' => ['learning_content_id', 'school_id', 'section_id'],
-            'subject_offerings' => ['academic_year_id', 'id', 'school_id'],
-            'teaching_assignments' => ['employee_id', 'ends_on', 'school_id', 'section_id', 'subject_offering_id'],
+            // E21-RH.7: + the database-recorded anchors the PHP LMS checks read.
+            'subject_offerings' => ['academic_year_id', 'id', 'retention_recorded_at', 'school_id'],
+            'teaching_assignments' => ['employee_id', 'ends_on', 'retention_recorded_at', 'school_id', 'section_id', 'subject_offering_id'],
         ];
         ksort($expected);
         $this->assertSame($expected, $columns);

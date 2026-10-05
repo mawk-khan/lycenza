@@ -66,7 +66,7 @@ final class EmployeeRecordRetentionService
     public function pruneAncillary(School $school, string $cutoffDate, int $batch, bool $dryRun, ?string $only = null): array
     {
         // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
-        return app(RetentionExpiry::class)->retained('employee_ancillary', $dryRun, $school->id, ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneAncillaryUnit($school, $cutoffDate, $batch, $dryRun, $only));
+        return app(RetentionExpiry::class)->retained('employee_ancillary', $dryRun, $school->id, ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneAncillaryUnit($school, $cutoffDate, $batch, $dryRun, $only), recordedBefore: $cutoffDate);
     }
 
     /** @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int} */
@@ -111,7 +111,7 @@ final class EmployeeRecordRetentionService
     public function pruneEvidence(School $school, string $cutoffDate, int $batch, bool $dryRun, array $clearedFirst = [], ?string $only = null): array
     {
         // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
-        return app(RetentionExpiry::class)->retained('employee_evidence', $dryRun, $school->id, ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneEvidenceUnit($school, $cutoffDate, $batch, $dryRun, $clearedFirst, $only));
+        return app(RetentionExpiry::class)->retained('employee_evidence', $dryRun, $school->id, ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneEvidenceUnit($school, $cutoffDate, $batch, $dryRun, $clearedFirst, $only), recordedBefore: $cutoffDate);
     }
 
     /** @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int} */

@@ -4,6 +4,7 @@ namespace App\Domain\Communications\Application\Retention;
 
 use App\Models\School;
 use App\Support\Retention\ReferencingRows;
+use App\Support\Retention\RetentionAnchors;
 use App\Support\Retention\RetentionExpiry;
 use App\Support\Retention\RetentionLocks;
 use App\Support\Retention\RetentionUnit;
@@ -69,7 +70,7 @@ final class CommunicationResidualRetentionService
     public function pruneNeverSent(School $school, CarbonInterface $cutoff, int $batch, bool $dryRun, bool $held): array
     {
         // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
-        return app(RetentionExpiry::class)->retained('communication_never_sent', $dryRun || $held, $school->id, ['eligible' => 0, 'deleted' => 0, 'held' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneNeverSentUnit($school, $cutoff, $batch, $dryRun, $held));
+        return app(RetentionExpiry::class)->retained('communication_never_sent', $dryRun || $held, $school->id, ['eligible' => 0, 'deleted' => 0, 'held' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneNeverSentUnit($school, $cutoff, $batch, $dryRun, $held), recordedBefore: $cutoff);
     }
 
     /** @return array{eligible: int, deleted: int, held: int, unresolved: int, dependency_blocked: int, errors: int} */
@@ -115,7 +116,7 @@ final class CommunicationResidualRetentionService
     public function pruneEmptyThreads(School $school, CarbonInterface $cutoff, int $batch, bool $dryRun, bool $held): array
     {
         // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
-        return app(RetentionExpiry::class)->retained('communication_empty_thread', $dryRun || $held, $school->id, ['eligible' => 0, 'deleted' => 0, 'held' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneEmptyThreadsUnit($school, $cutoff, $batch, $dryRun, $held));
+        return app(RetentionExpiry::class)->retained('communication_empty_thread', $dryRun || $held, $school->id, ['eligible' => 0, 'deleted' => 0, 'held' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneEmptyThreadsUnit($school, $cutoff, $batch, $dryRun, $held), recordedBefore: $cutoff);
     }
 
     /** @return array{eligible: int, deleted: int, held: int, unresolved: int, dependency_blocked: int, errors: int} */
@@ -129,7 +130,7 @@ final class CommunicationResidualRetentionService
 
             $result['unresolved'] = $empty(DB::table('communication_threads as t')->where('t.school_id', $school->id))->whereNull('t.last_activity_at')->count();
 
-            $empty(DB::table('communication_threads as t')->where('t.school_id', $school->id))->where('t.last_activity_at', '<', $at)->select('t.id')
+            RetentionAnchors::recordedBefore($empty(DB::table('communication_threads as t')->where('t.school_id', $school->id)), 't')->where('t.last_activity_at', '<', $at)->select('t.id')
                 ->chunkById($batch, function ($rows) use (&$result, $school, $at, $dryRun, $held, $empty): void {
                     foreach ($rows as $row) {
                         RetentionUnit::purge(
@@ -149,7 +150,8 @@ final class CommunicationResidualRetentionService
     /** Narrows never-sent `a` to cancelled/rejected rows whose canonical end is strictly before `$at`. */
     private function ended(Builder $query, string $at): Builder
     {
-        return $query->where(fn (Builder $q) => $q
+        // E21-RH.7: and recorded by the database (status, cancellation) before the unit's cutoff.
+        return RetentionAnchors::recordedBefore($query, 'a')->where(fn (Builder $q) => $q
             ->where(fn (Builder $c) => $c->where('a.status', 'cancelled')->whereNotNull('a.cancelled_at')->where('a.cancelled_at', '<', $at))
             ->orWhere(fn (Builder $r) => $r->where('a.status', 'rejected')->whereRaw('('.$this->rejectedAt().') < ?', [$at])));
     }
@@ -157,7 +159,9 @@ final class CommunicationResidualRetentionService
     /** The rejection time: `decided_at` of the latest approval request, only when that request is `rejected`. */
     private function rejectedAt(): string
     {
-        return "SELECT CASE WHEN r.status = 'rejected' THEN r.decided_at END FROM communication_approval_requests r
+        // E21-RH.7: a decision the database recorded on or after the unit's cutoff counts as no end yet.
+        return "SELECT CASE WHEN r.status = 'rejected' AND r.retention_recorded_at < NULLIF(current_setting('app.retention_anchor_cutoff', true), '')::timestamp
+                 THEN r.decided_at END FROM communication_approval_requests r
                  WHERE r.announcement_id = a.id AND r.school_id = a.school_id ORDER BY r.requested_at DESC, r.id DESC LIMIT 1";
     }
 

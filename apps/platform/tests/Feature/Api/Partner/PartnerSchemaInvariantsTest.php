@@ -126,7 +126,8 @@ class PartnerSchemaInvariantsTest extends TestCase
         }
 
         $columns = collect($admin->select("select column_name from information_schema.columns where table_name = 'api_client_credentials'"))->pluck('column_name')->sort()->values()->all();
-        $this->assertSame(['api_client_id', 'created_at', 'expires_at', 'id', 'issued_at', 'key_id', 'last_used_at', 'revoked_at', 'school_id', 'secret_hash', 'superseded_at', 'updated_at'], $columns);
+        // E21-RH.7 (ADR 0066 §15): + the database-recorded retention anchor (no secret).
+        $this->assertSame(['api_client_id', 'created_at', 'expires_at', 'id', 'issued_at', 'key_id', 'last_used_at', 'retention_recorded_at', 'revoked_at', 'school_id', 'secret_hash', 'superseded_at', 'updated_at'], $columns);
 
         $role = $admin->selectOne('select rolsuper, rolbypassrls from pg_roles where rolname = ?', [config('database.connections.pgsql.username')]);
         $this->assertFalse((bool) $role->rolsuper);

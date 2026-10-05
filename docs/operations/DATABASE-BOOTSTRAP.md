@@ -105,3 +105,42 @@ bootstrap tables (`api_client_credentials`, `api_clients`,
 `school_elevations`, `school_group_members`, `school_memberships` —
 guard-tested against the real schema); the 0O.1A root-grant boundary
 trigger enabled.
+
+Since E21-RH.7 (ADR 0066 §15) it also checks the retention timestamp
+anchors (`retention_anchors_recorded`), that every expiry function declares
+its cutoff (`retention_functions_declare_cutoff`), and that the rollback
+fences are recorded (`retention_rollback_fences`).
+
+## Retention security fences (E21-RH.7)
+Two migrations are deliberately irreversible, and their `down()` refuses:
+- `2026_12_01_090000_fence_retention_eligibility_guards`: the E21-RH.6
+  eligibility guards (employment and enrollment ends, `erasure_cases`, the
+  Guardian and Admissions marker backfills);
+- `2026_12_01_090100_anchor_retention_eligibility_clocks`: the
+  database-recorded retention anchors.
+
+`migrate:rollback` therefore stops at the fence. Rolling back past it would
+give the runtime role back the ability to manufacture retention eligibility.
+`migrate:fresh` on a disposable test or development database is unaffected
+(it drops tables and never runs `down()`).
+
+**Operator recovery** (a guard or anchor is defective). There is no routine
+rollback.
+1. Treat it as a change to a security boundary. Write a reviewed FORWARD
+   migration that installs the corrected guard or trigger in the same
+   transaction that removes the defective one, with an ADR 0066 amendment.
+2. Release it through the normal release step (`console migrate
+   --database=pgsql_admin --force`).
+3. Then run `console platform:verify-database`.
+
+Never disable a guard by hand to "get past" a problem. An owner session can
+(`ALTER TABLE ... DISABLE TRIGGER`), but that is a security incident:
+`platform:verify-database` fails (`retention_anchors_recorded`,
+`retention_deletes_guarded` or `retention_eligibility_guards`) until the
+trigger is enabled again. Record it in the operator evidence record.
+
+A legacy import or backfill that genuinely knows when a row was recorded may
+set `retention_recorded_at` explicitly, from the migration/owner login only
+(model D). Record the provenance, as `platform:lifecycle-markers-backfill`
+does from the audit ledger. The runtime and retention logins can never set
+it.

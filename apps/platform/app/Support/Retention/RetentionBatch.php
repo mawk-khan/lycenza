@@ -40,6 +40,8 @@ final class RetentionBatch
      */
     public function prune(string $table, Closure $eligible, int $batch, bool $dryRun, bool $held, array $owned = []): array
     {
+        // E21-RH.7: only rows the database recorded before the unit's declared cutoff are eligible at all.
+        $eligible = RetentionAnchors::anchored($table) ? fn (): Builder => RetentionAnchors::recordedBefore($eligible(), 't') : $eligible;
         $deletable = fn (): Builder => $this->unreferenced($table, $eligible(), $owned);
         $count = $eligible()->count();
         $result = ['eligible' => $count, 'deleted' => 0, 'held' => 0, 'unresolved' => 0, 'dependency_blocked' => $count === 0 ? 0 : $count - $deletable()->count(), 'errors' => 0];
@@ -60,8 +62,9 @@ final class RetentionBatch
 
                     return [count($candidates), $ids === [] ? 0 : $deletable()->whereIn('t.id', $ids)->delete()];
                 });
-            } catch (QueryException) {
-                $result['errors']++;
+            } catch (QueryException $e) {
+                // E21-RH.7: a row recorded within the period (a late child) keeps the batch, never an error.
+                $result[RetentionAnchors::refused($e) ? 'dependency_blocked' : 'errors']++;
 
                 break;
             }

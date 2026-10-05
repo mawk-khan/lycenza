@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Process\Process;
+use Tests\Concerns\AlignsRetentionAnchors;
 use Tests\Concerns\ForcesConcurrentOverlap;
 use Tests\Feature\Finance\Concerns\CreatesFinanceRetentionFixtures;
 use Tests\TestCase;
@@ -20,7 +21,7 @@ use Tests\TestCase;
  */
 class FinanceRetentionConcurrencyTest extends TestCase
 {
-    use CreatesFinanceRetentionFixtures, ForcesConcurrentOverlap;
+    use AlignsRetentionAnchors, CreatesFinanceRetentionFixtures, ForcesConcurrentOverlap;
 
     /** @var array<int, string> */
     protected $connectionsToTransact = [];
@@ -36,8 +37,11 @@ class FinanceRetentionConcurrencyTest extends TestCase
 
     private function world(bool $closeSecondYear = true): array
     {
+        $from = $this->retentionAnchorCheckpoint();
         $w = $this->d8World($closeSecondYear);
         $this->schools[] = $w['school'];
+        // E21-RH.7: the fixture's years-old Finance was also recorded by the database years ago.
+        $this->alignRetentionAnchorsSince($from);
 
         return $w;
     }

@@ -7,6 +7,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\AlignsRetentionAnchors;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\Concerns\ForcesConcurrentOverlap;
@@ -22,7 +23,7 @@ use Tests\TestCase;
  */
 class CommunicationsRetentionConcurrencyTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures, ForcesConcurrentOverlap;
+    use AlignsRetentionAnchors, CreatesCommunicationFixtures, CreatesTenancyFixtures, ForcesConcurrentOverlap;
 
     /** @var array<int, string> */
     protected $connectionsToTransact = [];
@@ -32,10 +33,19 @@ class CommunicationsRetentionConcurrencyTest extends TestCase
 
     private ?string $startedAt = null;
 
+    private string $anchorsFrom = '';
+
     protected function setUp(): void
     {
         parent::setUp();
         $this->startedAt = now()->subSecond()->toDateTimeString();
+        $this->anchorsFrom = $this->retentionAnchorCheckpoint();
+    }
+
+    /** E21-RH.7: the years-old fixtures were recorded years ago too (called by the race helper before it starts). */
+    protected function backdateEndRecording(): void
+    {
+        $this->alignRetentionAnchorsSince($this->anchorsFrom);
     }
 
     protected function tearDown(): void

@@ -46,7 +46,7 @@ final class AdmissionDecisionBackfill
                         $events = DB::table('school_audit_events')->where('school_id', $school->id)
                             ->where('subject_type', AdmissionApplication::class)->where('subject_id', $application->id)
                             ->whereIn('event_type', ['admission_application.rejected', 'admission_application.withdrawn'])
-                            ->get(['event_type', 'occurred_at']);
+                            ->get(['event_type', 'occurred_at', 'retention_recorded_at']);
 
                         if ($events->count() !== 1 || $events->first()->event_type !== 'admission_application.'.$application->status) {
                             $result['unresolved']++;
@@ -62,7 +62,8 @@ final class AdmissionDecisionBackfill
                         try {
                             $result['mapped'] += DB::table('admission_applications')->where('id', $application->id)
                                 ->where('status', $application->status)->whereNull('terminal_at')
-                                ->update(['terminal_at' => $events->first()->occurred_at]);
+                                // E21-RH.7: the decision counts from when the database recorded its audit event (provenance), never earlier.
+                                ->update(['terminal_at' => $events->first()->occurred_at, 'retention_recorded_at' => $events->first()->retention_recorded_at]);
                         } catch (QueryException) {
                             $result['error']++;
                         }

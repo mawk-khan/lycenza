@@ -62,7 +62,7 @@ final class GuardianRecordRetentionService
     public function prune(School $school, CarbonInterface $cutoff, ?CarbonInterface $authorityCutoff, int $batch, bool $dryRun, array $participants, ?string $only = null): array
     {
         // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
-        return app(RetentionExpiry::class)->retained('guardian_core', $dryRun, $school->id, ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneUnit($school, $cutoff, $authorityCutoff, $batch, $dryRun, $participants, $only));
+        return app(RetentionExpiry::class)->retained('guardian_core', $dryRun, $school->id, ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneUnit($school, $cutoff, $authorityCutoff, $batch, $dryRun, $participants, $only), recordedBefore: RetentionExpiry::recordedBefore($cutoff, $authorityCutoff));
     }
 
     /** @return array{eligible: int, deleted: int, unresolved: int, dependency_blocked: int, errors: int} */

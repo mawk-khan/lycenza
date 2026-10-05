@@ -172,6 +172,7 @@ class FinanceRetentionTest extends TestCase
     {
         $w = $this->d8World();
         $this->enableFinanceRetention();
+        $this->backdateEndRecording(); // E21-RH.7: the fixture's periods were closed, and recorded, years ago
 
         $periods = app(FinanceRetentionReadiness::class)->assess($w['school'])['periods'];
         $this->assertSame(['dependency_blocked'], $periods['2015-16'], 'an open charge and payroll evidence stay');
@@ -185,6 +186,7 @@ class FinanceRetentionTest extends TestCase
         $this->travelTo(Carbon::parse('2016-04-05 06:00:00', 'UTC'));
         $this->closePeriod($clean, $this->periodByKey($clean['school'], '2015-16'));
         $this->travelBack();
+        $this->backdateEndRecording(); // E21-RH.7: closed, and recorded, in 2016
 
         $report = app(FinanceRetentionReadiness::class)->assess($clean['school']);
         $this->assertSame(['ready'], $report['periods']['2015-16']);

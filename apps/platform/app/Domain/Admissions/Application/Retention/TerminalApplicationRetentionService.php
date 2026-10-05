@@ -4,6 +4,7 @@ namespace App\Domain\Admissions\Application\Retention;
 
 use App\Models\School;
 use App\Support\Retention\ReferencingRows;
+use App\Support\Retention\RetentionAnchors;
 use App\Support\Retention\RetentionExpiry;
 use App\Support\Retention\RetentionLocks;
 use App\Support\Retention\RetentionUnit;
@@ -56,7 +57,7 @@ final class TerminalApplicationRetentionService
     public function prune(School $school, CarbonInterface $cutoff, int $batch, bool $dryRun, bool $held): array
     {
         // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
-        return app(RetentionExpiry::class)->retained('admission_application', $dryRun || $held, $school->id, ['eligible' => 0, 'deleted' => 0, 'held' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneUnit($school, $cutoff, $batch, $dryRun, $held));
+        return app(RetentionExpiry::class)->retained('admission_application', $dryRun || $held, $school->id, ['eligible' => 0, 'deleted' => 0, 'held' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneUnit($school, $cutoff, $batch, $dryRun, $held), recordedBefore: $cutoff);
     }
 
     /** @return array{eligible: int, deleted: int, held: int, unresolved: int, dependency_blocked: int, errors: int} */
@@ -94,7 +95,8 @@ final class TerminalApplicationRetentionService
     /** Narrows `a` to terminal applications that ended strictly before `$at`. */
     private function expired(Builder $query, string $at): Builder
     {
-        return $query->whereIn('a.status', self::TERMINAL)->whereNotNull('a.terminal_at')->where('a.terminal_at', '<', $at);
+        // E21-RH.7: and recorded by the database before the unit's cutoff.
+        return RetentionAnchors::recordedBefore($query->whereIn('a.status', self::TERMINAL)->whereNotNull('a.terminal_at')->where('a.terminal_at', '<', $at), 'a');
     }
 
     private function lock(string $applicantId, string $at): bool

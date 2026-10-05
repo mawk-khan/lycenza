@@ -150,7 +150,7 @@ class AcademicRetentionConcurrencyTest extends TestCase
     }
 
     #[Test]
-    public function a_document_committed_first_is_removed_with_its_resource(): void
+    public function a_document_committed_first_keeps_its_resource_as_recorded_within_the_period(): void
     {
         $w = $this->oldYear();
         $id = $this->learningContent($w);
@@ -160,10 +160,13 @@ class AcademicRetentionConcurrencyTest extends TestCase
             $this->script('lms-prune', $w['school']->id, '2019-01-01'),
         );
 
+        // E21-RH.7: the Document was recorded by the database just now, so the unit keeps the resource with it
+        // (never an error): it goes only once that recording is past the period too. Before RH.7 a late
+        // Document left with its resource; a document attached minutes ago is not years-old evidence.
         $this->assertSame('attached', $holder);
-        $this->assertSame('deleted:1 errors:0', $contender);
-        $this->assertSame(0, $this->admin('learning_content', $id));
-        $this->assertSame(0, DB::connection('pgsql_admin')->table('documents')->where('learning_content_id', $id)->count());
+        $this->assertSame('deleted:0 errors:0', $contender);
+        $this->assertSame(1, $this->admin('learning_content', $id));
+        $this->assertSame(1, DB::connection('pgsql_admin')->table('documents')->where('learning_content_id', $id)->count());
     }
 
     #[Test]
@@ -243,6 +246,7 @@ class AcademicRetentionConcurrencyTest extends TestCase
         $b = $this->oldYear();
         $idA = $this->learningContent($a);
         $idB = $this->learningContent($b);
+        $this->backdateEndRecording(); // E21-RH.7: years-old fixtures were recorded years ago too
 
         $dir = sys_get_temp_dir().'/race_'.bin2hex(random_bytes(8));
         mkdir($dir);

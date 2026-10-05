@@ -2,6 +2,7 @@
 
 namespace App\Support\Operations;
 
+use App\Support\Retention\RetentionAnchors;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -153,6 +154,12 @@ class DatabaseRoleVerifier
      * identity -- what its whole-unit PHP reads need, nothing else (no
      * table-level grant, no write). table => sorted columns.
      */
+    /** E21-RH.7: the irreversible security migrations a rollback must never have passed. */
+    public const RETENTION_FENCES = [
+        '2026_12_01_090000_fence_retention_eligibility_guards',
+        '2026_12_01_090100_anchor_retention_eligibility_clocks',
+    ];
+
     public const RETENTION_SELECTS = [
         // E21-RH.2: the HRX units
         'employees' => ['id', 'school_id'],
@@ -174,8 +181,9 @@ class DatabaseRoleVerifier
         'documents' => ['assignment_id', 'id', 'learning_content_id'],
         'learning_content' => ['id', 'owner_employee_id', 'school_id', 'subject_offering_id'],
         'learning_content_section_audiences' => ['learning_content_id', 'school_id', 'section_id'],
-        'subject_offerings' => ['academic_year_id', 'id', 'school_id'],
-        'teaching_assignments' => ['employee_id', 'ends_on', 'school_id', 'section_id', 'subject_offering_id'],
+        // E21-RH.7: + the database-recorded anchors the PHP LMS checks read.
+        'subject_offerings' => ['academic_year_id', 'id', 'retention_recorded_at', 'school_id'],
+        'teaching_assignments' => ['employee_id', 'ends_on', 'retention_recorded_at', 'school_id', 'section_id', 'subject_offering_id'],
     ];
 
     /**
@@ -368,8 +376,11 @@ class DatabaseRoleVerifier
         $guardFn = DB::selectOne("select p.prosecdef, coalesce(array_to_string(p.proconfig, ','), '') as config,
                 (p.proacl is null or exists (select 1 from aclexplode(p.proacl) a where a.grantee = 0 and a.privilege_type = 'EXECUTE')) as public_exec
              from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = 'retention_guard_retention_delete'");
+        // E21-RH.7: every anchored table a retention path deletes from is guarded, and the guard enforces the recorded anchor.
+        $mustGuard = [...self::RETENTION_DELETES, ...array_diff(array_keys(RetentionAnchors::TABLES), RetentionAnchors::INPUTS)];
+        $guardBody = (string) DB::selectOne("select p.prosrc from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = 'retention_guard_retention_delete'")?->prosrc;
         $results = [CheckResult::of('retention_deletes_guarded', $guardFn !== null && $guardFn->prosecdef && str_contains($guardFn->config, 'search_path=') && ! $guardFn->public_exec
-            && array_diff(self::RETENTION_DELETES, $guardedTables) === [])];
+            && str_contains($guardBody, 'retention_anchor') && array_diff($mustGuard, $guardedTables) === [])];
 
         $revoked = array_values(array_diff([...self::RETENTION_DELETES, ...self::RUNTIME_DELETES_REVOKED_EXTRA], self::RUNTIME_PRODUCT_DELETES));
         $stillDeletable = array_filter($revoked, fn (string $table) => (bool) DB::selectOne('select has_table_privilege(?, ?, ?) as p', [$runtime, 'public.'.$table, 'DELETE'])->p);
@@ -379,6 +390,54 @@ class DatabaseRoleVerifier
             "select exists (select 1 from pg_trigger where tgrelid = ('public.'||?)::regclass and tgname = ? and tgenabled = 'O') as x", [$table, $trigger],
         )->x === false, ARRAY_FILTER_USE_BOTH);
         $results[] = CheckResult::of('retention_eligibility_guards', $missing === [], $missing === [] ? '' : count($missing).' missing or disabled');
+
+        return [...$results, ...$this->retentionAnchorChecks()];
+    }
+
+    /**
+     * E21-RH.7 (ADR 0066 §15): every retention-relevant table carries the
+     * database-recorded anchor, stamped by the one enabled trigger with
+     * exactly its tracked columns; every expiry function declares its
+     * cutoff; and the security fences against rollback are recorded.
+     *
+     * @return list<CheckResult>
+     */
+    private function retentionAnchorChecks(): array
+    {
+        $fn = DB::selectOne("select p.oid, p.prosecdef, coalesce(array_to_string(p.proconfig, ','), '') as config, p.prosrc,
+                (p.proacl is null or exists (select 1 from aclexplode(p.proacl) a where a.grantee = 0 and a.privilege_type = 'EXECUTE')) as public_exec
+             from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = 'retention_stamp_anchor'");
+        $rows = DB::select(
+            "select c.relname, a.attnotnull, format_type(a.atttypid, a.atttypmod) as type, t.tgenabled, t.tgfoid,
+                    case when t.oid is null then null else pg_get_triggerdef(t.oid) end as def
+               from pg_class c
+               left join pg_attribute a on a.attrelid = c.oid and a.attname = ? and not a.attisdropped
+               left join pg_trigger t on t.tgrelid = c.oid and t.tgname = ? and not t.tgisinternal
+              where c.relnamespace = 'public'::regnamespace and c.relkind = 'r'",
+            [RetentionAnchors::COLUMN, RetentionAnchors::TRIGGER],
+        );
+        $live = [];
+        foreach ($rows as $row) {
+            $live[$row->relname] = $row;
+        }
+        $broken = [];
+        foreach (RetentionAnchors::TABLES as $table => $tracked) {
+            $row = $live[$table] ?? null;
+            if ($row === null || $row->attnotnull !== true || $row->type !== 'timestamp without time zone'
+                || ! in_array($row->tgenabled, ['O', 'A'], true) || $fn === null || (int) $row->tgfoid !== (int) $fn->oid
+                || ! str_ends_with((string) $row->def, 'retention_stamp_anchor('.implode(', ', array_map(fn (string $c) => "'{$c}'", $tracked)).')')) {
+                $broken[] = $table;
+            }
+        }
+        $results = [CheckResult::of('retention_anchors_recorded', $fn !== null && ! $fn->prosecdef && str_contains($fn->config, 'search_path=') && ! $fn->public_exec
+            && str_contains($fn->prosrc, 'session_user') && $broken === [], $broken === [] ? '' : count($broken).' table(s)')];
+
+        $undeclared = DB::select("select p.proname from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'retention\\_expire\\_%'
+            and p.prosrc not like '%app.retention_anchor_cutoff%'");
+        $results[] = CheckResult::of('retention_functions_declare_cutoff', $undeclared === [], $undeclared === [] ? '' : count($undeclared).' function(s)');
+
+        $fenced = DB::table('migrations')->whereIn('migration', self::RETENTION_FENCES)->count();
+        $results[] = CheckResult::of('retention_rollback_fences', $fenced === count(self::RETENTION_FENCES), $fenced === count(self::RETENTION_FENCES) ? '' : 'a fence is not recorded');
 
         return $results;
     }

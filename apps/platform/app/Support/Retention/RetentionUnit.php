@@ -23,6 +23,11 @@ use Illuminate\Support\Facades\DB;
  *
  * A database failure rolls back only that unit. It is counted as `errors`
  * and retried on the next run; it is never reported as an expiry.
+ *
+ * E21-RH.7: PostgreSQL's refusal of a row the database recorded within the
+ * unit's period (`retention_anchor`: a late child, or a clock written in the
+ * past) is not a failure but a retained dependent -- `dependency_blocked`,
+ * logged by its closed code.
  */
 final class RetentionUnit
 {
@@ -54,7 +59,12 @@ final class RetentionUnit
 
                 return $purge() ?? 'kept';
             });
-        } catch (QueryException) {
+        } catch (QueryException $e) {
+            if (RetentionAnchors::refused($e)) {
+                $result['dependency_blocked']++;
+
+                return;
+            }
             $result['errors']++;
 
             return;

@@ -5,6 +5,7 @@ namespace App\Domain\Communications\Application\Retention;
 use App\Domain\AcademicStructure\Application\AcademicYearCalendar;
 use App\Models\School;
 use App\Support\Retention\ObjectDeletion;
+use App\Support\Retention\RetentionAnchors;
 use App\Support\Retention\RetentionExpiry;
 use App\Support\Retention\RetentionLocks;
 use App\Support\Tenancy\SchoolTimezone;
@@ -66,14 +67,15 @@ final class CommunicationRetentionService
     public function pruneDeliveries(School $school, CarbonImmutable $cutoff, int $batch, bool $dryRun): array
     {
         // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
-        return app(RetentionExpiry::class)->retained('communication_delivery', $dryRun, $school->id, ['eligible' => 0, 'deleted' => 0, 'skipped' => 0, 'errors' => 0], fn (): array => $this->pruneDeliveriesUnit($school, $cutoff, $batch, $dryRun));
+        return app(RetentionExpiry::class)->retained('communication_delivery', $dryRun, $school->id, ['eligible' => 0, 'deleted' => 0, 'skipped' => 0, 'errors' => 0], fn (): array => $this->pruneDeliveriesUnit($school, $cutoff, $batch, $dryRun), recordedBefore: $cutoff);
     }
 
     /** @return array{eligible: int, deleted: int, skipped: int, errors: int} */
     private function pruneDeliveriesUnit(School $school, CarbonImmutable $cutoff, int $batch, bool $dryRun): array
     {
         $result = $this->context->withSchool($school, function () use ($school, $cutoff, $batch, $dryRun): array {
-            $eligible = fn (): Builder => DB::table('communication_deliveries')
+            // E21-RH.7: only deliveries the database recorded (and last changed) before the cutoff.
+            $eligible = fn (): Builder => RetentionAnchors::recordedBefore(DB::table('communication_deliveries'), 'communication_deliveries')
                 ->where('school_id', $school->id)
                 ->whereIn('status', self::TERMINAL_STATUSES)
                 ->whereRaw('greatest(delivered_at, read_at, failed_at) < ?', [$cutoff->format('Y-m-d H:i:s')]);
@@ -112,7 +114,7 @@ final class CommunicationRetentionService
     public function pruneContent(School $school, string $cutoffDate, int $batch, bool $dryRun): array
     {
         // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
-        return app(RetentionExpiry::class)->retained('communication_content', $dryRun, $school->id, ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'skipped' => 0, 'errors' => 0], fn (): array => $this->pruneContentUnit($school, $cutoffDate, $batch, $dryRun));
+        return app(RetentionExpiry::class)->retained('communication_content', $dryRun, $school->id, ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'skipped' => 0, 'errors' => 0], fn (): array => $this->pruneContentUnit($school, $cutoffDate, $batch, $dryRun), recordedBefore: $cutoffDate);
     }
 
     /** @return array{eligible: int, deleted: int, unresolved: int, skipped: int, errors: int} */
@@ -130,7 +132,9 @@ final class CommunicationRetentionService
             $result['skipped'] += DB::table('communication_threads as t')->where('t.school_id', $school->id)->where('t.created_at', '<', $upper)
                 ->whereNotExists(fn (Builder $q) => $q->selectRaw('1')->from('communication_messages as m')->whereColumn('m.thread_id', 't.id'))->count();
 
-            DB::table('communication_announcements')->where('school_id', $school->id)->whereNotNull('published_at')->whereNotNull('message_id')
+            // E21-RH.7: an announcement (or a message of a thread) the database recorded on or after the cutoff is not eligible.
+            RetentionAnchors::recordedBefore(DB::table('communication_announcements'), 'communication_announcements')
+                ->where('school_id', $school->id)->whereNotNull('published_at')->whereNotNull('message_id')
                 ->where('published_at', '<', $upper)->orderBy('id')
                 ->chunkById($batch, function ($rows) use ($years, $tz, $cutoffDate, $dryRun, &$result): void {
                     foreach ($rows as $row) {
@@ -142,6 +146,7 @@ final class CommunicationRetentionService
             DB::table('communication_threads as t')->where('t.school_id', $school->id)
                 ->whereExists(fn (Builder $q) => $q->selectRaw('1')->from('communication_messages as m')->whereColumn('m.thread_id', 't.id'))
                 ->whereNotExists(fn (Builder $q) => $q->selectRaw('1')->from('communication_messages as m')->whereColumn('m.thread_id', 't.id')->where('m.created_at', '>=', $upper))
+                ->whereNotExists(fn (Builder $q) => RetentionAnchors::recordedOnOrAfter($q->selectRaw('1')->from('communication_messages as m')->whereColumn('m.thread_id', 't.id'), 'm'))
                 ->select('t.id')->orderBy('t.id')
                 ->chunkById($batch, function ($rows) use ($years, $tz, $cutoffDate, $dryRun, &$result): void {
                     foreach ($rows as $row) {

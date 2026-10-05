@@ -193,6 +193,25 @@ Its rows are counted as held, and nothing of it is deleted.
     `assignments`.
   - Finance unit, Student and Guardian core evidence keep runtime EXECUTE
     and the PHP-only hold for now.
+- **E21-RH.7 (2026-10-05, ADR 0066 §15): retention timestamp integrity.**
+  - **Recorded-anchor amendment.** Every period now also counts from when the
+    DATABASE recorded the row (`retention_recorded_at`): stamped on insert,
+    and again whenever an eligibility clock, status or link is set. A row is
+    eligible only when its domain clock AND its record are older than the
+    cutoff.
+  - The periods themselves are unchanged. A clock written in the past, or a
+    row re-linked onto an older parent, waits out the full period from when
+    it was written.
+  - Rows that existed before RH.7 count from RH.7 (no trustworthy record).
+  - Legacy decisions mapped by `platform:lifecycle-markers-backfill` carry
+    the record of their audit evidence.
+  - A row written within the period keeps its unit (`dependency_blocked`,
+    never an error). For example, a Document attached today keeps a
+    years-old resource.
+  - The RH.6 eligibility guards and the RH.7 anchors cannot be rolled back
+    (fail closed).
+  - Hold exemptions (idempotency keys, account recovery, staff credentials)
+    are unchanged.
 - **E21-RH.6 (2026-10-05, ADR 0066 §14): the remaining boundaries are
   hardened. E21-RH is NOT closed (E21-RH.7 below).**
   - No destructive retention function is executable by the runtime role:
@@ -216,10 +235,9 @@ Its rows are counted as held, and nothing of it is deleted.
     The periods themselves are unchanged; the rule only ever retains longer.
   - `erasure_cases` dates and transitions, and the Guardian and Admissions
     lifecycle-marker backfills, are database-guarded.
-  - **Still open, E21-RH.7 (pre-production blocker):** other retention
-    periods count from application-written times (`created_at`,
-    `occurred_at`, `sent_at`, ...) that the runtime role can set. Every
-    retention-relevant time must become database-stamped.
+  - **Then open, E21-RH.7:** other retention periods counted from
+    application-written times (`created_at`, `occurred_at`, `sent_at`, ...)
+    that the runtime role could set. Closed by E21-RH.7 (above).
 - **E21-RH.2 (2026-10-04, ADR 0066 §10).**
   - The HRX purge functions are executed only by the dedicated
     `school_os_retention` login.

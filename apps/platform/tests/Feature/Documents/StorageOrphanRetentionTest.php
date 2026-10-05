@@ -258,7 +258,9 @@ class StorageOrphanRetentionTest extends TestCase
         $naming = array_values(array_filter($files, fn (string $f) => str_contains((string) file_get_contents($f), "'employee_documents'")));
         sort($naming);
         $this->assertSame([
-            $hr, app_path('Support/Retention/ReferencingRows.php'), app_path('Support/Retention/StorageOrphanReaper.php'),
+            $hr, app_path('Support/Retention/ReferencingRows.php'),
+            app_path('Support/Retention/RetentionAnchors.php'), // E21-RH.7: the read-only recorded-anchor registry
+            app_path('Support/Retention/StorageOrphanReaper.php'),
             app_path('Support/Retention/TenantRetentionCatalog.php'), // E21.2F: the read-only closure-readiness map
         ], $naming);
         $this->assertStringContainsString('public function pruneEvidence(', (string) file_get_contents($hr));

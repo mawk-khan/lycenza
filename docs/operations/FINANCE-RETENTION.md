@@ -57,6 +57,13 @@ Do not skip a step, and do not reorder steps 4–6.
       latest expired year; verification must still pass);
     - `platform:school-closure-status <school>`.
 
+## Recorded age (E21-RH.7)
+A period is old enough only when both its `closed_at` and the database's own
+record of the close (`retention_recorded_at`, ADR 0066 §15) are older than the
+period. Readiness reports a period closed, or re-closed, within it as
+`period_too_young`, whatever `closed_at` says. Periods that existed before
+RH.7 count from RH.7.
+
 ## Holds
 
 `RETENTION_HOLD_SCHOOL_IDS` stops every Finance expiry for a School; its

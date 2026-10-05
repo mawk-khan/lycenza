@@ -3,7 +3,12 @@
 namespace Tests\Concerns;
 
 use App\Models\School;
+use App\Support\Retention\RetentionExpiry;
+use Illuminate\Database\Connection;
+use Illuminate\Database\Events\ConnectionEstablished;
+use Illuminate\Database\Events\TransactionBeginning;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Testing\PendingCommand;
 
 /**
@@ -35,6 +40,8 @@ use Illuminate\Testing\PendingCommand;
  */
 trait PurgesCommittedHrxFixtures
 {
+    use AlignsRetentionAnchors;
+
     /** @var array{schools: list<string>, users: list<string>, roles: list<string>, global: array<string, list<string>>, backlog: list<string>, heartbeats: list<string>, counts: array<string, int>}|null */
     private ?array $durableSnapshot = null;
 
@@ -57,8 +64,10 @@ trait PurgesCommittedHrxFixtures
 
     protected function snapshotDurableFixtures(): void
     {
+        $this->alignBeforeRetentionUnits();
         $admin = DB::connection('pgsql_admin');
         $this->durableSnapshot = [
+            'recorded_from' => $this->retentionAnchorCheckpoint(),
             'schools' => $admin->table('schools')->pluck('id')->all(),
             'users' => $admin->table('users')->pluck('id')->all(),
             'roles' => $admin->table('roles')->pluck('id')->all(),
@@ -131,18 +140,58 @@ trait PurgesCommittedHrxFixtures
         // Fixture setup, not the run under test: a distinct alias of the
         // owner connection, so a test watching which connections a command
         // used never mistakes this for the command reaching pgsql_admin.
-        config(['database.connections.fixtures_owner' => config('database.connections.pgsql_admin')]);
-        $admin = DB::connection('fixtures_owner');
+        $admin = $this->fixturesOwner();
         $schools = $admin->table('schools')->whereNotIn('id', $this->durableSnapshot['schools'] ?? [])->pluck('id')->all();
         foreach ($schools as $schoolId) {
             $admin->transaction(function () use ($admin, $schoolId): void {
                 $admin->select("SELECT set_config('app.current_school_id', ?, true)", [$schoolId]);
+                $admin->statement("SET LOCAL lock_timeout = '5s'");
                 foreach (['employment_records', 'student_enrollments'] as $table) {
-                    $admin->table($table)->where('school_id', $schoolId)->whereNotNull('ends_on')
-                        ->update(['ended_recorded_at' => DB::raw('ends_on::timestamp')]);
+                    // SKIP LOCKED: a row a retention unit or race holder has locked was aligned before it was locked.
+                    $admin->update("UPDATE {$table} SET ended_recorded_at = ends_on::timestamp WHERE ctid = ANY (ARRAY(
+                        SELECT ctid FROM {$table} WHERE school_id = ? AND ends_on IS NOT NULL AND ended_recorded_at IS DISTINCT FROM ends_on::timestamp FOR UPDATE SKIP LOCKED))", [$schoolId]);
                 }
             });
         }
+        // E21-RH.7: and every anchor this test recorded since setUp, long ago (AlignsRetentionAnchors).
+        if (isset($this->durableSnapshot['recorded_from'])) {
+            $this->alignRetentionAnchorsSince($this->durableSnapshot['recorded_from']);
+        }
+    }
+
+    /**
+     * E21-RH.7: a test that runs a retention unit or expiry function directly
+     * (not through artisan) gets the same alignment, right before the unit
+     * declares its cutoff or the function is called on the retention
+     * connection -- also after that connection is purged and re-established.
+     */
+    private function alignBeforeRetentionUnits(): void
+    {
+        $attach = function (Connection $connection): void {
+            if ($connection->getName() !== RetentionExpiry::PRIVILEGED_CONNECTION) {
+                return;
+            }
+            // Only where the retention session holds no lock yet: a statement outside any transaction ...
+            $connection->beforeExecuting(function (string $query, array $bindings, Connection $connection): void {
+                if ($this->durableSnapshot !== null && $this->alignsRetentionAnchors() && $connection->transactionLevel() === 0
+                    && preg_match('/app\.retention_anchor_cutoff|retention_expire_|retention_lock_rows/', $query) === 1) {
+                    $this->backdateEndRecording();
+                }
+            });
+        };
+        Event::listen(ConnectionEstablished::class, fn (ConnectionEstablished $event) => $attach($event->connection));
+        // ... or the moment one of its transactions begins.
+        Event::listen(TransactionBeginning::class, function (TransactionBeginning $event): void {
+            if ($this->durableSnapshot !== null && $this->alignsRetentionAnchors() && $event->connection->getName() === RetentionExpiry::PRIVILEGED_CONNECTION && $event->connection->transactionLevel() === 1) {
+                $this->backdateEndRecording();
+            }
+        });
+        DB::purge(RetentionExpiry::PRIVILEGED_CONNECTION);
+    }
+
+    private function alignsRetentionAnchors(): bool
+    {
+        return ! property_exists($this, 'alignRetentionAnchors') || $this->alignRetentionAnchors !== false;
     }
 
     /**
@@ -158,7 +207,9 @@ trait PurgesCommittedHrxFixtures
      */
     public function artisan($command, $parameters = [])
     {
-        $this->backdateEndRecording();
+        if ($this->alignsRetentionAnchors()) {
+            $this->backdateEndRecording();
+        }
 
         return parent::artisan($command, $parameters);
     }

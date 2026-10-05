@@ -109,7 +109,8 @@ final class LmsResourceRetention
         try {
             return DB::transaction(fn (): array => $this->expiry->lmsResource($kind, $school, $id, $cutoffDate));
         } catch (QueryException $e) {
-            if (str_contains($e->getMessage(), '(retention_lms)') || str_contains($e->getMessage(), '('.RetentionExpiry::REFUSED_HELD.')')) {
+            // E21-RH.7: a Document the database recorded within the period keeps the resource too.
+            if (str_contains($e->getMessage(), '(retention_lms)') || str_contains($e->getMessage(), '('.RetentionExpiry::REFUSED_HELD.')') || RetentionAnchors::refused($e)) {
                 return null;
             }
 
@@ -120,8 +121,10 @@ final class LmsResourceRetention
     /** Narrows `r` to resources whose Offering's Academic Year ended strictly before the cutoff. */
     private function yearEnded(Builder $query, string $cutoffDate): Builder
     {
+        // E21-RH.7: an Offering the database (re)placed in that Year on or after the cutoff is not eligible.
         return $query->whereExists(fn (Builder $q) => AcademicYearRetention::endedBefore(
-            $q->selectRaw('1')->from('subject_offerings as o')->whereColumn('o.id', 'r.subject_offering_id')->whereColumn('o.school_id', 'r.school_id'),
+            $q->selectRaw('1')->from('subject_offerings as o')->whereColumn('o.id', 'r.subject_offering_id')->whereColumn('o.school_id', 'r.school_id')
+                ->where('o.'.RetentionAnchors::COLUMN, '<', $cutoffDate),
             'o',
             $cutoffDate,
         ));
@@ -148,7 +151,12 @@ final class LmsResourceRetention
         if ((clone $assignments)->whereNull('t.ends_on')->select('t.section_id')->exists()) {
             return 'teaching_assignments';
         }
-        $ended = max((string) $resource->ends_on, (string) ((clone $assignments)->max('t.ends_on') ?? $resource->ends_on));
+        // E21-RH.7: an assignment end counts from no earlier than when the database recorded it.
+        $ended = max(
+            (string) $resource->ends_on,
+            (string) ((clone $assignments)->max('t.ends_on') ?? $resource->ends_on),
+            substr((string) ((clone $assignments)->max('t.'.RetentionAnchors::COLUMN) ?? $resource->ends_on), 0, 10),
+        );
 
         return EmbeddedAuthorityRetention::mayRemoveWithParent(CarbonImmutable::parse(substr($ended, 0, 10), 'UTC')->endOfDay())
             ? null

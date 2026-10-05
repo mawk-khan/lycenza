@@ -4,6 +4,7 @@ namespace App\Domain\Visitor\Application\Retention;
 
 use App\Models\School;
 use App\Support\Retention\ReferencingRows;
+use App\Support\Retention\RetentionAnchors;
 use App\Support\Retention\RetentionExpiry;
 use App\Support\Retention\RetentionLocks;
 use App\Support\Retention\RetentionUnit;
@@ -45,7 +46,7 @@ final class VisitorRetentionService
     public function prune(School $school, CarbonInterface $cutoff, int $batch, bool $dryRun, bool $held): array
     {
         // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
-        return app(RetentionExpiry::class)->retained('visitor', $dryRun || $held, $school->id, ['eligible' => 0, 'deleted' => 0, 'held' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneUnit($school, $cutoff, $batch, $dryRun, $held));
+        return app(RetentionExpiry::class)->retained('visitor', $dryRun || $held, $school->id, ['eligible' => 0, 'deleted' => 0, 'held' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneUnit($school, $cutoff, $batch, $dryRun, $held), recordedBefore: $cutoff);
     }
 
     /** @return array{eligible: int, deleted: int, held: int, unresolved: int, dependency_blocked: int, errors: int} */
@@ -91,7 +92,8 @@ final class VisitorRetentionService
     /** Narrows `x` to checked-out visits whose checkout is strictly before `$at`. */
     private function expired(Builder $query, string $at): Builder
     {
-        return $query->where('x.status', 'checked_out')->whereNotNull('x.checked_out_at')->where('x.checked_out_at', '<', $at);
+        // E21-RH.7: and recorded by the database before the unit's cutoff (a backdated checkout buys nothing).
+        return RetentionAnchors::recordedBefore($query->where('x.status', 'checked_out')->whereNotNull('x.checked_out_at')->where('x.checked_out_at', '<', $at), 'x');
     }
 
     private function blocker(string $schoolId, string $visitorId, string $at): ?string

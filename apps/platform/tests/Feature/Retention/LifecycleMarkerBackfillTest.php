@@ -69,6 +69,8 @@ class LifecycleMarkerBackfillTest extends TestCase
         $this->legacy(fn ($admin) => $admin->table('school_audit_events')->insert([
             'id' => (string) Str::uuid7(), 'school_id' => $schoolId, 'occurred_at' => $occurredAt, 'event_type' => $eventType,
             'subject_type' => $subjectType, 'subject_id' => $subjectId, 'metadata' => json_encode($metadata), 'created_at' => $occurredAt,
+            // E21-RH.7: legacy evidence, recorded by the database back then (the owner's maintenance path may say so).
+            'retention_recorded_at' => $occurredAt,
         ]));
     }
 
@@ -82,7 +84,9 @@ class LifecycleMarkerBackfillTest extends TestCase
             'id' => $id, 'school_id' => $school->id, 'applicant_id' => $applicant->id, 'academic_year_id' => $year->id,
             'campus_id' => $this->createCampus($school)->id, 'grade_level_id' => $this->createGradeLevel($school)->id,
             'status' => $status, 'terminal_at' => null, 'created_at' => '2019-01-01 00:00:00', 'updated_at' => '2026-01-01 00:00:00',
+            'retention_recorded_at' => '2019-01-01 00:00:00', // E21-RH.7: legacy, recorded back then
         ]));
+        $this->legacy(fn ($admin) => $admin->table('applicants')->where('id', $applicant->id)->update(['retention_recorded_at' => '2019-01-01 00:00:00']));
 
         return $id;
     }

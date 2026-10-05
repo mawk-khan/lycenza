@@ -85,7 +85,7 @@ class PruneFailedJobs extends Command
             } while ($batch > 0);
 
             return ['deleted' => $deleted, 'errors' => 0];
-        });
+        }, recordedBefore: $cutoff);
         if ($result['errors'] > 0) {
             $this->error('The retention identity is not available; nothing was deleted.');
 

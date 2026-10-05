@@ -60,8 +60,9 @@ final class GuardianMarkerBackfill
                         }
 
                         try {
+                            // E21-RH.7: the marker counts from when the database recorded its latest evidence (provenance), never earlier.
                             $result['mapped'] += DB::table('guardians')->where('id', $guardian->id)->whereNull('no_relationship_since')
-                                ->update(['no_relationship_since' => $since]);
+                                ->update(['no_relationship_since' => $since[0], 'retention_recorded_at' => $since[1]]);
                         } catch (QueryException) {
                             // A relationship committed meanwhile, or the evidence is in the future: the database refuses.
                             $result['error']++;
@@ -73,23 +74,33 @@ final class GuardianMarkerBackfill
         });
     }
 
-    /** The time the Guardian last had no relationship, from complete audit evidence, or null. */
-    private function evidence(string $schoolId, string $guardianId): ?string
+    /**
+     * The time the Guardian last had no relationship, from complete audit
+     * evidence, with the latest time the database recorded any of that
+     * evidence (E21-RH.7), or null.
+     *
+     * @return array{0: string, 1: string}|null
+     */
+    private function evidence(string $schoolId, string $guardianId): ?array
     {
         $audit = fn () => DB::table('school_audit_events')->where('school_id', $schoolId);
 
-        $created = $audit()->where('event_type', 'guardian.created')->where('subject_type', Guardian::class)->where('subject_id', $guardianId)->min('occurred_at');
+        $creation = $audit()->where('event_type', 'guardian.created')->where('subject_type', Guardian::class)->where('subject_id', $guardianId);
+        $created = (clone $creation)->min('occurred_at');
         if ($created === null) {
             return null;
         }
 
         $linked = $audit()->where('event_type', 'student_guardian.linked')->whereRaw("metadata->>'guardianId' = ?", [$guardianId])->pluck('subject_id')->all();
-        $unlinked = $audit()->where('event_type', 'student_guardian.unlinked')->whereRaw("metadata->>'guardianId' = ?", [$guardianId])->get(['subject_id', 'occurred_at']);
+        $unlinked = $audit()->where('event_type', 'student_guardian.unlinked')->whereRaw("metadata->>'guardianId' = ?", [$guardianId])->get(['subject_id', 'occurred_at', 'retention_recorded_at']);
 
         if (array_diff($linked, $unlinked->pluck('subject_id')->all()) !== []) {
             return null;
         }
 
-        return (string) ($unlinked->max('occurred_at') ?? $created);
+        return [
+            (string) ($unlinked->max('occurred_at') ?? $created),
+            (string) max((string) (clone $creation)->max('retention_recorded_at'), (string) $unlinked->max('retention_recorded_at')),
+        ];
     }
 }

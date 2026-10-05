@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\DomainEventOutbox;
 use App\Models\School;
+use App\Support\Retention\RetentionAnchors;
 use App\Support\Retention\RetentionExpiry;
 use App\Support\Retention\RetentionHolds;
 use App\Support\Retention\RetentionLocks;
@@ -85,13 +86,13 @@ class PruneOutboxEvents extends Command
 
                 // E21-RH.6: as the retention identity (its delete guard re-checks the School's hold in the database).
                 $schoolRows += $this->retention->retained('outbox', $dryRun, $school->id, ['deleted' => 0, 'errors' => 0],
-                    fn (): array => ['deleted' => $context->withSchool($school, fn () => $this->prune(fn () => $this->eligible($cutoff)->where('school_id', $school->id), $batch, $dryRun)), 'errors' => 0])['deleted'];
+                    fn (): array => ['deleted' => $context->withSchool($school, fn () => $this->prune(fn () => $this->eligible($cutoff)->where('school_id', $school->id), $batch, $dryRun)), 'errors' => 0], recordedBefore: $cutoff)['deleted'];
             }
         });
 
         // School-less rows are held by RETENTION_HOLD_PLATFORM (E21.2B).
         $platformRows = $holds->platformHeld() ? 0 : $this->retention->retained('outbox', $dryRun, null, ['deleted' => 0, 'errors' => 0],
-            fn (): array => ['deleted' => $this->prune(fn () => $this->eligible($cutoff)->whereNull('school_id'), $batch, $dryRun), 'errors' => 0])['deleted'];
+            fn (): array => ['deleted' => $this->prune(fn () => $this->eligible($cutoff)->whereNull('school_id'), $batch, $dryRun), 'errors' => 0], recordedBefore: $cutoff)['deleted'];
 
         Log::info($dryRun ? 'retention.outbox_prune.dry_run' : 'retention.outbox_prune.completed', [
             'retention_days' => $days,
@@ -135,12 +136,16 @@ class PruneOutboxEvents extends Command
     /** @return Builder<DomainEventOutbox> */
     private function eligible(Carbon $cutoff): Builder
     {
-        return DomainEventOutbox::query()
+        // E21-RH.7: only rows the database recorded (and last changed) before the declared cutoff.
+        return RetentionAnchors::recordedBefore(DomainEventOutbox::query(), 'domain_event_outbox')
             ->where('status', 'dispatched')
             ->whereNotNull('processed_at')
             ->where('processed_at', '<', $cutoff)
             ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('webhook_deliveries')
                 ->whereColumn('webhook_deliveries.event_id', 'domain_event_outbox.id')
-                ->where('webhook_deliveries.status', '!=', 'delivered'));
+                ->where('webhook_deliveries.status', '!=', 'delivered'))
+            // E21-RH.7: a receipt recorded (or re-linked here) within the period keeps its event.
+            ->whereNotExists(fn ($q) => RetentionAnchors::recordedOnOrAfter($q->selectRaw('1')->from('event_consumer_receipts')
+                ->whereColumn('event_consumer_receipts.event_id', 'domain_event_outbox.id'), 'event_consumer_receipts'));
     }
 }

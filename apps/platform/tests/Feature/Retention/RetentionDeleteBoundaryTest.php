@@ -37,6 +37,9 @@ class RetentionDeleteBoundaryTest extends TestCase
 {
     use CommitsRetentionFixtures, CreatesTenancyFixtures;
 
+    /** These proofs set the database recording themselves (backdateEndRecording() where a row is old). */
+    protected bool $alignRetentionAnchors = false;
+
     private const RH6_FUNCTIONS = [
         'retention_expire_finance_unit', 'retention_expire_student_processing_authorizations',
         'retention_expire_student_consent_events', 'retention_expire_guardian_consent_events',
@@ -49,6 +52,10 @@ class RetentionDeleteBoundaryTest extends TestCase
             DB::usingConnection($connection, fn () => DB::transaction(function () use ($school, $statement): void {
                 if ($school !== null) {
                     DB::select("SELECT set_config('app.current_school_id', ?, true)", [$school->id]);
+                }
+                if (DB::connection()->getName() === RetentionExpiry::PRIVILEGED_CONNECTION) {
+                    // As a retention unit does (E21-RH.7): it deletes only rows recorded before its declared cutoff, now.
+                    DB::select("SELECT set_config('app.retention_anchor_cutoff', (now() AT TIME ZONE 'UTC')::text, true)");
                 }
                 $statement();
             }));
@@ -92,6 +99,7 @@ class RetentionDeleteBoundaryTest extends TestCase
         $b = $this->createSchool();
         $visitorA = $this->createVisitor($a)->id;
         $visitorB = $this->createVisitor($b)->id;
+        $this->backdateEndRecording(); // recorded long ago: only the holds decide here
         $exists = fn (School $s, string $id): bool => $this->inSchool($s, fn () => DB::table('visitors')->where('id', $id)->exists());
         $holds = app(RetentionHolds::class);
         $retention = RetentionExpiry::PRIVILEGED_CONNECTION;

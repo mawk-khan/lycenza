@@ -88,9 +88,17 @@ class FinanceRetentionGuardTest extends TestCase
             $this->assertStringNotContainsString($call, (string) file_get_contents($catalog), "the catalog is a read-only map ({$call})");
         }
 
+        // E21-RH.7: the recorded-anchor registry names every anchored table, Finance included, as DATA too;
+        // it only narrows selections and never runs or writes a query of its own.
+        $anchors = app_path('Support/Retention/RetentionAnchors.php');
+        $this->assertContains($anchors, $files);
+        foreach (['DB::', '->delete(', '->update(', '->insert(', 'Schema::'] as $call) {
+            $this->assertStringNotContainsString($call, (string) file_get_contents($anchors), "the anchor registry is a read-only map ({$call})");
+        }
+
         $approved = array_map(fn (string $f) => app_path($f), self::D8_FILES);
         $payroll = array_map(fn (string $f) => app_path($f), self::D9_PAYROLL_FILES);
-        foreach (array_diff($files, [$catalog], $approved, $payroll) as $file) {
+        foreach (array_diff($files, [$catalog, $anchors], $approved, $payroll) as $file) {
             $this->assertDoesNotMatchRegularExpression(self::LEDGER_BOUND, $this->code($file), $file);
         }
         foreach ($payroll as $file) {

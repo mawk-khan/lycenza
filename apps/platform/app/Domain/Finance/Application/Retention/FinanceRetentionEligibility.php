@@ -81,7 +81,7 @@ class FinanceRetentionEligibility
         }
         if (! $period->isClosed()) {
             $blockers[] = 'period_not_closed';
-        } elseif ($years !== null && ! self::isAgeEligible($period, $years, $now)) {
+        } elseif ($years !== null && (! self::isAgeEligible($period, $years, $now) || ! $this->recordedEligible($school, $period, $years, $now))) {
             $blockers[] = 'period_too_young';
         }
         if ($this->periods->unmappedEntryCount($school, $period->endsOn) > 0) {
@@ -95,6 +95,19 @@ class FinanceRetentionEligibility
         }
 
         return $blockers;
+    }
+
+    /**
+     * E21-RH.7 (ADR 0066 §15): the database's own record of the close
+     * (`retention_recorded_at`, re-stamped by PostgreSQL whenever `status` or
+     * `closed_at` changes) must be just as old -- a `closed_at` written in the
+     * past buys nothing. The database Finance unit refuses the same.
+     */
+    private function recordedEligible(School $school, FinancialPeriodSummary $period, int $years, CarbonImmutable $now): bool
+    {
+        $recordedAt = $this->context->withSchool($school, fn () => DB::table('financial_periods')->where('school_id', $school->id)->where('id', $period->id)->value('retention_recorded_at'));
+
+        return is_string($recordedAt) && $now->utc()->subYearsNoOverflow($years)->gte(CarbonImmutable::parse($recordedAt, 'UTC'));
     }
 
     /**

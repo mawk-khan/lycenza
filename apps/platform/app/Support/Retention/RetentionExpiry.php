@@ -5,6 +5,7 @@ namespace App\Support\Retention;
 use App\Models\School;
 use App\Support\Observability\MetricsRecorder;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -315,12 +316,20 @@ final class RetentionExpiry
      */
     public function privileged(string $category, bool $dryRun, callable $participant, ?string $schoolId = null): array
     {
-        return $this->underRetentionIdentity($category, $dryRun, $participant, self::REFUSED_UNIT, $schoolId);
+        // Its deletes all run inside database expiry functions, which declare their own recorded-before cutoff.
+        return $this->underRetentionIdentity($category, $dryRun, $participant, self::REFUSED_UNIT, $schoolId, null);
     }
 
     /**
      * E21-RH.6: privileged() for a retention operation with its own result
      * shape. On refusal it returns `$zero` with one error.
+     *
+     * E21-RH.7 (ADR 0066 §15): `$recordedBefore` is the unit's cutoff -- the
+     * most recent one it applies. It is declared on the retention session
+     * for the unit's duration (`app.retention_anchor_cutoff`), and PostgreSQL
+     * refuses deleting any anchored row the database recorded on or after it
+     * (`retention_anchor`), whatever clock the PHP selection read. A date is
+     * its start (00:00).
      *
      * @template TResult of array<string, int>
      *
@@ -328,16 +337,36 @@ final class RetentionExpiry
      * @param  callable(): TResult  $operation
      * @return TResult
      */
-    public function retained(string $category, bool $dryRun, ?string $schoolId, array $zero, callable $operation): array
+    public function retained(string $category, bool $dryRun, ?string $schoolId, array $zero, callable $operation, CarbonInterface|string $recordedBefore): array
     {
-        return $this->underRetentionIdentity($category, $dryRun, $operation, ['errors' => 1] + $zero, $schoolId);
+        return $this->underRetentionIdentity($category, $dryRun, $operation, ['errors' => 1] + $zero, $schoolId, self::recordedBefore($recordedBefore));
+    }
+
+    /**
+     * The declared cutoff as a UTC timestamp string: the most recent of the
+     * given cutoffs (a unit with several declares the latest; nulls are
+     * ignored; a date means its 00:00).
+     */
+    public static function recordedBefore(CarbonInterface|string|null ...$cutoffs): string
+    {
+        $normalized = array_map(
+            fn (CarbonInterface|string $cutoff): string => $cutoff instanceof CarbonInterface
+                ? $cutoff->copy()->utc()->format('Y-m-d H:i:s')
+                : CarbonImmutable::parse($cutoff, 'UTC')->format('Y-m-d H:i:s'),
+            array_values(array_filter($cutoffs, fn ($cutoff) => $cutoff !== null)),
+        );
+        if ($normalized === []) {
+            throw new InvalidArgumentException('A retention unit declares at least one recorded-before cutoff.');
+        }
+
+        return max($normalized);
     }
 
     /**
      * @param  array<string, int>  $refused
      * @return array<string, int>
      */
-    private function underRetentionIdentity(string $category, bool $dryRun, callable $participant, array $refused, ?string $schoolId): array
+    private function underRetentionIdentity(string $category, bool $dryRun, callable $participant, array $refused, ?string $schoolId, ?string $recordedBefore): array
     {
         try {
             $this->assertRetentionIdentity();
@@ -351,7 +380,17 @@ final class RetentionExpiry
             return $refused;
         }
 
-        $result = DB::usingConnection(self::PRIVILEGED_CONNECTION, $participant);
+        $connection = DB::connection(self::PRIVILEGED_CONNECTION);
+        $connection->select("SELECT set_config('app.retention_anchor_cutoff', ?, false)", [$recordedBefore ?? '']);
+        try {
+            $result = DB::usingConnection(self::PRIVILEGED_CONNECTION, $participant);
+        } finally {
+            try {
+                $connection->select("SELECT set_config('app.retention_anchor_cutoff', '', false)");
+            } catch (QueryException|PDOException) {
+                DB::purge(self::PRIVILEGED_CONNECTION); // a session that cannot reset it is not reused
+            }
+        }
         if ($schoolId !== null && array_sum($result) > 0) {
             Log::info('retention.unit_run', ['category' => $category, 'school_id' => $schoolId, 'identity' => self::RETENTION_ROLE, 'dry_run' => $dryRun, ...$result]);
         }

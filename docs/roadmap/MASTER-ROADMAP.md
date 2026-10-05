@@ -2490,7 +2490,8 @@ parallel, and the email provider tail) — not started.
 
   E21.2A–E21.2F are closed.
 - **E21-RH — retention privilege hardening (ADR 0066): a pre-production
-  security blocker, open until RH.7.**
+  security blocker -- CLOSED by RH.7 (2026-10-05; see the RH.7 completion
+  report).**
   - RH.1–RH.3 published (dedicated `school_os_retention` identity; HRX on
     it; authoritative database holds).
   - **RH.4 (2026-10-05, ADR 0066 §12):** the eleven standalone legacy
@@ -2510,9 +2511,15 @@ parallel, and the email provider tail) — not started.
       database-guarded, and D7/D9 count from the recorded end date.
 
     Published.
-  - **Open, E21-RH.7 (new pre-production blocker):** database-stamped write
-    times on every remaining retention table (ADR 0066 §14.9). **E21-RH is
-    NOT closed.** Not started; never auto-started.
+  - **RH.7 (2026-10-05, ADR 0066 §15):**
+    - retention counts only from times PostgreSQL recorded: an anchor on
+      every retention-relevant table, re-recorded on any clock, status or
+      link change; the database refuses deleting a row recorded within the
+      unit's declared period;
+    - the RH.6 eligibility guards and the RH.7 anchors are fenced against
+      rollback.
+
+    Published.
 - **E21.4 — User Identity Minimization & Database Safety (2026-10-03):
   published / closed.** `docs/security/E21-RETENTION-DETERMINATION.md`
   §5.11, E21-L1 §10:
