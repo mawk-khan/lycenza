@@ -9,3 +9,8 @@
 # Docker Compose override files are machine-local by Compose convention
 # (e.g. host port remaps for a machine with conflicting local services).
 docker-compose.override.yml
+
+# Claude Code project-skill working state (.claude/skills/full-regression):
+# the throwaway regression snapshot worktree and its logs/results. Machine-
+# local, never committed. Local Claude settings are ignored per user.
+.claude/regression/

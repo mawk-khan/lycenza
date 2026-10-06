@@ -630,3 +630,41 @@ fixtures after every test (after the rollback) — the test database holds
 no platform grant at rest — and only through the unchanged, boot-verified
 connections after the admin connection positively reports the test
 database. The demo builder's Platform Admin is committed the same way.
+
+## Snapshot regressions and the project skills (2026-10-06)
+
+The isolated test container bind-mounts `apps/platform` of the worktree that
+runs `bin/safe-test`. Editing that tree during a full run (~40 minutes)
+silently makes the run test a mix of old and new code. This happened during the
+OPF.5 closure audit; the run was stopped and repeated.
+
+`.claude/skills/full-regression/run.sh` (the `/full-regression` project skill)
+removes the problem:
+- **Snapshot.** It builds a commit of the exact candidate tree (tracked changes
+  plus untracked, non-ignored files, written through a throwaway index; the
+  real index is untouched). It checks that commit out as a detached worktree at
+  `.claude/regression/snapshot` (gitignored). The gitignored inputs the suite
+  needs are supplied from the main tree: `vendor/` and `public/build/` are
+  hardlinked, and every env file `docker-compose.yml` names is copied.
+  Without the Vite manifest, every Inertia page test fails with a 500; the
+  first snapshot run showed 669 such failures.
+- **Run.** It runs `SAFE_TEST_ISOLATED=1 bin/safe-test --reset-db` and the
+  suite from that worktree. The snapshot's path always derives the same
+  isolated Compose project, separate from the main tree's (rule 81), so the
+  main tree stays free to edit.
+- **Evidence.** It records `.claude/regression/last-result` keyed by the
+  candidate tree id. `/publish-gate --require-regression` refuses to treat a
+  run as evidence for a tree that has changed since.
+
+The other project skills follow the same rules (rule 78, rules 50–54, no
+deploy or push):
+- `/publish-gate`: Pint, Larastan, whitespace, gitleaks on the changed files
+  with the pinned image, shared-types drift, and the regression evidence.
+- `/rollback-proof <n>`: refuses unless `platform:env-diagnostic` passes and
+  `current_database()` is `school_os_test`; then requires an identical
+  schema-only dump after rollback and re-apply.
+- `/closure-audit`: the programme closure checklist.
+
+`bin/safe-test` remains the canonical runner. The skills only call it, and
+mirror its naming and inert test values in
+`.claude/skills/_shared/lycenza-dev.sh`.
