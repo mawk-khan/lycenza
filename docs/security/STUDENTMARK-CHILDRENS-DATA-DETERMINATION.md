@@ -111,3 +111,12 @@ the determination above.
 - **Still withheld,** each as register items RES-L1 and RES-L4 – RES-L7:
   production, result publication, report cards, transcripts, and Student-
   and Guardian-facing access.
+
+## Project status note (2026-10-07) — not part of the determination
+
+RES-L0 has been answered by the approving authority: **CURRENT WITH CHANGES**
+(`docs/security/RES-L0-STUDENTMARK-REVALIDATION-DETERMINATION.md`). The
+determination above stays current only for School-internal recording and
+maintenance by authorised administrative staff, under the conditions recorded
+there. Production, teacher processing, results, report cards, transcripts and
+Student/Guardian access remain withheld (RES-L1, RES-L2, RES-L4 – RES-L7).

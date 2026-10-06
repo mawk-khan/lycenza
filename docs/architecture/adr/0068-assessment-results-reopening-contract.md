@@ -2,8 +2,10 @@
 
 - Status: **Accepted (RES.0B, 2026-10-06; documentation only).** Owner
   decisions R1–R20 (§4) are adopted. **RES.1 implemented (2026-10-06,
-  §18):** the P3 seam. No StudentMark code, schema, route, capability or
-  UI exists.
+  §18):** the P3 seam. **Amended 2026-10-07 (§19):** RES-L0 returned
+  CURRENT WITH CHANGES; its conditions bind RES.2 onward, and RES.2 is
+  authorised for development only (not production: RES-L1). No StudentMark
+  code, schema, route, capability or UI exists.
 - Date: 2026-10-06
 - Programme: **RES — Assessment & results** (`MASTER-ROADMAP.md`,
   "Post-foundation product programmes", order 5).
@@ -596,3 +598,104 @@ next read reports as `ambiguous_history`.
   or route; no StudentMark, mark-correction, result, report-card or
   transcript class, table, route or `examinations.marks.*` /
   `examinations.results.*` capability exists.
+
+## 19. Amendment — RES-L0 determination (7 October 2026)
+
+*Dated amendment. §1–§18 stay as written for their date; where this section
+differs, it controls.*
+
+### 19.1 Outcome
+The Lead Privacy Counsel & DPO (India Operations) determined RES-L0
+**CURRENT WITH CHANGES** on 7 October 2026
+(`docs/security/RES-L0-STUDENTMARK-REVALIDATION-DETERMINATION.md`). The
+3 September 2026 determination stays current **only** for School-internal
+StudentMark recording and maintenance by specifically authorised
+administrative / internal staff, under the conditions below.
+
+**Effect:** RES.2 is authorised for **development**. Production stays blocked
+by RES-L1; retention stays unresolved (RES-L8); teacher processing stays
+governed by RES-L2 and ADR 0063 §40 / E33.
+
+### 19.2 Binding requirements for RES.2 onward
+Each RES-L0 condition (determination §4) is a contract requirement. Most
+restate §6–§15; the new or tightened ones are marked **(new)**.
+
+| # | Condition | Contract requirement |
+|---|---|---|
+| 1 | Highly Sensitive | §10, unchanged |
+| 2 | Deny by default | No marks access without an explicit `examinations.marks.*` capability; a missing grant, membership, MFA window or processing basis refuses (§9, §19.3 b) |
+| 3 | Explicit roles / capabilities | Separate leaves for read, enter, lock, correction request and correction approval; administrative roles only (§9.1) |
+| 4 | School / tenant boundaries | Composite same-School keys, forced RLS, raw-SQL isolation tests (§6.1; rule 28) |
+| 5–6 | Audit creation, modification, sensitive access; actor, action, record, time | Every write and every marks read is audited School-side with actor, action, record ids and time; values never in audit metadata (§13) |
+| 7 | History never silently destroyed | **(new)** every write keeps value history, before lock too (§19.3 a) |
+| 8 | No generic exposure | **(new, explicit)** marks never appear in generic search, list or summary endpoints, reports, Analytics read models, Group reports, exports, AI tools, the outbox, webhooks or any `/api/v1` bearer-token route; only the dedicated session marks routes (§4.1, §13) |
+| 9 | No unrelated reuse | Marks feed nothing else in RES.2 (no results, rollover, promotion, eligibility, analytics; §8) |
+| 10 | Protected dev / test data | **(new)** fixtures, demo seeders and factories use synthetic data only; no import path for production marks; identifiable production marks never in a development or test environment without specific authorisation |
+| 11 | Data minimisation | Projections carry ids, roll number, display name, status and value only, for the requested paper; no extra Student data; nothing derived (§8) |
+| 12 | Safe errors, telemetry, logs | **(new, explicit)** validation errors, exceptions and logs never echo a mark value, Student name or remark; no marks data in metric labels or traces |
+| 13 | Bulk access / export separately authorised | **(new)** §19.3 c |
+| 14 | Exceptional override restricted and audited | **(new)** §19.3 d |
+| 15 | ADR 0038 provenance | §6.1, §6.2, unchanged |
+| 16 | Withdrawal does not resolve retention | §12 and §19.3 b; nothing deletes or invalidates marks on withdrawal |
+
+### 19.3 Conflicts resolved (RES.0B assumptions that change)
+- **a. Pre-lock history (R8 tightened by condition 7).** Before lock, marks may
+  still change, but **no write overwrites history**. Every create and change,
+  before or after lock, appends an insert-only history record (the mark, the
+  previous and new status and value, the actor, the time, and the qualifying
+  authorization). The record lives in an RLS-protected, Highly Sensitive,
+  insert-only table, never in audit metadata. Post-lock changes additionally
+  need maker/checker (§7.3, unchanged). RES.2 builds the pre-lock history;
+  RES.3 adds the lock and corrections on the same model.
+- **b. Withdrawal (determination §3; ADR 0038 assumption qualified).**
+  - A Student with **no currently qualifying authorization** gets no new mark
+    and no change to an existing mark (the §6.2 seam refuses).
+  - Existing marks are **neither deleted nor invalidated**; their provenance
+    still names the authorization they were recorded under.
+  - **Continued access needs an independently valid basis.** RES.2 therefore
+    **withholds** that Student's marks from every ordinary read (shown as
+    "processing basis unavailable", with no value), deny by default. Any
+    other access is an exceptional path (d), which RES.2 does not build.
+  - Retention, post-withdrawal use, archive, deletion and anonymisation stay
+    with RES-L8 / RES-L3.
+- **c. Bulk access and export (condition 13).** The per-paper entry grid
+  (§6.3: one ExaminationPaper, read and written by `examinations.marks.*`
+  holders, every read audited) is the ordinary administrative surface, not
+  bulk access. RES.2 builds **no** export or file download, no cross-paper or
+  School-wide marks read, no search and no report. Any such path needs a
+  separate privileged capability, its own review, and RES-L0 re-review if it
+  is a new disclosure.
+- **d. Exceptional override (condition 14).** RES.2 builds **no** override: no
+  unlock (§4.1), no bypass of the lock, the closed-year rule or the
+  processing-basis check. A future override needs its own decision, a separate
+  restricted capability, fresh MFA and a dedicated audit event.
+- **e. Teacher separation (determination §6).** `examinations.marks.*` is never
+  granted to the `teacher` role, and no administrative grant implies or
+  bootstraps teacher authority. RES.4 (after RES-L2) uses a distinct
+  owned-scope capability (§9.3).
+
+### 19.4 Re-review triggers (determination §5)
+No fixed expiry. Any slice that would introduce one of these **stops** and
+requests RES-L0 revalidation before implementation:
+- a material change of StudentMark purpose or scope;
+- Student or Guardian access;
+- result publication, report cards or transcripts;
+- teacher marks entry or assigned-teacher processing;
+- analytics, AI / ML, automated decision-making or profiling;
+- a new external integration, API disclosure or third-party recipient;
+- a material change to ADR 0038 or the processing-authorization model;
+- a material change in law, regulatory guidance or binding School obligations;
+- a new jurisdiction with materially different requirements;
+- a material privacy or security incident exposing a weakness in the model;
+- RES-L8 retention requirements materially changing these assumptions;
+- the RES-L1 production review identifying a material change.
+
+### 19.5 Gates after this amendment
+| Slice | Gate |
+|---|---|
+| RES.2 | **Authorised for development** (§19.2–§19.3); production: RES-L1 |
+| RES.3 | Follows RES.2; same conditions |
+| RES.4 | RES-L2; elective ownership; ADR 0063 §40 / E33; RES-L0 re-review (teacher processing is a trigger) |
+| Results, report cards, transcripts, Student / Guardian access | Not sequenced: RES-L4 – RES-L7 and RES-L0 re-review |
+
+Retention for every RES table stays `policy_unresolved` until RES-L8 (§12).

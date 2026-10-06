@@ -293,7 +293,9 @@ The authoritative Phase Zero A–O closeout table is kept in
   nor re-decided. Step 1 (re-confirmation with the approving authority) is
   open as **RES-L0** (ADR 0058 row E35), with the request at
   `docs/security/RES-L0-STUDENTMARK-REVALIDATION-REQUEST.md`. StudentMark
-  implementation (ADR 0068 RES.2) waits for its answer. Steps 2–3 are
+  implementation (ADR 0068 RES.2) waits for its answer. *Answered 2026-10-07:
+  CURRENT WITH CHANGES; RES.2 authorised for development only (ADR 0068
+  §19).* Steps 2–3 are
   re-verified in ADR 0068 (§6.2, §9.2); step 4 is P3 (RES.1); step 5 is
   register items RES-L1 – RES-L9.
 - **Reopening is not legal clearance** and not production authorization.

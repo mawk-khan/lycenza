@@ -1,6 +1,10 @@
 # RES-L0 — StudentMark Determination Revalidation Request
 
-**Status: DRAFT REQUEST — NOT SENT, NOT ANSWERED.** This document is the
+*Status update (2026-10-07): sent by the product owner and **answered — CURRENT
+WITH CHANGES**; see `docs/security/RES-L0-STUDENTMARK-REVALIDATION-DETERMINATION.md`.
+The request below is kept as sent.*
+
+**Status at drafting: DRAFT REQUEST — NOT SENT, NOT ANSWERED.** This document is the
 request the product owner sends to the approving authority. It records no
 approval, and nothing in it may be read as one. The answer, when received,
 is recorded as a dated, separate document and in the ADR 0058 register row

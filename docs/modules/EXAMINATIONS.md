@@ -711,9 +711,11 @@ module; ADR 0068 reopens **only** two things:
   question; this module never reproduces placement or enrollment logic.
 - **Internal StudentMark** — administrative marks entry per
   ExaminationPaper (RES.2), a per-paper `open` → `locked` state and
-  append-only, maker/checker corrections after lock (RES.3). RES.2 waits
-  for legal item RES-L0 (ADR 0058 E35). Teacher entry is RES.4 (RES-L2,
-  E33).
+  append-only, maker/checker corrections after lock (RES.3). RES-L0 was
+  determined CURRENT WITH CHANGES on 2026-10-07: RES.2 is authorised for
+  development only, under ADR 0068 §19's conditions (history kept before
+  lock too; a withdrawn basis withholds reads). Teacher entry is RES.4
+  (RES-L2, E33, RES-L0 re-review).
 
 **Guardrails — ADR 0068 is not authority for any of these:** result
 calculation, finalization, publication or revocation; GradeScale selection,

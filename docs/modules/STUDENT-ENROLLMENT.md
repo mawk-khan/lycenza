@@ -2642,7 +2642,8 @@ in that Offering on that date, and on which placement:
   transaction).
 
 Internal only (no route or capability) and no consumer yet: StudentMark
-(ADR 0068 RES.2) will be the first, after legal item RES-L0.
+(ADR 0068 RES.2, authorised for development since RES-L0 was determined on
+2026-10-07) will be the first.
 
 ## Deferred (not yet implemented)
 
