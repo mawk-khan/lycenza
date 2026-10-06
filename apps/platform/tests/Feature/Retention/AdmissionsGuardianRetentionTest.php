@@ -160,15 +160,26 @@ class AdmissionsGuardianRetentionTest extends TestCase
         $service = app(AdmissionApplicationService::class);
         $make = fn () => $this->createAdmissionApplication($this->createApplicant($w['school']), $w['year'], $w['campus'], $w['grade'], ['status' => 'submitted']);
 
-        $rejected = $service->reject($make());
+        // The transition runs inside one explicit transaction whose PostgreSQL
+        // transaction time is read BEFORE it: terminal_at must be exactly that
+        // instant (database-owned transaction time, not a later statement's
+        // clock, not the application clock). This class commits its fixtures
+        // (no wrapping test transaction), so a time read in a separate, later
+        // transaction could fall in the next second (OPF.2R).
+        $pending = $make();
+        [$tx, $rejected] = $this->in($w['school'], fn () => DB::transaction(function () use ($service, $pending): array {
+            $tx = DB::selectOne("select (now() at time zone 'UTC')::text as t")->t;
+
+            return [$tx, $service->reject($pending)];
+        }));
+        $storedTerminalAt = fn (): ?string => $this->in($w['school'], fn () => DB::table('admission_applications')->where('id', $rejected->id)->value(DB::raw('terminal_at::text')));
         $withdrawn = $service->withdraw($service->accept($make()));
         $accepted = $service->accept($make());
 
         $this->assertNotNull($rejected->terminal_at);
         $this->assertNotNull($withdrawn->terminal_at);
         $this->assertNull($accepted->terminal_at, 'a live application has no terminal time');
-        $tx = $this->in($w['school'], fn () => DB::selectOne("select date_trunc('second', now() at time zone 'UTC')::timestamp(0) as t")->t);
-        $this->assertSame($tx, $rejected->terminal_at->format('Y-m-d H:i:s'), 'set in the transition\'s own transaction');
+        $this->assertSame($tx, $storedTerminalAt(), 'set in the transition\'s own transaction, to the microsecond');
 
         $this->in($w['school'], function () use ($rejected, $accepted): void {
             $this->refused(fn () => DB::table('admission_applications')->where('id', $rejected->id)->update(['terminal_at' => '2001-01-01 00:00:00']), 'immutable');
@@ -178,6 +189,7 @@ class AdmissionsGuardianRetentionTest extends TestCase
             DB::table('admission_applications')->where('id', $rejected->id)->update(['updated_at' => '2001-01-01 00:00:00']);
         });
         $this->assertSame($rejected->terminal_at->format('Y-m-d H:i:s'), $this->in($w['school'], fn () => AdmissionApplication::query()->findOrFail($rejected->id))->terminal_at->format('Y-m-d H:i:s'));
+        $this->assertSame($tx, $storedTerminalAt(), 'unchanged, to the microsecond, after the refused rewrites');
     }
 
     #[Test]

@@ -628,6 +628,12 @@ not started:
     catalog, classification).
   - **Proof:** real-process races (residency link vs carry-forward, two
     carry-forwards, two seam selections), architecture allow-list guard.
+  - **Regression note (OPF.2R, 2026-10-06):** OPF.2 itself is unchanged. Its
+    canonical regression exposed a pre-existing timing-sensitive Admissions
+    retention assertion: since E21-RH.7 committed that class's fixtures, it
+    read the expected time in a later transaction. The assertion now reads
+    the transition transaction's own time, exactly. The final canonical
+    regression passed.
 - **OPF.3 — Admission fee at Student conversion.** Not started.
 - **OPF.4 — Library overdue fines** (versioned policy, event charge, waiver
   and void path, Finance retention amendment; E34). Not started.
