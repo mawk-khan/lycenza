@@ -84,10 +84,18 @@ Please answer each:
    authorization stops *new* marks for that Student but does not
    invalidate marks already recorded on a then-valid basis. Is that
    assumption acceptable?
-4. **Conditions:** are there any further conditions on development (for
-   example, data minimization, audit, access-review or test-data rules)?
-5. **Validity:** does the determination carry an expiry or a re-review
-   trigger (a date, a change in scope, a change in law)?
+4. **Conditions:** are there any further conditions on **design or
+   development** (for example, data minimization, audit, access-review or
+   test-data rules)? Please also name any condition you already know will
+   apply to **production**. Production approval itself is not requested here
+   (RES-L1).
+5. **Validity:** does the determination carry an expiry, a periodic review,
+   an event-triggered re-review (a change in scope, a change in law), or a
+   **jurisdictional restriction** (for example, Schools in India only)?
+6. **Staff scope:** please confirm whether this determination covers
+   **administrative staff only** (as §1 describes), and whether it says
+   anything about assigned teachers. We are not asking you to decide teacher
+   access here; that will be a separate request (RES-L2).
 
 ### 3. Requested form of answer
 
@@ -98,7 +106,8 @@ So that it can be recorded exactly, please state one outcome:
 - **NOT CURRENT** — a new assessment is needed before implementation;
 
 and give: the date, your name and role, the conditions, the answers to
-questions 2–5, and any expiry or re-review trigger.
+questions 2–6, and any expiry, re-review trigger or jurisdictional
+restriction.
 
 This request does **not** ask about production enablement (RES-L1),
 teacher access (RES-L2), results or publication (RES-L4), report cards
