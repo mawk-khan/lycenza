@@ -363,6 +363,9 @@ correct with zero coupling to any account-link/reachability code).
   not built; current authorization is School-wide
   `academics.subjects.view`/`.manage`, matching current product reality
   (no teacher-assignment data exists to restrict against).
+  *Note (RES.0B, 2026-10-06):* TeachingAssignment now exists (ADR 0063,
+  required Offerings only); the roster endpoints remain School-wide. The
+  historical, as-of-date Offering roster is ADR 0068 P3 (RES.1).
 - A dedicated Vue/Inertia admin UI for roster management (Subject
   Offering detail → roster, add/remove/switch-elective actions) was
   **not built in this checkpoint** — the JSON API surface

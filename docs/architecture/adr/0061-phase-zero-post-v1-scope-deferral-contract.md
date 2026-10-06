@@ -265,3 +265,35 @@ The authoritative Phase Zero A–O closeout table is kept in
 - **No Phase 0O change.** E03, E16, E17, E18 and E21 keep their current
   statuses.
 - **No code, configuration, migration or test changes.**
+
+## Reopening trace — RES (2026-10-06)
+
+*Dated addendum. §1–§5 above are unchanged and stay true for their date.*
+
+- **§2.5 step 1 is done for RES.** RES.0 (2026-10-06, at `cfc08ad`)
+  performed the fresh read-only scope and readiness audit for the deferred
+  §2.3 Examinations items.
+- **The reopening is partial.** ADR 0068 (Assessment & Results Reopening
+  Contract) reopens **only**:
+  - 0H.4D-P3, now defined as a Students-owned as-of-date SubjectOffering
+    eligibility seam (ADR 0068 §5); and
+  - **internal StudentMark processing** — administrative marks entry, a
+    per-paper lock and append-only corrections (ADR 0068 §6–§8).
+- **Still deferred under §2.3,** each until its own determination and
+  contract exist: grading beyond GradeScale/GradeBand; result calculation,
+  finalization, publication and revocation; report cards; transcripts;
+  assessment components and weighting; Student- and Guardian-facing marks
+  and results; promotion decisions; any dependent Documents or report
+  generation.
+- **Superseded:** the §2.3 Academics item "teacher identity on a delivery,
+  and ownership-based authorization" was reopened and built by ADR 0063
+  (TCH), as the 2026-09-30 trace records. Its use for marks entry is ADR
+  0068 RES.4, which still needs legal item RES-L2.
+- **§2.4 still binds.** The StudentMark determination is neither widened
+  nor re-decided. Step 1 (re-confirmation with the approving authority) is
+  open as **RES-L0** (ADR 0058 row E35), with the request at
+  `docs/security/RES-L0-STUDENTMARK-REVALIDATION-REQUEST.md`. StudentMark
+  implementation (ADR 0068 RES.2) waits for its answer. Steps 2–3 are
+  re-verified in ADR 0068 (§6.2, §9.2); step 4 is P3 (RES.1); step 5 is
+  register items RES-L1 – RES-L9.
+- **Reopening is not legal clearance** and not production authorization.

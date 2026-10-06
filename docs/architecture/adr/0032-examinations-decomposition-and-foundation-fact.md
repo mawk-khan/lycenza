@@ -213,3 +213,18 @@ is the authoritative seam for either Offering type.
 - **Do Lesson Planning first.** Rejected: it is hard-blocked by the
   missing ownership model, which is a cross-platform Phase 0B concern
   and not on any Examinations path.
+
+## Note — superseded statements (RES.0B, 2026-10-06)
+
+*Dated note; the text above is kept as written for its date.*
+- "No teacher role, no ownership model" and "Lesson Planning remains
+  independently blocked by the absent ownership-based authorization model"
+  (Consequences, Alternatives): ADR 0063 (TCH) built Teacher identity and
+  ownership since. Lesson Planning remains deferred by ADR 0061 for scope,
+  not for a missing model. Marks entry by teachers is ADR 0068 RES.4.
+- "Marks … crosses into Sensitive personal data (§6)": ADR 0068 R2
+  classifies Student marks and their corrections as **Highly Sensitive**.
+- The "Marks" and "Result calculation / publication" rows of the
+  provisional sequence: ADR 0068 reopens P3 and internal StudentMark only;
+  results, report cards and transcripts stay deferred (ADR 0061 §2.3,
+  RES-L4 – RES-L6).

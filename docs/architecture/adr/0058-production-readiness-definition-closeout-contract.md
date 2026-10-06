@@ -600,6 +600,16 @@ with secrets.
 | E32 | RTE / statutory free-seat obligations for fee assessment and concessions | ADR 0062 §14.2, §27 | Legal | Mandatory | LEGAL_REVIEW_REQUIRED (development authorised; no RTE label or rule exists) | Qualified answer recorded; any required fee treatment decided by the owner | Future legal record + ADR 0062 amendment | Legal + Owner | Yes |
 | E33 | TCH-L1 — teacher Attendance: whether widening access to identifiable Student attendance from administrative actors to assigned teachers needs an updated children's-data/privacy assessment, processing record or equivalent production approval | ADR 0063 §26, §39 | Legal | Mandatory | LEGAL_REVIEW_REQUIRED (development authorised — TCH.4 built and development-closed) | Qualified determination recorded; the `attendance.teacher` surface stays out of production use until then | Future `docs/security/TCH-L1-TEACHER-ATTENDANCE-DETERMINATION.md` + ADR 0063 amendment | Legal + Owner | Yes |
 | E34 | Library fine / penalty regulation (OPF.4): whether a School may levy overdue fines on Students, and any limit, notice, cap, waiver or treatment requirement — distinct from E31 (tuition late fees) | ADR 0067 §17, §22 | Legal | Mandatory | LEGAL_REVIEW_REQUIRED (development authorised — OPF.4 built 2026-10-06, ADR 0067 §30; no answer assumed) | Qualified answer recorded; Library fines stay out of production use until then | Future `docs/security/` determination + ADR 0067 amendment | Legal + Owner | Yes |
+| E35 | RES-L0 — StudentMark determination revalidation: whether the 2026-09-03 children's-data determination is still current for internal-staff marks entry, including ADR 0038's processing-basis model | ADR 0068 §16 | Legal | Mandatory (RES, post-v1) | LEGAL_REVIEW_REQUIRED (**blocks development** of RES.2 onward; RES.1 unaffected) | Qualified answer (CURRENT / CURRENT WITH CHANGES / NOT CURRENT) recorded verbatim with conditions and any re-review trigger | `RES-L0-STUDENTMARK-REVALIDATION-REQUEST.md`; future `RES-L0-…-DETERMINATION.md` | Legal + Owner | No (post-v1; blocks the RES slice named) |
+| E36 | RES-L1 — production enablement of internal staff marks entry for real Schools (withheld by the 2026-09-03 determination) | ADR 0068 §16 | Legal | Mandatory (RES, post-v1) | LEGAL_REVIEW_REQUIRED (development authorised once RES-L0 clears; **blocks production**) | Qualified production determination recorded | Future legal record + ADR 0068 amendment | Legal + Owner | No (post-v1; blocks the RES slice named) |
+| E37 | RES-L2 — whether "internal staff processing" includes assigned teachers (the E33 / TCH-L1 precedent) | ADR 0068 §16 | Legal | Mandatory (RES, post-v1) | LEGAL_REVIEW_REQUIRED (**blocks development** of RES.4 teacher entry; blocks production) | Qualified determination recorded; ADR 0063 §40 still applies while E33 is open | Future legal record + ADR 0068 amendment | Legal + Owner | No (post-v1; blocks the RES slice named) |
+| E38 | RES-L3 — effect of withdrawing or revoking a processing authorization on already-recorded marks, and use of the statutory/legitimate School purpose for examinations | ADR 0068 §16 | Legal | Mandatory (RES, post-v1) | LEGAL_REVIEW_REQUIRED (development authorised on ADR 0038's stated assumption that past marks survive; **blocks production**) | Qualified answer recorded; any change applied to ADR 0038/0068 by amendment | Future legal record (asked first in the RES-L0 request, question 3) | Legal + Owner | No (post-v1; blocks the RES slice named) |
+| E39 | RES-L4 — result calculation, finalization, publication, correction and revocation | ADR 0068 §16 | Legal | Mandatory (RES, post-v1) | LEGAL_REVIEW_REQUIRED (**blocks design and development**: withheld "before implementation begins") | Separate determination, then its own contract ADR | Future legal record | Legal + Owner | No (post-v1; blocks the RES slice named) |
+| E40 | RES-L5 — report cards (content, generation, distribution, Documents) | ADR 0068 §16 | Legal | Mandatory (RES, post-v1) | LEGAL_REVIEW_REQUIRED (**blocks design and development**) | Separate determination, then its own contract ADR | Future legal record | Legal + Owner | No (post-v1; blocks the RES slice named) |
+| E41 | RES-L6 — transcripts (issuance, verification, longevity) | ADR 0068 §16 | Legal | Mandatory (RES, post-v1) | LEGAL_REVIEW_REQUIRED (**blocks design and development**) | Separate determination, then its own contract ADR | Future legal record | Legal + Owner | No (post-v1; blocks the RES slice named) |
+| E42 | RES-L7 — Student- and Guardian-facing access to marks and results, including the age-18 transition, adult-Student control and separated or non-legal-guardian parents | ADR 0068 §16 | Legal | Mandatory (RES, post-v1) | LEGAL_REVIEW_REQUIRED (**blocks design and development** of any such surface; POR) | Separate determination, then a POR/RES contract | Future legal record | Legal + Owner | No (post-v1; blocks the RES slice named) |
+| E43 | RES-L8 — retention of marks, mark corrections, results, report cards and transcripts (an E21 extension; E21-D7 invents no RES records) | ADR 0068 §16 | Legal | Mandatory (RES, post-v1) | LEGAL_REVIEW_REQUIRED (development authorised: RES tables are `policy_unresolved` and fail closed; **blocks production** and any expiry) | Qualified retention decision recorded; mechanism implemented under ADR 0066 | Future E21 extension record | Legal + Owner | No (post-v1; blocks the RES slice named) |
+| E44 | RES-L9 — statutory academic rules: attendance thresholds for examinations, RTE / no-detention implications, mandatory examination requirements | ADR 0068 §16 | Legal | Mandatory (RES, post-v1) | LEGAL_REVIEW_REQUIRED (nothing encodes them; **blocks any slice that would**) | Qualified answer recorded before any such rule is modelled | Future legal record | Legal + Owner | No (post-v1; blocks the RES slice named) |
 
 A row moves to `EVIDENCE_COMPLETE` only by a dated, reviewed repository
 change that names its evidence location. The move is appended to
@@ -1284,3 +1294,18 @@ rows stay exactly as recorded above:
   residency, Library loan or converted application that carries OPF evidence
   therefore stays `dependency_blocked` for as long as that Finance evidence
   is retained (ADR 0067 §31.6). No retention period changed.
+
+## Note — RES legal items carried into the register (RES.0B, 2026-10-06)
+
+ADR 0068 reopens P3 and internal StudentMark only. **This is not a legal
+determination.** Rows E35–E44 record RES-L0 – RES-L9:
+- **Unlike E30–E34, several block development, not only production:** the
+  2026-09-03 determination withholds results, report cards, transcripts and
+  Student/Guardian access "before implementation begins" (E39–E42), and
+  ADR 0061 §2.4 requires it to be re-confirmed before StudentMark is built
+  (E35).
+- **None blocks O1:** RES is post-v1 (ADR 0061 §4); each blocks the RES slice
+  it names.
+- **E33 still binds** teacher marks entry in production (ADR 0063 §40), in
+  addition to E37.
+- **Independence.** E35–E44 and E21, E30–E34 stay separate rows.

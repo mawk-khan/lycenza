@@ -265,3 +265,8 @@ attack surface gets its own bound.
 - WebAuthn/passkey support, per-action step-up beyond the
   assurance-window model, and any teacher/class-scoped enforcement
   question remain explicitly deferred, not designed here.
+  *Note (RES.0B, 2026-10-06):* since then, ADR 0049 added a fresh MFA
+  re-verification (`FreshMfaRequirement`) for consequential actions, and
+  ADR 0063 (TCH) added teacher/class-scoped ownership. ADR 0068 §9.2 uses
+  both for StudentMark: `mfa` on every marks route, fresh re-verification
+  for the lock and correction approval; teacher marks entry is RES.4.

@@ -318,6 +318,15 @@ A default-off `students.processing_authorizations` feature flag
 visibility per School — never a substitute for capability/MFA
 authorization, per that resolver's own documented rule.
 
+*Drift note (RES.0B, 2026-10-06, ADR 0068 §14):* as built, the flag is
+seeded default-off by
+`2026_10_12_090200_seed_student_processing_authorizations_feature_flag`
+but **no code reads it** — the only `FeatureFlagResolver::isEnabledForSchool()`
+caller is Automation's own gate. The registry's routes are therefore gated
+by `capability:` + `mfa` alone, for every School. Whether the flag should be
+wired or removed is left to the next slice that touches the registry; no
+code changed here.
+
 ### No DELETE, no outbound events, no Student/Guardian-facing surface
 
 No DELETE route exists or ever will (matching every other "reference/

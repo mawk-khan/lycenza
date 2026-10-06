@@ -269,6 +269,11 @@ the same branch:
 - **Student marks**, by the `AttendanceRecord` row's reasoning;
 - **individual results**, report cards or transcripts.
 
+*Superseded for marks (RES.0B, 2026-10-06, ADR 0068 R2):* Student marks
+and their corrections are **Highly Sensitive** children's data, not merely
+Sensitive (`DATA-CLASSIFICATION.md`, "Student marks and mark corrections").
+The note above stays as history.
+
 ## 10. Structural integrity / RLS
 
 UUIDv7 · `BelongsToSchool` · `TenantRls::enable('examinations')` (ENABLE
@@ -624,7 +629,7 @@ Lesson Planning, Communications, Notifications or Documents integration.
 A named, School-owned mapping that converts a normalized percentage
 (0.00–100.00) into a discrete grade outcome through its ordered
 GradeBands — wholly independent of the Examination chain, exactly as
-§21 below anticipated. Full design and rationale: ADR 0035
+ADR 0032's provisional sequence anticipated. Full design and rationale: ADR 0035
 (`docs/architecture/adr/0035-grade-scale-band-mapping.md`).
 
 **GradeBand stores only a lower-bound threshold** (`min_percentage`,
@@ -698,6 +703,29 @@ complete: its foundations (§1–§19) are delivered as built.
 - **StudentMark determination:** unchanged and not widened. It must be
   revalidated when StudentMark is reopened (ADR 0061 §2.4).
 - **Nothing resumes automatically** (ADR 0061 §2.5).
+
+**RES reopening (RES.0B, 2026-10-06, ADR 0068).** RES.0 audited this
+module; ADR 0068 reopens **only** two things:
+- **P3** — a Students-owned as-of-date SubjectOffering eligibility seam
+  (RES.1). It replaces the current-roster read for any historical
+  question; this module never reproduces placement or enrollment logic.
+- **Internal StudentMark** — administrative marks entry per
+  ExaminationPaper (RES.2), a per-paper `open` → `locked` state and
+  append-only, maker/checker corrections after lock (RES.3). RES.2 waits
+  for legal item RES-L0 (ADR 0058 E35). Teacher entry is RES.4 (RES-L2,
+  E33).
+
+**Guardrails — ADR 0068 is not authority for any of these:** result
+calculation, finalization, publication or revocation; GradeScale selection,
+grade points, GPA, pass/fail; report cards; transcripts; Student- or
+Guardian-facing marks or results; rank or merit order; promotion or
+detention from marks; attendance-based or statutory examination
+eligibility; board-specific grading; components, weighting, grace, bonus,
+moderation or normalization; any outbox event, webhook, notification,
+Document, Analytics or AI consumer of marks. Each needs its own legal
+answer (RES-L4 – RES-L9) and contract. Marks never live on
+`examination_papers`, `examinations` or `grade_scales`: the existing guard
+tests keep those column sets closed.
 
 ## Retention (E21.3D, 2026-10-02)
 

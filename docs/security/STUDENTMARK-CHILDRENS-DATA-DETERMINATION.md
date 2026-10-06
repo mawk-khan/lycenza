@@ -98,3 +98,16 @@ determination above.
      0H.4D-P3;
   5. obtain every additional determination its scope needs.
 - **Deferral is not legal clearance.**
+
+## Project status note (2026-10-06, ADR 0068) — not part of the determination
+
+RES.0B reopened internal StudentMark processing in contract only (ADR
+0068). This note records project governance; it does not change or widen
+the determination above.
+- **Revalidation requested, not answered:** step 1 of the 2026-09-29 note is
+  register item RES-L0 (ADR 0058 row E35). The request is
+  `docs/security/RES-L0-STUDENTMARK-REVALIDATION-REQUEST.md`. StudentMark
+  implementation does not start until the answer is recorded.
+- **Still withheld,** each as register items RES-L1 and RES-L4 – RES-L7:
+  production, result publication, report cards, transcripts, and Student-
+  and Guardian-facing access.
