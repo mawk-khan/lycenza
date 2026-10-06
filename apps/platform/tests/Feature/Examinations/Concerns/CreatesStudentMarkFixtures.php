@@ -3,11 +3,15 @@
 namespace Tests\Feature\Examinations\Concerns;
 
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
+use App\Domain\Examinations\Application\Marks\StudentMarkCorrectionService;
 use App\Domain\Examinations\Application\Marks\StudentMarkEntry;
+use App\Domain\Examinations\Application\Marks\StudentMarkLockService;
 use App\Domain\Examinations\Application\Marks\StudentMarkReadService;
 use App\Domain\Examinations\Application\Marks\StudentMarkService;
 use App\Domain\Examinations\Infrastructure\ExaminationPaper;
+use App\Domain\Examinations\Infrastructure\ExaminationPaperMarkState;
 use App\Domain\Examinations\Infrastructure\StudentMark;
+use App\Domain\Examinations\Infrastructure\StudentMarkCorrection;
 use App\Domain\Examinations\Infrastructure\StudentMarkRevision;
 use App\Domain\Students\Application\StudentEnrollmentService;
 use App\Domain\Students\Application\StudentProcessingAuthorizationService;
@@ -27,12 +31,20 @@ use Tests\Feature\Auth\Mfa\Concerns\CreatesMfaFixtures;
  * (2026-09-01..30) and one paper per Offering (required: 2026-09-15, max 80;
  * elective: 2026-09-16, max 50). Students are placed, elected and authorised
  * through the real Students services. SYNTHETIC data only (RES-L0 condition 10).
+ *
+ * RES.3: `admin` also holds the lock and correction keys; `checker()` is a
+ * second administrator, so a request and its decision have different people.
  */
 trait CreatesStudentMarkFixtures
 {
     use CreatesExaminationPaperFixtures, CreatesMfaFixtures;
 
     /** @return array<string, mixed> */
+    protected const MARKS_CAPABILITIES = [
+        'examinations.marks.view', 'examinations.marks.manage', 'examinations.marks.lock',
+        'examinations.marks.correction.request', 'examinations.marks.correction.approve',
+    ];
+
     protected function marksWorld(): array
     {
         $school = $this->createSchool();
@@ -46,7 +58,7 @@ trait CreatesStudentMarkFixtures
         $w['examination'] = $this->createExamination($w['year'], ['starts_on' => '2026-09-01', 'ends_on' => '2026-09-30', 'status' => 'active']);
         $w['paper'] = $this->createExaminationPaper($w['examination'], $w['required'], ['scheduled_on' => '2026-09-15', 'max_marks' => '80.00']);
         $w['electivePaper'] = $this->createExaminationPaper($w['examination'], $w['elective'], ['scheduled_on' => '2026-09-16', 'max_marks' => '50.00']);
-        $w['admin'] = $this->createUserWithCapabilities($school, ['examinations.marks.view', 'examinations.marks.manage']);
+        $w['admin'] = $this->createUserWithCapabilities($school, self::MARKS_CAPABILITIES);
         $this->enrollActiveMfaFactor($w['admin']);
 
         return $w;
@@ -120,6 +132,45 @@ trait CreatesStudentMarkFixtures
     protected function placementOf(array $w, Student $student): StudentEnrollment
     {
         return $this->inMarksSchool($w['school'], fn () => StudentEnrollment::query()->where('student_id', $student->id)->where('status', 'active')->firstOrFail());
+    }
+
+    /** @param  array<string, mixed>  $w */
+    protected function checker(array $w): User
+    {
+        $checker = $this->createUserWithCapabilities($w['school'], self::MARKS_CAPABILITIES);
+        $this->enrollActiveMfaFactor($checker);
+
+        return $checker;
+    }
+
+    /** @param  array<string, mixed>  $w */
+    protected function lockMarks(array $w, ?ExaminationPaper $paper = null, ?User $actor = null): ExaminationPaperMarkState
+    {
+        return app(StudentMarkLockService::class)->lock($w['school'], ($paper ?? $w['paper'])->id, $actor ?? $w['admin']);
+    }
+
+    /** @param  array<string, mixed>  $w */
+    protected function requestCorrection(array $w, StudentMark $mark, string $status, ?string $value, string $reason = StudentMarkCorrection::REASON_ENTRY_ERROR, ?User $actor = null, ?int $expectedVersion = null): StudentMarkCorrection
+    {
+        return app(StudentMarkCorrectionService::class)->request($w['school'], $mark->examination_paper_id, $mark->id, $expectedVersion ?? $mark->version, $status, $value, $reason, $actor ?? $w['admin']);
+    }
+
+    /** @param  array<string, mixed>  $w */
+    protected function approveCorrection(array $w, StudentMarkCorrection $correction, User $actor): StudentMarkCorrection
+    {
+        return app(StudentMarkCorrectionService::class)->approve($w['school'], $correction->id, $actor);
+    }
+
+    /** @param  array<string, mixed>  $w */
+    protected function rejectCorrection(array $w, StudentMarkCorrection $correction, User $actor): StudentMarkCorrection
+    {
+        return app(StudentMarkCorrectionService::class)->reject($w['school'], $correction->id, $actor);
+    }
+
+    /** @param  array<string, mixed>  $w */
+    protected function freshCorrection(array $w, StudentMarkCorrection $correction): StudentMarkCorrection
+    {
+        return $this->inMarksSchool($w['school'], fn () => StudentMarkCorrection::query()->findOrFail($correction->id));
     }
 
     protected function inMarksSchool(School $school, callable $callback): mixed

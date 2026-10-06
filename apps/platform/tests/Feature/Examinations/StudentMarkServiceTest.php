@@ -154,16 +154,18 @@ class StudentMarkServiceTest extends TestCase
         $this->recordMarks($w, [$this->entry($marked, 'present', '12.5')]);
 
         $grid = $this->grid($w);
-        $this->assertSame(['id', 'subjectOfferingId', 'scheduledOn', 'maxMarks', 'status'], array_keys($grid['paper']));
+        $this->assertSame(['id', 'subjectOfferingId', 'scheduledOn', 'maxMarks', 'status', 'marksState'], array_keys($grid['paper']), 'RES.3 adds the marks state');
+        $this->assertSame('open', $grid['paper']['marksState']);
         $rows = collect($grid['rows'])->keyBy('studentId');
-        $this->assertSame(['studentId', 'studentEnrollmentId', 'rollNumber', 'fullName', 'eligible', 'eligibilitySource', 'processingBasis', 'mark'], array_keys($rows[$marked->id]));
+        $this->assertSame(['studentId', 'studentEnrollmentId', 'rollNumber', 'fullName', 'eligible', 'eligibilitySource', 'processingBasis', 'mark', 'pendingCorrection'], array_keys($rows[$marked->id]), 'RES.3 adds the pending correction (null here)');
+        $this->assertNull($rows[$marked->id]['pendingCorrection']);
         $this->assertSame(['present', '12.50', 1], [$rows[$marked->id]['mark']['status'], $rows[$marked->id]['mark']['value'], $rows[$marked->id]['mark']['version']]);
         $this->assertNull($rows[$unmarked->id]['mark']);
         $this->assertTrue($rows[$unmarked->id]['eligible']);
 
         $viewed = $this->audits($w, 'examinations.student_marks.viewed');
         $this->assertCount(1, $viewed);
-        $this->assertEquals(['examinationPaperId' => $w['paper']->id, 'rowCount' => 2, 'withheldCount' => 0], $viewed[0]->metadata);
+        $this->assertEquals(['examinationPaperId' => $w['paper']->id, 'rowCount' => 2, 'withheldCount' => 0, 'pendingCorrectionCount' => 0], $viewed[0]->metadata);
     }
 
     #[Test]

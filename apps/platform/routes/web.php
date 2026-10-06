@@ -40,6 +40,7 @@ use App\Http\Controllers\App\Examinations\ExaminationController;
 use App\Http\Controllers\App\Examinations\ExaminationPaperController;
 use App\Http\Controllers\App\Examinations\GradeScaleController;
 use App\Http\Controllers\App\Examinations\StudentMarkController;
+use App\Http\Controllers\App\Examinations\StudentMarkCorrectionController;
 use App\Http\Controllers\App\Finance\ChargeController as FinanceChargeController;
 use App\Http\Controllers\App\Finance\FeeAssessmentRunController as FinanceFeeAssessmentRunController;
 use App\Http\Controllers\App\Finance\FeeConcessionController as FinanceFeeConcessionController;
@@ -1571,7 +1572,28 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         Route::put('/', [StudentMarkController::class, 'update'])
             ->middleware(['capability:examinations.marks.manage', 'mfa'])
             ->name('update');
+        // RES.3 (ADR 0068 §7, §21): the one-way per-paper lock (fresh MFA) and
+        // the post-lock correction request. No unlock, reopen or bypass route.
+        Route::post('/lock', [StudentMarkCorrectionController::class, 'lock'])
+            ->middleware(['capability:examinations.marks.lock', 'mfa'])
+            ->name('lock');
+        Route::post('/{studentMark}/corrections', [StudentMarkCorrectionController::class, 'store'])
+            ->whereUuid('studentMark')
+            ->middleware(['capability:examinations.marks.correction.request', 'mfa'])
+            ->name('corrections.store');
     });
+
+    // RES.3 (ADR 0068 §7.3, §21): deciding a correction -- someone other than
+    // its requester, with a fresh MFA re-verification (controller). Terminal.
+    Route::prefix('app/student-mark-corrections/{studentMarkCorrection}')->whereUuid('studentMarkCorrection')
+        ->name('app.student-mark-corrections.')->group(function (): void {
+            Route::post('/approve', [StudentMarkCorrectionController::class, 'approve'])
+                ->middleware(['capability:examinations.marks.correction.approve', 'mfa'])
+                ->name('approve');
+            Route::post('/reject', [StudentMarkCorrectionController::class, 'reject'])
+                ->middleware(['capability:examinations.marks.correction.approve', 'mfa'])
+                ->name('reject');
+        });
 
     Route::prefix('app/examinations/grade-scales')->name('app.examinations.grade-scales.')->group(function (): void {
         Route::get('/', [GradeScaleController::class, 'index'])->name('index');

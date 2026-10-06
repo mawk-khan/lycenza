@@ -69,6 +69,8 @@ class DatabaseRoleVerifier
         'library_fines', 'library_fine_voids', 'library_fine_policies',
         // RES.2 (ADR 0068 §6.1, §19.3 a): StudentMark is never runtime-deleted; its value history is insert-only.
         'student_marks', 'student_mark_revisions',
+        // RES.3 (ADR 0068 §21): the per-paper marks lock and the append-only correction requests.
+        'examination_paper_mark_states', 'student_mark_corrections',
     ];
 
     /**

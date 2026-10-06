@@ -182,6 +182,9 @@ class ExaminationArchitectureGuardTest extends TestCase
             app_path('Domain/Examinations/Application/ExaminationPaperService.php'),
             // RES.2: the sole writer of StudentMark (StudentMarkArchitectureGuardTest proves it writes nothing else).
             app_path('Domain/Examinations/Application/Marks/StudentMarkService.php'),
+            // RES.3: the sole writers of the marks lock and of correction requests (StudentMarkArchitectureGuardTest).
+            app_path('Domain/Examinations/Application/Marks/StudentMarkLockService.php'),
+            app_path('Domain/Examinations/Application/Marks/StudentMarkCorrectionService.php'),
         ];
         $gradeScaleFiles = array_filter($this->moduleSources(), fn ($f) => str_contains(basename($f), 'GradeScale') || str_contains(basename($f), 'GradeBand'));
 

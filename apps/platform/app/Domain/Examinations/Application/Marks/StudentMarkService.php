@@ -7,10 +7,12 @@ use App\Domain\Examinations\Application\Exceptions\StudentMarkAcademicYearClosed
 use App\Domain\Examinations\Application\Exceptions\StudentMarkInvalidValueException;
 use App\Domain\Examinations\Application\Exceptions\StudentMarkNotEligibleException;
 use App\Domain\Examinations\Application\Exceptions\StudentMarkPaperInactiveException;
+use App\Domain\Examinations\Application\Exceptions\StudentMarkPaperLockedException;
 use App\Domain\Examinations\Application\Exceptions\StudentMarkProcessingBasisUnavailableException;
 use App\Domain\Examinations\Application\Exceptions\StudentMarkRejectedException;
 use App\Domain\Examinations\Application\Exceptions\StudentMarkVersionConflictException;
 use App\Domain\Examinations\Infrastructure\ExaminationPaper;
+use App\Domain\Examinations\Infrastructure\ExaminationPaperMarkState;
 use App\Domain\Examinations\Infrastructure\StudentMark;
 use App\Domain\Students\Application\Exceptions\StudentNotAuthorizedForProcessingException;
 use App\Domain\Students\Application\StudentProcessingAuthorizationReadService;
@@ -31,8 +33,9 @@ use Illuminate\Support\Facades\DB;
  * One request = one paper, many Students, atomic: every row commits or none
  * (R11). Per Student, in Student-id order (a stable global lock order), inside
  * one transaction (§6.2):
- * 1. the paper and its AcademicYear held FOR SHARE (an inactive paper or a
- *    closed year refuses; a concurrent close or paper change waits);
+ * 1. the paper and its AcademicYear held FOR SHARE (an inactive paper, a
+ *    LOCKED paper (RES.3) or a closed year refuses; a concurrent close, lock
+ *    or paper change waits -- the lock takes the paper FOR UPDATE);
  * 2. P3: SubjectOfferingEligibilityReadService::lockEligibilityAsOf() for the
  *    paper's Offering on the paper's date -- not eligible refuses;
  * 3. ADR 0038: lockQualifyingAuthorizationIdForStudentId() -- no current
@@ -71,6 +74,12 @@ class StudentMarkService
             if ($paper->status !== ExaminationPaper::STATUS_ACTIVE) {
                 throw new StudentMarkPaperInactiveException;
             }
+            // RES.3 (ADR 0068 §21): a locked paper's marks change only through a correction. The paper's FOR SHARE
+            // serializes with StudentMarkLockService (FOR UPDATE); the database refuses too (`student_marks_lock_guard`).
+            if (ExaminationPaperMarkState::query()->where('school_id', $school->id)->where('examination_paper_id', $paper->id)
+                ->value('state') === ExaminationPaperMarkState::STATE_LOCKED) {
+                throw new StudentMarkPaperLockedException;
+            }
             $year = AcademicYear::query()->where('school_id', $school->id)->whereKey($paper->academic_year_id)->sharedLock()->firstOrFail();
             if ($year->status === 'closed') {
                 throw new StudentMarkAcademicYearClosedException;
@@ -78,7 +87,7 @@ class StudentMarkService
 
             $written = [];
             foreach ($entries as $entry) {
-                $value = $this->assertShape($entry, (string) $paper->max_marks);
+                $value = self::normalizedValue($entry->studentId, $entry->status, $entry->value, (string) $paper->max_marks);
 
                 $eligibility = $this->eligibility->lockEligibilityAsOf($school, $entry->studentId, $paper->subject_offering_id, $paper->scheduled_on->toDateString());
                 if (! $eligibility->eligible) {
@@ -131,28 +140,51 @@ class StudentMarkService
         }));
     }
 
-    /** R3: present needs a value 0..max (two decimals); absent and exempt carry none. Returns the normalized value. */
-    private function assertShape(StudentMarkEntry $entry, string $maxMarks): ?string
+    /**
+     * RES.3 (ADR 0068 §21.4): applies an APPROVED correction -- the only post-lock mark write. Called by
+     * StudentMarkCorrectionService inside its transaction, after its own locks and checks, with the mark row
+     * already FOR UPDATE. The version advances once; the database records the revision and requires the matching
+     * pending correction now and its approval by commit (`student_marks_lock_guard`, deferred check).
+     */
+    public function applyCorrection(StudentMark $lockedMark, string $status, ?string $value, string $authorizationId, User $actor): StudentMark
     {
-        if (! in_array($entry->status, StudentMark::STATUSES, true)) {
-            throw new StudentMarkInvalidValueException($entry->studentId);
+        $lockedMark->forceFill([
+            'version' => $lockedMark->version + 1,
+            'status' => $status,
+            'value' => $value,
+            'processing_authorization_id' => $authorizationId,
+            'recorded_by_user_id' => $actor->id,
+        ]);
+        $this->save($lockedMark, $lockedMark->student_id);
+
+        return $lockedMark;
+    }
+
+    /**
+     * R3, shared by entry and corrections: present needs a value 0..max (two decimals); absent and exempt carry
+     * none. Returns the normalized value; never echoes the value in an error.
+     */
+    public static function normalizedValue(?string $studentId, string $status, ?string $value, string $maxMarks): ?string
+    {
+        if (! in_array($status, StudentMark::STATUSES, true)) {
+            throw new StudentMarkInvalidValueException($studentId);
         }
-        if ($entry->status !== StudentMark::STATUS_PRESENT) {
-            if ($entry->value !== null) {
-                throw new StudentMarkInvalidValueException($entry->studentId);
+        if ($status !== StudentMark::STATUS_PRESENT) {
+            if ($value !== null) {
+                throw new StudentMarkInvalidValueException($studentId);
             }
 
             return null;
         }
-        if ($entry->value === null || ! preg_match('/^\d{1,4}(\.\d{1,2})?$/', $entry->value)) {
-            throw new StudentMarkInvalidValueException($entry->studentId);
+        if ($value === null || ! preg_match('/^\d{1,4}(\.\d{1,2})?$/', $value)) {
+            throw new StudentMarkInvalidValueException($studentId);
         }
-        $value = bcadd($entry->value, '0', 2);
-        if (bccomp($value, $maxMarks, 2) > 0) {
-            throw new StudentMarkInvalidValueException($entry->studentId);
+        $normalized = bcadd($value, '0', 2);
+        if (bccomp($normalized, $maxMarks, 2) > 0) {
+            throw new StudentMarkInvalidValueException($studentId);
         }
 
-        return $value;
+        return $normalized;
     }
 
     private function save(StudentMark $mark, string $studentId): void
@@ -163,6 +195,9 @@ class StudentMarkService
             // Never rethrow the QueryException: its message carries the SQL and its bindings (the mark value).
             if (str_contains($e->getMessage(), 'student_marks_one_per_student_paper')) {
                 throw new StudentMarkVersionConflictException($studentId);
+            }
+            if (str_contains($e->getMessage(), 'marks are locked')) {
+                throw new StudentMarkPaperLockedException($studentId);
             }
             throw new StudentMarkRejectedException($studentId);
         }

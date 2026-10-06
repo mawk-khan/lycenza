@@ -6,7 +6,10 @@
   CURRENT WITH CHANGES; its conditions bind RES.2 onward, and RES.2 is
   authorised for development only (not production: RES-L1). **RES.2
   implemented (2026-10-07, §20):** internal administrative StudentMark entry,
-  development only; production blocked by RES-L1.
+  development only; production blocked by RES-L1. **RES.3 implemented
+  (2026-10-07, §21):** the one-way per-paper marks lock and append-only
+  maker/checker corrections, development only; production blocked by RES-L1.
+  §7.2's "insert-only" is amended in §21.3.
 - Date: 2026-10-06
 - Programme: **RES — Assessment & results** (`MASTER-ROADMAP.md`,
   "Post-foundation product programmes", order 5).
@@ -820,3 +823,217 @@ stays recorded and valid (§19.3 b).
   StudentMark files); `SubjectOfferingEligibilityArchitectureGuardTest`
   (exactly the two StudentMark services as P3 consumers; nothing from RES.3
   on). Count pins: user references 108 / 98 retained; RLS 202.
+
+## 21. RES.3 as built (2026-10-07)
+
+**A paper's marks can be locked, one way, and a locked mark changes only
+through a correction that one administrator requests and a different
+administrator approves. Development only; production stays blocked by
+RES-L1.** No teacher entry, result, publication, report card, transcript,
+Student/Guardian access, unlock, reopen or bypass exists. §1–§20 are unchanged
+except §7.2's "insert-only" (§21.3). No §19.4 re-review trigger was hit: the
+purpose, actors (administrative only), processing basis and surfaces are
+those RES-L0 already covers.
+
+### 21.1 Schema (`2026_12_07_090000_create_student_mark_lock_and_corrections_tables`)
+- **`examination_paper_mark_states`** — one per School × paper
+  (`examination_paper_mark_states_one_per_paper`), composite FK to the paper:
+  - `state` `open` / `locked`; `locked ⇔ locked_by_user_id and locked_at`
+    (CHECK);
+  - a missing row means `open`; a row is created when the paper is locked;
+  - the paper never changes, and a `locked` row never changes at all (trigger:
+    **no unlock** at the database).
+  This is a separate fact; `examination_papers.status` is untouched (§7.1).
+- **`student_mark_corrections`** — the request and its decision:
+  - the mark, its paper and Student (composite FKs);
+  - `base_version` and the previous status/value (the mark's at request time,
+    trigger-checked);
+  - the proposed status/value (R3 shape by CHECK, ≤ `max_marks` by trigger;
+    it must change something);
+  - `reason_code` — the closed catalogue `entry_error`, `totalling_error`,
+    `status_error` (CHECK; no free text);
+  - requester and `requested_at`, with the ADR 0038 authorization qualifying
+    at request time;
+  - `status` `pending` → `approved` | `rejected`, the decider and
+    `decided_at`; an approval also records the authorization qualifying at
+    approval time (both through `spa_context_unique`, purpose
+    `academic_records`).
+- **Database rules:**
+  - **maker ≠ checker** (`student_mark_corrections_maker_checker_check`);
+  - **one pending request per mark** (partial unique);
+  - a request is inserted `pending`, only for a locked paper, and only
+    against the mark's current version and values;
+  - its request fields never change;
+  - a decided row never changes;
+  - an approval is accepted only if the mark already holds exactly the
+    proposed values at `base_version + 1`.
+- **On `student_marks` (new):**
+  - `student_marks_lock_guard`: on a locked paper, an insert is refused and
+    an update is allowed only when a pending correction for exactly that
+    version and those values exists;
+  - the deferred constraint trigger `student_marks_locked_change_approved`:
+    by commit, that correction must be approved.
+
+  A raw write, even matching a pending request, cannot leave a locked mark
+  changed (proven with `SET CONSTRAINTS ALL IMMEDIATE` and in real
+  committing processes). The existing history trigger records the correction
+  as revision `n + 1` like any write.
+- **Both tables:**
+  - forced RLS; runtime DELETE revoked;
+  - anchored (`retention_recorded_at`) and delete-guarded;
+  - catalogued under `student_marks` = `policy_unresolved` (RES-L8);
+  - classified as keeping their Student and authorization;
+  - actors (locker, requester, decider) are `RETAIN_REFERENCE`;
+  - the forced-RLS count is 204.
+
+### 21.2 Paths
+- **`StudentMarkLockService::lock`:**
+  - takes the paper `FOR UPDATE`, then its state row;
+  - a second lock is a 409 (`STUDENT_MARKS_ALREADY_LOCKED`), never a second
+    transition;
+  - permitted on an inactive paper and in a closed year.
+- **`StudentMarkService::record`** (RES.2 entry) now refuses a locked paper
+  (409 `STUDENT_MARK_PAPER_LOCKED`) right after taking the paper `FOR SHARE`.
+  The database refuses it too.
+- **`StudentMarkCorrectionService`:**
+  - **`request`** — the paper must be locked (409
+    `STUDENT_MARK_CORRECTION_PAPER_NOT_LOCKED`). Then:
+    1. P3 is re-run under lock and must give exactly the stored placement,
+       source and elective row (else 422
+       `STUDENT_MARK_CORRECTION_CONTEXT_CHANGED`);
+    2. the current ADR 0038 basis must exist (else 422
+       `STUDENT_MARK_PROCESSING_BASIS_UNAVAILABLE`);
+    3. the mark is taken `FOR SHARE` at the named version (else 409
+       `STUDENT_MARK_VERSION_CONFLICT`).
+
+    A second pending request is a 409.
+  - **`approve`** — the request `FOR UPDATE` must be pending (else 409
+    `STUDENT_MARK_CORRECTION_ALREADY_DECIDED`) and decided by someone else
+    (else 403 `STUDENT_MARK_CORRECTION_SELF_DECISION`). Then P3 and the basis
+    are re-run, and the mark is taken `FOR UPDATE` at `base_version`. The
+    change goes through `StudentMarkService::applyCorrection()`, the one
+    StudentMark writer: version +1 exactly once, with the approval's basis
+    and the approver as the latest writer.
+  - **`reject`** — the same pending and maker ≠ checker rules. It needs no
+    current basis, because it processes no mark value.
+  - A stale approval is refused and the request stays pending for a reviewer
+    to reject. One pending request per mark makes this reachable only under
+    concurrency (T5).
+- **Closed year (§7.4):**
+  - ordinary entry stays refused;
+  - the lock, the request and the approval are permitted.
+- **No basis:**
+  - neither a request nor an approval proceeds;
+  - the grid withholds the mark **and** its pending correction exactly alike
+    (`{withheld: true}`).
+
+### 21.3 §7.2 amended: one guarded transition instead of "insert-only"
+§7.2 asked for an insert-only correction record. RES.3 records the request and
+its decision in **one row**, following the FEE concessions precedent §7.3
+cites (`fee_concessions`: requester and decider on one row). The runtime role
+may make exactly one `UPDATE` per row: `pending` → `approved` | `rejected`.
+The database refuses any change to the request fields, any change to a
+decided row, a decision by the requester, an approval that does not match the
+mark, and every DELETE. Nothing is ever overwritten. A rejection, and a new
+request after it, are both kept. §7.2's alternative is taken: the mark keeps
+a database-maintained current value, and every post-lock change is proven by
+an approved correction row. That proof is checked by the database by commit,
+and the history trigger records it as a revision.
+
+### 21.4 §7.4 realized: no correction of an unlocked mark
+A correction is only for a locked paper. On a closed year's **open** paper,
+the correction path is reached by locking the paper first, since the lock
+stays available after close (tested). §7.4's "whether or not its paper was
+locked" is met without a second, unlocked correction path.
+
+### 21.5 Canonical lock order
+Shared by entry, lock, request and approval. Every path takes a subset of
+these locks, in this order:
+1. `examination_papers` row — `FOR SHARE` for entry, request and approval;
+   `FOR UPDATE` for the lock;
+2. `examination_paper_mark_states` row (lock only, `FOR UPDATE`);
+3. `academic_years` `FOR SHARE` (entry only);
+4. `student_mark_corrections` row `FOR UPDATE` (decisions);
+5. P3: Offering, then placements, then elective rows, `FOR SHARE`;
+6. ADR 0038: Student `FOR UPDATE`, then grants, then relationship;
+7. `student_marks` — `FOR UPDATE` for entry and approval, `FOR SHARE` for a
+   request.
+
+Entry is per Student in Student-id order, inside one transaction.
+
+### 21.6 Surface, capabilities, MFA, audit
+- **Session JSON routes only** (no `/api/v1`). Every route composes
+  `capability:` with `mfa`:
+  - `POST app/examination-papers/{paper}/marks/lock`
+    (`examinations.marks.lock`);
+  - `POST app/examination-papers/{paper}/marks/{mark}/corrections`
+    (`examinations.marks.correction.request`);
+  - `POST app/student-mark-corrections/{correction}/approve` and `/reject`
+    (`examinations.marks.correction.approve`).
+- **Fresh MFA:** locking and deciding also re-verify a fresh code
+  (`FreshMfaRequirement`, 422 `mfa_code`). A request needs only the `mfa`
+  window.
+- **Ids:** UUID-constrained. Another School's paper, mark or correction, and
+  a mark of another paper, are 404. Responses carry ids and state only.
+- **Capabilities:** the three new keys are seeded to `school_admin` and
+  `principal` only. Never `teacher`; no unlock, reopen or results key
+  (guard-pinned).
+- **Idempotency:** no `idempotent` middleware (rule 29 evaluated). A retried
+  lock or decision is a 409, and a retried request meets the pending-unique
+  rule.
+- **Audit** — ids, versions and the closed reason only, never a value or
+  status:
+  - `examinations.student_marks.locked` (paper, mark count);
+  - `examinations.student_mark_correction.requested` (correction, mark,
+    paper, Student, base version, reason);
+  - `.approved` (… new version);
+  - `.rejected`.
+
+  The grid read's audit adds a pending-correction count.
+- **No outbox, webhook, Analytics, AI, export or search.** Synthetic fixtures
+  only.
+
+### 21.7 Proof
+- **Behaviour, HTTP and database tests:**
+  - `StudentMarkCorrectionServiceTest`, `StudentMarkCorrectionHttpTest`;
+  - `StudentMarkCorrectionsRlsIsolationTest` — raw-SQL RLS, no
+    DELETE/unlock, direct-write refusal, maker/checker, terminal decisions,
+    request immutability.
+- **Real processes** (`StudentMarkCorrectionConcurrencyTest`):
+  - T1 lock vs entry, both directions;
+  - T2 two approvals, and approval vs rejection;
+  - T3 approval behind a withdrawal;
+  - T4 a request that waited for the lock;
+  - T5 a stale-version request behind an approval.
+- **Mutation checks, each caught:**
+  - no `FOR UPDATE` on the request → T2: the loser is refused by the version
+    guard or the database instead, and the mark still advances once (defense
+    in depth);
+  - no `FOR UPDATE` on the paper in the lock → T1 and T4: overlap is no
+    longer serialized;
+  - no request version check → T5;
+  - no approval basis re-check → T3.
+- **Guards amended deliberately:**
+  - `StudentMarkArchitectureGuardTest`: column pins for both tables, one
+    writer per table, six exact routes, five exact capabilities, still
+    administrative only;
+  - `SubjectOfferingEligibilityArchitectureGuardTest`: the correction service
+    is the third P3 consumer; the RES.3 files are an exact allow-list; nothing
+    from RES.4 on;
+  - `ExaminationArchitectureGuardTest`: the two new writers.
+- **Count pins:** user references 111 / 101 retained; RLS 204.
+
+### 21.8 Recorded follow-up (not RES.3)
+`subject_offerings.is_required` (§20.1) stays mutable; RES.3 does not reopen
+it. Recommended to Academic Structure: **consider preventing required/elective
+flips once an Offering has dependent enrollment, examination-paper or mark
+evidence.** Until then, a flip after marking makes the affected marks
+uncorrectable (`STUDENT_MARK_CORRECTION_CONTEXT_CHANGED`, fail-closed, tested)
+rather than silently re-derived.
+
+### 21.9 Gates after RES.3
+| Slice | Gate |
+|---|---|
+| RES.2, RES.3 | **Complete, development only**; production: RES-L1 |
+| RES.4 (teacher entry) | **Not authorised:** RES-L2; ADR 0063 §40 / E33; RES-L0 re-review (teacher processing is a §19.4 trigger) |
+| Results, report cards, transcripts, Student / Guardian access | Not sequenced: RES-L4 – RES-L7 and RES-L0 re-review |

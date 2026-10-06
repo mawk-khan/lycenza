@@ -56,6 +56,8 @@ class StudentRetentionClassificationTest extends TestCase
             'identity_account_invitations' => 'retained, blocks: an ended one expires 7 d after it ended (platform:portal-invitations-prune, E21.3B); a usable one keeps the Student',
             // RES.2 (ADR 0068 §12, §19): StudentMark keeps its Student until RES-L8 is answered.
             'student_marks' => 'retained, blocks: RES-L8 unresolved (ADR 0068 §12): StudentMark evidence has no adopted period and no retention participant yet',
+            // RES.3 (ADR 0068 §21): so does a correction request about one of its marks.
+            'student_mark_corrections' => 'retained, blocks: RES-L8 unresolved (ADR 0068 §12): StudentMark evidence has no adopted period and no retention participant yet',
         ],
         'student_enrollments' => [
             'student_subject_enrollments' => 'D7 core: purged first, with the Student',
@@ -85,6 +87,8 @@ class StudentRetentionClassificationTest extends TestCase
             // RES.2 (ADR 0038 provenance): a mark keeps the authorization it was recorded under, never invalidated by withdrawal.
             'student_marks' => 'retained, blocks: RES-L8 unresolved (ADR 0068 §12): StudentMark evidence has no adopted period and no retention participant yet',
             'student_mark_revisions' => 'retained, blocks: RES-L8 unresolved (ADR 0068 §12): StudentMark evidence has no adopted period and no retention participant yet',
+            // RES.3: a correction keeps the authorization it was requested and approved under.
+            'student_mark_corrections' => 'retained, blocks: RES-L8 unresolved (ADR 0068 §12): StudentMark evidence has no adopted period and no retention participant yet',
         ],
         'admission_applications' => [
             // OPF.3 (ADR 0067 §29): it keeps the converted application (so its Student), as the selection keeps its Student.

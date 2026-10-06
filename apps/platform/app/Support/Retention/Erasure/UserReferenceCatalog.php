@@ -87,6 +87,8 @@ final class UserReferenceCatalog
         'employee_notes' => ['author_user_id' => self::RETAIN_REFERENCE],
         'employees' => ['user_id' => self::ACTIVE_PURPOSE_BLOCKER],
         'enrollment_rollover_plans' => ['created_by_user_id' => self::RETAIN_REFERENCE],
+        // RES.3 (ADR 0068 §21): who locked a paper's marks.
+        'examination_paper_mark_states' => ['locked_by_user_id' => self::RETAIN_REFERENCE],
         'fee_adjustments' => ['cancelled_by_user_id' => self::RETAIN_REFERENCE, 'posted_by_user_id' => self::RETAIN_REFERENCE],
         'fee_assessment_run_items' => ['excluded_by_user_id' => self::RETAIN_REFERENCE],
         'fee_assessment_runs' => ['cancelled_by_user_id' => self::RETAIN_REFERENCE, 'created_by_user_id' => self::RETAIN_REFERENCE, 'executed_by_user_id' => self::RETAIN_REFERENCE, 'previewed_by_user_id' => self::RETAIN_REFERENCE],
@@ -117,6 +119,8 @@ final class UserReferenceCatalog
         'schools' => ['closed_by_user_id' => self::RETAIN_REFERENCE],
         'staff_account_invitations' => ['accepted_user_id' => self::RETAIN_REFERENCE, 'invited_by_user_id' => self::RETAIN_REFERENCE, 'revoked_by_user_id' => self::RETAIN_REFERENCE],
         'student_guardian_account_links' => ['linked_by_user_id' => self::RETAIN_REFERENCE, 'unlinked_by_user_id' => self::RETAIN_REFERENCE],
+        // RES.3 (ADR 0068 §21): who requested and who decided a correction is the maker/checker evidence.
+        'student_mark_corrections' => ['decided_by_user_id' => self::RETAIN_REFERENCE, 'requested_by_user_id' => self::RETAIN_REFERENCE],
         'student_mark_revisions' => ['recorded_by_user_id' => self::RETAIN_REFERENCE],
         // RES.2 (ADR 0068 §6.1): the actor of each mark write is academic-evidence accountability.
         'student_marks' => ['recorded_by_user_id' => self::RETAIN_REFERENCE],

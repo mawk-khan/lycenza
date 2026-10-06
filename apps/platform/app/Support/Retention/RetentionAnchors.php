@@ -145,6 +145,9 @@ final class RetentionAnchors
         // RES.2 (ADR 0068 §12): StudentMark and its value history (retention policy_unresolved until RES-L8).
         'student_marks' => ['examination_paper_id', 'academic_year_id', 'student_id', 'student_enrollment_id', 'student_subject_enrollment_id', 'processing_authorization_id'],
         'student_mark_revisions' => ['student_mark_id', 'student_enrollment_id', 'student_subject_enrollment_id', 'processing_authorization_id'],
+        // RES.3 (ADR 0068 §21): the marks lock and the correction requests.
+        'examination_paper_mark_states' => ['examination_paper_id', 'state'],
+        'student_mark_corrections' => ['student_mark_id', 'examination_paper_id', 'student_id', 'status', 'request_processing_authorization_id', 'decision_processing_authorization_id'],
     ];
 
     /** The inputs no retention path deletes from (anchored, not delete-guarded). */

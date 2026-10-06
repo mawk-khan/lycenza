@@ -133,7 +133,7 @@ final class TenantRetentionCatalog
         // RES.2 (ADR 0068 §12, §19): StudentMark and its value history. RES-L8 has no answer, so NO period is
         // adopted and nothing expires them; their Student / placement / authorization keys keep the Student core
         // record dependency_blocked until a RES retention participant exists. The one deliberate policy_unresolved.
-        'student_marks' => [self::POLICY_UNRESOLVED, 'RES-L8 pending (ADR 0068 §12): no adopted period; never expired; keeps its Student, placement and processing authorization', ['student_marks', 'student_mark_revisions']],
+        'student_marks' => [self::POLICY_UNRESOLVED, 'RES-L8 pending (ADR 0068 §12): no adopted period; never expired; keeps its Student, placement and processing authorization', ['student_marks', 'student_mark_revisions', 'examination_paper_mark_states', 'student_mark_corrections']],
         'student_operational' => [self::ADOPTED, 'D7: 7 y after final exit', ['attendance_records', 'enrollment_rollover_items', 'student_guardian_relationships']],
         'student_rollover_configuration' => [self::TENANT_LIFETIME, 'School configuration', ['enrollment_rollover_plans', 'enrollment_rollover_mappings', 'enrollment_rollover_subject_mappings']],
         'processing_authorizations' => [self::ADOPTED, 'E21.2G P1: legal-basis evidence for the academic record, kept with the Student core record (25 y) and removed in its unit through a core-floored function (E21.3B, implemented)', ['student_processing_authorizations']],

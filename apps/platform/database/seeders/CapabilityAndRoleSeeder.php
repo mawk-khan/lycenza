@@ -811,6 +811,13 @@ class CapabilityAndRoleSeeder extends Seeder
             // E33 and a RES-L0 re-review, with its own owned-scope key.
             ['key' => 'examinations.marks.view', 'label' => 'View Student Marks', 'namespace' => 'school'],
             ['key' => 'examinations.marks.manage', 'label' => 'Enter Student Marks', 'namespace' => 'school'],
+            // RES.3 (ADR 0068 §7, §21): the one-way per-paper marks lock and
+            // the maker/checker post-lock correction -- same holders as
+            // `examinations.marks.manage`, never `teacher`. Locking and
+            // approving need a fresh MFA re-verification on top of `mfa`.
+            ['key' => 'examinations.marks.lock', 'label' => 'Lock Student Marks', 'namespace' => 'school'],
+            ['key' => 'examinations.marks.correction.request', 'label' => 'Request Student Mark Corrections', 'namespace' => 'school'],
+            ['key' => 'examinations.marks.correction.approve', 'label' => 'Decide Student Mark Corrections', 'namespace' => 'school'],
 
             // Phase 0I.2 (Learning Content Foundation -- the first
             // concrete LMS fact, ADR 0039). Rooted at `lms.content.*`, a
@@ -1199,6 +1206,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     // authorised administrative staff, the same holders as the
                     // processing-authorization registry it depends on.
                     'examinations.marks.view', 'examinations.marks.manage',
+                    'examinations.marks.lock', 'examinations.marks.correction.request', 'examinations.marks.correction.approve',
                     // Phase 0I.2: authoring and organizing a Subject
                     // Offering's Learning Content is the same routine
                     // academic administration as curating its syllabus
@@ -1396,6 +1404,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     // authorised administrative staff, the same holders as the
                     // processing-authorization registry it depends on.
                     'examinations.marks.view', 'examinations.marks.manage',
+                    'examinations.marks.lock', 'examinations.marks.correction.request', 'examinations.marks.correction.approve',
                     // Phase 0I.2: same reasoning as school_admin above --
                     // a Principal is the day-to-day operator of the
                     // academic structure and its content, not merely a

@@ -2642,7 +2642,8 @@ in that Offering on that date, and on which placement:
   transaction).
 
 Internal only (no route or capability) and no consumer yet: StudentMark
-(ADR 0068 RES.2) is its first and only consumer since 2026-10-07. RES.2 also
+(ADR 0068 RES.2) is its first and only consumer since 2026-10-07 (entry and
+grid read; RES.3's corrections re-check it through the same seams, §21). RES.2 also
 added `eligibleStudentsAsOf()` (the same per-Student decision applied to every
 candidate), `StudentPlacementDisplayReadService::forPlacements()` (the
 minimal SectionRosterMember projection) and, on the processing-authorization

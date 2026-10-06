@@ -2,7 +2,9 @@
 
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\Examinations\Application\Exceptions\ExaminationException;
+use App\Domain\Examinations\Application\Marks\StudentMarkCorrectionService;
 use App\Domain\Examinations\Application\Marks\StudentMarkEntry;
+use App\Domain\Examinations\Application\Marks\StudentMarkLockService;
 use App\Domain\Examinations\Application\Marks\StudentMarkService;
 use App\Domain\Students\Application\StudentEnrollmentService;
 use App\Domain\Students\Application\StudentProcessingAuthorizationService;
@@ -23,6 +25,11 @@ use Tests\Support\Concurrency\HeldTransaction;
 //   php student-mark-op.php record <schoolId> <paperId> <actorId> <studentId> <status> <value|-> <expectedVersion|->
 //   php student-mark-op.php withdraw-authorization <schoolId> <grantId> <actorId>
 //   php student-mark-op.php transfer-placement <schoolId> <enrollmentId> <targetSectionId> <rollNumber> <effectiveDate>
+// RES.3 (ADR 0068 §21):
+//   php student-mark-op.php lock <schoolId> <paperId> <actorId>
+//   php student-mark-op.php request-correction <schoolId> <paperId> <markId> <actorId> <expectedVersion> <status> <value|-> <reasonCode>
+//   php student-mark-op.php approve-correction <schoolId> <correctionId> <actorId>
+//   php student-mark-op.php reject-correction <schoolId> <correctionId> <actorId>
 
 require __DIR__.'/../../vendor/autoload.php';
 
@@ -42,6 +49,20 @@ try {
             )], User::query()->findOrFail($argv[4]));
 
             return 'recorded:v'.$written[0]['version'];
+        }
+        if ($op === 'lock') {
+            return 'locked:'.$app->make(StudentMarkLockService::class)->lock($school, $argv[3], User::query()->findOrFail($argv[4]))->state;
+        }
+        if ($op === 'request-correction') {
+            return 'requested:'.$app->make(StudentMarkCorrectionService::class)->request(
+                $school, $argv[3], $argv[4], (int) $argv[6], $argv[7], $argv[8] === '-' ? null : $argv[8], $argv[9], User::query()->findOrFail($argv[5]),
+            )->status;
+        }
+        if ($op === 'approve-correction' || $op === 'reject-correction') {
+            $corrections = $app->make(StudentMarkCorrectionService::class);
+            $actor = User::query()->findOrFail($argv[4]);
+
+            return 'decided:'.($op === 'approve-correction' ? $corrections->approve($school, $argv[3], $actor) : $corrections->reject($school, $argv[3], $actor))->status;
         }
         if ($op === 'withdraw-authorization') {
             $app->make(StudentProcessingAuthorizationService::class)->withdraw(

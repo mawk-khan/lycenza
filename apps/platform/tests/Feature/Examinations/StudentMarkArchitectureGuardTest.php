@@ -14,6 +14,11 @@ use Tests\TestCase;
  * the column set, add a writer, expose marks beyond the per-paper session
  * surface (bearer API, outbox, webhook, Analytics, Group reports, AI), grant
  * a teacher or create a results capability.
+ *
+ * RES.3 (ADR 0068 §7, §21) amends them deliberately: two more tables (the
+ * per-paper lock, the correction requests), each with exactly one writer;
+ * four more session routes (lock, request, approve, reject -- never an
+ * unlock or reopen); three more capabilities, still administrative only.
  */
 class StudentMarkArchitectureGuardTest extends TestCase
 {
@@ -24,6 +29,10 @@ class StudentMarkArchitectureGuardTest extends TestCase
         $files[] = app_path('Domain/Examinations/Infrastructure/StudentMark.php');
         $files[] = app_path('Domain/Examinations/Infrastructure/StudentMarkRevision.php');
         $files[] = app_path('Http/Controllers/App/Examinations/StudentMarkController.php');
+        // RES.3 (ADR 0068 §21): the marks lock and the correction workflow.
+        $files[] = app_path('Domain/Examinations/Infrastructure/ExaminationPaperMarkState.php');
+        $files[] = app_path('Domain/Examinations/Infrastructure/StudentMarkCorrection.php');
+        $files[] = app_path('Http/Controllers/App/Examinations/StudentMarkCorrectionController.php');
         sort($files);
 
         return $files;
@@ -72,19 +81,46 @@ class StudentMarkArchitectureGuardTest extends TestCase
             'recorded_at', 'recorded_by_user_id', 'retention_recorded_at', 'revision', 'school_id', 'student_enrollment_id',
             'student_mark_id', 'student_subject_enrollment_id',
         ], $this->columns('student_mark_revisions'), 'The value history records exactly the write, its provenance and its actor (§19.3 a).');
+        $this->assertSame([
+            'created_at', 'examination_paper_id', 'id', 'locked_at', 'locked_by_user_id', 'retention_recorded_at', 'school_id', 'state', 'updated_at',
+        ], $this->columns('examination_paper_mark_states'), 'The lock records the state, who and when -- no unlock, reopen or override column (RES.3, §21).');
+        $this->assertSame([
+            'base_version', 'created_at', 'decided_at', 'decided_by_user_id', 'decision_processing_authorization_id', 'examination_paper_id', 'id',
+            'previous_status', 'previous_value', 'processing_purpose', 'proposed_status', 'proposed_value', 'reason_code', 'request_processing_authorization_id',
+            'requested_at', 'requested_by_user_id', 'retention_recorded_at', 'school_id', 'status', 'student_id', 'student_mark_id', 'updated_at',
+        ], $this->columns('student_mark_corrections'), 'A correction records the change, a closed reason code (no free text), maker, checker and both bases (RES.3, §21).');
     }
 
     #[Test]
     public function only_the_mark_service_writes_and_no_lock_or_event_machinery_leaks(): void
     {
+        // RES.3: one writer per table -- StudentMarkLockService the lock, StudentMarkCorrectionService the requests
+        // (it changes a mark only through StudentMarkService::applyCorrection()).
+        $writers = [
+            'Application/Marks/StudentMarkService.php' => '$mark',
+            'Application/Marks/StudentMarkLockService.php' => '$state',
+            'Application/Marks/StudentMarkCorrectionService.php' => '$correction',
+        ];
+        foreach ($writers as $suffix => $variable) {
+            $code = $this->code(app_path('Domain/Examinations/'.$suffix));
+            preg_match_all('/(\$(?!this\b)\w+)->(forceFill|save)\(/', $code, $calls);
+            $targets = array_values(array_unique($calls[1]));
+            $this->assertNotEmpty($targets);
+            $this->assertSame([], array_values(array_diff($targets, [$variable, '$lockedMark'])), $suffix.' writes only its own table.');
+            if ($variable !== '$mark') {
+                $this->assertStringNotContainsString('$lockedMark', $code);
+            }
+        }
+        $this->assertStringContainsString('$this->marks->applyCorrection(', $this->code(app_path('Domain/Examinations/Application/Marks/StudentMarkCorrectionService.php')));
+
         foreach ($this->appFiles() as $file) {
-            if (str_ends_with($file, 'Application/Marks/StudentMarkService.php')) {
+            if (array_filter(array_keys($writers), fn (string $suffix) => str_ends_with($file, $suffix)) !== []) {
                 continue;
             }
             $code = $this->code($file);
-            if (preg_match('/\bStudentMark(Revision)?\b/', $code) || str_contains($code, "'student_marks'") || str_contains($code, "'student_mark_revisions'")) {
+            if (preg_match('/\bStudentMark(Revision|Correction)?\b|\bExaminationPaperMarkState\b/', $code) || preg_match("/'(student_marks|student_mark_revisions|student_mark_corrections|examination_paper_mark_states)'/", $code)) {
                 $this->assertDoesNotMatchRegularExpression('/->(forceFill|save|update|delete|create)\(|::create\(|->insert\(/', in_array($file, $this->markFiles(), true) ? $code : '',
-                    basename($file).' must not write StudentMark; StudentMarkService is its only writer.');
+                    basename($file).' must not write marks, the lock or corrections; each has exactly one writer.');
                 $this->assertContains($file, [...$this->markFiles(), app_path('Support/Retention/RetentionAnchors.php'), app_path('Support/Retention/TenantRetentionCatalog.php'), app_path('Support/Retention/Erasure/UserReferenceCatalog.php'), app_path('Support/Operations/DatabaseRoleVerifier.php')],
                     basename($file).' references StudentMark outside its own files and the retention/verifier registries (no reuse, ADR 0068 §19.2 #8-9).');
             }
@@ -115,7 +151,10 @@ class StudentMarkArchitectureGuardTest extends TestCase
         $routes = collect(RouteFacade::getRoutes()->getRoutes())
             ->filter(fn (Route $route) => str_contains((string) $route->getActionName(), 'StudentMark') || preg_match('#(^|/)marks(/|$)#', $route->uri()) === 1);
 
-        $this->assertCount(2, $routes);
+        $this->assertSame([
+            'app.examination-papers.marks.corrections.store', 'app.examination-papers.marks.index', 'app.examination-papers.marks.lock',
+            'app.examination-papers.marks.update', 'app.student-mark-corrections.approve', 'app.student-mark-corrections.reject',
+        ], $routes->map(fn (Route $route) => (string) $route->getName())->sort()->values()->all(), 'RES.3 adds lock, request, approve and reject -- never an unlock, reopen, bypass, list or search route.');
         foreach ($routes as $route) {
             $this->assertStringStartsNotWith('api/', $route->uri(), 'No bearer-token marks route (ADR 0049; ADR 0068 §4.1).');
             $middleware = $route->gatherMiddleware();
@@ -135,5 +174,12 @@ class StudentMarkArchitectureGuardTest extends TestCase
         $this->assertSame(['principal', 'school_admin'], $holders, 'Administrative roles only; never teacher (RES-L2, E33, RES-L0 re-review).');
         $this->assertSame(0, DB::table('role_capabilities')->join('roles', 'roles.id', '=', 'role_capabilities.role_id')
             ->where('roles.key', 'teacher')->where('role_capabilities.capability_key', 'like', 'examinations.marks.%')->count());
+        $this->assertSame([
+            'examinations.marks.correction.approve', 'examinations.marks.correction.request', 'examinations.marks.lock', 'examinations.marks.manage', 'examinations.marks.view',
+        ], DB::table('capabilities')->where('key', 'like', 'examinations.marks.%')->orderBy('key')->pluck('key')->all(), 'No unlock, reopen or bypass capability (RES.3, §21).');
+        foreach (['principal', 'school_admin'] as $role) {
+            $this->assertSame(5, DB::table('role_capabilities')->join('roles', 'roles.id', '=', 'role_capabilities.role_id')
+                ->where('roles.key', $role)->where('role_capabilities.capability_key', 'like', 'examinations.marks.%')->count());
+        }
     }
 }

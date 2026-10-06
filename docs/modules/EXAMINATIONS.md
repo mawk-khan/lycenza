@@ -714,8 +714,9 @@ module; ADR 0068 reopens **only** two things:
   append-only, maker/checker corrections after lock (RES.3). RES-L0 was
   determined CURRENT WITH CHANGES on 2026-10-07: RES.2 is authorised for
   development only, under ADR 0068 §19's conditions (history kept before
-  lock too; a withdrawn basis withholds reads). Teacher entry is RES.4
-  (RES-L2, E33, RES-L0 re-review).
+  lock too; a withdrawn basis withholds reads). RES.3 built the lock and
+  corrections (ADR 0068 §21, development only). Teacher entry is RES.4 —
+  not authorised (RES-L2, E33, RES-L0 re-review).
 
 **Guardrails — ADR 0068 is not authority for any of these:** result
 calculation, finalization, publication or revocation; GradeScale selection,
@@ -753,5 +754,42 @@ Internal, administrative marks entry per ExaminationPaper, **development only**
   for every write (and for showing a value); optimistic versions; atomic
   batches; a closed year or an inactive paper refuses; once marked, a paper's
   `max_marks` and `scheduled_on` are frozen.
-- **Not built:** lock, corrections (RES.3), teacher entry (RES.4), results,
-  report cards, transcripts, Student/Guardian access, exports, analytics.
+- **Not built:** teacher entry (RES.4), results, report cards, transcripts,
+  Student/Guardian access, exports, analytics.
+
+## Marks lock and corrections (RES.3, 2026-10-07; ADR 0068 §21)
+
+Development only (production: RES-L1). Highly Sensitive.
+- **Lock:** `examination_paper_mark_states`, `open` → `locked` per paper, one
+  way (the database refuses any change to a locked row; there is no unlock,
+  reopen or bypass). After lock, ordinary entry refuses every create and
+  change (409 `STUDENT_MARK_PAPER_LOCKED`), and so does the database.
+- **Corrections:** `student_mark_corrections`, one row per request:
+  - base version, previous and proposed status/value, and a closed reason
+    (`entry_error`, `totalling_error`, `status_error`);
+  - requester and decider, each with the processing basis at their step;
+  - `pending` → `approved` | `rejected`, terminal.
+
+  The database enforces:
+  - maker ≠ checker;
+  - one pending request per mark;
+  - no locked-mark change without its approved correction in the same
+    transaction.
+
+  Approval writes through `StudentMarkService` (version +1 once, revision
+  appended).
+- **Surface:** session JSON only.
+  - `POST /app/examination-papers/{paper}/marks/lock`
+    (`examinations.marks.lock`, fresh MFA);
+  - `POST /app/examination-papers/{paper}/marks/{mark}/corrections`
+    (`examinations.marks.correction.request`);
+  - `POST /app/student-mark-corrections/{correction}/approve` and `/reject`
+    (`examinations.marks.correction.approve`, fresh MFA).
+
+  All routes also need `mfa`; `school_admin` and `principal` only.
+- **Rules:**
+  - every request and approval re-checks P3 (the same placement, source and
+    elective row) and a current basis;
+  - a closed year refuses entry but permits the correction workflow;
+  - without a basis, the grid withholds the mark and its pending correction;
+  - audit carries ids, versions and the reason code only.
