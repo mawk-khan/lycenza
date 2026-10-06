@@ -542,8 +542,10 @@ one Student per transaction under the Student-row lock. The
 residency rows explicitly, never by cascade.
 - An **active** residency is never deleted on age, and it keeps the
   Student's core record.
-- Hostels, rooms and beds are School configuration and stay. No Finance row
-  references a residency.
+- Hostels, rooms and beds are School configuration and stay. Since OPF.2 a
+  residency that recorded fee intent is referenced by `hostel_fee_selections`
+  (Finance ledger evidence) and stays `dependency_blocked` while that
+  evidence exists (see "Fee integration").
 
 Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md`
 §5.6). Holds (`RETENTION_HOLD_SCHOOL_IDS`) keep everything; `--dry-run`
@@ -589,8 +591,9 @@ The contract:
     billing period at a time (no proration).
   - Ending or transferring a residency never cancels or alters a charge.
     Corrections are explicit Finance actions.
-- **Pricing tiers.** A room-category or hostel price is its own fee head /
-  line in FEE. Hostel owns only the tier → fee-head mapping (no amount;
+- **Pricing tiers.** A Hostel default or per-room override price is its own
+  fee head / line in FEE (Hostel has no room-category concept, ADR 0067
+  §28.2). Hostel owns only the tier → fee-head mapping (no amount;
   `hostel.directory.manage`).
 - **Academic year.** Carrying active residencies into the next year is an
   explicit, audited, idempotent operation.

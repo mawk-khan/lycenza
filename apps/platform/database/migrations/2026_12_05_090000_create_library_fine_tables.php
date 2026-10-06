@@ -245,10 +245,13 @@ return new class extends Migration
             DROP TRIGGER IF EXISTS charges_library_fine_guard_trigger ON charges;
             DROP FUNCTION IF EXISTS library_reject_cancelling_live_fine_charge();
             SQL);
+        TenantRls::disable('library_fine_voids');
         Schema::dropIfExists('library_fine_voids');
         DB::unprepared('DROP FUNCTION IF EXISTS library_fine_voids_require_cancelled_charge()');
+        TenantRls::disable('library_fines');
         Schema::dropIfExists('library_fines');
         DB::unprepared('DROP FUNCTION IF EXISTS library_fines_guard()');
+        TenantRls::disable('library_fine_policies');
         Schema::dropIfExists('library_fine_policies');
     }
 };

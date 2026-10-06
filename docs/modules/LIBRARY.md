@@ -210,6 +210,8 @@ repository requirement.
 | `library.circulation.view` | Read Loans |
 | `library.circulation.manage` | Check out, check in, use the checkout-form search endpoints |
 
+Since OPF.4 a check-in also assesses an overdue fine (no extra capability), and three fine capabilities exist: `library.fines.view` / `.manage` / `.void` (School Admin only; see "Fines (OPF.4, ADR 0067)").
+
 Mirrors the existing `academics.structure.*`/`academics.subjects.*`
 and `hr.employees.*`/`hr.departments.*` split — catalogue and
 circulation are independently gateable, matching the actor-category
@@ -388,8 +390,9 @@ The contract:
   (`fee_late_fee_rules`, structure-scoped, legal item E31) are not the
   Library fine engine.
 - **Event charge through FEE.**
-  - An overdue loan is assessed once per loan and fine kind: at check-in,
-    or explicitly under a narrow `library.fines.*` capability.
+  - An overdue loan is assessed once per loan and fine kind, only at
+    check-in (`library.circulation.manage`). There is no explicit
+    assessment path or capability (ADR 0067 §30.3).
   - It goes through FEE's event-charge seam (which calls
     `ChargeService::assess()`), with a Library-owned link row (unique per
     loan and kind, unique charge) created in the same transaction, under

@@ -135,8 +135,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        TenantRls::disable('hostel_fee_selections');
         Schema::dropIfExists('hostel_fee_selections');
         DB::unprepared('DROP FUNCTION IF EXISTS hostel_fee_selections_guard()');
+        TenantRls::disable('hostel_fee_heads');
         Schema::dropIfExists('hostel_fee_heads');
         DB::statement('ALTER TABLE hostel_rooms DROP CONSTRAINT IF EXISTS hostel_rooms_id_hostel_school_unique');
     }

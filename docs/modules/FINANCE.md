@@ -5263,10 +5263,11 @@ Library fine references, as it does `canteen_orders`.
   `ChargeService::assess()`.
 - **Charge subject: Student only, unchanged.** `charges.student_id` stays
   NOT NULL. OPF adds no applicant or polymorphic subject.
-- **Trusted source-selection seam (planned for OPF.1).** It sits beside the
-  human `FeeOptionalSelectionService::select`/`withdraw`
-  (`finance.fee_structures.manage`, unchanged), as something like
-  `selectForSource()` / `withdrawForSource()`:
+- **Trusted source-selection seam (built in OPF.1 as
+  `FeeSourceSelectionService::selectForSource()` / `withdrawForSource()`,
+  ADR 0067 §27.1).** It sits beside the human
+  `FeeOptionalSelectionService::select`/`withdraw`
+  (`finance.fee_structures.manage`, unchanged):
   - called only by a source module's application service, after it checked
     its own operational capability;
   - it records the initiating actor and source, and is idempotent on the

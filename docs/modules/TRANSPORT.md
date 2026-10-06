@@ -539,8 +539,10 @@ one Student per transaction under the Student-row lock.
 - An **active** assignment is never deleted on age, and it keeps the
   Student's core record.
 - Routes, stops and vehicles are School configuration and stay. Driver
-  (route) assignments are E21.3E (7 y after `ends_on`). No Finance row
-  references a Student assignment.
+  (route) assignments are E21.3E (7 y after `ends_on`). Since OPF.1 an
+  assignment that recorded fee intent is referenced by
+  `transport_fee_selections` (Finance ledger evidence) and stays
+  `dependency_blocked` while that evidence exists (see "Fee integration").
 
 Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md`
 §5.6). Holds (`RETENTION_HOLD_SCHOOL_IDS`) keep everything; `--dry-run`
@@ -586,8 +588,9 @@ The contract:
   Transport owns only a route (or route-tier) → fee-head mapping, with no
   amount. An unmapped route selects nothing, and never blocks the
   assignment.
-- **Academic year.** Assignments carry none. The year comes from the
-  Student's enrollment at the event. Carrying active assignments into the
+- **Academic year.** Assignments carry none. As built (§27.2), a new
+  assignment records intent for the School's active academic year, and the
+  Student's enrollment in that year selects the structure. Carrying active assignments into the
   next year is an **explicit, audited, idempotent** operation; nothing
   carries itself silently.
 - **Evidence and retention.** Transport-owned link rows record the

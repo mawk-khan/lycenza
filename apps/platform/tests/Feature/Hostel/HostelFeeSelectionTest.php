@@ -11,17 +11,20 @@ use App\Domain\Hostel\Application\Exceptions\HostelCarryForwardYearInvalidExcept
 use App\Domain\Hostel\Application\Exceptions\HostelFeeHeadNotSelectableException;
 use App\Domain\Hostel\Application\HostelFeeSelectionService;
 use App\Domain\Hostel\Application\HostelResidencyService;
+use App\Domain\Hostel\Infrastructure\HostelFeeHead;
 use App\Domain\Hostel\Infrastructure\HostelFeeSelection;
 use App\Domain\Hostel\Infrastructure\HostelResidencyAssignment;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\SchoolAuditEvent;
 use App\Models\User;
+use App\Support\Retention\ReferencingRows;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\AssertsTenantRlsIsolation;
 use Tests\Feature\Fees\Concerns\CreatesFeeAssessmentFixtures;
 use Tests\TestCase;
 
@@ -36,6 +39,7 @@ use Tests\TestCase;
  */
 class HostelFeeSelectionTest extends TestCase
 {
+    use AssertsTenantRlsIsolation;
     use CreatesFeeAssessmentFixtures;
 
     /** @return array<string, mixed> */
@@ -461,5 +465,64 @@ class HostelFeeSelectionTest extends TestCase
             ->getJson("/api/v1/schools/{$other->id}/hostel-residency-assignments/{$residency->id}/fee-selections")->assertNotFound();
         $this->actingAs($otherAdmin)->withHeader('X-School-Id', $other->id)
             ->getJson("/api/v1/schools/{$other->id}/hostels/{$w['hostel']->id}/fee-head")->assertNotFound();
+    }
+
+    /** OPF.5 closure: the room override read is capability-gated, and another School can neither read nor change a Hostel or room mapping. */
+    #[Test]
+    public function hostel_room_reads_need_hostel_capabilities_and_another_school_cannot_reach_hostel_mappings(): void
+    {
+        $w = $this->world();
+        $service = app(HostelFeeSelectionService::class);
+        $service->setHostelFeeHead($w['hostel'], $w['standard']->id, $w['hostelStaff']);
+        $service->setRoomFeeHead($w['premiumRoom'], $w['premium']->id, $w['hostelStaff']);
+        $base = "/api/v1/schools/{$w['school']->id}";
+
+        // Finance staff without Hostel capabilities cannot read a room override.
+        $this->actingAs($w['finance'])->withHeader('X-School-Id', $w['school']->id)
+            ->getJson("{$base}/hostel-rooms/{$w['premiumRoom']->id}/fee-head")->assertForbidden();
+
+        // Another School's administrator reaches no Hostel or room of this School, and changes nothing.
+        [$otherAdmin, $other] = $this->createSchoolAdmin();
+        $otherBase = "/api/v1/schools/{$other->id}";
+        $as = fn () => $this->actingAs($otherAdmin)->withHeader('X-School-Id', $other->id);
+        $as()->putJson("{$otherBase}/hostels/{$w['hostel']->id}/fee-head", ['fee_head_id' => null])->assertNotFound();
+        $as()->getJson("{$otherBase}/hostel-rooms/{$w['premiumRoom']->id}/fee-head")->assertNotFound();
+        $as()->putJson("{$otherBase}/hostel-rooms/{$w['premiumRoom']->id}/fee-head", ['fee_head_id' => null])->assertNotFound();
+        $this->assertSame($w['standard']->id, $service->hostelFeeHead($w['hostel'])['feeHeadId'] ?? null);
+        $this->assertSame($w['premium']->id, $service->roomFeeHead($w['premiumRoom'])['feeHeadId'] ?? null);
+    }
+
+    /** OPF.5 closure (rule 28): both Hostel OPF tables are isolated by forced RLS at the raw SQL layer and fail closed. */
+    #[Test]
+    public function the_hostel_fee_tables_are_tenant_isolated_at_the_raw_sql_layer(): void
+    {
+        $w = $this->world();
+        app(HostelFeeSelectionService::class)->setHostelFeeHead($w['hostel'], $w['standard']->id, $w['hostelStaff']);
+        $this->assign($w, $this->student($w));
+        $other = $this->createSchool();
+
+        $this->assertTenantRlsIsolation([
+            'hostel_fee_heads' => HostelFeeHead::class,
+            'hostel_fee_selections' => HostelFeeSelection::class,
+        ], $w['school']->id, $other->id);
+    }
+
+    /** OPF.5 closure (ADR 0067 §21): provenance keeps its ended residency dependency_blocked for the Hostel purge. */
+    #[Test]
+    public function the_provenance_keeps_its_ended_residency_from_the_hostel_purge(): void
+    {
+        $w = $this->world();
+        $blocker = fn (HostelResidencyAssignment $r) => $this->inSchool($w['school'], fn () => app(ReferencingRows::class)->first('hostel_residency_assignments', $w['school']->id, [$r->id]));
+
+        // An unmapped Hostel records no provenance: the ended residency leaves on its own clock.
+        $plain = $this->assign($w, $this->student($w));
+        $this->end($w, $plain);
+        $this->assertNull($blocker($plain));
+
+        // With provenance the ended residency stays, as Finance evidence keeps it.
+        app(HostelFeeSelectionService::class)->setHostelFeeHead($w['hostel'], $w['standard']->id, $w['hostelStaff']);
+        $linked = $this->assign($w, $this->student($w));
+        $this->end($w, $linked);
+        $this->assertSame('hostel_fee_selections', $blocker($linked));
     }
 }

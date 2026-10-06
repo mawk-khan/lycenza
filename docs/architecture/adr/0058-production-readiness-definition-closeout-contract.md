@@ -1264,3 +1264,23 @@ exists yet. **This is not a legal determination.**
 
   Each stays a production blocker, with development permitted.
 - **Independence.** E34 and E21, E30, E31, E32, E33 stay separate rows.
+
+## Note — OPF development closure (OPF.5, 2026-10-06)
+
+OPF.0–OPF.5 are development closed (ADR 0067 §31). OPF code now exists for
+Transport, Hostel, the Admission fee at conversion and Library overdue fines.
+**This is not a legal determination and not production clearance.** The OPF
+rows stay exactly as recorded above:
+- **E34** (Library fine / penalty regulation) stays LEGAL_REVIEW_REQUIRED;
+  Library fines stay out of production use until a qualified answer is
+  recorded.
+- **E21, E30, E31 and E32** stay open production blockers for every OPF
+  table and charge, with development permitted. E31 still does not cover
+  Library fines; E32's wording still concerns Transport, Hostel and Admission
+  fees, and nothing is concluded about RTE Students and Library fines.
+- **E21 observation for the qualified review:** OPF provenance rows are
+  Finance ledger evidence, and the Finance D8 unit deletes neither FEE
+  optional selections nor a fined charge. A Transport assignment, Hostel
+  residency, Library loan or converted application that carries OPF evidence
+  therefore stays `dependency_blocked` for as long as that Finance evidence
+  is retained (ADR 0067 §31.6). No retention period changed.

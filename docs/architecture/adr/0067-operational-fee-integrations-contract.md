@@ -8,6 +8,9 @@
   (2026-10-06, §29):** the Admission fee at Student conversion through the
   same seam. **OPF.4 implemented (2026-10-06, §30):** Library overdue fines
   as event charges through a second, narrow FEE event-charge seam.
+  **OPF.0–OPF.5 — PUBLISHED / CLOSED (development, 2026-10-06, §31).**
+  Development closure is not production readiness: E21, E30, E31, E32 and
+  E34 stay open production gates (§22, §31.8).
 - Date: 2026-10-05
 - Programme: **OPF — Operational Fee Integrations** (Transport, Hostel,
   Library fines, Admissions fee). Roadmap "Post-foundation product
@@ -419,7 +422,7 @@ Student-facing fee views (POR); gateway payments; GST / tax.
 | OPF.2 | Hostel fee selection (reuses the seam; no deposits) | **Published (2026-10-05, §28)** |
 | OPF.3 | Admission fee at Student conversion | **Published (2026-10-06, §29)** |
 | OPF.4 | Library overdue fines: versioned policy, event charge, waiver and void, Finance retention amendment, E34 | **Published (2026-10-06, §30)** |
-| OPF.5 | Closure audit and full regression | Not started |
+| OPF.5 | Closure audit and full regression | **Published / closed (2026-10-06, §31)** |
 
 ## 27. OPF.1 as built (2026-10-05)
 
@@ -1049,3 +1052,155 @@ OPF.4 draws no conclusion about RTE Students and fines.
 - **Migration:** both migrations apply, roll back and reapply to the
   identical snapshot (rollback restores the Finance function without the
   new clause); `platform:verify-database` passes.
+
+## 31. OPF.5 closure (2026-10-06)
+
+**OPF.0–OPF.5 — PUBLISHED / CLOSED for development.** A closure audit of the
+repository at `616fb02` checked §1–§30 against the code, migrations, schema
+and tests. It found no product, schema or authorization defect, and no
+deferred scope partially built. It found test-coverage and documentation
+gaps, corrected here without new behaviour (§31.3). §1–§30 and D1–D9 are
+unchanged.
+
+### 31.1 As built, in one table
+| Integration | Applicability | Tier / head mapping | Amount | Money made by | Correction | Provenance |
+|---|---|---|---|---|---|---|
+| Transport | assignment start / end (Transport) | route → fee head (Transport) | FEE instalment | Finance assessment run | Finance void / cancel, concession | `transport_fee_selections` (Transport) |
+| Hostel | residency start / end (Hostel) | Hostel default + room override → fee head (Hostel) | FEE instalment | Finance assessment run | as Transport | `hostel_fee_selections` (Hostel) |
+| Admission fee | successful conversion (Admissions) | one fee head per School (Admissions) | FEE instalment | Finance assessment run | as Transport | `admission_fee_selections` (Admissions) |
+| Library fine | overdue check-in (Library) | the policy version's fee head (Library) | Library-owned immutable policy version | the event-charge seam, at check-in | FEE `waiver` concession; Library void (unpaid only) | `library_fines` / `library_fine_voids` (Library) |
+
+- **Seams:** `FeeSourceSelectionService` (callers exactly the Transport,
+  Hostel and Admission fee-selection services) and `FeeSourceChargeService`
+  (callers exactly `LibraryFineService` and `LibraryFinePolicyService`), both
+  pinned by `OperationalFeeSourceArchitectureGuardTest`. No source module
+  references `ChargeService`; Fees, Finance and Payments reference no source
+  module or table. The only database exceptions are the two §4 / §30.3
+  ones: `charges_library_fine_guard_trigger` and the Finance expiry clause.
+- **Student-only charging, no parallel ledger, no new outbox event:** OPF
+  added no `applicant_id` or other subject, no ledger, no queued job or
+  command, and no outbox or webhook event. `charge.assessed.v1` /
+  `charge.cancelled.v1` stay canonical.
+- **Exactly once is database-enforced** in every path: the source's unique
+  key (one per assignment × year, residency × year, application, loan ×
+  kind, fine void) under the source's row lock, plus FEE's
+  `fee_optional_selections_one_active` with savepoint reuse. Every race was
+  proven with real processes and an observed lock wait (§27.4–§30.9).
+
+### 31.2 Clarification of §4: the Admissions layer exception
+`DOMAIN-MAP.md` lets a module depend only on its own or a lower layer.
+Admissions is Layer 2 and Fees Layer 3, so OPF.3's Admissions → Fees call
+(D1, §8, §16) is the one sanctioned exception. It is confined to the single
+trusted seam call inside the conversion transaction. Fees never reads
+Admissions (guard-tested), so there is no cycle. No other Admissions →
+Layer 3 dependency is sanctioned. Transport, Hostel and Library are Layer 3,
+like Fees. The domain map records the exception and each source's Fees and
+Academic Structure dependency.
+
+### 31.3 Corrections made in OPF.5 (no new behaviour)
+- **Rule 28 raw-SQL isolation** for all nine OPF tables
+  (`Tests\Concerns\AssertsTenantRlsIsolation`, one test per source).
+  Forced RLS hides School A's rows from School B and from a context-less
+  session. School B can neither rewrite them nor insert one for School A. The
+  Eloquent layer without context sees nothing.
+- **Rule 13 allow / deny:** the denied read for the Transport route mapping,
+  Transport assignment intent, Hostel room override and Library policy
+  versions; and the cross-School 404 for the Transport route mapping
+  (read / write), the Hostel and room mappings (write; room read) and the
+  Library fine void (with no void recorded and the charge untouched).
+- **§21 purge interaction, tested for Transport and Hostel** (Admissions and
+  Library already were): an ended assignment or residency with provenance is
+  `dependency_blocked`; without provenance it is not.
+- **Library charge-shape clause** of `library_fines_guard` tested directly
+  (another charge, a cancelled charge).
+- **Rule 18:** the four OPF create migrations' `down()` now call
+  `TenantRls::disable()` before dropping each table. Rollback was re-proven;
+  `up()` is unchanged.
+- **Wording:** the `finance_ledger` catalog decision names Library-fine-linked
+  detail; stale module-doc sentences were corrected (no explicit Library
+  assessment path; Transport and Hostel rows now referenced by Finance
+  evidence; the Transport year; the Hostel tier).
+
+### 31.4 Authorization (D9, final)
+Operational capabilities create intent or fines; only Finance capabilities
+make or correct money through Finance paths:
+- Transport: `transport.routes.view` / `.manage` (mapping),
+  `transport.assignments.view` / `.manage` (intent, carry-forward).
+- Hostel: `hostel.directory.view` / `.manage` (mapping),
+  `hostel.residency.view` / `.manage` (intent, carry-forward).
+- Admissions: `admissions.view` / `.manage` (mapping, conversion).
+- Library: `library.circulation.manage` (check-in, so assessment),
+  `library.fines.view` / `.manage` / `.void` (School Admin only; no
+  `library.fines.assess` exists).
+- Finance, unchanged: `finance.fee_assessments.run`, `finance.charges.manage`
+  (refused on a fine's charge by the database), `finance.fee_concessions.*`
+  (maker ≠ checker).
+
+OPF granted no operational role a `finance.*` capability and no Finance role
+a source capability. The only seeder change was the three `library.fines.*`
+capabilities for School Admin. Principal's existing Transport, Hostel,
+Admissions and circulation capabilities now also record fee intent or
+trigger a fine at check-in, by design (§18); Principal still holds no
+`finance.*`.
+
+### 31.5 Database and RLS
+Nine tenant tables, all with forced RLS (pinned count 200), composite
+same-School foreign keys (RESTRICT) and `school_id` CASCADE:
+- **Configuration (tenant lifetime, catalog only):** `transport_route_fee_heads`,
+  `hostel_fee_heads`, `admission_fee_heads` (runtime may update or clear a
+  mapping) and `library_fine_policies` (insert-only versions).
+- **Finance ledger evidence (anchored, delete-guarded, insert-only, on the
+  verifier's no-runtime-UPDATE / DELETE lists):** `transport_fee_selections`,
+  `hostel_fee_selections`, `admission_fee_selections`, `library_fines`,
+  `library_fine_voids`.
+- **Actor references:** three, all `RETAIN_REFERENCE` in
+  `UserReferenceCatalog` (§30.7).
+
+### 31.6 Retention, as built
+- **Dependency graph:** each provenance row keeps its operational row
+  (assignment, residency, converted application, loan) and its FEE selection
+  or charge; FEE selections and fined charges keep the Student. The
+  operational purges answer `dependency_blocked` through `ReferencingRows`
+  (or `ConvertedApplicationRetentionService::blocker()`).
+- **Finance expiry:** `retention_expire_finance_unit` refuses a unit whose
+  charge a Library fine references (`retention_finance_dependency`), as for
+  Canteen. No Transport, Hostel or Admissions table references `charges`.
+- **Observation for E21 (not a change):** the D8 unit deletes neither FEE
+  optional selections nor a fined charge, so OPF evidence, and the
+  operational rows it keeps, stay as long as that Finance evidence. The
+  Student was already kept by its selection or charge. Qualified E21
+  ratification should note this.
+
+### 31.7 Owner notes (accepted behaviour, no change)
+- **Withdrawal of a reused selection.** When an assignment or residency
+  reused an existing active selection (for example one Finance made by
+  hand), ending it withdraws that selection: §27.2 and §28.2 withdraw
+  "every still-active selection the source recorded". A Finance user may
+  select again by hand.
+- **Not tested as races, safe by locks:** void vs. payment allocation, void
+  vs. concession approval, and end vs. carry-forward. Each takes the
+  charge, or the assignment or residency, row lock and re-checks state.
+- **Guard scope.** The guard pins both seams' callers across all of `app/`
+  exactly. Its negative scans of the source modules cover `app/Domain/<module>`
+  and name the FEE charge classes; tightening it to a positive allow-list
+  of Fees imports is optional future hardening.
+
+### 31.8 Production gates (unchanged)
+E21 (retention ratification and configuration), E30 (receipt / GST), E31
+(fee regulation; not Library fines), E32 (RTE / free seats) and E34 (Library
+fines, LEGAL_REVIEW_REQUIRED) stay open. OPF is development-closed, not
+production-ready, and draws no legal conclusion.
+
+### 31.9 Deferred (unchanged, none partially built)
+Hostel deposits; refunds, credits and unapplied cash; pre-conversion
+application fees and any applicant charge subject; Library lost or damaged
+charging, replacement cost and daily accumulation; proration; a FEE price
+variant; gateway payments; GST / tax; Guardian- or Student-facing fee views.
+Each needs its own contract and ADR.
+
+### 31.10 Proof
+The OPF suites, the architecture guard, retention, authorization, RLS and
+database suites, the static and release gates, `platform:verify-database`,
+a rollback and reapply of the five OPF migrations to an identical schema
+snapshot, and the full canonical isolated regression on the closure tree.
+The counts are recorded in the OPF.5 commit.

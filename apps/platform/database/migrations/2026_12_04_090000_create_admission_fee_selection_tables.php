@@ -132,8 +132,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        TenantRls::disable('admission_fee_selections');
         Schema::dropIfExists('admission_fee_selections');
         DB::unprepared('DROP FUNCTION IF EXISTS admission_fee_selections_guard()');
+        TenantRls::disable('admission_fee_heads');
         Schema::dropIfExists('admission_fee_heads');
     }
 };

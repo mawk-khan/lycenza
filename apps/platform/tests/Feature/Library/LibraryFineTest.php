@@ -27,6 +27,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\AssertsTenantRlsIsolation;
 use Tests\Feature\Fees\Concerns\CreatesFeeConcessionFixtures;
 use Tests\TestCase;
 
@@ -42,6 +43,7 @@ use Tests\TestCase;
  */
 class LibraryFineTest extends TestCase
 {
+    use AssertsTenantRlsIsolation;
     use CreatesFeeConcessionFixtures;
 
     /** @return array<string, mixed> */
@@ -363,5 +365,65 @@ class LibraryFineTest extends TestCase
         $this->actingAs($otherAdmin)->withHeader('X-School-Id', $other->id)->getJson("/api/v1/schools/{$other->id}/library-loans/{$loan->id}/fine")->assertNotFound();
         $this->actingAs($otherAdmin)->withHeader('X-School-Id', $other->id)->getJson("/api/v1/schools/{$other->id}/library-fine-policy")->assertOk()->assertJsonPath('data', null);
         $this->assertSame(0, $this->inSchool($other, fn () => LibraryFine::query()->count()), 'RLS');
+    }
+
+    /** OPF.5 closure: the version history is capability-gated, and another School cannot void a fine. */
+    #[Test]
+    public function policy_versions_need_fine_view_and_another_school_cannot_void_a_fine(): void
+    {
+        $w = $this->world();
+        $this->publish($w);
+        $base = "/api/v1/schools/{$w['school']->id}";
+        foreach ([$w['librarian'], $w['financeOfficer']] as $denied) {
+            $this->actingAs($denied)->withHeader('X-School-Id', $w['school']->id)->getJson("{$base}/library-fine-policy/versions")->assertForbidden();
+        }
+
+        $this->returnAt($w, $this->loan($w), '2026-07-15 09:00:00');
+        $fine = $this->fines($w)->sole();
+
+        // Another School's administrator holds library.fines.void in their own School only: the fine is not found there.
+        [$otherAdmin, $other] = $this->createSchoolAdmin();
+        $this->actingAs($otherAdmin)->withHeader('X-School-Id', $other->id)->withHeader('Idempotency-Key', (string) Str::uuid())
+            ->postJson("/api/v1/schools/{$other->id}/library-fines/{$fine->id}/void", ['reason' => 'x'])->assertNotFound()
+            ->assertJsonPath('error.code', 'LIBRARY_FINE_NOT_FOUND');
+        $this->assertSame(0, $this->inSchool($w['school'], fn () => LibraryFineVoid::query()->count()));
+        $this->assertNull($this->inSchool($w['school'], fn () => Charge::query()->findOrFail($fine->charge_id))->cancelled_at);
+    }
+
+    /** OPF.5 closure (rule 28): the three Library fine tables are isolated by forced RLS at the raw SQL layer and fail closed. */
+    #[Test]
+    public function the_library_fine_tables_are_tenant_isolated_at_the_raw_sql_layer(): void
+    {
+        $w = $this->world();
+        $this->publish($w);
+        $this->returnAt($w, $this->loan($w), '2026-07-15 09:00:00');
+        app(LibraryFineService::class)->void($w['school'], $this->fines($w)->sole()->id, 'Returned before due', $w['finesOfficer']);
+        $other = $this->createSchool();
+
+        $this->assertTenantRlsIsolation([
+            'library_fine_policies' => LibraryFinePolicy::class,
+            'library_fines' => LibraryFine::class,
+            'library_fine_voids' => LibraryFineVoid::class,
+        ], $w['school']->id, $other->id);
+    }
+
+    /** OPF.5 closure: the database refuses fine evidence naming a charge that is not this fine's (another amount or Student, or a cancelled one). */
+    #[Test]
+    public function the_database_refuses_a_fine_on_a_charge_of_another_shape(): void
+    {
+        $w = $this->world();
+        $this->publish($w);
+        $this->returnAt($w, $this->loan($w), '2026-07-15 09:00:00');
+        $fine = $this->fines($w)->sole();
+        $insert = fn (array $over) => $this->inSchool($w['school'], fn () => DB::transaction(fn () => DB::table('library_fines')->insert(
+            collect(array_merge((array) DB::table('library_fines')->where('id', $fine->id)->first(), ['id' => (string) Str::uuid7()], $over))->except('retention_recorded_at')->all(),
+        )));
+
+        // The concession world's own tuition charge: same Student and year, another amount and other accounts.
+        $this->assertThrows(fn () => $insert(['charge_id' => $w['charge']->id]), QueryException::class, "the charge is not this fine's Student, year, amount and fee head accounts");
+
+        // A cancelled charge (the fine voided) can never be named again.
+        app(LibraryFineService::class)->void($w['school'], $fine->id, 'Returned before due', $w['finesOfficer']);
+        $this->assertThrows(fn () => $insert([]), QueryException::class, "the charge is not this fine's Student, year, amount and fee head accounts");
     }
 }

@@ -14,15 +14,18 @@ use App\Domain\Transport\Application\TransportFeeSelectionService;
 use App\Domain\Transport\Application\TransportStudentAssignmentService;
 use App\Domain\Transport\Infrastructure\TransportFeeSelection;
 use App\Domain\Transport\Infrastructure\TransportRoute;
+use App\Domain\Transport\Infrastructure\TransportRouteFeeHead;
 use App\Domain\Transport\Infrastructure\TransportStudentAssignment;
 use App\Models\SchoolAuditEvent;
 use App\Models\User;
+use App\Support\Retention\ReferencingRows;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\AssertsTenantRlsIsolation;
 use Tests\Feature\Fees\Concerns\CreatesFeeAssessmentFixtures;
 use Tests\TestCase;
 
@@ -34,6 +37,7 @@ use Tests\TestCase;
  */
 class TransportFeeSelectionTest extends TestCase
 {
+    use AssertsTenantRlsIsolation;
     use CreatesFeeAssessmentFixtures;
 
     /** @return array<string, mixed> */
@@ -353,5 +357,63 @@ class TransportFeeSelectionTest extends TestCase
         [$otherAdmin, $other] = $this->createSchoolAdmin();
         $this->actingAs($otherAdmin)->withHeader('X-School-Id', $other->id)
             ->getJson("/api/v1/schools/{$other->id}/transport-student-assignments/{$assignment->id}/fee-selections")->assertNotFound();
+    }
+
+    /** OPF.5 closure: every Transport fee read is capability-gated, and another School can neither read nor change a route mapping. */
+    #[Test]
+    public function transport_fee_reads_need_transport_capabilities_and_another_school_cannot_reach_a_route_mapping(): void
+    {
+        $w = $this->world();
+        $this->map($w);
+        $assignment = $this->assign($w, $this->student($w));
+        $base = "/api/v1/schools/{$w['school']->id}";
+        $as = fn (User $u) => $this->actingAs($u)->withHeader('X-School-Id', $w['school']->id);
+
+        // Finance staff without Transport capabilities read neither the mapping nor the intent.
+        $as($w['finance'])->getJson("{$base}/transport-routes/{$w['route']->id}/fee-head")->assertForbidden();
+        $as($w['finance'])->getJson("{$base}/transport-student-assignments/{$assignment->id}/fee-selections")->assertForbidden();
+
+        // Another School's administrator reaches no route of this School, and changes nothing.
+        [$otherAdmin, $other] = $this->createSchoolAdmin();
+        $otherBase = "/api/v1/schools/{$other->id}";
+        $this->actingAs($otherAdmin)->withHeader('X-School-Id', $other->id)
+            ->getJson("{$otherBase}/transport-routes/{$w['route']->id}/fee-head")->assertNotFound();
+        $this->actingAs($otherAdmin)->withHeader('X-School-Id', $other->id)
+            ->putJson("{$otherBase}/transport-routes/{$w['route']->id}/fee-head", ['fee_head_id' => null])->assertNotFound();
+        $this->assertSame($w['transportHead']->id, $this->fees()->routeFeeHead($w['route'])['feeHeadId'] ?? null);
+    }
+
+    /** OPF.5 closure (rule 28): both Transport OPF tables are isolated by forced RLS at the raw SQL layer and fail closed. */
+    #[Test]
+    public function the_transport_fee_tables_are_tenant_isolated_at_the_raw_sql_layer(): void
+    {
+        $w = $this->world();
+        $this->map($w);
+        $this->assign($w, $this->student($w));
+        $other = $this->createSchool();
+
+        $this->assertTenantRlsIsolation([
+            'transport_route_fee_heads' => TransportRouteFeeHead::class,
+            'transport_fee_selections' => TransportFeeSelection::class,
+        ], $w['school']->id, $other->id);
+    }
+
+    /** OPF.5 closure (ADR 0067 §21): provenance keeps its ended assignment dependency_blocked for the Transport purge. */
+    #[Test]
+    public function the_provenance_keeps_its_ended_assignment_from_the_transport_purge(): void
+    {
+        $w = $this->world();
+        $blocker = fn (TransportStudentAssignment $a) => $this->inSchool($w['school'], fn () => app(ReferencingRows::class)->first('transport_student_assignments', $w['school']->id, [$a->id]));
+
+        // An unmapped route records no provenance: the ended assignment leaves on its own clock.
+        $plain = $this->assign($w, $this->student($w));
+        $this->end($w, $plain);
+        $this->assertNull($blocker($plain));
+
+        // With provenance the ended assignment stays, as Finance evidence keeps it.
+        $this->map($w);
+        $linked = $this->assign($w, $this->student($w));
+        $this->end($w, $linked);
+        $this->assertSame('transport_fee_selections', $blocker($linked));
     }
 }

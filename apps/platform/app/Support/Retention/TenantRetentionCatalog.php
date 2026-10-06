@@ -61,7 +61,7 @@ final class TenantRetentionCatalog
 
     /** category => [status, decision, tables] */
     public const CATEGORIES = [
-        'finance_ledger' => [self::ADOPTED, 'D8: 8 y after the financial period closes; settled, dependency-safe units expire through platform:finance-retention-prune (E21.3A2); unsettled, payroll-linked and canteen-linked detail stays', [
+        'finance_ledger' => [self::ADOPTED, 'D8: 8 y after the financial period closes; settled, dependency-safe units expire through platform:finance-retention-prune (E21.3A2); unsettled, payroll-linked, canteen-linked and Library-fine-linked detail stays', [
             'financial_period_charge_states',
             'journal_entries', 'journal_lines', 'charges', 'fee_adjustments', 'fee_assessments', 'fee_assessment_runs',
             'fee_assessment_run_items', 'fee_concessions', 'fee_optional_selections', 'late_fee_assessments', 'late_fee_runs',

@@ -8,6 +8,7 @@ use App\Domain\Admissions\Application\Exceptions\AdmissionFeeHeadNotSelectableEx
 use App\Domain\Admissions\Application\Exceptions\InvalidAdmissionApplicationTransitionException;
 use App\Domain\Admissions\Application\Retention\ConvertedApplicationRetentionService;
 use App\Domain\Admissions\Infrastructure\AdmissionApplication;
+use App\Domain\Admissions\Infrastructure\AdmissionFeeHead;
 use App\Domain\Admissions\Infrastructure\AdmissionFeeSelection;
 use App\Domain\Fees\Application\FeeHeadService;
 use App\Domain\Fees\Application\FeeOptionalSelectionService;
@@ -28,6 +29,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use RuntimeException;
+use Tests\Concerns\AssertsTenantRlsIsolation;
 use Tests\Feature\Fees\Concerns\CreatesFeeAssessmentFixtures;
 use Tests\TestCase;
 
@@ -42,6 +44,7 @@ use Tests\TestCase;
  */
 class AdmissionFeeSelectionTest extends TestCase
 {
+    use AssertsTenantRlsIsolation;
     use CreatesFeeAssessmentFixtures;
 
     /** @return array<string, mixed> */
@@ -419,5 +422,20 @@ class AdmissionFeeSelectionTest extends TestCase
         $this->actingAs($otherAdmin)->withHeader('X-School-Id', $other->id)
             ->getJson("/api/v1/schools/{$other->id}/admission-fee-head")->assertOk()->assertJsonPath('data', null);
         $this->assertSame(0, $this->inSchool($other, fn () => AdmissionFeeSelection::query()->count()), 'RLS: no provenance is visible to another School');
+    }
+
+    /** OPF.5 closure (rule 28): both Admissions OPF tables are isolated by forced RLS at the raw SQL layer and fail closed. */
+    #[Test]
+    public function the_admission_fee_tables_are_tenant_isolated_at_the_raw_sql_layer(): void
+    {
+        $w = $this->world();
+        $this->map($w);
+        $this->convert($w);
+        $other = $this->createSchool();
+
+        $this->assertTenantRlsIsolation([
+            'admission_fee_heads' => AdmissionFeeHead::class,
+            'admission_fee_selections' => AdmissionFeeSelection::class,
+        ], $w['school']->id, $other->id);
     }
 }
