@@ -1,8 +1,9 @@
 # ADR 0068: Assessment & Results Reopening Contract — P3 and Internal StudentMark
 
 - Status: **Accepted (RES.0B, 2026-10-06; documentation only).** Owner
-  decisions R1–R20 (§4) are adopted. No code, schema, route, capability or
-  UI exists for anything this ADR describes.
+  decisions R1–R20 (§4) are adopted. **RES.1 implemented (2026-10-06,
+  §18):** the P3 seam. No StudentMark code, schema, route, capability or
+  UI exists.
 - Date: 2026-10-06
 - Programme: **RES — Assessment & results** (`MASTER-ROADMAP.md`,
   "Post-foundation product programmes", order 5).
@@ -498,3 +499,100 @@ assumed.**
   assurance (ADR 0049).
 - **Choose a retention period now.** Rejected: E21-D7 and the open E21
   ratification.
+
+## 18. RES.1 as built (2026-10-06)
+
+**P3 exists as a Students-owned read seam. Nothing consumes it yet;
+StudentMark (RES.2) waits for RES-L0.** §1–§17 are unchanged; the dated
+clarifications below record how §5 was realized.
+
+### 18.1 The seam
+`App\Domain\Students\Application\SubjectOfferingEligibilityReadService`:
+- `eligibilityAsOf(School, studentId, subjectOfferingId, Y-m-d)` — the plain
+  read;
+- `lockEligibilityAsOf(...)` — the same answer, inside the caller's open
+  transaction (`LogicException` otherwise), holding `FOR SHARE` on the
+  Offering row, then every placement of the Student covering D in the
+  Offering's year (id order), then every elective row of the Student for the
+  Offering covering D (id order).
+
+It returns `SubjectOfferingEligibility`: eligible (`required` / `elective`,
+the placement id, its Section id, and for an elective the
+`student_subject_enrollments` id), or not eligible with one closed reason:
+`student_not_found`, `offering_not_found`, `outside_academic_year`,
+`no_placement`, `no_elective_enrollment`, and the integrity reasons
+`elective_unanchored`, `ambiguous_history`, `inconsistent_record`
+(`isIntegrityFailure()`). An invalid date (`Y-m-d` only) is an
+`InvalidArgumentException`. Ids only: no Student data in the answer. No
+table, migration, route, capability, UI, event or cache.
+
+### 18.2 §5.5 answered from the code
+- **Elective anchoring on placement transfer:** none.
+  `StudentSubjectEnrollmentService::enroll()` anchors a row to the Student's
+  then-active placement in the Offering's context; `StudentEnrollmentService`
+  (transfer, complete, withdraw, cancel) never touches
+  `student_subject_enrollments`. After a transfer the elective row keeps its
+  original, ended anchor, so §5.2's rule (a matching placement covering D,
+  not the anchor itself) is the correct one. A cross-campus transfer leaves
+  the elective row `active` but the Student is no longer in the Offering's
+  context: `no_placement` from the transfer date.
+- **Cancelled intervals count.** `StudentEnrollmentRosterReadService`'s
+  predicate has no status filter, and
+  `StudentEnrollmentRosterReadServiceTest::the_predicate_is_temporal_not_status_based`
+  pins a cancelled placement on the roster for its interval. P3 follows it,
+  for placements and elective rows alike.
+
+### 18.3 Clarifications of §5
+- **The date must fall inside the Offering's AcademicYear** (inclusive;
+  `outside_academic_year`). An Offering belongs to one year, `ends_on` is
+  NOT NULL, and Examinations already requires its dates inside the year
+  (`EXAMINATIONS.md` §8). This also keeps a placement left open after its
+  year (rollover never completes the source row) from answering for the
+  next year.
+- **One place per date:** two placements of the Student covering D in the
+  Offering's year, or two elective rows for the Offering covering D, are
+  `ambiguous_history`, whatever their context (stricter than
+  `membersAsOf()`, which can only see one Section).
+- **Consistency checks** (`inconsistent_record`): the placement's Section row
+  must agree with the placement's context columns (application-kept, not a
+  foreign key); the elective row's year must equal the Offering's (the
+  Offering foreign key pins only the School); the anchor must be the same
+  Student's placement in the Offering's context.
+- **The Offering's current status is ignored** (an Offering inactive today
+  is answered for its historical dates); the current roster
+  (`SubjectOfferingRosterReadService`) still answers only "now".
+- **The source follows the Offering's current `is_required`.** It is
+  mutable through the Offering update route and has no history; the locking
+  variant serializes with a concurrent change, but a later flip changes
+  later answers. Recorded as a RES.2 review item.
+
+### 18.4 Concurrency
+Students writers lock Section → placement and Offering → elective row; the
+seam's Offering → placement → elective order cannot form a cycle with them.
+Row locks cannot stop a *new* overlapping row being inserted (a phantom),
+as for Attendance; the one-active-row indexes and the Offering lock taken by
+elective enrollment and switch narrow that to backdated inserts, which the
+next read reports as `ambiguous_history`.
+
+### 18.5 Proof
+- **Behaviour (`SubjectOfferingEligibilityReadServiceTest`, 15 tests):**
+  required eligibility on any Section of the grade; campus and grade
+  context; Section and campus transfer boundaries; rollover and year bounds;
+  withdrawal and cancelled-interval boundaries; elective start, end and
+  switch boundaries; no re-anchoring on placement transfer; a wrong-context
+  anchor and a legacy unanchored row fail closed (the current roster still
+  admits the latter; P3 does not); an inactive Offering is still answered;
+  another School's Student or Offering is never answered; overlapping
+  history and a year mismatch fail closed; the locking variant gives the
+  same answers and holds `RowShareLock` on exactly the three tables; dates
+  are strict.
+- **Concurrency (`SubjectOfferingEligibilityConcurrencyTest`)**, two real
+  processes with an observed lock wait: an elective withdrawal, and a
+  backdated placement transfer, each wait for the held locking read and
+  commit after it. A mutation that drops the locks fails both; a mutation
+  that adds a status filter fails the behaviour tests.
+- **Guard (`SubjectOfferingEligibilityArchitectureGuardTest`):** the seam
+  lives in Students and references no Examinations code; it has no caller
+  or route; no StudentMark, mark-correction, result, report-card or
+  transcript class, table, route or `examinations.marks.*` /
+  `examinations.results.*` capability exists.

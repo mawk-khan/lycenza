@@ -2623,6 +2623,27 @@ No queue job/scheduler, no automatic source Enrollment completion, no
 automatic Roll Number generation, no AcademicYear activation/closure --
 unchanged from the domain layer's own existing invariants.
 
+## As-of-date SubjectOffering eligibility (RES.1, ADR 0068 §5, §18)
+
+`SubjectOfferingEligibilityReadService` answers, for a School, Student,
+SubjectOffering and date, whether the Student was eligible to be assessed
+in that Offering on that date, and on which placement:
+- **required Offering:** a placement covering the date in the Offering's
+  AcademicYear, Campus and GradeLevel, whatever its Section (returned as
+  evidence);
+- **elective Offering:** additionally a `student_subject_enrollments` row
+  for the Offering covering the date, with its placement anchor;
+- **temporal, not status-based,** exactly as `membersAsOf()` (cancelled and
+  other terminal intervals count for their dates); a later transfer,
+  rollover or withdrawal never changes an earlier date's answer;
+- **fails closed** with a closed reason (another School, no placement, no
+  elective row, a legacy unanchored row, ambiguous or inconsistent history);
+- a plain read and a lock-capable variant (`FOR SHARE`, inside the caller's
+  transaction).
+
+Internal only (no route or capability) and no consumer yet: StudentMark
+(ADR 0068 RES.2) will be the first, after legal item RES-L0.
+
 ## Deferred (not yet implemented)
 
 - **Rollover queue-backed execution** — the architecture was decided
