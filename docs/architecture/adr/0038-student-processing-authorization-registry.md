@@ -395,3 +395,16 @@ and removed in the core purge's one-Student transaction.
 - A guardian-consent authorization's relationship goes with it.
 - An authorization of a current Student is never eligible.
 See `docs/security/E21-RETENTION-DETERMINATION.md` §5.6.
+
+## Note — first consumer (RES.2, 2026-10-07)
+
+StudentMark (ADR 0068 §20) is the first consumer of the seam above. It uses
+the documented sequence through two id-based additions, so Examinations never
+loads Students models: `lockQualifyingAuthorizationIdForStudentId()` (the same
+locks and transaction requirement, delegating to
+`lockQualifyingAuthorizationIdForProcessing()`) and `authorizedStudentIds()`
+(a plain read for a list that must withhold the rest). A mark names its grant
+through the registry's `spa_context_unique` key, so the database proves it is
+the same Student's `academic_records` grant. Per RES-L0 (2026-10-07), a
+withdrawal never invalidates a recorded mark, but it stops new marks and
+withholds the mark's value from ordinary reads.

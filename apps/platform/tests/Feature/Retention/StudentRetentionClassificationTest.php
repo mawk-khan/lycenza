@@ -54,6 +54,8 @@ class StudentRetentionClassificationTest extends TestCase
             'communication_domain_consent_events' => 'D7 core (25 y): consent evidence follows its Student subject (Communications participant, core-floored function, E21.3B)',
             'communication_domain_preferences' => 'D7 core (25 y): follows its Student subject (Communications participant, E21.3B)',
             'identity_account_invitations' => 'retained, blocks: an ended one expires 7 d after it ended (platform:portal-invitations-prune, E21.3B); a usable one keeps the Student',
+            // RES.2 (ADR 0068 §12, §19): StudentMark keeps its Student until RES-L8 is answered.
+            'student_marks' => 'retained, blocks: RES-L8 unresolved (ADR 0068 §12): StudentMark evidence has no adopted period and no retention participant yet',
         ],
         'student_enrollments' => [
             'student_subject_enrollments' => 'D7 core: purged first, with the Student',
@@ -62,8 +64,15 @@ class StudentRetentionClassificationTest extends TestCase
             'admission_applications' => 'D7 core: the converted application of the same Student (another Student\'s blocks)',
             'fee_assessments' => 'retained, blocks: Finance D8',
             'fee_assessment_run_items' => 'retained, blocks: Finance D8',
+            // RES.2: the P3 placement a mark (and each of its revisions) was recorded on.
+            'student_marks' => 'retained, blocks: RES-L8 unresolved (ADR 0068 §12): StudentMark evidence has no adopted period and no retention participant yet',
+            'student_mark_revisions' => 'retained, blocks: RES-L8 unresolved (ADR 0068 §12): StudentMark evidence has no adopted period and no retention participant yet',
         ],
-        'student_subject_enrollments' => [],
+        'student_subject_enrollments' => [
+            // RES.2: the elective enrollment a mark (and each of its revisions) was recorded on.
+            'student_marks' => 'retained, blocks: RES-L8 unresolved (ADR 0068 §12): StudentMark evidence has no adopted period and no retention participant yet',
+            'student_mark_revisions' => 'retained, blocks: RES-L8 unresolved (ADR 0068 §12): StudentMark evidence has no adopted period and no retention participant yet',
+        ],
         'student_guardian_relationships' => [
             'student_processing_authorizations' => 'D7 core: a relationship an authorization names is its evidence and goes with the core record (E21.3B); the operational phase leaves it',
         ],
@@ -73,6 +82,9 @@ class StudentRetentionClassificationTest extends TestCase
         // E21.3B: the rows that go with the Student, and what may reference them.
         'student_processing_authorizations' => [
             'student_processing_authorizations' => 'D7 core: terminal events point at their grant; removed together, leaves first',
+            // RES.2 (ADR 0038 provenance): a mark keeps the authorization it was recorded under, never invalidated by withdrawal.
+            'student_marks' => 'retained, blocks: RES-L8 unresolved (ADR 0068 §12): StudentMark evidence has no adopted period and no retention participant yet',
+            'student_mark_revisions' => 'retained, blocks: RES-L8 unresolved (ADR 0068 §12): StudentMark evidence has no adopted period and no retention participant yet',
         ],
         'admission_applications' => [
             // OPF.3 (ADR 0067 §29): it keeps the converted application (so its Student), as the selection keeps its Student.

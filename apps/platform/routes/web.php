@@ -39,6 +39,7 @@ use App\Http\Controllers\App\EnrollmentRolloverSubjectMappingController;
 use App\Http\Controllers\App\Examinations\ExaminationController;
 use App\Http\Controllers\App\Examinations\ExaminationPaperController;
 use App\Http\Controllers\App\Examinations\GradeScaleController;
+use App\Http\Controllers\App\Examinations\StudentMarkController;
 use App\Http\Controllers\App\Finance\ChargeController as FinanceChargeController;
 use App\Http\Controllers\App\Finance\FeeAssessmentRunController as FinanceFeeAssessmentRunController;
 use App\Http\Controllers\App\Finance\FeeConcessionController as FinanceFeeConcessionController;
@@ -1558,6 +1559,20 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
     // edited through the ordinary update -- there is no dedicated
     // activate/deactivate/reactivate route; the service interprets it
     // as a guarded lifecycle transition.
+    // RES.2 (ADR 0068 §4.1, §9, §19): the per-paper StudentMark surface --
+    // session JSON only (bearer tokens carry no MFA assurance, ADR 0049), each
+    // route composing its examinations.marks.* capability with `mfa`. Exactly
+    // the grid read and the atomic batch write; no list, search, export,
+    // report, Student-centric or results route. Development only (RES-L1).
+    Route::prefix('app/examination-papers/{examinationPaper}/marks')->name('app.examination-papers.marks.')->group(function (): void {
+        Route::get('/', [StudentMarkController::class, 'index'])
+            ->middleware(['capability:examinations.marks.view', 'mfa'])
+            ->name('index');
+        Route::put('/', [StudentMarkController::class, 'update'])
+            ->middleware(['capability:examinations.marks.manage', 'mfa'])
+            ->name('update');
+    });
+
     Route::prefix('app/examinations/grade-scales')->name('app.examinations.grade-scales.')->group(function (): void {
         Route::get('/', [GradeScaleController::class, 'index'])->name('index');
         Route::post('/', [GradeScaleController::class, 'store'])->name('store');

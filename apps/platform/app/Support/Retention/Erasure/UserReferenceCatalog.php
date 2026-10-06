@@ -117,6 +117,9 @@ final class UserReferenceCatalog
         'schools' => ['closed_by_user_id' => self::RETAIN_REFERENCE],
         'staff_account_invitations' => ['accepted_user_id' => self::RETAIN_REFERENCE, 'invited_by_user_id' => self::RETAIN_REFERENCE, 'revoked_by_user_id' => self::RETAIN_REFERENCE],
         'student_guardian_account_links' => ['linked_by_user_id' => self::RETAIN_REFERENCE, 'unlinked_by_user_id' => self::RETAIN_REFERENCE],
+        'student_mark_revisions' => ['recorded_by_user_id' => self::RETAIN_REFERENCE],
+        // RES.2 (ADR 0068 §6.1): the actor of each mark write is academic-evidence accountability.
+        'student_marks' => ['recorded_by_user_id' => self::RETAIN_REFERENCE],
         'student_processing_authorizations' => ['recorded_by_user_id' => self::RETAIN_REFERENCE],
         'teaching_assignments' => ['created_by_user_id' => self::RETAIN_REFERENCE, 'ended_by_user_id' => self::RETAIN_REFERENCE],
         'user_mfa_factors' => ['user_id' => self::DELETE_CHILD],

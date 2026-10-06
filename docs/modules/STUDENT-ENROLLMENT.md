@@ -2642,8 +2642,12 @@ in that Offering on that date, and on which placement:
   transaction).
 
 Internal only (no route or capability) and no consumer yet: StudentMark
-(ADR 0068 RES.2, authorised for development since RES-L0 was determined on
-2026-10-07) will be the first.
+(ADR 0068 RES.2) is its first and only consumer since 2026-10-07. RES.2 also
+added `eligibleStudentsAsOf()` (the same per-Student decision applied to every
+candidate), `StudentPlacementDisplayReadService::forPlacements()` (the
+minimal SectionRosterMember projection) and, on the processing-authorization
+read service, the id-based `lockQualifyingAuthorizationIdForStudentId()` and
+`authorizedStudentIds()` — so a consumer never loads this module's models.
 
 ## Deferred (not yet implemented)
 

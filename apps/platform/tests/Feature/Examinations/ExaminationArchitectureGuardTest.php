@@ -40,6 +40,20 @@ class ExaminationArchitectureGuardTest extends TestCase
         return $files;
     }
 
+    /** RES.2 (ADR 0068 §3): the only Students/SIS names StudentMark files may use. */
+    private const STUDENT_MARK_STUDENTS_SEAMS = [
+        'App\\Domain\\Students\\Application\\SubjectOfferingEligibilityReadService',
+        'App\\Domain\\Students\\Application\\StudentProcessingAuthorizationReadService',
+        'App\\Domain\\Students\\Application\\StudentPlacementDisplayReadService',
+        'App\\Domain\\Students\\Application\\Exceptions\\StudentNotAuthorizedForProcessingException',
+        'App\\Domain\\Students\\Domain\\ProcessingAuthorizationPurpose',
+    ];
+
+    private function isStudentMarkFile(string $file): bool
+    {
+        return str_contains($file, '/Application/Marks/') || str_starts_with(basename($file), 'StudentMark');
+    }
+
     private function code(string $file): string
     {
         // Strip comments/docblocks: this module's own docblocks
@@ -96,6 +110,12 @@ class ExaminationArchitectureGuardTest extends TestCase
 
         foreach ($this->moduleSources() as $file) {
             $code = $this->code($file);
+            // RES.2 (ADR 0068 §3): StudentMark reaches Students/SIS ONLY through these Application seams --
+            // never its models or tables. Removing exactly these names lets every other ban below still apply.
+            if ($this->isStudentMarkFile($file)) {
+                $code = str_replace(self::STUDENT_MARK_STUDENTS_SEAMS, '', $code);
+                $code = str_replace(array_map(fn (string $fqcn) => substr($fqcn, strrpos($fqcn, '\\') + 1), self::STUDENT_MARK_STUDENTS_SEAMS), '', $code);
+            }
 
             foreach ([
                 'App\\Domain\\Timetable',
@@ -160,6 +180,8 @@ class ExaminationArchitectureGuardTest extends TestCase
         $services = [
             app_path('Domain/Examinations/Application/ExaminationService.php'),
             app_path('Domain/Examinations/Application/ExaminationPaperService.php'),
+            // RES.2: the sole writer of StudentMark (StudentMarkArchitectureGuardTest proves it writes nothing else).
+            app_path('Domain/Examinations/Application/Marks/StudentMarkService.php'),
         ];
         $gradeScaleFiles = array_filter($this->moduleSources(), fn ($f) => str_contains(basename($f), 'GradeScale') || str_contains(basename($f), 'GradeBand'));
 
@@ -197,7 +219,9 @@ class ExaminationArchitectureGuardTest extends TestCase
         $gradeScaleFiles = array_filter($this->moduleSources(), fn ($f) => str_contains(basename($f), 'GradeScale') || str_contains(basename($f), 'GradeBand'));
 
         foreach ($this->moduleSources() as $file) {
-            if (in_array($file, $gradeScaleFiles, true)) {
+            // RES.2 (ADR 0068 §6.2): StudentMark's row locks (paper and year FOR SHARE, the mark FOR UPDATE) are
+            // its sanctioned write order; StudentMarkArchitectureGuardTest pins that it uses no TenantLock/advisory.
+            if (in_array($file, $gradeScaleFiles, true) || $this->isStudentMarkFile($file)) {
                 continue;
             }
 

@@ -214,6 +214,14 @@ class TenantClosureReadinessTest extends TestCase
         // E21.2G: no category is left without a project decision. A decided
         // period without a mechanism names the follow-up checkpoint that ships it.
         foreach (TenantRetentionCatalog::CATEGORIES as $category => [$status, $decision]) {
+            // RES.2 (ADR 0068 §12): StudentMark is the ONE deliberate exception -- legal item RES-L8 has no answer,
+            // so no period may be invented; readiness reports it as `policy_unresolved` (fail closed).
+            if ($category === 'student_marks') {
+                $this->assertSame(TenantRetentionCatalog::POLICY_UNRESOLVED, $status, 'StudentMark has no adopted period until RES-L8');
+                $this->assertStringContainsString('RES-L8', $decision);
+
+                continue;
+            }
             $this->assertNotSame(TenantRetentionCatalog::POLICY_UNRESOLVED, $status, "{$category} has no decision");
             $this->assertNotSame('', trim($decision), "{$category} has no decision text");
             if ($status === TenantRetentionCatalog::MECHANISM_PENDING) {

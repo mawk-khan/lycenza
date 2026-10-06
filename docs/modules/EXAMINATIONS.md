@@ -735,3 +735,23 @@ Examinations and examination papers are tenant-lifetime School academic
 configuration without personal data (E21.2G A2): no E21 mechanism expires
 them (`AcademicRetentionArchitectureGuardTest`). Student marks and results
 are not implemented.
+
+## StudentMark (RES.2, 2026-10-07; ADR 0068 §20)
+
+Internal, administrative marks entry per ExaminationPaper, **development only**
+(production: RES-L1). Highly Sensitive.
+- **Data:** `student_marks` (one per paper × Student; `present` with a value
+  0..max, `absent`, `exempt`; the P3 placement, eligibility source, elective
+  row and ADR 0038 authorization it was written under; a version) and
+  `student_mark_revisions` (the value history of every write, written by the
+  database; insert-only). No remark, grade, percentage, pass/fail, rank or
+  publication field.
+- **Surface:** `GET` / `PUT /app/examination-papers/{paper}/marks` (session
+  JSON, `examinations.marks.view` / `.manage` + `mfa`); `school_admin` and
+  `principal` only.
+- **Rules:** P3 eligibility on the paper's date; a current processing basis
+  for every write (and for showing a value); optimistic versions; atomic
+  batches; a closed year or an inactive paper refuses; once marked, a paper's
+  `max_marks` and `scheduled_on` are frozen.
+- **Not built:** lock, corrections (RES.3), teacher entry (RES.4), results,
+  report cards, transcripts, Student/Guardian access, exports, analytics.

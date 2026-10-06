@@ -67,6 +67,8 @@ class DatabaseRoleVerifier
         'admission_fee_selections',
         // OPF.4 (ADR 0067 §30): Library fine evidence, its voids and the immutable policy versions.
         'library_fines', 'library_fine_voids', 'library_fine_policies',
+        // RES.2 (ADR 0068 §6.1, §19.3 a): StudentMark is never runtime-deleted; its value history is insert-only.
+        'student_marks', 'student_mark_revisions',
     ];
 
     /**
@@ -86,6 +88,8 @@ class DatabaseRoleVerifier
         'admission_fee_selections',
         // OPF.4 (ADR 0067 §30): Library fine evidence, its voids and the immutable policy versions.
         'library_fines', 'library_fine_voids', 'library_fine_policies',
+        // RES.2 (ADR 0068 §19.3 a): StudentMark value history is never rewritten.
+        'student_mark_revisions',
     ];
 
     /**

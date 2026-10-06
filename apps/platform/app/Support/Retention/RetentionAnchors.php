@@ -142,6 +142,9 @@ final class RetentionAnchors
         // OPF.4 (ADR 0067 §30): Library fine evidence and its voids (Finance evidence; the fine references `charges`).
         'library_fines' => ['library_loan_id', 'student_id', 'library_fine_policy_id', 'fee_head_id', 'academic_year_id', 'charge_id'],
         'library_fine_voids' => ['library_fine_id'],
+        // RES.2 (ADR 0068 §12): StudentMark and its value history (retention policy_unresolved until RES-L8).
+        'student_marks' => ['examination_paper_id', 'academic_year_id', 'student_id', 'student_enrollment_id', 'student_subject_enrollment_id', 'processing_authorization_id'],
+        'student_mark_revisions' => ['student_mark_id', 'student_enrollment_id', 'student_subject_enrollment_id', 'processing_authorization_id'],
     ];
 
     /** The inputs no retention path deletes from (anchored, not delete-guarded). */

@@ -214,6 +214,43 @@ class StudentProcessingAuthorizationReadService
         });
     }
 
+    /**
+     * As lockQualifyingAuthorizationIdForProcessing(), for a caller that
+     * holds only the Student's id (a consumer module that never loads this
+     * module's models). A Student who is not the School's is simply not
+     * authorized. The same locks, order and transaction requirement apply.
+     *
+     * @throws StudentNotAuthorizedForProcessingException
+     */
+    public function lockQualifyingAuthorizationIdForStudentId(School $school, string $studentId, ProcessingAuthorizationPurpose $purpose, ?CarbonImmutable $asOf = null): string
+    {
+        $student = $this->context->withSchool($school, fn () => Student::query()->where('school_id', $school->id)->find($studentId));
+        if ($student === null) {
+            throw new StudentNotAuthorizedForProcessingException($purpose->value);
+        }
+
+        return $this->lockQualifyingAuthorizationIdForProcessing($school, $student, $purpose, $asOf);
+    }
+
+    /**
+     * The subset of $studentIds currently authorized for $purpose -- a plain
+     * point-in-time read (no locks), for a list that must withhold every
+     * other Student's data. Ids outside the School are never returned.
+     *
+     * @param  list<string>  $studentIds
+     * @return list<string>
+     */
+    public function authorizedStudentIds(School $school, array $studentIds, ProcessingAuthorizationPurpose $purpose, ?CarbonImmutable $asOf = null): array
+    {
+        if ($studentIds === []) {
+            return [];
+        }
+        $students = $this->context->withSchool($school, fn () => Student::query()->where('school_id', $school->id)->whereIn('id', $studentIds)->get());
+
+        return $students->filter(fn (Student $student) => $this->isAuthorizedForProcessing($school, $student, $purpose, $asOf))
+            ->map(fn (Student $student) => (string) $student->id)->values()->all();
+    }
+
     private function relationshipStillLegalGuardian(StudentProcessingAuthorization $grant): bool
     {
         if ($grant->student_guardian_relationship_id === null) {

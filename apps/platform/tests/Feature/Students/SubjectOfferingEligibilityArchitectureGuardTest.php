@@ -8,11 +8,12 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * RES.1 (ADR 0068 §5, §11, §15): P3 is a Students-owned read seam, and RES.1
- * builds nothing beyond it. These fail on the shape of a change that would
- * move P3 out of Students, give it a caller before RES.2, or start RES.2+
- * (StudentMark, marks or results capabilities, routes or tables, report
- * cards, transcripts) while legal item RES-L0 is unanswered.
+ * RES.1 (ADR 0068 §5, §11, §15) as amended by RES.2 (§19): P3 is a
+ * Students-owned read seam. RES-L0 was determined CURRENT WITH CHANGES
+ * (2026-10-07), so StudentMark (RES.2) became its first -- and only --
+ * consumer. These fail on the shape of a change that would move P3 out of
+ * Students, give it any other consumer, or start RES.3+ (lock, corrections,
+ * results, report cards, transcripts, results capabilities or routes).
  */
 class SubjectOfferingEligibilityArchitectureGuardTest extends TestCase
 {
@@ -54,8 +55,14 @@ class SubjectOfferingEligibilityArchitectureGuardTest extends TestCase
         }
     }
 
+    /** RES.2 (ADR 0068 §6.2, §19): the only P3 consumers -- the StudentMark write and grid read. */
+    private const SANCTIONED_CALLERS = [
+        'Domain/Examinations/Application/Marks/StudentMarkReadService.php',
+        'Domain/Examinations/Application/Marks/StudentMarkService.php',
+    ];
+
     #[Test]
-    public function the_seam_has_no_caller_route_or_capability_until_res2(): void
+    public function the_seam_has_exactly_the_student_mark_consumers_and_no_route(): void
     {
         $callers = [];
         foreach ($this->files(app_path()) as $file) {
@@ -66,7 +73,8 @@ class SubjectOfferingEligibilityArchitectureGuardTest extends TestCase
                 $callers[] = substr($file, strlen(app_path()) + 1);
             }
         }
-        $this->assertSame([], $callers, 'P3 has no consumer in RES.1; StudentMark (RES.2) is its first, after RES-L0 (ADR 0068 §11).');
+        sort($callers);
+        $this->assertSame(self::SANCTIONED_CALLERS, $callers, 'P3 consumers are exactly StudentMark (RES.2, authorised for development after RES-L0, ADR 0068 §19); a new consumer needs its own review.');
 
         foreach (glob(base_path('routes/*.php')) ?: [] as $file) {
             $this->assertStringNotContainsString('SubjectOfferingEligibility', (string) file_get_contents($file), 'P3 is internal: no route.');
@@ -74,26 +82,33 @@ class SubjectOfferingEligibilityArchitectureGuardTest extends TestCase
     }
 
     #[Test]
-    public function no_res2_or_later_artifact_exists(): void
+    public function no_res3_or_later_artifact_exists(): void
     {
+        // RES.2 built StudentMark and its value history; nothing from RES.3 onward (lock, corrections), results,
+        // report cards or transcripts exists, and no results capability.
         foreach ($this->files(app_path()) as $file) {
-            $this->assertDoesNotMatchRegularExpression('/^(StudentMark|MarkCorrection|ReportCard|Transcript|ExaminationResult|StudentResult)\w*\.php$/', basename($file), "RES.2+ is not started: {$file}");
+            $this->assertDoesNotMatchRegularExpression('/^(MarkCorrection|StudentMarkCorrection|ReportCard|Transcript|ExaminationResult|StudentResult)\w*\.php$/', basename($file), "RES.3+ is not started: {$file}");
         }
 
         foreach ($this->files(database_path('migrations')) as $file) {
             $this->assertDoesNotMatchRegularExpression(
-                "/Schema::create\(\s*'(student_marks?|mark_corrections?|examination_paper_marks?|marks_states?|student_results?|examination_results?|report_cards?|transcripts?)'/",
+                "/Schema::create\(\s*'(mark_corrections?|student_mark_corrections?|examination_paper_mark_states?|marks_states?|student_results?|examination_results?|report_cards?|transcripts?)'/",
                 (string) file_get_contents($file),
-                "RES.2+ tables are not created in RES.1: {$file}",
+                "RES.3+ tables are not created: {$file}",
             );
         }
 
         $seeder = $this->code(database_path('seeders/CapabilityAndRoleSeeder.php'));
-        $this->assertDoesNotMatchRegularExpression("/'key'\s*=>\s*'examinations\.(marks|results)\./", $seeder, 'No examinations.marks.* or examinations.results.* capability before RES.2 (marks) or a results contract (results).');
+        $this->assertDoesNotMatchRegularExpression("/'key'\s*=>\s*'examinations\.results\./", $seeder, 'No examinations.results.* capability before a results contract.');
+        preg_match_all("/'key'\s*=>\s*'(examinations\.marks\.[a-z_.]+)'/", $seeder, $keys);
+        $this->assertSame(['examinations.marks.view', 'examinations.marks.manage'], $keys[1], 'RES.2 adds exactly marks view and manage; lock and correction keys are RES.3.');
 
-        $uris = collect(RouteFacade::getRoutes()->getRoutes())->map(fn (Route $route) => $route->uri())->all();
-        foreach ($uris as $uri) {
-            $this->assertDoesNotMatchRegularExpression('#(^|[/-])(marks?|report-cards?|transcripts?|student-results?|examination-results?)([/-]|$)#', $uri, "No marks, results, report-card or transcript route exists: {$uri}");
-        }
+        $marksRoutes = collect(RouteFacade::getRoutes()->getRoutes())
+            ->filter(fn (Route $route) => preg_match('#(^|[/-])(marks?|report-cards?|transcripts?|student-results?|examination-results?)([/-]|$)#', $route->uri()) === 1)
+            ->map(fn (Route $route) => implode('|', $route->methods()).' '.$route->uri())->sort()->values()->all();
+        $this->assertSame([
+            'GET|HEAD app/examination-papers/{examinationPaper}/marks',
+            'PUT app/examination-papers/{examinationPaper}/marks',
+        ], $marksRoutes, 'Exactly the RES.2 per-paper grid and batch write; no results, report-card or transcript route.');
     }
 }

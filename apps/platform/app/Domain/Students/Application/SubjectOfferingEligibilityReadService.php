@@ -89,6 +89,44 @@ class SubjectOfferingEligibilityReadService
         return $this->context->withSchool($school, fn () => $this->decide($school, $studentId, $subjectOfferingId, $date, true));
     }
 
+    /**
+     * Every Student eligible for the Offering on the date, keyed by Student
+     * id -- the same per-Student decision as eligibilityAsOf() (a plain read,
+     * no locks), applied to each candidate: a placement covering the date in
+     * the Offering's context, or (elective) a subject-enrollment row for the
+     * Offering covering it. Candidates the decision rejects (ambiguous,
+     * inconsistent, unanchored) are left out, never guessed.
+     *
+     * @return array<string, SubjectOfferingEligibility>
+     */
+    public function eligibleStudentsAsOf(School $school, string $subjectOfferingId, string $asOfDate): array
+    {
+        $date = $this->date($asOfDate);
+
+        return $this->context->withSchool($school, function () use ($school, $subjectOfferingId, $date): array {
+            $offering = SubjectOffering::query()->where('school_id', $school->id)->whereKey($subjectOfferingId)->first();
+            if ($offering === null) {
+                return [];
+            }
+            $candidates = $offering->is_required
+                ? $this->covering(StudentEnrollment::query()->where('school_id', $school->id)
+                    ->where('academic_year_id', $offering->academic_year_id)->where('campus_id', $offering->campus_id)
+                    ->where('grade_level_id', $offering->grade_level_id), $date)->pluck('student_id')
+                : $this->covering(StudentSubjectEnrollment::query()->where('school_id', $school->id)
+                    ->where('subject_offering_id', $offering->id), $date)->pluck('student_id');
+
+            $eligible = [];
+            foreach ($candidates->map(fn ($id) => (string) $id)->unique()->sort()->values() as $studentId) {
+                $answer = $this->decide($school, $studentId, $offering->id, $date, false);
+                if ($answer->eligible) {
+                    $eligible[$studentId] = $answer;
+                }
+            }
+
+            return $eligible;
+        });
+    }
+
     private function decide(School $school, string $studentId, string $offeringId, string $date, bool $lock): SubjectOfferingEligibility
     {
         $offering = $this->locked(SubjectOffering::query()->where('school_id', $school->id)->whereKey($offeringId), $lock)->first();

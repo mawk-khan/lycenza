@@ -766,8 +766,10 @@ class CapabilityAndRoleSeeder extends Seeder
             // and never Academic Structure's own `academics.years.*`
             // even though the parent AcademicYear belongs to it -- the
             // Canteen capability-boundary lesson. No
-            // `examinations.*.teacher`: v1 is admin-only, with no
-            // teacher self-service and no teacher-ownership rule.
+            // `examinations.*.teacher`: Examinations is admin-only. The
+            // teacher-ownership rule exists since ADR 0063, but no
+            // Examinations capability adopts it; teacher marks entry is
+            // RES.4, gated by RES-L2, E33 and a RES-L0 re-review (ADR 0068).
             ['key' => 'examinations.definitions.view', 'label' => 'View Examinations', 'namespace' => 'school'],
             ['key' => 'examinations.definitions.manage', 'label' => 'Manage Examinations', 'namespace' => 'school'],
 
@@ -801,6 +803,14 @@ class CapabilityAndRoleSeeder extends Seeder
             // same as every other Examinations capability.
             ['key' => 'examinations.grade_scales.view', 'label' => 'View Grade Scales', 'namespace' => 'school'],
             ['key' => 'examinations.grade_scales.manage', 'label' => 'Manage Grade Scales', 'namespace' => 'school'],
+            // RES.2 (ADR 0068 §9.1, §19; RES-L0 2026-10-07): internal
+            // StudentMark entry -- Highly Sensitive, administrative staff
+            // only, always composed with `mfa`, development only (RES-L1).
+            // Never implies `examinations.results.*` (not created), and never
+            // held by `teacher`: teacher marks entry is RES.4 behind RES-L2,
+            // E33 and a RES-L0 re-review, with its own owned-scope key.
+            ['key' => 'examinations.marks.view', 'label' => 'View Student Marks', 'namespace' => 'school'],
+            ['key' => 'examinations.marks.manage', 'label' => 'Enter Student Marks', 'namespace' => 'school'],
 
             // Phase 0I.2 (Learning Content Foundation -- the first
             // concrete LMS fact, ADR 0039). Rooted at `lms.content.*`, a
@@ -1185,6 +1195,10 @@ class CapabilityAndRoleSeeder extends Seeder
                     // administration as defining the Examination window
                     // and scheduling its papers.
                     'examinations.grade_scales.view', 'examinations.grade_scales.manage',
+                    // RES.2 (ADR 0068 §9.1, §19): internal marks entry by
+                    // authorised administrative staff, the same holders as the
+                    // processing-authorization registry it depends on.
+                    'examinations.marks.view', 'examinations.marks.manage',
                     // Phase 0I.2: authoring and organizing a Subject
                     // Offering's Learning Content is the same routine
                     // academic administration as curating its syllabus
@@ -1378,6 +1392,10 @@ class CapabilityAndRoleSeeder extends Seeder
                     // administration as defining the Examination window
                     // and scheduling its papers.
                     'examinations.grade_scales.view', 'examinations.grade_scales.manage',
+                    // RES.2 (ADR 0068 §9.1, §19): internal marks entry by
+                    // authorised administrative staff, the same holders as the
+                    // processing-authorization registry it depends on.
+                    'examinations.marks.view', 'examinations.marks.manage',
                     // Phase 0I.2: same reasoning as school_admin above --
                     // a Principal is the day-to-day operator of the
                     // academic structure and its content, not merely a

@@ -8,6 +8,7 @@ use App\Domain\Examinations\Application\Exceptions\ExaminationNotActiveException
 use App\Domain\Examinations\Application\Exceptions\ExaminationPaperAcademicYearMismatchException;
 use App\Domain\Examinations\Application\Exceptions\ExaminationPaperDateOutsideWindowException;
 use App\Domain\Examinations\Application\Exceptions\ExaminationPaperInvalidMaxMarksException;
+use App\Domain\Examinations\Application\Exceptions\ExaminationPaperMarksRecordedException;
 use App\Domain\Examinations\Application\Exceptions\ExaminationPaperTimeOrderException;
 use App\Domain\Examinations\Application\Exceptions\SubjectOfferingNotAvailableException;
 use App\Domain\Examinations\Infrastructure\Examination;
@@ -16,6 +17,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
@@ -220,6 +222,13 @@ class ExaminationPaperService
             }
 
             throw new DuplicateExaminationPaperException($examinationId, $subjectOfferingId);
+        } catch (QueryException $e) {
+            // RES.2 (ADR 0068 §20): a paper with recorded marks keeps its maximum and its date (the P3
+            // eligibility date) -- the database's `examination_papers_freeze_when_marked` refuses the change.
+            if (str_contains($e->getMessage(), 'a paper with recorded marks keeps')) {
+                throw new ExaminationPaperMarksRecordedException;
+            }
+            throw $e;
         }
     }
 

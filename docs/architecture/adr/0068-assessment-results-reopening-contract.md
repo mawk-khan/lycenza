@@ -4,8 +4,9 @@
   decisions R1–R20 (§4) are adopted. **RES.1 implemented (2026-10-06,
   §18):** the P3 seam. **Amended 2026-10-07 (§19):** RES-L0 returned
   CURRENT WITH CHANGES; its conditions bind RES.2 onward, and RES.2 is
-  authorised for development only (not production: RES-L1). No StudentMark
-  code, schema, route, capability or UI exists.
+  authorised for development only (not production: RES-L1). **RES.2
+  implemented (2026-10-07, §20):** internal administrative StudentMark entry,
+  development only; production blocked by RES-L1.
 - Date: 2026-10-06
 - Programme: **RES — Assessment & results** (`MASTER-ROADMAP.md`,
   "Post-foundation product programmes", order 5).
@@ -699,3 +700,123 @@ requests RES-L0 revalidation before implementation:
 | Results, report cards, transcripts, Student / Guardian access | Not sequenced: RES-L4 – RES-L7 and RES-L0 re-review |
 
 Retention for every RES table stays `policy_unresolved` until RES-L8 (§12).
+
+## 20. RES.2 as built (2026-10-07)
+
+**Internal, administrative StudentMark entry exists for development. No
+lock, correction, teacher entry, result, publication, report card,
+transcript or Student/Guardian access exists. Production stays blocked by
+RES-L1.** §1–§19 are unchanged; this records how §6–§15 and §19 were
+realized.
+
+### 20.1 `subject_offerings.is_required` (§18.3), decided
+- **Finding:** the `/api/v1` Offering `PATCH` (`academics.subjects.manage`)
+  can flip `is_required` at any time, with no history; only a grouped elective
+  is protected (`subject_offerings_required_group_check`). The same exposure
+  pre-dates RES (Teaching Assignments, Curriculum Delivery).
+- **Resolution in RES.2:** each mark **snapshots its eligibility source**
+  (`required` / `elective`), database-checked against the elective-row
+  reference (`student_marks_source_shape_check`), and every revision copies
+  it. A recorded mark is never re-derived. A later edit re-runs P3 under the
+  current flag and fails closed if the meaning changed.
+- **Not changed:** Academic Structure's update rule (another module's product
+  decision). Recommended follow-up: refuse an `is_required` flip once an
+  Offering has enrollments, papers or marks.
+- **Same reasoning, Examinations' own table:** once a paper has a mark, its
+  `max_marks` and `scheduled_on` (the P3 date) are frozen by
+  `examination_papers_freeze_when_marked` (409 `EXAMINATION_PAPER_HAS_MARKS`).
+
+### 20.2 Schema (`2026_12_06_090000_create_student_marks_tables`)
+- **`student_marks`**, one per School × paper × Student
+  (`student_marks_one_per_student_paper`):
+  - status `present` / `absent` / `exempt`; `value numeric(6,2)` — present ⇔
+    value, value ≥ 0 (CHECK), value ≤ the paper's `max_marks` (trigger);
+  - provenance: the P3 placement through `(id, school_id, student_id,
+    academic_year_id)`; `eligibility_source`; the elective row; the ADR 0038
+    authorization through the registry's own key `(id, school_id,
+    student_id, purpose)` with `processing_purpose = 'academic_records'`, so
+    the database proves it is this Student's academic-records grant;
+  - `version` (exactly +1 per write, trigger); `recorded_by_user_id` (the
+    latest writer);
+  - immutable School, paper, Student and year (trigger); the placement must be
+    in the paper's campus and grade, the elective row the Student's row for
+    the paper's Offering (trigger);
+  - all foreign keys composite and RESTRICT; forced RLS; runtime DELETE
+    revoked; no remark, grade, percentage, pass/fail, rank or publication
+    column (guard-pinned).
+- **`student_mark_revisions`:** written only by the `student_marks` trigger
+  (a direct insert is refused: `pg_trigger_depth`), one per write with the
+  previous and new status and value, the provenance and the actor. Even a raw
+  `UPDATE` cannot skip it. Forced RLS; runtime UPDATE and DELETE revoked.
+- **Retention:** both anchored (`retention_recorded_at`, links tracked) and
+  delete-guarded; catalogued `student_marks` = **`policy_unresolved`** (RES-L8)
+  — the one deliberate exception in `TenantClosureReadinessTest`. Their keys keep
+  the Student, placements, elective rows and authorizations
+  `dependency_blocked` (classified in `StudentRetentionClassificationTest`).
+  Actors are `RETAIN_REFERENCE`. The forced-RLS count is 202.
+
+### 20.3 Write path (`StudentMarkService::record`)
+Per request: one paper, many Students, atomic. The paper and its year are
+held `FOR SHARE` (inactive paper: 422; closed year: 409). Per Student, in id
+order:
+1. P3 `lockEligibilityAsOf()` on the paper's date (not eligible: 422 with the
+   closed reason);
+2. ADR 0038 `lockQualifyingAuthorizationIdForStudentId()` (none: 422
+   `STUDENT_MARK_PROCESSING_BASIS_UNAVAILABLE`);
+3. the mark `FOR UPDATE`, then an **optimistic version check** (a new mark
+   expects none; a change names the version it replaces: 409
+   `STUDENT_MARK_VERSION_CONFLICT`);
+4. the write; the database appends the revision.
+
+Database errors are translated so no SQL, binding or value leaves the
+service. **No `idempotent` middleware** (rule 29 evaluated): a replay meets the
+version guard and re-runs every eligibility and basis check (the TCH.4
+precedent), and a stored response would hold Highly Sensitive data (rule 36).
+
+### 20.4 Read path (`StudentMarkReadService::grid`)
+One paper's rows: every P3-eligible Student (Students' new
+`eligibleStudentsAsOf()`) plus every Student with a mark, each minimal (ids,
+roll number, display name through Students'
+`StudentPlacementDisplayReadService`). A Student without a **current**
+processing basis (`authorizedStudentIds()`) shows
+`processing_basis_unavailable` with no status, value or version; the mark
+stays recorded and valid (§19.3 b).
+
+### 20.5 Surface and authorization
+- `GET` / `PUT /app/examination-papers/{paper}/marks`: session JSON only,
+  `capability:examinations.marks.view` / `.manage` + `mfa` (401
+  `mfa_step_up_required` without the window); another School's paper is 404.
+  Validation is manual: field names only, never a value, never a session
+  flash.
+- Capabilities `examinations.marks.view` / `.manage`, seeded to `school_admin`
+  and `principal` (the administrative holders of every other `examinations.*`
+  key and of the processing-authorization registry). Never `teacher`; no
+  `examinations.results.*`.
+- Students exposes three new Application seams, all id-based, so Examinations
+  never loads Students models: `lockQualifyingAuthorizationIdForStudentId()`
+  and `authorizedStudentIds()` (ADR 0038 registry), and
+  `eligibleStudentsAsOf()` (P3), plus the display read above.
+
+### 20.6 Audit, events, privacy
+- Audit: `examinations.student_mark.recorded` / `.changed` (mark, paper,
+  Student, version) and `examinations.student_marks.viewed` (paper, row and
+  withheld counts) — ids and counts only.
+- No outbox event, webhook, Analytics, Group report, AI, export, search or
+  bulk path (guard-pinned). Synthetic fixtures only. No override or unlock.
+
+### 20.7 Proof
+- Behaviour, HTTP, raw-SQL RLS and structural tests (`StudentMarkServiceTest`,
+  `StudentMarkHttpTest`, `StudentMarksRlsIsolationTest`,
+  `StudentMarkArchitectureGuardTest`).
+- Real processes (`StudentMarkConcurrencyTest`): two editors (update and
+  create), entry behind a withdrawal, transfer behind an entry. Mutation
+  checks: removing the version guard fails T1; bypassing the authorization
+  re-check fails T2. Same-Student serialization comes first from the ADR 0038
+  Student lock and the mark's foreign-key share locks; the mark row lock and
+  P3's `FOR SHARE` (which closes the check-to-insert window) are defense in
+  depth that this harness cannot isolate.
+- Guards amended deliberately: `ExaminationArchitectureGuardTest` (an exact
+  allow-list of Students seams, the StudentMark writer and row locks only in
+  StudentMark files); `SubjectOfferingEligibilityArchitectureGuardTest`
+  (exactly the two StudentMark services as P3 consumers; nothing from RES.3
+  on). Count pins: user references 108 / 98 retained; RLS 202.
