@@ -95,8 +95,9 @@ class ElevationRlsIsolationTest extends TestCase
         // + payroll_run_hrx_inputs (HRX.5, ADR 0065 §26);
         // + transport_route_fee_heads and transport_fee_selections (OPF.1, ADR 0067 §14);
         // + hostel_fee_heads and hostel_fee_selections (OPF.2, ADR 0067 §28);
-        // + admission_fee_heads and admission_fee_selections (OPF.3, ADR 0067 §29).
-        $this->assertSame(197, (int) DB::connection('pgsql_admin')->selectOne(
+        // + admission_fee_heads and admission_fee_selections (OPF.3, ADR 0067 §29);
+        // + library_fine_policies, library_fines and library_fine_voids (OPF.4, ADR 0067 §30).
+        $this->assertSame(200, (int) DB::connection('pgsql_admin')->selectOne(
             "select count(*) as c from pg_class where relrowsecurity and relforcerowsecurity and relnamespace = 'public'::regnamespace",
         )->c, 'No tenant table gained or lost RLS in Phase 0N.3.');
     }

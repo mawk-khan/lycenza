@@ -32,8 +32,27 @@ class LibraryCapabilityTest extends TestCase
     #[Test]
     public function no_speculative_library_capabilities_were_added(): void
     {
-        foreach (['library.fines.manage', 'library.reservations.manage', 'library.renewals.manage', 'library.documents.manage'] as $key) {
-            $this->assertSame(0, Capability::query()->where('key', $key)->count(), "'{$key}' must not exist -- out of scope for Phase 10A.");
+        foreach (['library.reservations.manage', 'library.renewals.manage', 'library.documents.manage', 'library.fines.assess', 'library.manage_finance'] as $key) {
+            $this->assertSame(0, Capability::query()->where('key', $key)->count(), "'{$key}' must not exist -- out of scope.");
+        }
+    }
+
+    /**
+     * OPF.4 (ADR 0067 §30.4): exactly the narrow fine family -- view, manage
+     * (policy versions), void -- and nothing broader; School Admin only (a
+     * financial configuration, like `canteen.settings.*`), never Principal.
+     */
+    #[Test]
+    public function the_opf4_fine_capabilities_exist_once_and_only_school_admin_holds_them(): void
+    {
+        $this->assertSame(['library.fines.manage', 'library.fines.view', 'library.fines.void'],
+            Capability::query()->where('key', 'like', 'library.fines.%')->orderBy('key')->pluck('key')->all());
+
+        [$admin, $school] = $this->createSchoolAdmin('school_admin');
+        [$principal, $principalSchool] = $this->createSchoolAdmin('principal');
+        foreach (['library.fines.view', 'library.fines.manage', 'library.fines.void'] as $key) {
+            $this->assertTrue(Gate::forUser($admin)->allows('capability', [$key, $school]), $key);
+            $this->assertFalse(Gate::forUser($principal)->allows('capability', [$key, $principalSchool]), $key);
         }
     }
 

@@ -287,8 +287,9 @@ public catalogue — all explicitly out of scope (§14).
 
 - Fines, fine balances, payment tables, ledger postings, any Finance/Fees
   integration (Finance was not yet on `main` when this checkpoint closed).
-  Fines are now the OPF programme's OPF.4 (ADR 0067; contract only, not
-  built). See "Fines (OPF.4, ADR 0067)" below.
+  Overdue fines are now OPF.4 (ADR 0067 §30; implemented 2026-10-06). See
+  "Fines (OPF.4, ADR 0067)" below. Fine balances, payment tables and
+  ledger postings stay in Finance/Fees, never in Library.
 - Reservations, holds, waiting lists, renewals, recurring loans,
   inter-library transfers.
 - Documents module integration (no new owner arm added to the
@@ -347,8 +348,9 @@ one Student per transaction under the Student-row lock.
 - An **unreturned** (`active`) loan is never deleted on age, and it keeps
   the Student's core record.
 - A re-entry (new Enrollment or reactivation) restarts the clock.
-- Titles and copies are School inventory and stay. Library has no fines,
-  fees or Finance link, so no D8 evidence is involved.
+- Titles and copies are School inventory and stay. Since OPF.4 a returned
+  loan with a Library fine is kept by that fine (Finance evidence,
+  `dependency_blocked`); other loans are unaffected.
 
 Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md`
 §5.6). Holds (`RETENTION_HOLD_SCHOOL_IDS`) keep everything; `--dry-run`
@@ -356,8 +358,29 @@ counts with the same rule.
 
 ## Fines (OPF.4, ADR 0067)
 
-Contract only (OPF.0, 2026-10-05); **OPF.4 implements it, and nothing below
-is built yet.** Until then, Library has no fines, fees or Finance link.
+**Implemented by OPF.4 (2026-10-06; ADR 0067 §30).** As built:
+- **Policy:** `library_fine_policies`, immutable numbered versions per
+  School; the highest governs. An active version names the FEE fee head,
+  a daily rate, grace days and an optional cap; a disabled version switches
+  fines off.
+- **Assessment:** only at check-in (`LibraryLoanService::checkIn()`, same
+  transaction, loan row lock held), once per loan
+  (`library_fines_one_per_loan_kind`). Overdue days = each started 24 hours
+  after `due_at`; chargeable = overdue − grace; amount = chargeable × rate,
+  capped. No assess endpoint.
+- **Charge:** one Student event charge through FEE's `FeeSourceChargeService`
+  (never `ChargeService` directly), on the fee head's accounts, for the
+  School's active academic year.
+- **Not applicable** (no or disabled policy, within grace, no active year,
+  fee head inactive) is audited and never fails the return.
+- **Void:** `POST /library-fines/{fine}/void` (`library.fines.void`) records
+  an insert-only void and cancels the unpaid, unwaived charge in one
+  transaction; Finance's generic cancel cannot cancel a fine's charge.
+- **Capabilities:** `library.fines.view` / `.manage` / `.void` (School Admin
+  only by default); check-in stays `library.circulation.manage`.
+- **Legal:** E34 is still LEGAL_REVIEW_REQUIRED; production use waits.
+
+The contract:
 - **Library-owned versioned fine policy.** Rate, grace and cap semantics,
   as immutable versions, snapshotted on each assessment. Library calculates
   the amount.
@@ -367,9 +390,10 @@ is built yet.** Until then, Library has no fines, fees or Finance link.
 - **Event charge through FEE.**
   - An overdue loan is assessed once per loan and fine kind: at check-in,
     or explicitly under a narrow `library.fines.*` capability.
-  - It goes through `ChargeService::assess()`, with a Library-owned link
-    row (unique per loan and kind, unique charge) created in the same
-    transaction, under the loan-row lock.
+  - It goes through FEE's event-charge seam (which calls
+    `ChargeService::assess()`), with a Library-owned link row (unique per
+    loan and kind, unique charge) created in the same transaction, under
+    the loan-row lock.
   - There is no daily accumulation of separate charges.
   - The ledger destination is a fee head / account mapping, validated as
     FEE validates accounts.

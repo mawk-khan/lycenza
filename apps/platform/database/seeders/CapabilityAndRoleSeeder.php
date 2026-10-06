@@ -331,6 +331,16 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'library.catalogue.manage', 'label' => 'Manage the Library catalogue (Titles/Copies)', 'namespace' => 'school'],
             ['key' => 'library.circulation.view', 'label' => 'View Library loans', 'namespace' => 'school'],
             ['key' => 'library.circulation.manage', 'label' => 'Check Library items out and in', 'namespace' => 'school'],
+            // OPF.4 (ADR 0067 §17-§18): narrow Library fine authority. An overdue
+            // fine is assessed automatically at check-in under
+            // `library.circulation.manage`; these cover reading fines and the
+            // policy, publishing a policy version (ledger destination +
+            // rate/grace/cap) and voiding an erroneous unpaid fine. None grants
+            // a Finance capability (no assessment runs, no generic charge
+            // cancellation, no concession approval).
+            ['key' => 'library.fines.view', 'label' => 'View Library fines and the fine policy', 'namespace' => 'school'],
+            ['key' => 'library.fines.manage', 'label' => 'Publish Library fine policy versions', 'namespace' => 'school'],
+            ['key' => 'library.fines.void', 'label' => 'Void an erroneous, unpaid Library fine (never a refund)', 'namespace' => 'school'],
 
             // Phase 1B.7E (docs/modules/STUDENT-ENROLLMENT.md
             // "Rollover Authorization & Administrative HTTP/API") --
@@ -1083,6 +1093,11 @@ class CapabilityAndRoleSeeder extends Seeder
                     'canteen.directory.view', 'canteen.directory.manage',
                     'canteen.orders.view', 'canteen.orders.manage',
                     'canteen.settings.view', 'canteen.settings.manage',
+                    // OPF.4 (ADR 0067 §18): Library fines are Finance-facing
+                    // (a ledger destination, money rules, voiding a charge), so
+                    // School-Admin-only like `canteen.settings.*`; never
+                    // Principal, by the same financial-configuration boundary.
+                    'library.fines.view', 'library.fines.manage', 'library.fines.void',
                     // Phase 9.7 (corrected at its own authorization
                     // review): Payroll's NON-sensitive administrative
                     // surface is granted to School Admin, mirroring

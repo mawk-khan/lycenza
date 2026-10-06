@@ -5245,7 +5245,17 @@ allow-list (`OperationalFeeSourceArchitectureGuardTest`). Admissions is
 the third (OPF.3, ADR 0067 §29): a successful conversion selects the
 converted Student's one-time Admission line (`admissions` source). No
 applicant is a charge subject and `charges` gains no `applicant_id`.
-OPF.4 is not built.
+
+**OPF.4 (ADR 0067 §30) adds the event-charge seam**
+`FeeSourceChargeService` (`assessForSource` / `cancelForSource` /
+`chargeableFeeHead`, closed `FeeChargeSource` catalogue: `library`). Library
+fines are Student event charges on an active fee head's accounts, computed
+by Library's versioned policy; the seam is the only way a source module
+reaches `ChargeService`. A fine's charge is cancelled only by the Library
+void (`charges_library_fine_guard_trigger`; `ChargeIsSourceChargeException`
+otherwise), only while unpaid and unwaived; waivers are targeted
+`waiver` concessions. `retention_expire_finance_unit` refuses a charge a
+Library fine references, as it does `canteen_orders`.
 - **Operational-source boundary.** Transport, Hostel, Admissions and
   Library call trusted FEE seams. **Fees, Finance and Payments never read
   those modules** to infer whether a fee applies. There is no parallel

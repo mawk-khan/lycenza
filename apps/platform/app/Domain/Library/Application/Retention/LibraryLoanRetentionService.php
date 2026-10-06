@@ -21,8 +21,10 @@ use Illuminate\Support\Facades\DB;
  *   loan is never reopened). An unreturned (`active`) loan is a live
  *   relationship: it is never deleted on age, and it keeps the Student (the
  *   core purge sees it as a retained reference).
- * - Library has no fines, fees or Finance link: no D8 evidence is involved.
- *   Titles and copies are School inventory and stay.
+ * - OPF.4 (ADR 0067 §30): an overdue loan may carry a Library fine, which is
+ *   Finance evidence kept with its charge; it references the loan, so that
+ *   loan stays (`dependency_blocked`, below) while the fine exists. Titles
+ *   and copies are School inventory and stay.
  * - Locking, the exit recheck (a re-entry that committed first keeps
  *   everything) and one transaction per Student come from
  *   StudentRetentionEligibility::purgeExitedBefore(). The predicate is

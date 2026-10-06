@@ -65,6 +65,8 @@ class DatabaseRoleVerifier
         'hostel_fee_selections',
         // OPF.3 (ADR 0067 §29): and Admissions'.
         'admission_fee_selections',
+        // OPF.4 (ADR 0067 §30): Library fine evidence, its voids and the immutable policy versions.
+        'library_fines', 'library_fine_voids', 'library_fine_policies',
     ];
 
     /**
@@ -82,6 +84,8 @@ class DatabaseRoleVerifier
         'hostel_fee_selections',
         // OPF.3 (ADR 0067 §29): and Admissions'.
         'admission_fee_selections',
+        // OPF.4 (ADR 0067 §30): Library fine evidence, its voids and the immutable policy versions.
+        'library_fines', 'library_fine_voids', 'library_fine_policies',
     ];
 
     /**

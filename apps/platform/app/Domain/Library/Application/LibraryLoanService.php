@@ -28,6 +28,7 @@ class LibraryLoanService
 {
     public function __construct(
         private readonly AuditRecorder $audit,
+        private readonly LibraryFineService $fines,
     ) {}
 
     /**
@@ -127,6 +128,11 @@ class LibraryLoanService
                 'studentId' => $loan->student_id,
                 'wasOverdue' => $checkedInAt->greaterThan($loan->due_at),
             ]);
+
+            // OPF.4 (ADR 0067 §17): one overdue fine from the final duration, in
+            // this transaction (the loan row lock is held); not applicable is
+            // audited and never fails the return.
+            $this->fines->assessOnCheckIn($fresh, $actor);
 
             return $fresh;
         });

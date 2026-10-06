@@ -2508,8 +2508,77 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Checks in an active Loan. Requires library.circulation.manage. */
+        /** Checks in an active Loan. Requires library.circulation.manage. OPF.4 (ADR 0067 §30) -- an overdue return is fined once, in the same transaction, under the School's governing fine policy version, as one Student event charge through FEE (not applicable cases are audited and never fail the return). A retried check-in is refused, so it never fines twice. */
         post: operations["checkInLibraryLoan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/library-fine-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The School's governing (highest) Library fine policy version, or null (OPF.4, ADR 0067 D3). Requires library.fines.view. */
+        get: operations["getLibraryFinePolicy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/library-fine-policy/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every immutable Library fine policy version, newest first (OPF.4). Requires library.fines.view. */
+        get: operations["listLibraryFinePolicyVersions"];
+        put?: never;
+        /** Publishes the next immutable Library fine policy version (OPF.4, ADR 0067 D3) -- active (an active fee head of the School as ledger destination, a daily rate, grace days, an optional cap) or disabled (fines off). Governs fines assessed from then on; never rewrites an assessed fine. Requires library.fines.manage. Idempotency-Key required. Production use of Library fines is gated by legal item E34. */
+        post: operations["publishLibraryFinePolicyVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/library-loans/{libraryLoanId}/fine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The overdue fine assessed for this Loan, or null (OPF.4). Requires library.fines.view. */
+        get: operations["getLibraryLoanFine"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/library-fines/{libraryFineId}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Voids an erroneously assessed Library fine and cancels its charge, in one transaction (OPF.4, ADR 0067 D4). Only an unpaid, unwaived fine; never a refund; the fine evidence is kept. Requires library.fines.void. Idempotency-Key required. */
+        post: operations["voidLibraryFine"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7175,6 +7244,51 @@ export interface components {
             campus_id?: string | null;
             /** @enum {string} */
             status?: "active" | "inactive";
+        };
+        /** @description One immutable Library fine policy version (OPF.4). A disabled version carries no fee head, rate, grace or cap. */
+        LibraryFinePolicy: {
+            /** Format: uuid */
+            id: string;
+            version: number;
+            /** @enum {string} */
+            status: "active" | "disabled";
+            /** Format: uuid */
+            feeHeadId?: string | null;
+            dailyRate?: string | null;
+            graceDays?: number | null;
+            maxAmount?: string | null;
+            currency: string;
+            /** Format: date-time */
+            createdAt?: string | null;
+        };
+        /** @description Insert-only evidence of one Library fine and its FEE event charge (OPF.4). status is voided once a void is recorded. */
+        LibraryFine: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            libraryLoanId: string;
+            /** Format: uuid */
+            studentId: string;
+            /** @enum {string} */
+            kind: "overdue";
+            /** Format: uuid */
+            libraryFinePolicyId: string;
+            /** Format: uuid */
+            feeHeadId: string;
+            /** Format: uuid */
+            academicYearId: string;
+            overdueDays: number;
+            chargeableDays: number;
+            amount: string;
+            currency: string;
+            /** Format: uuid */
+            chargeId: string;
+            /** @enum {string} */
+            status: "assessed" | "voided";
+            /** Format: date-time */
+            voidedAt?: string | null;
+            /** Format: date-time */
+            createdAt?: string | null;
         };
         /** @description One circulation/loan record. A Copy may have at most one Loan with status=active at a time (database-enforced, docs/modules/LIBRARY.md "Concurrency/database invariants"). */
         LibraryLoan: {
@@ -19268,6 +19382,181 @@ export interface operations {
             };
             /** @description This Loan was already checked in (LIBRARY_LOAN_ALREADY_RETURNED). */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getLibraryFinePolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LibraryFinePolicy"] | null;
+                    };
+                };
+            };
+        };
+    };
+    listLibraryFinePolicyVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LibraryFinePolicy"][];
+                    };
+                };
+            };
+        };
+    };
+    publishLibraryFinePolicyVersion: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    status: "active" | "disabled";
+                    /** Format: uuid */
+                    fee_head_id?: string | null;
+                    /** @example 5.00 */
+                    daily_rate?: string | null;
+                    grace_days?: number | null;
+                    /** @example 50.00 */
+                    max_amount?: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LibraryFinePolicy"];
+                    };
+                };
+            };
+            /** @description Invalid policy (LIBRARY_FINE_POLICY_INVALID), or invalid input. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getLibraryLoanFine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                libraryLoanId: components["parameters"]["LibraryLoanId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LibraryFine"] | null;
+                    };
+                };
+            };
+        };
+    };
+    voidLibraryFine: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                libraryFineId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LibraryFine"];
+                    };
+                };
+            };
+            /** @description No such fine (LIBRARY_FINE_NOT_FOUND). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Already voided (LIBRARY_FINE_ALREADY_VOIDED), or its charge is paid or waived (LIBRARY_FINE_NOT_VOIDABLE). */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

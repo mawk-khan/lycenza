@@ -139,6 +139,9 @@ final class RetentionAnchors
         'hostel_fee_selections' => ['hostel_residency_assignment_id', 'academic_year_id', 'fee_head_id', 'fee_optional_selection_id'],
         // OPF.3 (ADR 0067 §29): Admissions' insert-only Admission-fee provenance (Finance evidence).
         'admission_fee_selections' => ['admission_application_id', 'student_id', 'academic_year_id', 'fee_head_id', 'fee_optional_selection_id'],
+        // OPF.4 (ADR 0067 §30): Library fine evidence and its voids (Finance evidence; the fine references `charges`).
+        'library_fines' => ['library_loan_id', 'student_id', 'library_fine_policy_id', 'fee_head_id', 'academic_year_id', 'charge_id'],
+        'library_fine_voids' => ['library_fine_id'],
     ];
 
     /** The inputs no retention path deletes from (anchored, not delete-guarded). */

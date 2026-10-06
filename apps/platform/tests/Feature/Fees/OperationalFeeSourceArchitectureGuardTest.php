@@ -9,29 +9,51 @@ use Tests\TestCase;
  * OPF (ADR 0067 §4, §8): operational modules call trusted FEE seams; FEE
  * never reads them. Pinned on the source, as FeeSetupArchitectureGuardTest
  * pins Payments -> Fees.
+ *
+ * Two seams, two explicit allow-lists (OPF.4):
+ * - the optional-SELECTION seam (FeeSourceSelectionService): Transport,
+ *   Hostel and Admissions -- intent only;
+ * - the EVENT-CHARGE seam (FeeSourceChargeService): Library fines only.
+ * No source module references ChargeService itself, and no module joins
+ * either list without its own reviewed OPF slice.
  */
 class OperationalFeeSourceArchitectureGuardTest extends TestCase
 {
-    /** OPF source modules implemented so far (OPF.1 Transport, OPF.2 Hostel, OPF.3 Admissions), with their table prefix(es). */
-    private const SOURCE_MODULES = ['Transport' => 'transport', 'Hostel' => 'hostel', 'Admissions' => '(?:admission|applicant)'];
+    /** OPF source modules implemented so far (OPF.1-OPF.4), with their table prefix(es). */
+    private const SOURCE_MODULES = [
+        'Transport' => 'transport',
+        'Hostel' => 'hostel',
+        'Admissions' => '(?:admission|applicant)',
+        'Library' => 'library',
+    ];
 
-    /**
-     * The explicit allow-list of the trusted selection seam's callers: one
-     * reviewed Application service per approved source module. Library or
-     * any other caller is a failure until its own OPF slice adds it here
-     * (ADR 0067 §8).
-     */
-    private const APPROVED_SEAM_CALLERS = [
+    /** The optional-selection seam's callers: one reviewed Application service per approved module (ADR 0067 §8). */
+    private const APPROVED_SELECTION_SEAM_CALLERS = [
         'Domain/Admissions/Application/AdmissionFeeSelectionService.php',
         'Domain/Hostel/Application/HostelFeeSelectionService.php',
         'Domain/Transport/Application/TransportFeeSelectionService.php',
     ];
+
+    /**
+     * The event-charge seam's callers (OPF.4): the Library fine service, which
+     * alone assesses and cancels, and the Library fine policy service, which
+     * only validates its ledger destination (chargeableFeeHead()).
+     */
+    private const APPROVED_CHARGE_SEAM_CALLERS = [
+        'Domain/Library/Application/LibraryFinePolicyService.php',
+        'Domain/Library/Application/LibraryFineService.php',
+    ];
+
+    /** The one caller that may assess or cancel through the event-charge seam. */
+    private const CHARGE_SEAM_WRITER = 'Domain/Library/Application/LibraryFineService.php';
 
     /** Each source module's fee-integration tables and their one writer. */
     private const TABLE_WRITERS = [
         'Domain/Transport/Application/TransportFeeSelectionService.php' => ['TransportFeeSelection', 'TransportRouteFeeHead'],
         'Domain/Hostel/Application/HostelFeeSelectionService.php' => ['HostelFeeSelection', 'HostelFeeHead'],
         'Domain/Admissions/Application/AdmissionFeeSelectionService.php' => ['AdmissionFeeSelection', 'AdmissionFeeHead'],
+        'Domain/Library/Application/LibraryFineService.php' => ['LibraryFine', 'LibraryFineVoid'],
+        'Domain/Library/Application/LibraryFinePolicyService.php' => ['LibraryFinePolicy'],
     ];
 
     /** @return list<string> */
@@ -49,6 +71,23 @@ class OperationalFeeSourceArchitectureGuardTest extends TestCase
         return $out;
     }
 
+    /** @return list<string> app-relative files outside the Fees seams that match $pattern */
+    private function callersOf(string $pattern): array
+    {
+        $callers = [];
+        foreach ($this->files('') as $file) {
+            if (str_contains($file, '/Domain/Fees/Application/Sources/')) {
+                continue;
+            }
+            if (preg_match($pattern, (string) file_get_contents($file))) {
+                $callers[] = substr($file, strlen(app_path()) + 1);
+            }
+        }
+        sort($callers);
+
+        return $callers;
+    }
+
     #[Test]
     public function fees_finance_and_payments_never_depend_on_or_read_a_source_module(): void
     {
@@ -64,32 +103,30 @@ class OperationalFeeSourceArchitectureGuardTest extends TestCase
     }
 
     #[Test]
-    public function only_the_approved_source_module_services_call_the_trusted_seam(): void
+    public function only_the_approved_services_call_the_selection_seam(): void
     {
-        $callers = [];
-        foreach ($this->files('') as $file) {
-            if (str_contains($file, '/Domain/Fees/Application/Sources/')) {
-                continue;
-            }
-            if (str_contains((string) file_get_contents($file), 'FeeSourceSelectionService')) {
-                $callers[] = substr($file, strlen(app_path()) + 1);
-            }
-        }
-        sort($callers);
-
-        $this->assertSame(self::APPROVED_SEAM_CALLERS, $callers, 'the seam has no route and only the approved callers (ADR 0067 §8)');
+        $this->assertSame(self::APPROVED_SELECTION_SEAM_CALLERS, $this->callersOf('/\bFeeSourceSelectionService\b/'), 'the selection seam has no route and only the approved callers (ADR 0067 §8)');
     }
 
     #[Test]
-    public function the_seam_allow_list_admits_no_module_without_an_opf_slice(): void
+    public function only_the_library_fine_services_call_the_event_charge_seam(): void
     {
-        foreach (['Library'] as $excluded) {
-            foreach (self::APPROVED_SEAM_CALLERS as $caller) {
-                $this->assertStringStartsNotWith("Domain/{$excluded}/", $caller, "{$excluded} is not an approved OPF source yet");
-            }
-            foreach ($this->files("Domain/{$excluded}") as $file) {
-                $this->assertStringNotContainsString('FeeSourceSelectionService', (string) file_get_contents($file), "{$file} must not call the seam");
-                $this->assertStringNotContainsString('FeeSelectionSource', (string) file_get_contents($file), "{$file} must not name a selection source");
+        $this->assertSame(self::APPROVED_CHARGE_SEAM_CALLERS, $this->callersOf('/\bFeeSourceChargeService\b/'), 'the event-charge seam has no route and only the approved callers (ADR 0067 §17)');
+        $this->assertSame([self::CHARGE_SEAM_WRITER], $this->callersOf('/\bFeeChargeSource::/'), 'only the Library fine service names an event-charge source, so only it can assess or cancel one');
+    }
+
+    #[Test]
+    public function each_module_uses_only_its_own_seam_and_no_other_module_joins_without_an_opf_slice(): void
+    {
+        foreach (self::APPROVED_SELECTION_SEAM_CALLERS as $caller) {
+            $this->assertDoesNotMatchRegularExpression('/\bFeeSourceChargeService\b|\bFeeChargeSource\b/', (string) file_get_contents(app_path($caller)), "{$caller}: selection sources never assess charges");
+        }
+        foreach ($this->files('Domain/Library') as $file) {
+            $this->assertDoesNotMatchRegularExpression('/\bFeeSourceSelectionService\b|\bFeeSelectionSource\b/', (string) file_get_contents($file), "{$file}: Library fines are event charges, never selections (D6)");
+        }
+        foreach (['Canteen', 'Inventory', 'Visitor'] as $other) {
+            foreach ($this->files("Domain/{$other}") as $file) {
+                $this->assertDoesNotMatchRegularExpression('/\bFeeSource(Selection|Charge)Service\b|\bFee(Selection|Charge)Source\b/', (string) file_get_contents($file), "{$file} is not an approved OPF source");
             }
         }
     }
@@ -104,7 +141,7 @@ class OperationalFeeSourceArchitectureGuardTest extends TestCase
                 $this->assertStringNotContainsString('App\\Domain\\Finance\\', $code, $file);
                 $this->assertStringNotContainsString('App\\Domain\\Payments\\', $code, $file);
                 $this->assertDoesNotMatchRegularExpression("/'(charges|fee_optional_selections|fee_assessments)'/", $code, "{$file} must not read FEE tables");
-                $this->assertStringNotContainsString('ChargeService', $code, "{$file} must never create a charge: only Finance assessment runs do (D9)");
+                $this->assertDoesNotMatchRegularExpression('/\bChargeService\b|\bAssessChargeData\b|\bChargeAdministrationService\b/', $code, "{$file} must never reach FEE's charge service directly: only through the event-charge seam (D9)");
             }
         }
     }
@@ -120,7 +157,7 @@ class OperationalFeeSourceArchitectureGuardTest extends TestCase
                     continue;
                 }
                 foreach ($models as $model) {
-                    $this->assertStringNotContainsString("{$model}::query()->create", $code, "{$relative} must not write {$model}");
+                    $this->assertDoesNotMatchRegularExpression("/\\b{$model}::query\\(\\)->create/", $code, "{$relative} must not write {$model}");
                 }
             }
         }

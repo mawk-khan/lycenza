@@ -36,6 +36,8 @@ class StudentRetentionClassificationTest extends TestCase
             'admission_applications' => 'D7 core (25 y): a converted application goes with its Student (Admissions participant, E21.3B)',
             // OPF.3 (ADR 0067 §29): the provenance of the converted Student's Admission-fee selection.
             'admission_fee_selections' => 'retained, blocks: Finance D8 (OPF fee-selection provenance)',
+            // OPF.4 (ADR 0067 §30): Library fine evidence, kept with its charge (the D8 unit refuses that charge).
+            'library_fines' => 'retained, blocks: Finance D8 (OPF event-charge evidence)',
             'charges' => 'retained, blocks: Finance D8 (its own expiry, E21.3A2)',
             'fee_assessments' => 'retained, blocks: Finance D8',
             'fee_assessment_run_items' => 'retained, blocks: Finance D8',
@@ -81,7 +83,10 @@ class StudentRetentionClassificationTest extends TestCase
         ],
         'communication_domain_consent_events' => [],
         'communication_domain_preferences' => [],
-        'library_loans' => [],
+        'library_loans' => [
+            // OPF.4 (ADR 0067 §30): the fine keeps its returned loan (`dependency_blocked`) as Finance evidence.
+            'library_fines' => 'retained, blocks: Finance D8 (OPF event-charge evidence)',
+        ],
         'transport_student_assignments' => [
             // OPF.1 (ADR 0067 §21): the provenance of the fee selection the assignment recorded; it keeps the assignment
             // as the selection keeps its Student.

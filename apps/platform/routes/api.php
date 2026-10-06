@@ -69,6 +69,7 @@ use App\Domain\Leave\Http\Controllers\LeaveLedgerController;
 use App\Domain\Leave\Http\Controllers\LeaveRequestController;
 use App\Domain\Leave\Http\Controllers\MyLeaveController;
 use App\Domain\Library\Http\Controllers\LibraryCopyController;
+use App\Domain\Library\Http\Controllers\LibraryFineController;
 use App\Domain\Library\Http\Controllers\LibraryLoanController;
 use App\Domain\Library\Http\Controllers\LibraryTitleController;
 use App\Domain\LMS\Http\Controllers\AssignmentController;
@@ -1051,6 +1052,25 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/library-loans/{libraryLoan}/check-in', [LibraryLoanController::class, 'checkIn'])
                 ->middleware(['capability:library.circulation.manage', 'throttle:school-api-mutations'])
                 ->name('schools.library-loans.check-in');
+
+            // --- OPF.4 (ADR 0067 §17): Library overdue fines. A fine is
+            // assessed by the check-in above itself (one per loan; the
+            // conditional return transition makes a retried check-in safe),
+            // so there is no assess endpoint. `library.fines.*` only: the
+            // versioned policy (each publish is a new immutable version),
+            // a loan's fine, and the D4 void (idempotent; never a refund).
+            Route::get('/library-fine-policy', [LibraryFineController::class, 'showPolicy'])
+                ->name('schools.library-fine-policy.show');
+            Route::get('/library-fine-policy/versions', [LibraryFineController::class, 'policyVersions'])
+                ->name('schools.library-fine-policy.versions.index');
+            Route::post('/library-fine-policy/versions', [LibraryFineController::class, 'publishPolicy'])
+                ->middleware(['capability:library.fines.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.library-fine-policy.versions.store');
+            Route::get('/library-loans/{libraryLoan}/fine', [LibraryFineController::class, 'loanFine'])
+                ->name('schools.library-loans.fine.show');
+            Route::post('/library-fines/{libraryFine}/void', [LibraryFineController::class, 'void'])
+                ->middleware(['capability:library.fines.void', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.library-fines.void');
 
             // --- Phase 10B: Transport (Routes/Stops, Vehicles, Route
             // operational Vehicle/Driver assignment, Student Transport

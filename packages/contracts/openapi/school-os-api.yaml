@@ -5428,7 +5428,7 @@ paths:
   /schools/{schoolId}/library-loans/{libraryLoanId}/check-in:
     post:
       operationId: checkInLibraryLoan
-      summary: Checks in an active Loan. Requires library.circulation.manage.
+      summary: Checks in an active Loan. Requires library.circulation.manage. OPF.4 (ADR 0067 §30) -- an overdue return is fined once, in the same transaction, under the School's governing fine policy version, as one Student event charge through FEE (not applicable cases are audited and never fail the return). A retried check-in is refused, so it never fines twice.
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { $ref: "#/components/parameters/LibraryLoanId" }
@@ -5440,6 +5440,110 @@ paths:
               schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LibraryLoan" } } }
         "422":
           description: This Loan was already checked in (LIBRARY_LOAN_ALREADY_RETURNED).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/library-fine-policy:
+    get:
+      operationId: getLibraryFinePolicy
+      summary: The School's governing (highest) Library fine policy version, or null (OPF.4, ADR 0067 D3). Requires library.fines.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { allOf: [{ $ref: "#/components/schemas/LibraryFinePolicy" }], nullable: true } } }
+
+  /schools/{schoolId}/library-fine-policy/versions:
+    get:
+      operationId: listLibraryFinePolicyVersions
+      summary: Every immutable Library fine policy version, newest first (OPF.4). Requires library.fines.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/LibraryFinePolicy" } } } }
+    post:
+      operationId: publishLibraryFinePolicyVersion
+      summary: Publishes the next immutable Library fine policy version (OPF.4, ADR 0067 D3) -- active (an active fee head of the School as ledger destination, a daily rate, grace days, an optional cap) or disabled (fines off). Governs fines assessed from then on; never rewrites an assessed fine. Requires library.fines.manage. Idempotency-Key required. Production use of Library fines is gated by legal item E34.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [active, disabled] }
+                fee_head_id: { type: string, format: uuid, nullable: true }
+                daily_rate: { type: string, nullable: true, example: "5.00" }
+                grace_days: { type: integer, nullable: true, minimum: 0 }
+                max_amount: { type: string, nullable: true, example: "50.00" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LibraryFinePolicy" } } }
+        "422":
+          description: Invalid policy (LIBRARY_FINE_POLICY_INVALID), or invalid input.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/library-loans/{libraryLoanId}/fine:
+    get:
+      operationId: getLibraryLoanFine
+      summary: The overdue fine assessed for this Loan, or null (OPF.4). Requires library.fines.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/LibraryLoanId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { allOf: [{ $ref: "#/components/schemas/LibraryFine" }], nullable: true } } }
+
+  /schools/{schoolId}/library-fines/{libraryFineId}/void:
+    post:
+      operationId: voidLibraryFine
+      summary: Voids an erroneously assessed Library fine and cancels its charge, in one transaction (OPF.4, ADR 0067 D4). Only an unpaid, unwaived fine; never a refund; the fine evidence is kept. Requires library.fines.void. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { name: libraryFineId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, maxLength: 255 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LibraryFine" } } }
+        "404":
+          description: No such fine (LIBRARY_FINE_NOT_FOUND).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: Already voided (LIBRARY_FINE_ALREADY_VOIDED), or its charge is paid or waived (LIBRARY_FINE_NOT_VOIDABLE).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -15419,6 +15523,40 @@ components:
         campus_id: { type: string, format: uuid, nullable: true }
         status: { type: string, enum: [active, inactive] }
 
+    LibraryFinePolicy:
+      type: object
+      required: [id, version, status, currency]
+      description: One immutable Library fine policy version (OPF.4). A disabled version carries no fee head, rate, grace or cap.
+      properties:
+        id: { type: string, format: uuid }
+        version: { type: integer }
+        status: { type: string, enum: [active, disabled] }
+        feeHeadId: { type: string, format: uuid, nullable: true }
+        dailyRate: { type: string, nullable: true }
+        graceDays: { type: integer, nullable: true }
+        maxAmount: { type: string, nullable: true }
+        currency: { type: string }
+        createdAt: { type: string, format: date-time, nullable: true }
+    LibraryFine:
+      type: object
+      required: [id, libraryLoanId, studentId, kind, libraryFinePolicyId, feeHeadId, academicYearId, overdueDays, chargeableDays, amount, currency, chargeId, status]
+      description: Insert-only evidence of one Library fine and its FEE event charge (OPF.4). status is voided once a void is recorded.
+      properties:
+        id: { type: string, format: uuid }
+        libraryLoanId: { type: string, format: uuid }
+        studentId: { type: string, format: uuid }
+        kind: { type: string, enum: [overdue] }
+        libraryFinePolicyId: { type: string, format: uuid }
+        feeHeadId: { type: string, format: uuid }
+        academicYearId: { type: string, format: uuid }
+        overdueDays: { type: integer }
+        chargeableDays: { type: integer }
+        amount: { type: string }
+        currency: { type: string }
+        chargeId: { type: string, format: uuid }
+        status: { type: string, enum: [assessed, voided] }
+        voidedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time, nullable: true }
     LibraryLoan:
       type: object
       required: [id, status, checkedOutAt, dueAt, copy, student]

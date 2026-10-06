@@ -9,6 +9,7 @@ use App\Domain\Fees\Application\Exceptions\ChargeHasLiveLateFeeException;
 use App\Domain\Fees\Application\Exceptions\ChargeHasPaymentAllocationsException;
 use App\Domain\Fees\Application\Exceptions\ChargeIsFeeAssessedException;
 use App\Domain\Fees\Application\Exceptions\ChargeIsLateFeeException;
+use App\Domain\Fees\Application\Exceptions\ChargeIsSourceChargeException;
 use App\Domain\Fees\Application\Exceptions\ChargeNotFoundException;
 use App\Domain\Fees\Application\Exceptions\InvalidChargeException;
 use App\Domain\Fees\Application\Exceptions\StudentNotFoundException;
@@ -246,6 +247,12 @@ class ChargeService
                     }
                     if (str_contains($e->getMessage(), 'has a live late fee; void the late fee first')) {
                         throw new ChargeHasLiveLateFeeException($charge->id);
+                    }
+
+                    // OPF.4 (ADR 0067 §17, D4): a source event charge is cancelled
+                    // only by voiding it at its source.
+                    if (str_contains($e->getMessage(), 'is a source event charge; void it at its source')) {
+                        throw new ChargeIsSourceChargeException($charge->id);
                     }
 
                     // FEE.3 (ADR 0062 §14.7): cancel live adjustments first.
