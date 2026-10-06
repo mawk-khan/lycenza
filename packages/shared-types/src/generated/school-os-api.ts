@@ -2358,6 +2358,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/admission-fee-head": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The FEE fee head that is the School's one-time Admission fee, or null (OPF.3, ADR 0067). Requires admissions.view. */
+        get: operations["getAdmissionFeeHead"];
+        /** Maps the School's Admission fee to an active fee head of the School, or clears it with null (OPF.3, ADR 0067 D1, D7). Configuration only -- no amount; FEE structure instalments own the Admission fee amount. A successful Student conversion then records the converted Student's selection intent; no applicant is ever charged. Requires admissions.manage. */
+        put: operations["setAdmissionFeeHead"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/admission-applications/{admissionApplicationId}/fee-selection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The Admission-fee selection intent this application's conversion recorded for the converted Student, or null (OPF.3, ADR 0067). Requires admissions.view. */
+        get: operations["getAdmissionApplicationFeeSelection"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/library-titles": {
         parameters: {
             query?: never;
@@ -9315,6 +9350,30 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             convertedAt?: string | null;
+        };
+        /** @description The fee head that is the School's one-time Admission fee (OPF.3). No amount -- FEE owns it. */
+        AdmissionFeeHead: {
+            /** Format: uuid */
+            feeHeadId: string;
+            code: string;
+            name: string;
+        };
+        /** @description Insert-only provenance of the FEE optional selection a converted application recorded for the converted Student (OPF.3). Never an applicant. */
+        AdmissionFeeSelection: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            studentId: string;
+            /** Format: uuid */
+            academicYearId: string;
+            /** Format: uuid */
+            feeHeadId: string;
+            /** Format: uuid */
+            feeOptionalSelectionId: string;
+            /** @enum {string} */
+            selectionOutcome: "created" | "reused";
+            /** Format: date-time */
+            createdAt?: string | null;
         };
         AdmissionApplication: components["schemas"]["AdmissionApplicationSummary"] & {
             /** @description Internal */
@@ -18778,6 +18837,95 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdmissionFeeHead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AdmissionFeeHead"] | null;
+                    };
+                };
+            };
+        };
+    };
+    setAdmissionFeeHead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    fee_head_id: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AdmissionFeeHead"] | null;
+                    };
+                };
+            };
+            /** @description Not an active fee head of this School (ADMISSION_FEE_HEAD_NOT_SELECTABLE), or invalid input. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdmissionApplicationFeeSelection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                admissionApplicationId: components["parameters"]["AdmissionApplicationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AdmissionFeeSelection"] | null;
+                    };
                 };
             };
         };

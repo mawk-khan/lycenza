@@ -28,7 +28,10 @@ use Illuminate\Support\Facades\DB;
  * - Any other row referencing the application or the released applicant,
  *   and an application converted into another Student that names one of
  *   this Student's placements, keeps the Student (`dependency_blocked`).
- * - No Admissions row owns a Document or a Finance record.
+ * - No Admissions row owns a Document. The one Finance link is OPF.3's
+ *   insert-only Admission-fee provenance (`admission_fee_selections`, ADR
+ *   0067 §29): it references the converted application, so it keeps the
+ *   Student (`dependency_blocked`), as the FEE selection already does.
  */
 final class ConvertedApplicationRetentionService implements StudentCoreParticipant
 {

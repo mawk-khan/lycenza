@@ -36,7 +36,9 @@ use Illuminate\Support\Facades\DB;
  *   paths lock only the application).
  * - Any other row referencing an expiring application, or the released
  *   applicant, keeps them (`dependency_blocked`; ReferencingRows). No
- *   Admissions row owns a Document or a Finance record.
+ *   terminal application owns a Document or a Finance record: OPF.3's
+ *   Admission-fee provenance names converted applications only (its
+ *   trigger requires `status = 'converted'`).
  * - A held School is counted only. Counts only, never applicant details.
  */
 final class TerminalApplicationRetentionService

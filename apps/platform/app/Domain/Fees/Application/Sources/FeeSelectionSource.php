@@ -17,7 +17,10 @@ final readonly class FeeSelectionSource
     /** OPF.2 (ADR 0067 §15): a Hostel residency. */
     public const HOSTEL = 'hostel';
 
-    public const MODULES = [self::TRANSPORT, self::HOSTEL];
+    /** OPF.3 (ADR 0067 §16): a converted admission application (never an applicant). */
+    public const ADMISSIONS = 'admissions';
+
+    public const MODULES = [self::TRANSPORT, self::HOSTEL, self::ADMISSIONS];
 
     private function __construct(
         public string $module,
@@ -41,6 +44,11 @@ final readonly class FeeSelectionSource
     public static function hostel(string $residencyId): self
     {
         return self::of(self::HOSTEL, $residencyId);
+    }
+
+    public static function admissions(string $applicationId): self
+    {
+        return self::of(self::ADMISSIONS, $applicationId);
     }
 
     /** @return array{sourceModule: string, sourceId: string} */

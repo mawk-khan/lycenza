@@ -63,6 +63,8 @@ class DatabaseRoleVerifier
         'transport_fee_selections',
         // OPF.2 (ADR 0067 §28): so is Hostel's.
         'hostel_fee_selections',
+        // OPF.3 (ADR 0067 §29): and Admissions'.
+        'admission_fee_selections',
     ];
 
     /**
@@ -78,6 +80,8 @@ class DatabaseRoleVerifier
         'transport_fee_selections',
         // OPF.2 (ADR 0067 §28): so is Hostel's.
         'hostel_fee_selections',
+        // OPF.3 (ADR 0067 §29): and Admissions'.
+        'admission_fee_selections',
     ];
 
     /**

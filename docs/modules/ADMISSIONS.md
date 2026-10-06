@@ -585,11 +585,31 @@ established for Phase 1C's subject enrollment guards.
   - **Finance/Fees exist** (Phase 0G, FEE ADR 0062). Every charge has a
     Student subject (`charges.student_id` NOT NULL), so an applicant who is
     not yet a Student cannot be charged.
-  - **OPF (ADR 0067 D1, contract published 2026-10-05; OPF.3 not yet
-    built):** an **Admission fee applies only after conversion**. Inside
-    the conversion transaction, `AdmissionConversionService` may select the
-    School's optional Admission fee line for the new Student, through the
-    trusted FEE source-selection seam. FEE assessment runs make the charge.
+  - **OPF.3 (ADR 0067 D1, §29; implemented 2026-10-06):** an **Admission
+    fee applies only after conversion.** Inside the conversion transaction,
+    `AdmissionConversionService` calls `AdmissionFeeSelectionService`, which
+    selects the School's optional Admission fee line for the new Student
+    through the trusted FEE source-selection seam. FEE assessment runs make
+    the charge. As built:
+    - **Configuration:** one Admission fee head per School
+      (`admission_fee_heads`, no amount; `admissions.view` / `.manage`;
+      `GET` / `PUT /admission-fee-head`). FEE's structure for the year,
+      grade and campus owns the line and its one-time instalment.
+    - **Year:** the application's own academic year (the year of the
+      enrollment the conversion creates).
+    - **Provenance:** `admission_fee_selections`, one per converted
+      application, naming the converted Student (never the applicant);
+      insert-only Finance evidence, database-checked
+      (`GET /admission-applications/{id}/fee-selection`).
+    - **Not applicable** (not configured, no structure, no optional line,
+      inactive head) is audited and never fails the conversion; a failed
+      conversion leaves no fee evidence.
+    - **No withdrawal and no carry-forward**; corrections are explicit
+      Finance actions.
+    - **Retention:** the provenance keeps its converted application (and so
+      its Student) `dependency_blocked` until Finance evidence can go, as
+      the FEE selection already keeps the Student; the one-year terminal
+      clock for rejected or withdrawn applications is unaffected.
   - **A genuine pre-conversion application fee is deferred:** it needs its
     own ADR for an applicant financial subject, and is not implemented.
 - **Public/self-service applicant portal, Applicant/Guardian login,

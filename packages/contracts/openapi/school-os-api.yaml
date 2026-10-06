@@ -5190,6 +5190,58 @@ paths:
 
   # --- Phase 10A: Library catalogue (Title/Copy) + circulation (Loan).
   # See docs/modules/LIBRARY.md for the full domain design.
+  /schools/{schoolId}/admission-fee-head:
+    get:
+      operationId: getAdmissionFeeHead
+      summary: The FEE fee head that is the School's one-time Admission fee, or null (OPF.3, ADR 0067). Requires admissions.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { allOf: [{ $ref: "#/components/schemas/AdmissionFeeHead" }], nullable: true } } }
+    put:
+      operationId: setAdmissionFeeHead
+      summary: Maps the School's Admission fee to an active fee head of the School, or clears it with null (OPF.3, ADR 0067 D1, D7). Configuration only -- no amount; FEE structure instalments own the Admission fee amount. A successful Student conversion then records the converted Student's selection intent; no applicant is ever charged. Requires admissions.manage.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fee_head_id]
+              properties:
+                fee_head_id: { type: string, format: uuid, nullable: true }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { allOf: [{ $ref: "#/components/schemas/AdmissionFeeHead" }], nullable: true } } }
+        "422":
+          description: Not an active fee head of this School (ADMISSION_FEE_HEAD_NOT_SELECTABLE), or invalid input.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/admission-applications/{admissionApplicationId}/fee-selection:
+    get:
+      operationId: getAdmissionApplicationFeeSelection
+      summary: The Admission-fee selection intent this application's conversion recorded for the converted Student, or null (OPF.3, ADR 0067). Requires admissions.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/AdmissionApplicationId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { allOf: [{ $ref: "#/components/schemas/AdmissionFeeSelection" }], nullable: true } } }
+
   /schools/{schoolId}/library-titles:
     get:
       operationId: listLibraryTitles
@@ -17671,6 +17723,26 @@ components:
         createdAt: { type: string, format: date-time }
         convertedAt: { type: string, format: date-time, nullable: true }
 
+    AdmissionFeeHead:
+      type: object
+      required: [feeHeadId, code, name]
+      description: The fee head that is the School's one-time Admission fee (OPF.3). No amount -- FEE owns it.
+      properties:
+        feeHeadId: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+    AdmissionFeeSelection:
+      type: object
+      required: [id, studentId, academicYearId, feeHeadId, feeOptionalSelectionId, selectionOutcome]
+      description: Insert-only provenance of the FEE optional selection a converted application recorded for the converted Student (OPF.3). Never an applicant.
+      properties:
+        id: { type: string, format: uuid }
+        studentId: { type: string, format: uuid }
+        academicYearId: { type: string, format: uuid }
+        feeHeadId: { type: string, format: uuid }
+        feeOptionalSelectionId: { type: string, format: uuid }
+        selectionOutcome: { type: string, enum: [created, reused] }
+        createdAt: { type: string, format: date-time, nullable: true }
     AdmissionApplication:
       allOf:
         - { $ref: "#/components/schemas/AdmissionApplicationSummary" }

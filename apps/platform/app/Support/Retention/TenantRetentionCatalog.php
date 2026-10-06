@@ -71,6 +71,8 @@ final class TenantRetentionCatalog
             'transport_fee_selections',
             // OPF.2 (ADR 0067 §28): provenance of Hostel-recorded fee selections, retained with them.
             'hostel_fee_selections',
+            // OPF.3 (ADR 0067 §29): provenance of conversion-recorded Admission-fee selections, retained with them.
+            'admission_fee_selections',
         ]],
         'finance_period_evidence' => [self::TENANT_LIFETIME, 'D8: financial periods, their cumulative account baselines and the expiry lineage carry every later balance; kept with the School', [
             'financial_periods', 'financial_period_account_balances', 'financial_period_expiries',
@@ -91,6 +93,8 @@ final class TenantRetentionCatalog
             'transport_route_fee_heads',
             // OPF.2 (ADR 0067 D7): the Hostel / room -> fee head mapping (no amounts).
             'hostel_fee_heads',
+            // OPF.3 (ADR 0067 D7): the School's Admission fee head (no amounts).
+            'admission_fee_heads',
         ]],
         'audit' => [self::ADOPTED, 'D1: 7 y after the event', ['school_audit_events']],
         'erasure_cases' => [self::ADOPTED, 'D10: a closed erasure case, 7 y after it closed', ['erasure_cases']],

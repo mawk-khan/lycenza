@@ -207,15 +207,21 @@ class HostelFeeSelectionTest extends TestCase
 
         // A Student with no qualifying enrollment in the year.
         $unenrolled = $this->createStudent($w['school']);
-        $this->assertSame('active', $this->assign($w, $unenrolled)->status);
+        $first = $this->assign($w, $unenrolled);
+        $this->assertSame('active', $first->status);
 
         // A tier mapped to a fee head that is not an optional line of the Student's structure.
         $this->fees()->setRoomFeeHead($w['premiumRoom'], $w['tuition']->id, $w['hostelStaff']);
-        $this->assertSame('active', $this->assign($w, $this->student($w), 'premiumRoom')->status);
+        $second = $this->assign($w, $this->student($w), 'premiumRoom');
+        $this->assertSame('active', $second->status);
 
         $this->assertCount(0, $this->links($w));
-        $this->assertSame(['no_enrollment_in_year', 'no_optional_line'],
-            $this->audits($w, 'hostel.fee_selection.not_applicable')->sortBy('created_at')->map(fn ($a) => $a->metadata['reason'])->values()->all());
+        // Each residency's own outcome (keyed by residency: audit rows written in one instant have no stable order).
+        $expected = [$first->id => 'no_enrollment_in_year', $second->id => 'no_optional_line'];
+        $actual = $this->audits($w, 'hostel.fee_selection.not_applicable')->mapWithKeys(fn ($a) => [$a->metadata['hostelResidencyAssignmentId'] => $a->metadata['reason']])->all();
+        ksort($expected);
+        ksort($actual);
+        $this->assertSame($expected, $actual);
     }
 
     #[Test]

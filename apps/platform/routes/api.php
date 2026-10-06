@@ -9,6 +9,7 @@ use App\Domain\AcademicStructure\Http\Controllers\SectionController;
 use App\Domain\AcademicStructure\Http\Controllers\SubjectController;
 use App\Domain\AcademicStructure\Http\Controllers\SubjectOfferingController;
 use App\Domain\Admissions\Http\Controllers\AdmissionApplicationController;
+use App\Domain\Admissions\Http\Controllers\AdmissionFeeController;
 use App\Domain\Admissions\Http\Controllers\ApplicantController;
 use App\Domain\Attendance\Http\Controllers\AttendanceSessionController;
 use App\Domain\Attendance\Http\Controllers\TeacherAttendanceController;
@@ -994,6 +995,19 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/admission-applications/{admissionApplication}/convert', [AdmissionApplicationController::class, 'convert'])
                 ->middleware(['capability:admissions.manage', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.admission-applications.convert');
+
+            // --- OPF.3 (ADR 0067 §16): Admission fee at Student
+            // conversion. Admissions capabilities only -- the School's
+            // Admission fee head (no amount) and a converted application's
+            // recorded fee intent. The intent itself is recorded only by
+            // the conversion above; there is no separate fee mutation.
+            Route::get('/admission-fee-head', [AdmissionFeeController::class, 'showFeeHead'])
+                ->name('schools.admission-fee-head.show');
+            Route::put('/admission-fee-head', [AdmissionFeeController::class, 'updateFeeHead'])
+                ->middleware(['capability:admissions.manage', 'throttle:school-api-mutations'])
+                ->name('schools.admission-fee-head.update');
+            Route::get('/admission-applications/{admissionApplication}/fee-selection', [AdmissionFeeController::class, 'applicationFeeSelection'])
+                ->name('schools.admission-applications.fee-selection.show');
 
             // --- Phase 10A: Library catalogue (Title/Copy) and
             // circulation (Loan). `idempotent` is applied only to

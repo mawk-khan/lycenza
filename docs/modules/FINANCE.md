@@ -5233,16 +5233,19 @@ Contract published by OPF.0 (2026-10-05). **The trusted seam is built
 (OPF.1, ADR 0067 §27.1):**
 - `App\Domain\Fees\Application\Sources\FeeSourceSelectionService`, with
   `selectForSource()`, `withdrawForSource()` and `selectableFeeHead()`;
-- `FeeSelectionSource`, a closed catalogue (`transport`, and `hostel` since
-  OPF.2);
+- `FeeSelectionSource`, a closed catalogue (`transport`, `hostel` since
+  OPF.2, and `admissions` since OPF.3);
 - `FeeSourceSelectionResult`.
 
 It resolves the line from the Student's enrollment in the year (Students'
 `currentForYear()`) and `FeeStructureResolver`. Transport is its first
 caller; Hostel is the second (OPF.2, ADR 0067 §28), through the same seam
 with no Hostel-specific FEE API. The seam's callers are an explicit
-allow-list (`OperationalFeeSourceArchitectureGuardTest`). OPF.3–OPF.4 are
-not built.
+allow-list (`OperationalFeeSourceArchitectureGuardTest`). Admissions is
+the third (OPF.3, ADR 0067 §29): a successful conversion selects the
+converted Student's one-time Admission line (`admissions` source). No
+applicant is a charge subject and `charges` gains no `applicant_id`.
+OPF.4 is not built.
 - **Operational-source boundary.** Transport, Hostel, Admissions and
   Library call trusted FEE seams. **Fees, Finance and Payments never read
   those modules** to infer whether a fee applies. There is no parallel

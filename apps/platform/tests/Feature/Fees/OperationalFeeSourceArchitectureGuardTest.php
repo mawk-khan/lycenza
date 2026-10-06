@@ -12,16 +12,17 @@ use Tests\TestCase;
  */
 class OperationalFeeSourceArchitectureGuardTest extends TestCase
 {
-    /** OPF source modules implemented so far (OPF.1 Transport, OPF.2 Hostel), with their table prefix. */
-    private const SOURCE_MODULES = ['Transport' => 'transport', 'Hostel' => 'hostel'];
+    /** OPF source modules implemented so far (OPF.1 Transport, OPF.2 Hostel, OPF.3 Admissions), with their table prefix(es). */
+    private const SOURCE_MODULES = ['Transport' => 'transport', 'Hostel' => 'hostel', 'Admissions' => '(?:admission|applicant)'];
 
     /**
      * The explicit allow-list of the trusted selection seam's callers: one
-     * reviewed Application service per approved source module. Admissions,
-     * Library or any other caller is a failure until its own OPF slice adds
-     * it here (ADR 0067 §8).
+     * reviewed Application service per approved source module. Library or
+     * any other caller is a failure until its own OPF slice adds it here
+     * (ADR 0067 §8).
      */
     private const APPROVED_SEAM_CALLERS = [
+        'Domain/Admissions/Application/AdmissionFeeSelectionService.php',
         'Domain/Hostel/Application/HostelFeeSelectionService.php',
         'Domain/Transport/Application/TransportFeeSelectionService.php',
     ];
@@ -30,6 +31,7 @@ class OperationalFeeSourceArchitectureGuardTest extends TestCase
     private const TABLE_WRITERS = [
         'Domain/Transport/Application/TransportFeeSelectionService.php' => ['TransportFeeSelection', 'TransportRouteFeeHead'],
         'Domain/Hostel/Application/HostelFeeSelectionService.php' => ['HostelFeeSelection', 'HostelFeeHead'],
+        'Domain/Admissions/Application/AdmissionFeeSelectionService.php' => ['AdmissionFeeSelection', 'AdmissionFeeHead'],
     ];
 
     /** @return list<string> */
@@ -81,7 +83,7 @@ class OperationalFeeSourceArchitectureGuardTest extends TestCase
     #[Test]
     public function the_seam_allow_list_admits_no_module_without_an_opf_slice(): void
     {
-        foreach (['Admissions', 'Library'] as $excluded) {
+        foreach (['Library'] as $excluded) {
             foreach (self::APPROVED_SEAM_CALLERS as $caller) {
                 $this->assertStringStartsNotWith("Domain/{$excluded}/", $caller, "{$excluded} is not an approved OPF source yet");
             }
@@ -102,6 +104,7 @@ class OperationalFeeSourceArchitectureGuardTest extends TestCase
                 $this->assertStringNotContainsString('App\\Domain\\Finance\\', $code, $file);
                 $this->assertStringNotContainsString('App\\Domain\\Payments\\', $code, $file);
                 $this->assertDoesNotMatchRegularExpression("/'(charges|fee_optional_selections|fee_assessments)'/", $code, "{$file} must not read FEE tables");
+                $this->assertStringNotContainsString('ChargeService', $code, "{$file} must never create a charge: only Finance assessment runs do (D9)");
             }
         }
     }

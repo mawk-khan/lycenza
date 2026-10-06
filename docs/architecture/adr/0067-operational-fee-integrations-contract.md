@@ -4,7 +4,9 @@
   are adopted. OPF.1–OPF.5 (§26) implement it, each behind its own
   checkpoint. **OPF.1 implemented (2026-10-05, §27):** Transport fee
   selection through the trusted FEE seam. **OPF.2 implemented (2026-10-05,
-  §28):** Hostel fee selection through the same seam.
+  §28):** Hostel fee selection through the same seam. **OPF.3 implemented
+  (2026-10-06, §29):** the Admission fee at Student conversion through the
+  same seam.
 - Date: 2026-10-05
 - Programme: **OPF — Operational Fee Integrations** (Transport, Hostel,
   Library fines, Admissions fee). Roadmap "Post-foundation product
@@ -413,8 +415,8 @@ Student-facing fee views (POR); gateway payments; GST / tax.
 |---|---|---|
 | OPF.0 | This contract; module, roadmap and register alignment | **Published (2026-10-05)** |
 | OPF.1 | Transport fee selection: the trusted seam, Transport link rows, route → fee-head mapping, carry-forward, retention registration | **Published (2026-10-05, §27)** |
-| OPF.2 | Hostel fee selection (reuses the seam; no deposits) | Not started |
-| OPF.3 | Admission fee at Student conversion | Not started |
+| OPF.2 | Hostel fee selection (reuses the seam; no deposits) | **Published (2026-10-05, §28)** |
+| OPF.3 | Admission fee at Student conversion | **Published (2026-10-06, §29)** |
 | OPF.4 | Library overdue fines: versioned policy, event charge, waiver and void, Finance retention amendment, E34 | Not started |
 | OPF.5 | Closure audit and full regression | Not started |
 
@@ -701,4 +703,149 @@ credits, damage charges and proration remain excluded (§3, D2, D5).
   suites pass unchanged.
 - **Migration:** rollback drops both tables, the guard function and the
   rooms key; reapplying reproduces the identical schema snapshot.
+  `platform:verify-database` passes.
+
+## 29. OPF.3 as built (2026-10-06)
+
+**A successful conversion records the converted Student's one-time
+Admission-fee intent through the same trusted seam. Only Finance assessment
+runs make money. FEE never reads Admissions. No applicant is ever a
+financial subject.** §1–§28 and D1 are unchanged. The dated clarifications
+below record how §16 was realized.
+
+### 29.1 D1 reconfirmed
+- The fee arises only after conversion: the provenance row requires a
+  `converted` application and names the converted Student; nothing names an
+  applicant or an unconverted application.
+- `charges.student_id` stays the only charge subject; no `applicant_id` is
+  added anywhere in Finance. There is no applicant payment, receipt,
+  statement or portal billing, and no Admissions ledger.
+- A genuine pre-conversion application fee stays deferred to its own ADR.
+
+### 29.2 The seam (FEE)
+- **`FeeSelectionSource`** admits `admissions`
+  (`FeeSelectionSource::admissions($applicationId)`). No FEE schema change,
+  no Admissions-specific FEE API, the human path untouched.
+- **Clarification of §8, callers:** the allow-list is exactly three
+  services: `TransportFeeSelectionService`, `HostelFeeSelectionService` and
+  `AdmissionFeeSelectionService`. Library stays excluded until OPF.4. The
+  guard also asserts no source module references `ChargeService`.
+
+### 29.3 Admissions (`2026_12_04_090000_create_admission_fee_selection_tables`)
+- **Clarification of §16, the mapping:** Admissions has no pricing
+  dimension of its own. FEE's structure already varies by academic year,
+  grade and campus, so the mapping is **one fee head per School**
+  (`admission_fee_heads`, `admission_fee_heads_one_per_school`). No amount
+  column; composite foreign key to `fee_heads (id, school_id)`; RLS;
+  `admissions.view` / `.manage`. Writes serialize on a per-School
+  transaction advisory lock.
+- **`admission_fee_selections`:** provenance, one per application
+  (`admission_fee_selections_one_per_application`). It holds the
+  application, the converted Student, the academic year, the fee head, the
+  FEE selection and `selection_outcome` (`created` / `reused`).
+  - A BEFORE INSERT trigger proves the application is `converted` into that
+    Student in that year, and the selection is that Student's selection of
+    that year and head.
+  - Composite foreign keys (all RESTRICT) to the application, Student,
+    year, head and selection keep everything in one School.
+  - Insert-only for the runtime role; no actor column (the actor is in the
+    audit trail and on FEE's selection, as in §27.2).
+- **Where in the conversion:** `AdmissionConversionService::convert()`
+  calls `AdmissionFeeSelectionService::recordForConversion()` last, inside
+  its one transaction, after the application is marked `converted` and the
+  conversion is audited. A failed or rolled-back conversion leaves no
+  selection, provenance or fee audit.
+- **Clarification of §16, the year:** the application's own academic year,
+  which is the year of the enrollment the conversion just created (the
+  conversion requires the Section to match it). FEE resolves the line from
+  that enrollment (`currentForYear()`), then the active structure for its
+  grade and campus. It is not the School's active year.
+- **Not applicable never fails the conversion; integrity failures do.**
+  Not configured (`not_configured`), no active structure, no optional line
+  of the head, or the head no longer active are audited as
+  `admission_fee_selection.not_applicable`. Any other exception propagates
+  and rolls the conversion back.
+- **One-time, no lifecycle:** no withdrawal and no carry-forward. Later
+  application or Student changes never rewrite the evidence. "One-time" is
+  FEE's structure line (one instalment); Admissions holds no `is_one_time`
+  flag and no amount.
+- **Idempotent:** `recordForConversion()` re-locks the application row; a
+  replay returns `already_linked`. An existing active selection (for
+  example one Finance made by hand) is reused, never duplicated.
+- **API**, Admissions capabilities only: `GET` / `PUT /admission-fee-head`
+  (`admissions.view` / `.manage`) and
+  `GET /admission-applications/{id}/fee-selection` (`admissions.view`).
+  The intent itself is recorded only by the existing conversion endpoint.
+  These are documented in the OpenAPI contract, with regenerated shared
+  types. There is no Inertia page in OPF.3.
+- **Audit (Admissions):** `admission_fee_selection.linked` /
+  `.not_applicable` and `admission_fee_head.set` / `.cleared`, ids only.
+  FEE audits `fee_optional_selection.created` with source module
+  `admissions`. **No outbox event**, and the existing conversion audit is
+  unchanged.
+
+### 29.4 Retention (as §27.3)
+- `admission_fee_selections` is **Finance ledger**: E21-RH.7 anchor (its
+  five links tracked), retention delete guard, `RetentionAnchors::TABLES`,
+  the verifier's no-runtime-DELETE and no-runtime-UPDATE lists, and
+  classified under both `students` and `admission_applications` in
+  `StudentRetentionClassificationTest`.
+- `admission_fee_heads` is **Finance configuration** (tenant lifetime),
+  catalogued only.
+- **The dependency chain, stated:**
+  - Provenance references only **converted** applications. A converted
+    application is retained with its Student's core record (E21.3B), so the
+    one-year terminal (rejected or withdrawn) clock is unaffected.
+  - A converted application with provenance is `dependency_blocked` in the
+    Student-core purge (`ConvertedApplicationRetentionService::blocker()`
+    returns `admission_fee_selections`). The FEE selection already keeps
+    the Student (Finance D8), so the effective retention of the Student and
+    its converted application is unchanged: both wait for Finance evidence
+    to be releasable.
+  - No OPF.3 table references `charges`, so `retention_expire_finance_unit`
+    is unchanged. No retention period changed.
+- The forced-RLS table count is 197.
+
+### 29.5 Production gates (unchanged)
+E21 (retention), E30 (receipt / GST) and E32 (whether RTE / free-seat
+Students may be charged an Admission fee) still gate production. OPF.3
+draws no legal conclusion.
+
+### 29.6 Proof
+- **Behaviour (`AdmissionFeeSelectionTest`):**
+  - a conversion records one selection (actor and source `admissions`), one
+    provenance row and no charge; a replay records nothing;
+  - an unconfigured School converts normally and audits `not_configured`;
+  - no optional line, an inactive head and no active structure are audited
+    and never fail the conversion;
+  - a failed enrollment, a caller rollback after conversion, and an
+    unaccepted application all leave no fee evidence;
+  - Finance's run charges the one-time ADM instalment (2500.00) to the
+    converted Student, once, including after a replay and a re-run;
+  - an existing Finance selection is reused.
+- **Database:** no amount or applicant column; a foreign School's head and
+  a second School mapping are refused; provenance is unique,
+  trigger-checked (unconverted application, wrong Student, wrong
+  selection), insert-only, with RESTRICT foreign keys.
+- **Retention dependency:** the converted application is
+  `dependency_blocked` by the provenance; references are classified.
+- **Authorization:**
+  - Admissions managers configure and convert;
+  - Admissions viewers and Finance-only staff can't;
+  - Admissions staff can't create an assessment run or select by hand;
+  - another School sees 404 or nothing.
+- **Concurrency (`AdmissionFeeSelectionConcurrencyTest`)**, real processes
+  with an observed lock wait:
+  - two conversions of one application produce one Student, one provenance
+    row and one selection; the loser gets
+    `AdmissionApplicationAlreadyConvertedException`;
+  - two fee-links of one converted application produce one row, the loser
+    `already_linked`;
+  - two Admissions-source seam selections produce one selection, the loser
+    `reused`.
+- **Architecture:** FEE, Finance and Payments never reference Admissions or
+  its tables; the seam's callers are exactly the three; the Transport and
+  Hostel OPF suites pass unchanged.
+- **Migration:** rollback drops both tables and the guard function;
+  reapplying reproduces the identical schema snapshot.
   `platform:verify-database` passes.

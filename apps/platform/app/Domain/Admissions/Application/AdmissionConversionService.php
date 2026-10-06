@@ -69,6 +69,7 @@ class AdmissionConversionService
         private readonly StudentEnrollmentService $enrollmentService,
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly AdmissionFeeSelectionService $fees,
     ) {}
 
     /**
@@ -174,6 +175,13 @@ class AdmissionConversionService
                     'campusId' => $locked->campus_id,
                     'gradeLevelId' => $locked->grade_level_id,
                 ]);
+
+                // OPF.3 (ADR 0067 §16, D1): the converted Student's one-time
+                // Admission-fee intent, in this same transaction (a failed
+                // conversion leaves none). Not configured / not applicable is
+                // audited and never fails the conversion; any other failure
+                // rolls the whole conversion back.
+                $this->fees->recordForConversion($locked->refresh(), $actor);
 
                 return AdmissionConversionResult::make($locked->refresh(), $student, $enrollment, $guardianModel, $relationship);
             });

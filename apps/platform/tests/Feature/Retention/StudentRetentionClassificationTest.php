@@ -34,6 +34,8 @@ class StudentRetentionClassificationTest extends TestCase
             'student_guardian_relationships' => 'D7 operational (7 y)',
             'student_processing_authorizations' => 'D7 core (25 y): legal-basis evidence, removed with the Student through its core-floored function (E21.3B)',
             'admission_applications' => 'D7 core (25 y): a converted application goes with its Student (Admissions participant, E21.3B)',
+            // OPF.3 (ADR 0067 §29): the provenance of the converted Student's Admission-fee selection.
+            'admission_fee_selections' => 'retained, blocks: Finance D8 (OPF fee-selection provenance)',
             'charges' => 'retained, blocks: Finance D8 (its own expiry, E21.3A2)',
             'fee_assessments' => 'retained, blocks: Finance D8',
             'fee_assessment_run_items' => 'retained, blocks: Finance D8',
@@ -70,7 +72,10 @@ class StudentRetentionClassificationTest extends TestCase
         'student_processing_authorizations' => [
             'student_processing_authorizations' => 'D7 core: terminal events point at their grant; removed together, leaves first',
         ],
-        'admission_applications' => [],
+        'admission_applications' => [
+            // OPF.3 (ADR 0067 §29): it keeps the converted application (so its Student), as the selection keeps its Student.
+            'admission_fee_selections' => 'retained, blocks: Finance D8 (OPF fee-selection provenance)',
+        ],
         'applicants' => [
             'admission_applications' => 'D7 core: an applicant goes with its converted application only once no other application remains',
         ],

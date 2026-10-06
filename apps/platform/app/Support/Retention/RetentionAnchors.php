@@ -137,6 +137,8 @@ final class RetentionAnchors
         'transport_fee_selections' => ['transport_student_assignment_id', 'academic_year_id', 'fee_head_id', 'fee_optional_selection_id'],
         // OPF.2 (ADR 0067 §28): Hostel's insert-only fee-selection provenance (Finance evidence).
         'hostel_fee_selections' => ['hostel_residency_assignment_id', 'academic_year_id', 'fee_head_id', 'fee_optional_selection_id'],
+        // OPF.3 (ADR 0067 §29): Admissions' insert-only Admission-fee provenance (Finance evidence).
+        'admission_fee_selections' => ['admission_application_id', 'student_id', 'academic_year_id', 'fee_head_id', 'fee_optional_selection_id'],
     ];
 
     /** The inputs no retention path deletes from (anchored, not delete-guarded). */

@@ -18,7 +18,8 @@ use Illuminate\Support\Facades\DB;
  * OPF (ADR 0067 §8, D9): the trusted source-selection seam. An operational
  * module's application service -- after checking its OWN capability (for
  * Transport, `transport.assignments.manage`; for Hostel,
- * `hostel.residency.manage`) -- records or withdraws optional
+ * `hostel.residency.manage`; for Admissions, `admissions.manage`) --
+ * records or withdraws optional
  * fee selection INTENT for one Student, academic year and fee head.
  *
  * - **Trusted, authorization-neutral** like ChargeService: it performs no
