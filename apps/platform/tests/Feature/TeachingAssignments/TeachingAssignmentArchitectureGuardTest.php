@@ -36,17 +36,19 @@ class TeachingAssignmentArchitectureGuardTest extends TestCase
     {
         // Adopted one surface at a time (ADR 0063 section 16): TCH.3
         // Curriculum Delivery, TCH.4 Attendance, TCH.5C/TCH.5D LMS (Learning
-        // Content, Assignments) -- each through the
+        // Content, Assignments), RES.4 Examinations (owned StudentMark entry,
+        // development only, ADR 0068 section 25) -- each through the
         // TeachingOwnership read only, never the model, the table or the
         // administrative services.
-        foreach (['Timetable', 'Syllabus', 'Examinations'] as $module) {
+        foreach (['Timetable', 'Syllabus'] as $module) {
             $this->assertSame([], $this->grep('TeachingAssignment', "app/Domain/{$module}"), "{$module} is not an adopted TeachingAssignment consumer.");
         }
 
-        foreach (['CurriculumDelivery', 'Attendance', 'LMS'] as $module) {
+        foreach (['CurriculumDelivery', 'Attendance', 'LMS', 'Examinations'] as $module) {
             $uses = array_filter(
                 $this->grep('App\\Domain\\TeachingAssignments', "app/Domain/{$module}"),
-                fn (string $line) => ! str_contains($line, 'Application\\TeachingOwnership;') && ! str_contains($line, 'Application\\OwnedTeachingPeriod;'),
+                fn (string $line) => ! str_contains($line, 'Application\\TeachingOwnership;') && ! str_contains($line, 'Application\\OwnedTeachingPeriod;')
+                    && ! ($module === 'Examinations' && str_contains($line, 'Application\\OwnedElectivePeriod;')),
             );
             $this->assertSame([], array_values($uses), "{$module} may use TeachingOwnership/OwnedTeachingPeriod only: ".implode("\n", $uses));
             $this->assertSame([], $this->grep('teaching_assignments', "app/Domain/{$module}"));
@@ -84,20 +86,27 @@ class TeachingAssignmentArchitectureGuardTest extends TestCase
 
     /**
      * TCH-E (ADR 0063 section 45): elective ownership is the only new teacher-ownership fact, read only through
-     * TeachingOwnership, and it grants no StudentMark authority: no consumer in Examinations, no teacher marks
-     * capability or route, no results capability. RES.4 remains NOT AUTHORISED (ADR 0068 section 22).
+     * TeachingOwnership. RES.4 (ADR 0068 section 25, owner-authorised development) is its one adopted consumer:
+     * Examinations' teacher marks path only, through TeachingOwnership (holdOffering() under lock, the periods
+     * for reads) -- never the model or table. Ownership grants nothing by itself; no results capability.
      */
     #[Test]
-    public function elective_ownership_is_the_one_new_fact_and_grants_no_marks_authority(): void
+    public function elective_ownership_is_the_one_new_fact_and_only_the_teacher_marks_path_consumes_it(): void
     {
         $ownership = (string) file_get_contents(app_path('Domain/TeachingAssignments/Application/TeachingOwnership.php'));
         preg_match_all('/^use App.Domain.TeachingAssignments.Infrastructure.(\w+);/m', $ownership, $facts);
         $this->assertSame(['ElectiveTeachingAssignment', 'TeachingAssignment'], $facts[1], 'TeachingOwnership reads exactly the two ownership facts.');
 
+        foreach (['ElectiveTeachingAssignment', 'elective_teaching_assignments', 'teaching_assignments'] as $forbidden) {
+            $this->assertSame([], $this->grep($forbidden, 'app/Domain/Examinations'), "Examinations reads ownership only through TeachingOwnership, never {$forbidden}.");
+        }
         foreach (['TeachingOwnership', 'ElectiveTeachingAssignment', 'elective_teaching_assignments', 'OwnedElectivePeriod'] as $forbidden) {
-            $this->assertSame([], $this->grep($forbidden, 'app/Domain/Examinations'), "Examinations must not consume {$forbidden} (RES.4 is NOT AUTHORISED).");
             $this->assertSame([], $this->grep($forbidden, 'app/Domain/Students'));
         }
+        $consumers = array_map(fn (string $line) => explode(':', $line)[0], array_merge($this->grep('TeachingOwnership', 'app/Domain/Examinations')));
+        $this->assertSame(['app/Domain/Examinations/Application/Marks/TeacherStudentMarkAccess.php', 'app/Domain/Examinations/Application/Marks/TeacherStudentMarkGuard.php'],
+            array_values(array_unique(array_map(fn (string $f) => str_replace(base_path().'/', '', $f), $consumers))), 'Examinations consumes ownership in the teacher marks path only');
+        $this->assertSame(1, count($this->grep('holdOffering(', 'app/Domain/Examinations')), 'the teacher write decides ownership through holdOffering() only');
         foreach (['CurriculumDelivery', 'Attendance', 'LMS'] as $module) {
             $this->assertSame([], $this->grep('OwnedElectivePeriod', "app/Domain/{$module}"), "{$module} adopted required ownership only; electives are a new decision per consumer.");
             $this->assertSame([], $this->grep('holdElective', "app/Domain/{$module}"));
@@ -105,7 +114,6 @@ class TeachingAssignmentArchitectureGuardTest extends TestCase
         }
 
         $seeder = (string) file_get_contents(database_path('seeders/CapabilityAndRoleSeeder.php'));
-        $this->assertStringNotContainsString("'examinations.marks.teacher'", $seeder);
         $this->assertDoesNotMatchRegularExpression("/'key'\s*=>\s*'examinations\.results\./", $seeder);
         $this->assertDoesNotMatchRegularExpression("/'key'\s*=>\s*'teaching\.[a-z_.]*elective/", $seeder, 'elective ownership reuses teaching.assignments.*; no new capability');
         foreach (Route::getRoutes() as $route) {

@@ -716,7 +716,9 @@ module; ADR 0068 reopens **only** two things:
   development only, under ADR 0068 §19's conditions (history kept before
   lock too; a withdrawn basis withholds reads). RES.3 built the lock and
   corrections (ADR 0068 §21, development only). Teacher entry is RES.4 —
-  not authorised (RES-L2, E33, RES-L0 re-review).
+  built for development on the owner's engineering authorisation (ADR 0068
+  §25); production blocked in code pending RES-L2, the teacher RES-L0
+  re-review and RES-L1.
 
 **Guardrails — ADR 0068 is not authority for any of these:** result
 calculation, finalization, publication or revocation; GradeScale selection,
@@ -754,8 +756,8 @@ Internal, administrative marks entry per ExaminationPaper, **development only**
   for every write (and for showing a value); optimistic versions; atomic
   batches; a closed year or an inactive paper refuses; once marked, a paper's
   `max_marks` and `scheduled_on` are frozen.
-- **Not built:** teacher entry (RES.4), results, report cards, transcripts,
-  Student/Guardian access, exports, analytics.
+- **Not built:** results, report cards, transcripts, Student/Guardian access,
+  exports, analytics. Teacher entry is RES.4 (below).
 
 ## Marks lock and corrections (RES.3, 2026-10-07; ADR 0068 §21)
 
@@ -793,3 +795,48 @@ Development only (production: RES-L1). Highly Sensitive.
   - a closed year refuses entry but permits the correction workflow;
   - without a basis, the grid withholds the mark and its pending correction;
   - audit carries ids, versions and the reason code only.
+
+## Teacher-owned marks entry (RES.4, 2026-10-07; ADR 0068 §25)
+
+**Development only.** The product owner authorised the engineering work. That
+is not a legal determination: RES-L2 (E37) and the teacher RES-L0 re-review
+(E35) are unresolved, and RES-L1 (E36) still blocks production StudentMark.
+- **Production block.** `TeacherStudentMarkAvailability` refuses teacher marks
+  in every environment except `local` / `testing`. It has no flag and is
+  checked both at the route and in the Application layer, so a role grant
+  cannot open it.
+- **Capability.** `examinations.marks.teacher`, held by `teacher`, and by
+  `school_admin` for grantability only. It implies no administrative marks
+  key and no results key, and is implied by none.
+- **Surface:** session JSON only.
+  - `GET` / `PUT /app/my-examination-papers/{paper}/marks`;
+  - every route needs `teacher-marks-development-only` +
+    `capability:examinations.marks.teacher` + `mfa`.
+
+  There is no `/api/v1` route, list, search, lock or correction route for
+  teachers.
+- **Authority**, every part required:
+  - an ActingEmployee today;
+  - per Student, P3 eligibility on the paper's `scheduled_on`;
+  - ownership on that date — required: TeachingAssignment for the Student's
+    P3 Section × the Offering; elective: the Offering-wide elective
+    assignment (`TeachingOwnership::holdOffering()`, held `FOR SHARE`);
+  - a current ADR 0038 basis;
+  - the paper active and open, the year not closed.
+
+  Co-teachers and short cover assignments are ordinary owners
+  (owner-adopted development rules pending RES-L2).
+- **Read.** Only fully authorised owned Students are listed. Owned Students
+  without a basis are only counted (`unavailableCount`), and nothing about
+  another teacher's Students is listed, counted or signalled. Every paper
+  miss is the same 404.
+- **Write.** `StudentMarkService` is still the one writer; the teacher guard
+  runs inside its transaction (lock order: ADR 0068 §25.7).
+  - An out-of-scope Student gets the same reason-free 404.
+  - A locked paper refuses (409).
+  - Teachers never lock, request or decide corrections.
+- **Audit:**
+  - reads: `examinations.student_marks.teacher_viewed`;
+  - writes: `examinations.student_mark.teacher_recorded` / `.teacher_changed`.
+
+  Each carries ids, the Employee and the ownership source, and never a value.

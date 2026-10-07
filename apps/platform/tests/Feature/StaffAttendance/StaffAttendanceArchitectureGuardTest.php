@@ -131,7 +131,7 @@ class StaffAttendanceArchitectureGuardTest extends TestCase
         $this->assertSame(['hr.staff_attendance.manage', 'hr.staff_attendance.self', 'hr.staff_attendance.view'], $keys, 'HRX.4 adds the read-only own capability');
         $teacher = DB::table('roles as r')->join('role_capabilities as rc', 'rc.role_id', '=', 'r.id')
             ->where('r.key', 'teacher')->pluck('rc.capability_key')->sort()->values()->all();
-        $this->assertSame(['attendance.teacher', 'curriculum.delivery.teacher', 'lms.assignments.teacher', 'lms.content.teacher'], $teacher, 'E33: the teacher role is unchanged');
+        $this->assertSame(['attendance.teacher', 'curriculum.delivery.teacher', 'examinations.marks.teacher', 'lms.assignments.teacher', 'lms.content.teacher'], $teacher, 'E33: the teacher role is unchanged by Staff Attendance (RES.4 adds only the owned marks key)');
         // school_admin also holds `.self` only so it can grant staff_self_service (HRX.4, no escalation).
         foreach (['school_admin' => ['hr.staff_attendance.manage', 'hr.staff_attendance.self', 'hr.staff_attendance.view'], 'principal' => ['hr.staff_attendance.manage', 'hr.staff_attendance.view']] as $role => $expected) {
             $granted = DB::table('roles as r')->join('role_capabilities as rc', 'rc.role_id', '=', 'r.id')->where('r.key', $role)->where('rc.capability_key', 'like', 'hr.staff_attendance.%')->orderBy('rc.capability_key')->pluck('rc.capability_key')->all();

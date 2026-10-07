@@ -13,7 +13,12 @@
   §22; docs only):** the teacher-processing requests are drafted, not sent;
   **RES.4 remains NOT AUTHORISED.** **E33 determined (2026-10-07, §23):**
   APPROVED WITH CONDITIONS for teacher Attendance only; RES.4 still NOT
-  AUTHORISED (RES-L2, RES-L0 teacher re-review).
+  AUTHORISED (RES-L2, RES-L0 teacher re-review). **RES.4 implemented for
+  development (2026-10-07, §25):** on the product owner's explicit
+  engineering authorisation (not a legal determination), owned teacher
+  StudentMark entry is built and tested; **production is technically
+  blocked** pending RES-L2 (E37), the teacher RES-L0 re-review (E35) and
+  RES-L1 (E36).
 - Date: 2026-10-06
 - Programme: **RES — Assessment & results** (`MASTER-ROADMAP.md`,
   "Post-foundation product programmes", order 5).
@@ -1044,6 +1049,12 @@ rather than silently re-derived.
 
 ## 22. RES.4 readiness — teacher StudentMark gates (2026-10-07)
 
+> **Amended by §25 (2026-10-07).** The product owner authorised RES.4
+> engineering development; §22.9's development outcome rule is overridden as
+> an internal product-development hold only. §22's legal analysis and gate
+> states are unchanged: RES-L2 (E37) and the teacher RES-L0 re-review (E35)
+> remain undetermined, and §22.8's production block stands.
+
 **Documentation only. RES.4 remains NOT AUTHORISED.** This section records
 the gate analysis, the ownership audit and the contract a future RES.4 would
 have to meet. It changes no code, capability, role, route or test, and no
@@ -1232,3 +1243,291 @@ Offering-wide) and `TeachingOwnership::holdElective()` / `holdOffering()`.
   4. ownership facts: required **READY**, elective **READY**.
 
   **RES.4 remains NOT AUTHORISED**, blocked only by gates 1 and 2.
+
+## 25. RES.4 as built — teacher-owned StudentMark entry, development only (2026-10-07)
+
+### 25.1 Owner decision trace (not a legal determination)
+- **2026-10-07 — product owner:** explicitly authorised RES.4 **engineering
+  development** (build and test teacher-owned StudentMark entry).
+- This **overrides the project's internal product-development hold** (§22.9's
+  development outcome rule, ADR 0058 row E37's "blocks development"). It is
+  **not** a privacy or legal determination. Nobody has approved teacher
+  StudentMark processing: the Lead Privacy Counsel & DPO has answered neither
+  question.
+- **RES-L2 (E37)** stays **LEGAL_REVIEW_REQUIRED**. The **teacher-scope
+  RES-L0 re-review (E35)** stays **undetermined**; E35's 7 October 2026
+  determination remains administrative-only. **RES-L1 (E36)** still blocks
+  any production StudentMark.
+- **Production enablement is prohibited** and is technically blocked
+  (§25.3).
+- **If a future determination conflicts with this implementation, RES.4 is
+  amended or disabled before production.** The rules marked
+  "owner-adopted development rule" below are the questions RES-L2 asks
+  (`docs/security/RES-L2-TEACHER-STUDENTMARK-REVIEW-REQUEST.md`). The
+  determination decides them; this section does not.
+
+### 25.2 Capability and holders
+- **`examinations.marks.teacher`** — "Enter Student Marks for the classes one
+  teaches". It is the only owned-scope Examinations key.
+- **No implication either way.** It implies none of `examinations.marks.view`,
+  `.manage`, `.lock`, `.correction.request` or `.correction.approve`, and none
+  of them implies it. No `examinations.results.*` key exists.
+- **Holders:**
+  - **`teacher`** (its fifth owned-scope key);
+  - **`school_admin`**, only so it can grant the `teacher` role. This follows
+    the TCH.3 precedent: StaffRoleCatalog lets an issuer grant only
+    capabilities it holds. Used alone, the key still needs an ActingEmployee
+    and ownership, and School Admin already holds the administrative marks
+    keys.
+- **Not held:** `principal` and every other role. Guard-pinned
+  (`StudentMarkArchitectureGuardTest`, `TeacherRoleRegistryTest`).
+- **No role branch.** Any role carrying the key is treated the same, and the
+  role key is never consulted.
+
+### 25.3 Interim production block (owner-authorised development)
+- **`TeacherStudentMarkAvailability`:** teacher marks run only when
+  `APP_ENV` is `local` or `testing`. Any other environment (production,
+  staging, anything else) answers 403 `TEACHER_STUDENT_MARKS_UNAVAILABLE`.
+- **Not configurable.** No variable or flag opens it, so neither a
+  misconfigured deployment nor an accidental grant of the key to any role can
+  make teacher marks production-effective.
+- **Lifting it** is a reviewed code change, made only once RES-L2, the
+  teacher RES-L0 re-review and RES-L1 permit it.
+- **Enforced twice:**
+  - at the route, by `teacher-marks-development-only`
+    (`EnsureTeacherStudentMarksDevelopmentOnly`, first in the stack, before
+    any capability, identity or ownership work);
+  - in the Application layer, as the first statement of both teacher entry
+    points (`TeacherStudentMarkAccess::scope()` and
+    `TeacherStudentMarkGuard::holdActor()`).
+
+  A route that forgot the middleware would still be refused. Guard-pinned:
+  the class reads no config or environment variable.
+- **Administrative marks are unaffected.** They remain development-only by
+  RES-L1 as before.
+
+### 25.4 Ownership semantics
+- **Ownership date.** Ownership is judged on the paper's **`scheduled_on`**
+  (§22.4, R12). Separately, the actor must be an eligible **ActingEmployee
+  today**: `ActingEmployeeResolver::hold()` as of the School-local entry
+  date, the Attendance precedent.
+  - There is **no second "ownership must also hold today" check**. That is
+    RES-L2 Q5/Q10 and stays open: an *owner-adopted development assumption
+    pending formal review*. A teacher whose assignment ended after the paper
+    date may still enter that paper's marks while employed and while the
+    paper is open.
+- **Required Offering, decided per Student.** P3 returns the Student's
+  placement Section on `scheduled_on`, and
+  `TeachingOwnership::holdOffering()` (→ `hold()`) requires the teacher's
+  TeachingAssignment for that Section × the Offering on that date.
+  - An Offering-wide paper never gives a teacher every Student.
+- **Elective Offering.** P3 must find the Student's elective enrollment on
+  `scheduled_on`; `holdOffering()` (→ `holdElective()`) requires the
+  teacher's Offering-wide elective assignment (TCH-E) on that date. No
+  Section is used.
+  - A StudentSubjectEnrollment alone is never teacher authority.
+  - Another elective's ownership is never authority.
+- **Co-teachers** are equal owners: each passes for the Students in their own
+  verified scope, and there is no lead or assistant hierarchy. *Owner-adopted
+  development rule pending RES-L2.*
+- **Cover / substitute.** A short dated assignment covering `scheduled_on`
+  is an ordinary assignment; there is no substitute flag. *Owner-adopted
+  development rule pending RES-L2.*
+- **Exactly one covering row counts,** as `hold()` does: corrupt data with
+  two covering rows fails closed.
+
+### 25.5 Read surface — `GET /app/my-examination-papers/{paper}/marks`
+- **Purpose-built.** `TeacherStudentMarkReadService` never calls or filters
+  the administrative grid.
+- **Paper visibility.** The paper must exist in the School and its Offering
+  must be owned by the teacher on `scheduled_on` (any Section of a required
+  Offering, or the elective). Otherwise the answer is one 404
+  `STUDENT_MARK_PAPER_NOT_FOUND`, identical for an unknown id, another
+  School's paper and an unowned paper. The id is a plain uuid, not
+  route-model-bound.
+- **Paper state.**
+  - An inactive paper → 422.
+  - A closed year → 409.
+  - A **locked** paper stays readable (`marksState: locked`).
+- **Rows.** Only Students who are P3-eligible on the date, owned by the
+  teacher on the date, **and** have a current ADR 0038 basis.
+  - Each row carries `studentId`, roll number, display name and the mark
+    (`studentMarkId`, status, value, version).
+  - No correction data, eligibility source, placement id or administrative
+    field.
+- **Owned Students without a current basis** are not listed: only
+  `unavailableCount` is returned.
+  - No row, value or existence signal is given for their marks, and the
+    marks stay recorded (RES-L0 §3).
+  - Students outside the teacher's scope are not read into the response,
+    listed or counted.
+- **Audit.** Every successful read: `examinations.student_marks.teacher_viewed`
+  with `{examinationPaperId, employeeId, rowCount, unavailableCount}`.
+
+### 25.6 Write path — `PUT /app/my-examination-papers/{paper}/marks`
+- **One writer.** `StudentMarkService::record()` is unchanged for
+  administrators. The teacher passes a `StudentMarkWriteGuard`
+  (`TeacherStudentMarkGuard`, the only implementation, guard-pinned) that
+  narrows the actor **inside the same transaction**:
+  - **`holdActor()`:** the block, then `examinations.marks.teacher`, then
+    `ActingEmployeeResolver::hold()` today. This runs before any marks lock.
+  - **`admitPaper()`:** the paper-visibility rule of §25.5. It runs before
+    the paper's status, lock or year is disclosed.
+  - **`admitStudent()`:** after P3 has locked the Student's facts, an
+    ineligible Student **or** one the teacher does not own on `scheduled_on`
+    is one 404 `STUDENT_MARK_STUDENT_NOT_FOUND`.
+    - That answer carries the caller's own Student id and no P3 reason, so
+      it is identical for an unknown id, an unplaced Student and another
+      teacher's Student.
+    - Ownership is `holdOffering()`: the covering assignment is held
+      `FOR SHARE`.
+- **The rest is RES.2 / RES.3:**
+  - ADR 0038 basis under lock;
+  - the optimistic version guard;
+  - the batch is atomic (one refusal saves nothing);
+  - the database-appended revision history (`student_mark_revisions`,
+    with `recorded_by_user_id` = the teacher);
+  - the locked-paper refusal (409 `STUDENT_MARK_PAPER_LOCKED`), backed by
+    the database `student_marks_lock_guard`.
+- **Audit.** Every written mark: `examinations.student_mark.teacher_recorded`
+  or `examinations.student_mark.teacher_changed` with
+  `{studentMarkId, examinationPaperId, studentId, version, employeeId,
+  ownershipSource}`. `ownershipSource` is `teaching_assignment` or
+  `elective_teaching_assignment`. Never a value, status, name or free text.
+- **Not given to teachers:** lock, unlock, correction request, correction
+  approval or rejection, overrides, results, publication, report cards,
+  transcripts, export, search, Analytics, AI or integrations.
+  - Correction requests stay administrative: having entered a mark grants
+    nothing.
+  - The administrative routes still refuse a teacher (403).
+- **MFA:** `mfa` (the ADR 0037 assurance window) on both routes, as for
+  administrative entry. There is no fresh-MFA requirement for ordinary entry
+  (none exists for administrative entry), and no bearer-token route.
+
+### 25.7 Canonical lock order (amends §21.5)
+Every path takes a subset, in this order:
+0. **Teacher only:** `ActingEmployeeResolver::hold()`, all `FOR SHARE`, in
+   this order: School → membership → User → Employee → EmploymentRecord
+   (the ADR 0063 order);
+1. `examination_papers` (`FOR SHARE` for entry, request and approval;
+   `FOR UPDATE` for the lock);
+2. `examination_paper_mark_states` (lock only);
+3. `academic_years` `FOR SHARE`;
+4. `student_mark_corrections` (decisions);
+5. P3: Offering, then placements, then elective rows, all `FOR SHARE`;
+6. **Teacher only:** ownership. `holdOffering()` takes the Offering
+   `FOR SHARE` again (the same transaction already holds it), then the one
+   covering `teaching_assignments` / `elective_teaching_assignments` row
+   `FOR SHARE`;
+7. ADR 0038: Student `FOR UPDATE`, then grants, then relationship;
+8. `student_marks`.
+
+**Why this order cannot deadlock.** A deadlock needs a writer that holds
+something the teacher path takes later while waiting for something it took
+earlier. No writer below does:
+- **Assignment end.** TeachingAssignmentService / ElectiveTeachingAssignmentService
+  take School `FOR SHARE`, the key's advisory lock, then the assignment
+  `FOR UPDATE`. They lock no marks, paper, placement or Student row, so they
+  wait for a teacher's share lock or commit before it.
+- **Employment end.** EmploymentService locks Employee / EmploymentRecord.
+  The teacher holds those before any assignment (step 0 before step 6), the
+  ADR 0063 order.
+- **Processing-authorization withdrawal, placement transfer and the paper
+  lock** take only their own rows, which the teacher path takes in §21.5's
+  order.
+- **Identity rows first.** No marks writer takes identity rows, and no
+  identity writer takes marks rows, so taking identity first adds no cycle.
+
+### 25.8 Tenancy, privacy, logging
+- **School isolation.** The School is always the trusted session context;
+  every read and write is School-scoped; RLS on `student_marks` / revisions
+  is unchanged.
+- **Per-School identity.** A multi-School identity qualifies in each School
+  independently: a teacher's Employee and assignments in School A give
+  nothing in School B. There is no global teacher authority.
+- **Raw SQL.** Under another School's context a teacher-written mark is
+  invisible and unwritable (`TeacherStudentMarkTenancyTest`).
+- **No echo of values.** Errors are fixed text plus the caller's own Student
+  id. Validation answers field names only and never flashes input. Database
+  errors are translated (RES.2), and no mark value reaches a log, exception
+  message, audit row or response other than the owned read.
+
+### 25.9 Proof
+**Authorization and behaviour**
+- **`TeacherStudentMarkAccessTest` (11):**
+  - required teacher (own Section only; atomic batch);
+  - elective teacher (across Sections; elected Students only; no cross-use
+    of required and elective ownership; another elective denied);
+  - unrelated teacher;
+  - unknown, unplaced and late-placed Students look alike;
+  - ownership on the paper date: ended before, started after, historical
+    inclusive, short cover;
+  - ActingEmployee judged today;
+  - co-teachers plus the version guard;
+  - no ActingEmployee / no capability / administrative keys don't imply it;
+  - no basis (never and withdrawn) discloses and writes nothing;
+  - locked, inactive and closed;
+  - audit, ids only;
+  - production and staging refused, even for an accidental administrative
+    grant, with administrative entry unaffected;
+  - an assignment end stops future authority and keeps history.
+- **`TeacherStudentMarkHttpTest` (7):**
+  - session JSON;
+  - MFA: step-up 401, no factor 403;
+  - capability;
+  - one fixed 403 for an ineligible identity;
+  - every paper miss gives the identical 404 body;
+  - an out-of-scope Student gets 404 without a reason;
+  - administrative grid, entry, lock, correction request, approve and reject
+    are all 403 to a teacher;
+  - production gives a fixed 403 first;
+  - no value is echoed, flashed or logged.
+- **`TeacherStudentMarkTenancyTest` (2):** the multi-School identity and the
+  raw-SQL RLS checks of §25.8.
+
+**Concurrency** — `TeacherStudentMarkConcurrencyTest` (9), real OS processes
+with forced overlap:
+- **X1 / X2 (required / elective end):**
+  - end first → the entry is refused;
+  - entry first → the end waits and the mark stands.
+- **X3:** withdrawal → refused.
+- **X4:** a transfer waits; the mark keeps its placement.
+- **X5:**
+  - lock first → refused;
+  - entry first → the lock waits, then completes.
+- **X6:** co-teachers → version conflict, no lost update.
+
+**Mutation checks, each caught:**
+- `hold()` without `FOR SHARE` → both X1 races fail;
+- `holdElective()` without `FOR SHARE` → both X2 races fail;
+- the guard deciding ownership from the unlocked snapshot → all four X1/X2
+  races fail;
+- removing `admitStudent()` from the writer → five access/HTTP tests fail.
+
+**Guards amended deliberately:**
+- `StudentMarkArchitectureGuardTest`: routes, holders, one write guard,
+  lock-order positions, purpose-built read, non-configurable block;
+- `SubjectOfferingEligibilityArchitectureGuardTest`: P3 consumers; RES.4
+  artifacts admitted, RES.5+ still absent;
+- `TeachingAssignmentArchitectureGuardTest`: Examinations is the adopted
+  consumer, through TeachingOwnership only;
+- `ExaminationArchitectureGuardTest`: the P3 result DTO;
+- the teacher-role pins.
+
+### 25.10 What RES.4 does not do
+It adds no Result model, grade calculation, publication, report card,
+transcript, promotion, ranking, Student or Guardian marks access, Analytics,
+AI/ML, export, search, outbox event, webhook or `/api/v1` route. It creates no
+`examinations.results.*` key, no table and no migration.
+
+### 25.11 Gates after RES.4
+| Gate | State |
+|---|---|
+| RES-L2 (E37) | **LEGAL_REVIEW_REQUIRED** — unresolved; blocks production |
+| Teacher RES-L0 re-review (E35) | **Undetermined** — blocks production |
+| RES-L1 (E36) | Open — blocks any production StudentMark |
+| E33 | Determined for Attendance only; no effect on marks |
+| Owner engineering authorisation | Given 2026-10-07 (development and test only) |
+
+**RES.4 — IMPLEMENTED FOR DEVELOPMENT / PRODUCTION BLOCKED PENDING RES-L2 +
+TEACHER RES-L0 + RES-L1.**

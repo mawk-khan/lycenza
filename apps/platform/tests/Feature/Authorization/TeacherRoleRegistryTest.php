@@ -40,8 +40,8 @@ class TeacherRoleRegistryTest extends TestCase
 
         $this->assertTrue($role->is_system);
         $this->assertSame('school', $role->scope);
-        // TCH.3 + TCH.4 + TCH.5C + TCH.5D: exactly the four owned-scope capabilities.
-        $this->assertSame(['attendance.teacher', 'curriculum.delivery.teacher', 'lms.assignments.teacher', 'lms.content.teacher'], $this->capabilities('teacher'));
+        // TCH.3 + TCH.4 + TCH.5C + TCH.5D + RES.4 (ADR 0068 §25, development only): exactly the five owned-scope capabilities.
+        $this->assertSame(['attendance.teacher', 'curriculum.delivery.teacher', 'examinations.marks.teacher', 'lms.assignments.teacher', 'lms.content.teacher'], $this->capabilities('teacher'));
         $this->assertSame(1, Role::query()->where('key', 'like', '%teacher%')->count(), 'One Teacher role, no second teacher-like role.');
     }
 
@@ -60,12 +60,14 @@ class TeacherRoleRegistryTest extends TestCase
         }
         $this->assertSame(['attendance.teacher'], array_values(array_filter($teacher, fn ($k) => str_starts_with($k, 'attendance.'))), 'Only the owned-scope Attendance capability.');
         $this->assertSame(['lms.assignments.teacher', 'lms.content.teacher'], array_values(array_filter($teacher, fn ($k) => str_starts_with($k, 'lms.'))), 'Only the owned-scope LMS capabilities; no School-wide LMS capability.');
+        // RES.4: the owned marks key only -- never marks view/manage/lock/corrections, papers, definitions or results.
+        $this->assertSame(['examinations.marks.teacher'], array_values(array_filter($teacher, fn ($k) => str_starts_with($k, 'examinations.'))), 'Only the owned-scope marks capability.');
     }
 
     #[Test]
     public function the_owned_capabilities_are_carried_only_by_teacher_and_by_school_admin_for_grantability(): void
     {
-        foreach (['curriculum.delivery.teacher', 'attendance.teacher', 'lms.content.teacher', 'lms.assignments.teacher'] as $key) {
+        foreach (['curriculum.delivery.teacher', 'attendance.teacher', 'lms.content.teacher', 'lms.assignments.teacher', 'examinations.marks.teacher'] as $key) {
             $holders = Role::query()->where('is_system', true)
                 ->whereHas('capabilities', fn ($q) => $q->where('key', $key))
                 ->pluck('key')->sort()->values()->all();
@@ -76,7 +78,7 @@ class TeacherRoleRegistryTest extends TestCase
             $this->assertSame('school', Capability::query()->where('key', $key)->value('namespace'));
         }
 
-        $this->assertSame(['attendance.teacher', 'curriculum.delivery.teacher', 'lms.assignments.teacher', 'lms.content.teacher'], Capability::query()->where('key', 'like', '%.teacher')->orderBy('key')->pluck('key')->all(), 'No Timetable or other *.teacher capability (not adopted).');
+        $this->assertSame(['attendance.teacher', 'curriculum.delivery.teacher', 'examinations.marks.teacher', 'lms.assignments.teacher', 'lms.content.teacher'], Capability::query()->where('key', 'like', '%.teacher')->orderBy('key')->pluck('key')->all(), 'No Timetable or other *.teacher capability (not adopted).');
     }
 
     /** @return array{0: User, 1: School} */

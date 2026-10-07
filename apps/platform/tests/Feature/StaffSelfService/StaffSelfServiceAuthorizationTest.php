@@ -45,7 +45,7 @@ class StaffSelfServiceAuthorizationTest extends TestCase
     {
         $this->assertSame(['hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self'], $this->roleCapabilities('staff_self_service'));
         $this->assertSame('school', DB::table('roles')->where('key', 'staff_self_service')->value('scope'));
-        $this->assertSame(['attendance.teacher', 'curriculum.delivery.teacher', 'lms.assignments.teacher', 'lms.content.teacher'], $this->roleCapabilities('teacher'), 'E33: byte-for-byte the pre-HRX.4 bundle');
+        $this->assertSame(['attendance.teacher', 'curriculum.delivery.teacher', 'examinations.marks.teacher', 'lms.assignments.teacher', 'lms.content.teacher'], $this->roleCapabilities('teacher'), 'E33: the pre-HRX.4 bundle plus only the RES.4 owned marks key');
         $this->assertSame([], array_values(array_intersect($this->roleCapabilities('principal'), ['hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self'])), 'principal unchanged');
         $this->assertSame([], array_values(array_intersect($this->roleCapabilities('teacher'), ['hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self', 'hr.leave.approve'])));
         $this->assertSame(['hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self'], array_values(array_intersect($this->roleCapabilities('school_admin'), ['hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self'])), 'school_admin holds them so it can grant the role');

@@ -43,6 +43,8 @@ class ExaminationArchitectureGuardTest extends TestCase
     /** RES.2 (ADR 0068 §3): the only Students/SIS names StudentMark files may use. */
     private const STUDENT_MARK_STUDENTS_SEAMS = [
         'App\\Domain\\Students\\Application\\SubjectOfferingEligibilityReadService',
+        // RES.4 (ADR 0068 §25): the P3 RESULT, handed to the teacher write guard by StudentMarkService.
+        'App\\Domain\\Students\\Application\\SubjectOfferingEligibility',
         'App\\Domain\\Students\\Application\\StudentProcessingAuthorizationReadService',
         'App\\Domain\\Students\\Application\\StudentPlacementDisplayReadService',
         'App\\Domain\\Students\\Application\\Exceptions\\StudentNotAuthorizedForProcessingException',

@@ -19,6 +19,13 @@ use Tests\TestCase;
  * per-paper lock, the correction requests), each with exactly one writer;
  * four more session routes (lock, request, approve, reject -- never an
  * unlock or reopen); three more capabilities, still administrative only.
+ *
+ * RES.4 (ADR 0068 §25; owner-authorised DEVELOPMENT, RES-L2 / E37 and the
+ * teacher RES-L0 re-review / E35 undetermined) amends them deliberately: one
+ * owned-scope capability (`examinations.marks.teacher`, held by `teacher` and
+ * by `school_admin` for grantability only), two teacher session routes behind
+ * the development-only block, and the teacher path writing through
+ * StudentMarkService with a guard -- still one writer, no new table.
  */
 class StudentMarkArchitectureGuardTest extends TestCase
 {
@@ -33,6 +40,8 @@ class StudentMarkArchitectureGuardTest extends TestCase
         $files[] = app_path('Domain/Examinations/Infrastructure/ExaminationPaperMarkState.php');
         $files[] = app_path('Domain/Examinations/Infrastructure/StudentMarkCorrection.php');
         $files[] = app_path('Http/Controllers/App/Examinations/StudentMarkCorrectionController.php');
+        // RES.4 (ADR 0068 §25): the owned teacher surface.
+        $files[] = app_path('Http/Controllers/App/Examinations/TeacherStudentMarkController.php');
         sort($files);
 
         return $files;
@@ -153,33 +162,101 @@ class StudentMarkArchitectureGuardTest extends TestCase
 
         $this->assertSame([
             'app.examination-papers.marks.corrections.store', 'app.examination-papers.marks.index', 'app.examination-papers.marks.lock',
-            'app.examination-papers.marks.update', 'app.student-mark-corrections.approve', 'app.student-mark-corrections.reject',
-        ], $routes->map(fn (Route $route) => (string) $route->getName())->sort()->values()->all(), 'RES.3 adds lock, request, approve and reject -- never an unlock, reopen, bypass, list or search route.');
+            'app.examination-papers.marks.update', 'app.my-examination-papers.marks.index', 'app.my-examination-papers.marks.update',
+            'app.student-mark-corrections.approve', 'app.student-mark-corrections.reject',
+        ], $routes->map(fn (Route $route) => (string) $route->getName())->sort()->values()->all(), 'RES.3 adds lock, request, approve and reject; RES.4 the owned teacher read and write -- never an unlock, reopen, bypass, list or search route.');
         foreach ($routes as $route) {
             $this->assertStringStartsNotWith('api/', $route->uri(), 'No bearer-token marks route (ADR 0049; ADR 0068 §4.1).');
             $middleware = $route->gatherMiddleware();
             $this->assertContains('mfa', $middleware, $route->uri().' needs the MFA window.');
             $this->assertNotEmpty(array_filter($middleware, fn ($m) => is_string($m) && str_starts_with($m, 'capability:examinations.marks.')), $route->uri().' needs an examinations.marks.* capability.');
             $this->assertContains('school-context', $middleware);
+
+            // RES.4: the teacher routes carry the teacher key and the development-only block; no administrative
+            // route accepts the teacher key, and no teacher route accepts an administrative one.
+            $capabilities = array_values(array_filter($middleware, fn ($m) => is_string($m) && str_starts_with($m, 'capability:')));
+            if (str_starts_with((string) $route->getName(), 'app.my-examination-papers.')) {
+                $this->assertSame(['capability:examinations.marks.teacher'], $capabilities, $route->uri());
+                $this->assertContains('teacher-marks-development-only', $middleware, $route->uri().' is development only (ADR 0068 §25.3).');
+                $this->assertSame('App\\Http\\Controllers\\App\\Examinations\\TeacherStudentMarkController', $route->getControllerClass());
+            } else {
+                $this->assertNotContains('capability:examinations.marks.teacher', $capabilities, $route->uri());
+                $this->assertNotContains('teacher-marks-development-only', $middleware);
+            }
         }
     }
 
     #[Test]
-    public function only_administrative_roles_hold_marks_and_no_results_capability_exists(): void
+    public function only_administrative_roles_hold_administrative_marks_and_no_results_capability_exists(): void
     {
         $this->assertSame(0, DB::table('capabilities')->where('key', 'like', 'examinations.results.%')->count(), 'No results capability (RES-L4).');
-        $holders = DB::table('role_capabilities')->join('roles', 'roles.id', '=', 'role_capabilities.role_id')
-            ->where('role_capabilities.capability_key', 'like', 'examinations.marks.%')->where('roles.is_system', true)
-            ->distinct()->orderBy('roles.key')->pluck('roles.key')->all();
-        $this->assertSame(['principal', 'school_admin'], $holders, 'Administrative roles only; never teacher (RES-L2, E33, RES-L0 re-review).');
-        $this->assertSame(0, DB::table('role_capabilities')->join('roles', 'roles.id', '=', 'role_capabilities.role_id')
-            ->where('roles.key', 'teacher')->where('role_capabilities.capability_key', 'like', 'examinations.marks.%')->count());
-        $this->assertSame([
-            'examinations.marks.correction.approve', 'examinations.marks.correction.request', 'examinations.marks.lock', 'examinations.marks.manage', 'examinations.marks.view',
-        ], DB::table('capabilities')->where('key', 'like', 'examinations.marks.%')->orderBy('key')->pluck('key')->all(), 'No unlock, reopen or bypass capability (RES.3, §21).');
-        foreach (['principal', 'school_admin'] as $role) {
-            $this->assertSame(5, DB::table('role_capabilities')->join('roles', 'roles.id', '=', 'role_capabilities.role_id')
-                ->where('roles.key', $role)->where('role_capabilities.capability_key', 'like', 'examinations.marks.%')->count());
+        $holders = fn (string $key) => DB::table('role_capabilities')->join('roles', 'roles.id', '=', 'role_capabilities.role_id')
+            ->where('role_capabilities.capability_key', $key)->distinct()->orderBy('roles.key')->pluck('roles.key')->all();
+        $administrative = ['examinations.marks.correction.approve', 'examinations.marks.correction.request', 'examinations.marks.lock', 'examinations.marks.manage', 'examinations.marks.view'];
+        foreach ($administrative as $key) {
+            $this->assertSame(['principal', 'school_admin'], $holders($key), "{$key}: administrative roles only; never teacher (RES-L2, RES-L0 re-review).");
+        }
+        // RES.4 (ADR 0068 §25.2): the owned key -- teacher, and school_admin only so it can grant the teacher role
+        // (StaffRoleCatalog: an issuer grants only capabilities it holds). principal does not hold it.
+        $this->assertSame(['school_admin', 'teacher'], $holders('examinations.marks.teacher'));
+        $this->assertSame(['examinations.marks.teacher'], DB::table('role_capabilities')->join('roles', 'roles.id', '=', 'role_capabilities.role_id')
+            ->where('roles.key', 'teacher')->where('role_capabilities.capability_key', 'like', 'examinations.%')->pluck('role_capabilities.capability_key')->all(),
+            'teacher holds no administrative marks, lock, correction, paper, definition or results key');
+        $this->assertSame([...array_slice($administrative, 0, 4), 'examinations.marks.teacher', 'examinations.marks.view'],
+            DB::table('capabilities')->where('key', 'like', 'examinations.marks.%')->orderBy('key')->pluck('key')->all(), 'No unlock, reopen or bypass capability (RES.3, §21); one owned teacher key (RES.4).');
+        $this->assertSame(5, DB::table('role_capabilities')->join('roles', 'roles.id', '=', 'role_capabilities.role_id')
+            ->where('roles.key', 'principal')->where('role_capabilities.capability_key', 'like', 'examinations.marks.%')->count(), 'principal unchanged');
+        $this->assertSame(6, DB::table('role_capabilities')->join('roles', 'roles.id', '=', 'role_capabilities.role_id')
+            ->where('roles.key', 'school_admin')->where('role_capabilities.capability_key', 'like', 'examinations.marks.%')->count(), 'school_admin: its five plus the grantable teacher key');
+    }
+
+    /**
+     * RES.4 (ADR 0068 §25): the teacher path is a narrowing of the one writer, never a second one; its read is
+     * purpose-built (never the administrative grid filtered afterwards); the production block is code, not
+     * configuration, and every teacher entry point passes through it.
+     */
+    #[Test]
+    public function the_teacher_path_is_one_guarded_writer_a_purpose_built_read_and_development_only(): void
+    {
+        $marks = app_path('Domain/Examinations/Application/Marks/');
+        $guards = array_values(array_filter($this->appFiles(), fn (string $f) => preg_match('/implements\s+StudentMarkWriteGuard\b/', $this->code($f)) === 1));
+        $this->assertSame([$marks.'TeacherStudentMarkGuard.php'], $guards, 'exactly one write guard: the teacher one');
+
+        $guard = $this->code($marks.'TeacherStudentMarkGuard.php');
+        $this->assertMatchesRegularExpression('/function holdActor[^{]*\{\s*TeacherStudentMarkAvailability::assertAvailable\(\);\s*\$this->authorizeCapabilityFor\(\$this->actor, TeacherStudentMarkAccess::CAPABILITY/', $guard, 'block, then capability, first');
+        $this->assertStringContainsString('$this->identities->hold($this->actor, $school)', $guard, 'ActingEmployee held inside the transaction');
+        $this->assertStringContainsString('$this->ownership->holdOffering(', $guard, 'per-Student ownership under lock');
+        $this->assertStringNotContainsString('->resolve(', $guard);
+
+        $access = $this->code($marks.'TeacherStudentMarkAccess.php');
+        $this->assertMatchesRegularExpression('/function scope[^{]*\{\s*TeacherStudentMarkAvailability::assertAvailable\(\);\s*\$this->authorizeCapabilityFor/', $access);
+
+        $service = $this->code($marks.'StudentMarkService.php');
+        $order = array_map(fn (string $needle) => strpos($service, $needle), ['$guard?->holdActor(', '->sharedLock()->first()', '$guard?->admitPaper(', 'STATUS_ACTIVE', 'lockEligibilityAsOf(', '$guard?->admitStudent(', 'lockQualifyingAuthorizationIdForStudentId(', '->lockForUpdate()->first()']);
+        $this->assertNotContains(false, $order);
+        $sorted = $order;
+        sort($sorted);
+        $this->assertSame($sorted, $order, 'canonical lock order (§25.7): identity, paper, visibility, state, P3, ownership, ADR 0038, mark');
+
+        $read = $this->code($marks.'TeacherStudentMarkReadService.php');
+        $this->assertDoesNotMatchRegularExpression('/\bStudentMarkReadService\b/', $read, 'never the administrative grid');
+        $this->assertStringNotContainsString('StudentMarkCorrection', $read, 'no correction data on the teacher surface');
+        $this->assertStringContainsString('$this->access->scope($actor, $school)', $read);
+
+        $controller = $this->code(app_path('Http/Controllers/App/Examinations/TeacherStudentMarkController.php'));
+        $this->assertStringContainsString('$access->guard($user)', $controller);
+        $this->assertDoesNotMatchRegularExpression('/\bStudentMarkReadService\b/', $controller);
+        $this->assertDoesNotMatchRegularExpression('/ExaminationPaper \$examinationPaper/', $controller, 'not route-model-bound: every paper miss is the same 404');
+
+        $availability = $this->code($marks.'TeacherStudentMarkAvailability.php');
+        $this->assertStringContainsString("public const array ENVIRONMENTS = ['local', 'testing'];", $availability);
+        foreach (['config(', 'env(', 'getenv', '$_ENV', '$_SERVER'] as $forbidden) {
+            $this->assertStringNotContainsString($forbidden, $availability, 'the block is not configurable');
+        }
+        $this->assertStringContainsString('TeacherStudentMarkAvailability::isAvailable()', $this->code(app_path('Http/Middleware/EnsureTeacherStudentMarksDevelopmentOnly.php')));
+
+        foreach (['TeacherStudentMarkGuard.php', 'TeacherStudentMarkAccess.php', 'TeacherStudentMarkReadService.php', 'TeacherStudentMarkScope.php'] as $file) {
+            $this->assertDoesNotMatchRegularExpression("/'examinations\.marks\.(view|manage|lock|correction\.[a-z]+)'/", $this->code($marks.$file), "{$file} never consults an administrative marks key");
         }
     }
 }

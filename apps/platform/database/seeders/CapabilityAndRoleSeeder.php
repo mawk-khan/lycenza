@@ -765,11 +765,10 @@ class CapabilityAndRoleSeeder extends Seeder
             // shape. NOT `academics.*` (owned by Academic Structure)
             // and never Academic Structure's own `academics.years.*`
             // even though the parent AcademicYear belongs to it -- the
-            // Canteen capability-boundary lesson. No
-            // `examinations.*.teacher`: Examinations is admin-only. The
-            // teacher-ownership rule exists since ADR 0063, but no
-            // Examinations capability adopts it; teacher marks entry is
-            // RES.4, gated by RES-L2, E33 and a RES-L0 re-review (ADR 0068).
+            // Canteen capability-boundary lesson. Examinations is
+            // admin-only except `examinations.marks.teacher` (RES.4, ADR
+            // 0068 §25): the one owned-scope key, development only while
+            // RES-L2 and the teacher RES-L0 re-review are undetermined.
             ['key' => 'examinations.definitions.view', 'label' => 'View Examinations', 'namespace' => 'school'],
             ['key' => 'examinations.definitions.manage', 'label' => 'Manage Examinations', 'namespace' => 'school'],
 
@@ -807,8 +806,8 @@ class CapabilityAndRoleSeeder extends Seeder
             // StudentMark entry -- Highly Sensitive, administrative staff
             // only, always composed with `mfa`, development only (RES-L1).
             // Never implies `examinations.results.*` (not created), and never
-            // held by `teacher`: teacher marks entry is RES.4 behind RES-L2,
-            // E33 and a RES-L0 re-review, with its own owned-scope key.
+            // held by `teacher`: teacher marks entry is RES.4's own
+            // owned-scope key below (development only).
             ['key' => 'examinations.marks.view', 'label' => 'View Student Marks', 'namespace' => 'school'],
             ['key' => 'examinations.marks.manage', 'label' => 'Enter Student Marks', 'namespace' => 'school'],
             // RES.3 (ADR 0068 §7, §21): the one-way per-paper marks lock and
@@ -818,6 +817,15 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'examinations.marks.lock', 'label' => 'Lock Student Marks', 'namespace' => 'school'],
             ['key' => 'examinations.marks.correction.request', 'label' => 'Request Student Mark Corrections', 'namespace' => 'school'],
             ['key' => 'examinations.marks.correction.approve', 'label' => 'Decide Student Mark Corrections', 'namespace' => 'school'],
+            // RES.4 (ADR 0068 §25): owned-scope teacher marks entry -- the
+            // `<module>.<resource>.teacher` convention (ADR 0063 §13). It
+            // implies none of the administrative keys above and none of them
+            // implies it; it reaches only Students the teacher owns on the
+            // paper's date (TeachingOwnership), under `mfa`. DEVELOPMENT ONLY:
+            // owner-authorised engineering, RES-L2 (E37) and the teacher
+            // RES-L0 re-review (E35) undetermined, so TeacherStudentMarkAvailability
+            // refuses it outside local/testing whatever the grant says.
+            ['key' => 'examinations.marks.teacher', 'label' => 'Enter Student Marks for the classes one teaches', 'namespace' => 'school'],
 
             // Phase 0I.2 (Learning Content Foundation -- the first
             // concrete LMS fact, ADR 0039). Rooted at `lms.content.*`, a
@@ -1252,6 +1260,11 @@ class CapabilityAndRoleSeeder extends Seeder
                     // TCH.5D: same no-escalation reason; School Admin already
                     // holds the School-wide lms.assignments.manage (Tier 1 wins).
                     'lms.assignments.teacher',
+                    // RES.4 (ADR 0068 §25.2): same no-escalation reason; School
+                    // Admin already holds the School-wide examinations.marks.view
+                    // / .manage. Used alone it still needs an ActingEmployee and
+                    // ownership, and it is development only (production refused).
+                    'examinations.marks.teacher',
                 ],
             ],
             'principal' => [
@@ -1451,6 +1464,9 @@ class CapabilityAndRoleSeeder extends Seeder
                     'lms.content.teacher',
                     // TCH.5D: owned Assignments (ADR 0063 section 37).
                     'lms.assignments.teacher',
+                    // RES.4: owned StudentMark entry (ADR 0068 §25) --
+                    // development only; production refuses it in code.
+                    'examinations.marks.teacher',
                 ],
             ],
             // HRX.4 (ADR 0065 §22.3, §25.2): Staff Self-Service -- a convenience

@@ -22,6 +22,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
@@ -51,6 +52,14 @@ use Illuminate\Support\Facades\DB;
  * Authorization is the caller's: `examinations.marks.manage` + the `mfa`
  * window (route middleware). No retry shortcut: a replay re-runs every check
  * and meets the version guard (§6.3).
+ *
+ * RES.4 (ADR 0068 §25): a teacher writes through this same path with a
+ * StudentMarkWriteGuard (TeacherStudentMarkGuard), which narrows the actor
+ * INSIDE the transaction, in the canonical order (§25.7): the actor's
+ * identity chain first (ActingEmployeeResolver::hold, before the paper); the
+ * paper's visibility before its state; per Student, ownership after P3 and
+ * before ADR 0038 (TeachingOwnership::holdOffering). Without a guard the
+ * administrative behaviour is unchanged.
  */
 class StudentMarkService
 {
@@ -65,12 +74,18 @@ class StudentMarkService
      * @param  list<StudentMarkEntry>  $entries
      * @return list<array{studentId: string, studentMarkId: string, version: int}>
      */
-    public function record(School $school, string $examinationPaperId, array $entries, User $actor): array
+    public function record(School $school, string $examinationPaperId, array $entries, User $actor, ?StudentMarkWriteGuard $guard = null): array
     {
         usort($entries, fn (StudentMarkEntry $a, StudentMarkEntry $b) => strcmp($a->studentId, $b->studentId));
 
-        return $this->context->withSchool($school, fn (): array => DB::transaction(function () use ($school, $examinationPaperId, $entries, $actor): array {
-            $paper = ExaminationPaper::query()->where('school_id', $school->id)->whereKey($examinationPaperId)->sharedLock()->firstOrFail();
+        return $this->context->withSchool($school, fn (): array => DB::transaction(function () use ($school, $examinationPaperId, $entries, $actor, $guard): array {
+            $guard?->holdActor($school);
+
+            $paper = ExaminationPaper::query()->where('school_id', $school->id)->whereKey($examinationPaperId)->sharedLock()->first();
+            $guard?->admitPaper($school, $paper);
+            if ($paper === null) {
+                throw (new ModelNotFoundException)->setModel(ExaminationPaper::class, [$examinationPaperId]);
+            }
             if ($paper->status !== ExaminationPaper::STATUS_ACTIVE) {
                 throw new StudentMarkPaperInactiveException;
             }
@@ -90,6 +105,7 @@ class StudentMarkService
                 $value = self::normalizedValue($entry->studentId, $entry->status, $entry->value, (string) $paper->max_marks);
 
                 $eligibility = $this->eligibility->lockEligibilityAsOf($school, $entry->studentId, $paper->subject_offering_id, $paper->scheduled_on->toDateString());
+                $scope = $guard?->admitStudent($school, $paper, $entry->studentId, $eligibility) ?? [];
                 if (! $eligibility->eligible) {
                     throw new StudentMarkNotEligibleException($entry->studentId, $eligibility->reason);
                 }
@@ -126,11 +142,12 @@ class StudentMarkService
                 ]);
                 $this->save($mark, $entry->studentId);
 
-                $this->audit->school($school, $created ? 'examinations.student_mark.recorded' : 'examinations.student_mark.changed', actor: $actor, metadata: [
+                $this->audit->school($school, $guard?->auditEvent($created) ?? ($created ? 'examinations.student_mark.recorded' : 'examinations.student_mark.changed'), actor: $actor, metadata: [
                     'studentMarkId' => $mark->id,
                     'examinationPaperId' => $paper->id,
                     'studentId' => $entry->studentId,
                     'version' => $mark->version,
+                    ...$scope,
                 ]);
 
                 $written[] = ['studentId' => $entry->studentId, 'studentMarkId' => (string) $mark->id, 'version' => (int) $mark->version];

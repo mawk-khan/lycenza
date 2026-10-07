@@ -63,6 +63,12 @@ class SubjectOfferingEligibilityArchitectureGuardTest extends TestCase
         'Domain/Examinations/Application/Marks/StudentMarkCorrectionService.php',
         'Domain/Examinations/Application/Marks/StudentMarkReadService.php',
         'Domain/Examinations/Application/Marks/StudentMarkService.php',
+        // RES.4 (ADR 0068 §25): the owned teacher read calls the seam; the write guard (and its interface and
+        // the read scope) only RECEIVE the P3 result StudentMarkService decided under lock (writes reuse it).
+        'Domain/Examinations/Application/Marks/StudentMarkWriteGuard.php',
+        'Domain/Examinations/Application/Marks/TeacherStudentMarkGuard.php',
+        'Domain/Examinations/Application/Marks/TeacherStudentMarkReadService.php',
+        'Domain/Examinations/Application/Marks/TeacherStudentMarkScope.php',
     ];
 
     #[Test]
@@ -78,7 +84,7 @@ class SubjectOfferingEligibilityArchitectureGuardTest extends TestCase
             }
         }
         sort($callers);
-        $this->assertSame(self::SANCTIONED_CALLERS, $callers, 'P3 consumers are exactly StudentMark entry, read and correction (RES.2/RES.3, development only, ADR 0068 §19, §21); a new consumer needs its own review.');
+        $this->assertSame(self::SANCTIONED_CALLERS, $callers, 'P3 consumers are exactly StudentMark entry, read and correction (RES.2/RES.3) and the owned teacher read (RES.4), development only (ADR 0068 §19, §21, §25); a new consumer needs its own review.');
 
         foreach (glob(base_path('routes/*.php')) ?: [] as $file) {
             $this->assertStringNotContainsString('SubjectOfferingEligibility', (string) file_get_contents($file), 'P3 is internal: no route.');
@@ -86,13 +92,16 @@ class SubjectOfferingEligibilityArchitectureGuardTest extends TestCase
     }
 
     #[Test]
-    public function no_res4_or_later_artifact_exists(): void
+    public function no_res5_or_later_artifact_exists(): void
     {
         // RES.2 built StudentMark and its value history; RES.3 (ADR 0068 §21) the per-paper lock and the
-        // correction requests -- deliberately admitted below. Nothing from RES.4 onward (teacher entry), results,
-        // report cards or transcripts exists, and no results capability.
+        // correction requests; RES.4 (§25) owned teacher entry (development only) -- deliberately admitted below.
+        // Nothing after it (results, report cards, transcripts, Student/Guardian marks) exists, and no results capability.
         foreach ($this->files(app_path()) as $file) {
-            $this->assertDoesNotMatchRegularExpression('/^(MarkCorrection|ReportCard|Transcript|ExaminationResult|StudentResult|TeacherMark|MyMark)\w*\.php$/', basename($file), "RES.4+ is not started: {$file}");
+            $this->assertDoesNotMatchRegularExpression('/^(MarkCorrection|ReportCard|Transcript|ExaminationResult|StudentResult|TeacherMark|MyMark)\w*\.php$/', basename($file), "RES.5+ is not started: {$file}");
+            if (str_starts_with(basename($file), 'TeacherStudentMark')) {
+                $this->assertMatchesRegularExpression('/^TeacherStudentMark(Access|Availability|Guard|ReadService|Scope|Controller|(PaperNotFound|StudentNotFound)Exception)\.php$|^TeacherStudentMarksUnavailableException\.php$/', basename($file), "Only the RES.4 teacher files: {$file}");
+            }
             if (str_starts_with(basename($file), 'StudentMarkCorrection')) {
                 $this->assertMatchesRegularExpression('/^StudentMarkCorrection(Service|Controller|(AlreadyDecided|ContextChanged|Invalid|PaperNotLocked|PendingExists|SelfDecision)Exception)?\.php$/', basename($file), "Only the RES.3 correction files: {$file}");
             }
@@ -112,18 +121,21 @@ class SubjectOfferingEligibilityArchitectureGuardTest extends TestCase
         $this->assertSame([
             'examinations.marks.view', 'examinations.marks.manage',
             'examinations.marks.lock', 'examinations.marks.correction.request', 'examinations.marks.correction.approve',
-        ], $keys[1], 'RES.2 adds marks view and manage, RES.3 lock, correction request and approve; no teacher, unlock or results key.');
+            'examinations.marks.teacher',
+        ], $keys[1], 'RES.2 adds marks view and manage, RES.3 lock, correction request and approve, RES.4 the owned teacher key; no unlock or results key.');
 
         $marksRoutes = collect(RouteFacade::getRoutes()->getRoutes())
             ->filter(fn (Route $route) => preg_match('#(^|[/-])(marks?|report-cards?|transcripts?|student-results?|examination-results?)([/-]|$)#', $route->uri()) === 1)
             ->map(fn (Route $route) => implode('|', $route->methods()).' '.$route->uri())->sort()->values()->all();
         $this->assertSame([
             'GET|HEAD app/examination-papers/{examinationPaper}/marks',
+            'GET|HEAD app/my-examination-papers/{examinationPaper}/marks',
             'POST app/examination-papers/{examinationPaper}/marks/lock',
             'POST app/examination-papers/{examinationPaper}/marks/{studentMark}/corrections',
             'POST app/student-mark-corrections/{studentMarkCorrection}/approve',
             'POST app/student-mark-corrections/{studentMarkCorrection}/reject',
             'PUT app/examination-papers/{examinationPaper}/marks',
-        ], $marksRoutes, 'Exactly the RES.2 grid and batch write plus the RES.3 lock and correction routes; no unlock, results, report-card or transcript route.');
+            'PUT app/my-examination-papers/{examinationPaper}/marks',
+        ], $marksRoutes, 'Exactly the RES.2 grid and batch write, the RES.3 lock and correction routes and the RES.4 owned teacher read and write; no unlock, results, report-card or transcript route.');
     }
 }

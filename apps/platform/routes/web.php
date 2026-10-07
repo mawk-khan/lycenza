@@ -41,6 +41,7 @@ use App\Http\Controllers\App\Examinations\ExaminationPaperController;
 use App\Http\Controllers\App\Examinations\GradeScaleController;
 use App\Http\Controllers\App\Examinations\StudentMarkController;
 use App\Http\Controllers\App\Examinations\StudentMarkCorrectionController;
+use App\Http\Controllers\App\Examinations\TeacherStudentMarkController;
 use App\Http\Controllers\App\Finance\ChargeController as FinanceChargeController;
 use App\Http\Controllers\App\Finance\FeeAssessmentRunController as FinanceFeeAssessmentRunController;
 use App\Http\Controllers\App\Finance\FeeConcessionController as FinanceFeeConcessionController;
@@ -1593,6 +1594,21 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
             ->middleware(['capability:examinations.marks.correction.request', 'mfa'])
             ->name('corrections.store');
     });
+
+    // RES.4 (ADR 0068 §25): the owned TEACHER marks surface -- session JSON
+    // only (no bearer API), `capability:examinations.marks.teacher` + `mfa` +
+    // the development-only block (production refuses it while RES-L2 / E37 and
+    // the teacher RES-L0 re-review / E35 are undetermined). Only the read and
+    // the batch write of one paper, scoped server-side to the Students the
+    // teacher owns on its date; no lock, correction, list or search route. The
+    // paper id is a plain uuid (not model-bound): every miss is the same 404.
+    Route::prefix('app/my-examination-papers/{examinationPaper}/marks')->whereUuid('examinationPaper')
+        ->name('app.my-examination-papers.marks.')
+        ->middleware(['teacher-marks-development-only', 'capability:examinations.marks.teacher', 'mfa'])
+        ->group(function (): void {
+            Route::get('/', [TeacherStudentMarkController::class, 'index'])->name('index');
+            Route::put('/', [TeacherStudentMarkController::class, 'update'])->name('update');
+        });
 
     // RES.3 (ADR 0068 §7.3, §21): deciding a correction -- someone other than
     // its requester, with a fresh MFA re-verification (controller). Terminal.

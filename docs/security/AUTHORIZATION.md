@@ -30,9 +30,12 @@ This table is a design reference, not a list of implemented roles.
 - every other row here is a design-reference actor, with no production
   role;
 - the Teacher row is implemented by ADR 0063 (TCH): the `teacher` role is a
-  bundle of four owned-scope capabilities whose every use also needs a
+  bundle of five owned-scope capabilities whose every use also needs a
   verified ActingEmployee and TeachingAssignment ownership — see
-  "Ownership-based authorization" below.
+  "Ownership-based authorization" below. The fifth,
+  `examinations.marks.teacher` (RES.4, ADR 0068 §25), is development only.
+  It is refused in code outside `local` / `testing` while RES-L2 and the
+  teacher RES-L0 re-review are undetermined.
 
 | Actor | Nature | Typical scope | Notes |
 |---|---|---|---|
@@ -243,9 +246,36 @@ rule for Learning Content and Assignment attachments through
 `LmsParentResourceAuthorization` (fresh check before storage, locked check
 inside the Documents transaction).
 
+**Teacher marks (RES.4, ADR 0068 §25; development only).**
+`examinations.marks.teacher` reaches one paper's marks:
+
+```text
+active actor + `mfa` + ActingEmployee (today)
+  + examinations.marks.teacher
+  + per Student, on the paper's scheduled_on:
+        P3 eligibility
+        AND ownership (required: TeachingAssignment for the Student's P3 Section x Offering;
+                       elective: the Offering-wide elective assignment)
+        AND a current ADR 0038 processing basis
+  + paper active (writes: marks open), year not closed
+```
+
+- **One writer.** Writes go through `StudentMarkService`, with
+  `TeacherStudentMarkGuard` holding the ActingEmployee and the ownership
+  `FOR SHARE` inside its transaction.
+- **One not-found answer.** Every paper miss is one 404, and an
+  out-of-scope Student is one reason-free 404.
+- **No implication either way.** It implies no administrative marks key
+  (view, manage, lock, corrections) and no results key, and is implied by
+  none.
+- **Production block.** `TeacherStudentMarkAvailability` refuses it in
+  every environment except `local` / `testing`, whatever the grants, until
+  RES-L2 (E37), the teacher RES-L0 re-review (E35) and RES-L1 permit it.
+
 **Teacher role.** The production system role `teacher` carries exactly
-`curriculum.delivery.teacher`, `attendance.teacher`, `lms.content.teacher`
-and `lms.assignments.teacher`:
+`curriculum.delivery.teacher`, `attendance.teacher`, `lms.content.teacher`,
+`lms.assignments.teacher` and (development only, RES.4)
+`examinations.marks.teacher`:
 - It is a bundle, never a check: no code tests the role key, and any role
   carrying the capability behaves identically.
 - On its own it reaches nothing.
@@ -253,7 +283,7 @@ and `lms.assignments.teacher`:
   production it is not granted while TCH-L1 / ADR 0058 E33 is OPEN** (owner
   decision, ADR 0063 §40). The rule is enforced by process; it is not a
   missing technical control.
-- `school_admin` also holds all four capabilities, only so it can grant the
+- `school_admin` also holds all five capabilities, only so it can grant the
   role under the no-escalation rule.
 
 **Not found is one answer (ADR 0063 §18, as fixed by TCH.6).** On every owned
@@ -285,8 +315,9 @@ first with a 404 that names nothing. Domain refusals (403 `*_NOT_OWNED`, 422
     `curriculum.delivery.manage`, `lms.content.manage`) keep their current
     meaning and grants.
   - Owned-scope capabilities (`curriculum.delivery.teacher`,
-    `attendance.teacher`, `lms.content.teacher`, `lms.assignments.teacher`)
-    require capability **AND** ownership, never either alone.
+    `attendance.teacher`, `lms.content.teacher`, `lms.assignments.teacher`,
+    `examinations.marks.teacher`) require capability **AND** ownership,
+    never either alone.
 - **ActingEmployee** (HR): User → active SchoolMembership → linked Employee
   → active Employee record → eligible current EmploymentRecord (dated
   current, status `active` or `notice_period`).

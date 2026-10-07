@@ -3268,3 +3268,32 @@ capability and its own gates.
   - no teacher marks route.
 - **Pins:** user references 113 / 103 retained; forced RLS 205; Employee
   retention classification; standalone retention functions.
+
+## 46. Ownership consumed by RES.4 — teacher marks, development only (2026-10-07)
+
+**ADR 0068 §25 is the controlling record.** This section records only the
+ownership side.
+- **Fifth adopted surface: Examinations.** StudentMark entry, built on the
+  product owner's engineering authorisation (not a legal determination;
+  RES-L2 / E37 and the teacher RES-L0 re-review / E35 unresolved).
+  - It is production-refused in code outside `local` / `testing`.
+- **New owned key.** `examinations.marks.teacher` joins the `teacher` bundle
+  (§13), with `school_admin` holding it for grantability only. The role
+  still reaches nothing on its own, and no code reads the role key.
+- **Consumption, through `TeachingOwnership` only:**
+  - `holdOffering()` inside the marks write transaction, after P3 and
+    before ADR 0038 — the first consumer of the TCH-E elective fact;
+  - `periods()` / `electivePeriods()` for the read and the paper-visibility
+    check.
+  - Never the models, the tables or the administrative services
+    (guard-pinned).
+- **Ownership date.** The paper's `scheduled_on` (not today). The
+  ActingEmployee is judged today, the §11 / Attendance precedent.
+- **Co-teachers** (§9) are equal owners, and **cover** is an ordinary short
+  dated assignment. Both are owner-adopted development rules pending RES-L2.
+- **Lock order.** The identity chain (§20) comes first, then the marks rows
+  (ADR 0068 §21.5) and the ownership row after P3; ADR 0068 §25.7 shows it
+  is deadlock-free against assignment ends and employment ends.
+- **No effect on E33 or teacher Attendance.** Attendance authority still
+  never implies marks authority, and marks authority never implies
+  Attendance.

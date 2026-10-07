@@ -140,12 +140,12 @@ class TeacherAttendanceArchitectureGuardTest extends TestCase
     }
 
     #[Test]
-    public function the_teacher_role_holds_exactly_its_four_owned_capabilities_and_no_marks(): void
+    public function the_teacher_role_holds_exactly_its_owned_capabilities_and_no_administrative_marks(): void
     {
         $keys = DB::table('role_capabilities')->join('roles', 'roles.id', '=', 'role_capabilities.role_id')
             ->where('roles.key', 'teacher')->where('roles.is_system', true)->orderBy('capability_key')->pluck('capability_key')->all();
-        $this->assertSame(['attendance.teacher', 'curriculum.delivery.teacher', 'lms.assignments.teacher', 'lms.content.teacher'], $keys,
-            'Attendance authority never brings StudentMark authority (E33 determination section 10; RES.4 NOT AUTHORISED).');
+        $this->assertSame(['attendance.teacher', 'curriculum.delivery.teacher', 'examinations.marks.teacher', 'lms.assignments.teacher', 'lms.content.teacher'], $keys,
+            'Attendance authority never brings StudentMark authority (E33 determination section 10): the owned marks key is its own RES.4 grant (ADR 0068 §25, development only).');
     }
 
     #[Test]

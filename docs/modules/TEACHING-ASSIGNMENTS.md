@@ -204,7 +204,11 @@ Subject Offering from `starts_on` to `ends_on`".
 
   `periods()` and `hold()` are unchanged and never include electives.
 - **Retention:** E21-D6 (`authority`), as for `teaching_assignments`.
-- **Not done:**
-  - no consumer uses elective ownership yet;
-  - it grants no access by itself;
-  - it authorises no StudentMark processing (RES.4 is NOT AUTHORISED).
+- **Consumers:** one — RES.4 teacher marks (ADR 0068 §25; ADR 0063 §46),
+  development only.
+  - It uses `holdOffering()` inside the marks write and the periods for the
+    owned read.
+  - Ownership still grants nothing by itself: marks also need
+    `examinations.marks.teacher`, MFA, an ActingEmployee, P3 and ADR 0038.
+  - Production is refused in code pending RES-L2 and the teacher RES-L0
+    re-review.

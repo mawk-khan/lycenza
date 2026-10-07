@@ -166,7 +166,7 @@ class DemoDataBuilderTest extends TestCase
         // TeachingAssignment (G8-A Mathematics) covers. HRX.4: plus the
         // SEPARATE staff_self_service role (own leave, attendance, payslips).
         $this->assertEqualsCanonicalizing([
-            'curriculum.delivery.teacher', 'attendance.teacher', 'lms.content.teacher', 'lms.assignments.teacher',
+            'curriculum.delivery.teacher', 'attendance.teacher', 'lms.content.teacher', 'lms.assignments.teacher', 'examinations.marks.teacher',
             'hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self',
         ], array_values($resolver->schoolCapabilities($this->user('teacher@example.test'), $school)));
 
