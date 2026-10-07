@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\App\Examinations;
 
 use App\Domain\Examinations\Application\Exceptions\ExaminationException;
-use App\Domain\Examinations\Application\Exceptions\TeacherStudentMarkPaperNotFoundException;
 use App\Domain\Examinations\Application\Marks\StudentMarkEntry;
 use App\Domain\Examinations\Application\Marks\StudentMarkService;
 use App\Domain\Examinations\Application\Marks\TeacherExaminationPaperDiscoveryService;
@@ -15,7 +14,6 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
 
 /**
  * RES.4 (ADR 0068 §25.5-§25.6): "My examination paper marks" -- the owned
@@ -29,7 +27,8 @@ use Illuminate\Support\Str;
  *
  * The paper id is NOT route-model-bound: an unknown id, another School's
  * paper and a paper the teacher does not own all answer the identical 404
- * body. Validation never echoes a value or flashes input into the session;
+ * body (a malformed id never reaches here: the route's `whereUuid` answers
+ * the framework's plain 404). Validation never echoes a value or flashes input into the session;
  * an ineligible identity is one fixed 403.
  */
 class TeacherStudentMarkController extends Controller
@@ -50,10 +49,6 @@ class TeacherStudentMarkController extends Controller
 
     public function index(Request $request, string $examinationPaper, TeacherStudentMarkReadService $marks): JsonResponse
     {
-        if (! Str::isUuid($examinationPaper)) {
-            return $this->error(new TeacherStudentMarkPaperNotFoundException);
-        }
-
         try {
             return response()->json(['data' => $marks->paper($this->context->requireSchool(), $examinationPaper, $request->user())]);
         } catch (ActingEmployeeUnavailableException $e) {
@@ -65,10 +60,6 @@ class TeacherStudentMarkController extends Controller
 
     public function update(Request $request, string $examinationPaper, StudentMarkService $marks, TeacherStudentMarkAccess $access): JsonResponse
     {
-        if (! Str::isUuid($examinationPaper)) {
-            return $this->error(new TeacherStudentMarkPaperNotFoundException);
-        }
-
         $validator = Validator::make($request->all(), [
             'marks' => ['required', 'array', 'min:1', 'max:500'],
             'marks.*.student_id' => ['required', 'uuid', 'distinct'],

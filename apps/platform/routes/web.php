@@ -1577,23 +1577,28 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
     // route composing its examinations.marks.* capability with `mfa`. Exactly
     // the grid read and the atomic batch write; no list, search, export,
     // report, Student-centric or results route. Development only (RES-L1).
-    Route::prefix('app/examination-papers/{examinationPaper}/marks')->name('app.examination-papers.marks.')->group(function (): void {
-        Route::get('/', [StudentMarkController::class, 'index'])
-            ->middleware(['capability:examinations.marks.view', 'mfa'])
-            ->name('index');
-        Route::put('/', [StudentMarkController::class, 'update'])
-            ->middleware(['capability:examinations.marks.manage', 'mfa'])
-            ->name('update');
-        // RES.3 (ADR 0068 §7, §21): the one-way per-paper lock (fresh MFA) and
-        // the post-lock correction request. No unlock, reopen or bypass route.
-        Route::post('/lock', [StudentMarkCorrectionController::class, 'lock'])
-            ->middleware(['capability:examinations.marks.lock', 'mfa'])
-            ->name('lock');
-        Route::post('/{studentMark}/corrections', [StudentMarkCorrectionController::class, 'store'])
-            ->whereUuid('studentMark')
-            ->middleware(['capability:examinations.marks.correction.request', 'mfa'])
-            ->name('corrections.store');
-    });
+    // RES.5 (ADR 0068 §21.6, §27): the paper id is UUID-constrained like every
+    // other marks id -- a malformed id is a 404, never a database cast error.
+    // RES.5 (ADR 0068 §27): every marks route is development only until RES-L1
+    // (E36) -- `marks-development-only`, enforced again in the services.
+    Route::prefix('app/examination-papers/{examinationPaper}/marks')->whereUuid('examinationPaper')->name('app.examination-papers.marks.')
+        ->middleware('marks-development-only')->group(function (): void {
+            Route::get('/', [StudentMarkController::class, 'index'])
+                ->middleware(['capability:examinations.marks.view', 'mfa'])
+                ->name('index');
+            Route::put('/', [StudentMarkController::class, 'update'])
+                ->middleware(['capability:examinations.marks.manage', 'mfa'])
+                ->name('update');
+            // RES.3 (ADR 0068 §7, §21): the one-way per-paper lock (fresh MFA) and
+            // the post-lock correction request. No unlock, reopen or bypass route.
+            Route::post('/lock', [StudentMarkCorrectionController::class, 'lock'])
+                ->middleware(['capability:examinations.marks.lock', 'mfa'])
+                ->name('lock');
+            Route::post('/{studentMark}/corrections', [StudentMarkCorrectionController::class, 'store'])
+                ->whereUuid('studentMark')
+                ->middleware(['capability:examinations.marks.correction.request', 'mfa'])
+                ->name('corrections.store');
+        });
 
     // RES.4 (ADR 0068 §25): the owned TEACHER marks surface -- session JSON
     // only (no bearer API), `capability:examinations.marks.teacher` + `mfa` +
@@ -1605,11 +1610,11 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
     // RES.4A (ADR 0068 §26): the teacher's own paper discovery list -- the same
     // block, capability and `mfa`; papers owned on their date, no Student data.
     Route::get('app/my-examination-papers', [TeacherStudentMarkController::class, 'papers'])
-        ->middleware(['teacher-marks-development-only', 'capability:examinations.marks.teacher', 'mfa'])
+        ->middleware(['teacher-marks-development-only', 'marks-development-only', 'capability:examinations.marks.teacher', 'mfa'])
         ->name('app.my-examination-papers.index');
     Route::prefix('app/my-examination-papers/{examinationPaper}/marks')->whereUuid('examinationPaper')
         ->name('app.my-examination-papers.marks.')
-        ->middleware(['teacher-marks-development-only', 'capability:examinations.marks.teacher', 'mfa'])
+        ->middleware(['teacher-marks-development-only', 'marks-development-only', 'capability:examinations.marks.teacher', 'mfa'])
         ->group(function (): void {
             Route::get('/', [TeacherStudentMarkController::class, 'index'])->name('index');
             Route::put('/', [TeacherStudentMarkController::class, 'update'])->name('update');
@@ -1618,7 +1623,7 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
     // RES.3 (ADR 0068 §7.3, §21): deciding a correction -- someone other than
     // its requester, with a fresh MFA re-verification (controller). Terminal.
     Route::prefix('app/student-mark-corrections/{studentMarkCorrection}')->whereUuid('studentMarkCorrection')
-        ->name('app.student-mark-corrections.')->group(function (): void {
+        ->name('app.student-mark-corrections.')->middleware('marks-development-only')->group(function (): void {
             Route::post('/approve', [StudentMarkCorrectionController::class, 'approve'])
                 ->middleware(['capability:examinations.marks.correction.approve', 'mfa'])
                 ->name('approve');

@@ -3,9 +3,11 @@
 namespace Tests\Feature\Examinations;
 
 use App\Domain\AcademicStructure\Application\AcademicYearService;
+use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Examinations\Application\ExaminationPaperService;
 use App\Domain\Examinations\Application\Exceptions\ExaminationPaperMarksRecordedException;
 use App\Domain\Examinations\Application\Exceptions\StudentMarkAcademicYearClosedException;
+use App\Domain\Examinations\Application\Exceptions\StudentMarkContextChangedException;
 use App\Domain\Examinations\Application\Exceptions\StudentMarkInvalidValueException;
 use App\Domain\Examinations\Application\Exceptions\StudentMarkNotEligibleException;
 use App\Domain\Examinations\Application\Exceptions\StudentMarkPaperInactiveException;
@@ -221,5 +223,40 @@ class StudentMarkServiceTest extends TestCase
         $paperService->update($w['school'], $fresh($w['paper']), ['starts_at' => '10:00:00'], $actor);
         $this->assertSame('80.00', (string) $this->inMarksSchool($w['school'], fn () => ExaminationPaper::query()->findOrFail($w['paper']->id))->max_marks);
         $this->assertSame(1, $this->inMarksSchool($w['school'], fn () => StudentMark::query()->count()));
+    }
+
+    /**
+     * RES.5 (ADR 0068 §20.1, §27): a recorded mark is never re-derived. An ordinary edit re-runs P3 and fails closed
+     * when it answers a different source, placement or elective row than the mark was recorded under.
+     */
+    #[Test]
+    public function an_edit_never_re_derives_the_context_the_mark_was_recorded_under(): void
+    {
+        $w = $this->marksWorld();
+        $elected = $this->markStudent($w);
+        $this->elect($w, $elected);
+        $this->recordMarks($w, [$this->entry($elected, 'present', '30')], $w['electivePaper']);
+        $moved = $this->markStudent($w);
+        $this->recordMarks($w, [$this->entry($moved, 'present', '40')]);
+        $unchanged = $this->markStudent($w);
+        $this->recordMarks($w, [$this->entry($unchanged, 'present', '50')]);
+
+        // The elective Offering flipped to required: P3 now says "required" -- the edit refuses.
+        $this->inMarksSchool($w['school'], fn () => SubjectOffering::query()->whereKey($w['elective']->id)->update(['is_required' => true]));
+        $this->assertThrows(fn () => $this->recordMarks($w, [$this->entry($elected, 'present', '31', 1)], $w['electivePaper']), StudentMarkContextChangedException::class);
+        $mark = $this->markOf($w, $elected, $w['electivePaper']);
+        $this->assertSame(['30.00', 1, 'elective'], [(string) $mark->value, $mark->version, $mark->eligibility_source]);
+
+        // A backdated transfer moved the paper date's placement: the edit refuses, the recorded placement stays.
+        $source = $this->placementOf($w, $moved);
+        app(StudentEnrollmentService::class)->transferPlacement($source, $w['a2'], '88', '2026-09-01');
+        $this->assertThrows(fn () => $this->recordMarks($w, [$this->entry($moved, 'present', '41', 1)]), StudentMarkContextChangedException::class);
+        $this->assertSame([$source->id, '40.00', 1], [$this->markOf($w, $moved)->student_enrollment_id, (string) $this->markOf($w, $moved)->value, $this->markOf($w, $moved)->version]);
+
+        // Unchanged context: the ordinary edit proceeds, and the batch is still atomic.
+        $this->recordMarks($w, [$this->entry($unchanged, 'present', '51', 1)]);
+        $this->assertSame('51.00', (string) $this->markOf($w, $unchanged)->value);
+        $this->assertThrows(fn () => $this->recordMarks($w, [$this->entry($unchanged, 'present', '52', 2), $this->entry($moved, 'present', '42', 1)]), StudentMarkContextChangedException::class);
+        $this->assertSame('51.00', (string) $this->markOf($w, $unchanged)->value);
     }
 }

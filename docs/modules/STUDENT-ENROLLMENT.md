@@ -2641,9 +2641,11 @@ in that Offering on that date, and on which placement:
 - a plain read and a lock-capable variant (`FOR SHARE`, inside the caller's
   transaction).
 
-Internal only (no route or capability) and no consumer yet: StudentMark
-(ADR 0068 RES.2) is its first and only consumer since 2026-10-07 (entry and
-grid read; RES.3's corrections re-check it through the same seams, §21). RES.2 also
+Internal only (no route or capability). Consumers, development only: StudentMark
+entry and grid read (ADR 0068 RES.2), RES.3's corrections (which re-check it
+through the same seams, §21) and the RES.4 teacher read/write path
+(`TeacherStudentMarkReadService`, and `TeacherStudentMarkGuard` receiving the
+result StudentMarkService decided under lock, §25). RES.2 also
 added `eligibleStudentsAsOf()` (the same per-Student decision applied to every
 candidate), `StudentPlacementDisplayReadService::forPlacements()` (the
 minimal SectionRosterMember projection) and, on the processing-authorization

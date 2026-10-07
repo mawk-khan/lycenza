@@ -13949,6 +13949,14 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: >
+            EXAMINATION_PAPER_HAS_MARKS -- the paper already has recorded
+            Student marks, so its max_marks and scheduled_on (the P3
+            eligibility date) are frozen (ADR 0068 §20.1).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /schools/{schoolId}/grade-scales:
     get:
       operationId: listGradeScales

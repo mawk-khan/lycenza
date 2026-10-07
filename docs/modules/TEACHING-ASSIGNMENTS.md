@@ -30,15 +30,18 @@ describes the as-built module.
   check) and Academic Structure (Section, SubjectOffering, AcademicYear), by
   composite foreign key and through tenant-scoped reads.
 - **Never depended on** by HR or Academic Structure.
-- **Four consumers,** all through `TeachingOwnership`/`OwnedTeachingPeriod`
-  only:
+- **Five consumers,** all through `TeachingOwnership` (and its period
+  types) only:
   - Curriculum Delivery (TCH.3), on the delivery's dates;
   - Attendance (TCH.4), on the register's `attendance_date`;
   - LMS Learning Content (TCH.5C) and LMS Assignments (TCH.5D), on the
     School-local current date -- every audience Section for writes (held
-    in ascending Section id), any for published reads.
+    in ascending Section id), any for published reads;
+  - Examinations teacher marks (RES.4, ADR 0068 §25; development only), on
+    the paper's `scheduled_on` -- required and elective ownership through
+    `holdOffering()`.
 
-  Timetable, Syllabus and Examinations do not reference it.
+  Timetable and Syllabus do not reference it.
 - **Not derived from anything else.** It never uses `TimetableEntry` (a
   weekly schedule, not authority) or `ActingEmployeeResolver` (the actor's
   identity, not the owner's).

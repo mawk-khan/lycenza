@@ -55,6 +55,8 @@ class StudentMarkReadService
      */
     public function grid(School $school, string $examinationPaperId, User $actor): array
     {
+        StudentMarkAvailability::assertAvailable();
+
         return $this->context->withSchool($school, function () use ($school, $examinationPaperId, $actor): array {
             $paper = ExaminationPaper::query()->where('school_id', $school->id)->whereKey($examinationPaperId)->firstOrFail();
             $date = $paper->scheduled_on->toDateString();

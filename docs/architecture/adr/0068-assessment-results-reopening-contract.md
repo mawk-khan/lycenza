@@ -19,7 +19,10 @@
   StudentMark entry is built and tested; **production is technically
   blocked** pending RES-L2 (E37), the teacher RES-L0 re-review (E35) and
   RES-L1 (E36). **RES.4A (2026-10-07, §26):** the teacher's own
-  examination-paper discovery list (discovery only; same gates, same block).
+  examination-paper discovery list (discovery only; same gates, same block). **RES.5 closure audit (2026-10-07,
+  §27): RES CURRENT REOPENED SCOPE — CLOSED** after three corrections: §20.1
+  enforced in code, administrative marks refused in code outside
+  local/testing (RES-L1), and the §21.6 paper id UUID-constrained.
 - Date: 2026-10-06
 - Programme: **RES — Assessment & results** (`MASTER-ROADMAP.md`,
   "Post-foundation product programmes", order 5).
@@ -1648,3 +1651,341 @@ read-set pins).
 ### 26.8 Gates
 Unchanged from §25.11. **RES.4 / RES.4A — IMPLEMENTED FOR DEVELOPMENT /
 PRODUCTION BLOCKED PENDING RES-L2 + TEACHER RES-L0 + RES-L1.**
+
+## 27. RES.5 — closure audit of the reopened scope (2026-10-07)
+
+**Outcome: RES CURRENT REOPENED SCOPE — CLOSED** (P3 + internal StudentMark:
+RES.1–RES.4A).
+- **What closes, and in which environments.** The reopened scope is complete
+  and consistent with this contract **for development and test**, after the
+  §27.2 corrections.
+- **What does not close.** The Assessment & Results product family does not
+  close. Production StudentMark is not approved, and nothing from Results
+  onward exists.
+- **Legal.** No register status changed.
+
+### 27.1 Method
+The audit compared the code (migrations, triggers, services, routes,
+seeder, tests) against every normative clause of §1–§26 and §19.2's sixteen
+binding conditions. It used three independent read-only reviews:
+- §1–§26 against the code;
+- RES.1–RES.3 plus retention;
+- TCH-E, RES.4, RES.4A, the lock order and the guards.
+
+Each finding was then verified in the code before acting on it. At the
+baseline `7e8f51b`, a focused run was green: 2704 tests, covering
+Examinations, Students, StudentSubjectEnrollment, TeachingAssignments, HR,
+Auth/MFA, Authorization, Postgres/RLS and Retention.
+
+Classification of the contract's requirements:
+- **IMPLEMENTED:**
+  - R1–R3, R5–R13, R15, R17–R20;
+  - §5–§13 and §18–§26, except as below;
+  - all sixteen §19.2 conditions.
+- **SUPERSEDED BY DATED AMENDMENT:**
+  - §7.2 "insert-only" → §21.3;
+  - R6 / R14 / §15's teacher rule → §23–§25;
+  - §22.9's development outcome → §25.1.
+- **DOCUMENTATION ONLY / FUTURE:**
+  - R4 (further statuses);
+  - §21.8 (`is_required` freeze).
+- **LEGALLY BLOCKED:**
+  - R16 / §16 (RES-L1, RES-L2 and RES-L4 – RES-L9);
+  - §9.3(1) (RES-L2);
+  - production of everything.
+- **DEFECT / CLOSURE BLOCKER (corrected in §27.2):**
+  1. §20.1 not enforced;
+  2. administrative production not refused in code;
+  3. §21.6 paper id not UUID-constrained.
+
+### 27.2 Corrections made (this slice)
+1. **§20.1 enforced (was a closure blocker).**
+   - §20.1 says a recorded mark is never re-derived, and that a later edit
+     fails closed if its meaning changed. `StudentMarkService::record()`
+     instead re-snapshotted the source, placement and elective row on every
+     ordinary edit; only corrections failed closed.
+   - Now: an edit of an existing mark whose P3 answer differs in placement,
+     source or elective row is refused with 409
+     `STUDENT_MARK_CONTEXT_CHANGED`, and nothing is saved. Provenance is
+     written on create only.
+   - Example triggers: a required/elective flip, or a backdated transfer
+     moving the date's placement.
+   - The decision is unchanged; the code now matches it.
+   - Proof: `StudentMarkServiceTest::an_edit_never_re_derives_the_context_the_mark_was_recorded_under`;
+     a mutation check (removing the refusal) fails it.
+2. **Administrative StudentMark production block (closure criterion 5).**
+   - RES.2 and RES.3 say "development only; production: RES-L1", but that
+     was enforced by process only, while the seeder grants the
+     administrative keys in every environment.
+   - Now `StudentMarkAvailability` (non-configurable; `local` / `testing`
+     only) is the first statement of every marks entry point:
+     - `record` (administrative and teacher writes);
+     - `grid`;
+     - `lock`;
+     - correction `request` / `approve` / `reject`;
+     - the teacher `scope()`.
+   - The `marks-development-only` middleware returns a fixed 403
+     `STUDENT_MARKS_UNAVAILABLE` on all nine marks routes.
+   - On teacher routes `teacher-marks-development-only` stays first, so they
+     keep their own code. `TeacherStudentMarkAccess::guard()` checks the
+     teacher block before building a write guard.
+   - This adds enforcement and lifts nothing. Lifting it is a reviewed code
+     change once RES-L1 (and RES-L8 for expiry) permit.
+3. **§21.6 "UUID-constrained" made true.** The administrative paper id
+   (`app/examination-papers/{examinationPaper}/marks`) now has
+   `whereUuid`, so a malformed id is a 404, not a database cast error
+   (tested).
+4. **Contract.** OpenAPI `updateExaminationPaper` now documents
+   409 `EXAMINATION_PAPER_HAS_MARKS` (§20.1's freeze); the shared types are
+   regenerated.
+5. **Closure guards.**
+   - **The marks Application layer has a closed consumer set:** its own
+     controllers and middleware only. A planted Analytics consumer was
+     caught.
+   - **The production blocks cannot be hollowed out:**
+     - the bodies of `isAvailable()` / `assertAvailable()` are pinned;
+     - every marks entry point starts with the block;
+     - `scopeFor()` and teacher guard construction have fixed callers;
+     - every marks route carries `marks-development-only`.
+   - **App-wide closed set of users of the elective ownership fact.**
+6. **Cleanups.**
+   - The dead `isUuid` branch is removed from `TeacherStudentMarkController`.
+   - The `SubjectOfferingEligibilityReadService` docblock now states
+     Students writers' real lock order.
+   - About 25 stale current-state statements (§27.10) are corrected.
+
+**Text notes (no behaviour change):**
+- §25.6: the acting Employee is recorded in the audit event only
+  (`employeeId`). `student_marks` / revisions record the teacher's User
+  (`recorded_by_user_id`), which meets §6.1.
+- §25.7 is amended as follows:
+  - `EmploymentService::end()` locks the EmploymentRecord only, and
+    `create()` the Employee;
+  - steps 5–8 repeat per Student in Student-id order;
+  - `TeachingAssignmentService::create()` takes Offering → Employee, the
+    reverse of teacher entry's Employee → Offering. Every lock involved is
+    `FOR SHARE`, so this is not a hazard;
+  - the heading's "amends §21.5" also covers §6.2's combined order (ownership
+    is taken per Student after P3, not first).
+- §22's banner also covers §22.5:
+  - its paper-level rule and its "source `required`" item are replaced by
+    §25.5's Offering-ownership visibility and by elective ownership
+    (§24, §25.4).
+
+### 27.3 Canonical lock order (definitive)
+Every marks path takes a subset, in this order:
+0. **Teacher only:** schools → school_memberships → users → employees →
+   employment_records, all `FOR SHARE`.
+1. `examination_papers`: `FOR SHARE` for entry, request and decisions;
+   `FOR UPDATE` for the lock. Decisions first read the correction's paper id
+   without a lock.
+2. `examination_paper_mark_states`: `FOR UPDATE` for the lock only (entry and
+   request read it under step 1).
+3. `academic_years` `FOR SHARE` (entry only).
+4. `student_mark_corrections` `FOR UPDATE` (decisions).
+5. **Per Student, in id order**, P3: `subject_offerings` → covering
+   `student_enrollments` (id order) → covering `student_subject_enrollments`
+   (id order), all `FOR SHARE`.
+6. **Teacher only:** `subject_offerings` again (re-entrant), then the one
+   covering `teaching_assignments` / `elective_teaching_assignments` row
+   `FOR SHARE`.
+7. ADR 0038: `students` `FOR UPDATE` → grants → guardian relationships, all
+   `FOR UPDATE`.
+8. `student_marks`: `FOR UPDATE` for entry and approval, `FOR SHARE` for a
+   request. Then the writes, revisions and audit. Their implicit FK
+   `KEY SHARE` locks fall only on rows already held.
+
+**Pairwise review.** There is no opposite-order exclusive acquisition
+between any marks path (administrative or teacher entry, lock, request,
+approve, reject) and any of:
+- assignment create or end (required or elective);
+- employment end or create, and Employee archive, link or unlink;
+- placement transfer, withdraw or complete;
+- StudentSubjectEnrollment enroll, transfer or withdraw;
+- processing-authorization record, withdraw or revoke;
+- AcademicYear close or activate;
+- the Offering PATCH and the paper update.
+
+This holds because each of those writers takes at most its own row(s), plus
+shared locks that the marks paths take in the same order. Proven races:
+RES.2 T1–T3, RES.3 T1–T5 and RES.4 X1–X6.
+
+**One shared-seam hazard predates RES** and is recorded as follow-up S5:
+- ADR 0038's `lockQualifyingAuthorizationIdForProcessing` locks grant →
+  guardian relationship;
+- Guardians `unlink` deletes the relationship, whose `RESTRICT` check takes
+  `KEY SHARE` on the grants;
+- Guardians `setPrimary` updates two relationships.
+
+PostgreSQL aborts one side of such a deadlock. No mark is corrupted, but the
+aborted marks write is not translated (500). This is not a RES closure
+blocker.
+
+### 27.4 Authorization matrix
+Development (`local` / `testing`):
+
+| Actor | Paper discovery | Marks read | Entry / change | Lock | Correction request | Correction decision | Results |
+|---|---|---|---|---|---|---|---|
+| `school_admin` | Only through the teacher path, with its own Employee + ownership (it holds `.teacher` for grantability) | Yes — grid, basis-gated | Yes — open paper, open year | Yes — fresh MFA | Yes | Yes — not own, fresh MFA | None exist |
+| `principal` | No | Yes | Yes | Yes | Yes | Yes | None |
+| Assigned required-subject teacher | Owned papers | Owned + basis Students | Owned Students, open paper/year | No | No | No | No |
+| Assigned elective teacher | Owned elective papers | Same (TCH-E) | Same | No | No | No | No |
+| Co-teacher (owner-adopted dev rule) | As assigned | As assigned | As assigned (version guard) | No | No | No | No |
+| Cover teacher (owner-adopted dev rule) | If the dated assignment covers `scheduled_on` | Same | Same | No | No | No | No |
+| Unrelated teacher (same School) | Empty list | 404 | 404 | No | No | No | No |
+| Teacher from another School | 403 (no membership) / nothing | 404 / RLS | 404 / RLS | No | No | No | No |
+| Student | No | No (RES-L7) | No | No | No | No | No |
+| Guardian | No | No (RES-L7) | No | No | No | No | No |
+
+**Production: no actor reaches anything.** Every marks route and service
+refuses (`STUDENT_MARKS_UNAVAILABLE`; teacher routes
+`TEACHER_STUDENT_MARKS_UNAVAILABLE`). No legal approval is implied:
+E36 / E37 and the E35 teacher re-review are open.
+
+### 27.5 Production gates
+| Surface | Code block | Legal / register gates | Accidental grant |
+|---|---|---|---|
+| Administrative StudentMark (grid, entry, lock, corrections) | `StudentMarkAvailability` + `marks-development-only` (RES.5) | RES-L1 / E36; RES-L8 / E43 (any expiry) | No effect: the block is not a capability |
+| Teacher StudentMark (read, write, discovery) | `TeacherStudentMarkAvailability` + `teacher-marks-development-only`, **and** `StudentMarkAvailability` | RES-L2 / E37; the teacher RES-L0 re-review (E35); RES-L1 / E36; RES-L8 | No effect (tested: an administrator holding `.teacher` + `.manage` in production is refused) |
+| Results and onward | Nothing exists | RES-L4 – RES-L7, RES-L9 (E39–E42, E44): block design and development | — |
+
+Residual note: both blocks key on `APP_ENV`. A deployment mislabelled
+`local` would open them, the same trust boundary as every other
+development-only guard (CLAUDE.md rule 20, ProductionConfigurationGuard).
+
+### 27.6 Legal register (ADR 0058), unchanged by RES.5
+| Row | Item | Status | Implementation effect | Production effect | Blocks |
+|---|---|---|---|---|---|
+| E35 | RES-L0 | DETERMINED — CURRENT WITH CHANGES (administrative scope only); the teacher re-review is **undetermined** | §19 conditions bind RES.2+ | — | Teacher production |
+| E36 | RES-L1 | LEGAL_REVIEW_REQUIRED | none (development authorised) | blocks all production marks (now also in code) | Production StudentMark |
+| E37 | RES-L2 | LEGAL_REVIEW_REQUIRED (+ owner engineering note, not a determination) | owner-authorised development | blocks teacher production | Teacher production |
+| E38 | RES-L3 | LEGAL_REVIEW_REQUIRED (development on ADR 0038's assumption as qualified by RES-L0 §3) | withdrawal withholds reads, refuses writes, keeps marks | production review | — |
+| E39 | RES-L4 results | LEGAL_REVIEW_REQUIRED | blocks design and development | — | Results |
+| E40 | RES-L5 report cards | same | same | — | Report cards |
+| E41 | RES-L6 transcripts | same | same | — | Transcripts |
+| E42 | RES-L7 Student / Guardian access | same | same | — | Any Student/Guardian surface |
+| E43 | RES-L8 retention | LEGAL_REVIEW_REQUIRED | `policy_unresolved`, fail closed | blocks production and any expiry | Retention finalisation |
+| E44 | RES-L9 statutory rules | LEGAL_REVIEW_REQUIRED | nothing encodes them | — | Any slice that would |
+
+Three distinctions hold:
+- **E33** (teacher Attendance, determined) does not approve teacher
+  StudentMark.
+- **The administrative RES-L0** determination does not approve teacher
+  scope.
+- **The owner's engineering authorisation (§25.1)** changed no
+  determination.
+
+### 27.7 Retention (RES-L8 unresolved)
+- **Catalogue.** All four tables (`student_marks`, `student_mark_revisions`,
+  `examination_paper_mark_states`, `student_mark_corrections`) are in
+  category `student_marks` = `policy_unresolved` (`TenantRetentionCatalog`),
+  retained and never expired. `TenantClosureReadinessTest` pins this as the
+  one deliberate exception.
+- **Anchors and delete protection.** The tables are anchored
+  (`RetentionAnchors`), have no expiry function, and are in
+  `DatabaseRoleVerifier::NO_RUNTIME_DELETE` (revisions also
+  `NO_RUNTIME_UPDATE`).
+- **Actor references.** The user columns are `RETAIN_REFERENCE`.
+- **Student erasure.** A Student with marks is `dependency_blocked` (live FK
+  catalogue + `RESTRICT`).
+- **No period is invented.** This is sufficient for development closure;
+  production and any expiry wait for RES-L8.
+
+### 27.8 Privacy, classification, consumers
+- **Classification.** StudentMark, its revisions and corrections are Highly
+  Sensitive throughout (DATA-CLASSIFICATION; §10; R2).
+- **Audit, errors and logs.**
+  - Audit carries ids, versions, reason codes and counts only.
+  - Errors are fixed text plus the caller's own Student id.
+  - The marks files have no `Log::` or metrics call.
+  - `QueryException`s are translated.
+- **No prohibited consumer.**
+  - No marks reference exists in Analytics, `Support/Ai`, Webhooks, Events,
+    Documents, the Gateway, any export or any outbox.
+  - The non-Examinations files naming StudentMark (RequireMfa, the Students
+    seams) do so in comments only.
+  - Guard-pinned (§27.2 item 5).
+
+### 27.9 Results remain absent
+None of the following exists:
+- a result, report-card, transcript, ranking or grade-point table, model,
+  service or route;
+- a percentage or grade-resolution consumer of marks (GradeScale is not read
+  by any marks code);
+- pass/fail, GPA/CGPA, publication or revocation;
+- a Student or Guardian marks surface;
+- an `examinations.results.*` key.
+
+This is pinned by `SubjectOfferingEligibilityArchitectureGuardTest::no_res5_or_later_artifact_exists`
+and `StudentMarkArchitectureGuardTest`.
+
+### 27.10 Documentation drift corrected
+Current-state statements now provably stale were corrected; historical
+entries were kept, with dated notes. Locations:
+- DOMAIN-MAP (Examinations, Students, Teaching Assignments, TCH-L1);
+- EXAMINATIONS.md (models and capabilities header, the blocker paragraph,
+  §20 classification, retention, the teacher route wording);
+- STUDENT-ENROLLMENT.md (P3 consumers);
+- TEACHING-ASSIGNMENTS.md (five consumers);
+- AUTHORIZATION.md (adopters, E33);
+- DATA-CLASSIFICATION.md (E33);
+- STAFF-ACCOUNTS.md;
+- DDEV-DEMO-REVIEW.md;
+- the ADR 0063 status header;
+- ADR 0058's E37 cell;
+- ADR 0033 (P3 supersedes the roster seam for marks; the paper stays
+  Confidential);
+- the roadmap (the 0H row, RES.1 consumers, the RES.4 cadence line, the
+  Examinations status note).
+
+### 27.11 Follow-ups — not closure blockers
+- **S1 — `subject_offerings.is_required`:** still mutable after enrollments,
+  papers or marks exist.
+  - Marks now fail closed both on ordinary edit (§27.2 item 1) and on
+    correction.
+  - Teacher discovery still lists the paper's metadata while Students fail
+    closed.
+  - Recommend an Academic Structure integrity slice that freezes or
+    constrains the switch once dependent academic evidence exists.
+- **S2 — teacher marks UI:** RES.4/RES.4A are session JSON only. That is
+  future UI/product work, not promised by this contract.
+- **S3 — the Visitors timestamp flake:** `VisitorsRlsIsolationTest` can get
+  `checked_out_at < checked_in_at` from two `now()` calls under a WSL2 clock
+  step. The class passes in isolation; a separate reliability correction.
+- **S4 — formal teacher determinations:** E37 (RES-L2) and the E35 teacher
+  re-review are external legal / privacy work that gates production only.
+- **S5 — ADR 0038 × Guardians deadlock (§27.3):** the order differs from
+  the processing-authorization seam's. Recommend a Students slice to align
+  the Guardians writers' order (or lock the grants first). StudentMark should
+  also translate a deadlock abort into a retryable 409.
+- **S6 — database defence in depth (LOW, raw-SQL only; the application paths
+  are safe):**
+  - `student_marks_lock_guard` reads the mark state without a lock, so a raw
+    INSERT racing the lock could slip past; add `AFTER INSERT` to the
+    deferred check, or lock the paper in the guard;
+  - a marked paper's `subject_offering_id` / `examination_id` are frozen by
+    the application only;
+  - a locked mark's provenance columns are not pinned by the database lock
+    guard.
+- **S7 — employment end leaves teaching assignments open:** after a rehire,
+  old open assignments count again. This is tied to the RES-L2 Q5/Q10
+  questions.
+- **S8 — cosmetic:** `StudentMarkController::index` does not catch
+  `ExaminationException`. If the service-level marks block ever fired
+  without its middleware, the grid would answer a generic 500 instead of the
+  fixed 403. It still fails closed and leaks nothing; the middleware answers
+  first today.
+
+### 27.12 Gates after RES.5
+The RES.2–RES.4A development state stands. The reopened scope is CLOSED.
+Future, separately gated programmes:
+- production StudentMark (RES-L1 / E36);
+- teacher legal and privacy clearance (E37, the E35 teacher re-review);
+- results calculation and publication (RES-L4);
+- report cards (RES-L5);
+- transcripts (RES-L6);
+- Student / Guardian exposure (RES-L7);
+- retention finalisation (RES-L8);
+- statutory academic rules (RES-L9).
+
+None starts automatically.

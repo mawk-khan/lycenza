@@ -34,6 +34,8 @@ class StudentMarkLockService
 
     public function lock(School $school, string $examinationPaperId, User $actor): ExaminationPaperMarkState
     {
+        StudentMarkAvailability::assertAvailable();
+
         return $this->context->withSchool($school, fn (): ExaminationPaperMarkState => DB::transaction(function () use ($school, $examinationPaperId, $actor): ExaminationPaperMarkState {
             $paper = ExaminationPaper::query()->where('school_id', $school->id)->whereKey($examinationPaperId)->lockForUpdate()->firstOrFail();
 

@@ -33338,6 +33338,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description EXAMINATION_PAPER_HAS_MARKS -- the paper already has recorded Student marks, so its max_marks and scheduled_on (the P3 eligibility date) are frozen (ADR 0068 §20.1). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Validation or domain failure -- a malformed date/time, an end time not after the start time, a scheduled date outside the Examination's window, a non-positive max_marks, an out-of-vocabulary status, or a reactivation (inactive -> active) while the Examination or SubjectOffering is currently inactive. */
             422: {
                 headers: {

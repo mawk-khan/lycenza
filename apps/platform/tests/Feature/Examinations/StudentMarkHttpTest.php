@@ -2,8 +2,10 @@
 
 namespace Tests\Feature\Examinations;
 
+use App\Domain\Examinations\Application\Exceptions\StudentMarksUnavailableException;
 use App\Models\School;
 use App\Models\User;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CapturesStructuredLogs;
 use Tests\Feature\Examinations\Concerns\CreatesStudentMarkFixtures;
@@ -128,5 +130,51 @@ class StudentMarkHttpTest extends TestCase
             $this->getJson($path)->assertNotFound();
         }
         $this->getJson("/api/v1/schools/{$w['school']->id}/examination-papers/{$w['paper']->id}/marks")->assertNotFound();
+    }
+
+    /** RES.5 (ADR 0068 §21.6, §27): the paper id is UUID-constrained -- a malformed id is a 404, never a 500. */
+    #[Test]
+    public function a_malformed_paper_id_is_a_404(): void
+    {
+        $w = $this->marksWorld();
+        $this->as($w['admin'], $w['school']);
+
+        $this->getJson('/app/examination-papers/not-a-uuid/marks')->assertNotFound();
+        $this->putJson('/app/examination-papers/not-a-uuid/marks', ['marks' => []])->assertNotFound();
+        $this->postJson('/app/examination-papers/not-a-uuid/marks/lock')->assertNotFound();
+    }
+
+    /**
+     * RES.5 (ADR 0068 §27): administrative StudentMark is development only until RES-L1 (E36) -- refused in code
+     * outside local/testing, at the route and in every service, whatever the grants. Nothing is read or written.
+     */
+    #[Test]
+    public function production_and_staging_refuse_every_marks_route_and_service(): void
+    {
+        $w = $this->marksWorld();
+        $student = $this->markStudent($w);
+        $this->recordMarks($w, [$this->entry($student, 'present', '50')]);
+        $this->lockMarks($w);
+        $mark = $this->markOf($w, $student);
+        $correction = $this->requestCorrection($w, $mark, 'present', '51');
+        $this->as($w['admin'], $w['school']);
+        $this->withoutMiddleware(PreventRequestForgery::class);
+        $fixed = ['error' => ['code' => 'STUDENT_MARKS_UNAVAILABLE', 'message' => 'Student marks are not available in this environment.', 'status' => 403]];
+
+        foreach (['production', 'staging'] as $environment) {
+            $this->app['env'] = $environment;
+            $this->getJson($this->url($w))->assertForbidden()->assertExactJson($fixed);
+            $this->putJson($this->url($w), ['marks' => [['student_id' => $student->id, 'status' => 'absent', 'value' => null, 'expected_version' => 1]]])->assertForbidden()->assertExactJson($fixed);
+            $this->postJson($this->url($w).'/lock')->assertForbidden()->assertExactJson($fixed);
+            $this->postJson($this->url($w)."/{$mark->id}/corrections", ['expected_version' => 1, 'status' => 'absent', 'value' => null, 'reason_code' => 'entry_error'])->assertForbidden()->assertExactJson($fixed);
+            $this->postJson("/app/student-mark-corrections/{$correction->id}/approve")->assertForbidden()->assertExactJson($fixed);
+            $this->postJson("/app/student-mark-corrections/{$correction->id}/reject")->assertForbidden()->assertExactJson($fixed);
+
+            $this->assertThrows(fn () => $this->grid($w), StudentMarksUnavailableException::class);
+            $this->assertThrows(fn () => $this->recordMarks($w, [$this->entry($this->markStudent($w), 'present', '1')]), StudentMarksUnavailableException::class);
+            $this->assertThrows(fn () => $this->approveCorrection($w, $correction, $this->checker($w)), StudentMarksUnavailableException::class);
+            $this->app['env'] = 'testing';
+        }
+        $this->assertSame(['50.00', 1, 'pending'], [(string) $this->markOf($w, $student)->value, $this->markOf($w, $student)->version, $this->freshCorrection($w, $correction)->status]);
     }
 }

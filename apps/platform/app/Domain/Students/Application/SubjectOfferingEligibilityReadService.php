@@ -58,8 +58,10 @@ use Throwable;
  *   every elective row of S for O covering D (id order), so a concurrent
  *   Offering change, placement transfer / end, or elective switch /
  *   withdrawal of those rows waits for the caller's commit. Students
- *   writers lock Section -> placement and Offering -> elective row, so this
- *   order cannot form a cycle with them.
+ *   writers lock Section -> placement, Offering -> elective row (enroll) and
+ *   source elective row -> target Offering (transfer, a different Offering's
+ *   row than the target), so this order cannot form a cycle with them
+ *   (RES.5 lock-order audit, ADR 0068 §27).
  *
  * Authorization-neutral, like every Students read service: callers
  * authorize first. The School is the trusted tenant context, never a

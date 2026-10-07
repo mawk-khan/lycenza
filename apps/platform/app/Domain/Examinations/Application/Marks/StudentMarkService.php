@@ -4,6 +4,7 @@ namespace App\Domain\Examinations\Application\Marks;
 
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\Examinations\Application\Exceptions\StudentMarkAcademicYearClosedException;
+use App\Domain\Examinations\Application\Exceptions\StudentMarkContextChangedException;
 use App\Domain\Examinations\Application\Exceptions\StudentMarkInvalidValueException;
 use App\Domain\Examinations\Application\Exceptions\StudentMarkNotEligibleException;
 use App\Domain\Examinations\Application\Exceptions\StudentMarkPaperInactiveException;
@@ -43,7 +44,9 @@ use Illuminate\Support\Facades\DB;
  *    basis refuses (deny by default, §19.3 b);
  * 4. the mark row FOR UPDATE, an optimistic version check (a new mark
  *    expects none; a change names the version it replaces), then the write
- *    with its provenance. The database appends the value history
+ *    with its provenance. A change keeps the provenance it was recorded
+ *    under: if P3 now answers a different placement, source or elective row,
+ *    it fails closed (§20.1; RES.5 correction, §27). The database appends the value history
  *    (`student_mark_revisions`) for every write, pre-lock included.
  *
  * Audit: one School event per written mark, ids only -- never a value, a
@@ -76,6 +79,7 @@ class StudentMarkService
      */
     public function record(School $school, string $examinationPaperId, array $entries, User $actor, ?StudentMarkWriteGuard $guard = null): array
     {
+        StudentMarkAvailability::assertAvailable();
         usort($entries, fn (StudentMarkEntry $a, StudentMarkEntry $b) => strcmp($a->studentId, $b->studentId));
 
         return $this->context->withSchool($school, fn (): array => DB::transaction(function () use ($school, $examinationPaperId, $entries, $actor, $guard): array {
@@ -122,6 +126,13 @@ class StudentMarkService
                 if ($created ? $entry->expectedVersion !== null : $entry->expectedVersion !== $mark->version) {
                     throw new StudentMarkVersionConflictException($entry->studentId);
                 }
+                // ADR 0068 §20.1: a recorded mark is never re-derived -- an edit whose P3 context differs from the
+                // one the mark was recorded under fails closed (as a correction does, §21.2).
+                if (! $created && ($mark->student_enrollment_id !== $eligibility->studentEnrollmentId
+                    || $mark->eligibility_source !== $eligibility->source
+                    || $mark->student_subject_enrollment_id !== $eligibility->studentSubjectEnrollmentId)) {
+                    throw new StudentMarkContextChangedException($entry->studentId);
+                }
 
                 $mark ??= new StudentMark;
                 $mark->forceFill([
@@ -131,10 +142,10 @@ class StudentMarkService
                         'academic_year_id' => $paper->academic_year_id,
                         'student_id' => $entry->studentId,
                         'version' => 1,
+                        'student_enrollment_id' => $eligibility->studentEnrollmentId,
+                        'eligibility_source' => $eligibility->source,
+                        'student_subject_enrollment_id' => $eligibility->studentSubjectEnrollmentId,
                     ] : ['version' => $mark->version + 1]),
-                    'student_enrollment_id' => $eligibility->studentEnrollmentId,
-                    'eligibility_source' => $eligibility->source,
-                    'student_subject_enrollment_id' => $eligibility->studentSubjectEnrollmentId,
                     'processing_authorization_id' => $authorizationId,
                     'status' => $entry->status,
                     'value' => $value,

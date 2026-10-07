@@ -15,7 +15,8 @@ use Tests\TestCase;
  * RES.4 (ADR 0068 §25): the owned teacher marks surface over HTTP --
  * session JSON only, `capability:examinations.marks.teacher` + `mfa` + the
  * development-only block on both routes; every paper miss (unknown, another
- * School's, not owned, not a uuid) the identical 404 body; the administrative
+ * School's, not owned) the identical 404 body, a malformed id the route's
+ * plain 404; the administrative
  * grid, entry, lock and correction routes still refused to a teacher; no
  * submitted value echoed, flashed or logged; production refused first.
  */

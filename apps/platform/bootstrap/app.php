@@ -16,6 +16,7 @@ use App\Http\Middleware\DevOnlySchoolHeaderResolver;
 use App\Http\Middleware\EnforceCredentialVersion;
 use App\Http\Middleware\EnsureCapability;
 use App\Http\Middleware\EnsureIdempotent;
+use App\Http\Middleware\EnsureStudentMarksDevelopmentOnly;
 use App\Http\Middleware\EnsureTeacherAttendanceApiDevelopmentOnly;
 use App\Http\Middleware\EnsureTeacherStudentMarksDevelopmentOnly;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -125,6 +126,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'mfa-page' => RequireMfaForPage::class,
             'teacher-attendance-api' => EnsureTeacherAttendanceApiDevelopmentOnly::class,
             'teacher-marks-development-only' => EnsureTeacherStudentMarksDevelopmentOnly::class,
+            'marks-development-only' => EnsureStudentMarksDevelopmentOnly::class,
             // Phase 0N.1: the School-context prerequisite for every
             // School-scoped web route (routes/web.php's School group) --
             // see App\Http\Middleware\RequireSchoolContext.

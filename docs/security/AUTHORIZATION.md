@@ -159,7 +159,7 @@ of the AI Gateway's capability check (ADR 0014's "Domain service" step)
   See `tests/Feature/Authorization/CapabilityResolverTest.php`'s disabled-
   user and suspended-membership cases (section 31).
 
-## Ownership-based authorization (ADR 0063 — TCH; adopters: Curriculum Delivery, Attendance, Learning Content, Assignments)
+## Ownership-based authorization (ADR 0063 — TCH; adopters: Curriculum Delivery, Attendance, Learning Content, Assignments, Examinations teacher marks)
 
 Roles stay capability bundles. ADR 0063 (TCH.0, 2026-09-30) contracts the
 platform's first ownership-based authorization, for teachers. **TCH is
@@ -167,13 +167,15 @@ development-closed (TCH.6, 2026-10-01, ADR 0063 §38).** Built: the
 ActingEmployee identity boundary (TCH.1), the TeachingAssignment ownership
 fact (TCH.2) and four owned adopters — Curriculum Delivery (TCH.3),
 Attendance (TCH.4), Learning Content (TCH.5C) and Assignments (TCH.5D), on the
-LMS owner/audience persistence (TCH.5B).
+LMS owner/audience persistence (TCH.5B). A fifth adopter, Examinations
+teacher marks (RES.4, ADR 0068 §25), is development only.
 
 **Curriculum Delivery, Attendance, LMS Learning Content and LMS Assignments
 are the owned teaching surfaces.** Timetable remains admin-only, and Timetable stays scheduling evidence,
 never ownership authority. **Teacher Attendance functionality is implemented
 but production enablement remains blocked by TCH-L1 until the required
-legal/compliance determination is recorded** (ADR 0063 §26). The first
+legal/compliance determination is recorded** (ADR 0063 §26). *(Dated note:
+E33 / TCH-L1 was determined APPROVED WITH CONDITIONS on 2026-10-07 (ADR 0063 §42–§44); production `teacher` grants wait for deployment re-verification, E21 and the O1 checklist.)* The first
 implemented example:
 
 ```text
@@ -286,7 +288,9 @@ active actor + `mfa` + ActingEmployee (today)
 - It is granted and revoked through the ordinary staff role path. **In
   production it is not granted while TCH-L1 / ADR 0058 E33 is OPEN** (owner
   decision, ADR 0063 §40). The rule is enforced by process; it is not a
-  missing technical control.
+  missing technical control. *(Dated note: E33 / TCH-L1 was determined APPROVED WITH CONDITIONS on 2026-10-07 (ADR 0063 §42–§44); production `teacher` grants wait for deployment re-verification, E21 and the O1 checklist. The role's
+  `examinations.marks.teacher` is refused in code outside `local` /
+  `testing` whatever the grant, ADR 0068 §25.3.)*
 - `school_admin` also holds all five capabilities, only so it can grant the
   role under the no-escalation rule.
 

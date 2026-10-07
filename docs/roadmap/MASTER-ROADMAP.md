@@ -23,7 +23,7 @@ scope is **not** a claim that the deferred capability exists.
 | 0E | COMPLETE |
 | 0F | COMPLETE / PUBLISHED |
 | 0G | COMPLETE |
-| 0H | **CLOSED FOR PHASE ZERO** — active foundation scope delivered; remaining Academic / Examination depth (Lesson Planning, StudentMark, results, report cards, transcripts, 0H.4D-P3) deferred post-v1 (ADR 0061) |
+| 0H | **CLOSED FOR PHASE ZERO** — active foundation scope delivered; remaining Academic / Examination depth (Lesson Planning, StudentMark, results, report cards, transcripts, 0H.4D-P3) deferred post-v1 (ADR 0061); P3 and internal StudentMark later reopened by ADR 0068 as RES (row 5) |
 | 0I | COMPLETE — Submission cancelled / out of scope |
 | 0J | ENGINEERING COMPLETE — the recorded ESI disability-threshold legal deferral stands (ADR 0036) |
 | 0K | CLOSED — Health / Safety deferred behind their recorded gates |
@@ -77,7 +77,7 @@ contract checkpoint.
 | 2 | **TCH — Teacher Identity & Ownership-Based Authorization** | **DEVELOPMENT CLOSED** (TCH.0–TCH.6, 2026-10-01; ADR 0063 §38). Built: ActingEmployee identity (TCH.1), TeachingAssignment ownership (TCH.2), the production `teacher` role (four owned-scope capabilities, never a role-name check) and owned teacher access to Curriculum Delivery (TCH.3), Attendance (TCH.4), Learning Content (TCH.5C) and Assignments (TCH.5D) on the LMS owner/audience persistence (TCH.5B). Every owned access needs capability AND verified ActingEmployee AND TeachingAssignment; the role alone grants nothing, and Timetable is never authority. **Production readiness (ADR 0063 §39, 2026-10-01): PRODUCTION READY EXCEPT DOCUMENTED EXTERNAL GATES** — teacher Attendance is **BLOCKED by open legal/compliance determination TCH-L1** (now ADR 0058 register **E33**), enforced by process only. The one `teacher` role also carries `attendance.teacher`. **Owner decision (ADR 0063 §40): no production `teacher` role grants while E33 / TCH-L1 is OPEN**, and no role split or Attendance gate. The role is implemented and production-capable; the blocker is external, not a technical deficiency. **E33 / TCH-L1 DETERMINED — APPROVED WITH CONDITIONS** (Lead Privacy Counsel & DPO, 2026-10-07; ADR 0063 §42): teacher Attendance development permitted within scope; production only after the nine controls are verified. **TCH ATTENDANCE PRODUCTION CONTROLS — BUILT** (2026-10-07, ADR 0063 §43): MFA on every My Attendance route, every owned read audited, the bearer-token teacher API development-only; all nine controls PASS in the repository. Production `teacher` grants still wait on production-candidate re-verification, E21 and the platform checklist. No effect on StudentMark. TCH history retention waits on the platform-wide legal item **E21** (ADR 0058). TCH.6 fixed one closure defect (non-identical not-found bodies on owned surfaces). LMS Submission remains cancelled and outside TCH |
 | 3 | HRX — Leave & staff attendance | **HRX.0 CONTRACT — PUBLISHED / CLOSED** (ADR 0065, 2026-10-03, docs only). **HRX.1 LEAVE FOUNDATION — PUBLISHED / CLOSED** (2026-10-03; ADR 0065 §22 final owner decisions). **HRX.2 LEAVE REQUESTS & APPROVAL — PUBLISHED / CLOSED** (2026-10-03; ADR 0065 §23). **HRX.3 STAFF ATTENDANCE — PUBLISHED / CLOSED** (2026-10-03; ADR 0065 §24: exact half-day evidence, CAS corrections with append-only history, Leave ↔ Attendance through application contracts). **HRX.4 STAFF SELF-SERVICE — PUBLISHED / CLOSED** (2026-10-04; ADR 0065 §25: ActingEmployee-only identity, own leave view/submit/withdraw/cancel, read-only own attendance, posted own payslips, separate `staff_self_service` bundle). **HRX.5 PAYROLL LOSS-OF-PAY INTEGRATION — MECHANISM PUBLISHED / CLOSED** (2026-10-04; ADR 0065 §26: HRX→Payroll evidence contract implemented, versioned, fingerprinted and snapshotted; posted payroll immutable; differences detected; **automatic wage deduction disabled / not legally activated; EPFO NCP conversion pending current-rule validation; HRX-L4 legal activation pending**). **HRX.6 RETENTION, READINESS & CLOSURE — PUBLISHED / CLOSED** (2026-10-04; ADR 0065 §27: Leave and Staff Attendance evidence join the existing E21-D9 employee retention run through two narrow, separation-floored database functions; no runtime DELETE, no cascade; Payroll's HRX snapshot follows Payroll retention). **HRX — LEAVE & STAFF ATTENDANCE IMPLEMENTATION PUBLISHED / CLOSED. HRX.5 MECHANISM CLOSED / LEGAL ACTIVATION GATED.** HRX-L1–L4 remain OPEN; E21 qualified ratification and production retention configuration pending (`docs/modules/HRX-READINESS-AND-CLOSURE.md`). Health-data features and biometric attendance stay out of v1 behind legal gates; Payroll loss-of-pay is HRX.5. No TCH/E33 change |
 | 4 | OPF — Operational fee integrations (Transport, Hostel, Library fines, Admissions fee) | **PUBLISHED / CLOSED — DEVELOPMENT** (OPF.0–OPF.5, 2026-10-06; ADR 0067 §31). **Not production-ready:** legal E21, E30, E31, E32 and E34 (Library fines) remain open. **OPF.0 CONTRACT — PUBLISHED** (ADR 0067, 2026-10-05, docs only; owner decisions D1–D9 adopted). **OPF.1 TRANSPORT FEE SELECTION — PUBLISHED** (2026-10-05, ADR 0067 §27). **OPF.2 HOSTEL FEE SELECTION — PUBLISHED** (2026-10-05, ADR 0067 §28). **OPF.3 ADMISSION FEE AT CONVERSION — PUBLISHED** (2026-10-06, ADR 0067 §29). **OPF.4 LIBRARY OVERDUE FINES — PUBLISHED** (2026-10-06, ADR 0067 §30; E34 production gate unresolved). **OPF.5 CLOSURE AUDIT — PUBLISHED / CLOSED** (2026-10-06, ADR 0067 §31; test, rollback and documentation corrections only). Prerequisite FEE.1–FEE.2 satisfied. Production gated by E21, E30, E31, E32 and the new E34 (Library fines); development permitted |
-| 5 | RES — Assessment & results (P3 → StudentMark → results → report cards → transcripts) | **RES.0 REOPENING AUDIT — COMPLETE** (2026-10-06). **RES.0B REOPENING CONTRACT — PUBLISHED** (ADR 0068, 2026-10-06, docs only; owner decisions R1–R20): reopens only P3 and internal StudentMark. **RES.1 P3 AS-OF-DATE OFFERING ELIGIBILITY — PUBLISHED** (2026-10-06, ADR 0068 §18; Students read seam, no consumer). **RES-L0 — RESOLVED: CURRENT WITH CHANGES** (Lead Privacy Counsel & DPO, 2026-10-07; ADR 0068 §19). **RES.2 ADMIN/INTERNAL STUDENTMARK ENTRY — PUBLISHED (DEVELOPMENT ONLY / NOT PRODUCTION)** (2026-10-07, ADR 0068 §20; production gated by RES-L1; retention RES-L8; teachers RES-L2). **RES.3 PER-PAPER LOCK & APPEND-ONLY CORRECTIONS — COMPLETE (DEVELOPMENT ONLY / NOT PRODUCTION)** (2026-10-07, ADR 0068 §21; production gated by RES-L1). **RES.4 READINESS — REQUESTS DRAFTED, NOT SENT** (2026-10-07, ADR 0068 §22, docs only): RES-L2, RES-L0 teacher re-review and TCH-L1 requests in `docs/security/`; electives technically blocked (no elective ownership fact). **E33 / TCH-L1 DETERMINED — APPROVED WITH CONDITIONS** (2026-10-07; teacher Attendance only, no StudentMark effect). Elective teacher ownership technically READY since TCH-E (2026-10-07, ADR 0063 §45). **RES.4 — IMPLEMENTED FOR DEVELOPMENT / PRODUCTION BLOCKED PENDING RES-L2 + TEACHER RES-L0 + RES-L1** (2026-10-07, ADR 0068 §25; owner-authorised engineering development, not a legal determination: E37 and the E35 teacher re-review unresolved; production refused in code). **RES.4A teacher paper discovery — IMPLEMENTED FOR DEVELOPMENT** (2026-10-07, ADR 0068 §26). Results, report cards, transcripts and Student/Guardian access are not sequenced (RES-L4 – RES-L7) |
+| 5 | RES — Assessment & results (P3 → StudentMark → results → report cards → transcripts) | **RES.0 REOPENING AUDIT — COMPLETE** (2026-10-06). **RES.0B REOPENING CONTRACT — PUBLISHED** (ADR 0068, 2026-10-06, docs only; owner decisions R1–R20): reopens only P3 and internal StudentMark. **RES.1 P3 AS-OF-DATE OFFERING ELIGIBILITY — PUBLISHED** (2026-10-06, ADR 0068 §18; Students read seam, consumed by RES.2–RES.4). **RES-L0 — RESOLVED: CURRENT WITH CHANGES** (Lead Privacy Counsel & DPO, 2026-10-07; ADR 0068 §19). **RES.2 ADMIN/INTERNAL STUDENTMARK ENTRY — PUBLISHED (DEVELOPMENT ONLY / NOT PRODUCTION)** (2026-10-07, ADR 0068 §20; production gated by RES-L1; retention RES-L8; teachers RES-L2). **RES.3 PER-PAPER LOCK & APPEND-ONLY CORRECTIONS — COMPLETE (DEVELOPMENT ONLY / NOT PRODUCTION)** (2026-10-07, ADR 0068 §21; production gated by RES-L1). **RES.4 READINESS — REQUESTS DRAFTED, NOT SENT** (2026-10-07, ADR 0068 §22, docs only): RES-L2, RES-L0 teacher re-review and TCH-L1 requests in `docs/security/`; electives technically blocked (no elective ownership fact). **E33 / TCH-L1 DETERMINED — APPROVED WITH CONDITIONS** (2026-10-07; teacher Attendance only, no StudentMark effect). Elective teacher ownership technically READY since TCH-E (2026-10-07, ADR 0063 §45). **RES.4 — IMPLEMENTED FOR DEVELOPMENT / PRODUCTION BLOCKED PENDING RES-L2 + TEACHER RES-L0 + RES-L1** (2026-10-07, ADR 0068 §25; owner-authorised engineering development, not a legal determination: E37 and the E35 teacher re-review unresolved; production refused in code). **RES.4A teacher paper discovery — IMPLEMENTED FOR DEVELOPMENT** (2026-10-07, ADR 0068 §26). **RES.5 CLOSURE AUDIT — RES CURRENT REOPENED SCOPE (P3 + internal StudentMark) CLOSED** (2026-10-07, ADR 0068 §27; development only; all StudentMark refused in production code pending RES-L1). The Assessment & Results family is NOT complete: production StudentMark (RES-L1), teacher clearance (E37 + E35 re-review), results (RES-L4), report cards (RES-L5), transcripts (RES-L6), Student/Guardian access (RES-L7), retention (RES-L8) and statutory rules (RES-L9) are future gated programmes, never auto-started. Results, report cards, transcripts and Student/Guardian access are not sequenced (RES-L4 – RES-L7) |
 | 6 | POR — Guardian/Student portal | Not started; legal (children's data) and security gates |
 
 **TCH checkpoints (ADR 0063 §25)** -- all built; **TCH DEVELOPMENT CLOSED
@@ -726,9 +726,31 @@ programme is development closed (ADR 0067 §31), not production-ready:
     - stale module-doc sentences.
   - **Production:** gated by E21, E30, E31, E32 and E34 (unchanged).
 
-**RES checkpoints (ADR 0068 §11, §19)** -- RES.0, RES.0B and RES.1 published;
-RES-L0 determined (CURRENT WITH CHANGES); RES.2 and RES.3 complete for
-development only (not production):
+**RES checkpoints (ADR 0068 §11, §19, §27)** -- **current reopened scope
+CLOSED by RES.5 (2026-10-07)**:
+
+| Stage | Status |
+|---|---|
+| RES.0 | COMPLETE |
+| RES.0B | COMPLETE |
+| RES.1 | COMPLETE |
+| RES.2 | COMPLETE — development implemented; production blocked (RES-L1, refused in code) |
+| RES.3 | COMPLETE — development implemented; production blocked (RES-L1, refused in code) |
+| RES.4 | COMPLETE — development implemented; teacher production blocked (E37, E35 re-review, RES-L1; refused in code) |
+| RES.4A | COMPLETE |
+| RES.5 | COMPLETE — CURRENT REOPENED SCOPE CLOSED |
+
+Future gated programmes, not started:
+- production StudentMark enablement (RES-L1);
+- teacher legal / privacy clearance (E35 re-review, E37);
+- result calculation and publication (RES-L4);
+- report cards (RES-L5);
+- transcripts (RES-L6);
+- Student / Guardian exposure (RES-L7);
+- retention finalisation (RES-L8);
+- statutory academic rules (RES-L9).
+
+Detail per stage:
 - **RES.0 — Reopening audit.** Complete (2026-10-06, read-only).
   - No hidden or partial marks/results implementation exists.
   - Prerequisites built: Examination, ExaminationPaper (`max_marks`),
@@ -840,7 +862,8 @@ development only (not production):
     `testing`.
   - No results, correction or lock authority for teachers.
   - Real-process races X1–X6 with mutation checks.
-  - Regression cadence: round 2/5 after the `10b2e04` checkpoint.
+  - Regression cadence: early full-regression checkpoint at `c9d9762`
+    (7874 green; counter 0/5).
   - If a determination conflicts, RES.4 is amended or disabled before
     production.
 - **RES.4A — Teacher "My examination papers" discovery.** **IMPLEMENTED FOR
@@ -850,7 +873,22 @@ development only (not production):
   - No Student or mark data; same gates and production block as RES.4.
   - E35, E36 and E37 unchanged.
   - Regression cadence: round 1/5 after the `c9d9762` checkpoint.
-- **RES.5 — Closure audit.**
+- **RES.5 — Closure audit.** **COMPLETE — RES CURRENT REOPENED SCOPE
+  CLOSED** (2026-10-07, ADR 0068 §27).
+  - Every ADR 0068 clause and all sixteen RES-L0 conditions were reconciled
+    with the code.
+  - Three corrections were made:
+    - §20.1 enforced: an edit never re-derives a mark's context (409
+      `STUDENT_MARK_CONTEXT_CHANGED`);
+    - **administrative StudentMark refused in code outside local/testing**
+      (`StudentMarkAvailability`, RES-L1);
+    - the §21.6 paper id is UUID-constrained.
+  - Also: the OpenAPI 409 for paper update, three closure guards, a
+    definitive lock order and authorization/production-gate matrices, and
+    about 25 drift corrections.
+  - Follow-ups S1–S7 are recorded and are not blockers.
+  - Regression cadence: round 2/5 after the `c9d9762` checkpoint (executable
+    corrections, confined to the marks paths; focused and broad suites).
 - **Not sequenced:** results, finalization, publication, report cards,
   transcripts and Student/Guardian access, until RES-L4 – RES-L7 are
   answered and each has its own contract.
@@ -1459,6 +1497,9 @@ for the complete as-built record. *(Corrected 2026-10-06, RES.0B: this
 paragraph previously said "not yet published" and named a pending
 publication gate; it was published at `70e4a43`.)*
 
+*(Dated note, 2026-10-07: P3 and StudentMark were later built for
+development under RES — Highly Sensitive, ADR 0068 — see the RES
+checkpoints; results, report cards and transcripts remain unbuilt.)*
 **Examinations has STARTED but is NOT complete.** Examination
 Foundation, ExaminationPaper/Scheduling and GradeScale/GradeBand
 mapping are its first three checkpoints: **marks, result calculation,

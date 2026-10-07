@@ -62,6 +62,8 @@ class StudentMarkCorrectionService
 
     public function request(School $school, string $examinationPaperId, string $studentMarkId, int $expectedVersion, string $status, ?string $value, string $reasonCode, User $actor): StudentMarkCorrection
     {
+        StudentMarkAvailability::assertAvailable();
+
         if (! in_array($reasonCode, StudentMarkCorrection::REASONS, true)) {
             throw new StudentMarkCorrectionInvalidException;
         }
@@ -116,6 +118,8 @@ class StudentMarkCorrectionService
 
     public function approve(School $school, string $correctionId, User $actor): StudentMarkCorrection
     {
+        StudentMarkAvailability::assertAvailable();
+
         return $this->context->withSchool($school, fn (): StudentMarkCorrection => DB::transaction(function () use ($school, $correctionId, $actor): StudentMarkCorrection {
             [$paper, $correction] = $this->pendingForDecision($school, $correctionId, $actor);
             $mark = StudentMark::query()->where('school_id', $school->id)->whereKey($correction->student_mark_id)->firstOrFail();
@@ -153,6 +157,8 @@ class StudentMarkCorrectionService
 
     public function reject(School $school, string $correctionId, User $actor): StudentMarkCorrection
     {
+        StudentMarkAvailability::assertAvailable();
+
         return $this->context->withSchool($school, fn (): StudentMarkCorrection => DB::transaction(function () use ($school, $correctionId, $actor): StudentMarkCorrection {
             [$paper, $correction] = $this->pendingForDecision($school, $correctionId, $actor);
 

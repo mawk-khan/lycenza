@@ -120,4 +120,38 @@ class TeachingAssignmentArchitectureGuardTest extends TestCase
             $this->assertDoesNotMatchRegularExpression('#(^|/)(my-marks|my/marks|teacher-marks)(/|$)#', $route->uri(), 'no teacher marks route');
         }
     }
+
+    /** RES.5 (ADR 0068 §27): the elective ownership fact and its reads have a closed, app-wide set of users. */
+    #[Test]
+    public function the_elective_ownership_fact_has_a_closed_set_of_users(): void
+    {
+        $hits = [];
+        $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(app_path(), \FilesystemIterator::SKIP_DOTS));
+        foreach ($iterator as $file) {
+            if ($file->getExtension() !== 'php') {
+                continue;
+            }
+            $code = (string) preg_replace('#/\*.*?\*/|//[^\n]*#s', '', (string) file_get_contents($file->getPathname()));
+            if (preg_match('/\b(holdElective|holdOffering|electivePeriods|OwnedElectivePeriod|ElectiveTeachingAssignment)\b|elective_teaching_assignments/', $code) === 1) {
+                $hits[] = substr($file->getPathname(), strlen(app_path()) + 1);
+            }
+        }
+        sort($hits);
+        $this->assertSame([
+            'Domain/Examinations/Application/Marks/TeacherStudentMarkAccess.php',
+            'Domain/Examinations/Application/Marks/TeacherStudentMarkGuard.php',
+            'Domain/Examinations/Application/Marks/TeacherStudentMarkScope.php',
+            'Domain/TeachingAssignments/Application/ElectiveTeachingAssignmentService.php',
+            'Domain/TeachingAssignments/Application/OwnedElectivePeriod.php',
+            'Domain/TeachingAssignments/Application/TeachingAssignmentReadService.php',
+            'Domain/TeachingAssignments/Application/TeachingOwnership.php',
+            'Domain/TeachingAssignments/Infrastructure/ElectiveTeachingAssignment.php',
+            'Http/Controllers/App/TeachingAssignments/ElectiveTeachingAssignmentController.php',
+            'Support/Operations/DatabaseRoleVerifier.php',
+            'Support/Retention/Erasure/UserReferenceCatalog.php',
+            'Support/Retention/RetentionAnchors.php',
+            'Support/Retention/RetentionExpiry.php',
+            'Support/Retention/TenantRetentionCatalog.php',
+        ], $hits, 'a new user of the elective ownership fact needs its own review (ADR 0063 §45-§46)');
+    }
 }

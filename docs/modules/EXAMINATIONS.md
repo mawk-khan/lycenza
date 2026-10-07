@@ -18,8 +18,9 @@ coherent fact underneath it.
 | Second checkpoint | **Phase 0H.4B — ExaminationPaper / Scheduling** (implemented) |
 | Third checkpoint | **Phase 0H.4C — GradeScale / GradeBand mapping** (implemented; published to main at `70e4a43`) |
 | Domain directory | `app/Domain/Examinations` |
-| Models / tables | `Examination` / `examinations`; `ExaminationPaper` / `examination_papers`; `GradeScale` / `grade_scales`; `GradeBand` / `grade_bands` |
-| Capability families | **`examinations.definitions.*`**; **`examinations.papers.*`**; **`examinations.grade_scales.*`** |
+| Models / tables | `Examination` / `examinations`; `ExaminationPaper` / `examination_papers`; `GradeScale` / `grade_scales`; `GradeBand` / `grade_bands`; since RES.2–RES.3 (development only): `StudentMark` / `student_marks`, `StudentMarkRevision` / `student_mark_revisions`, `ExaminationPaperMarkState` / `examination_paper_mark_states`, `StudentMarkCorrection` / `student_mark_corrections` |
+| Capability families | **`examinations.definitions.*`**; **`examinations.papers.*`**; **`examinations.grade_scales.*`**; since RES.2–RES.4 **`examinations.marks.*`** (`view`, `manage`, `lock`, `correction.request`, `correction.approve`; owned-scope `teacher`, development only). No `examinations.results.*` |
+| RES (ADR 0068) | RES.1–RES.4A built for development only; RES.5 closure audit closed the reopened P3 + StudentMark scope (2026-10-07, ADR 0068 §27). Production blocked and refused in code: RES-L1 (all marks, `StudentMarkAvailability`), RES-L2 + teacher RES-L0 (teacher marks, also `TeacherStudentMarkAvailability`); RES-L8 (retention) |
 
 **The capability root is `examinations.*`, deliberately depth-2.** A
 flat `examinations.view`/`.manage` would eventually grant clerical marks
@@ -671,6 +672,9 @@ production enablement/Student-facing/Guardian-facing/result
 publication remain separately withheld pending their own review (§20
 below). GradeScale itself carries no Student/Enrollment/marks data and
 ships fully independently of that blocker, as anticipated.
+*(Dated note, 2026-10-07: superseded in part — P3 was built as RES.1 and
+StudentMark as RES.2–RES.4A, development only; see the StudentMark sections
+below and ADR 0068 §18–§27. Results and onward remain withheld.)*
 
 ## 20. Future
 
@@ -681,7 +685,9 @@ ships fully independently of that blocker, as anticipated.
   `[LEGAL REVIEW REQUIRED]` children's-data gate
   (`docs/security/DATA-CLASSIFICATION.md`). A mark must carry **no
   free-text remark column**, or it risks drifting toward the Health
-  tier's own legal gate.
+  tier's own legal gate. *(Dated note, 2026-10-07: superseded by ADR
+  0068 R2 — marks are **Highly Sensitive**; built as RES.2, no remark
+  column.)*
 - **Result calculation / publication** and **report cards /
   transcripts** (PROVISIONAL): recording a fact, deriving a result,
   publishing it and generating a document are four different things and
@@ -736,8 +742,10 @@ tests keep those column sets closed.
 
 Examinations and examination papers are tenant-lifetime School academic
 configuration without personal data (E21.2G A2): no E21 mechanism expires
-them (`AcademicRetentionArchitectureGuardTest`). Student marks and results
-are not implemented.
+them (`AcademicRetentionArchitectureGuardTest`). Student marks and their
+lock/correction records (RES.2/RES.3) are catalogued `policy_unresolved` —
+retained, never expired, until RES-L8 (ADR 0068 §12); results are not
+implemented.
 
 ## StudentMark (RES.2, 2026-10-07; ADR 0068 §20)
 
@@ -813,7 +821,8 @@ is not a legal determination: RES-L2 (E37) and the teacher RES-L0 re-review
   - every route needs `teacher-marks-development-only` +
     `capability:examinations.marks.teacher` + `mfa`.
 
-  There is no `/api/v1` route, list, search, lock or correction route for
+  There is no `/api/v1` route, Student or mark list, search, lock or
+  correction route for
   teachers.
 - **Authority**, every part required:
   - an ActingEmployee today;
@@ -855,3 +864,17 @@ capability, ActingEmployee and `mfa` as the marks routes.
 - **Audit:** `examinations.examination_papers.teacher_listed` (Employee id
   and paper count).
 - **Status:** development only; the legal gates are unchanged.
+
+## RES.5 closure (2026-10-07; ADR 0068 §27)
+
+The reopened scope (P3 + internal StudentMark) is **CLOSED** for
+development. Three corrections came out of the audit:
+- **No re-derivation.** An ordinary edit never re-derives a mark's recorded
+  P3 context: if it changed, the edit gets 409 `STUDENT_MARK_CONTEXT_CHANGED`.
+- **Production block for all marks.** Every marks route and service refuses
+  outside `local` / `testing` with 403 `STUDENT_MARKS_UNAVAILABLE`
+  (`StudentMarkAvailability`, `marks-development-only`; RES-L1).
+- **UUID-constrained paper id.** The administrative marks paper id is
+  UUID-constrained.
+
+Follow-ups S1–S7 are listed in ADR 0068 §27.11.

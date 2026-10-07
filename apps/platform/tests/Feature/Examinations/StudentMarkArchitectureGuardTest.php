@@ -171,6 +171,7 @@ class StudentMarkArchitectureGuardTest extends TestCase
             $this->assertContains('mfa', $middleware, $route->uri().' needs the MFA window.');
             $this->assertNotEmpty(array_filter($middleware, fn ($m) => is_string($m) && str_starts_with($m, 'capability:examinations.marks.')), $route->uri().' needs an examinations.marks.* capability.');
             $this->assertContains('school-context', $middleware);
+            $this->assertContains('marks-development-only', $middleware, $route->uri().' is development only until RES-L1 (ADR 0068 §27).');
 
             // RES.4: the teacher routes carry the teacher key and the development-only block; no administrative
             // route accepts the teacher key, and no teacher route accepts an administrative one.
@@ -229,7 +230,7 @@ class StudentMarkArchitectureGuardTest extends TestCase
         $this->assertStringNotContainsString('->resolve(', $guard);
 
         $access = $this->code($marks.'TeacherStudentMarkAccess.php');
-        $this->assertMatchesRegularExpression('/function scope[^{]*\{\s*TeacherStudentMarkAvailability::assertAvailable\(\);\s*\$this->authorizeCapabilityFor/', $access);
+        $this->assertMatchesRegularExpression('/function scope[^{]*\{\s*TeacherStudentMarkAvailability::assertAvailable\(\);\s*StudentMarkAvailability::assertAvailable\(\);\s*\$this->authorizeCapabilityFor/', $access);
 
         $service = $this->code($marks.'StudentMarkService.php');
         $order = array_map(fn (string $needle) => strpos($service, $needle), ['$guard?->holdActor(', '->sharedLock()->first()', '$guard?->admitPaper(', 'STATUS_ACTIVE', 'lockEligibilityAsOf(', '$guard?->admitStudent(', 'lockQualifyingAuthorizationIdForStudentId(', '->lockForUpdate()->first()']);
@@ -266,6 +267,70 @@ class StudentMarkArchitectureGuardTest extends TestCase
 
         foreach (['TeacherStudentMarkGuard.php', 'TeacherStudentMarkAccess.php', 'TeacherStudentMarkReadService.php', 'TeacherStudentMarkScope.php', 'TeacherExaminationPaperDiscoveryService.php'] as $file) {
             $this->assertDoesNotMatchRegularExpression("/'examinations\.marks\.(view|manage|lock|correction\.[a-z]+)'/", $this->code($marks.$file), "{$file} never consults an administrative marks key");
+        }
+    }
+
+    /**
+     * RES.5 (ADR 0068 §27): the marks Application layer has a CLOSED consumer set. Any other class reaching a
+     * marks service, guard, scope or the availability block -- a job, command, AI tool, report, Communications or
+     * Automation consumer, a differently named route -- is a new consumer that needs its own RES review.
+     */
+    #[Test]
+    public function the_marks_application_layer_has_a_closed_consumer_set(): void
+    {
+        $classes = array_map(fn (string $f) => basename($f, '.php'), glob(app_path('Domain/Examinations/Application/Marks/*.php')) ?: []);
+        $this->assertNotEmpty($classes);
+        $pattern = '/Examinations\\\\Application\\\\Marks\\\\|\b('.implode('|', $classes).')\b/';
+        $allowed = [
+            'Domain/Examinations/Application/Marks/',
+            'Http/Controllers/App/Examinations/StudentMarkController.php',
+            'Http/Controllers/App/Examinations/StudentMarkCorrectionController.php',
+            'Http/Controllers/App/Examinations/TeacherStudentMarkController.php',
+            'Http/Middleware/EnsureTeacherStudentMarksDevelopmentOnly.php',
+            'Http/Middleware/EnsureStudentMarksDevelopmentOnly.php',
+        ];
+        $consumers = [];
+        foreach ($this->appFiles() as $file) {
+            $relative = substr($file, strlen(app_path()) + 1);
+            if (preg_match($pattern, $this->code($file)) === 1 && array_filter($allowed, fn (string $a) => str_starts_with($relative, $a)) === []) {
+                $consumers[] = $relative;
+            }
+        }
+        $this->assertSame([], $consumers, 'StudentMark application code is consumed only by its own controllers and middleware.');
+    }
+
+    /** RES.5 (ADR 0068 §25.3, §27): the production block's body and its entry points are pinned, not only its constant. */
+    #[Test]
+    public function the_teacher_production_block_cannot_be_hollowed_out(): void
+    {
+        $marks = app_path('Domain/Examinations/Application/Marks/');
+        $this->assertMatchesRegularExpression('/function isAvailable\(\): bool\s*\{\s*return app\(\)->environment\(self::ENVIRONMENTS\);\s*\}/', $this->code($marks.'TeacherStudentMarkAvailability.php'));
+        $this->assertMatchesRegularExpression('/function assertAvailable\(\): void\s*\{\s*if \(! self::isAvailable\(\)\) \{\s*throw new TeacherStudentMarksUnavailableException;/', $this->code($marks.'TeacherStudentMarkAvailability.php'));
+
+        $callers = fn (string $needle) => array_values(array_map(fn (string $f) => basename($f), array_filter($this->appFiles(), fn (string $f) => str_contains($this->code($f), $needle))));
+        $this->assertEqualsCanonicalizing(['TeacherStudentMarkAccess.php', 'TeacherStudentMarkGuard.php'], $callers('->scopeFor('), 'the block-free scopeFor() is reached only after the block');
+        $guardBuilders = array_values(array_map(fn (string $f) => basename($f), array_filter($this->appFiles(), fn (string $f) => str_contains($this->code($f), 'TeacherStudentMarkAccess') && str_contains($this->code($f), '->guard('))));
+        $this->assertSame(['TeacherStudentMarkController.php'], $guardBuilders, 'only the teacher controller builds a teacher write guard');
+        $this->assertEqualsCanonicalizing(['TeacherExaminationPaperDiscoveryService.php', 'TeacherStudentMarkReadService.php'], $callers('$this->access->scope('), 'every teacher read starts at the blocked scope()');
+    }
+
+    /** RES.5 (ADR 0068 §27): every StudentMark entry point refuses outside local/testing first (RES-L1), not by process alone. */
+    #[Test]
+    public function every_marks_entry_point_is_development_only_first(): void
+    {
+        $marks = app_path('Domain/Examinations/Application/Marks/');
+        $this->assertMatchesRegularExpression('/function isAvailable\(\): bool\s*\{\s*return app\(\)->environment\(self::ENVIRONMENTS\);\s*\}/', $this->code($marks.'StudentMarkAvailability.php'));
+        $this->assertStringContainsString("public const array ENVIRONMENTS = ['local', 'testing'];", $this->code($marks.'StudentMarkAvailability.php'));
+        foreach (['config(', 'env(', 'getenv', '$_ENV', '$_SERVER'] as $forbidden) {
+            $this->assertStringNotContainsString($forbidden, $this->code($marks.'StudentMarkAvailability.php'));
+        }
+        foreach ([
+            'StudentMarkService.php' => 'record', 'StudentMarkReadService.php' => 'grid', 'StudentMarkLockService.php' => 'lock',
+            'StudentMarkCorrectionService.php' => 'request|approve|reject',
+        ] as $file => $methods) {
+            foreach (explode('|', $methods) as $method) {
+                $this->assertMatchesRegularExpression('/public function '.$method.'\([^{]*\{\s*StudentMarkAvailability::assertAvailable\(\);/', $this->code($marks.$file), "{$file}::{$method}() must refuse outside local/testing first");
+            }
         }
     }
 }

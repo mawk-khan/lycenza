@@ -154,7 +154,10 @@ re-tier triggers apply: attaching an invigilator/teacher identity, a
 Student roster snapshot, or `StudentMark` would each elevate the
 affected entity to Sensitive, requiring the re-tier in the same branch
 plus the children's-data **[LEGAL REVIEW REQUIRED]** gate for the latter
-two.
+two. *(Dated note, 2026-10-07: superseded in part by ADR 0068. Student
+eligibility for a Paper is the Students-owned P3 seam (RES.1), not the
+roster seam. StudentMark lives in its own Highly Sensitive tables (RES.2+),
+so the Paper itself stays Confidential.)*
 
 ### 10. Capability root: `examinations.papers.*`, the reserved sibling
 

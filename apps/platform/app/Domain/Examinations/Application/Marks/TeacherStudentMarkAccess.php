@@ -45,6 +45,7 @@ class TeacherStudentMarkAccess
     public function scope(User $actor, School $school): TeacherStudentMarkScope
     {
         TeacherStudentMarkAvailability::assertAvailable();
+        StudentMarkAvailability::assertAvailable();
         $this->authorizeCapabilityFor($actor, self::CAPABILITY, $school);
 
         $acting = $this->identities->resolve($actor, $school);
@@ -60,6 +61,8 @@ class TeacherStudentMarkAccess
     /** For writes: the guard StudentMarkService::record() runs inside its transaction. */
     public function guard(User $actor): TeacherStudentMarkGuard
     {
+        TeacherStudentMarkAvailability::assertAvailable();
+
         return new TeacherStudentMarkGuard($actor, $this, $this->identities, $this->ownership);
     }
 }

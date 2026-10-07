@@ -11,6 +11,10 @@
   PRODUCTION READY EXCEPT DOCUMENTED EXTERNAL GATES** — TCH-L1 (ADR 0058
   E33) and E21. **Owner decision (§40): no production `teacher` role grants
   while TCH-L1 / E33 is OPEN.** **LMS Submission remains cancelled and outside TCH.**
+  **Amended 2026-10-07:** E33 APPROVED WITH CONDITIONS (§42); controls built
+  (§43) and verified (§44), §40 superseded in part by §42; TCH-E elective
+  ownership (§45); RES.4 teacher marks as a development-only consumer
+  (§46).
 - Date: 2026-09-30
 - Programme: **TCH — Teacher Identity & Ownership-Based Authorization**
   (`docs/roadmap/MASTER-ROADMAP.md`, "Post-foundation product programmes").
