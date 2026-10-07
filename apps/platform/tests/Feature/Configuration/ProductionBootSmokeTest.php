@@ -95,6 +95,9 @@ class ProductionBootSmokeTest extends TestCase
             'DOMAIN_FAKES_ENABLED' => 'false',
             'DOMAIN_ALLOW_DEVELOPMENT_HOSTS' => 'false',
             'SESSION_HANDOFF_STORE' => 'redis',
+            // E33 / TCH-L1 (ADR 0063 section 44): the development-only teacher
+            // Attendance bearer API is off -- phpunit.xml turns it on for the suite.
+            'TEACHER_ATTENDANCE_API_DEVELOPMENT_ENABLED' => 'false',
             // ADR 0055 (Phase 0O.9A): email explicitly disabled (a complete,
             // safe mode) -- phpunit.xml turns the fake provider and fake
             // event feed on for the suite.
@@ -133,6 +136,8 @@ class ProductionBootSmokeTest extends TestCase
             ['AI_GATEWAY_CONTEXT_SIGNING_KEY' => 'dev-local-only-context-signing-key-change-me'],
             ['AI_GATEWAY_SERVICE_TOKEN' => 'dev-local-only-token'],
             ['AI_GATEWAY_BASE_URL' => 'http://gateway.internal:8100'],
+            // E33 / TCH-L1 (ADR 0063 section 44): the flag alone can never open the teacher bearer API in production.
+            ['TEACHER_ATTENDANCE_API_DEVELOPMENT_ENABLED' => 'true'],
         ] as $unsafe) {
             foreach (['about', 'route:list', 'schedule:list'] as $command) {
                 $process = $this->runArtisan([$command], $this->productionEnv($unsafe));

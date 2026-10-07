@@ -112,6 +112,13 @@ final class ProductionConfigurationGuard
             $violations[] = 'ai_legacy_service_token_configured';
         }
 
+        // E33 / TCH-L1 (ADR 0063 section 44): the owned teacher Attendance bearer
+        // routes carry no MFA and are development only; the middleware already
+        // refuses them outside local/testing, and production refuses the flag.
+        if ((bool) $this->config->get('attendance.teacher_api_development_enabled')) {
+            $violations[] = 'teacher_attendance_api_development_enabled';
+        }
+
         return [...$violations, ...$this->serviceAuthViolations(), ...$this->infrastructureViolations(), ...$this->hostViolations(), ...$this->emailViolations(), ...$this->accountRecoveryViolations()];
     }
 

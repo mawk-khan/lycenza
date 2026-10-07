@@ -10,8 +10,11 @@ use App\Domain\TeachingAssignments\Application\TeachingAssignmentService;
 use App\Models\SchoolAuditEvent;
 use App\Models\User;
 use App\Models\UserMfaFactor;
+use App\Support\Auth\Mfa\MfaAdminResetService;
+use Illuminate\Support\Facades\Hash;
 use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
+use PragmaRX\Google2FA\Google2FA;
 use Tests\Concerns\CapturesStructuredLogs;
 use Tests\Concerns\CreatesTeacherAttendanceFixtures;
 use Tests\Concerns\CreatesTeacherDeliveryFixtures;
@@ -218,6 +221,14 @@ class TeacherAttendanceProductionControlsTest extends TestCase
             'timetable_entry_id' => $w['entry']->id, 'attendance_date' => '2026-09-14', 'records' => $this->allPresent($w['studentsA']),
         ])->assertForbidden()->assertJsonPath('error.code', 'TEACHER_ATTENDANCE_API_UNAVAILABLE');
 
+        // Production with the flag off: refused.
+        $this->app['env'] = 'production';
+        try {
+            $refused();
+        } finally {
+            $this->app['env'] = 'testing';
+        }
+
         // The flag on in a production environment: still refused (double guard).
         config(['attendance.teacher_api_development_enabled' => true]);
         $this->app['env'] = 'production';
@@ -298,5 +309,77 @@ class TeacherAttendanceProductionControlsTest extends TestCase
     private function bogusUuid(): string
     {
         return '01890000-0000-7000-8000-000000000000';
+    }
+
+    /** The real two-stage sign-in (password, then a TOTP or recovery code) -- the only way assurance is earned. */
+    private function signIn(array $w, User $user, string $code): void
+    {
+        $user->forceFill(['password' => Hash::make('teacher-password-1')])->save();
+        auth()->logout();
+        $this->flushSession();
+        $this->post('/login', ['email' => $user->email, 'password' => 'teacher-password-1'])->assertRedirect('/login/mfa');
+        $this->post('/login/mfa', ['code' => $code])->assertRedirect('/app');
+        $this->withHeader('X-School-Id', $w['school']->id);
+    }
+
+    #[Test]
+    public function anonymous_and_expired_assurance_are_refused(): void
+    {
+        [$w, $user, $mine] = $this->ownedWorld();
+
+        $this->withHeader('X-School-Id', $w['school']->id)->get('/app/my-attendance')->assertRedirect('/login');
+        $this->withHeader('X-School-Id', $w['school']->id)->get("/app/my-attendance/{$mine->id}")->assertRedirect('/login');
+
+        $this->enrollActiveMfaFactor($user);
+        $this->travel(-((int) config('mfa.assurance_window_minutes') + 1))->minutes();
+        $stale = now()->toIso8601String();
+        $this->travelBack();
+        $this->actingAs($user)->withSession(['mfa_verified_at' => $stale])->withHeader('X-School-Id', $w['school']->id)
+            ->get("/app/my-attendance/{$mine->id}")->assertUnauthorized();
+        $this->assertSame(0, $this->readAuditCount($w));
+    }
+
+    #[Test]
+    public function an_mfa_reset_needs_a_new_sign_in_and_never_bypasses_ownership(): void
+    {
+        [$w, $user, $mine] = $this->ownedWorld();
+        $theirs = $this->adminRegister($w, $w['entryB'], self::DATE);
+        $this->travel(-10)->minutes();
+        $this->enrollActiveMfaFactor($user);
+        $this->travelBack();
+
+        // Assurance earned a few minutes ago with the old factor -- still inside the window.
+        $earlier = now()->subMinutes(5)->toIso8601String();
+        $this->actingAs($user)->withSession(['mfa_verified_at' => $earlier])->withHeader('X-School-Id', $w['school']->id)
+            ->get("/app/my-attendance/{$mine->id}")->assertOk();
+
+        // An administrative reset revokes the factor: refused at once (not enrolled).
+        app(MfaAdminResetService::class)->reset($this->createUser(), $user);
+        $this->get("/app/my-attendance/{$mine->id}")->assertForbidden();
+
+        // Re-enrolling a new factor does not revive the old assurance: a new sign-in is required.
+        $secret = app(Google2FA::class)->generateSecretKey();
+        $this->enrollActiveMfaFactor($user, $secret);
+        $this->get("/app/my-attendance/{$mine->id}")->assertUnauthorized()
+            ->assertInertia(fn (AssertableInertia $p) => $p->component('App/Platform/MfaRequired')->where('code', 'mfa_step_up_required'));
+
+        // After a real sign-in with the new factor: the owned register only; ownership still decides.
+        $this->signIn($w, $user, $this->currentTotpCodeFor($secret));
+        $this->get("/app/my-attendance/{$mine->id}")->assertOk();
+        $this->get("/app/my-attendance/{$theirs->id}")->assertNotFound();
+    }
+
+    #[Test]
+    public function a_recovery_code_sign_in_is_ordinary_assurance_and_still_needs_ownership(): void
+    {
+        [$w, , $mine] = $this->ownedWorld();
+        [$unrelated] = $this->teacher($w);
+        $this->enrollActiveMfaFactor($unrelated);
+        [$code] = $this->issueRecoveryCodes($unrelated, 1);
+
+        $this->signIn($w, $unrelated, $code);
+        $this->get('/app/my-attendance')->assertOk()->assertInertia(fn (AssertableInertia $p) => $p->has('sessions.data', 0));
+        $this->get("/app/my-attendance/{$mine->id}")->assertNotFound();
+        $this->assertCount(0, $this->audits($w, TeacherAttendanceReadAudit::SESSION_VIEWED));
     }
 }

@@ -231,6 +231,17 @@ determination entry below.)*:
   - All nine E33 controls PASS in the repository. Production `teacher`
     grants: production-candidate re-verification, E21, platform checklist.
   - Regression cadence: round 1/5 after the RES.3 checkpoint.
+- **TCH Attendance production-candidate verification** (ADR 0063 §44,
+  2026-10-07): **E33 TECHNICALLY READY FOR PRODUCTION-CANDIDATE SIGN-OFF**.
+  - All nine controls PASS from the call chain.
+  - Three narrow corrections:
+    - MFA assurance bound to the current factor (a reset forces a new
+      sign-in; ADR 0037 amendment);
+    - production refuses the dev teacher-API flag;
+    - raw-SQL Attendance RLS proof.
+  - Not go-live: deployment re-verification, E21 and the other O1 rows
+    remain; production `teacher` grants stay process-gated.
+  - Regression cadence: round 2/5.
   - No fixed expiry; re-review triggers recorded.
   - **No effect on teacher StudentMark** (RES-L2, RES-L0 teacher re-review
     unresolved; RES.4 NOT AUTHORISED).

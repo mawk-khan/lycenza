@@ -66,6 +66,27 @@ class MfaMiddlewareTest extends TestCase
         $response->assertJsonPath('error.code', 'mfa_step_up_required');
     }
 
+    /** E33 / TCH-L1 (ADR 0063 section 44): assurance belongs to the factor it was earned with. */
+    #[Test]
+    public function assurance_earned_before_the_current_factor_was_activated_is_not_assurance(): void
+    {
+        $user = $this->authorizedUser();
+        $this->travel(-10)->minutes();
+        $old = $this->enrollActiveMfaFactor($user);
+        $this->travelBack();
+        $this->actingAs($user);
+        session(['mfa_verified_at' => now()->subMinutes(5)->toIso8601String()]);
+        $this->get('/internal/mfa-demo/ping')->assertOk();
+
+        // The factor is replaced (a reset, then re-enrolment): the earlier sign-in no longer counts.
+        $old->forceFill(['status' => 'revoked'])->save();
+        $this->enrollActiveMfaFactor($user)->forceFill(['confirmed_at' => now()])->save();
+        $this->get('/internal/mfa-demo/ping')->assertStatus(401)->assertJsonPath('error.code', 'mfa_step_up_required');
+
+        session(['mfa_verified_at' => now()->toIso8601String()]);
+        $this->get('/internal/mfa-demo/ping')->assertOk();
+    }
+
     #[Test]
     public function an_enrolled_user_with_valid_assurance_is_allowed(): void
     {

@@ -270,3 +270,13 @@ attack surface gets its own bound.
   ADR 0063 (TCH) added teacher/class-scoped ownership. ADR 0068 §9.2 uses
   both for StudentMark: `mfa` on every marks route, fresh re-verification
   for the lock and correction approval; teacher marks entry is RES.4.
+
+  *Amendment (E33 / TCH-L1 verification, 2026-10-07; ADR 0063 §44):*
+  `MfaChallengeService::hasValidAssurance()` now also requires the session's
+  assurance to be no older than the user's **current** active factor
+  (`confirmed_at`, else `created_at`). Before, an administrative MFA reset
+  revoked the factor, but a live session that re-enrolled a new factor
+  inside the window could reuse its pre-reset `mfa_verified_at`. The user now
+  signs in again with the new factor. This is the one seam behind `mfa`,
+  `mfa-page` and every in-controller assurance check, so the rule applies to
+  all of them; the window, the challenge and the reset flow are unchanged.

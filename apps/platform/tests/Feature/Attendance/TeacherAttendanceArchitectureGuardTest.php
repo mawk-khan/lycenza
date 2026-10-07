@@ -147,4 +147,40 @@ class TeacherAttendanceArchitectureGuardTest extends TestCase
         $this->assertSame(['attendance.teacher', 'curriculum.delivery.teacher', 'lms.assignments.teacher', 'lms.content.teacher'], $keys,
             'Attendance authority never brings StudentMark authority (E33 determination section 10; RES.4 NOT AUTHORISED).');
     }
+
+    #[Test]
+    public function the_complete_teacher_attendance_surface_is_exactly_the_pinned_eleven_routes(): void
+    {
+        // Found by controller and by capability, not only by URI prefix, so no alternate route escapes the gates.
+        $surface = [];
+        foreach (Route::getRoutes() as $route) {
+            $action = (string) $route->getActionName();
+            $middleware = $route->gatherMiddleware();
+            if (str_contains($action, 'MyAttendanceController') || str_contains($action, 'TeacherAttendanceController') || in_array('capability:attendance.teacher', $middleware, true)) {
+                $surface[] = implode('|', array_diff($route->methods(), ['HEAD'])).' '.$route->uri();
+                $this->assertContains('capability:attendance.teacher', $middleware, $route->uri());
+                $this->assertTrue(
+                    str_starts_with($route->uri(), 'app/my-attendance') ? in_array('mfa-page', $middleware, true) : in_array('teacher-attendance-api', $middleware, true),
+                    $route->uri().' escapes the MFA / development-only policy.',
+                );
+            }
+        }
+        sort($surface);
+        $this->assertSame([
+            'GET api/v1/schools/{school}/my/attendance-sessions',
+            'GET api/v1/schools/{school}/my/attendance-sessions/roster-preview',
+            'GET api/v1/schools/{school}/my/attendance-sessions/scheduled-classes',
+            'GET api/v1/schools/{school}/my/attendance-sessions/{attendanceSession}',
+            'GET app/my-attendance',
+            'GET app/my-attendance/take',
+            'GET app/my-attendance/{attendanceSession}',
+            'POST api/v1/schools/{school}/my/attendance-records/{attendanceRecord}/correct',
+            'POST api/v1/schools/{school}/my/attendance-sessions',
+            'POST app/my-attendance',
+            'POST app/my-attendance/records/{attendanceRecord}/correct',
+        ], $surface);
+
+        // Production refuses to boot with the development flag on (a third layer behind the middleware's double guard).
+        $this->assertStringContainsString("'teacher_attendance_api_development_enabled'", (string) file_get_contents(app_path('Support/Configuration/ProductionConfigurationGuard.php')));
+    }
 }

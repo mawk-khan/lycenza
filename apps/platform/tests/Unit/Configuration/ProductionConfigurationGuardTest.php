@@ -175,6 +175,9 @@ class ProductionConfigurationGuardTest extends TestCase
         $this->assertSame([], $violations(['session.domain' => null]));
         $this->assertSame(['domain_development_hosts_enabled'], $violations(['domains.allow_development_hosts' => true]));
         $this->assertSame(['domain_fakes_enabled'], $violations(['domains.fakes' => true]));
+        // E33 / TCH-L1 (ADR 0063 section 44): the development-only teacher Attendance bearer API.
+        $this->assertSame(['teacher_attendance_api_development_enabled'], $violations(['attendance.teacher_api_development_enabled' => true]));
+        $this->assertSame([], $violations(['attendance.teacher_api_development_enabled' => false]));
         $this->assertSame(['domain_host_list_invalid'], $violations(['domains.platform_aliases' => ['*.example.org']]));
         $this->assertSame(['domain_host_list_invalid'], $violations(['domains.internal_hosts' => ['web']]), 'single-label names are local-only');
         $this->assertSame(['domain_host_list_invalid'], $violations(['domains.reserved_suffixes' => ['Example.ORG']]), 'lists are written canonically');

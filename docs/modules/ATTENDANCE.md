@@ -606,6 +606,7 @@ register save · substitution modelling · a replace-register operation.
 | TCH.4 dependency direction, no teacher_id authority, route gating, OpenAPI | `Tests\Feature\Attendance\TeacherAttendanceArchitectureGuardTest` |
 | TCH.4 "My Attendance" pages and capability-driven navigation | `Tests\Feature\App\MyAttendanceUiTest` |
 | E33 production controls: MFA, read audit, development-only bearer API, revocation, per-School authority, no log leak | `Tests\Feature\Attendance\TeacherAttendanceProductionControlsTest` |
+| E33 control 3 at the raw-SQL layer (forced RLS, no cross-School read/rewrite/insert) | `Tests\Feature\Postgres\AttendanceRlsIsolationTest` |
 
 ## 18. Owned teacher Attendance (TCH.4, ADR 0063 §32)
 
@@ -636,6 +637,13 @@ The production controls are in place (ADR 0063 §43):
   refused or concealed read records nothing.
 - Production `teacher` grants remain subject to E21 and the ADR 0058
   platform checklist (ADR 0063 §43.4).
+- **Verified (ADR 0063 §44):** all nine E33 controls PASS from the call chain
+  ("technically ready for production-candidate sign-off", not go-live).
+  - MFA assurance is bound to the current factor, so an MFA reset needs a new
+    sign-in.
+  - Production refuses to boot with `TEACHER_ATTENDANCE_API_DEVELOPMENT_ENABLED`.
+  - `AttendanceRlsIsolationTest` proves raw-SQL tenant isolation of registers
+    and records.
 
 **Two tiers.**
 

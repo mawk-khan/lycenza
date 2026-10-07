@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\UserMfaFactor;
 use App\Support\Auth\AssuranceFreshness;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use PragmaRX\Google2FA\Google2FA;
 
@@ -110,10 +111,23 @@ class MfaChallengeService
 
     public function hasValidAssurance(Request $request): bool
     {
-        return AssuranceFreshness::isFresh(
-            $request->session()->get('mfa_verified_at'),
-            (int) config('mfa.assurance_window_minutes'),
-        );
+        $verifiedAt = $request->session()->get('mfa_verified_at');
+
+        if (! AssuranceFreshness::isFresh($verifiedAt, (int) config('mfa.assurance_window_minutes'))) {
+            return false;
+        }
+
+        // E33 / TCH-L1 (ADR 0063 section 44): assurance belongs to the factor it
+        // was earned with. A session verified BEFORE the user's current factor
+        // was confirmed -- e.g. before an administrative MFA reset and a
+        // re-enrolment -- is not assurance for the new factor: the user signs
+        // in again with it. Compared at whole seconds (the stored precision).
+        $user = $request->user();
+        $factor = $user instanceof User ? $this->activeFactorFor($user) : null;
+        // A factor cannot be activated before it exists: created_at bounds a factor with no confirmed_at.
+        $activatedAt = $factor === null ? null : ($factor->confirmed_at ?? $factor->created_at);
+
+        return $activatedAt === null || $activatedAt->getTimestamp() <= Carbon::parse((string) $verifiedAt)->getTimestamp();
     }
 
     public function clearAssurance(Request $request): void

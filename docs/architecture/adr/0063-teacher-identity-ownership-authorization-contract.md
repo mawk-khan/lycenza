@@ -3004,3 +3004,129 @@ or equivalent context".
 - Updated deliberately: `MyAttendanceUiTest` (teachers now have MFA) and
   `DemoDataBuilderTest` (demo accounts carry no factor, so the demo teacher
   sees `MfaRequired`).
+
+## 44. E33 production-candidate verification (2026-10-07)
+
+**Verification slice with three narrow corrections.** It re-checked the nine
+determination §9 controls against the code at `bdf1afa`, from the call chain
+rather than the route list, and fixed what contradicted an approved
+condition. No legal outcome, RES state or teacher function changed. **This is
+not production approval or go-live.**
+
+### 44.1 Corrections
+1. **MFA reset could be bypassed by a live session (control 5; determination
+   §4 "MFA recovery and reset must be secured").** An administrative reset
+   (`MfaAdminResetService`) revoked the factor, but the session kept its
+   `mfa_verified_at`. Re-enrolling inside the 60-minute window satisfied
+   `mfa`/`mfa-page` without a sign-in with the new factor.
+   `MfaChallengeService::hasValidAssurance()` now rejects assurance older
+   than the current factor's activation (ADR 0037 amendment). It is one
+   shared seam, so the rule holds for every MFA-gated surface.
+2. **Production refuses the development API flag (control 5, defence in
+   depth).** `ProductionConfigurationGuard` reports
+   `teacher_attendance_api_development_enabled`, so a production process with
+   `TEACHER_ATTENDANCE_API_DEVELOPMENT_ENABLED=true` does not boot. This is a
+   third layer behind the middleware's flag-and-environment double guard.
+   It is proven by a real production-environment boot
+   (`ProductionBootSmokeTest`).
+3. **No raw-SQL proof existed for the Attendance tables (control 3).**
+   `AttendanceRlsIsolationTest` now proves `attendance_sessions` and
+   `attendance_records` are forced-RLS. They are invisible to another School
+   and to a session without tenant context, and are neither rewritable nor
+   insertable across Schools.
+
+### 44.2 Route inventory (unchanged since `bdf1afa`)
+- **Web (5):** `GET app/my-attendance`, `GET …/take`, `GET …/{session}`,
+  `POST app/my-attendance`, `POST …/records/{record}/correct`.
+- **API (6):** `GET …/my/attendance-sessions`, `…/scheduled-classes`,
+  `…/roster-preview`, `…/{session}`, `POST …/my/attendance-sessions`,
+  `…/my/attendance-records/{record}/correct`.
+- **Guard.** `TeacherAttendanceArchitectureGuardTest` pins the full set and
+  now finds routes by controller and by `capability:attendance.teacher`, not
+  only by URI. No route reaches either controller or carries the capability
+  outside these eleven.
+
+### 44.3 Call-chain evidence
+- **Reads.** `MyAttendanceController` / `TeacherAttendanceController` call
+  `TeacherAttendanceAccess::scope()`, which applies the capability, then
+  `ActingEmployeeResolver::resolve()` (operational School, active
+  membership, enabled User, linked active Employee, exactly one eligible
+  employment today), then `TeachingOwnership::periods()`.
+  `TeacherAttendanceScope::constrain()` / `ownsOn()` filter in the query on
+  the register's `attendance_date`. The read audit runs after that.
+- **Writes.** `TeacherAttendanceAccess::guard()` passes a
+  `TeacherAttendanceGuard` into the Attendance services' own transaction:
+  capability, then `ActingEmployeeResolver::hold()` (`FOR SHARE`), then
+  visibility (404), then `TeachingOwnership::hold()` on the date (`FOR
+  SHARE`). The write audit is part of the same transaction.
+- **Middleware.** Route middleware is only the outer layer. Ownership never
+  depends on it, and MFA never replaces it (tests).
+
+### 44.4 Production configuration contract
+| Item | Production value / rule |
+|---|---|
+| Teacher Attendance surface | `/app/my-attendance` only, for signed-in staff through the ordinary School context |
+| MFA | Mandatory on every route (`mfa-page`). Teachers must enroll a factor; assurance comes only from a real sign-in with it |
+| Teacher bearer API | Off. `TEACHER_ATTENDANCE_API_DEVELOPMENT_ENABLED` unset/false; `true` refuses boot (`ProductionConfigurationGuard`); outside `local`/`testing` the routes answer 403 anyway |
+| `APP_ENV` | `production` (environment separation is itself a guard violation code) |
+| Dev / test mechanisms | `X-School-Id` header (`DevOnlySchoolHeaderResolver`, double-guarded); demo data (`DemoEnvironmentGuard`: local DDEV / testing only); MFA and idempotency demo routes (registered only in local/testing). None is reachable in production |
+| Demo / test MFA shortcut | None. No factor or TOTP secret is seeded; the test fixtures are test-only code |
+| Audit | Always on (`AuditRecorder`, append-only `school_audit_events`); no switch exists |
+
+No secret or environment-specific value is added to the repository.
+
+### 44.5 Nine controls — verified
+| E33 control | Status | Evidence |
+|---|---|---|
+| Individual authentication | **PASS** | Anonymous requests redirect to sign-in. Every request resolves one signed-in User; there is no shared or generic account type. Production has no test-authentication path (§44.4) |
+| Authoritative ownership | **PASS** | §44.3 call chain; per-register date semantics; MFA-qualified unrelated teacher refused (tests) |
+| School isolation | **PASS** | `AttendanceRlsIsolationTest` (raw SQL); per-School capability and ActingEmployee; multi-School identity test; no global teacher fallback |
+| Deny by default | **PASS** | Each missing predicate is refused: capability, Employee, assignment, School, register scope, MFA. 404 is identical for unowned, other-School and unknown |
+| MFA / equivalent | **PASS** | `mfa-page` on all 5 web routes. Not-enrolled, expired and reset-then-re-enrolled sessions are refused. A recovery-code sign-in is ordinary assurance and still needs ownership. The bearer API is refused in production (middleware, configuration guard, boot test) |
+| Audit | **PASS** | Read events (§43.3) with identifiers only and none on a refused read; write events in the write transaction; append-only, so no teacher path can alter audit |
+| Assignment revocation | **PASS** | End, revocation, suspension, unlink, archive and employment end refuse the next write. Inclusive boundary dates. History kept (`TeacherAttendanceAccessTest`, `TeacherAttendanceConcurrencyTest`, production-controls tests) |
+| Exceptional-access isolation | **PASS** | No teacher override and no MFA or ownership bypass. Tier 1 `attendance.view`/`.manage` is a separate administrative path (school_admin, principal). Platform elevation is refused on School routes (rule 83) |
+| Attendance-only scope | **PASS** | `attendance.teacher` reaches only the owned Attendance surface. The `teacher` role has exactly four owned keys: no `examinations.marks.*`, no Finance, no Tier 1, no `students.view`, no export or analytics (guard-pinned) |
+
+**Result: E33 TECHNICALLY READY FOR PRODUCTION-CANDIDATE SIGN-OFF.**
+Repository evidence is complete. What remains for E33 is the deployment
+re-verification of these controls on the actual production candidate.
+
+### 44.6 What still prevents production
+E33 readiness is not platform production readiness. O1 (ADR 0058) still has
+every other "Blocks O1" row open:
+- **Governance:** E02 (final regression and qualification of the closeout
+  commit), E03 (`main` protection), E14 (signing custody), E29 (evidence
+  hygiene).
+- **Deployment:** E05, E07, E09–E12, E15, E19, E20, E22, E23.
+- **Provider:** E08 (secret store), E13 (registry).
+- **Decision:** E16 (vulnerability exceptions).
+- **Legal:**
+  - E17, E18 (email);
+  - **E21** (retention, including TCH history, §39.5);
+  - E30–E32 (fees);
+  - E34 (library fines).
+
+None is changed here.
+
+### 44.7 The future enablement step (not taken)
+- The `teacher` system role is seeded everywhere with its four owned keys.
+  There is no feature flag, environment-conditional seeding or role split
+  (§40).
+- Production enablement for a person is a **School staff-role grant**:
+  Settings → Staff accounts (ADR 0059), by an issuer holding
+  `school.members.manage` + `school.roles.manage` and every capability of the
+  role (no-escalation; `school_admin` holds the four `*.teacher` keys), with
+  a fresh MFA code. It is audited and revocable.
+- Nothing grants it automatically: production seeds no users, and demo data
+  refuses to build outside local DDEV / testing.
+- After the grant, the teacher still needs an enrolled factor, a sign-in with
+  it, a linked eligible Employee and a dated TeachingAssignment before
+  anything is visible.
+- The grant stays **process-gated** (§40, §42.5): no production `teacher`
+  grant until the production-candidate re-verification, E21 and the platform
+  checklist allow it, under a rule-16 go-live authorization.
+
+### 44.8 No effect on StudentMark
+RES-L2 (E37) and the RES-L0 teacher re-review (E35) are unresolved. **RES.4
+remains NOT AUTHORISED.**
