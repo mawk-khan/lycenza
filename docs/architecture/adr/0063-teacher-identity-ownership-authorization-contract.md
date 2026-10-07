@@ -2795,3 +2795,13 @@ code enforces it.
 - **E21** is OPEN and platform-wide. It covers the §39.5 questions and ADR
   0042 items 4–6. No retention duration, purge schedule, erasure policy,
   tenant-deletion retention or audit duration is invented.
+
+## 41. Note — TCH-L1 review request drafted (2026-10-07)
+
+**Docs only; E33 / TCH-L1 stays OPEN and §40 is unchanged.** The request that
+asks the authorized reviewer to complete §39.4 is drafted as
+`docs/security/TCH-L1-TEACHER-ATTENDANCE-REVIEW-REQUEST.md` (not sent). It is
+sent alongside the teacher StudentMark requests (ADR 0068 §22) and asks for a
+separate outcome: a TCH-L1 answer decides teacher Attendance only, never
+teacher marks. ADR 0068 §22.2 records how teacher marks would use this ADR's
+ownership seams; no TCH code, role or capability changes.

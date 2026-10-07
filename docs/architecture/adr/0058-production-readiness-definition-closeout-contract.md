@@ -1325,3 +1325,22 @@ Lead Privacy Counsel & DPO, 7 October 2026
   unchanged.
 - This is not production clearance. Any re-review trigger the determination
   lists requires a new determination first.
+
+## Note — RES.4 readiness: teacher-processing requests drafted (2026-10-07)
+
+**No legal determination. No row status changes.** ADR 0068 §22 records the
+readiness analysis for teacher StudentMark entry (RES.4). Three requests are
+drafted for the owner to send; none is sent or answered:
+- **E37 (RES-L2):** `docs/security/RES-L2-TEACHER-STUDENTMARK-REVIEW-REQUEST.md`.
+  Still LEGAL_REVIEW_REQUIRED; still blocks RES.4 development and production.
+- **E35 (RES-L0) re-review for teacher processing:**
+  `docs/security/RES-L0-TEACHER-STUDENTMARK-REVALIDATION-REQUEST.md`. E35's
+  7 October 2026 outcome stands for administrative staff only; the teacher
+  extension is a re-review trigger and is undetermined.
+- **E33 (TCH-L1):** `docs/security/TCH-L1-TEACHER-ATTENDANCE-REVIEW-REQUEST.md`,
+  completing ADR 0063 §39.4. Still OPEN; still a production gate (ADR 0063
+  §40: no production `teacher` grants).
+- **Independence.** Each request asks for a separate recorded outcome per
+  register item. RES-L2 does not answer E33, and E33 does not answer RES-L2.
+- **RES.4 remains NOT AUTHORISED** (ADR 0068 §22.9). Elective teacher entry
+  is also technically blocked (no elective teaching-ownership fact).

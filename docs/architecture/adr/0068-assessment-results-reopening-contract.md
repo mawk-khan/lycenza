@@ -9,7 +9,9 @@
   development only; production blocked by RES-L1. **RES.3 implemented
   (2026-10-07, §21):** the one-way per-paper marks lock and append-only
   maker/checker corrections, development only; production blocked by RES-L1.
-  §7.2's "insert-only" is amended in §21.3.
+  §7.2's "insert-only" is amended in §21.3. **RES.4 readiness (2026-10-07,
+  §22; docs only):** the teacher-processing requests are drafted, not sent;
+  **RES.4 remains NOT AUTHORISED.**
 - Date: 2026-10-06
 - Programme: **RES — Assessment & results** (`MASTER-ROADMAP.md`,
   "Post-foundation product programmes", order 5).
@@ -1037,3 +1039,152 @@ rather than silently re-derived.
 | RES.2, RES.3 | **Complete, development only**; production: RES-L1 |
 | RES.4 (teacher entry) | **Not authorised:** RES-L2; ADR 0063 §40 / E33; RES-L0 re-review (teacher processing is a §19.4 trigger) |
 | Results, report cards, transcripts, Student / Guardian access | Not sequenced: RES-L4 – RES-L7 and RES-L0 re-review |
+
+## 22. RES.4 readiness — teacher StudentMark gates (2026-10-07)
+
+**Documentation only. RES.4 remains NOT AUTHORISED.** This section records
+the gate analysis, the ownership audit and the contract a future RES.4 would
+have to meet. It changes no code, capability, role, route or test, and no
+legal-register status: no authority response exists. §1–§21 are unchanged.
+
+### 22.1 The three gates, as recorded
+| Gate | Register | What it is | State |
+|---|---|---|---|
+| **RES-L2** | E37 | May assigned teachers process StudentMark? | **LEGAL_REVIEW_REQUIRED** — blocks RES.4 development and production. Request drafted: `docs/security/RES-L2-TEACHER-STUDENTMARK-REVIEW-REQUEST.md` (not sent) |
+| **RES-L0 re-review** | E35 | The 7 October 2026 determination covers administrative staff only (its §6); teacher processing is a §5 / §19.4 trigger | **Re-review required** before RES.4. Request drafted: `docs/security/RES-L0-TEACHER-STUDENTMARK-REVALIDATION-REQUEST.md` (not sent) |
+| **E33 / TCH-L1** | E33 | Teacher **Attendance** in production (ADR 0063 §26, §39); by ADR 0063 §40, no production `teacher` role grant while open | **OPEN** — production only. Request drafted: `docs/security/TCH-L1-TEACHER-ATTENDANCE-REVIEW-REQUEST.md` (not sent) |
+
+**E33 is independent of RES-L2.** E33 asks about identifiable attendance;
+RES-L2 about marks. Neither answer decides the other, and the requests ask
+for separate recorded outcomes. E33 concerns RES.4 only through ADR 0063 §40:
+the single production `teacher` role bundles `attendance.teacher`, so no
+teacher of any kind is granted in production while E33 is open. On the
+existing record, E33 **does not block development** (E33 row; RES-L0
+determination §6: "for production, ADR 0063 §40 / E33"); the RES-L2 request
+asks the authority to confirm this.
+
+### 22.2 What exists today (ownership audit, `1724fa4`)
+- **`teaching_assignments`** (ADR 0063 §9): one row = Employee × Section ×
+  **required** SubjectOffering × an inclusive School-local date range
+  (`starts_on`, nullable `ends_on`); dated and historical (an ended row keeps
+  its final `ends_on`, immutable by trigger). **No kind column** (no
+  lead / co-teacher / assistant / cover / substitute). Overlap is refused per
+  Employee only (service advisory lock), so several Employees may hold the
+  same Section × Offering at once. Elective Offerings are refused
+  (`RequiredOfferingOnlyException`).
+- **`TeachingOwnership::hold(School, employeeId, sectionId,
+  subjectOfferingId, date)`**: as-of a stated date, `FOR SHARE`, inside the
+  caller's transaction, true only for exactly one covering row. It does not
+  re-read the Offering. Consumers: Attendance, Curriculum Delivery, LMS.
+  Examinations has none, and `TeachingAssignmentArchitectureGuardTest` forbids
+  it until RES.4 amends that guard deliberately.
+- **`ActingEmployeeResolver::hold(User, School, asOf)`**: School operational →
+  active membership → enabled User → linked active Employee → exactly one
+  eligible employment on `asOf`, `FOR SHARE`; every failure is the same 403.
+- **P3** already returns the Student's placement `sectionId` and
+  `studentEnrollmentId` on the paper's date; StudentMark stores the placement.
+- **ExaminationPaper is Offering-wide** (no Section, no teacher), so one paper
+  spans several Sections: teacher authority must be decided **per Student**
+  (R12), never for the paper.
+- **No code yet joins** a Student's P3 placement Section with
+  `TeachingOwnership::hold()`.
+- **Roles:** `teacher` holds exactly `curriculum.delivery.teacher`,
+  `attendance.teacher`, `lms.content.teacher`, `lms.assignments.teacher`; no
+  role but `school_admin` and `principal` holds any `examinations.marks.*`
+  key (guard-pinned).
+
+### 22.3 Readiness by case
+| Case | Technical readiness | Note |
+|---|---|---|
+| **Required subject, assigned teacher** | **READY** (building blocks exist; the join is RES.4 work) | P3 placement Section × paper Offering × `scheduled_on` → `hold()` |
+| **Co-teacher** | **READY only as equal owners** | Several dated rows may cover the same Section × Offering × date; each holder passes `hold()`. No lead/assistant distinction exists: if the authority approves only some co-teachers, that case is **BLOCKED** (needs a kind fact) |
+| **Cover / substitute / temporary** | **READY only as an ordinary dated assignment** | ADR 0063 §9: cover is a short dated TeachingAssignment, no substitute entity, indistinguishable from an ordinary one. If the authority excludes or distinguishes cover, that case is **BLOCKED** |
+| **Ownership beginning or ending on the paper date** | **READY** | Inclusive dates; `hold()` on `scheduled_on` |
+| **Elective subject** | **BLOCKED** | No authoritative dated elective teacher-ownership fact exists (ADR 0063 D-05; R13). `student_subject_enrollments` has no teacher; TeachingAssignment refuses electives. **Elective teacher marks entry remains technically blocked even if legal approval is obtained.** |
+
+**Smallest elective prerequisite** (a separate, explicitly scoped slice with
+its own ADR 0063 amendment, never part of RES.4): a dated, School-scoped
+elective teaching-ownership fact — Employee × elective SubjectOffering ×
+date range, with the same history/end rules as `teaching_assignments` — and
+a lock-capable ownership read for it. Its effect on LMS elective Tier 1 (ADR
+0063 §34) is decided there.
+
+### 22.4 Ownership date (decided for the contract)
+- **Ownership is judged on the paper's `scheduled_on`** — the date P3 and
+  StudentMark already use (R12). Never "the current teacher".
+- **The actor must be an eligible employee on the entry date** (the ADR 0063
+  Attendance precedent: `ActingEmployeeResolver::hold()` as of today).
+- **Open question to the authority** (RES-L2 Q5, Q10): whether ownership must
+  also hold on the entry date. If so, RES.4 adds that as a second `hold()`;
+  it narrows, it never replaces the paper-date check.
+
+### 22.5 The owned-scope capability (documented, not created)
+- **Key:** `examinations.marks.teacher` (the `<module>.<resource>.teacher`
+  convention, ADR 0063 §13). Separate from `examinations.marks.view`,
+  `.manage`, `.lock`, `.correction.request` and `.correction.approve`; never
+  implied by any of them, and none implied by it.
+- **Authorization predicate — every term required, none substitutes for
+  another, all inside the write transaction:**
+  1. the capability (`capability:examinations.marks.teacher`);
+  2. a session-authenticated staff request (no bearer token, ADR 0049);
+  3. the `mfa` window (or fresh MFA if the authority requires it);
+  4. a verified ActingEmployee on the entry date (`ActingEmployeeResolver::hold`);
+  5. a currently qualifying ADR 0038 processing basis for the Student;
+  6. P3 eligibility on `scheduled_on` with source `required`;
+  7. `TeachingOwnership::hold(employee, P3 sectionId, paper's Offering,
+     scheduled_on)`;
+  8. the paper `active`, its marks `open` (RES.3), its year not `closed`;
+  9. the same School throughout (route-bound, RLS).
+- **Read:** only owned Students' rows; unowned Students are not listed,
+  counted or signalled; a paper with no owned Student answers the identical
+  non-disclosing 404 (ADR 0063 §18).
+- **Write:** through `StudentMarkService` only (one writer), with history,
+  version guard and the existing audit; the acting Employee is recorded in
+  audit (RES.4 decides whether also on the mark).
+- **Lock order:** RES.4 inserts ActingEmployee and ownership holds into §21.5
+  under ADR 0063's own order; decided in RES.4, not here.
+
+### 22.6 Role / authorization decision table
+Today = as built at `1724fa4`. RES.4 = only if authorised (§22.9), and only
+within the authority's conditions.
+
+| Actor | Marks read | Marks entry | Lock | Correction request | Correction approval | Results |
+|---|---|---|---|---|---|---|
+| `school_admin` | Yes (per paper; basis-gated) | Yes (open papers, open years) | Yes (fresh MFA) | Yes | Yes (not own; fresh MFA) | **None exists** |
+| `principal` | Yes (same) | Yes (same) | Yes | Yes | Yes (not own) | None exists |
+| Assigned required-subject teacher | Today **No**. RES.4: owned Students only | Today **No**. RES.4: owned Students, open papers | **No** | **No** | **No** | No |
+| Co-teacher | Today No. RES.4: as assigned teacher **only if the authority includes co-teachers** | Same | No | No | No | No |
+| Cover / substitute teacher | Today No. RES.4: as assigned teacher **only if the authority includes cover** and a dated assignment covers `scheduled_on` | Same | No | No | No | No |
+| Elective teacher | **No** (technically blocked, §22.3) | **No** | No | No | No | No |
+| Unrelated teacher (same School) | No (404) | No | No | No | No | No |
+| Teacher from another School | No (404, RLS) | No | No | No | No | No |
+| Student | **No** (RES-L7) | No | No | No | No | No |
+| Guardian | **No** (RES-L7) | No | No | No | No | No |
+
+### 22.7 Privacy conditions carried forward
+Every RES-L0 condition (§19.2) binds teacher scope unchanged: Highly
+Sensitive; deny by default; School isolation; capability checks; ADR 0038
+provenance; audited reads and writes; immutable history; no generic search,
+report or export; no analytics or AI/ML; no unrelated reuse; safe logs and
+errors; no outbox or integration; no Student/Guardian access. Teacher scope
+narrows access; it never widens the StudentMark platform.
+
+### 22.8 Development vs production
+- **Development authorization** for RES.4 (if ever given) covers
+  development and test environments with synthetic data only.
+- **Production teacher enablement** stays blocked while any of RES-L1 (E36),
+  E33 / ADR 0063 §40, or a production condition of the new determinations
+  applies. Development authorization is never production approval.
+
+### 22.9 Outcome rule
+RES.4 becomes **AUTHORIZED FOR DEVELOPMENT** only when all are true:
+1. RES-L2 (E37) is determined AUTHORISED or AUTHORISED WITH CONDITIONS;
+2. the RES-L0 teacher re-review (E35) is CURRENT or CURRENT WITH CHANGES for
+   the same scope;
+3. E33 is closed or expressly does not block RES.4 development (true on the
+   existing record; to be confirmed by the authority);
+4. the ownership facts for the authorised scope exist (§22.3).
+
+If required subjects clear and electives do not, RES.4 is limited to
+**required subjects**; elective entry waits for the §22.3 prerequisite slice.
+**Today 1 and 2 are absent: RES.4 remains NOT AUTHORISED.**
