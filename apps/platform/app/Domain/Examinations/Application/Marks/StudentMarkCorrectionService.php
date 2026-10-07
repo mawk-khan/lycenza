@@ -68,7 +68,7 @@ class StudentMarkCorrectionService
             throw new StudentMarkCorrectionInvalidException;
         }
 
-        return $this->context->withSchool($school, fn (): StudentMarkCorrection => DB::transaction(function () use ($school, $examinationPaperId, $studentMarkId, $expectedVersion, $status, $value, $reasonCode, $actor): StudentMarkCorrection {
+        return RetryableAbort::translate(fn (): StudentMarkCorrection => $this->context->withSchool($school, fn (): StudentMarkCorrection => DB::transaction(function () use ($school, $examinationPaperId, $studentMarkId, $expectedVersion, $status, $value, $reasonCode, $actor): StudentMarkCorrection {
             $paper = $this->lockedPaper($school, $examinationPaperId);
             $mark = StudentMark::query()->where('school_id', $school->id)->where('examination_paper_id', $paper->id)->whereKey($studentMarkId)->firstOrFail();
             $proposed = StudentMarkService::normalizedValue($mark->student_id, $status, $value, (string) $paper->max_marks);
@@ -113,14 +113,14 @@ class StudentMarkCorrectionService
             ]);
 
             return $correction;
-        }));
+        })));
     }
 
     public function approve(School $school, string $correctionId, User $actor): StudentMarkCorrection
     {
         StudentMarkAvailability::assertAvailable();
 
-        return $this->context->withSchool($school, fn (): StudentMarkCorrection => DB::transaction(function () use ($school, $correctionId, $actor): StudentMarkCorrection {
+        return RetryableAbort::translate(fn (): StudentMarkCorrection => $this->context->withSchool($school, fn (): StudentMarkCorrection => DB::transaction(function () use ($school, $correctionId, $actor): StudentMarkCorrection {
             [$paper, $correction] = $this->pendingForDecision($school, $correctionId, $actor);
             $mark = StudentMark::query()->where('school_id', $school->id)->whereKey($correction->student_mark_id)->firstOrFail();
 
@@ -152,14 +152,14 @@ class StudentMarkCorrectionService
             ]);
 
             return $correction;
-        }));
+        })));
     }
 
     public function reject(School $school, string $correctionId, User $actor): StudentMarkCorrection
     {
         StudentMarkAvailability::assertAvailable();
 
-        return $this->context->withSchool($school, fn (): StudentMarkCorrection => DB::transaction(function () use ($school, $correctionId, $actor): StudentMarkCorrection {
+        return RetryableAbort::translate(fn (): StudentMarkCorrection => $this->context->withSchool($school, fn (): StudentMarkCorrection => DB::transaction(function () use ($school, $correctionId, $actor): StudentMarkCorrection {
             [$paper, $correction] = $this->pendingForDecision($school, $correctionId, $actor);
 
             $correction->forceFill([
@@ -177,7 +177,7 @@ class StudentMarkCorrectionService
             ]);
 
             return $correction;
-        }));
+        })));
     }
 
     /** The paper FOR SHARE (it waits for, or blocks, a concurrent lock) and it must be locked. */
@@ -239,7 +239,11 @@ class StudentMarkCorrectionService
         try {
             $correction->save();
         } catch (QueryException $e) {
-            // Never rethrow: the message carries SQL and bindings (mark values).
+            // S5: a deadlock / serialization abort goes up to the entry point's RetryableAbort::translate() (a fixed 409).
+            if (RetryableAbort::is($e)) {
+                throw $e;
+            }
+            // Never rethrow anything else: the message carries SQL and bindings (mark values).
             if (str_contains($e->getMessage(), 'student_mark_corrections_one_pending_per_mark')) {
                 throw new StudentMarkCorrectionPendingExistsException($studentId);
             }

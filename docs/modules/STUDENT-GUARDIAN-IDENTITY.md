@@ -1382,6 +1382,16 @@ design (lifecycle, concurrency, read-service contract) and
 `docs/security/STUDENTMARK-CHILDRENS-DATA-DETERMINATION.md` for the
 underlying legal/privacy determination this exists to satisfy.
 
+**Lock order (S5, 2026-10-07; ADR 0038 amendment).** The canonical order is:
+
+    Student FOR UPDATE -> processing-authorization grants -> guardian relationships
+
+- `StudentGuardianRelationshipService::unlink()`, `setPrimary()` and
+  `update()` take the Student row first, through
+  `StudentLockOrder::holdStudent()`, so they never form a lock cycle with the
+  processing-authorization seam StudentMark uses.
+- Writes for different Students never wait on each other.
+
 ## Retention (E21.2D, 2026-10-01)
 
 Under E21-D7 (`docs/security/E21-RETENTION-DETERMINATION.md`, project-adopted,

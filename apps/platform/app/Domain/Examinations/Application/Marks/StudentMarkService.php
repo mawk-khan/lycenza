@@ -82,7 +82,8 @@ class StudentMarkService
         StudentMarkAvailability::assertAvailable();
         usort($entries, fn (StudentMarkEntry $a, StudentMarkEntry $b) => strcmp($a->studentId, $b->studentId));
 
-        return $this->context->withSchool($school, fn (): array => DB::transaction(function () use ($school, $examinationPaperId, $entries, $actor, $guard): array {
+        // S5: a deadlock / serialization abort is a retryable 409 (STUDENT_MARK_RETRY_REQUIRED); nothing else is translated.
+        return RetryableAbort::translate(fn (): array => $this->context->withSchool($school, fn (): array => DB::transaction(function () use ($school, $examinationPaperId, $entries, $actor, $guard): array {
             $guard?->holdActor($school);
 
             $paper = ExaminationPaper::query()->where('school_id', $school->id)->whereKey($examinationPaperId)->sharedLock()->first();
@@ -165,7 +166,7 @@ class StudentMarkService
             }
 
             return $written;
-        }));
+        })));
     }
 
     /**
@@ -220,7 +221,11 @@ class StudentMarkService
         try {
             $mark->save();
         } catch (QueryException $e) {
-            // Never rethrow the QueryException: its message carries the SQL and its bindings (the mark value).
+            // S5: a deadlock / serialization abort goes up to record()'s RetryableAbort::translate() (a fixed 409).
+            if (RetryableAbort::is($e)) {
+                throw $e;
+            }
+            // Never rethrow any other QueryException: its message carries the SQL and its bindings (the mark value).
             if (str_contains($e->getMessage(), 'student_marks_one_per_student_paper')) {
                 throw new StudentMarkVersionConflictException($studentId);
             }

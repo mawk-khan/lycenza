@@ -2,7 +2,9 @@
 
 namespace Tests\Feature\Examinations;
 
+use App\Domain\Examinations\Application\Exceptions\StudentMarkRetryRequiredException;
 use App\Domain\Examinations\Application\Exceptions\StudentMarksUnavailableException;
+use App\Domain\Examinations\Application\Marks\StudentMarkService;
 use App\Models\School;
 use App\Models\User;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -176,5 +178,19 @@ class StudentMarkHttpTest extends TestCase
             $this->app['env'] = 'testing';
         }
         $this->assertSame(['50.00', 1, 'pending'], [(string) $this->markOf($w, $student)->value, $this->markOf($w, $student)->version, $this->freshCorrection($w, $correction)->status]);
+    }
+
+    /** S5: a deadlock-victim write answers the fixed retryable 409 -- no SQLSTATE, SQL, table, value or Student id. */
+    #[Test]
+    public function a_retryable_abort_is_a_fixed_409_body(): void
+    {
+        $w = $this->marksWorld();
+        $student = $this->markStudent($w);
+        $this->mock(StudentMarkService::class)->shouldReceive('record')->andThrow(new StudentMarkRetryRequiredException);
+        $this->as($w['admin'], $w['school']);
+
+        $this->putJson($this->url($w), ['marks' => [['student_id' => $student->id, 'status' => 'present', 'value' => '77.25', 'expected_version' => null]]])
+            ->assertStatus(409)
+            ->assertExactJson(['error' => ['code' => 'STUDENT_MARK_RETRY_REQUIRED', 'message' => 'A concurrent change interrupted this request; nothing was saved. Please retry.', 'status' => 409]]);
     }
 }

@@ -408,3 +408,56 @@ through the registry's `spa_context_unique` key, so the database proves it is
 the same Student's `academic_records` grant. Per RES-L0 (2026-10-07), a
 withdrawal never invalidates a recorded mark, but it stops new marks and
 withholds the mark's value from ordinary reads.
+
+## Amendment — canonical lock order across Students and Guardians (S5, 2026-10-07)
+
+**One order for every path that touches a Student's processing
+authorizations or guardian relationships.** The original concurrency rule
+(Student locked before its grants) is kept and extended to the Guardian
+side:
+
+    Student FOR UPDATE -> its processing-authorization grants -> its guardian relationships
+
+- **Already in this order:**
+  - `lockQualifyingAuthorizationIdForProcessing()`, the seam StudentMark
+    uses;
+  - `StudentProcessingAuthorizationService::terminate()`
+    (withdraw / revoke / supersede);
+  - recording a grant (its insert takes `KEY SHARE` on the Student before
+    the relationship).
+- **The outliers, found by the RES.5 audit (ADR 0068 §27.3) and reproduced
+  as real PostgreSQL deadlocks** (`GuardianProcessingAuthorizationLockOrderTest`
+  D1/D2, before the fix):
+  - **`unlink`** — `DELETE` locks the relationship, then its `RESTRICT`
+    check takes `KEY SHARE` on the consent grant referencing it
+    (relationship → grant), against the seam's grant → relationship;
+  - **`setPrimary`** — previous primary, then target (R1 → R2), against
+    the seam's relationships in grant-recency order (possibly R2 → R1).
+- **Correction.**
+  - `StudentGuardianRelationshipService::unlink()`, `setPrimary()` and
+    `update()` take the Student row `FOR UPDATE` first, through the new
+    Students seam `App\Domain\Students\Application\StudentLockOrder::holdStudent()`
+    (Guardians → Students, the documented dependency direction).
+  - They then serialize with the seam at the Student, so no cycle can form.
+  - It is one row per Student: unrelated Students never wait, and there is
+    no table or advisory lock.
+  - `update()` is aligned too, because `is_legal_guardian` decides whether
+    a consent grant qualifies.
+- **Not changed:**
+  - `link()` (its insert takes the Student `KEY SHARE` first);
+  - admission conversion (a Student created in the same transaction);
+  - the retention purge functions (they reach only a Student whose
+    dependants are cleared; marks `RESTRICT` erasure);
+  - Guardian authorization, processing-authorization semantics and
+    StudentMark authorization.
+- **Defence in depth at the StudentMark boundary.**
+  - A PostgreSQL deadlock (`40P01`) or serialization failure (`40001`) is
+    translated into 409 `STUDENT_MARK_RETRY_REQUIRED` with fixed text,
+    covering entry (administrative and teacher), the lock, and correction
+    request / approve / reject.
+  - Only those two SQLSTATEs are translated, and there is no automatic
+    retry.
+  - The aborted transaction leaves no mark, revision, correction or audit
+    row.
+  - A retry re-runs every check: P3, ownership, basis, paper, year and
+    version.

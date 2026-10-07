@@ -1962,7 +1962,15 @@ entries were kept, with dated notes. Locations:
   step. The class passes in isolation; a separate reliability correction.
 - **S4 — formal teacher determinations:** E37 (RES-L2) and the E35 teacher
   re-review are external legal / privacy work that gates production only.
-- **S5 — ADR 0038 × Guardians deadlock (§27.3):** the order differs from
+- **S5 — ADR 0038 × Guardians deadlock (§27.3):** **DONE 2026-10-07 (ADR
+  0038 lock-order amendment):**
+  - Guardian `unlink` / `setPrimary` / `update` take the Student first; both
+    cycles were reproduced as real deadlocks and are proven gone.
+  - StudentMark writes translate a deadlock / serialization abort into 409
+    `STUDENT_MARK_RETRY_REQUIRED`.
+  - RES.5 stays CLOSED; S8 stays open.
+
+  *Original text:* the order differs from
   the processing-authorization seam's. Recommend a Students slice to align
   the Guardians writers' order (or lock the grants first). StudentMark should
   also translate a deadlock abort into a retryable 409.

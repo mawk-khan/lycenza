@@ -8,6 +8,7 @@ use App\Domain\Guardians\Application\Exceptions\DuplicateRelationshipException;
 use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Domain\Guardians\Infrastructure\RelationshipType;
 use App\Domain\Guardians\Infrastructure\StudentGuardianRelationship;
+use App\Domain\Students\Application\StudentLockOrder;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
@@ -45,6 +46,7 @@ class StudentGuardianRelationshipService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly StudentLockOrder $lockOrder,
     ) {}
 
     /**
@@ -112,6 +114,8 @@ class StudentGuardianRelationshipService
     public function update(StudentGuardianRelationship $relationship, array $attributes, ?User $actor = null): StudentGuardianRelationship
     {
         return $this->context->withSchool($relationship->school, fn () => DB::transaction(function () use ($relationship, $attributes, $actor) {
+            // S5: Student first (ADR 0038 order) -- `is_legal_guardian` decides whether a consent grant qualifies.
+            $this->lockOrder->holdStudent($relationship->school, $relationship->student_id);
             $relationship->update($attributes);
 
             $this->audit->school($relationship->school, 'student_guardian.updated', actor: $actor, subject: $relationship, metadata: [
@@ -141,6 +145,9 @@ class StudentGuardianRelationshipService
         return $this->context->withSchool($relationship->school, function () use ($relationship, $actor) {
             try {
                 return DB::transaction(function () use ($relationship, $actor) {
+                    // S5: Student first (ADR 0038 order): the two relationship rows below are then never locked
+                    // against the processing-authorization seam's own relationship order.
+                    $this->lockOrder->holdStudent($relationship->school, $relationship->student_id);
                     $previousPrimary = StudentGuardianRelationship::query()
                         ->where('school_id', $relationship->school_id)
                         ->where('student_id', $relationship->student_id)
@@ -182,6 +189,9 @@ class StudentGuardianRelationshipService
     {
         $this->context->withSchool($relationship->school, function () use ($relationship, $actor) {
             DB::transaction(function () use ($relationship, $actor) {
+                // S5: Student first (ADR 0038 order): the DELETE's RESTRICT check reaches the grants after the
+                // relationship row, the reverse of the seam's grants -> relationship; the Student serializes them.
+                $this->lockOrder->holdStudent($relationship->school, $relationship->student_id);
                 $this->audit->school($relationship->school, 'student_guardian.unlinked', actor: $actor, subject: $relationship, metadata: [
                     'studentId' => $relationship->student_id,
                     'guardianId' => $relationship->guardian_id,

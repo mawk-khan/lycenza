@@ -898,6 +898,17 @@ Detail per stage:
     - Regression cadence: an early full-regression checkpoint on the final
       tree — the triggers touch every writer of seven tables in seven modules
       (counter reset to 0/5).
+  - **S5 — COMPLETE (2026-10-07, ADR 0038 lock-order amendment):**
+    - one canonical order, Student → processing-authorization grants →
+      guardian relationships;
+    - Guardian `unlink` / `setPrimary` / `update` take the Student first
+      (both cycles reproduced as real deadlocks, then proven gone, with
+      mutation checks);
+    - StudentMark writes translate a deadlock / serialization abort into 409
+      `STUDENT_MARK_RETRY_REQUIRED`.
+    - S8 still open; RES stays CLOSED.
+    - Regression cadence: round 1/5 after the `11e0ff3` checkpoint (focused
+      and broad suites; no shared primitive changed broadly).
   - Regression cadence: round 2/5 after the `c9d9762` checkpoint (executable
     corrections, confined to the marks paths; focused and broad suites).
 - **Not sequenced:** results, finalization, publication, report cards,
