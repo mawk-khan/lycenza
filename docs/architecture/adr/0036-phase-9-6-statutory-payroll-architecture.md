@@ -235,7 +235,10 @@ in a fixture or test.
 ### Explicitly deferred, this checkpoint
 
 - ESI disability special threshold (₹25,000) — `DEFERRED — ADDITIONAL
-  LEGAL CLARIFICATION REQUIRED`.
+  LEGAL CLARIFICATION REQUIRED`. *(Dated note, 2026-10-07: registered as ADR
+  0058 row E45 / PAY-L1; clarification request drafted in
+  `docs/security/PAY-L1-ESI-DISABILITY-THRESHOLD-REVIEW-REQUEST.md`, not yet
+  sent or answered. Nothing changes until the determination is recorded.)*
 - Automated EPFO/ESIC/income-tax portal submission.
 - Form 16 PDF/digital-signature production.
 - Bank-disbursement/payment-execution integration of any kind.

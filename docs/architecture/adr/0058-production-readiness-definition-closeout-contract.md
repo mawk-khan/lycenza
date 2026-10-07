@@ -610,6 +610,7 @@ with secrets.
 | E42 | RES-L7 — Student- and Guardian-facing access to marks and results, including the age-18 transition, adult-Student control and separated or non-legal-guardian parents | ADR 0068 §16 | Legal | Mandatory (RES, post-v1) | LEGAL_REVIEW_REQUIRED (**blocks design and development** of any such surface; POR) | Separate determination, then a POR/RES contract | Future legal record | Legal + Owner | No (post-v1; blocks the RES slice named) |
 | E43 | RES-L8 — retention of marks, mark corrections, results, report cards and transcripts (an E21 extension; E21-D7 invents no RES records) | ADR 0068 §16 | Legal | Mandatory (RES, post-v1) | LEGAL_REVIEW_REQUIRED (development authorised: RES tables are `policy_unresolved` and fail closed; **blocks production** and any expiry) | Qualified retention decision recorded; mechanism implemented under ADR 0066 | Future E21 extension record | Legal + Owner | No (post-v1; blocks the RES slice named) |
 | E44 | RES-L9 — statutory academic rules: attendance thresholds for examinations, RTE / no-detention implications, mandatory examination requirements | ADR 0068 §16 | Legal | Mandatory (RES, post-v1) | LEGAL_REVIEW_REQUIRED (nothing encodes them; **blocks any slice that would**) | Qualified answer recorded before any such rule is modelled | Future legal record | Legal + Owner | No (post-v1; blocks the RES slice named) |
+| E45 | PAY-L1 — ESI wage ceiling for employees with a disability (commonly reported ₹25,000): basis, qualifying definition, evidence, contribution-period timing, rates; and the privacy terms for holding the disability-status fact it needs | ADR 0036 §9 ("Explicitly deferred") | Legal + Privacy | Mandatory (Payroll statutory) | LEGAL_REVIEW_REQUIRED (request drafted 2026-10-07, not sent: `docs/security/PAY-L1-ESI-DISABILITY-THRESHOLD-REVIEW-REQUEST.md`; the general ESI rule is implemented; the disability branch, any disability fact and golden fixture ESI-12 wait for the answer) | Qualified answer to Q1–Q9 recorded in a determination document | Future legal record + ADR 0036 amendment | Legal + Privacy + Owner | Owner to decide (affects only Schools employing staff with a disability earning between the general and the disability ceiling; disclosed on every payslip) |
 
 A row moves to `EVIDENCE_COMPLETE` only by a dated, reviewed repository
 change that names its evidence location. The move is appended to
@@ -1426,3 +1427,14 @@ only.
   is undetermined), E37 and E38–E44.
 - **Results and onward** (E39–E42, E44) remain blocked for design and
   development.
+
+## Note — PAY-L1 registered (2026-10-07)
+
+**No legal determination.** Row E45 records a gap that ADR 0036 §9 already
+deferred but that had no register row: the ESI disability wage ceiling.
+- **Request.** Drafted, not sent:
+  `docs/security/PAY-L1-ESI-DISABILITY-THRESHOLD-REVIEW-REQUEST.md`. It asks
+  the statutory adviser Q1–Q7 and the DPO Q8–Q9, and proposes an
+  implementation contract that waits on the answers.
+- **Unchanged until the answer.** Golden fixture ESI-12 stays a recorded
+  skip, and nothing is implemented or collected.
