@@ -12957,6 +12957,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description GUARDIAN_RELATIONSHIP_IN_USE -- the relationship is still referenced by retained processing-authorization evidence (a recorded, withdrawn, revoked or superseded Guardian consent), so it is not removed. Nothing was changed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     updateStudentGuardianRelationship: {

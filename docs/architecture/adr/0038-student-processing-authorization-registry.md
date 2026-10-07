@@ -461,3 +461,36 @@ side:
     row.
   - A retry re-runs every check: P3, ownership, basis, paper, year and
     version.
+
+## Note — retained consent evidence keeps its Guardian relationship (2026-10-07)
+
+**The rule.** A Guardian relationship named by any row of this append-only
+ledger is never deleted. That covers a recorded Guardian-consent grant and
+every terminal row (withdrawn, revoked or superseded), because terminal rows
+copy `student_guardian_relationship_id`. The relationship is part of the
+evidence chain.
+- **The persistence rule is unchanged.**
+  `spa_guardian_relationship_context_foreign` stays `RESTRICT`. There is no
+  cascade, no `SET NULL`, and the evidence is never detached or deleted.
+- **What changed is how the refusal is presented.** It used to reach callers
+  as a raw database error (a 500). Now
+  `StudentGuardianRelationshipService::unlink()`:
+  1. takes the Student first (S5);
+  2. checks `StudentProcessingAuthorizationReadService::isGuardianRelationshipReferenced()`
+     (a School-scoped existence read);
+  3. refuses with 409 `GUARDIAN_RELATIONSHIP_IN_USE` and fixed text.
+- **Why the check cannot be raced.** Every ledger insert needs the Student's
+  key, so it serializes with the Student lock and no reference can appear
+  between the check and the delete.
+- **The key remains the authority.** Only its own violation (SQLSTATE 23503
+  naming exactly this key, also through the previous-exception chain) is
+  translated into the same 409. Every other integrity error keeps its
+  handling.
+- **Surfaces:**
+  - the API answers 409 (documented in OpenAPI);
+  - the web page redirects with a `relationship` error shown on the Student
+    page.
+- **Unaffected:**
+  - set-primary and attribute updates;
+  - unlinking an unreferenced relationship;
+  - authorization and audit (a refused unlink records no unlink event).

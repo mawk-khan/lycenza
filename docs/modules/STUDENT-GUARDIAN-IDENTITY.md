@@ -1392,6 +1392,19 @@ underlying legal/privacy determination this exists to satisfy.
   processing-authorization seam StudentMark uses.
 - Writes for different Students never wait on each other.
 
+**Unlinking a relationship with retained consent evidence (2026-10-07; ADR
+0038 note).**
+- **The rule.** A relationship that any processing-authorization row names
+  (recorded, withdrawn, revoked or superseded Guardian consent) is not
+  removed.
+- **The answer.** Unlink refuses it deliberately with 409
+  `GUARDIAN_RELATIONSHIP_IN_USE` (the API), or a `relationship` error on the
+  Student page (the web).
+- **The guarantees.**
+  - The `RESTRICT` foreign key stays the source-of-truth protection.
+  - Historical evidence is preserved.
+  - Unreferenced relationships unlink as before.
+
 ## Retention (E21.2D, 2026-10-01)
 
 Under E21-D7 (`docs/security/E21-RETENTION-DETERMINATION.md`, project-adopted,

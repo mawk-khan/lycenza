@@ -119,7 +119,7 @@ class GuardianProcessingAuthorizationLockOrderTest extends TestCase
             $this->op('unlink', $f['school']->id, $f['r1']->id, $f['admin']->id),
         );
 
-        $this->assertSame(['ok', 'refused:fk'], [$seam, $unlink], 'no deadlock: the unlink waited at the Student, then met its RESTRICT');
+        $this->assertSame(['ok', 'refused:GUARDIAN_RELATIONSHIP_IN_USE'], [$seam, $unlink], 'no deadlock: the unlink waited at the Student, then was refused (retained consent evidence)');
         $this->assertTrue($this->inMarksSchool($f['school'], fn () => StudentGuardianRelationship::query()->whereKey($f['r1']->id)->exists()));
     }
 
@@ -167,7 +167,7 @@ class GuardianProcessingAuthorizationLockOrderTest extends TestCase
 
         // Entry first (seam: Student, grants, r2): the unlink of r1 waits at the Student, then meets its RESTRICT.
         [$entry, $unlink] = $this->raceWithHeldHolder($this->record($f, '40'), $this->op('unlink', $f['school']->id, $f['r1']->id, $f['admin']->id));
-        $this->assertSame(['recorded:v1', 'refused:fk'], [$entry, $unlink]);
+        $this->assertSame(['recorded:v1', 'refused:GUARDIAN_RELATIONSHIP_IN_USE'], [$entry, $unlink]);
 
         // Unlink first (an unreferenced relationship): the entry waits at the Student, then records.
         [$unlink, $entry] = $this->raceWithHeldHolder($this->op('unlink', $f['school']->id, $f['r3']->id, $f['admin']->id),
@@ -257,5 +257,32 @@ class GuardianProcessingAuthorizationLockOrderTest extends TestCase
         $this->recordMarks($f, [$this->entry($f['student'], 'present', '55.5')]);
         $this->assertSame(['55.50', 1], [(string) $this->markOf($f, $f['student'])->value, $this->markOf($f, $f['student'])->version]);
         $this->assertSame(1, $events());
+    }
+
+    /** Guardian unlink vs a consent being recorded on the same relationship -- both orders, no raw error, no evidence loss. */
+    #[Test]
+    public function j_unlink_and_consent_recording_serialize_at_the_student_and_never_surface_a_raw_error(): void
+    {
+        $f = $this->family();
+        $links = app(StudentGuardianRelationshipService::class);
+        $first = $links->link($f['student'], $this->createGuardian($f['school']), RelationshipType::StepParent, ['is_legal_guardian' => true], $f['admin']);
+        $second = $links->link($f['student'], $this->createGuardian($f['school']), RelationshipType::GenericParent, ['is_legal_guardian' => true], $f['admin']);
+
+        // J3: the consent is being recorded first -- the unlink waits at the Student, then sees the evidence.
+        [$consent, $unlink] = $this->raceWithHeldHolder(
+            $this->op('record-consent', $f['school']->id, $first->id, $f['admin']->id),
+            $this->op('unlink', $f['school']->id, $first->id, $f['admin']->id),
+        );
+        $this->assertSame(['consented:recorded', 'refused:GUARDIAN_RELATIONSHIP_IN_USE'], [$consent, $unlink]);
+        $this->assertTrue($this->inMarksSchool($f['school'], fn () => StudentGuardianRelationship::query()->whereKey($first->id)->exists()));
+
+        // J2: the unlink holds the Student first -- the consent waits, then finds no relationship to consent through.
+        [$unlink, $consent] = $this->raceWithHeldHolder(
+            $this->op('unlink', $f['school']->id, $second->id, $f['admin']->id),
+            $this->op('record-consent', $f['school']->id, $second->id, $f['admin']->id),
+        );
+        $this->assertSame('unlinked', $unlink);
+        $this->assertSame('refused:fk', $consent, 'consent through a removed relationship is refused by its foreign key');
+        $this->assertSame(0, $this->inMarksSchool($f['school'], fn () => StudentProcessingAuthorization::query()->where('student_guardian_relationship_id', $second->id)->count()));
     }
 }

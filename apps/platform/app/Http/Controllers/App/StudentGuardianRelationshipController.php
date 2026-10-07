@@ -5,6 +5,7 @@ namespace App\Http\Controllers\App;
 use App\Domain\Guardians\Application\Exceptions\ConcurrentPrimaryGuardianConflictException;
 use App\Domain\Guardians\Application\Exceptions\CrossSchoolRelationshipException;
 use App\Domain\Guardians\Application\Exceptions\DuplicateRelationshipException;
+use App\Domain\Guardians\Application\Exceptions\GuardianRelationshipInUseException;
 use App\Domain\Guardians\Application\GuardianContactService;
 use App\Domain\Guardians\Application\GuardianService;
 use App\Domain\Guardians\Application\StudentGuardianRelationshipService;
@@ -250,7 +251,11 @@ class StudentGuardianRelationshipController extends Controller
 
         $model = StudentGuardianRelationship::query()->findOrFail($relationship);
         $studentId = $model->student_id;
-        $service->unlink($model, $context->actor());
+        try {
+            $service->unlink($model, $context->actor());
+        } catch (GuardianRelationshipInUseException $e) {
+            return redirect("/app/students/{$studentId}")->withErrors(['relationship' => $e->getMessage()]);
+        }
 
         return redirect("/app/students/{$studentId}");
     }

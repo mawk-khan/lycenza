@@ -5,14 +5,17 @@ namespace App\Domain\Guardians\Application;
 use App\Domain\Guardians\Application\Exceptions\ConcurrentPrimaryGuardianConflictException;
 use App\Domain\Guardians\Application\Exceptions\CrossSchoolRelationshipException;
 use App\Domain\Guardians\Application\Exceptions\DuplicateRelationshipException;
+use App\Domain\Guardians\Application\Exceptions\GuardianRelationshipInUseException;
 use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Domain\Guardians\Infrastructure\RelationshipType;
 use App\Domain\Guardians\Infrastructure\StudentGuardianRelationship;
 use App\Domain\Students\Application\StudentLockOrder;
+use App\Domain\Students\Application\StudentProcessingAuthorizationReadService;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
@@ -47,6 +50,7 @@ class StudentGuardianRelationshipService
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly StudentLockOrder $lockOrder,
+        private readonly StudentProcessingAuthorizationReadService $authorizations,
     ) {}
 
     /**
@@ -192,14 +196,40 @@ class StudentGuardianRelationshipService
                 // S5: Student first (ADR 0038 order): the DELETE's RESTRICT check reaches the grants after the
                 // relationship row, the reverse of the seam's grants -> relationship; the Student serializes them.
                 $this->lockOrder->holdStudent($relationship->school, $relationship->student_id);
+
+                // Retained processing-authorization evidence keeps the relationship (ADR 0038 note, 2026-10-07): a
+                // deliberate 409, not the foreign key's raw error. Holding the Student, no new reference can appear
+                // before this commits (every ledger insert needs the Student's key too).
+                if ($this->authorizations->isGuardianRelationshipReferenced($relationship->school, $relationship->id)) {
+                    throw new GuardianRelationshipInUseException;
+                }
+
                 $this->audit->school($relationship->school, 'student_guardian.unlinked', actor: $actor, subject: $relationship, metadata: [
                     'studentId' => $relationship->student_id,
                     'guardianId' => $relationship->guardian_id,
                     'relationshipType' => $relationship->relationship_type->value,
                 ]);
 
-                $relationship->delete();
+                try {
+                    $this->deleteRelationship($relationship);
+                } catch (QueryException $e) {
+                    // The RESTRICT key stays the authority; only ITS violation is this refusal.
+                    if (GuardianRelationshipInUseException::isViolation($e)) {
+                        throw new GuardianRelationshipInUseException;
+                    }
+                    throw $e;
+                }
             });
         });
+    }
+
+    /**
+     * The hard delete (the model has no delete events). Its RESTRICT foreign key
+     * (`spa_guardian_relationship_context_foreign`) refuses a relationship retained evidence still names -- the
+     * caller's preflight normally answers first.
+     */
+    private function deleteRelationship(StudentGuardianRelationship $relationship): void
+    {
+        StudentGuardianRelationship::query()->where('school_id', $relationship->school_id)->whereKey($relationship->id)->delete();
     }
 }

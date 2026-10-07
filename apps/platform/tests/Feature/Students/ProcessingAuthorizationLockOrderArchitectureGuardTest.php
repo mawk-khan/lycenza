@@ -62,10 +62,15 @@ class ProcessingAuthorizationLockOrderArchitectureGuardTest extends TestCase
             $this->assertMatchesRegularExpression('/DB::transaction\(function \(\) use \([^)]*\) \{\s*\$this->lockOrder->holdStudent\(\$relationship->school, \$relationship->student_id\);/', $body,
                 "{$writer}() takes the Student first, before any relationship or grant row");
         }
-        $code = $this->code($service);
-        foreach (['StudentProcessingAuthorization', 'lockQualifyingAuthorizationId', 'student_processing_authorizations'] as $forbidden) {
+        // Guardian writers never run their own processing-authorization logic. The one sanctioned use (Guardian
+        // unlink, 2026-10-07) is the Students read seam's existence check, after the Student lock.
+        $code = str_replace(['StudentProcessingAuthorizationReadService', '$this->authorizations->isGuardianRelationshipReferenced('], '', $this->code($service));
+        foreach (['StudentProcessingAuthorization', 'lockQualifyingAuthorizationId', 'student_processing_authorizations', '$this->authorizations->'] as $forbidden) {
             $this->assertStringNotContainsString($forbidden, $code, 'Guardian writers never run their own processing-authorization lookup');
         }
+        $this->assertInOrder($this->method($service, 'unlink'), ['$this->lockOrder->holdStudent(', '->isGuardianRelationshipReferenced(', '$this->deleteRelationship($relationship)'],
+            'unlink: Student first, then the retained-evidence check, then the delete');
+        $this->assertStringContainsString('GuardianRelationshipInUseException::isViolation($e)', $this->method($service, 'unlink'), 'the RESTRICT key is the backstop, translated narrowly');
     }
 
     #[Test]

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { router, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { router, useForm, usePage } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
 import RelationshipFlags from '../../../Components/RelationshipFlags.vue';
 import StatusBadge from '../../../Components/StatusBadge.vue';
@@ -209,6 +209,12 @@ function submitRelationshipEdit(relationshipId: string): void {
 function makePrimary(relationshipId: string): void {
     router.post(`/app/relationships/${relationshipId}/primary`, {}, { preserveScroll: true });
 }
+
+// A refused unlink (relationship still referenced by retained authorization evidence) comes back as this error.
+const page = usePage();
+const relationshipError = computed(
+    () => (page.props.errors as Record<string, string> | undefined)?.relationship ?? null,
+);
 
 function unlink(r: Relationship): void {
     const confirmed = window.confirm(
@@ -426,6 +432,10 @@ function unlink(r: Relationship): void {
                     Add guardian
                 </a>
             </div>
+
+            <p v-if="relationshipError" class="mt-3 text-sm text-red-700" role="alert">
+                {{ relationshipError }}
+            </p>
 
             <p v-if="relationships.length === 0" class="mt-3 text-sm text-slate-500">
                 No Guardians linked yet.

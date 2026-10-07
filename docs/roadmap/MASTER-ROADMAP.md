@@ -919,6 +919,15 @@ Detail per stage:
     - RES stays CLOSED.
     - Regression cadence: round 2/5 (focused and broad suites; the triggers
       touch only StudentMark writes and paper identity updates).
+  - **Guardian unlink: referenced-consent conflict — COMPLETE (2026-10-07;
+    ADR 0038 note):**
+    - a relationship still named by retained processing-authorization
+      evidence is refused with 409 `GUARDIAN_RELATIONSHIP_IN_USE`, instead
+      of a raw foreign-key 500;
+    - the `RESTRICT` key stays the authority and is the narrow backstop;
+    - Student-first (S5) preserved;
+    - races with consent recording are proven.
+    - Regression cadence: round 3/5.
   - Regression cadence: round 2/5 after the `c9d9762` checkpoint (executable
     corrections, confined to the marks paths; focused and broad suites).
 - **Not sequenced:** results, finalization, publication, report cards,

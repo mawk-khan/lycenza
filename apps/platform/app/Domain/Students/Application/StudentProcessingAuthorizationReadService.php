@@ -233,6 +233,21 @@ class StudentProcessingAuthorizationReadService
     }
 
     /**
+     * Guardian unlink (2026-10-07; ADR 0038 note): is the relationship named by ANY row of this append-only ledger --
+     * a recorded grant or a terminal (withdrawn / revoked / superseded) row, all of which keep it as evidence? Such a
+     * relationship is never deleted (`spa_guardian_relationship_context_foreign`, RESTRICT). A plain existence read,
+     * School-scoped; the caller holds the Student row (StudentLockOrder), which every ledger insert's Student key
+     * also needs, so no new reference can appear before the caller commits.
+     */
+    public function isGuardianRelationshipReferenced(School $school, string $studentGuardianRelationshipId): bool
+    {
+        return $this->context->withSchool($school, fn (): bool => StudentProcessingAuthorization::query()
+            ->where('school_id', $school->id)
+            ->where('student_guardian_relationship_id', $studentGuardianRelationshipId)
+            ->exists());
+    }
+
+    /**
      * The subset of $studentIds currently authorized for $purpose -- a plain
      * point-in-time read (no locks), for a list that must withhold every
      * other Student's data. Ids outside the School are never returned.

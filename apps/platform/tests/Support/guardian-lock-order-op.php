@@ -2,6 +2,8 @@
 
 use App\Domain\Guardians\Application\StudentGuardianRelationshipService;
 use App\Domain\Guardians\Infrastructure\StudentGuardianRelationship;
+use App\Domain\Students\Application\StudentProcessingAuthorizationService;
+use App\Domain\Students\Domain\ProcessingAuthorizationPurpose;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
@@ -15,6 +17,7 @@ use Tests\Support\Concurrency\HeldTransaction;
 //
 //   php guardian-lock-order-op.php unlink <schoolId> <relationshipId> <actorId>
 //   php guardian-lock-order-op.php set-primary <schoolId> <relationshipId> <actorId>
+//   php guardian-lock-order-op.php record-consent <schoolId> <relationshipId> <actorId>   (academic_records Guardian consent)
 //
 // Stepped holders (env CONCURRENCY_HOLD_DIR): take the first locks, touch
 // `acted`, wait for `step2`, take the next locks, touch `step2done`, wait for
@@ -92,6 +95,13 @@ try {
             $service = $app->make(StudentGuardianRelationshipService::class);
             $relationship = StudentGuardianRelationship::query()->findOrFail($argv[3]);
             $actor = User::query()->findOrFail($argv[4]);
+            if ($op === 'record-consent') {
+                $grant = $app->make(StudentProcessingAuthorizationService::class)->recordGuardianConsent(
+                    $relationship->school, $relationship->student, ProcessingAuthorizationPurpose::AcademicRecords, $relationship, $actor,
+                );
+
+                return 'consented:'.$grant->status->value;
+            }
             if ($op === 'unlink') {
                 $service->unlink($relationship, $actor);
 
