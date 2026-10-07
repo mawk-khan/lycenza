@@ -10,6 +10,7 @@ use Tests\Concerns\CreatesTeacherAttendanceFixtures;
 use Tests\Concerns\CreatesTeacherDeliveryFixtures;
 use Tests\Concerns\CreatesTeachingAssignmentFixtures;
 use Tests\Feature\Attendance\Concerns\CreatesAttendanceFixtures;
+use Tests\Feature\Auth\Mfa\Concerns\CreatesMfaFixtures;
 use Tests\TestCase;
 
 /**
@@ -20,10 +21,16 @@ use Tests\TestCase;
  */
 class MyAttendanceUiTest extends TestCase
 {
-    use CreatesAttendanceFixtures, CreatesTeacherAttendanceFixtures, CreatesTeacherDeliveryFixtures, CreatesTeachingAssignmentFixtures;
+    use CreatesAttendanceFixtures, CreatesMfaFixtures, CreatesTeacherAttendanceFixtures, CreatesTeacherDeliveryFixtures, CreatesTeachingAssignmentFixtures;
 
+    /** E33 / TCH-L1 (ADR 0063 section 43): My Attendance needs MFA assurance -- an active factor and a current sign-in window. */
     private function actor(array $w, User $user): static
     {
+        if (! $user->mfaFactors()->where('status', 'active')->exists()) {
+            $this->enrollActiveMfaFactor($user);
+        }
+        session(['mfa_verified_at' => now()->toIso8601String()]);
+
         return $this->actingAs($user)->withHeader('X-School-Id', $w['school']->id);
     }
 

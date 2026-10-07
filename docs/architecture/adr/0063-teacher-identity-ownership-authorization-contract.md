@@ -2899,3 +2899,108 @@ satisfy RES-L2 (E37) or the teacher-scope RES-L0 re-review (E35), establish
 any StudentMark processing basis, or let any marks capability inherit from
 an Attendance capability. **RES.4 remains NOT AUTHORISED** (ADR 0068 §22.9,
 §23).
+
+## 43. E33 production controls built — MFA and teacher read audit (2026-10-07)
+
+**Executable slice, independent of RES.4.** It closes the two gaps §42.4
+recorded and nothing else: no new teacher function, no StudentMark change, no
+legal-outcome change. The determination
+(`docs/security/TCH-L1-TEACHER-ATTENDANCE-DETERMINATION.md`) is unchanged.
+
+### 43.1 Inventory (as built at `f7e6fc7`)
+| Surface | Route | Kind | Auth | Audit before | Now |
+|---|---|---|---|---|---|
+| Web | `GET /app/my-attendance` | read (own registers) | session | none | `capability:attendance.teacher` + `mfa-page`; `attendance.teacher.sessions_listed` |
+| Web | `GET /app/my-attendance/take` | read (owned classes; roster of one) | session | none | same gates; `.classes_listed`, `.roster_viewed` |
+| Web | `GET /app/my-attendance/{session}` | read (one register) | session | none | same gates; `.session_viewed` |
+| Web | `POST /app/my-attendance` | write (submit) | session | `attendance.session.submitted` | same gates; write audit unchanged |
+| Web | `POST /app/my-attendance/records/{record}/correct` | write (correct) | session | `attendance.record.corrected` | same gates; write audit unchanged |
+| API | `GET …/my/attendance-sessions`, `…/{id}`, `…/scheduled-classes`, `…/roster-preview` | reads | bearer | none | `teacher-attendance-api` (development only); reads audited (`surface: api`) |
+| API | `POST …/my/attendance-sessions`, `…/my/attendance-records/{id}/correct` | writes | bearer | as web | `teacher-attendance-api` (development only) |
+
+Ownership is unchanged on every route: `TeacherAttendanceAccess::scope()`
+(capability → ActingEmployee → TeachingOwnership periods) for reads, and
+`TeacherAttendanceGuard` inside the write transaction for writes.
+
+### 43.2 MFA
+- **Session (web):** the new `mfa-page` middleware (`RequireMfaForPage`) runs
+  RequireMfa's two checks — an active factor, and current sign-in assurance
+  inside the ADR 0037 window — and on failure renders the existing
+  `MfaRequired` page (403 not enrolled, 401 step-up) instead of RequireMfa's
+  JSON, because these are full pages. Composed after `capability:`. No fresh
+  per-action code: neither ADR 0063 nor the determination asks for one. MFA
+  never substitutes for ownership (tested), and a revoked factor (an MFA
+  reset) cannot ride on an older sign-in assurance (tested).
+- **Bearer (API): a token cannot prove MFA.** ADR 0049 records that a
+  bearer token carries no MFA assurance; issuance needs a fresh code but use
+  does not, and no equivalent control is formally approved. This slice does
+  not invent one. **Policy: the owned teacher Attendance API is development
+  only.** `EnsureTeacherAttendanceApiDevelopmentOnly`
+  (`teacher-attendance-api`) answers a fixed 403
+  `TEACHER_ATTENDANCE_API_UNAVAILABLE` before any capability, identity or
+  ownership work unless `config('attendance.teacher_api_development_enabled')`
+  (env `TEACHER_ATTENDANCE_API_DEVELOPMENT_ENABLED`, default false) **and**
+  `app()->environment(['local','testing'])` — the DevOnlySchoolHeaderResolver
+  double guard, so a production variable alone cannot open it. The OpenAPI
+  403 descriptions say so. A production teacher API needs a separate,
+  approved authentication design (for example token-bound MFA assurance); it
+  is not part of this slice.
+
+### 43.3 Read audit
+`App\Domain\Attendance\Application\TeacherAttendanceReadAudit` records one School
+audit event per successful owned read, after the ownership decision:
+
+| Event | When | Metadata (identifiers and counts only) |
+|---|---|---|
+| `attendance.teacher.sessions_listed` | the register list | acting Employee, date filter, page, result count, surface |
+| `attendance.teacher.session_viewed` | one register (subject = the session) | acting Employee, session, Section, SubjectOffering, date, record count, surface |
+| `attendance.teacher.classes_listed` | owned classes of a date | acting Employee, date, class count, surface |
+| `attendance.teacher.roster_viewed` | a roster preview | acting Employee, timetable entry, Section, SubjectOffering, date, member count, surface |
+
+The actor is the User and the School is the event's own column. No Student id,
+name, roll number or status is stored (guard- and test-pinned). A refused,
+not-found or concealed read records nothing. Audit is append-only, and no
+teacher capability can modify it. The write events (`attendance.session.submitted`,
+`attendance.record.corrected`) are unchanged: they already carry actor,
+School, the register or record, the timetable entry or session context and
+previous/new status, which is the determination's "class / Section / subject
+or equivalent context".
+
+### 43.4 The nine E33 production controls (determination §9), re-evaluated
+| # | Control | Status | Evidence |
+|---|---|---|---|
+| 1 | Individual teacher authentication | **PASS** | Per-User session sign-in; per-User tokens (dev only); no shared-account path |
+| 2 | Authoritative assignment / ownership | **PASS** | ActingEmployee + `TeachingOwnership` on `attendance_date` (`TeacherAttendanceAccessTest`, `TeacherAttendanceProductionControlsTest`) |
+| 3 | School / tenant isolation | **PASS** | Forced RLS, School-bound routes, per-School capability and identity; multi-School identity test |
+| 4 | Deny by default | **PASS** | Capability first, identical 404 for unowned/other-School/unknown, no fallback |
+| 5 | MFA for production teacher accounts | **PASS** | `mfa-page` on all five web routes (guard-pinned); the bearer surface is refused outside development |
+| 6 | Auditable reads, writes, material changes | **PASS** | §43.3 read events + existing write events; append-only audit |
+| 7 | Revocation ends future authority | **PASS** | Assignment end and role revocation tests; TCH.4 two-process tests; history kept |
+| 8 | Exceptional access cannot bypass the controls | **PASS** | No teacher override or MFA/ownership bypass; Tier 1 `attendance.manage` is separate administrative authority; elevation refused on School routes (rule 83); dev-only mechanisms double-guarded |
+| 9 | No authority beyond Attendance | **PASS** | `attendance.teacher` reaches only Attendance; the `teacher` role is pinned to its four owned keys, no `examinations.marks.*` |
+
+### 43.5 Effect
+- **E33's privacy conditions are met in the repository.** Per determination
+  §9, no further privacy approval is needed for the approved Attendance scope.
+- **Not a production go-live.** Production `teacher` grants still follow §40's
+  APPROVED WITH CONDITIONS row together with **E21** and the ADR 0058 platform
+  checklist (O1). This slice deploys nothing and grants nothing. Operators must
+  also enroll teachers in MFA, and the controls are re-verified on the
+  production candidate.
+- **No effect on StudentMark** (§42.7): RES-L2 (E37) and the RES-L0 teacher
+  re-review (E35) are unresolved; **RES.4 remains NOT AUTHORISED**.
+
+### 43.6 Proof
+- `TeacherAttendanceProductionControlsTest`: MFA refusals (not enrolled and
+  step-up, reads and writes, nothing written); MFA never replaces the
+  capability, identity or ownership; revoked-factor reset; read-audit metadata
+  and no Student data; no audit on a refused or concealed read; the bearer
+  gate (flag off, production with the flag on); assignment end and role
+  revocation; multi-School independence; no Student data in logs.
+- `TeacherAttendanceArchitectureGuardTest`: `mfa-page` on all five web routes,
+  `teacher-attendance-api` on all six API routes, the double guard, an audit
+  call in every read action after the ownership decision, no Student field in
+  read-audit metadata, and the `teacher` role's exact four keys.
+- Updated deliberately: `MyAttendanceUiTest` (teachers now have MFA) and
+  `DemoDataBuilderTest` (demo accounts carry no factor, so the demo teacher
+  sees `MfaRequired`).

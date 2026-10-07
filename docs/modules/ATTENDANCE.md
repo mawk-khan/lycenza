@@ -26,6 +26,9 @@ implemented but production enablement remains blocked by TCH-L1 until the
 required legal/compliance determination is recorded.** TCH-L1 is ADR 0058
 register row **E33**. It is enforced by process, not by a runtime flag; the
 decision record and the facts for the reviewer are in ADR 0063 §39.
+**Update (2026-10-07):** TCH-L1 is **APPROVED WITH CONDITIONS** (ADR 0063
+§42), and the two missing production controls — MFA and audit of teacher
+reads — are built (ADR 0063 §43, section 18 below).
 
 ## 2. The two entities
 
@@ -602,14 +605,37 @@ register save · substitution modelling · a replace-register operation.
 | TCH.4 teacher write vs assignment end / suspension / unlink / archive / employment end (real OS processes) | `Tests\Feature\Attendance\TeacherAttendanceConcurrencyTest` |
 | TCH.4 dependency direction, no teacher_id authority, route gating, OpenAPI | `Tests\Feature\Attendance\TeacherAttendanceArchitectureGuardTest` |
 | TCH.4 "My Attendance" pages and capability-driven navigation | `Tests\Feature\App\MyAttendanceUiTest` |
+| E33 production controls: MFA, read audit, development-only bearer API, revocation, per-School authority, no log leak | `Tests\Feature\Attendance\TeacherAttendanceProductionControlsTest` |
 
 ## 18. Owned teacher Attendance (TCH.4, ADR 0063 §32)
 
-**Production gate.** Teacher Attendance functionality is implemented but
-production enablement remains blocked by TCH-L1 until the required
-legal/compliance determination is recorded. TCH-L1 (ADR 0063 §26) is
+**Production gate (history).** Teacher Attendance functionality is
+implemented but production enablement remains blocked by TCH-L1 until the
+required legal/compliance determination is recorded. TCH-L1 (ADR 0063 §26) is
 **OPEN**: not a development blocker, a production blocker. Nothing here
 draws a statutory conclusion.
+
+**Now (2026-10-07):** TCH-L1 is **APPROVED WITH CONDITIONS**
+(`docs/security/TCH-L1-TEACHER-ATTENDANCE-DETERMINATION.md`, ADR 0063 §42).
+The production controls are in place (ADR 0063 §43):
+- **MFA.** Every `/app/my-attendance` page and post needs
+  `capability:attendance.teacher` and `mfa-page`: an active factor and a
+  current sign-in assurance window (ADR 0037). Without them the
+  `MfaRequired` page is shown (403 not enrolled, 401 step-up) and nothing is
+  read or written. MFA never substitutes for ownership.
+- **Bearer API is development only.** A bearer token carries no MFA assurance
+  (ADR 0049), so the `/api/v1/…/my/attendance-*` routes answer 403
+  `TEACHER_ATTENDANCE_API_UNAVAILABLE` unless
+  `TEACHER_ATTENDANCE_API_DEVELOPMENT_ENABLED` is true **and** the app runs
+  in `local`/`testing`. Production teacher Attendance is the web surface.
+- **Read audit.** Every successful owned read records one School audit event
+  (`TeacherAttendanceReadAudit`): `attendance.teacher.sessions_listed`,
+  `.session_viewed`, `.classes_listed`, `.roster_viewed`, with the acting
+  Employee, the register / timetable entry / Section / SubjectOffering ids,
+  the date, counts and the surface — never a Student id, name or status. A
+  refused or concealed read records nothing.
+- Production `teacher` grants remain subject to E21 and the ADR 0058
+  platform checklist (ADR 0063 §43.4).
 
 **Two tiers.**
 
@@ -668,12 +694,15 @@ Neither that column nor `timetable_entries.teacher_id` authorizes. So:
 
 **Denials.**
 - **403:** no capability, or not an eligible Employee
-  (`HR_ACTING_EMPLOYEE_UNAVAILABLE`).
+  (`HR_ACTING_EMPLOYEE_UNAVAILABLE`); on the web, no MFA factor (`MfaRequired`);
+  on the API outside development, `TEACHER_ATTENDANCE_API_UNAVAILABLE`.
+- **401 (web):** MFA assurance window lapsed (`MfaRequired`, step-up).
 - **404:** an unowned class or register, another School's id, an unknown id
   and a malformed id — all the same response.
 
-**Unchanged:** the schema, the Sensitive classification, the audit events
-(the acting User is the actor, as for Tier 1), zero domain events, and every
+**Unchanged:** the schema, the Sensitive classification, the write audit
+events (the acting User is the actor, as for Tier 1; reads gained their own
+events in ADR 0063 §43), zero domain events, and every
 section 5–14 rule.
 
 ## 19. Retention (E21.2D, 2026-10-01)

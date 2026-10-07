@@ -235,7 +235,10 @@ class DemoDataBuilderTest extends TestCase
         // School-wide: not the administrative delivery page, not
         // TeachingAssignment administration, not Attendance.
         $this->assertPageStatus('teacher@example.test', $school, '/app/my-curriculum-delivery', 200);
-        $this->assertPageStatus('teacher@example.test', $school, '/app/my-attendance', 200);
+        // E33 / TCH-L1 (ADR 0063 section 43): My Attendance needs MFA, and demo
+        // accounts carry no factor (no TOTP secret is ever seeded), so the demo
+        // teacher gets the MfaRequired page until they enroll one.
+        $this->assertPageStatus('teacher@example.test', $school, '/app/my-attendance', 403);
         $this->assertPageStatus('teacher@example.test', $school, '/app/my-learning-content', 200);
         $this->assertPageStatus('teacher@example.test', $school, '/app/my-assignments', 200);
         foreach (['/app/syllabus-delivery', '/app/teaching-assignments', '/app/attendance', '/app/timetable-schedule', '/app/learning-content', '/app/assignments'] as $page) {

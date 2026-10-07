@@ -5,6 +5,7 @@ namespace App\Domain\Attendance\Http\Controllers;
 use App\Domain\Attendance\Application\AttendanceCorrectionService;
 use App\Domain\Attendance\Application\AttendanceSubmissionService;
 use App\Domain\Attendance\Application\TeacherAttendanceAccess;
+use App\Domain\Attendance\Application\TeacherAttendanceReadAudit;
 use App\Domain\Attendance\Infrastructure\AttendanceRecord;
 use App\Domain\Attendance\Infrastructure\AttendanceSession;
 use App\Domain\Students\Application\SectionRosterMember;
@@ -40,14 +41,17 @@ use Illuminate\Validation\Rule;
  * not own, another School's id, an unknown and a malformed id are all the
  * same 404.
  *
- * PRODUCTION ENABLEMENT of this surface is blocked by the open TCH-L1
- * legal/compliance determination (ADR 0063 section 26).
+ * E33 / TCH-L1 (ADR 0063 section 43): a bearer token carries no MFA
+ * assurance (ADR 0049), so this surface is DEVELOPMENT ONLY
+ * (`teacher-attendance-api`); production teacher Attendance is the web
+ * surface with MFA. Every successful read is audited
+ * (TeacherAttendanceReadAudit).
  */
 class TeacherAttendanceController extends Controller
 {
     use PresentsAttendanceSessions;
 
-    public function index(Request $request, School $school, TeacherAttendanceAccess $access): JsonResponse
+    public function index(Request $request, School $school, TeacherAttendanceAccess $access, TeacherAttendanceReadAudit $audit): JsonResponse
     {
         $validated = $request->validate([
             'attendance_date' => ['sometimes', 'date_format:Y-m-d'],
@@ -62,6 +66,7 @@ class TeacherAttendanceController extends Controller
             ->orderBy('period_start_time')
             ->paginate(50)
             ->withQueryString();
+        $audit->sessionsListed($school, $request->user(), $scope, $validated['attendance_date'] ?? null, $paginator->currentPage(), count($paginator->items()), TeacherAttendanceReadAudit::SURFACE_API);
 
         return response()->json([
             'data' => $paginator->through(fn (AttendanceSession $s) => $this->present($s, withRecords: false))->items(),
@@ -73,14 +78,16 @@ class TeacherAttendanceController extends Controller
         ]);
     }
 
-    public function show(Request $request, School $school, string $attendanceSession, TeacherAttendanceAccess $access): JsonResponse
+    public function show(Request $request, School $school, string $attendanceSession, TeacherAttendanceAccess $access, TeacherAttendanceReadAudit $audit): JsonResponse
     {
         abort_if(! Str::isUuid($attendanceSession), 404);
 
-        $session = $access->scope($request->user(), $school)
+        $scope = $access->scope($request->user(), $school);
+        $session = $scope
             ->constrain(AttendanceSession::query()->whereKey($attendanceSession))
             ->with($this->presentationRelations(withRecords: true))
             ->firstOrFail();
+        $audit->sessionViewed($school, $request->user(), $scope, $session, TeacherAttendanceReadAudit::SURFACE_API);
 
         return response()->json(['data' => $this->present($session, withRecords: true)]);
     }
@@ -91,7 +98,7 @@ class TeacherAttendanceController extends Controller
      * entry's own teacher_id is shown as the scheduled teacher and plays no
      * part in the filter.
      */
-    public function scheduledClasses(Request $request, School $school, TeacherAttendanceAccess $access): JsonResponse
+    public function scheduledClasses(Request $request, School $school, TeacherAttendanceAccess $access, TeacherAttendanceReadAudit $audit): JsonResponse
     {
         $validated = $request->validate([
             'attendance_date' => ['required', 'date_format:Y-m-d'],
@@ -111,6 +118,7 @@ class TeacherAttendanceController extends Controller
             ->where('day_of_week', $date->isoWeekday())
             ->get()
             ->filter(fn (TimetableEntry $e) => $scope->ownsOn($e->section_id, $e->subject_offering_id, $date->toDateString()));
+        $audit->classesListed($school, $request->user(), $scope, $date->toDateString(), $entries->count(), TeacherAttendanceReadAudit::SURFACE_API);
 
         return response()->json(['data' => $entries->map(fn (TimetableEntry $e) => [
             'timetableEntryId' => $e->id,
@@ -132,7 +140,7 @@ class TeacherAttendanceController extends Controller
     }
 
     /** The roster of an OWNED class on its date (non-authoritative preview, like Tier 1's). */
-    public function rosterPreview(Request $request, School $school, TeacherAttendanceAccess $access, StudentEnrollmentRosterReadService $roster): JsonResponse
+    public function rosterPreview(Request $request, School $school, TeacherAttendanceAccess $access, StudentEnrollmentRosterReadService $roster, TeacherAttendanceReadAudit $audit): JsonResponse
     {
         $validated = $request->validate([
             'timetable_entry_id' => ['required', 'uuid'],
@@ -150,6 +158,7 @@ class TeacherAttendanceController extends Controller
             $school->id, $entry->academic_year_id, $entry->campus_id,
             $entry->grade_level_id, $entry->section_id, $validated['attendance_date'],
         );
+        $audit->rosterViewed($school, $request->user(), $scope, $entry->id, $entry->section_id, $entry->subject_offering_id, $validated['attendance_date'], $members->count(), TeacherAttendanceReadAudit::SURFACE_API);
 
         return response()->json([
             'data' => $members->map(fn (SectionRosterMember $m) => $m->toArray())->all(),

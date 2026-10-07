@@ -30019,7 +30019,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Lacking attendance.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE). */
+            /** @description Lacking attendance.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE); or TEACHER_ATTENDANCE_API_UNAVAILABLE -- this bearer-token surface is development only (E33 / TCH-L1, ADR 0063 section 43 -- a bearer token carries no MFA assurance, so production teacher Attendance is the web app with MFA). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -30073,7 +30073,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Lacking attendance.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE). */
+            /** @description Lacking attendance.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE); or TEACHER_ATTENDANCE_API_UNAVAILABLE -- this bearer-token surface is development only (E33 / TCH-L1, ADR 0063 section 43 -- a bearer token carries no MFA assurance, so production teacher Attendance is the web app with MFA). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -30143,7 +30143,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Lacking attendance.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE). */
+            /** @description Lacking attendance.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE); or TEACHER_ATTENDANCE_API_UNAVAILABLE -- this bearer-token surface is development only (E33 / TCH-L1, ADR 0063 section 43 -- a bearer token carries no MFA assurance, so production teacher Attendance is the web app with MFA). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -30205,7 +30205,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Lacking attendance.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE). */
+            /** @description Lacking attendance.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE); or TEACHER_ATTENDANCE_API_UNAVAILABLE -- this bearer-token surface is development only (E33 / TCH-L1, ADR 0063 section 43 -- a bearer token carries no MFA assurance, so production teacher Attendance is the web app with MFA). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -30265,7 +30265,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Lacking attendance.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE). */
+            /** @description Lacking attendance.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE); or TEACHER_ATTENDANCE_API_UNAVAILABLE -- this bearer-token surface is development only (E33 / TCH-L1, ADR 0063 section 43 -- a bearer token carries no MFA assurance, so production teacher Attendance is the web app with MFA). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -30320,7 +30320,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Lacking attendance.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE). */
+            /** @description Lacking attendance.teacher, or not an eligible Employee of this School today (HR_ACTING_EMPLOYEE_UNAVAILABLE); or TEACHER_ATTENDANCE_API_UNAVAILABLE -- this bearer-token surface is development only (E33 / TCH-L1, ADR 0063 section 43 -- a bearer token carries no MFA assurance, so production teacher Attendance is the web app with MFA). */
             403: {
                 headers: {
                     [name: string]: unknown;

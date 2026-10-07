@@ -1618,7 +1618,10 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
     // rosters. Authorization lives in the controller (TeacherAttendanceAccess)
     // and, for writes, again inside the Attendance services' transactions.
     // PRODUCTION ENABLEMENT is blocked by the open TCH-L1 determination.
-    Route::prefix('app/my-attendance')->name('app.my-attendance.')->group(function (): void {
+    // E33 / TCH-L1 (ADR 0063 section 43): the owned capability and the MFA
+    // assurance gate on every My Attendance page and post. MFA never
+    // substitutes for ownership -- TeacherAttendanceAccess still decides it.
+    Route::prefix('app/my-attendance')->name('app.my-attendance.')->middleware(['capability:attendance.teacher', 'mfa-page'])->group(function (): void {
         Route::get('/', [MyAttendanceController::class, 'index'])->name('index');
         Route::get('/take', [MyAttendanceController::class, 'take'])->name('take');
         Route::post('/', [MyAttendanceController::class, 'store'])->name('store');

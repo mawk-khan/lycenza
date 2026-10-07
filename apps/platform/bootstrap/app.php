@@ -16,11 +16,13 @@ use App\Http\Middleware\DevOnlySchoolHeaderResolver;
 use App\Http\Middleware\EnforceCredentialVersion;
 use App\Http\Middleware\EnsureCapability;
 use App\Http\Middleware\EnsureIdempotent;
+use App\Http\Middleware\EnsureTeacherAttendanceApiDevelopmentOnly;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\NoReferrer;
 use App\Http\Middleware\PreventAuthenticatedPageCaching;
 use App\Http\Middleware\RecordHttpMetrics;
 use App\Http\Middleware\RequireMfa;
+use App\Http\Middleware\RequireMfaForPage;
 use App\Http\Middleware\RequireSchoolContext;
 use App\Http\Middleware\ResolvePlatformElevation;
 use App\Http\Middleware\ResolveSchoolContext;
@@ -116,6 +118,11 @@ return Application::configure(basePath: dirname(__DIR__))
             // never global -- see App\Http\Middleware\RequireMfa's
             // docblock.
             'mfa' => RequireMfa::class,
+            // E33 / TCH-L1 (ADR 0063 section 43): the same assurance gate for
+            // Inertia pages (renders MfaRequired), and the development-only
+            // gate on the owned teacher Attendance bearer routes.
+            'mfa-page' => RequireMfaForPage::class,
+            'teacher-attendance-api' => EnsureTeacherAttendanceApiDevelopmentOnly::class,
             // Phase 0N.1: the School-context prerequisite for every
             // School-scoped web route (routes/web.php's School group) --
             // see App\Http\Middleware\RequireSchoolContext.

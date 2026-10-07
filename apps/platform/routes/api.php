@@ -2009,25 +2009,27 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             // inside each write. Unowned = 404. `private-no-store`: Sensitive
             // Student attendance. Submit is deliberately not `idempotent`
             // (see TeacherAttendanceController::store()). Helpers before
-            // `{attendanceSession}`. PRODUCTION ENABLEMENT is blocked by the
-            // open TCH-L1 legal/compliance determination.
+            // `{attendanceSession}`. E33 / TCH-L1 (ADR 0063 section 43): a
+            // bearer token carries no MFA assurance, so these routes are
+            // DEVELOPMENT ONLY (`teacher-attendance-api`, double-guarded);
+            // production teacher Attendance is the web surface with MFA.
             Route::get('/my/attendance-sessions', [TeacherAttendanceController::class, 'index'])
-                ->middleware(['private-no-store', 'capability:attendance.teacher'])
+                ->middleware(['teacher-attendance-api', 'private-no-store', 'capability:attendance.teacher'])
                 ->name('schools.my.attendance-sessions.index');
             Route::post('/my/attendance-sessions', [TeacherAttendanceController::class, 'store'])
-                ->middleware(['private-no-store', 'capability:attendance.teacher', 'throttle:school-api-mutations'])
+                ->middleware(['teacher-attendance-api', 'private-no-store', 'capability:attendance.teacher', 'throttle:school-api-mutations'])
                 ->name('schools.my.attendance-sessions.store');
             Route::get('/my/attendance-sessions/scheduled-classes', [TeacherAttendanceController::class, 'scheduledClasses'])
-                ->middleware(['private-no-store', 'capability:attendance.teacher'])
+                ->middleware(['teacher-attendance-api', 'private-no-store', 'capability:attendance.teacher'])
                 ->name('schools.my.attendance-sessions.scheduled-classes');
             Route::get('/my/attendance-sessions/roster-preview', [TeacherAttendanceController::class, 'rosterPreview'])
-                ->middleware(['private-no-store', 'capability:attendance.teacher'])
+                ->middleware(['teacher-attendance-api', 'private-no-store', 'capability:attendance.teacher'])
                 ->name('schools.my.attendance-sessions.roster-preview');
             Route::get('/my/attendance-sessions/{attendanceSession}', [TeacherAttendanceController::class, 'show'])
-                ->middleware(['private-no-store', 'capability:attendance.teacher'])
+                ->middleware(['teacher-attendance-api', 'private-no-store', 'capability:attendance.teacher'])
                 ->name('schools.my.attendance-sessions.show');
             Route::post('/my/attendance-records/{attendanceRecord}/correct', [TeacherAttendanceController::class, 'correct'])
-                ->middleware(['private-no-store', 'capability:attendance.teacher', 'throttle:school-api-mutations'])
+                ->middleware(['teacher-attendance-api', 'private-no-store', 'capability:attendance.teacher', 'throttle:school-api-mutations'])
                 ->name('schools.my.attendance-records.correct');
 
             // Phase 0H.3A (Syllabus Foundation -- the first concrete

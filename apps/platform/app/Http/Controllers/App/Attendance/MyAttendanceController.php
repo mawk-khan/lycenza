@@ -6,6 +6,7 @@ use App\Domain\Attendance\Application\AttendanceCorrectionService;
 use App\Domain\Attendance\Application\AttendanceSubmissionService;
 use App\Domain\Attendance\Application\Exceptions\AttendanceException;
 use App\Domain\Attendance\Application\TeacherAttendanceAccess;
+use App\Domain\Attendance\Application\TeacherAttendanceReadAudit;
 use App\Domain\Attendance\Application\TeacherAttendanceScope;
 use App\Domain\Attendance\Infrastructure\AttendanceRecord;
 use App\Domain\Attendance\Infrastructure\AttendanceSession;
@@ -43,8 +44,11 @@ use Inertia\Response;
  * empty list and every other page is refused (403); a class or register
  * they do not own is 404. There is no Student directory access.
  *
- * PRODUCTION ENABLEMENT is blocked by the open TCH-L1 legal/compliance
- * determination (ADR 0063 section 26).
+ * E33 / TCH-L1 (APPROVED WITH CONDITIONS, ADR 0063 sections 42-43): every
+ * route also needs `capability:attendance.teacher` and the MFA assurance gate
+ * (`mfa-page`), and every successful read is audited
+ * (TeacherAttendanceReadAudit, ids and counts only). Production enablement
+ * follows ADR 0063 section 43's control verification.
  */
 class MyAttendanceController extends Controller
 {
@@ -52,7 +56,7 @@ class MyAttendanceController extends Controller
 
     private const string BASE = '/app/my-attendance';
 
-    public function index(Request $request, TenantContext $context, TeacherAttendanceAccess $access): Response
+    public function index(Request $request, TenantContext $context, TeacherAttendanceAccess $access, TeacherAttendanceReadAudit $audit): Response
     {
         $school = $context->requireSchool();
 
@@ -74,6 +78,10 @@ class MyAttendanceController extends Controller
             ->paginate(25)
             ->withQueryString();
 
+        if ($scope !== null) {
+            $audit->sessionsListed($school, $request->user(), $scope, $validated['attendance_date'] ?? null, $paginator->currentPage(), count($paginator->items()), TeacherAttendanceReadAudit::SURFACE_WEB);
+        }
+
         return Inertia::render('App/Attendance/Index', [
             'sessions' => $paginator->through(fn (AttendanceSession $s) => $this->presentSummary($s)),
             'filters' => ['attendanceDate' => $validated['attendance_date'] ?? ''],
@@ -83,7 +91,7 @@ class MyAttendanceController extends Controller
         ]);
     }
 
-    public function take(Request $request, TenantContext $context, TeacherAttendanceAccess $access, StudentEnrollmentRosterReadService $roster): Response
+    public function take(Request $request, TenantContext $context, TeacherAttendanceAccess $access, StudentEnrollmentRosterReadService $roster, TeacherAttendanceReadAudit $audit): Response
     {
         $school = $context->requireSchool();
         $scope = $this->scope($access, $request, $school);
@@ -121,10 +129,12 @@ class MyAttendanceController extends Controller
                     $school->id, $entry->academic_year_id, $entry->campus_id,
                     $entry->grade_level_id, $entry->section_id, $date,
                 )->map(fn (SectionRosterMember $m) => $m->toArray())->all();
+                $audit->rosterViewed($school, $request->user(), $scope, $entry->id, $entry->section_id, $entry->subject_offering_id, $date, count($rosterMembers), TeacherAttendanceReadAudit::SURFACE_WEB);
             } catch (AmbiguousHistoricalEnrollmentException $e) {
                 $rosterError = $e->getMessage();
             }
         }
+        $audit->classesListed($school, $request->user(), $scope, $date, $owned->count(), TeacherAttendanceReadAudit::SURFACE_WEB);
 
         return Inertia::render('App/Attendance/Take', [
             'attendanceDate' => $date,
@@ -146,18 +156,20 @@ class MyAttendanceController extends Controller
         ]);
     }
 
-    public function show(Request $request, TenantContext $context, TeacherAttendanceAccess $access, string $attendanceSession): Response
+    public function show(Request $request, TenantContext $context, TeacherAttendanceAccess $access, TeacherAttendanceReadAudit $audit, string $attendanceSession): Response
     {
         $school = $context->requireSchool();
         abort_unless(Str::isUuid($attendanceSession), 404);
 
-        $session = $this->scope($access, $request, $school)
+        $scope = $this->scope($access, $request, $school);
+        $session = $scope
             ->constrain(AttendanceSession::query()->whereKey($attendanceSession))
             ->with([
                 'academicYear', 'campus', 'gradeLevel', 'section', 'subjectOffering.subject', 'teacher', 'period',
                 'records.studentEnrollment.student:id,school_id,first_name,middle_name,last_name',
             ])
             ->firstOrFail();
+        $audit->sessionViewed($school, $request->user(), $scope, $session, TeacherAttendanceReadAudit::SURFACE_WEB);
 
         return Inertia::render('App/Attendance/Show', [
             'session' => $this->presentDetail($session),

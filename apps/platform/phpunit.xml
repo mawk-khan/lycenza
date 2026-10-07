@@ -137,6 +137,8 @@
         <env name="TELESCOPE_ENABLED" value="false" force="true"/>
         <env name="NIGHTWATCH_ENABLED" value="false" force="true"/>
         <env name="TENANCY_ALLOW_DEV_HEADER_OVERRIDE" value="true" force="true"/>
+        <!-- E33 / TCH-L1 (ADR 0063 section 43): the owned teacher Attendance bearer routes are development/testing only (double-guarded with the environment). -->
+        <env name="TEACHER_ATTENDANCE_API_DEVELOPMENT_ENABLED" value="true" force="true"/>
         <!-- ADR 0053 (Phase 0O.7A): no AI Gateway and no service keys unless a
              test configures them (runtime-generated keys, never the committed
              development ones); an ambient developer .env value (including the

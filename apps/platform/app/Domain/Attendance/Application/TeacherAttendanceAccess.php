@@ -32,9 +32,9 @@ use App\Support\Authorization\AuthorizesCapability;
  * `attendance_date` -- never today, created_at or submitted_at.
  *
  * Reads filter the same models; writes run AttendanceSubmissionService /
- * AttendanceCorrectionService with a TeacherAttendanceGuard. Production
- * enablement is gated by the TCH-L1 legal/compliance determination
- * (ADR 0063 section 26); nothing here decides it.
+ * AttendanceCorrectionService with a TeacherAttendanceGuard. TCH-L1 / E33
+ * is APPROVED WITH CONDITIONS (ADR 0063 sections 42-43): MFA and the read
+ * audit live at the surfaces; nothing here decides production enablement.
  */
 class TeacherAttendanceAccess
 {
