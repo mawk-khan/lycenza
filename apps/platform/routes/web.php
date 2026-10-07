@@ -1602,6 +1602,11 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
     // the batch write of one paper, scoped server-side to the Students the
     // teacher owns on its date; no lock, correction, list or search route. The
     // paper id is a plain uuid (not model-bound): every miss is the same 404.
+    // RES.4A (ADR 0068 §26): the teacher's own paper discovery list -- the same
+    // block, capability and `mfa`; papers owned on their date, no Student data.
+    Route::get('app/my-examination-papers', [TeacherStudentMarkController::class, 'papers'])
+        ->middleware(['teacher-marks-development-only', 'capability:examinations.marks.teacher', 'mfa'])
+        ->name('app.my-examination-papers.index');
     Route::prefix('app/my-examination-papers/{examinationPaper}/marks')->whereUuid('examinationPaper')
         ->name('app.my-examination-papers.marks.')
         ->middleware(['teacher-marks-development-only', 'capability:examinations.marks.teacher', 'mfa'])

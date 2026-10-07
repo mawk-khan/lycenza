@@ -840,3 +840,18 @@ is not a legal determination: RES-L2 (E37) and the teacher RES-L0 re-review
   - writes: `examinations.student_mark.teacher_recorded` / `.teacher_changed`.
 
   Each carries ids, the Employee and the ownership source, and never a value.
+
+### My examination papers (RES.4A, 2026-10-07; ADR 0068 §26)
+
+`GET /app/my-examination-papers` is discovery only, with the same block,
+capability, ActingEmployee and `mfa` as the marks routes.
+- **Listed:** papers whose Offering the teacher owns on the paper's
+  `scheduled_on` (any owned Section of a required Offering, or the TCH-E
+  elective assignment), that are active and in a year that is not closed.
+  Locked papers are listed read-only (`entryAvailable: false`).
+- **Each row:** paper, Examination and Subject identity, the date, the
+  maximum, the marks state and the marks URL. No Student, count, mark or
+  basis signal.
+- **Audit:** `examinations.examination_papers.teacher_listed` (Employee id
+  and paper count).
+- **Status:** development only; the legal gates are unchanged.

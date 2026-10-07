@@ -271,6 +271,10 @@ active actor + `mfa` + ActingEmployee (today)
 - **Production block.** `TeacherStudentMarkAvailability` refuses it in
   every environment except `local` / `testing`, whatever the grants, until
   RES-L2 (E37), the teacher RES-L0 re-review (E35) and RES-L1 permit it.
+- **Discovery (RES.4A, ADR 0068 §26).** `GET /app/my-examination-papers`
+  uses the same key, block, ActingEmployee and `mfa`. It lists only papers
+  whose Offering the teacher owns on the paper's date (active, year not
+  closed; locked papers read-only), with no Student or mark data.
 
 **Teacher role.** The production system role `teacher` carries exactly
 `curriculum.delivery.teacher`, `attendance.teacher`, `lms.content.teacher`,

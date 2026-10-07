@@ -6,6 +6,7 @@ use App\Domain\Examinations\Application\Exceptions\ExaminationException;
 use App\Domain\Examinations\Application\Exceptions\TeacherStudentMarkPaperNotFoundException;
 use App\Domain\Examinations\Application\Marks\StudentMarkEntry;
 use App\Domain\Examinations\Application\Marks\StudentMarkService;
+use App\Domain\Examinations\Application\Marks\TeacherExaminationPaperDiscoveryService;
 use App\Domain\Examinations\Application\Marks\TeacherStudentMarkAccess;
 use App\Domain\Examinations\Application\Marks\TeacherStudentMarkReadService;
 use App\Domain\HR\Application\Exceptions\ActingEmployeeUnavailableException;
@@ -22,8 +23,9 @@ use Illuminate\Support\Str;
  * `capability:examinations.marks.teacher`, `mfa` and the development-only
  * block (routes/web.php); the Application layer decides everything again
  * (TeacherStudentMarkReadService; StudentMarkService with the teacher guard).
- * Exactly two actions, the owned read and the owned batch write -- never the
- * administrative grid, a list, search, export or Student-centric endpoint.
+ * Exactly two marks actions, the owned read and the owned batch write, plus
+ * (RES.4A) the owned paper discovery list -- never the administrative grid, a
+ * Student or mark list, search, export or Student-centric endpoint.
  *
  * The paper id is NOT route-model-bound: an unknown id, another School's
  * paper and a paper the teacher does not own all answer the identical 404
@@ -33,6 +35,18 @@ use Illuminate\Support\Str;
 class TeacherStudentMarkController extends Controller
 {
     public function __construct(private readonly TenantContext $context) {}
+
+    /** RES.4A (ADR 0068 §26): the papers the teacher can open here -- discovery only, no Student or mark. */
+    public function papers(Request $request, TeacherExaminationPaperDiscoveryService $papers): JsonResponse
+    {
+        try {
+            return response()->json(['data' => $papers->papers($this->context->requireSchool(), $request->user())]);
+        } catch (ActingEmployeeUnavailableException $e) {
+            return $this->identityUnavailable($e);
+        } catch (ExaminationException $e) {
+            return $this->error($e);
+        }
+    }
 
     public function index(Request $request, string $examinationPaper, TeacherStudentMarkReadService $marks): JsonResponse
     {

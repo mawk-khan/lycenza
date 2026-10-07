@@ -18,7 +18,8 @@
   engineering authorisation (not a legal determination), owned teacher
   StudentMark entry is built and tested; **production is technically
   blocked** pending RES-L2 (E37), the teacher RES-L0 re-review (E35) and
-  RES-L1 (E36).
+  RES-L1 (E36). **RES.4A (2026-10-07, §26):** the teacher's own
+  examination-paper discovery list (discovery only; same gates, same block).
 - Date: 2026-10-06
 - Programme: **RES — Assessment & results** (`MASTER-ROADMAP.md`,
   "Post-foundation product programmes", order 5).
@@ -1531,3 +1532,119 @@ AI/ML, export, search, outbox event, webhook or `/api/v1` route. It creates no
 
 **RES.4 — IMPLEMENTED FOR DEVELOPMENT / PRODUCTION BLOCKED PENDING RES-L2 +
 TEACHER RES-L0 + RES-L1.**
+
+## 26. RES.4A — teacher "My examination papers" discovery (2026-10-07)
+
+**A usability follow-up to §25, authorised by the product owner. Development
+and test only.**
+- It does not change the legal or privacy position: RES-L2 (E37), the teacher
+  RES-L0 re-review (E35) and RES-L1 (E36) remain unresolved.
+- Production stays refused by the same non-configurable
+  `TeacherStudentMarkAvailability` block (§25.3).
+
+### 26.1 What it answers
+`GET /app/my-examination-papers` answers one question: **which
+ExaminationPapers can this teacher open on the §25 marks surface?** It is
+discovery only. It never promises that any particular Student can be
+processed: the marks surface still decides P3 eligibility, ownership, the
+ADR 0038 basis and mark visibility per Student, unchanged.
+
+### 26.2 Rule
+A paper is listed only if every one of these holds:
+- **the §25 access path:**
+  - the development-only block;
+  - `examinations.marks.teacher`;
+  - an eligible ActingEmployee today;
+  - session plus `mfa` on the route;
+- **ownership on the paper's date:** the teacher owns the paper's Offering on
+  its **`scheduled_on`**, by `TeacherStudentMarkScope::ownsOffering()`, the
+  same rule as the marks surface's paper visibility (§25.5, §25.6
+  `admitPaper()`):
+  - **required Offering:** a TeachingAssignment of *some* Section of that
+    Offering covering the date;
+  - **elective Offering:** the TCH-E Offering-wide assignment covering the
+    date;
+- **paper state:** the paper is **active** and its AcademicYear is **not
+  closed**.
+
+**Never enough to be listed:**
+- a role or School membership;
+- a StudentSubjectEnrollment;
+- ownership of another Offering;
+- ownership of this Offering on another date.
+
+### 26.3 States (decided)
+- **Locked papers are listed read-only:** `marksState: locked`,
+  `entryAvailable: false`. The teacher can still view marks on them; the
+  write path keeps refusing them, and no unlock authority exists.
+- **Inactive papers and closed years are omitted.** The §25 marks read
+  refuses both, so listing them would offer something the teacher cannot
+  open. Historical viewing beyond §25 is not added.
+
+### 26.4 Data minimisation
+Each row contains:
+- the paper id;
+- the Examination id and name;
+- the Offering id, Subject name and code, and grade-level name;
+- `scheduledOn` and `maxMarks`;
+- `marksState` and `entryAvailable`;
+- `marksUrl`.
+
+Nothing else is returned: no Student, roster, count, mark, processing-basis
+signal, correction, result or administrative field. The service reads no
+Student, mark, revision, correction, P3 or processing-authorization data
+(guard-pinned).
+
+### 26.5 Architecture
+`TeacherExaminationPaperDiscoveryService`, behind a thin action on
+`TeacherStudentMarkController`:
+- `TeacherStudentMarkAccess::scope()`, i.e. the teacher's
+  `TeachingOwnership` periods (required and elective);
+- **one** paper query: active papers of the owned Offerings in years that
+  are not closed, with eager-loaded display names;
+- each paper's date checked in memory;
+- **one** mark-state query.
+
+The query count is constant in the number of papers, Sections and
+assignments (tested), and nothing is cached. Ownership is read fresh on every
+request, so an ended or shortened assignment removes the paper immediately;
+StudentMark evidence is untouched.
+
+### 26.6 Audit and protections
+- **Audit.** Every successful listing records
+  `examinations.examination_papers.teacher_listed` with
+  `{employeeId, paperCount}`. Refused requests record nothing.
+- **Route.** `teacher-marks-development-only` +
+  `capability:examinations.marks.teacher` + `mfa` (guard-pinned with the
+  §25 routes).
+- **No new surface elsewhere.** No new capability, no `/api/v1` route, no
+  OpenAPI change.
+- **Concealment.** Unowned and other-School papers are simply absent, and
+  direct access to them stays the §25 identical 404.
+
+### 26.7 Proof
+`TeacherExaminationPaperDiscoveryTest` (9):
+- required: own Offering only; any owned Section reaches the Offering-wide
+  paper; not another Offering's paper;
+- elective: the owned elective only; another elective's teacher and an
+  elected Student grant nothing;
+- date cases: co-teacher, short cover, inclusive end, ended the day before,
+  starts the day after;
+- states: locked read-only, inactive omitted, closed year omitted;
+- an assignment end removes the paper and keeps the marks;
+- refusals: no ActingEmployee, administrative keys, an unrelated teacher's
+  empty list, other Schools, production and staging;
+- audit;
+- constant query count;
+- HTTP: anonymous 401, MFA 401/403, capability, identity, production and
+  staging 403 even for an accidental grant, every listed paper opens on the
+  marks route, a foreign paper is 404, no value or Student field, no API
+  route.
+
+**Mutation check:** dropping the per-paper date check fails 2 tests.
+`StudentMarkArchitectureGuardTest` is amended (route list, discovery
+read-set pins).
+
+### 26.8 Gates
+Unchanged from §25.11. **RES.4 / RES.4A — IMPLEMENTED FOR DEVELOPMENT /
+PRODUCTION BLOCKED PENDING RES-L2 + TEACHER RES-L0 + RES-L1.**

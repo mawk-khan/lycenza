@@ -162,9 +162,9 @@ class StudentMarkArchitectureGuardTest extends TestCase
 
         $this->assertSame([
             'app.examination-papers.marks.corrections.store', 'app.examination-papers.marks.index', 'app.examination-papers.marks.lock',
-            'app.examination-papers.marks.update', 'app.my-examination-papers.marks.index', 'app.my-examination-papers.marks.update',
+            'app.examination-papers.marks.update', 'app.my-examination-papers.index', 'app.my-examination-papers.marks.index', 'app.my-examination-papers.marks.update',
             'app.student-mark-corrections.approve', 'app.student-mark-corrections.reject',
-        ], $routes->map(fn (Route $route) => (string) $route->getName())->sort()->values()->all(), 'RES.3 adds lock, request, approve and reject; RES.4 the owned teacher read and write -- never an unlock, reopen, bypass, list or search route.');
+        ], $routes->map(fn (Route $route) => (string) $route->getName())->sort()->values()->all(), 'RES.3 adds lock, request, approve and reject; RES.4 the owned teacher read and write, RES.4A the owned paper discovery list -- never an unlock, reopen, bypass, Student/mark list or search route.');
         foreach ($routes as $route) {
             $this->assertStringStartsNotWith('api/', $route->uri(), 'No bearer-token marks route (ADR 0049; ADR 0068 §4.1).');
             $middleware = $route->gatherMiddleware();
@@ -255,7 +255,16 @@ class StudentMarkArchitectureGuardTest extends TestCase
         }
         $this->assertStringContainsString('TeacherStudentMarkAvailability::isAvailable()', $this->code(app_path('Http/Middleware/EnsureTeacherStudentMarksDevelopmentOnly.php')));
 
-        foreach (['TeacherStudentMarkGuard.php', 'TeacherStudentMarkAccess.php', 'TeacherStudentMarkReadService.php', 'TeacherStudentMarkScope.php'] as $file) {
+        // RES.4A (ADR 0068 §26): discovery is the RES.4 access path over papers only -- no Student, mark, revision,
+        // correction, P3, processing-authorization or results read, and never the administrative paper surface.
+        $discovery = $this->code($marks.'TeacherExaminationPaperDiscoveryService.php');
+        $this->assertMatchesRegularExpression('/function papers[^{]*\{\s*\$scope = \$this->access->scope\(\$actor, \$school\);/', $discovery, 'block, capability and ActingEmployee first');
+        $this->assertStringContainsString('$scope->ownsOffering(', $discovery, 'the RES.4 paper-visibility rule, on each paper\'s date');
+        foreach (['/\bStudentMark(Revision|Correction)?\b/', '/\bSubjectOfferingEligibility/', '/ProcessingAuthorization/', '/\bStudent\b/', '/examinations\.results/', '/\bStudentMarkReadService\b/', '/ExaminationPaperService/', "/'value'/"] as $forbidden) {
+            $this->assertDoesNotMatchRegularExpression($forbidden, $discovery, "discovery must not use {$forbidden}");
+        }
+
+        foreach (['TeacherStudentMarkGuard.php', 'TeacherStudentMarkAccess.php', 'TeacherStudentMarkReadService.php', 'TeacherStudentMarkScope.php', 'TeacherExaminationPaperDiscoveryService.php'] as $file) {
             $this->assertDoesNotMatchRegularExpression("/'examinations\.marks\.(view|manage|lock|correction\.[a-z]+)'/", $this->code($marks.$file), "{$file} never consults an administrative marks key");
         }
     }

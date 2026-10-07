@@ -33,6 +33,17 @@ final readonly class TeacherStudentMarkScope
         private array $electivePeriods,
     ) {}
 
+    /**
+     * RES.4A: every Offering the teacher holds any ownership period of (any date) -- a candidate prefilter only;
+     * ownsOffering() still decides each paper on its own date.
+     *
+     * @return list<string>
+     */
+    public function offeringIds(): array
+    {
+        return array_values(array_unique(array_map(fn (OwnedTeachingPeriod|OwnedElectivePeriod $p) => $p->subjectOfferingId, [...$this->periods, ...$this->electivePeriods])));
+    }
+
     /** Does the teacher own any part of the Offering on the date (any Section of a required one, or the elective)? */
     public function ownsOffering(string $subjectOfferingId, string $date): bool
     {
