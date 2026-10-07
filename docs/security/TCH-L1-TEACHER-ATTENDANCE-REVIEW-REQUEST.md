@@ -1,5 +1,9 @@
 # TCH-L1 — Teacher Attendance Production Access: Review Request
 
+*Status update (2026-10-07): answered — **APPROVED WITH CONDITIONS**; see
+`docs/security/TCH-L1-TEACHER-ATTENDANCE-DETERMINATION.md`. The request below
+is kept as drafted.*
+
 **Status at drafting (2026-10-07): DRAFT REQUEST — NOT SENT, NOT ANSWERED.**
 This is the request the product owner sends to the authorized
 legal/compliance reviewer. It records no approval, and nothing in it may be

@@ -11,7 +11,9 @@
   maker/checker corrections, development only; production blocked by RES-L1.
   §7.2's "insert-only" is amended in §21.3. **RES.4 readiness (2026-10-07,
   §22; docs only):** the teacher-processing requests are drafted, not sent;
-  **RES.4 remains NOT AUTHORISED.**
+  **RES.4 remains NOT AUTHORISED.** **E33 determined (2026-10-07, §23):**
+  APPROVED WITH CONDITIONS for teacher Attendance only; RES.4 still NOT
+  AUTHORISED (RES-L2, RES-L0 teacher re-review).
 - Date: 2026-10-06
 - Programme: **RES — Assessment & results** (`MASTER-ROADMAP.md`,
   "Post-foundation product programmes", order 5).
@@ -1188,3 +1190,27 @@ RES.4 becomes **AUTHORIZED FOR DEVELOPMENT** only when all are true:
 If required subjects clear and electives do not, RES.4 is limited to
 **required subjects**; elective entry waits for the §22.3 prerequisite slice.
 **Today 1 and 2 are absent: RES.4 remains NOT AUTHORISED.**
+
+## 23. Gate trace — E33 / TCH-L1 determined (2026-10-07)
+
+**Docs only; §22 is unchanged and stays the controlling readiness record.**
+- **E33 / TCH-L1:** **APPROVED WITH CONDITIONS** (Lead Privacy Counsel & DPO,
+  7 October 2026; `docs/security/TCH-L1-TEACHER-ATTENDANCE-DETERMINATION.md`;
+  ADR 0063 §42). It concerns teacher **Attendance** only and expressly has
+  **no effect on teacher StudentMark processing**: it does not satisfy
+  RES-L2, the RES-L0 teacher re-review or any StudentMark processing basis,
+  and no marks capability may inherit from an Attendance capability.
+- **§22.9 gates re-evaluated:**
+
+  | Gate | State |
+  |---|---|
+  | 1. RES-L2 (E37) | **Unresolved** — request not answered |
+  | 2. RES-L0 teacher re-review (E35) | **Unresolved** — request not answered; the 7 October administrative determination stays administrative-only |
+  | 3. E33 / ADR 0063 | **Satisfied for development** (the determination permits development; it was already production-only on record). For production, ADR 0063 §42.5 keeps production `teacher` grants closed until MFA and read-audit controls are evidenced |
+  | 4. Ownership facts | Required subjects READY; electives BLOCKED (§22.3) |
+
+- **Outcome: RES.4 — NOT AUTHORISED, blocked by RES-L2 (E37) and the RES-L0
+  teacher re-review (E35).**
+- **For a future RES.4 production case** (not authorised), the TCH-L1
+  conditions are a useful precedent but not binding on marks; the marks
+  conditions come from RES-L2, the RES-L0 teacher re-review and RES-L1.

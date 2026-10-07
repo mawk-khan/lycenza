@@ -598,7 +598,7 @@ with secrets.
 | E30 | Fee receipt statutory form / GST (ADR 0062 decision J): whether a prescribed receipt or tax invoice, GSTIN, HSN/SAC, taxable value or tax lines are required, and how any fee is treated | ADR 0062 §17.5; FEE.4 note | Legal | Mandatory | LEGAL_REVIEW_REQUIRED (development authorised — FEE.4 ships a payment acknowledgement only) | Qualified answer recorded; the receipt form changed only if the answer requires it | Future legal record + ADR 0062 amendment | Legal + Owner | Yes |
 | E31 | Fee regulation: limits on late fees and in-year fee changes (owner product decision H recorded 2026-09-30; the legal question stays open) | ADR 0062 §16, §27 | Legal | Mandatory | LEGAL_REVIEW_REQUIRED (development authorised for FEE.5; H decided 2026-09-30) | Qualified answer recorded before late fees are enabled in production | Future legal record + ADR 0062 amendment | Legal + Owner | Yes |
 | E32 | RTE / statutory free-seat obligations for fee assessment and concessions | ADR 0062 §14.2, §27 | Legal | Mandatory | LEGAL_REVIEW_REQUIRED (development authorised; no RTE label or rule exists) | Qualified answer recorded; any required fee treatment decided by the owner | Future legal record + ADR 0062 amendment | Legal + Owner | Yes |
-| E33 | TCH-L1 — teacher Attendance: whether widening access to identifiable Student attendance from administrative actors to assigned teachers needs an updated children's-data/privacy assessment, processing record or equivalent production approval | ADR 0063 §26, §39 | Legal | Mandatory | LEGAL_REVIEW_REQUIRED (development authorised — TCH.4 built and development-closed) | Qualified determination recorded; the `attendance.teacher` surface stays out of production use until then | Future `docs/security/TCH-L1-TEACHER-ATTENDANCE-DETERMINATION.md` + ADR 0063 amendment | Legal + Owner | Yes |
+| E33 | TCH-L1 — teacher Attendance: whether widening access to identifiable Student attendance from administrative actors to assigned teachers needs an updated children's-data/privacy assessment, processing record or equivalent production approval | ADR 0063 §26, §39, §42 | Legal | Mandatory | **DETERMINED — APPROVED WITH CONDITIONS** (7 October 2026, Lead Privacy Counsel & DPO): teacher **Attendance** only. **Development:** permitted within the approved scope (conforming to ADR 0063 and the determination). **Production:** permitted only after the determination's nine controls are implemented and verified; at `91450ea` MFA on the teacher surfaces and audit of teacher reads are **not evidenced** (ADR 0063 §42.4), so the `attendance.teacher` surface and the production `teacher` role stay out of production use. Re-review on the triggers recorded; no fixed expiry. **No effect on StudentMark** (E35, E37 unchanged) | Qualified determination recorded (done); production: the §9 control evidence | `docs/security/TCH-L1-TEACHER-ATTENDANCE-DETERMINATION.md`; request `TCH-L1-TEACHER-ATTENDANCE-REVIEW-REQUEST.md`; ADR 0063 §42 | Legal + Owner | Yes — until the production controls are evidenced (the legal question is answered) |
 | E34 | Library fine / penalty regulation (OPF.4): whether a School may levy overdue fines on Students, and any limit, notice, cap, waiver or treatment requirement — distinct from E31 (tuition late fees) | ADR 0067 §17, §22 | Legal | Mandatory | LEGAL_REVIEW_REQUIRED (development authorised — OPF.4 built 2026-10-06, ADR 0067 §30; no answer assumed) | Qualified answer recorded; Library fines stay out of production use until then | Future `docs/security/` determination + ADR 0067 amendment | Legal + Owner | Yes |
 | E35 | RES-L0 — StudentMark determination revalidation: whether the 2026-09-03 children's-data determination is still current for internal-staff marks entry, including ADR 0038's processing-basis model | ADR 0068 §16 | Legal | Mandatory (RES, post-v1) | **DETERMINED — CURRENT WITH CHANGES** (7 October 2026, Lead Privacy Counsel & DPO): RES-L0 satisfied for the limited design/development scope only; its conditions bind ADR 0068 §19; RES.2 authorised for development; production still RES-L1, retention RES-L8, teacher processing RES-L2; re-review on the triggers recorded | Qualified answer recorded with conditions and re-review triggers (done) | `docs/security/RES-L0-STUDENTMARK-REVALIDATION-DETERMINATION.md`; request `RES-L0-STUDENTMARK-REVALIDATION-REQUEST.md` | Legal + Owner | No (post-v1; blocks the RES slice named) |
 | E36 | RES-L1 — production enablement of internal staff marks entry for real Schools (withheld by the 2026-09-03 determination) | ADR 0068 §16 | Legal | Mandatory (RES, post-v1) | LEGAL_REVIEW_REQUIRED (development authorised once RES-L0 clears; **blocks production**) | Qualified production determination recorded | Future legal record + ADR 0068 amendment | Legal + Owner | No (post-v1; blocks the RES slice named) |
@@ -1344,3 +1344,25 @@ drafted for the owner to send; none is sent or answered:
   register item. RES-L2 does not answer E33, and E33 does not answer RES-L2.
 - **RES.4 remains NOT AUTHORISED** (ADR 0068 §22.9). Elective teacher entry
   is also technically blocked (no elective teaching-ownership fact).
+
+## Note — E33 / TCH-L1 determined (2026-10-07)
+
+Row E33 records the formal outcome of TCH-L1: **APPROVED WITH CONDITIONS**, by
+the Lead Privacy Counsel & DPO, 7 October 2026
+(`docs/security/TCH-L1-TEACHER-ATTENDANCE-DETERMINATION.md`).
+- **Scope:** teacher **Attendance** only, assignment-scoped, deny by default;
+  the teacher role or School membership alone is never enough.
+- **Development:** permitted within that scope.
+- **Production:** permitted only after nine controls are implemented and
+  verified (individual authentication, ownership verification, tenant
+  isolation, deny by default, MFA, auditable reads/writes/changes,
+  revocation, exceptional access not bypassing controls, no authority beyond
+  Attendance). ADR 0063 §42.4 records that **MFA** on the teacher surfaces
+  and **audit of teacher reads** are not evidenced at `91450ea`. Until they
+  are, ADR 0063 §40's no-production-`teacher`-grant rule continues to apply
+  in practice.
+- **Re-review:** no fixed expiry; triggers recorded in the determination §11.
+- **Independence.** This determination has **no effect on teacher StudentMark
+  processing**. E37 (RES-L2) and the E35 teacher re-review are unchanged and
+  unresolved; **RES.4 remains NOT AUTHORISED**. E21, E36 and the other rows
+  are unchanged.

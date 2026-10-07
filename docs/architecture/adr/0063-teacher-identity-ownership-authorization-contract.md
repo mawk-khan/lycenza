@@ -660,6 +660,12 @@ Production blocker: **yes**, for the teacher Attendance surface
 (`attendance.teacher`). No determination has been recorded, and none is
 implied by the TCH.4 implementation or its tests.
 
+**Update (7 October 2026, §42):** TCH-L1 is **DETERMINED — APPROVED WITH
+CONDITIONS** (`docs/security/TCH-L1-TEACHER-ATTENDANCE-DETERMINATION.md`).
+Development: permitted within scope. Production: only after the
+determination's controls are verified (§42.4). The text above is kept as the
+historical state.
+
 ## 27. Findings recorded for other programmes (not TCH scope)
 
 - **Production least privilege.** Only two School roles exist, so every
@@ -2740,6 +2746,11 @@ Items 1 and 3 are not answered here.
 **Status: DECIDED (owner, 2026-10-01; docs only).** This resolves §39.3. No
 application code, capability, role, seed, route or test changes.
 
+*Superseded in part (7 October 2026, §42): TCH-L1 / E33 is now determined
+APPROVED WITH CONDITIONS. The "while E33 is OPEN" premise no longer holds;
+the APPROVED WITH CONDITIONS row of the rule table below governs, and §42.5
+applies it. This section is kept as the historical decision.*
+
 **Decision.** While TCH-L1 / ADR 0058 **E33** is OPEN, production must not
 grant the `teacher` system role to any user. No role split and no
 Attendance feature gate is introduced to work around the open legal
@@ -2805,3 +2816,86 @@ sent alongside the teacher StudentMark requests (ADR 0068 §22) and asks for a
 separate outcome: a TCH-L1 answer decides teacher Attendance only, never
 teacher marks. ADR 0068 §22.2 records how teacher marks would use this ADR's
 ownership seams; no TCH code, role or capability changes.
+
+## 42. TCH-L1 / E33 determined — APPROVED WITH CONDITIONS (7 October 2026)
+
+**Docs only. No code, capability, role, seed, route or test changes.** The
+controlling record is `docs/security/TCH-L1-TEACHER-ATTENDANCE-DETERMINATION.md`
+(Lead Privacy Counsel & DPO, 7 October 2026), completing the §39.4 decision
+record. §26, §39 and §40 are kept as history, with dated pointers here.
+
+### 42.1 Outcome
+**APPROVED WITH CONDITIONS** for teacher **Attendance** processing: an
+authenticated individual teacher with a verified, current, School-maintained
+assignment to the controlled scope; deny by default outside it. The teacher
+role or same-School membership alone is never enough.
+
+### 42.2 Development
+**Permitted** for the approved scope, conforming to this ADR and the
+determination: ownership verification, tenant controls, teacher
+capabilities, MFA enforcement, read/write restrictions, auditing, revocation
+behaviour and related security controls. It broadens no authority.
+
+### 42.3 Mapping to this ADR (as built, TCH.4)
+| Determination condition | This ADR | State |
+|---|---|---|
+| Individual teacher identity | Signed-in User; individual API tokens (ADR 0049) | Met |
+| Verified current assignment | ActingEmployee (§10) + `TeachingOwnership::hold()` on `attendance_date` (§9), held `FOR SHARE` in writes | Met |
+| Permitted actions | Owned roster preview, submit an owned register, correct a record, view own sessions (§39.2) | Met; nothing broader exists |
+| Not authorised (School-wide browsing, export, unrelated classes, analytics, override, admin capabilities) | `attendance.teacher` has no Tier 1; no export, analytics or override on the teacher surface; unowned = identical 404 (§18) | Met |
+| End of assignment | Next write refused after end, suspension, unlink, archive or employment end (two-process tests); recorded Attendance is kept | Met |
+| School-scoped, no cross-tenant fallback, per-School authority | Forced RLS, composite FKs, School-bound routes; capabilities and ActingEmployee resolved per School | Met |
+| Audit (writes, material changes) | `attendance.session.submitted`, `attendance.record.corrected` (actor, School, record, previous/new status); audit is append-only | Met |
+| Privileged / exceptional access | Tier 1 `attendance.manage` is separate administrative authority, not derived from `attendance.teacher`; elevation is refused on School routes (CLAUDE.md rule 83) | Met on record |
+| Data minimisation | §39.2 data set only; no notes, health or Guardian data | Met |
+
+### 42.4 Production conditions — what is NOT yet evidenced (`91450ea`)
+Production is permitted **only after** the nine controls of determination §9
+are implemented and verified. Two are not met by the current implementation:
+1. **MFA (§9.5).** No teacher Attendance route requires MFA. The web routes
+   `app/my-attendance/*` carry no `mfa` middleware, and the `/api/v1`
+   `…/my/attendance-*` routes are bearer-token routes, which carry no MFA
+   assurance (ADR 0049). D-12 (§17) deliberately added no MFA to teaching
+   surfaces. The determination now requires MFA, or a formally approved
+   equivalent control, for production teacher accounts.
+2. **Audit of teacher reads (§9.6).** Writes and corrections are audited;
+   teacher reads (the session list, a session, the scheduled classes, the
+   roster preview) are not.
+
+Also to be verified at production readiness, not assumed:
+- secured MFA recovery and reset that cannot bypass ownership or School
+  authorization;
+- no development/test authentication bypass reachable in production;
+- that the remaining controls are re-verified on the production
+  candidate.
+
+**This audit claims no production readiness.** Closing items 1–2 is a
+separate, explicitly scoped engineering slice under this ADR (MFA on the
+teacher Attendance surfaces, session-only or an approved equivalent for the
+API; read audit), followed by the verification evidence. That slice needs no
+further privacy approval for this scope (determination §9).
+
+### 42.5 Production `teacher` role grants (§40 applied)
+§40's rule table already has the row for this outcome: **APPROVED WITH
+CONDITIONS → evaluate the recorded conditions before enabling the role; add
+controls only if the determination requires them.** It requires MFA and read
+audit, which §42.4 shows are missing. So:
+- **no production `teacher` grant** until §42.4 items are implemented and
+  verified, and E21 and the ADR 0058 platform checklist allow;
+- still no role split, Attendance feature flag or environment-conditional
+  seeding (§40 unchanged on these).
+
+### 42.6 Re-review
+No fixed expiry. Triggers: determination §11 (ownership model change,
+School-wide or cross-tenant access, weakened MFA or audit, a new
+integration or recipient, analytics/profiling/automated decisions/AI, a new
+jurisdiction, a change in law, a material incident, or a material change to
+this ADR's assumptions). Ordinary fixes that keep the conditions do not
+trigger it.
+
+### 42.7 No effect on StudentMark
+This determination does **not** authorise teacher marks entry or reads,
+satisfy RES-L2 (E37) or the teacher-scope RES-L0 re-review (E35), establish
+any StudentMark processing basis, or let any marks capability inherit from
+an Attendance capability. **RES.4 remains NOT AUTHORISED** (ADR 0068 §22.9,
+§23).
