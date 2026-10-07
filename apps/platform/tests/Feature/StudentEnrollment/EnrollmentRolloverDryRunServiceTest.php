@@ -24,6 +24,7 @@ use App\Domain\Students\Infrastructure\StudentSubjectEnrollment;
 use App\Models\Campus;
 use App\Models\School;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -1368,25 +1369,32 @@ class EnrollmentRolloverDryRunServiceTest extends TestCase
     }
 
     #[Test]
-    public function a_malformed_required_offering_participation_is_never_treated_as_a_valid_elective_candidate(): void
+    public function a_malformed_required_offering_participation_can_no_longer_exist(): void
     {
         ['school' => $school, 'sourceYear' => $sourceYear, 'campus' => $campus, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan] = $this->buildSubjectContext();
         $subject = $this->createSubject($school);
         $requiredSourceOffering = $this->createSubjectOffering($sourceYear, $campus, $sourceGrade, $subject, ['is_required' => true]);
         $student = $this->createStudent($school, ['student_number' => 'S-1001']);
         $sourceEnrollment = $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
-        // StudentSubjectEnrollmentService::enroll() would reject a
-        // required Offering outright -- this raw row simulates malformed/
-        // pre-1C.1 legacy data no service path can produce today.
-        app(TenantContext::class)->withSchool($school, fn () => StudentSubjectEnrollment::factory()->create([
-            'school_id' => $school->id,
-            'student_id' => $student->id,
-            'student_enrollment_id' => $sourceEnrollment->id,
-            'subject_offering_id' => $requiredSourceOffering->id,
-            'academic_year_id' => $requiredSourceOffering->academic_year_id,
-            'status' => 'active',
-            'starts_on' => '2026-06-01',
-        ]));
+        // StudentSubjectEnrollmentService::enroll() rejects a required
+        // Offering, and since ADR 0069 the database refuses even a raw
+        // row (`subject_offering_evidence_guard`): the malformed/legacy
+        // participation this test once simulated cannot exist, and the
+        // migration refuses to install over any that does.
+        try {
+            DB::transaction(fn () => app(TenantContext::class)->withSchool($school, fn () => StudentSubjectEnrollment::factory()->create([
+                'school_id' => $school->id,
+                'student_id' => $student->id,
+                'student_enrollment_id' => $sourceEnrollment->id,
+                'subject_offering_id' => $requiredSourceOffering->id,
+                'academic_year_id' => $requiredSourceOffering->academic_year_id,
+                'status' => 'active',
+                'starts_on' => '2026-06-01',
+            ])));
+            $this->fail('the database refuses an elective participation on a required Offering');
+        } catch (QueryException $e) {
+            $this->assertStringContainsString('subject_offering_classification_mismatch', $e->getMessage());
+        }
         // no subject mapping exists for the required offering -- and none should ever be required
         $this->promoteWithDefaultPlacement($plan, $school, $sourceGrade, $targetGrade, $targetSection, $student);
 

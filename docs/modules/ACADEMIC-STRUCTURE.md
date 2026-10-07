@@ -165,6 +165,28 @@ schema later — `subject_offerings` would gain an optional
 `section_id` column — without requiring a redesign of the existing
 rows, which remain valid as "offered to the whole Grade."
 
+**Required/elective classification is frozen once used (ADR 0069,
+2026-10-07).**
+- **When it can change:** `is_required` can change, in either direction,
+  only while the Offering has no dependent academic evidence. Evidence is
+  any row in:
+  - `teaching_assignments`, `timetable_entries`, `curriculum_deliveries`
+    or `attendance_sessions` (required-only);
+  - `student_subject_enrollments` or `elective_teaching_assignments`
+    (elective-only);
+  - `examination_papers` (either; marks are covered through their paper).
+
+  Ended, cancelled and withdrawn rows count.
+- **Enforcement:** PostgreSQL triggers enforce it (raw SQL cannot bypass
+  it). Every evidence insert locks the Offering `FOR SHARE` and is refused
+  if its kind does not match the classification.
+- **Surface:** `SubjectOfferingService::update()` is the one update path
+  and answers 409 `SUBJECT_OFFERING_CLASSIFICATION_LOCKED`. `sequence`,
+  `weekly_periods_target` and `status` stay editable, and a no-op is not a
+  change.
+- **Correcting a misclassified Offering:** once used, it needs a
+  deliberate operator data correction; there is no application path.
+
 ## Multi-campus rules (the chosen default)
 
 | Entity | Scope |

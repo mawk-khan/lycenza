@@ -234,7 +234,10 @@ class StudentRetentionPruneTest extends TestCase
     {
         $w = $this->world();
         $free = $this->leaver($w, '2026-09-30');
-        $this->createStudentSubjectEnrollment($free, $w['offering'], ['status' => 'withdrawn', 'starts_on' => '2026-06-01', 'ends_on' => '2026-09-30']);
+        // An elective participation needs an elective Offering (ADR 0069: the database refuses one on the required,
+        // timetabled $w['offering']).
+        $elective = $this->createSubjectOffering($w['year'], $w['campus'], $w['grade'], $this->createSubject($w['school']), ['is_required' => false, 'status' => 'active']);
+        $this->createStudentSubjectEnrollment($free, $elective, ['status' => 'withdrawn', 'starts_on' => '2026-06-01', 'ends_on' => '2026-09-30']);
         $freeGuardian = $this->guardianOf($free);
         $freeDocument = $this->documentOf($free);
         $this->accountLink($free, 'revoked', '2026-10-01 00:00:00');

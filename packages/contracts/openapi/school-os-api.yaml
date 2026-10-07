@@ -1259,7 +1259,13 @@ paths:
               schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/SubjectOffering" } } }
     patch:
       operationId: updateSubjectOffering
-      summary: Updates a Subject Offering. Requires academics.subjects.manage.
+      summary: >
+        Updates a Subject Offering. Requires academics.subjects.manage.
+        The required/elective classification (isRequired) is frozen once
+        the Offering has dependent academic evidence -- an elective
+        enrollment, a teaching assignment, a timetable entry, a curriculum
+        delivery, an attendance register or an examination paper (ADR
+        0069); the other fields stay editable.
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { name: subjectOfferingId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1279,6 +1285,14 @@ paths:
           content:
             application/json:
               schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/SubjectOffering" } } }
+        "409":
+          description: >
+            SUBJECT_OFFERING_CLASSIFICATION_LOCKED -- isRequired cannot
+            change because the Offering already has dependent academic
+            evidence. Nothing was changed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   # --- Phase 1A.5: Student & Guardian Identity administrative surface
   # (docs/modules/STUDENT-GUARDIAN-IDENTITY.md, "Administrative HTTP

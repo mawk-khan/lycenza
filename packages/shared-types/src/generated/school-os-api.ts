@@ -615,7 +615,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Updates a Subject Offering. Requires academics.subjects.manage. */
+        /** Updates a Subject Offering. Requires academics.subjects.manage. The required/elective classification (isRequired) is frozen once the Offering has dependent academic evidence -- an elective enrollment, a teaching assignment, a timetable entry, a curriculum delivery, an attendance register or an examination paper (ADR 0069); the other fields stay editable. */
         patch: operations["updateSubjectOffering"];
         trace?: never;
     };
@@ -12687,6 +12687,15 @@ export interface operations {
                     "application/json": {
                         data: components["schemas"]["SubjectOffering"];
                     };
+                };
+            };
+            /** @description SUBJECT_OFFERING_CLASSIFICATION_LOCKED -- isRequired cannot change because the Offering already has dependent academic evidence. Nothing was changed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };

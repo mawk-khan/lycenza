@@ -3,7 +3,8 @@
 namespace Tests\Feature\Examinations;
 
 use App\Domain\AcademicStructure\Application\AcademicYearService;
-use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
+use App\Domain\AcademicStructure\Application\Exceptions\SubjectOfferingClassificationLockedException;
+use App\Domain\AcademicStructure\Application\SubjectOfferingService;
 use App\Domain\Examinations\Application\ExaminationPaperService;
 use App\Domain\Examinations\Application\Exceptions\ExaminationPaperMarksRecordedException;
 use App\Domain\Examinations\Application\Exceptions\StudentMarkAcademicYearClosedException;
@@ -241,11 +242,13 @@ class StudentMarkServiceTest extends TestCase
         $unchanged = $this->markStudent($w);
         $this->recordMarks($w, [$this->entry($unchanged, 'present', '50')]);
 
-        // The elective Offering flipped to required: P3 now says "required" -- the edit refuses.
-        $this->inMarksSchool($w['school'], fn () => SubjectOffering::query()->whereKey($w['elective']->id)->update(['is_required' => true]));
-        $this->assertThrows(fn () => $this->recordMarks($w, [$this->entry($elected, 'present', '31', 1)], $w['electivePaper']), StudentMarkContextChangedException::class);
+        // The Offering's classification cannot flip under a recorded mark any more (ADR 0069: its paper freezes
+        // it), so the source never changes; the edit proceeds under the recorded context.
+        $this->assertThrows(fn () => app(SubjectOfferingService::class)->update($w['school'], $w['elective']->id, ['is_required' => true],
+            $this->createUserWithCapabilities($w['school'], ['academics.subjects.manage'])), SubjectOfferingClassificationLockedException::class);
+        $this->recordMarks($w, [$this->entry($elected, 'present', '31', 1)], $w['electivePaper']);
         $mark = $this->markOf($w, $elected, $w['electivePaper']);
-        $this->assertSame(['30.00', 1, 'elective'], [(string) $mark->value, $mark->version, $mark->eligibility_source]);
+        $this->assertSame(['31.00', 2, 'elective'], [(string) $mark->value, $mark->version, $mark->eligibility_source]);
 
         // A backdated transfer moved the paper date's placement: the edit refuses, the recorded placement stays.
         $source = $this->placementOf($w, $moved);

@@ -102,9 +102,13 @@ class SubjectOfferingIdentityGuardTest extends TestCase
             );
         }
 
-        // And the update path must still pass ONLY validated input to
-        // the model -- never $request->all().
-        $this->assertStringContainsString('$model->update($validated)', $source);
+        // And the update path must still pass ONLY validated input --
+        // never $request->all(). Since ADR 0069 the write is
+        // SubjectOfferingService::update(), which applies exactly the
+        // validated attributes it is given.
+        $this->assertStringContainsString('->update($school, $subjectOffering, $validated, $request->user())', $source);
         $this->assertStringNotContainsString('$request->all()', $source);
+        $service = (string) file_get_contents(app_path('Domain/AcademicStructure/Application/SubjectOfferingService.php'));
+        $this->assertStringContainsString('$offering->update($attributes);', $service);
     }
 }

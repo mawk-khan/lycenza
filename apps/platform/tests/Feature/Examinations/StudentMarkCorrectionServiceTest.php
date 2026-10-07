@@ -3,7 +3,8 @@
 namespace Tests\Feature\Examinations;
 
 use App\Domain\AcademicStructure\Application\AcademicYearService;
-use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
+use App\Domain\AcademicStructure\Application\Exceptions\SubjectOfferingClassificationLockedException;
+use App\Domain\AcademicStructure\Application\SubjectOfferingService;
 use App\Domain\Examinations\Application\Exceptions\StudentMarkCorrectionAlreadyDecidedException;
 use App\Domain\Examinations\Application\Exceptions\StudentMarkCorrectionContextChangedException;
 use App\Domain\Examinations\Application\Exceptions\StudentMarkCorrectionInvalidException;
@@ -21,6 +22,7 @@ use App\Domain\Examinations\Infrastructure\ExaminationPaper;
 use App\Domain\Examinations\Infrastructure\ExaminationPaperMarkState;
 use App\Domain\Examinations\Infrastructure\StudentMark;
 use App\Domain\Examinations\Infrastructure\StudentMarkCorrection;
+use App\Domain\Students\Application\StudentEnrollmentService;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\SchoolAuditEvent;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -283,8 +285,12 @@ class StudentMarkCorrectionServiceTest extends TestCase
         $checker = $this->checker($w);
         $pending = $this->requestCorrection($w, $mark, 'present', '41');
 
-        // §20.1: is_required is mutable; a correction never re-derives what the mark was recorded under.
-        $this->inMarksSchool($w['school'], fn () => SubjectOffering::query()->whereKey($w['required']->id)->update(['is_required' => false]));
+        // §20.1: a correction never re-derives what the mark was recorded under. Since ADR 0069 the Offering's
+        // classification can no longer change under it (the paper freezes it); a backdated placement transfer still
+        // changes the paper date's context, and the correction fails closed.
+        $this->assertThrows(fn () => app(SubjectOfferingService::class)->update($w['school'], $w['required']->id, ['is_required' => false],
+            $this->createUserWithCapabilities($w['school'], ['academics.subjects.manage'])), SubjectOfferingClassificationLockedException::class);
+        app(StudentEnrollmentService::class)->transferPlacement($this->placementOf($w, $student), $w['a2'], '88', '2026-09-01');
         $this->assertThrows(fn () => $this->approveCorrection($w, $pending, $checker), StudentMarkCorrectionContextChangedException::class);
         $this->rejectCorrection($w, $pending, $checker);
         $this->assertThrows(fn () => $this->requestCorrection($w, $mark, 'present', '42'), StudentMarkCorrectionContextChangedException::class);

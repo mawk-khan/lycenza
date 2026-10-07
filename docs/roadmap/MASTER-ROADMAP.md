@@ -887,6 +887,17 @@ Detail per stage:
     definitive lock order and authorization/production-gate matrices, and
     about 25 drift corrections.
   - Follow-ups S1–S7 are recorded and are not blockers.
+  - **S1 — COMPLETE (2026-10-07, ADR 0069):** SubjectOffering
+    required/elective classification frozen once dependent academic
+    evidence exists.
+    - Symmetric, database-enforced and race-free; the evidence is seven
+      tables, papers included.
+    - 409 `SUBJECT_OFFERING_CLASSIFICATION_LOCKED`.
+    - Real-process races T1–T5 with mutation checks; rollback proof.
+    - RES stays CLOSED.
+    - Regression cadence: an early full-regression checkpoint on the final
+      tree — the triggers touch every writer of seven tables in seven modules
+      (counter reset to 0/5).
   - Regression cadence: round 2/5 after the `c9d9762` checkpoint (executable
     corrections, confined to the marks paths; focused and broad suites).
 - **Not sequenced:** results, finalization, publication, report cards,

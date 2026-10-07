@@ -2,6 +2,7 @@
 
 namespace App\Domain\AcademicStructure\Http\Controllers;
 
+use App\Domain\AcademicStructure\Application\SubjectOfferingService;
 use App\Domain\AcademicStructure\Events\SubjectOfferingCreated;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
@@ -95,7 +96,7 @@ class SubjectOfferingController extends Controller
     {
         $this->authorizeCapability('academics.subjects.manage', $school);
 
-        $model = SubjectOffering::query()->findOrFail($subjectOffering);
+        SubjectOffering::query()->findOrFail($subjectOffering);
 
         $validated = $request->validate([
             'is_required' => ['sometimes', 'boolean'],
@@ -104,15 +105,10 @@ class SubjectOfferingController extends Controller
             'status' => ['sometimes', 'in:active,inactive'],
         ]);
 
-        $before = $model->only(array_keys($validated));
-        $model->update($validated);
+        // ADR 0069 (S1): the classification freeze is enforced there (409 SUBJECT_OFFERING_CLASSIFICATION_LOCKED).
+        $model = app(SubjectOfferingService::class)->update($school, $subjectOffering, $validated, $request->user());
 
-        app(AuditRecorder::class)->school($school, 'subject_offering.updated', actor: $request->user(), subject: $model, metadata: [
-            'before' => $before,
-            'after' => $validated,
-        ]);
-
-        return response()->json(['data' => $this->present($model->refresh())]);
+        return response()->json(['data' => $this->present($model)]);
     }
 
     /**

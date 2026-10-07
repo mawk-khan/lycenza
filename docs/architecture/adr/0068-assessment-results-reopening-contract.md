@@ -23,6 +23,8 @@
   §27): RES CURRENT REOPENED SCOPE — CLOSED** after three corrections: §20.1
   enforced in code, administrative marks refused in code outside
   local/testing (RES-L1), and the §21.6 paper id UUID-constrained.
+  **S1 done (2026-10-07, ADR 0069):** SubjectOffering classification frozen
+  once academic evidence exists.
 - Date: 2026-10-06
 - Programme: **RES — Assessment & results** (`MASTER-ROADMAP.md`,
   "Post-foundation product programmes", order 5).
@@ -1939,7 +1941,13 @@ entries were kept, with dated notes. Locations:
   Examinations status note).
 
 ### 27.11 Follow-ups — not closure blockers
-- **S1 — `subject_offerings.is_required`:** still mutable after enrollments,
+- **S1 — `subject_offerings.is_required`:** **DONE 2026-10-07 (ADR 0069):**
+  the classification is frozen (both directions, database-enforced, race-free)
+  once any elective enrollment, teaching assignment (required or elective),
+  timetable entry, curriculum delivery, attendance register or examination
+  paper exists. §20.1's and §21.8's recommendation is implemented; the RES
+  fail-closed checks stay as defence in depth. RES.5 stays CLOSED.
+  *Original text:* still mutable after enrollments,
   papers or marks exist.
   - Marks now fail closed both on ordinary edit (§27.2 item 1) and on
     correction.
