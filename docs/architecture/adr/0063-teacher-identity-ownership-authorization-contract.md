@@ -3130,3 +3130,141 @@ None is changed here.
 ### 44.8 No effect on StudentMark
 RES-L2 (E37) and the RES-L0 teacher re-review (E35) are unresolved. **RES.4
 remains NOT AUTHORISED.**
+
+## 45. TCH-E — dated elective teaching ownership (2026-10-07)
+
+**Executable slice, authorised by the product owner as a technical
+prerequisite.** It makes elective teacher ownership expressible. It
+authorises no consumer: no StudentMark, Attendance, LMS or Curriculum
+Delivery behaviour changes, and no legal or privacy approval is implied for
+any future use. **RES.4 remains NOT AUTHORISED** (RES-L2 and the teacher-scope
+RES-L0 revalidation are unanswered). §7's D-05 exclusion is lifted for the
+ownership fact only.
+
+### 45.1 Why electives were excluded (D-05, verified)
+- §7: "No Section-independent teaching cohort exists. Electives are
+  Student-level enrollments, not Section-wide slots."
+- TIMETABLE.md: the timetable refuses electives
+  (`RequiredSubjectOfferingOnlyException`).
+- `TeachingAssignmentService` refuses them (`RequiredOfferingOnlyException`),
+  because the TCH.2 fact is Section × required Offering.
+
+Nothing in the repository gives an elective a Section, a teaching group or a
+slot.
+
+### 45.2 The model
+A **parallel fact, not a change to `teaching_assignments`.** Required-subject
+ownership is untouched and never reads it.
+- **`elective_teaching_assignments`** — one row per Employee × elective
+  SubjectOffering period, **Offering-wide**. The cohort is the Students
+  enrolled in the elective (P3), across Sections. There is never one row per
+  Student, and no Section, group or timetable restriction is invented.
+- **Columns:** UUIDv7 id, `school_id`, Employee, the elective Offering with its
+  year/campus/grade pins, `starts_on`, nullable `ends_on`, creator, and the
+  end facts (`ended_at`, `ended_by_user_id`, closed `end_reason`). No free
+  text.
+- **Invariants:**
+  - composite same-School FKs (Employee `(id, school_id)`, the Offering
+    through its 5-column context key, RESTRICT);
+  - `starts_on ≤ ends_on`;
+  - end shape;
+  - **elective only** — the database refuses a required Offering at insert,
+    and the service refuses it first (`ElectiveOfferingOnlyException`);
+  - identity frozen, one end that may only shorten, then immutable
+    (`trg_elective_teaching_assignments_history`);
+  - forced RLS; no runtime DELETE.
+- **Overlap** per (School, Employee, Offering) is refused under the advisory
+  lock `teaching.elective_assignment:{school}:{employee}:{offering}`.
+  Different Employees may own the same elective at once.
+- **Retention:** category `authority` (E21-D6), exactly like
+  `teaching_assignments`:
+  - anchored and delete-guarded;
+  - expired 7 years after `ends_on` by
+    `retention_expire_elective_teaching_assignments` (retention identity
+    only, holds respected; wired into `platform:authority-history-prune`);
+  - its actors are `RETAIN_REFERENCE`, and it keeps its Employee (D6
+    authority history).
+
+### 45.3 Temporal semantics
+- Dates are School-local and inclusive; `ends_on` NULL is open-ended.
+- An end shortens the period and never rewrites it, so "did E own O on D" for
+  an earlier D stays true.
+- Creation needs an active elective Offering, a draft or active year, dates
+  inside the year, and an Employee employed on the start date
+  (`EmploymentCoverage`).
+
+### 45.4 Ownership seam (`TeachingOwnership`)
+`periods()` and `hold()` are unchanged. Three additions:
+- **`electivePeriods(School, employee)`** — `OwnedElectivePeriod`s (ids and
+  dates, no Section).
+- **`holdElective(School, employee, offering, date)`** — inside the caller's
+  transaction, the one covering row `FOR SHARE`. An end either commits first
+  or waits.
+- **`holdOffering(School, employee, offering, ?section, date)`** — one
+  decision for any Offering. It takes the Offering `FOR SHARE`, so a
+  required↔elective change waits, then:
+  - a required Offering uses `hold()` and needs the Section;
+  - an elective uses `holdElective()` and takes no Section;
+  - anything else is "not owned".
+
+Consumers must not read either table directly (guard-pinned). The existing
+adopters (Attendance, Curriculum Delivery, LMS) do not use the elective
+reads: adopting electives is each consumer's own decision.
+
+### 45.5 Co-teachers and cover
+- **Co-teachers:** several Employees may hold the same elective at once, as
+  equal owners. There is no lead/assistant model. A legal requirement to
+  distinguish them would need new modelling.
+- **Cover/substitute:** representable only as a short, ordinary dated
+  assignment, indistinguishable from any other (as §9 for required
+  subjects). No substitute classification exists.
+
+### 45.6 Identity is separate
+Ownership is a fact about an **Employee**. It never implies current
+employment, a School membership, a role, a capability or authentication.
+Every consumer must still compose ActingEmployee, its owned-scope
+capability and its own gates.
+
+### 45.7 Administration and audit
+- **Page:** `/app/elective-teaching-assignments` (list per year, create, end;
+  no edit, no delete), linked from the TCH.2 page.
+- **Capabilities:** the existing `teaching.assignments.view` / `.manage`,
+  checked in the controller and the service. No new capability. Teachers
+  never assign themselves.
+- **API:** no `/api/v1` surface in this slice; it is a follow-up if one is
+  needed.
+- **Audit:** `elective_teaching_assignment.created` / `.ended` — ids, dates
+  and the closed reason; directory-tier projections only.
+
+### 45.8 Proof
+- **`ElectiveTeachingAssignmentTest`:**
+  - creation rules: elective only, active, open year, inside the year, dates;
+  - capability and cross-School 404;
+  - overlap vs co-teachers;
+  - end once and shorten only;
+  - inclusive boundaries and historical truth;
+  - per-Employee and per-School;
+  - `holdOffering()` dispatch;
+  - ownership without identity.
+- **`ElectiveTeachingAssignmentsRlsIsolationTest`:**
+  - raw-SQL forced RLS;
+  - required Offering, cross-School Employee, wrong pins, bad interval and
+    born-ended rows all refused;
+  - identity rewrites and runtime DELETE refused;
+  - immutable once ended.
+- **`ElectiveTeachingOwnershipConcurrencyTest`** (real processes): two
+  overlapping creates give one row; an end waits for a holder; a check behind
+  an end sees the shortened period. Mutation checks:
+  - removing `holdElective()`'s `FOR SHARE` fails both lock races;
+  - removing the create advisory lock fails the overlap race.
+- **`ElectiveTeachingAssignmentAdminUiTest`:** list, create and end; a
+  required Offering is refused; the view-only, teacher and other-School
+  cases.
+- **Guards:**
+  - one writer per ownership table;
+  - `TeachingOwnership` reads exactly the two facts;
+  - no Examinations or Students consumer;
+  - no `examinations.marks.teacher`, results or new teaching capability;
+  - no teacher marks route.
+- **Pins:** user references 113 / 103 retained; forced RLS 205; Employee
+  retention classification; standalone retention functions.

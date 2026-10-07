@@ -45,6 +45,8 @@ class DatabaseRoleVerifier
         'membership_role_assignments',
         // E21.2B: authority history expired only through the retention functions.
         'teaching_assignments', 'group_role_assignments', 'school_elevations',
+        // TCH-E (ADR 0063 section 45): elective teaching ownership, the same authority history.
+        'elective_teaching_assignments',
         // E21.2F: erasure cases expire only through their retention function.
         'erasure_cases',
         // E21.3A (ADR 0064): financial periods and their close baselines.
@@ -220,6 +222,8 @@ class DatabaseRoleVerifier
         'retention_expire_school_audit_events', 'retention_expire_membership_role_assignments',
         'retention_expire_teaching_assignments', 'retention_expire_school_elevations',
         'retention_expire_communication_delivery_policy_decisions', 'retention_expire_api_client_credentials',
+        // TCH-E (ADR 0063 section 45): created with the RH.4 prologue already in place.
+        'retention_expire_elective_teaching_assignments',
         // School-less
         'retention_expire_platform_audit_events', 'retention_expire_released_email_suppressions',
         'retention_expire_group_role_assignments', 'retention_expire_platform_role_assignments',

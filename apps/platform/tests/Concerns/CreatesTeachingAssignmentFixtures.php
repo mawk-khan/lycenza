@@ -7,7 +7,9 @@ use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\HR\Infrastructure\Employee;
+use App\Domain\TeachingAssignments\Application\ElectiveTeachingAssignmentService;
 use App\Domain\TeachingAssignments\Application\TeachingAssignmentService;
+use App\Domain\TeachingAssignments\Infrastructure\ElectiveTeachingAssignment;
 use App\Domain\TeachingAssignments\Infrastructure\TeachingAssignment;
 use App\Models\Campus;
 use App\Models\School;
@@ -69,6 +71,25 @@ trait CreatesTeachingAssignmentFixtures
             ($employee ?? $world['employee'])->id,
             $world['section']->id,
             $world['offering']->id,
+            $startsOn,
+            $endsOn,
+            $actor ?? $world['admin'],
+        );
+    }
+
+    /** TCH-E: an active elective SubjectOffering in the world's year, campus and grade. @param  array<string, mixed>  $world */
+    protected function electiveOffering(array $world): SubjectOffering
+    {
+        return $this->createSubjectOffering($world['year'], $world['campus'], $world['grade'], $this->createSubject($world['school']), ['is_required' => false, 'status' => 'active']);
+    }
+
+    /** TCH-E: an elective teaching assignment through its service. @param  array<string, mixed>  $world */
+    protected function assignElective(array $world, SubjectOffering $offering, string $startsOn = '2026-06-01', ?string $endsOn = null, ?Employee $employee = null, ?User $actor = null): ElectiveTeachingAssignment
+    {
+        return app(ElectiveTeachingAssignmentService::class)->create(
+            $world['school'],
+            ($employee ?? $world['employee'])->id,
+            $offering->id,
             $startsOn,
             $endsOn,
             $actor ?? $world['admin'],

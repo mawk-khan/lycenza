@@ -150,8 +150,9 @@ eligible (corrected at the E21.2G closure audit).
 - **No cancellation of a future assignment.** ADR 0063 defines none. The
   earliest end is the start date, which still leaves one owned day. A real
   cancellation needs a later, explicit contract refinement.
-- **No class-teacher/homeroom, electives or substitute entity.** Temporary
-  cover is a short dated assignment (ADR 0063 D-02, D-05, D-15).
+- **No class-teacher/homeroom or substitute entity.** Temporary cover is a
+  short dated assignment (ADR 0063 D-02, D-15). Electives have their own
+  Offering-wide fact since TCH-E (section 9).
 - **The Employee picker lists at most 1,000 active Employees,** ordered by
   name.
 
@@ -177,3 +178,33 @@ Nothing here resolves identity, checks roles or is cached.
 Teachers never get `teaching.assignments.view`/`.manage`. They see only
 their own periods, through their consumer's projection ("My Curriculum
 Delivery", "My Attendance").
+
+## 9. Elective teaching ownership (TCH-E, ADR 0063 §45)
+
+**`elective_teaching_assignments`:** "this Employee teaches this **elective**
+Subject Offering from `starts_on` to `ends_on`".
+- **Scope:** Offering-wide. An elective has no Section cohort, so there is no
+  Section, group or per-Student row.
+- **Rules (as section 2–3):**
+  - same-School composite FKs;
+  - inclusive dates;
+  - one end that may only shorten, then immutable; never deleted;
+  - no overlap per Employee × Offering; co-teachers allowed;
+  - the database refuses a required Offering.
+- **Write path:** `ElectiveTeachingAssignmentService` (create, end) is the
+  only one, under `teaching.assignments.manage`.
+- **Page:** `/app/elective-teaching-assignments` (list per year, create,
+  end), linked from the Teaching Assignments page. No `/api/v1` surface yet.
+- **Audit:** `elective_teaching_assignment.created` / `.ended`.
+- **Ownership read (`TeachingOwnership`):**
+  - `electivePeriods()`;
+  - `holdElective()` (`FOR SHARE` in the caller's transaction);
+  - `holdOffering()`, which takes the Offering `FOR SHARE` and asks the
+    required fact (with a Section) or the elective fact (without one).
+
+  `periods()` and `hold()` are unchanged and never include electives.
+- **Retention:** E21-D6 (`authority`), as for `teaching_assignments`.
+- **Not done:**
+  - no consumer uses elective ownership yet;
+  - it grants no access by itself;
+  - it authorises no StudentMark processing (RES.4 is NOT AUTHORISED).

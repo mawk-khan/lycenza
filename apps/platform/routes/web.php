@@ -122,6 +122,7 @@ use App\Http\Controllers\App\StudentProcessingAuthorizationController;
 use App\Http\Controllers\App\StudentSubjectEnrollmentController;
 use App\Http\Controllers\App\SubjectOfferingController;
 use App\Http\Controllers\App\Syllabus\SyllabusUnitController;
+use App\Http\Controllers\App\TeachingAssignments\ElectiveTeachingAssignmentController;
 use App\Http\Controllers\App\TeachingAssignments\TeachingAssignmentController;
 use App\Http\Controllers\App\Timetable\TimetableEntryController;
 use App\Http\Controllers\App\Timetable\TimetablePeriodController;
@@ -1388,6 +1389,16 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         Route::get('/', [TeachingAssignmentController::class, 'index'])->name('index');
         Route::post('/', [TeachingAssignmentController::class, 'store'])->name('store');
         Route::post('/{teachingAssignment}/end', [TeachingAssignmentController::class, 'end'])->name('end');
+    });
+
+    // TCH-E (ADR 0063 section 45) -- the administrative ELECTIVE teaching
+    // assignment page (Employee x elective Offering, Offering-wide): list,
+    // create, end, under the same teaching.assignments.* capabilities
+    // (checked in the controller and the service). No edit, no delete.
+    Route::prefix('app/elective-teaching-assignments')->name('app.elective-teaching-assignments.')->group(function (): void {
+        Route::get('/', [ElectiveTeachingAssignmentController::class, 'index'])->name('index');
+        Route::post('/', [ElectiveTeachingAssignmentController::class, 'store'])->name('store');
+        Route::post('/{electiveTeachingAssignment}/end', [ElectiveTeachingAssignmentController::class, 'end'])->name('end');
     });
 
     // HRX.2 (ADR 0065 §23.14) -- Leave administration (configuration,

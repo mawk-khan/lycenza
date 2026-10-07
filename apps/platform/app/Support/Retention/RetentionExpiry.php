@@ -49,6 +49,9 @@ final class RetentionExpiry
 
     public const TEACHING_ASSIGNMENT = 'teaching_assignment';
 
+    /** TCH-E (ADR 0063 section 45, E21-D6): an ended elective teaching assignment, 7 years after its last day. */
+    public const ELECTIVE_TEACHING_ASSIGNMENT = 'elective_teaching_assignment';
+
     public const SCHOOL_ELEVATION = 'school_elevation';
 
     public const GROUP_ROLE_GRANT = 'group_role_grant';
@@ -84,6 +87,7 @@ final class RetentionExpiry
         self::SCHOOL_AUDIT => 'retention_expire_school_audit_events',
         self::SCHOOL_ROLE_GRANT => 'retention_expire_membership_role_assignments',
         self::TEACHING_ASSIGNMENT => 'retention_expire_teaching_assignments',
+        self::ELECTIVE_TEACHING_ASSIGNMENT => 'retention_expire_elective_teaching_assignments',
         self::SCHOOL_ELEVATION => 'retention_expire_school_elevations',
         self::COMMUNICATION_POLICY_DECISION => 'retention_expire_communication_delivery_policy_decisions',
         self::SCHOOL_API_CREDENTIAL => 'retention_expire_api_client_credentials',
@@ -99,7 +103,7 @@ final class RetentionExpiry
     ];
 
     /** Categories whose trigger is a School-local date (the cutoff is a date). */
-    private const DATE_CUTOFFS = [self::TEACHING_ASSIGNMENT];
+    private const DATE_CUTOFFS = [self::TEACHING_ASSIGNMENT, self::ELECTIVE_TEACHING_ASSIGNMENT];
 
     /** @return list<string> every category (the metric's closed `operation` values) */
     public static function categories(): array

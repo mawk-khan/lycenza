@@ -122,7 +122,7 @@ final class TenantRetentionCatalog
         'integration_configuration' => [self::TENANT_LIFETIME, 'School configuration', ['webhook_endpoints', 'webhook_subscriptions', 'api_clients']],
         'api_credentials' => [self::ADOPTED, 'E21.2G I3 (D6): an ended credential, 7 y after its authority ended (LEAST(revoked_at, expires_at)), through its narrow, floored retention function in platform:authority-history-prune (E21.3E, implemented)', ['api_client_credentials']],
         'technical_ttl' => [self::ADOPTED, 'technical TTL (48 h idempotency)', ['api_idempotency_keys']],
-        'authority' => [self::ADOPTED, 'D6: 7 y after the authority ends', ['membership_role_assignments', 'teaching_assignments', 'school_elevations']],
+        'authority' => [self::ADOPTED, 'D6: 7 y after the authority ends', ['membership_role_assignments', 'teaching_assignments', 'elective_teaching_assignments', 'school_elevations']],
         'identity' => [self::TENANT_LIFETIME, 'E21.2G I1: memberships are authority provenance (suspended, never deleted, rule 92): tenant lifetime, no age-based expiry; ended staff invitations are a technical TTL (7 d, implemented)', [
             'school_memberships', 'staff_account_invitations', 'staff_account_invitation_roles',
         ]],

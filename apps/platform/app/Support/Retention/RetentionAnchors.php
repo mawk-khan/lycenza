@@ -71,6 +71,8 @@ final class RetentionAnchors
         'assignment_section_audiences' => ['academic_year_id', 'assignment_id', 'campus_id', 'grade_level_id', 'section_id', 'subject_offering_id'],
         'subject_offerings' => ['academic_year_id', 'campus_id', 'elective_group_id', 'grade_level_id', 'subject_id'],
         'teaching_assignments' => ['ends_on', 'ended_at', 'academic_year_id', 'campus_id', 'employee_id', 'grade_level_id', 'section_id', 'subject_offering_id'],
+        // TCH-E (ADR 0063 section 45): elective teaching ownership.
+        'elective_teaching_assignments' => ['ends_on', 'ended_at', 'academic_year_id', 'campus_id', 'employee_id', 'grade_level_id', 'subject_offering_id'],
         // Operational residuals
         'transport_route_assignments' => ['ends_on', 'status', 'driver_employee_id', 'route_id', 'vehicle_id'],
         'visitors' => [],

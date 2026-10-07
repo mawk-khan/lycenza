@@ -1214,3 +1214,21 @@ If required subjects clear and electives do not, RES.4 is limited to
 - **For a future RES.4 production case** (not authorised), the TCH-L1
   conditions are a useful precedent but not binding on marks; the marks
   conditions come from RES-L2, the RES-L0 teacher re-review and RES-L1.
+
+## 24. Readiness trace — elective teacher ownership available (2026-10-07)
+
+**Docs only here; §22–§23 are unchanged.** TCH-E (ADR 0063 §45) built the
+dated elective teaching-ownership fact (`elective_teaching_assignments`,
+Offering-wide) and `TeachingOwnership::holdElective()` / `holdOffering()`.
+- §22.3's elective row changes from BLOCKED to **technically READY** (as
+  ordinary dated ownership; co-teachers equal; cover only as a short dated
+  assignment).
+- **No StudentMark processing is granted.** No Examinations code consumes the
+  fact (guard-pinned), and no `examinations.marks.teacher` exists.
+- **§22.9 gates:**
+  1. RES-L2 (E37): **unresolved**;
+  2. teacher-scope RES-L0 (E35): **unresolved**;
+  3. E33: satisfied for development;
+  4. ownership facts: required **READY**, elective **READY**.
+
+  **RES.4 remains NOT AUTHORISED**, blocked only by gates 1 and 2.

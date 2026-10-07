@@ -34,6 +34,8 @@ class EmployeeRetentionClassificationTest extends TestCase
             'employee_certifications' => 'D9 ancillary (2 y)',
             'payroll_run_results' => 'retained, blocks: posted payroll evidence until Payroll\'s own D9 expiry removes it (E21.3F: 8 y after final separation, once every posting is that old)',
             'teaching_assignments' => 'retained, blocks: D6 authority history (E21.2B, 7 y after it ends)',
+            // TCH-E (ADR 0063 section 45): elective teaching ownership, the same D6 authority history.
+            'elective_teaching_assignments' => 'retained, blocks: D6 authority history (TCH-E, 7 y after it ends)',
             'attendance_sessions' => 'retained, blocks: register provenance until the header itself expires (A1, E21.3D: 7 y after its Academic Year, once empty)',
             'timetable_entries' => 'retained, blocks: until the entry itself expires (A1, E21.3D: 7 y after its Academic Year, once no header references it)',
             'learning_content' => 'retained, blocks: LMS owner until the resource expires (A1 + D6 minimum, E21.3D)',

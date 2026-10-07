@@ -2,6 +2,7 @@
 
 namespace App\Domain\TeachingAssignments\Application;
 
+use App\Domain\TeachingAssignments\Infrastructure\ElectiveTeachingAssignment;
 use App\Domain\TeachingAssignments\Infrastructure\TeachingAssignment;
 use App\Models\School;
 use App\Models\User;
@@ -51,6 +52,50 @@ class TeachingAssignmentReadService
             ->orderBy('id')
             ->paginate(min(max($perPage, 1), self::MAX_PER_PAGE), ['*'], 'page', max($page, 1))
             ->through(fn (TeachingAssignment $a) => self::present($a, $today)));
+    }
+
+    /**
+     * TCH-E (ADR 0063 section 45): an AcademicYear's elective teaching assignments, the same projection without a
+     * Section (an elective is Offering-wide). Under `teaching.assignments.view`.
+     *
+     * @return LengthAwarePaginator<int, array<string, mixed>>
+     */
+    public function listElective(School $school, string $academicYearId, int $page, int $perPage, User $actor): LengthAwarePaginator
+    {
+        $this->authorizeCapabilityFor($actor, TeachingAssignmentService::CAPABILITY_VIEW, $school);
+        $today = $this->today($school);
+
+        return $this->context->withSchool($school, fn () => ElectiveTeachingAssignment::query()
+            ->where('school_id', $school->id)
+            ->where('academic_year_id', $academicYearId)
+            ->with(['employee', 'subjectOffering.subject'])
+            ->orderByDesc('starts_on')
+            ->orderBy('id')
+            ->paginate(min(max($perPage, 1), self::MAX_PER_PAGE), ['*'], 'page', max($page, 1))
+            ->through(fn (ElectiveTeachingAssignment $a) => self::presentElective($a, $today)));
+    }
+
+    /** @return array<string, mixed> */
+    public static function presentElective(ElectiveTeachingAssignment $a, string $today): array
+    {
+        $startsOn = $a->starts_on->toDateString();
+        $endsOn = $a->ends_on?->toDateString();
+
+        return [
+            'id' => $a->id,
+            'employee' => ['id' => $a->employee_id, 'employeeNumber' => $a->employee?->employee_number, 'fullName' => $a->employee?->full_name],
+            'subjectOffering' => ['id' => $a->subject_offering_id, 'subjectName' => $a->subjectOffering?->subject?->name, 'subjectCode' => $a->subjectOffering?->subject?->code],
+            'academicYearId' => $a->academic_year_id,
+            'startsOn' => $startsOn,
+            'endsOn' => $endsOn,
+            'state' => match (true) {
+                $today < $startsOn => 'upcoming',
+                $endsOn !== null && $today > $endsOn => 'past',
+                default => 'current',
+            },
+            'endedAt' => $a->ended_at?->toIso8601String(),
+            'endReason' => $a->end_reason,
+        ];
     }
 
     /** @return array<string, mixed> */

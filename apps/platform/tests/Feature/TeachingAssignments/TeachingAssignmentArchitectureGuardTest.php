@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\TeachingAssignments;
 
+use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -65,11 +66,50 @@ class TeachingAssignmentArchitectureGuardTest extends TestCase
     #[Test]
     public function teaching_assignments_are_written_only_by_their_service(): void
     {
+        // `new TeachingAssignment;` / `(`, never the exception classes that share the prefix.
         $writers = array_filter(
-            array_merge($this->grep('new TeachingAssignment', 'app'), $this->grep("table('teaching_assignments')", 'app')),
+            array_merge($this->grep('new TeachingAssignment;', 'app'), $this->grep('new TeachingAssignment(', 'app'), $this->grep("table('teaching_assignments')", 'app')),
             fn (string $line) => ! str_contains($line, '/TeachingAssignmentService.php:'),
         );
 
         $this->assertSame([], array_values($writers), 'Only TeachingAssignmentService writes teaching_assignments: '.implode("\n", $writers));
+
+        // TCH-E (ADR 0063 section 45): the elective fact has its own single writer.
+        $electiveWriters = array_filter(
+            array_merge($this->grep('new ElectiveTeachingAssignment', 'app'), $this->grep("table('elective_teaching_assignments')", 'app')),
+            fn (string $line) => ! str_contains($line, '/ElectiveTeachingAssignmentService.php:'),
+        );
+        $this->assertSame([], array_values($electiveWriters), 'Only ElectiveTeachingAssignmentService writes elective_teaching_assignments: '.implode("\n", $electiveWriters));
+    }
+
+    /**
+     * TCH-E (ADR 0063 section 45): elective ownership is the only new teacher-ownership fact, read only through
+     * TeachingOwnership, and it grants no StudentMark authority: no consumer in Examinations, no teacher marks
+     * capability or route, no results capability. RES.4 remains NOT AUTHORISED (ADR 0068 section 22).
+     */
+    #[Test]
+    public function elective_ownership_is_the_one_new_fact_and_grants_no_marks_authority(): void
+    {
+        $ownership = (string) file_get_contents(app_path('Domain/TeachingAssignments/Application/TeachingOwnership.php'));
+        preg_match_all('/^use App.Domain.TeachingAssignments.Infrastructure.(\w+);/m', $ownership, $facts);
+        $this->assertSame(['ElectiveTeachingAssignment', 'TeachingAssignment'], $facts[1], 'TeachingOwnership reads exactly the two ownership facts.');
+
+        foreach (['TeachingOwnership', 'ElectiveTeachingAssignment', 'elective_teaching_assignments', 'OwnedElectivePeriod'] as $forbidden) {
+            $this->assertSame([], $this->grep($forbidden, 'app/Domain/Examinations'), "Examinations must not consume {$forbidden} (RES.4 is NOT AUTHORISED).");
+            $this->assertSame([], $this->grep($forbidden, 'app/Domain/Students'));
+        }
+        foreach (['CurriculumDelivery', 'Attendance', 'LMS'] as $module) {
+            $this->assertSame([], $this->grep('OwnedElectivePeriod', "app/Domain/{$module}"), "{$module} adopted required ownership only; electives are a new decision per consumer.");
+            $this->assertSame([], $this->grep('holdElective', "app/Domain/{$module}"));
+            $this->assertSame([], $this->grep('holdOffering', "app/Domain/{$module}"));
+        }
+
+        $seeder = (string) file_get_contents(database_path('seeders/CapabilityAndRoleSeeder.php'));
+        $this->assertStringNotContainsString("'examinations.marks.teacher'", $seeder);
+        $this->assertDoesNotMatchRegularExpression("/'key'\s*=>\s*'examinations\.results\./", $seeder);
+        $this->assertDoesNotMatchRegularExpression("/'key'\s*=>\s*'teaching\.[a-z_.]*elective/", $seeder, 'elective ownership reuses teaching.assignments.*; no new capability');
+        foreach (Route::getRoutes() as $route) {
+            $this->assertDoesNotMatchRegularExpression('#(^|/)(my-marks|my/marks|teacher-marks)(/|$)#', $route->uri(), 'no teacher marks route');
+        }
     }
 }

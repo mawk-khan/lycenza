@@ -86,6 +86,8 @@ class PruneAuthorityHistory extends Command
 
                 $add(RetentionExpiry::SCHOOL_ROLE_GRANT, $expiry->forSchool(RetentionExpiry::SCHOOL_ROLE_GRANT, $school, $cutoff, $batch, $dryRun));
                 $add(RetentionExpiry::TEACHING_ASSIGNMENT, $expiry->forSchool(RetentionExpiry::TEACHING_ASSIGNMENT, $school, $localCutoff, $batch, $dryRun));
+                // TCH-E (ADR 0063 section 45): elective teaching ownership, the same School-local date clock.
+                $add(RetentionExpiry::ELECTIVE_TEACHING_ASSIGNMENT, $expiry->forSchool(RetentionExpiry::ELECTIVE_TEACHING_ASSIGNMENT, $school, $localCutoff, $batch, $dryRun));
                 $add(RetentionExpiry::SCHOOL_ELEVATION, $expiry->forSchool(RetentionExpiry::SCHOOL_ELEVATION, $school, $cutoff, $batch, $dryRun));
                 // E21.3E (E21.2G I3): ended API client credentials, LEAST(revoked_at, expires_at).
                 $add(RetentionExpiry::SCHOOL_API_CREDENTIAL, $expiry->forSchool(RetentionExpiry::SCHOOL_API_CREDENTIAL, $school, $cutoff, $batch, $dryRun));
