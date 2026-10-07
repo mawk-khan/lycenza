@@ -1974,8 +1974,37 @@ entries were kept, with dated notes. Locations:
   the processing-authorization seam's. Recommend a Students slice to align
   the Guardians writers' order (or lock the grants first). StudentMark should
   also translate a deadlock abort into a retryable 409.
-- **S6 — database defence in depth (LOW, raw-SQL only; the application paths
-  are safe):**
+- **S6 — database defence in depth:** **DONE 2026-10-07** (migration
+  `2026_12_10_090000_harden_student_mark_paper_integrity`; EXAMINATIONS.md
+  "StudentMark database defence (S6)").
+  - Every mark write takes its paper `FOR SHARE` first (re-entrant for the
+    application paths), so the lock guard and the context guard read a paper
+    no concurrent writer can lock or re-point under them.
+  - A marked paper keeps its Examination and Subject Offering (with its
+    maximum and date, already frozen since RES.2).
+  - Proven by raw runtime-role SQL and real-process races, each gap first
+    reproduced on the old code.
+  - **Still open (residual S6c, LOW, raw SQL only)** — the third item below.
+    - A raw update that exactly matches a pending correction's status, value
+      and base version could also change a locked mark's placement or
+      elective row to another value the context guard accepts (same paper
+      context).
+    - The application never does this: `applyCorrection` changes only the
+      basis and the actor, and the correction re-checks P3 is unchanged.
+    - Not part of this slice's objective; recorded for a later hardening.
+  - **Known limitation (residual S6d, LOW, raw SQL only).** The "freeze once
+    evidence exists" triggers (RES.2's maximum/date, S6's identity, ADR 0069's
+    classification) assume READ COMMITTED, where a BEFORE trigger's check
+    takes a fresh snapshot after the row lock.
+    - A raw runtime session in REPEATABLE READ or SERIALIZABLE could take
+      its snapshot before a first mark or evidence row commits elsewhere,
+      then change the frozen field.
+    - No application path uses those isolation levels.
+    - A later hardening could refuse an actual change on a marked or used
+      row when `transaction_isolation <> 'read committed'`.
+  - RES.5 stays CLOSED.
+
+  *Original text (LOW, raw-SQL only; the application paths are safe):*
   - `student_marks_lock_guard` reads the mark state without a lock, so a raw
     INSERT racing the lock could slip past; add `AFTER INSERT` to the
     deferred check, or lock the paper in the guard;

@@ -333,4 +333,42 @@ class StudentMarkArchitectureGuardTest extends TestCase
             }
         }
     }
+
+    /**
+     * S6 (ADR 0068 §27.11): the database defence is installed as designed -- the paper FOR SHARE fires first on every
+     * mark write, the lock guard covers INSERT and UPDATE, the approved-correction check is in place, and a marked
+     * paper keeps its Examination, Offering, maximum and date. The application keeps the identity fixed and answers
+     * 409 EXAMINATION_PAPER_HAS_MARKS for the maximum and date.
+     */
+    #[Test]
+    public function the_database_defence_of_marks_is_installed(): void
+    {
+        $before = collect(DB::select("select t.tgname, pg_get_triggerdef(t.oid) as def from pg_trigger t where t.tgrelid = 'student_marks'::regclass
+            and not t.tgisinternal and pg_get_triggerdef(t.oid) like '%BEFORE%' order by t.tgname"));
+        $this->assertSame('student_marks_a_paper_share_trigger', $before->first()->tgname, 'the paper FOR SHARE fires before every other BEFORE trigger');
+        $definitions = $before->pluck('def', 'tgname');
+        foreach (['student_marks_a_paper_share_trigger', 'student_marks_lock_guard_trigger', 'student_marks_guard_trigger'] as $trigger) {
+            $this->assertStringContainsString('BEFORE INSERT OR UPDATE ON public.student_marks', (string) $definitions[$trigger], $trigger);
+        }
+        $this->assertStringContainsString('FOR SHARE', (string) DB::selectOne("select pg_get_functiondef('student_marks_paper_share'::regproc) as d")->d);
+        $this->assertSame(1, DB::table('pg_trigger')->where('tgname', 'student_marks_locked_change_approved')->where('tgdeferrable', true)->count(), 'RES.3: a locked change is approved by commit');
+
+        $freeze = (string) DB::selectOne("select pg_get_triggerdef(oid) as d from pg_trigger where tgname = 'examination_papers_freeze_when_marked_trigger'")->d;
+        $this->assertStringContainsString('BEFORE UPDATE OF max_marks, scheduled_on, examination_id, subject_offering_id ON public.examination_papers', $freeze);
+
+        foreach (['student_marks_paper_share', 'examination_papers_freeze_when_marked', 'student_marks_lock_guard', 'student_marks_guard'] as $function) {
+            $fn = DB::selectOne("select p.prosecdef, coalesce(array_to_string(p.proconfig, ','), '') as config, has_function_privilege('public', p.oid, 'EXECUTE') as public_exec
+                from pg_proc p where p.proname = ?", [$function]);
+            $this->assertNotNull($fn, $function);
+            $this->assertFalse($fn->prosecdef, "{$function}: SECURITY INVOKER");
+            $this->assertStringContainsString('search_path=', $fn->config);
+            $this->assertFalse($fn->public_exec);
+        }
+
+        $papers = $this->code(app_path('Domain/Examinations/Application/ExaminationPaperService.php'));
+        preg_match('/public function update\(.*?\n    \}/s', $papers, $update);
+        $this->assertStringNotContainsString("'examination_id' =>", $update[0] ?? '', 'the application never re-points a paper');
+        $this->assertStringNotContainsString("'subject_offering_id' =>", $update[0] ?? '');
+        $this->assertStringContainsString('ExaminationPaperMarksRecordedException', $papers, 'the documented 409 for a marked paper\'s maximum and date');
+    }
 }

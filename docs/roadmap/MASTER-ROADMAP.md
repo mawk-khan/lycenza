@@ -909,6 +909,16 @@ Detail per stage:
     - S8 still open; RES stays CLOSED.
     - Regression cadence: round 1/5 after the `11e0ff3` checkpoint (focused
       and broad suites; no shared primitive changed broadly).
+  - **S6 — COMPLETE (2026-10-07):** StudentMark database defence in depth.
+    - Every mark write takes its paper `FOR SHARE` first. This closes two
+      raw-SQL races, both reproduced on the old code: a mark inserted onto a
+      paper being locked, and a mark validated against an Offering the paper
+      was being re-pointed from.
+    - A marked paper keeps its Examination and Offering.
+    - Rollback proof; mutation checks.
+    - RES stays CLOSED.
+    - Regression cadence: round 2/5 (focused and broad suites; the triggers
+      touch only StudentMark writes and paper identity updates).
   - Regression cadence: round 2/5 after the `c9d9762` checkpoint (executable
     corrections, confined to the marks paths; focused and broad suites).
 - **Not sequenced:** results, finalization, publication, report cards,

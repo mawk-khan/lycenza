@@ -878,3 +878,41 @@ development. Three corrections came out of the audit:
   UUID-constrained.
 
 Follow-ups S1–S7 are listed in ADR 0068 §27.11.
+
+## StudentMark database defence (S6, 2026-10-07; ADR 0068 §27.11)
+
+The application paths were already safe. S6 makes the **database** hold the
+same rules against raw SQL, a future writer or an accidental service bypass.
+
+**The database rules:**
+- **Every `student_marks` write takes its paper `FOR SHARE` first**
+  (`student_marks_a_paper_share_trigger`, fires before every other BEFORE
+  trigger).
+  - The lock guard can no longer miss a lock being committed: a raw insert
+    used to land on a paper whose lock was in flight.
+  - The context guard can no longer validate against an Offering the paper
+    is being re-pointed away from.
+  - For the services, which already hold the paper, it is re-entrant.
+- **A paper with any mark keeps its Examination and Subject Offering**
+  (`examination_papers_freeze_when_marked`, extended). Its maximum and date
+  were already frozen (RES.2). Its year, campus, grade and School follow
+  through the composite foreign keys.
+- **Locked papers.** No ordinary mark insert or change on a locked paper;
+  only a pending correction's exact change, approved by commit (RES.3,
+  unchanged).
+
+| Field | Before marks | After marks | Database rule |
+|---|---|---|---|
+| `examination_id`, `subject_offering_id` | fixed by the application (set at creation) | fixed | **frozen once marked (S6)** |
+| `academic_year_id`, `campus_id`, `grade_level_id` | follow Examination / Offering | fixed | composite foreign keys (unchanged) |
+| `school_id` | fixed | fixed | RLS; the marks' composite key (unchanged) |
+| `scheduled_on`, `max_marks` | editable | 409 `EXAMINATION_PAPER_HAS_MARKS` | frozen once marked (RES.2, unchanged) |
+| `starts_at`, `ends_at`, `status` | editable | editable | none: a mark does not depend on them |
+
+**How each layer answers:**
+- **The application** answers the documented 409 `EXAMINATION_PAPER_HAS_MARKS`
+  (any database "a paper with recorded marks keeps …" refusal is translated).
+- **Raw SQL** gets the database exception.
+- **S1** (ADR 0069) is a different rule: it freezes the Offering's
+  required/elective meaning. S6 freezes which Offering a marked paper
+  refers to. The two compose, and neither replaces the other.
