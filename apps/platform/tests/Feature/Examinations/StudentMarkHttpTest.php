@@ -4,11 +4,16 @@ namespace Tests\Feature\Examinations;
 
 use App\Domain\Examinations\Application\Exceptions\StudentMarkRetryRequiredException;
 use App\Domain\Examinations\Application\Exceptions\StudentMarksUnavailableException;
+use App\Domain\Examinations\Application\Marks\StudentMarkReadService;
 use App\Domain\Examinations\Application\Marks\StudentMarkService;
+use App\Http\Middleware\EnsureStudentMarksDevelopmentOnly;
 use App\Models\School;
+use App\Models\SchoolAuditEvent;
 use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use PHPUnit\Framework\Attributes\Test;
+use RuntimeException;
 use Tests\Concerns\CapturesStructuredLogs;
 use Tests\Feature\Examinations\Concerns\CreatesStudentMarkFixtures;
 use Tests\TestCase;
@@ -33,6 +38,11 @@ class StudentMarkHttpTest extends TestCase
         }
 
         return $this;
+    }
+
+    private function auditCount(School $school, string $type): int
+    {
+        return $this->inMarksSchool($school, fn () => SchoolAuditEvent::query()->where('event_type', $type)->count());
     }
 
     /** @param  array<string, mixed>  $w */
@@ -178,6 +188,60 @@ class StudentMarkHttpTest extends TestCase
             $this->app['env'] = 'testing';
         }
         $this->assertSame(['50.00', 1, 'pending'], [(string) $this->markOf($w, $student)->value, $this->markOf($w, $student)->version, $this->freshCorrection($w, $correction)->status]);
+    }
+
+    /**
+     * S8 (ADR 0068 §27.11): the services' own block is defence in depth. With ONLY the availability middleware
+     * bypassed (capability, `mfa` and the School context still run), the grid and the batch write answer the same
+     * fixed 403 the middleware would -- never a 500 -- with no successful read audit, no value and no exception log.
+     */
+    #[Test]
+    public function the_service_level_block_answers_the_same_fixed_403_without_its_middleware(): void
+    {
+        $w = $this->marksWorld();
+        $student = $this->markStudent($w);
+        $this->recordMarks($w, [$this->entry($student, 'present', '73.25')]);
+        $this->as($w['admin'], $w['school']);
+        $this->withoutMiddleware([PreventRequestForgery::class, EnsureStudentMarksDevelopmentOnly::class]);
+        $this->captureLogs();
+        $fixed = ['error' => ['code' => 'STUDENT_MARKS_UNAVAILABLE', 'message' => 'Student marks are not available in this environment.', 'status' => 403]];
+        $viewed = fn (): int => $this->auditCount($w['school'], 'examinations.student_marks.viewed');
+        $before = $viewed();
+
+        foreach (['production', 'staging'] as $environment) {
+            $this->app['env'] = $environment;
+            $grid = $this->getJson($this->url($w))->assertForbidden()->assertExactJson($fixed);
+            $write = $this->putJson($this->url($w), ['marks' => [['student_id' => $student->id, 'status' => 'absent', 'value' => null, 'expected_version' => 1]]])
+                ->assertForbidden()->assertExactJson($fixed);
+            $this->app['env'] = 'testing';
+
+            foreach ([(string) $grid->getContent(), (string) $write->getContent()] as $body) {
+                foreach ([$environment, '73.25', $student->id, 'Exception', 'trace', 'RES-L1', 'E36'] as $leak) {
+                    $this->assertStringNotContainsString($leak, $body);
+                }
+            }
+        }
+
+        $this->assertSame($before, $viewed());
+        $this->assertSame(['present', 1], [$this->markOf($w, $student)->status, $this->markOf($w, $student)->version]);
+        $this->assertStringNotContainsString('StudentMarksUnavailableException', $this->capturedOutput());
+        $this->assertStringNotContainsString('73.25', $this->capturedOutput());
+
+        // The permitted environment still serves the same route.
+        $this->getJson($this->url($w))->assertOk()->assertJsonPath('data.rows.0.mark.value', '73.25');
+        $this->assertSame($before + 1, $viewed());
+    }
+
+    /** S8: only the availability refusal is translated -- any other failure in the grid keeps its existing behaviour. */
+    #[Test]
+    public function the_grid_does_not_translate_an_unrelated_failure(): void
+    {
+        $w = $this->marksWorld();
+        $this->mock(StudentMarkReadService::class)->shouldReceive('grid')->andThrowExceptions([new RuntimeException('unrelated'), new AuthorizationException]);
+        $this->as($w['admin'], $w['school']);
+
+        $this->getJson($this->url($w))->assertStatus(500)->assertJsonMissingPath('error.code');
+        $this->getJson($this->url($w))->assertForbidden()->assertJsonMissingPath('error.code')->assertJsonPath('message', 'This action is unauthorized.');
     }
 
     /** S5: a deadlock-victim write answers the fixed retryable 409 -- no SQLSTATE, SQL, table, value or Student id. */

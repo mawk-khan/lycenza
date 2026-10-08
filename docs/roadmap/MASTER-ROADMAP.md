@@ -886,7 +886,7 @@ Detail per stage:
   - Also: the OpenAPI 409 for paper update, three closure guards, a
     definitive lock order and authorization/production-gate matrices, and
     about 25 drift corrections.
-  - Follow-ups S1–S7 are recorded and are not blockers.
+  - Follow-ups S1–S8 are recorded and are not blockers.
   - **S1 — COMPLETE (2026-10-07, ADR 0069):** SubjectOffering
     required/elective classification frozen once dependent academic
     evidence exists.
@@ -953,6 +953,16 @@ Detail per stage:
     - RES stays CLOSED.
     - Regression cadence: round 5/5 — canonical full regression on the
       exact published tree; counter reset to 0/5.
+  - **S8 — COMPLETE (2026-10-08; ADR 0068 §27.11):** the administrative
+    grid translates the service-level marks block.
+    - With its route block bypassed, the grid answered a 500; it now answers
+      the same fixed 403 `STUDENT_MARKS_UNAVAILABLE` as the middleware.
+    - Only that exception is translated; the other five administrative
+      actions already were. Both layers remain.
+    - No refused-read audit or log; the teacher block is unchanged.
+    - No authorization, environment, schema or legal change. RES stays
+      CLOSED.
+    - Regression cadence: round 1/5 after the `e2b31647` checkpoint.
   - Regression cadence: round 2/5 after the `c9d9762` checkpoint (executable
     corrections, confined to the marks paths; focused and broad suites).
 - **Not sequenced:** results, finalization, publication, report cards,

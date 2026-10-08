@@ -2049,7 +2049,23 @@ entries were kept, with dated notes. Locations:
 
   *Original text:* after a rehire, old open assignments count again. This
   is tied to the RES-L2 Q5/Q10 questions.
-- **S8 — cosmetic:** `StudentMarkController::index` does not catch
+- **S8 — grid refusal translation:** **DONE 2026-10-08:**
+  - Reproduced first: with only `marks-development-only` bypassed, the grid
+    answered a generic 500 (an unhandled `StudentMarksUnavailableException`,
+    reported as an error).
+  - `StudentMarkController::index` now catches exactly that exception and
+    answers the middleware's fixed 403 `STUDENT_MARKS_UNAVAILABLE` body. The
+    grid translates nothing else; an unrelated failure keeps its behaviour.
+  - The other five administrative actions (write, lock, request, approve,
+    reject) already translated it. Both layers stay: the route block
+    answers first, the service block is defence in depth.
+  - A refused read writes no `examinations.student_marks.viewed` audit and
+    logs nothing.
+  - The teacher block keeps its own type and code
+    (`TEACHER_STUDENT_MARKS_UNAVAILABLE`). No authorization, environment,
+    schema or legal change. RES.5 stays CLOSED.
+
+  *Original text:* `StudentMarkController::index` does not catch
   `ExaminationException`. If the service-level marks block ever fired
   without its middleware, the grid would answer a generic 500 instead of the
   fixed 403. It still fails closed and leaks nothing; the middleware answers

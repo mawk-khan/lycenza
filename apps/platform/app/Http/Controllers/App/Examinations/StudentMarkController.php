@@ -4,6 +4,7 @@ namespace App\Http\Controllers\App\Examinations;
 
 use App\Domain\Examinations\Application\Exceptions\ExaminationException;
 use App\Domain\Examinations\Application\Exceptions\StudentMarkNotEligibleException;
+use App\Domain\Examinations\Application\Exceptions\StudentMarksUnavailableException;
 use App\Domain\Examinations\Application\Marks\StudentMarkEntry;
 use App\Domain\Examinations\Application\Marks\StudentMarkReadService;
 use App\Domain\Examinations\Application\Marks\StudentMarkService;
@@ -25,6 +26,12 @@ use Illuminate\Support\Facades\Validator;
  * its input (mark values) into the session, and no message echoes a value.
  * The paper is route-bound under the School context, so another School's
  * paper is a 404.
+ *
+ * S8 (ADR 0068 §27.11): `marks-development-only` refuses first outside local /
+ * testing; if that route wiring ever regressed, the read service's own block
+ * (StudentMarksUnavailableException) answers the same fixed 403 here rather
+ * than a 500. The grid translates nothing else -- it has no other domain
+ * refusal.
  */
 class StudentMarkController extends Controller
 {
@@ -32,7 +39,11 @@ class StudentMarkController extends Controller
 
     public function index(Request $request, ExaminationPaper $examinationPaper, StudentMarkReadService $marks): JsonResponse
     {
-        return response()->json(['data' => $marks->grid($this->context->requireSchool(), $examinationPaper->id, $request->user())]);
+        try {
+            return response()->json(['data' => $marks->grid($this->context->requireSchool(), $examinationPaper->id, $request->user())]);
+        } catch (StudentMarksUnavailableException $e) {
+            return $this->refusal($e);
+        }
     }
 
     public function update(Request $request, ExaminationPaper $examinationPaper, StudentMarkService $marks): JsonResponse
@@ -64,15 +75,21 @@ class StudentMarkController extends Controller
         try {
             $written = $marks->record($this->context->requireSchool(), $examinationPaper->id, $entries, $request->user());
         } catch (ExaminationException $e) {
-            return response()->json(['error' => array_filter([
-                'code' => $e->errorCode(),
-                'message' => $e->getMessage(),
-                'status' => $e->getStatusCode(),
-                'studentId' => property_exists($e, 'studentId') ? $e->studentId : null,
-                'reason' => $e instanceof StudentMarkNotEligibleException ? $e->reason : null,
-            ], fn ($v) => $v !== null)], $e->getStatusCode());
+            return $this->refusal($e);
         }
 
         return response()->json(['data' => ['marks' => $written]]);
+    }
+
+    /** The fixed code, message and status; a Student id / eligibility reason only where the refusal names one. */
+    private function refusal(ExaminationException $e): JsonResponse
+    {
+        return response()->json(['error' => array_filter([
+            'code' => $e->errorCode(),
+            'message' => $e->getMessage(),
+            'status' => $e->getStatusCode(),
+            'studentId' => property_exists($e, 'studentId') ? $e->studentId : null,
+            'reason' => $e instanceof StudentMarkNotEligibleException ? $e->reason : null,
+        ], fn ($v) => $v !== null)], $e->getStatusCode());
     }
 }

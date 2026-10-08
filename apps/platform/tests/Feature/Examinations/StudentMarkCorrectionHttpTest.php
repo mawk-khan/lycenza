@@ -3,9 +3,11 @@
 namespace Tests\Feature\Examinations;
 
 use App\Domain\Examinations\Infrastructure\StudentMarkCorrection;
+use App\Http\Middleware\EnsureStudentMarksDevelopmentOnly;
 use App\Models\School;
 use App\Models\User;
 use App\Models\UserMfaFactor;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use PHPUnit\Framework\Attributes\Test;
 use PragmaRX\Google2FA\Google2FA;
 use Tests\Concerns\CapturesStructuredLogs;
@@ -205,6 +207,44 @@ class StudentMarkCorrectionHttpTest extends TestCase
         foreach (['987.654', '99.99', '41.25', '42.75'] as $value) {
             $this->assertStringNotContainsString($value, $this->capturedOutput());
         }
+        $this->assertSame(1, $this->inMarksSchool($w['school'], fn () => StudentMarkCorrection::query()->count()));
+    }
+
+    /**
+     * S8 (ADR 0068 §27.11): with ONLY the availability middleware bypassed, the lock, request, approve and reject
+     * actions already translate the services' own block into the same fixed 403 (capability, `mfa` and the fresh
+     * code still run). Nothing changes state.
+     */
+    #[Test]
+    public function the_service_level_block_answers_the_same_fixed_403_without_its_middleware(): void
+    {
+        $w = $this->marksWorld();
+        $student = $this->markStudent($w);
+        $this->recordMarks($w, [$this->entry($student, 'present', '40')]);
+        $other = $this->marksWorld();
+        $maker = $this->staff($w['school']);
+        $checker = $this->staff($w['school']);
+        $this->lockMarks($w);
+        $mark = $this->markOf($w, $student);
+        $correction = $this->requestCorrection($w, $mark, 'present', '41', actor: $maker);
+        $this->withoutMiddleware([PreventRequestForgery::class, EnsureStudentMarksDevelopmentOnly::class]);
+        $fixed = ['error' => ['code' => 'STUDENT_MARKS_UNAVAILABLE', 'message' => 'Student marks are not available in this environment.', 'status' => 403]];
+
+        foreach (['production', 'staging'] as $environment) {
+            $this->as($maker, $w['school']);
+            $this->app['env'] = $environment;
+            $this->postJson('/app/examination-papers/'.$other['paper']->id.'/marks/lock', ['mfa_code' => $this->code($maker)])->assertNotFound();
+            $this->postJson($this->lockUrl($w), ['mfa_code' => $this->code($maker)])->assertForbidden()->assertExactJson($fixed);
+            $this->postJson($this->requestUrl($w, $mark->id), $this->body())->assertForbidden()->assertExactJson($fixed);
+            $this->app['env'] = 'testing';
+            $this->as($checker, $w['school']);
+            $this->app['env'] = $environment;
+            $this->postJson("/app/student-mark-corrections/{$correction->id}/approve", ['mfa_code' => $this->code($checker)])->assertForbidden()->assertExactJson($fixed);
+            $this->postJson("/app/student-mark-corrections/{$correction->id}/reject", ['mfa_code' => $this->code($checker)])->assertForbidden()->assertExactJson($fixed);
+            $this->app['env'] = 'testing';
+        }
+
+        $this->assertSame(['40.00', 1, 'pending'], [(string) $this->markOf($w, $student)->value, $this->markOf($w, $student)->version, $this->freshCorrection($w, $correction)->status]);
         $this->assertSame(1, $this->inMarksSchool($w['school'], fn () => StudentMarkCorrection::query()->count()));
     }
 }

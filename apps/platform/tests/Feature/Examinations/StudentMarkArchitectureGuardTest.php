@@ -2,6 +2,12 @@
 
 namespace Tests\Feature\Examinations;
 
+use App\Domain\Examinations\Application\Exceptions\ExaminationException;
+use App\Domain\Examinations\Application\Exceptions\StudentMarksUnavailableException;
+use App\Domain\Examinations\Application\Exceptions\TeacherStudentMarksUnavailableException;
+use App\Http\Controllers\App\Examinations\StudentMarkController;
+use App\Http\Controllers\App\Examinations\StudentMarkCorrectionController;
+use App\Http\Controllers\App\Examinations\TeacherStudentMarkController;
 use Illuminate\Routing\Route;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route as RouteFacade;
@@ -331,6 +337,56 @@ class StudentMarkArchitectureGuardTest extends TestCase
             foreach (explode('|', $methods) as $method) {
                 $this->assertMatchesRegularExpression('/public function '.$method.'\([^{]*\{\s*StudentMarkAvailability::assertAvailable\(\);/', $this->code($marks.$file), "{$file}::{$method}() must refuse outside local/testing first");
             }
+        }
+    }
+
+    /** @return list<string> the exception classes an action's own body catches, comments stripped */
+    private function caughtBy(\ReflectionMethod $method): array
+    {
+        $lines = array_slice(file((string) $method->getFileName()) ?: [], $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1);
+        preg_match_all('/catch \(([^)$]+)\$/', (string) preg_replace('#/\*.*?\*/|//[^\n]*#s', '', implode('', $lines)), $m);
+
+        return array_map(fn (string $types) => trim($types), $m[1]);
+    }
+
+    /**
+     * S8 (ADR 0068 §27.11): the route block (`marks-development-only`) refuses first; every administrative marks
+     * action ALSO translates the services' own StudentMarksUnavailableException into its fixed 403, so a regressed
+     * route answers the same refusal instead of a 500. Translation is by exception type only -- no blanket catch of
+     * Throwable / Exception / authorization, no message matching -- and the teacher block stays its own type.
+     */
+    #[Test]
+    public function every_administrative_marks_action_translates_the_availability_refusal_narrowly(): void
+    {
+        $subclass = fn (string $class, string $of): bool => (new \ReflectionClass($class))->isSubclassOf($of);
+        $this->assertTrue($subclass(StudentMarksUnavailableException::class, ExaminationException::class));
+        $refusal = new StudentMarksUnavailableException;
+        $this->assertSame([403, 'STUDENT_MARKS_UNAVAILABLE'], [$refusal->getStatusCode(), $refusal->errorCode()]);
+        $this->assertFalse($subclass(TeacherStudentMarksUnavailableException::class, StudentMarksUnavailableException::class), 'the teacher block is never the administrative one');
+        $this->assertFalse($subclass(StudentMarksUnavailableException::class, TeacherStudentMarksUnavailableException::class));
+        $this->assertStringContainsString('StudentMarkAvailability::isAvailable()', $this->code(app_path('Http/Middleware/EnsureStudentMarksDevelopmentOnly.php')));
+        $this->assertStringNotContainsString('TeacherStudentMarkAvailability', $this->code(app_path('Http/Middleware/EnsureStudentMarksDevelopmentOnly.php')));
+
+        $translates = ['StudentMarksUnavailableException', 'ExaminationException'];
+        $actions = collect(RouteFacade::getRoutes()->getRoutes())
+            ->filter(fn (Route $route) => in_array($route->getControllerClass(), [StudentMarkController::class, StudentMarkCorrectionController::class], true));
+        $this->assertCount(6, $actions, 'grid, write, lock, request, approve, reject');
+        foreach ($actions as $route) {
+            $this->assertContains('marks-development-only', $route->gatherMiddleware(), $route->uri());
+            $method = new \ReflectionMethod($route->getControllerClass(), $route->getActionMethod());
+            $caught = $this->caughtBy($method);
+            if ($caught === [] && $route->getControllerClass() === StudentMarkCorrectionController::class) {
+                $caught = $this->caughtBy(new \ReflectionMethod(StudentMarkCorrectionController::class, 'answer'));
+            }
+            $this->assertNotSame([], array_intersect($caught, $translates), $route->getActionName().' must translate StudentMarksUnavailableException (S8)');
+            $this->assertSame([], array_diff($caught, $translates), $route->getActionName().' translates only the marks domain refusals');
+        }
+        $this->assertSame(['StudentMarksUnavailableException'], $this->caughtBy(new \ReflectionMethod(StudentMarkController::class, 'index')), 'the grid has no other domain refusal to translate');
+
+        foreach ([StudentMarkController::class, StudentMarkCorrectionController::class, TeacherStudentMarkController::class] as $controller) {
+            $code = $this->code((string) (new \ReflectionClass($controller))->getFileName());
+            $this->assertDoesNotMatchRegularExpression('/catch \(\\\\?(Throwable|Exception|RuntimeException|[A-Za-z\\\\]*AuthorizationException|[A-Za-z\\\\]*HttpException)\b/', $code, $controller);
+            $this->assertDoesNotMatchRegularExpression('/getMessage\(\)\s*(===|==|!==|!=)|str_contains\(\$e->getMessage|preg_match\([^,]+,\s*\$e->getMessage/', $code, $controller.' never branches on exception text');
         }
     }
 

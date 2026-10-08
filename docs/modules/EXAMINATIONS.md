@@ -873,11 +873,14 @@ development. Three corrections came out of the audit:
   P3 context: if it changed, the edit gets 409 `STUDENT_MARK_CONTEXT_CHANGED`.
 - **Production block for all marks.** Every marks route and service refuses
   outside `local` / `testing` with 403 `STUDENT_MARKS_UNAVAILABLE`
-  (`StudentMarkAvailability`, `marks-development-only`; RES-L1).
+  (`StudentMarkAvailability`, `marks-development-only`; RES-L1). The route
+  block answers first; if it were ever missing, every administrative marks
+  action still answers the same fixed 403 from the service block, never a
+  500 (S8, 2026-10-08).
 - **UUID-constrained paper id.** The administrative marks paper id is
   UUID-constrained.
 
-Follow-ups S1–S7 are listed in ADR 0068 §27.11.
+Follow-ups S1–S8 are listed in ADR 0068 §27.11.
 
 ## StudentMark database defence (S6, 2026-10-07; ADR 0068 §27.11)
 

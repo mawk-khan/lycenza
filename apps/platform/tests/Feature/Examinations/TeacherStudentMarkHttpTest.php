@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Examinations;
 
+use App\Http\Middleware\EnsureStudentMarksDevelopmentOnly;
+use App\Http\Middleware\EnsureTeacherStudentMarksDevelopmentOnly;
 use App\Models\School;
 use App\Models\User;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -181,6 +183,31 @@ class TeacherStudentMarkHttpTest extends TestCase
                 ->assertForbidden()->assertJsonPath('error.code', 'TEACHER_STUDENT_MARKS_UNAVAILABLE');
         }
         $this->app['env'] = 'testing';
+        $this->assertNull($this->markOf($w, $student));
+    }
+
+    /**
+     * S8 (ADR 0068 §27.11): the teacher surface keeps its own block. With BOTH availability middlewares bypassed the
+     * services still refuse with the teacher's fixed 403 (TeacherStudentMarkAvailability first) -- never the
+     * administrative code, never a 500, nothing written.
+     */
+    #[Test]
+    public function the_teacher_service_block_keeps_its_own_fixed_403_without_its_middleware(): void
+    {
+        $w = $this->teacherMarksWorld();
+        [$teacher, $student] = $this->owner($w);
+        $this->as($teacher, $w['school']);
+        $this->withoutMiddleware([PreventRequestForgery::class, EnsureTeacherStudentMarksDevelopmentOnly::class, EnsureStudentMarksDevelopmentOnly::class]);
+        $fixed = ['error' => ['code' => 'TEACHER_STUDENT_MARKS_UNAVAILABLE', 'message' => 'Teacher marks entry is not available in this environment.', 'status' => 403]];
+
+        foreach (['production', 'staging'] as $environment) {
+            $this->app['env'] = $environment;
+            $this->getJson('/app/my-examination-papers')->assertForbidden()->assertExactJson($fixed);
+            $this->getJson($this->url($w['paper']->id))->assertForbidden()->assertExactJson($fixed);
+            $this->putJson($this->url($w['paper']->id), ['marks' => [['student_id' => $student->id, 'status' => 'absent', 'value' => null, 'expected_version' => null]]])
+                ->assertForbidden()->assertExactJson($fixed);
+            $this->app['env'] = 'testing';
+        }
         $this->assertNull($this->markOf($w, $student));
     }
 
