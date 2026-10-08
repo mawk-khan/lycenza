@@ -8,7 +8,10 @@
   capability-only model now governs Tier 1 administration, while teachers
   reach LMS through `lms.content.teacher`/`lms.assignments.teacher` AND a
   verified ActingEmployee AND TeachingAssignment ownership. The Submission
-  cancellation addendum is unchanged.
+  cancellation addendum is unchanged. **Corrected 2026-10-08 by ADR 0070
+  §3.2 (POR.0):** a Guardian login does **not** reach any in-app
+  Communications surface (see the dated note under the "self-service
+  portal" bullet below).
 - Date: 2026-09-04 (Phase 0I.1)
 
 ## Context
@@ -294,6 +297,12 @@ publication) found:
   parent-portal product surface. Repeatedly and explicitly deferred as
   its own concern across every Phase 5D checkpoint's "Deferred"
   section.
+  *(Correction 2026-10-08, ADR 0070 §3.2: this was inaccurate when
+  written. In-app deliveries are created for a linked Guardian, but every
+  Communications page (inbox, conversations, threads, announcements)
+  requires `communications.view`, which a role-less Guardian membership
+  does not hold. A Guardian cannot open any in-app message. The Guardian
+  portal is now contracted as POR, ADR 0070.)*
 - **No action anywhere in this codebase authorizes a Guardian/Student
   through the ordinary staff capability system.** No `student`/
   `guardian` role exists in `CapabilityAndRoleSeeder`, and a linked

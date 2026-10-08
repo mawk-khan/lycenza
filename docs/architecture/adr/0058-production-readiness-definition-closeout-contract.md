@@ -611,6 +611,7 @@ with secrets.
 | E43 | RES-L8 — retention of marks, mark corrections, results, report cards and transcripts (an E21 extension; E21-D7 invents no RES records) | ADR 0068 §16 | Legal | Mandatory (RES, post-v1) | LEGAL_REVIEW_REQUIRED (development authorised: RES tables are `policy_unresolved` and fail closed; **blocks production** and any expiry) | Qualified retention decision recorded; mechanism implemented under ADR 0066 | Future E21 extension record | Legal + Owner | No (post-v1; blocks the RES slice named) |
 | E44 | RES-L9 — statutory academic rules: attendance thresholds for examinations, RTE / no-detention implications, mandatory examination requirements | ADR 0068 §16 | Legal | Mandatory (RES, post-v1) | LEGAL_REVIEW_REQUIRED (nothing encodes them; **blocks any slice that would**) | Qualified answer recorded before any such rule is modelled | Future legal record | Legal + Owner | No (post-v1; blocks the RES slice named) |
 | E45 | PAY-L1 — ESI wage ceiling for employees with a disability (commonly reported ₹25,000): basis, qualifying definition, evidence, contribution-period timing, rates; and the privacy terms for holding the disability-status fact it needs | ADR 0036 §9 ("Explicitly deferred") | Legal + Privacy | Mandatory (Payroll statutory) | LEGAL_REVIEW_REQUIRED (request drafted 2026-10-07, not sent: `docs/security/PAY-L1-ESI-DISABILITY-THRESHOLD-REVIEW-REQUEST.md`; the general ESI rule is implemented; the disability branch, any disability fact and golden fixture ESI-12 wait for the answer) | Qualified answer to Q1–Q9 recorded in a determination document | Future legal record + ADR 0036 amendment | Legal + Privacy + Owner | Owner to decide (affects only Schools employing staff with a disability earning between the general and the disability ceiling; disclosed on every payslip) |
+| E46 | POR-L1 — Guardian- and Student-facing portal access to Student information: per surface (own Communications, linked Student Attendance, fee statements, receipts, replies), who qualifies (legal guardian / non-legal-guardian parent / separated parents / court restrictions), ending access, multiple Guardians, the age-18 transition, Student accounts and age-appropriate capabilities, Guardian MFA, legal basis and DPDP obligations, audit, production conditions, re-review. **Distinct from E42** (marks/results access), E39–E41, E35–E37, E28 and E21 | ADR 0070 (POR.0) | Legal + Privacy | Mandatory (POR) | LEGAL_REVIEW_REQUIRED (request drafted 2026-10-08, **not sent, not answered**: `docs/security/POR-L1-GUARDIAN-STUDENT-PORTAL-REVIEW-REQUEST.md`; blocks **production** of every Guardian surface and **design and development** of any Student account or Student-facing surface; Guardian surfaces may be designed and, once the owner authorises each slice, developed behind the code-level `PortalAvailability` block) | Qualified answer to Q1–Q32 recorded in a determination document | Future legal record + ADR 0070 amendment | Legal + Privacy + Owner | No (post-v1 programme) |
 
 A row moves to `EVIDENCE_COMPLETE` only by a dated, reviewed repository
 change that names its evidence location. The move is appended to
@@ -1437,6 +1438,29 @@ recorded:
 - E37 (RES-L2) and the E35 teacher re-review still block teacher marks.
 - E38–E44 still block their own scope.
 - E33 still covers teacher Attendance only and never StudentMark.
+
+## Note — POR-L1 registered (POR.0, 2026-10-08)
+
+**No legal determination. No other row changes.** Row E46 records POR-L1
+for the POR programme (ADR 0070, documentation only).
+- **Request.** Drafted, not sent:
+  `docs/security/POR-L1-GUARDIAN-STUDENT-PORTAL-REVIEW-REQUEST.md`.
+- **What it blocks:**
+  - **production** of every Guardian portal surface;
+  - **design and development** of Student accounts and Student-facing
+    surfaces.
+- **What is allowed:**
+  - Guardian surfaces may be designed;
+  - each Guardian slice may be developed only on the owner's explicit
+    authorisation, behind a code-level development-only block.
+- **Independence.** E42 still governs Student/Guardian access to marks and
+  results: POR-L1 can never authorise them. E39–E41, E35–E37, E28 and E21
+  are unchanged.
+- **Separately recorded, not part of E46:**
+  - a TCH-L1 clarification request on historical-date teacher Attendance
+    (`docs/security/TCH-L1-HISTORICAL-DATE-CLARIFICATION-REQUEST.md`). Not
+    sent; E33 is unchanged;
+  - E16 still expires 2026-10-28, outside POR.
 
 ## Note — PAY-L1 registered (2026-10-07)
 

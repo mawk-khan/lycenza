@@ -3401,7 +3401,12 @@ tables, `employment_ended` only:
   to the old employment's last day, so they can correct Attendance or
   record Curriculum Delivery for those dates. §47.5 decides this only for
   the RES.4 paper-date rule. Whether Attendance corrections and Curriculum
-  Delivery should allow it is an open owner question.
+  Delivery should allow it is an open owner question. *(2026-10-08: for
+  teacher Attendance, a DPO clarification is drafted, not sent:
+  `docs/security/TCH-L1-HISTORICAL-DATE-CLARIFICATION-REQUEST.md`. It must
+  be resolved before E33 production re-verification unless the
+  determination already clearly authorises this. Curriculum Delivery and
+  RES.4 are not part of it.)*
 - **Employments ended before S7 (same audit).** The S7 migration changed
   constraints only. An employment `end()`ed before S7 can still have open
   assignments, which a rehire would revive. Development data only;

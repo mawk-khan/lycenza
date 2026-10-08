@@ -53,8 +53,8 @@ This table is a design reference, not a list of implemented roles.
 | Librarian | Human | One School/Campus, library-domain capabilities | |
 | Receptionist | Human | One School/Campus, narrow front-office capabilities | |
 | Counsellor | Human | One School, student-welfare-domain capabilities (often intersects with Highly Sensitive data — `docs/security/DATA-CLASSIFICATION.md`) | |
-| Parent/Guardian | Human, external-facing | Own linked student(s) only | Never a default "see all students" capability — always resolved through the specific Guardian↔Student link. |
-| Student | Human, external-facing | Own record only | Age-appropriate capability sets are a **[LEGAL REVIEW REQUIRED]** design question once the Students/SIS module is built (see `docs/security/DATA-CLASSIFICATION.md`'s children's-data flag). |
+| Parent/Guardian | Human, external-facing | Own linked student(s) only | Never a default "see all students" capability — always resolved through the specific Guardian↔Student link. **Current state (2026-10-08):** Guardian identity exists (invitation, activation, an `AccountLink` that proves identity only), but **no Guardian portal authority exists**: an activated Guardian holds no role and no capability. The portal is contract-stage only: **ADR 0070 (POR.0)** = `portal.*` capabilities (a closed `guardian`-scope system role, never a role-name check) + `ActingGuardian` + `GuardianStudentScope` (live relationships; fail-closed `is_legal_guardian` pending POR-L1 / E46). Nothing is built. |
+| Student | Human, external-facing | Own record only | Age-appropriate capability sets are a **[LEGAL REVIEW REQUIRED]** design question once the Students/SIS module is built (see `docs/security/DATA-CLASSIFICATION.md`'s children's-data flag). **Current state (2026-10-08):** no Student actor or account exists. Student accounts and Student-facing surfaces are blocked for design and development pending POR-L1 (E46; ADR 0070 §16). |
 | Driver | Human | Own assigned route/vehicle only | |
 | External Integration | Non-human (API key holder) | Whatever the integration's granted API-key scope covers | Same capability model as a human actor — an API key's capabilities are just as narrow and reviewable. |
 | AI Agent | Non-human | Whatever its granted capability set covers, always within one tenant per request | Governed specifically by ADR 0014's stricter chain (capability → tool → authorization → policy → approval → domain service → audit) — an AI agent's capability grant is reviewed with at least as much scrutiny as a human role's, arguably more, given the prompt-injection threat model in `docs/ai/AI-SECURITY.md`. |
@@ -377,7 +377,9 @@ first with a 404 that names nothing. Domain refusals (403 `*_NOT_OWNED`, 422
     admissions);
   - tenant-custom roles;
   - HRX self-service;
-  - RES, POR and Lesson Planning.
+  - RES, POR and Lesson Planning. *(POR's Guardian authorization reuses the
+    same composition — capability + verified actor + live ownership — with
+    Guardian-specific parts: ADR 0070 §4–§8.)*
 
 ## Source-record access vs. derived/aggregate-view access are separate concepts (ADR 0040)
 
