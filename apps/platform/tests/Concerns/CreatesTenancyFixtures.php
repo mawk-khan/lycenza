@@ -811,6 +811,20 @@ trait CreatesTenancyFixtures
         );
     }
 
+    /** A returned Loan whose return derives from its own checkout (LibraryLoanFactory::returned()). */
+    protected function createReturnedLibraryLoan(LibraryCopy $copy, Student $student, array $attributes = []): LibraryLoan
+    {
+        return app(TenantContext::class)->withSchool(
+            $copy->school,
+            // The attributes go in BEFORE returned(), so an overridden checked_out_at is the one it derives from.
+            fn () => LibraryLoan::factory()->state(array_merge([
+                'school_id' => $copy->school_id,
+                'library_copy_id' => $copy->id,
+                'student_id' => $student->id,
+            ], $attributes))->returned()->create(),
+        );
+    }
+
     // --- Phase 10B: Transport fixtures -----------------------------------
 
     protected function createTransportRoute(School $school, array $attributes = []): TransportRoute

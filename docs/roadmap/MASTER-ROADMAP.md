@@ -974,6 +974,18 @@ Detail per stage:
     - The CHECK is unchanged and pinned; RLS tests are unchanged.
     - RES stays CLOSED.
     - Regression cadence: round 2/5.
+  - **Library loan clock correction — COMPLETE (2026-10-08; the
+    non-RES counterpart of S3):**
+    - Same defect class, both reproduced on the old code:
+      - `TenantClosureReadinessTest`'s returned-loan fixture read the return
+        `now()` before the factory's checkout `now()`;
+      - production `LibraryLoanService::checkIn()` was refused with a 500
+        after a backward clock step.
+    - `LibraryLoanFactory::returned()` derives the return from the checkout.
+    - `checkIn()` records `max(now, checked_out_at)`; such a return is never
+      overdue or fined.
+    - The CHECK is unchanged and now pinned; no schema change.
+    - Regression cadence: round 3/5.
   - Regression cadence: round 2/5 after the `c9d9762` checkpoint (executable
     corrections, confined to the marks paths; focused and broad suites).
 - **Not sequenced:** results, finalization, publication, report cards,

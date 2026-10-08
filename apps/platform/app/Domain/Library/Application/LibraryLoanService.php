@@ -106,11 +106,18 @@ class LibraryLoanService
      * duplicate/retried request) is caught here rather than silently
      * re-processed -- the exact pattern
      * AcademicYearService::activate()'s own conditional update uses.
+     *
+     * The return is never earlier than the stored `checked_out_at`: if this
+     * node's clock reads earlier (a backward NTP/VM step, or skew between the
+     * node that checked out and this one) it is recorded at the checkout
+     * instant instead of being refused by
+     * `library_loans_checkin_after_checkout_check`, which stays the
+     * authority. Such a return is never overdue (`due_at >= checked_out_at`).
      */
     public function checkIn(LibraryLoan $loan, ?User $actor = null): LibraryLoan
     {
         return DB::transaction(function () use ($loan, $actor) {
-            $checkedInAt = now();
+            $checkedInAt = now()->max($loan->checked_out_at);
 
             $affected = LibraryLoan::query()
                 ->where('id', $loan->id)

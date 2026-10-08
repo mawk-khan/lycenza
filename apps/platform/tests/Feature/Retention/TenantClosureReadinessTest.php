@@ -153,7 +153,7 @@ class TenantClosureReadinessTest extends TestCase
         $applicant = $this->createApplicant($school);
         $this->createAdmissionApplication($applicant, $year, $campus, $grade, ['status' => 'converted', 'converted_student_id' => $student->id, 'converted_student_enrollment_id' => $enrollmentId, 'converted_at' => now()]);
         $this->createAdmissionApplication($this->createApplicant($school), $year, $campus, $grade, ['status' => 'rejected']);
-        $this->createLibraryLoan($this->createLibraryCopy($this->createLibraryTitle($school)), $student, ['status' => 'returned', 'checked_in_at' => now()]);
+        $this->createReturnedLibraryLoan($this->createLibraryCopy($this->createLibraryTitle($school)), $student);
         $consent = fn (string $column, string $id) => app(TenantContext::class)->withSchool($school, fn () => DB::table('communication_domain_consent_events')->insert([
             'id' => (string) Str::uuid7(), 'school_id' => $school->id, $column => $id, 'channel' => 'email', 'status' => 'granted',
             'recorded_at' => now(), 'recorded_by_user_id' => $this->createUser()->id, 'created_at' => now(), 'updated_at' => now(),

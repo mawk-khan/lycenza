@@ -628,7 +628,8 @@ duration. Never take each from its own `now()`.
   1,000 this way, with no backward clock involved. WSL2 clock steps make it
   worse.
 - Use the factory state that derives the pair, for example
-  `VisitorVisitFactory::checkedOut()` / `createCheckedOutVisitorVisit()`,
+  `VisitorVisitFactory::checkedOut()` / `createCheckedOutVisitorVisit()`
+  or `LibraryLoanFactory::returned()` / `createReturnedLibraryLoan()`,
   or literal instants.
 - Tests that need a moving clock drive it per call (`travelTo`, or a
   `Carbon::setTestNow` sequence, which the framework resets after each

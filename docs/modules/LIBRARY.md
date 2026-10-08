@@ -190,6 +190,15 @@ structurally equivalent to `checked_in_at IS NOT NULL` — an impossible
 "returned but no checked-in timestamp" (or vice versa) state cannot
 exist at the row level at all.
 
+**Check-in clock (2026-10-08; the Library counterpart of S3).**
+`checkIn()` records `max(now, checked_out_at)`. If the returning node's
+clock reads earlier than the stored checkout (a backward NTP/VM step, or
+skew between the node that checked out and this one), the return is
+recorded at the checkout instant instead of being refused with a 500 by
+`library_loans_checkin_after_checkout_check`, which stays the authority.
+Because `due_at >= checked_out_at`, such a return is never overdue and
+never fined. `checked_out_at` is never rewritten.
+
 ## 8. Student eligibility assumption
 
 This repository has no dedicated concept of "library borrowing
