@@ -45,6 +45,10 @@ class SchoolSetupController extends Controller
     public function index(TenantContext $context): Response
     {
         $school = $context->requireSchool();
+        // POR.1 (ADR 0070 §9.6): setup progress is School administration
+        // state -- the same read capability its sibling setup pages use. A
+        // membership alone (a Guardian, a role-less member) is not enough.
+        $this->authorizeCapability('school.profile.view', $school);
 
         return Inertia::render('App/SchoolSetup/Index', [
             'progress' => [

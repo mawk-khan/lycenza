@@ -2,6 +2,8 @@
 
 namespace App\Domain\Identity\Application\Staff;
 
+use App\Domain\Identity\Application\Portal\ActingGuardianResolver;
+use App\Domain\Identity\Application\SchoolAccessLock;
 use App\Models\MembershipRoleAssignment;
 use App\Models\Role;
 use App\Models\School;
@@ -37,6 +39,16 @@ use Illuminate\Support\Facades\DB;
  * ADMINISTRATOR invariant: nothing may leave the active School with zero
  * qualifying administrators (App\Support\Authorization\SchoolAdministrators).
  *
+ * POR.1 (ADR 0059 amendment, ADR 0070 §9.4): "staff" means a membership
+ * that holds -- or held -- a `school`-scope role. A `guardian`-scope grant
+ * never makes a membership staff, and staff code never grants, revokes or
+ * lists it. Off-boarding a membership that is ALSO a live Guardian (an
+ * active `guardian` grant and a resolving ActingGuardian -- a dual staff +
+ * Guardian person) revokes the staff roles only
+ * (`staff_offboarded`) and leaves the membership active, so the Guardian
+ * identity survives; reactivation of such a membership re-grants staff roles
+ * without a status change.
+ *
  * Concurrency: every access-management transaction first takes one
  * transaction-scoped advisory lock per School, so two administrators racing
  * to remove each other's authority serialize; the invariant is evaluated
@@ -53,6 +65,9 @@ final class StaffAccessService
 
     public const ROLE_REVOKED = 'school.membership.role_revoked';
 
+    /** POR.1: staff authority removed from a membership that keeps its Guardian identity. */
+    public const STAFF_OFFBOARDED = 'school.membership.staff_offboarded';
+
     public function __construct(
         private readonly StaffRoleCatalog $roles,
         private readonly SchoolAdministrators $administrators,
@@ -60,6 +75,7 @@ final class StaffAccessService
         private readonly TenantContext $context,
         private readonly CapabilityResolver $capabilities,
         private readonly AuditRecorder $audit,
+        private readonly ActingGuardianResolver $guardians,
     ) {}
 
     /**
@@ -72,6 +88,25 @@ final class StaffAccessService
 
             if ($membership->status !== SchoolMembership::STATUS_ACTIVE) {
                 throw new StaffAccountException('not_active');
+            }
+
+            // POR.1 (ADR 0059 amendment): a dual staff + Guardian membership loses
+            // its staff roles only; the membership and its Guardian identity stay.
+            if ($this->hasGuardianIdentity($membership)) {
+                $revokedKeys = $this->revokeAll($school, $actor, $membership, MembershipRoleAssignment::REASON_STAFF_OFFBOARDED);
+
+                if ($revokedKeys === []) {
+                    throw new StaffAccountException('not_active');
+                }
+
+                $this->audit->school($school, self::STAFF_OFFBOARDED, actor: $actor, subject: $membership, metadata: [
+                    'schoolMembershipId' => $membership->id,
+                    'userId' => $membership->user_id,
+                    'revokedRoleKeys' => $revokedKeys,
+                    'guardianIdentityRetained' => true,
+                ]);
+
+                return $membership->user;
             }
 
             $membership->update(['status' => SchoolMembership::STATUS_SUSPENDED]);
@@ -99,7 +134,14 @@ final class StaffAccessService
         $this->run($school, $actor, [StaffRoleCatalog::MEMBERS, StaffRoleCatalog::ROLES], function () use ($school, $actor, $membershipId, $roles): User {
             $membership = $this->lockStaffMembership($school, $actor, $membershipId);
 
-            if ($membership->status !== SchoolMembership::STATUS_SUSPENDED) {
+            // POR.1: a dual staff + Guardian membership off-boarded from staff
+            // stays ACTIVE (its Guardian identity kept); it is "suspended" from
+            // staff while it holds no active staff grant.
+            $staffOffboarded = $membership->status === SchoolMembership::STATUS_ACTIVE
+                && $this->hasGuardianIdentity($membership)
+                && ! MembershipRoleAssignment::query()->where('school_membership_id', $membership->id)->staff()->active()->exists();
+
+            if ($membership->status !== SchoolMembership::STATUS_SUSPENDED && ! $staffOffboarded) {
                 throw new StaffAccountException('not_suspended');
             }
 
@@ -198,7 +240,7 @@ final class StaffAccessService
     private function run(School $school, User $actor, array $capabilities, callable $change): void
     {
         $target = DB::transaction(function () use ($school, $actor, $capabilities, $change): User {
-            DB::select('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', ['staff-access:'.$school->id]);
+            SchoolAccessLock::hold($school->id);
 
             if (! $this->guard->holdOperational($school->id)) {
                 throw new StaffAccountException('school_not_operational');
@@ -245,7 +287,9 @@ final class StaffAccessService
             throw new StaffAccountException('self_administration');
         }
 
-        $isStaff = MembershipRoleAssignment::query()->where('school_membership_id', $membership->id)->exists();
+        // POR.1: ever held a `school`-scope role (history counts) -- a
+        // Guardian-only membership, whose only grant is `guardian`-scope, is not staff.
+        $isStaff = MembershipRoleAssignment::query()->where('school_membership_id', $membership->id)->staff()->exists();
 
         if (! $isStaff) {
             throw new StaffAccountException('not_staff');
@@ -271,12 +315,41 @@ final class StaffAccessService
     }
 
     /**
+     * A LIVE Guardian identity: an active `guardian`-scope grant (which the
+     * database allows only beside an active Guardian link, and which only
+     * invitation acceptance creates) AND a resolving ActingGuardian (active
+     * persona, an eligible relationship) -- never merely an account link an
+     * administrator attached, which would let anyone shield their own
+     * membership from staff off-boarding.
+     */
+    private function hasGuardianIdentity(SchoolMembership $membership): bool
+    {
+        $hasPortalGrant = MembershipRoleAssignment::query()
+            ->where('school_membership_id', $membership->id)
+            ->guardianPortal()
+            ->active()
+            ->exists();
+
+        if (! $hasPortalGrant) {
+            return false;
+        }
+
+        $user = User::query()->find($membership->user_id);
+
+        return $user !== null && $this->guardians->resolve($user, $membership->school) !== null;
+    }
+
+    /**
+     * The membership's active STAFF grants only -- a `guardian`-scope grant is
+     * Guardian lifecycle, never revoked here (POR.1).
+     *
      * @return list<string> the revoked role keys
      */
     private function revokeAll(School $school, User $actor, SchoolMembership $membership, string $reason): array
     {
         $grants = MembershipRoleAssignment::query()
             ->where('school_membership_id', $membership->id)
+            ->staff()
             ->active()
             ->with('role')
             ->lockForUpdate()

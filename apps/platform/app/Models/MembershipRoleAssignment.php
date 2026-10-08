@@ -42,6 +42,12 @@ class MembershipRoleAssignment extends Model
 
     public const REASON_REACTIVATION_RESET = 'reactivation_reset';
 
+    /** POR.1 (ADR 0059 amendment): staff authority removed; the membership keeps its Guardian identity. */
+    public const REASON_STAFF_OFFBOARDED = 'staff_offboarded';
+
+    /** POR.1 (ADR 0070 §9): Guardian portal authority removed with the Guardian account link. */
+    public const REASON_GUARDIAN_LINK_REVOKED = 'guardian_link_revoked';
+
     protected $fillable = ['school_id', 'school_membership_id', 'role_id', 'assigned_by_user_id', 'assigned_at'];
 
     protected function casts(): array
@@ -87,5 +93,20 @@ class MembershipRoleAssignment extends Model
     public function scopeActive(Builder $query): Builder
     {
         return $query->whereNull('revoked_at');
+    }
+
+    /**
+     * POR.1 (ADR 0070 §8.2): staff authority is a grant of a `school`-scope
+     * role. A `guardian`-scope grant never makes anyone staff.
+     */
+    public function scopeStaff(Builder $query): Builder
+    {
+        return $query->whereIn('role_id', Role::query()->where('scope', Role::SCOPE_SCHOOL)->select('id'));
+    }
+
+    /** POR.1: a Guardian portal grant (the closed `guardian`-scope role). */
+    public function scopeGuardianPortal(Builder $query): Builder
+    {
+        return $query->whereIn('role_id', Role::query()->where('scope', Role::SCOPE_GUARDIAN)->select('id'));
     }
 }

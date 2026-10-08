@@ -66,6 +66,7 @@ interface Props {
     students: LinkedStudent[];
     canManage: boolean;
     accountLink: AccountLink | null;
+    canOffboardPortal: boolean;
     accountInvitation: AccountInvitationState;
     communicationPreferences: { email: EmailPreferenceState };
     canManageCommunicationPreferences: boolean;
@@ -116,6 +117,26 @@ function linkAccount(candidate: MembershipCandidate): void {
             },
         },
     );
+}
+
+// --- POR.1 (ADR 0070 §9.2): Guardian off-boarding ------------------------
+const offboardForm = useForm({ mfa_code: '' });
+
+function offboardError(key: 'mfa_code' | 'guardian'): string | undefined {
+    return (offboardForm.errors as Record<string, string | undefined>)[key];
+}
+
+function offboardGuardian(): void {
+    const confirmed = window.confirm(
+        'Off-board this Guardian from the School? Their portal access and account link end now; ' +
+            'their School membership is suspended unless it also holds a staff role. ' +
+            'Records and history are kept.',
+    );
+    if (!confirmed) return;
+    offboardForm.post(`/app/guardians/${props.guardian.id}/portal-offboard`, {
+        preserveScroll: true,
+        onFinish: () => offboardForm.reset('mfa_code'),
+    });
 }
 
 function unlinkAccount(): void {
@@ -474,6 +495,40 @@ function submitContact(): void {
                 >
                     Unlink
                 </button>
+
+                <form
+                    v-if="canOffboardPortal"
+                    class="mt-4 border-t border-slate-200 pt-3"
+                    @submit.prevent="offboardGuardian"
+                >
+                    <p class="text-xs text-slate-500">
+                        Off-boarding ends this Guardian's portal access in this School. A fresh
+                        authentication code is required.
+                    </p>
+                    <label class="mt-2 block text-xs font-medium text-slate-700" for="offboard-mfa"
+                        >Authentication code</label
+                    >
+                    <input
+                        id="offboard-mfa"
+                        v-model="offboardForm.mfa_code"
+                        class="mt-1 w-32 rounded border border-slate-300 px-2 py-1 text-sm"
+                        inputmode="numeric"
+                        autocomplete="one-time-code"
+                    />
+                    <p v-if="offboardError('mfa_code')" class="mt-1 text-xs text-red-600">
+                        {{ offboardError('mfa_code') }}
+                    </p>
+                    <p v-if="offboardError('guardian')" class="mt-1 text-xs text-red-600">
+                        {{ offboardError('guardian') }}
+                    </p>
+                    <button
+                        type="submit"
+                        class="mt-2 block text-red-600 underline"
+                        :disabled="offboardForm.processing"
+                    >
+                        Off-board from the School
+                    </button>
+                </form>
             </div>
 
             <div v-else-if="canManage">

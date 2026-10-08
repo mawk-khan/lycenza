@@ -109,7 +109,9 @@ class CommunicationAttachmentAuthorizationTest extends TestCase
         $this->activate($creator, $school);
 
         $recipient = $this->createUser();
-        $this->createMembership($recipient, $school);
+        $recipientMembership = $this->createMembership($recipient, $school);
+        $bare = $this->createUser();
+        $this->createMembership($bare, $school);
 
         $announcement = app(AnnouncementService::class)->createDraft(
             $school, $creator, 'T', 'B', CommunicationPriority::Normal, CommunicationAudienceType::SchoolWide,
@@ -118,6 +120,14 @@ class CommunicationAttachmentAuthorizationTest extends TestCase
         $published = app(AnnouncementService::class)->publish($announcement, $creator);
         $attachment = $this->findAttachmentByAnnouncement($school, $published->id);
 
+        // POR.1 (ADR 0070 §24.8): the staff Hub download needs `communications.view`, like the
+        // announcement page itself -- a resolved recipient with only a membership is refused.
+        $this->activate($bare, $school);
+        $this->actingAs($bare)
+            ->get("/app/communications/attachments/{$attachment->id}/download")
+            ->assertForbidden();
+
+        $this->assignSchoolRole($recipientMembership, 'principal');
         $this->activate($recipient, $school);
         $this->actingAs($recipient)
             ->get("/app/communications/attachments/{$attachment->id}/download")

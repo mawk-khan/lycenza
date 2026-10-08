@@ -9,6 +9,7 @@ use App\Domain\Communications\Infrastructure\CommunicationAttachment;
 use App\Domain\Communications\Infrastructure\CommunicationThread;
 use App\Http\Controllers\Controller;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
@@ -37,6 +38,8 @@ use Illuminate\Validation\ValidationException;
  */
 class CommunicationAttachmentController extends Controller
 {
+    use AuthorizesCapability;
+
     public function store(Request $request, TenantContext $context, CommunicationAttachmentService $service, string $announcement): RedirectResponse
     {
         $school = $context->requireSchool();
@@ -136,6 +139,12 @@ class CommunicationAttachmentController extends Controller
     public function download(TenantContext $context, CommunicationAttachmentService $service, AuditRecorder $audit, string $attachment)
     {
         $school = $context->requireSchool();
+        // POR.1 (ADR 0070 §24.8): the staff Hub's download needs the Hub
+        // capability like every other Hub page -- a membership alone (an
+        // off-boarded staff member who stays a Guardian, a role-less member)
+        // never reaches staff attachments by id. Guardians use the portal's
+        // own route.
+        $this->authorizeCapability('communications.view', $school);
         $actor = $context->actor();
 
         // School-scoped by construction (BelongsToSchool/RLS already

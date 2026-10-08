@@ -20,9 +20,10 @@ class GroupAuthorityDatabaseInvariantsTest extends TestCase
     use CreatesTenancyFixtures;
 
     #[Test]
-    public function exactly_three_role_scopes_exist_and_capabilities_never_cross_them(): void
+    public function exactly_four_role_scopes_exist_and_capabilities_never_cross_them(): void
     {
-        $this->assertSame([], DB::table('roles')->whereNotIn('scope', ['platform', 'school', 'group'])->pluck('key')->all());
+        // POR.1 (ADR 0070 §8.2; ADR 0045 amendment): `guardian` is the fourth scope.
+        $this->assertSame([], DB::table('roles')->whereNotIn('scope', ['platform', 'school', 'group', 'guardian'])->pluck('key')->all());
         $this->assertRejected(fn () => DB::table('roles')->insert(['id' => (string) Str::uuid7(), 'key' => 'x_'.Str::random(6), 'name' => 'X', 'scope' => 'trust', 'is_system' => false]), 'roles_scope_check');
 
         $this->assertRejected(fn () => DB::table('capabilities')->insert(['key' => 'group.bogus.x', 'label' => 'X', 'namespace' => 'school']), 'capabilities_group_namespace_check');

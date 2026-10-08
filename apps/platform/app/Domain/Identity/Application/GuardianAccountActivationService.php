@@ -7,12 +7,14 @@ use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Domain\Identity\Application\Exceptions\ExistingAccountConfirmationRequiredException;
 use App\Domain\Identity\Application\Exceptions\InvitationNotUsableException;
 use App\Domain\Identity\Application\Exceptions\PersonaAlreadyLinkedException;
+use App\Domain\Identity\Application\Portal\GuardianPortalRoleGrants;
 use App\Domain\Identity\Infrastructure\GuardianAccountInvitation;
 use App\Domain\Identity\Infrastructure\StudentGuardianAccountLink;
 use App\Models\School;
 use App\Models\SchoolMembership;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
@@ -44,6 +46,8 @@ class GuardianAccountActivationService
         private readonly AuditRecorder $audit,
         private readonly GuardianEmailAddressResolver $emailResolver,
         private readonly AccountLinkService $accountLinks,
+        private readonly GuardianPortalRoleGrants $portalGrants,
+        private readonly CapabilityResolver $capabilities,
     ) {}
 
     public function resolveUsableInvitation(School $school, string $plaintextToken): ?GuardianAccountInvitation
@@ -98,6 +102,11 @@ class GuardianAccountActivationService
     {
         return $this->context->withSchool($school, function () use ($school, $invitation, $authenticatedUser, $newPassword) {
             return DB::transaction(function () use ($school, $invitation, $authenticatedUser, $newPassword) {
+                // POR.1 (ADR 0070 §9): the School access lock first, so an
+                // activation and a concurrent off-boarding or staff change of
+                // the same School serialize.
+                SchoolAccessLock::hold($school->id);
+
                 // Phase 0N.9: re-checked at acceptance, FOR SHARE, so no
                 // account, membership or link is created once a suspension
                 // has committed.
@@ -152,6 +161,17 @@ class GuardianAccountActivationService
                 }
 
                 $link = $this->linkOrReuse($school, $guardian, $membership, $user);
+
+                // POR.1 (ADR 0070 §8.2): activation is the only path that grants
+                // the closed `guardian` role -- idempotently, and only when the
+                // Guardian's active link sits on THIS membership (a link an
+                // administrator put on another membership grants nothing here).
+                // It carries `portal.*` capabilities only; no staff capability.
+                if ($link->school_membership_id === $membership->id) {
+                    $this->portalGrants->grant($school, $membership, $user);
+                    $this->capabilities->forgetCache($user, $school);
+                    DB::afterCommit(fn () => $this->capabilities->forgetCache($user, $school));
+                }
 
                 $fresh->forceFill(['status' => 'accepted', 'accepted_at' => now()])->save();
 

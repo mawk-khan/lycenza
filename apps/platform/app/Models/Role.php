@@ -22,6 +22,14 @@ class Role extends Model
 {
     use GeneratesUuidV7;
 
+    public const SCOPE_SCHOOL = 'school';
+
+    /** POR.1 (ADR 0070 §8.2): the fourth scope, database-separated from staff roles. */
+    public const SCOPE_GUARDIAN = 'guardian';
+
+    /** The one Guardian system role (capability delivery only; never checked by name). */
+    public const GUARDIAN = 'guardian';
+
     protected $fillable = ['key', 'name', 'scope', 'is_system', 'runtime_assignable'];
 
     protected function casts(): array
@@ -53,5 +61,11 @@ class Role extends Model
     public function isSchoolScoped(): bool
     {
         return $this->scope === 'school';
+    }
+
+    /** POR.1 (ADR 0070 §8.2): the Guardian portal scope -- never staff authority. */
+    public function isGuardianScoped(): bool
+    {
+        return $this->scope === self::SCOPE_GUARDIAN;
     }
 }

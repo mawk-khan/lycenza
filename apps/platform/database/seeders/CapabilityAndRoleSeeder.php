@@ -228,6 +228,12 @@ class CapabilityAndRoleSeeder extends Seeder
             // disabled independently of this capability.
             ['key' => 'communications.conversations.guardians', 'label' => 'Start private Communication Hub conversations with linked Guardians', 'namespace' => 'school'],
             ['key' => 'communications.conversations.students', 'label' => 'Start private Communication Hub conversations with linked Students', 'namespace' => 'school'],
+            // POR.1 (ADR 0070 §8): the Guardian portal capabilities live in their
+            // own `guardian` namespace (database-separated from every staff
+            // capability) and are carried only by the closed `guardian` role.
+            // Every use also needs a verified ActingGuardian and, outside
+            // local/testing, POR-L1 (E46) -- PortalAvailability.
+            ['key' => 'portal.communications.view', 'label' => 'Read own Guardian communications in the portal', 'namespace' => 'guardian'],
 
             // Phase 1B.4 (docs/modules/STUDENT-ENROLLMENT.md
             // "Authorization") -- Student academic placement/enrollment,
@@ -1476,6 +1482,18 @@ class CapabilityAndRoleSeeder extends Seeder
             // and ownership. Granted and revoked through the ordinary staff role
             // path; never provisioned automatically. Separate from `teacher`
             // (unchanged, E33) and from `hr.leave.approve`.
+            // POR.1 (ADR 0070 §8.2): the closed Guardian system role, in its own
+            // `guardian` scope. It exists only to deliver `portal.*` capabilities,
+            // is granted only by Guardian account activation and revoked with
+            // the Guardian account link -- never staff-assignable, never
+            // checked by name.
+            'guardian' => [
+                'name' => 'Guardian (portal)',
+                'scope' => 'guardian',
+                'capabilities' => [
+                    'portal.communications.view',
+                ],
+            ],
             'staff_self_service' => [
                 'name' => 'Staff Self-Service',
                 'scope' => 'school',

@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\App;
 
+use App\Domain\Identity\Application\Portal\ActingGuardianResolver;
 use App\Domain\Platform\Application\Elevation\SchoolElevationService;
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\RequireSchoolContext;
 use App\Http\Middleware\ResolvePlatformElevation;
 use App\Models\SchoolMembership;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Portal\PortalAvailability;
 use App\Support\Tenancy\ElevationContext;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Request;
@@ -29,7 +31,7 @@ use Inertia\Response;
  */
 class DashboardController extends Controller
 {
-    public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities, ElevationContext $elevated, SchoolElevationService $elevations): Response
+    public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities, ElevationContext $elevated, SchoolElevationService $elevations, ActingGuardianResolver $guardians): Response
     {
         $user = $request->user();
 
@@ -189,6 +191,15 @@ class DashboardController extends Controller
                 'canViewDomains' => $school !== null && $capabilities->canInSchool($user, 'school.domains.view', $school),
                 // Phase 0O.12B: Settings -> Staff accounts (ADR 0059).
                 'canViewStaffAccounts' => $school !== null && $capabilities->canInSchool($user, 'school.members.view', $school),
+                // POR.1 (ADR 0070 §9.6): School setup needs school.profile.view, never a bare membership.
+                'canViewSchoolSetup' => $school !== null && $capabilities->canInSchool($user, 'school.profile.view', $school),
+                // POR.1 (ADR 0070 §10.1): the Guardian portal, shown beside (never instead of)
+                // any staff navigation -- capability AND a live ActingGuardian AND
+                // PortalAvailability, each re-checked by the portal routes themselves.
+                'canViewGuardianPortal' => $school !== null
+                    && PortalAvailability::isAvailable()
+                    && $capabilities->canInSchool($user, 'portal.communications.view', $school)
+                    && $guardians->resolve($user, $school) !== null,
             ],
         ]);
     }

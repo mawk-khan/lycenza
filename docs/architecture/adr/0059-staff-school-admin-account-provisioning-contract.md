@@ -957,3 +957,30 @@ This amendment records facts only. The decisions above are unchanged.
 
 §23 items 1–14 are met. **ADR 0058 row E24 is REPOSITORY_COMPLETE.** O1
 remains **NOT SATISFIED**.
+
+## Amendment — staff and Guardian identities in one membership (POR.1, 2026-10-08; ADR 0070 §9.4)
+
+A School membership may carry staff roles **and** a Guardian account link,
+for example a teacher who is also a parent. The two lifecycles are now
+independent.
+- **What "staff" means:** a membership that holds, or held, a
+  **`school`-scope** grant. A `guardian`-scope grant never makes anyone
+  staff. `StaffAccessService` (including staff detection and `revokeAll`),
+  `StaffAccountDirectory` and the bootstrap-administrator replacement count,
+  list and revoke `school`-scope grants only.
+- **Staff off-boarding** of a membership that is also a **live, activated
+  Guardian** (an active `guardian` grant and a resolving ActingGuardian, never
+  merely an account link):
+  - revokes the staff roles only (new revocation reason `staff_offboarded`;
+    audit `school.membership.staff_offboarded`);
+  - leaves the membership **active**, so the Guardian identity and portal
+    remain;
+  - can be reversed by **reactivation**, which re-grants the chosen staff
+    roles with no status change.
+- **Guardian off-boarding** (ADR 0070 §9.2) never touches staff roles or a
+  membership that holds one.
+- **Membership suspension** still ends both identities. Off-boarding a dual
+  person from both, staff then Guardian, suspends the membership.
+- Every change takes one per-School access lock first (`SchoolAccessLock`,
+  the existing `staff-access:` key), shared with Guardian activation,
+  unlinking and off-boarding.

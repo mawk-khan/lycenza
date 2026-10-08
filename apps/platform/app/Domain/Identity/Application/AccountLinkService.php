@@ -7,12 +7,15 @@ use App\Domain\Identity\Application\Exceptions\CrossSchoolMembershipLinkExceptio
 use App\Domain\Identity\Application\Exceptions\MembershipAlreadyLinkedException;
 use App\Domain\Identity\Application\Exceptions\NoActiveAccountLinkException;
 use App\Domain\Identity\Application\Exceptions\PersonaAlreadyLinkedException;
+use App\Domain\Identity\Application\Portal\GuardianPortalRoleGrants;
 use App\Domain\Identity\Infrastructure\StudentGuardianAccountLink;
 use App\Domain\Students\Infrastructure\Student;
+use App\Models\MembershipRoleAssignment;
 use App\Models\School;
 use App\Models\SchoolMembership;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
@@ -49,6 +52,8 @@ class AccountLinkService
     public function __construct(
         private readonly TenantContext $context,
         private readonly AuditRecorder $audit,
+        private readonly GuardianPortalRoleGrants $portalGrants,
+        private readonly CapabilityResolver $capabilities,
     ) {}
 
     public function linkStudent(School $school, Student $student, SchoolMembership $membership, User $actor): StudentGuardianAccountLink
@@ -198,14 +203,32 @@ class AccountLinkService
 
     private function unlink(School $school, \Closure $findActive, User $actor, string $auditEventType): void
     {
-        $this->context->withSchool($school, function () use ($findActive, $actor, $auditEventType): void {
+        $this->context->withSchool($school, function () use ($school, $findActive, $actor, $auditEventType): void {
             $link = $findActive();
 
             if ($link === null) {
                 throw new NoActiveAccountLinkException;
             }
 
-            DB::transaction(function () use ($link, $actor, $auditEventType) {
+            DB::transaction(function () use ($school, $link, $actor, $auditEventType) {
+                // POR.1 (ADR 0070 §9.2): ending a Guardian's account link ends
+                // their portal authority in this School. Under the School
+                // access lock, the `guardian`-scope grant is revoked FIRST --
+                // the database refuses ending a link whose membership still
+                // holds an active one. A Student link carries no grant.
+                if ($link->guardian_id !== null) {
+                    SchoolAccessLock::hold($school->id);
+                    $link = StudentGuardianAccountLink::query()->whereKey($link->id)->active()->lockForUpdate()->first()
+                        ?? throw new NoActiveAccountLinkException;
+                    $membership = $link->membership()->lockForUpdate()->firstOrFail();
+                    $this->portalGrants->revokeAll($school, $membership, $actor, MembershipRoleAssignment::REASON_GUARDIAN_LINK_REVOKED);
+                    $user = User::query()->find($membership->user_id);
+                    if ($user !== null) {
+                        $this->capabilities->forgetCache($user, $school);
+                        DB::afterCommit(fn () => $this->capabilities->forgetCache($user, $school));
+                    }
+                }
+
                 $link->update([
                     'status' => 'revoked',
                     'unlinked_by_user_id' => $actor->id,

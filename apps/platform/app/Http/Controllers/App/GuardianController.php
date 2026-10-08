@@ -143,6 +143,8 @@ class GuardianController extends Controller
                 'memberName' => $link->membership->user->name,
                 'membershipActive' => $link->membership->isActive(),
             ],
+            // POR.1 (ADR 0070 §9.2): Guardian off-boarding needs the same pair as invitations.
+            'canOffboardPortal' => $link !== null && $canManageAccountInvitations,
             'accountInvitation' => [
                 'canManage' => $canManageAccountInvitations,
                 'hasEmailContact' => $emailResolver->resolve($model) !== null,

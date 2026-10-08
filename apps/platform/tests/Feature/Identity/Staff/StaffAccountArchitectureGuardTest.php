@@ -49,11 +49,15 @@ class StaffAccountArchitectureGuardTest extends TestCase
             'app/Domain/Identity/Application/GuardianAccountActivationService.php',
             'app/Domain/Identity/Application/Staff/StaffInvitationAcceptanceService.php',
             'app/Domain/Identity/Application/Staff/StaffAccessService.php',
+            // POR.1 (ADR 0070 §9.2): Guardian off-boarding suspends a Guardian-only membership.
+            'app/Domain/Identity/Application/Portal/GuardianOffboardingService.php',
         ];
         $grantWriters = [
             'app/Domain/Platform/Application/Schools/SchoolBootstrapAdministrationService.php',
             'app/Domain/Identity/Application/Staff/StaffInvitationAcceptanceService.php',
             'app/Domain/Identity/Application/Staff/StaffAccessService.php',
+            // POR.1 (ADR 0070 §8.2): the only writer of the closed `guardian`-scope grant.
+            'app/Domain/Identity/Application/Portal/GuardianPortalRoleGrants.php',
         ];
 
         foreach ($this->appSources() as $path => $source) {

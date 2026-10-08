@@ -200,15 +200,21 @@ docs/roadmap             MASTER-ROADMAP.md
 
 25. **School roles cannot grant platform capabilities, and this is
     database-enforced, not just conventional.** `membership_role_assignments`
-    only accepts `scope='school'` roles; `platform_role_assignments`
-    only accepts `scope='platform'` roles — both via a Postgres trigger
-    (see those tables' migrations). Since Phase 0N.5 there are exactly
-    three scopes (`roles_scope_check`: `platform`, `school`, `group`):
-    `group_role_assignments` only accepts `scope='group'` roles, and
-    `trg_role_capabilities_scope` lets a role hold only capabilities of
-    its own scope's namespace, so no role of one scope can carry another
-    scope's capability. Do not add an application-level-only check that
-    could be bypassed by a direct write.
+    only accepts `scope='school'` and `scope='guardian'` roles;
+    `platform_role_assignments` only accepts `scope='platform'` roles —
+    both via a Postgres trigger (see those tables' migrations). Since
+    POR.1 (ADR 0070 §8.2; ADR 0045 amendment) there are exactly **four**
+    scopes (`roles_scope_check`: `platform`, `school`, `group`,
+    `guardian`): `group_role_assignments` only accepts `scope='group'`
+    roles, and `trg_role_capabilities_scope` lets a role hold only
+    capabilities of its own scope's namespace, so no role of one scope can
+    carry another scope's capability. `portal.*` keys live only in the
+    `guardian` namespace (`capabilities_guardian_namespace_check`); a new
+    `guardian` grant needs an active Guardian account link on the same
+    membership, and that link cannot end while the grant is active. "Staff"
+    means holding a `school`-scope grant — a `guardian` grant never makes
+    anyone staff. Do not add an application-level-only check that could be
+    bypassed by a direct write.
 
 26. **Platform admins do not receive database RLS bypass.** The
     `school_os_app` runtime role (used by every request/queue

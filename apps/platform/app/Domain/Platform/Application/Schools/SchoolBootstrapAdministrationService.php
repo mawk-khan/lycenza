@@ -151,6 +151,7 @@ class SchoolBootstrapAdministrationService
                 // reactivation never silently restores them.
                 $this->context->withSchool($locked, fn () => MembershipRoleAssignment::query()
                     ->where('school_membership_id', $old->id)
+                    ->staff()
                     ->active()
                     ->update([
                         'revoked_at' => now(),

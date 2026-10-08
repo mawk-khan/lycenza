@@ -525,3 +525,19 @@ seeding; who may grant platform roles remains D12.
 
 CLAUDE.md rule 25 is amended accordingly (three role scopes, each
 database-enforced) and rule 84 records the Group-scope invariants.
+
+## Amendment — a fourth scope, `guardian` (POR.1, 2026-10-08; ADR 0070 §8.2)
+
+`roles_scope_check` now admits **four** scopes: `platform`, `school`,
+`group` and `guardian`.
+- **Namespace:** `portal.*` capabilities live in the `guardian` namespace
+  (`capabilities_guardian_namespace_check`). `trg_role_capabilities_scope`
+  is unchanged and now also keeps Guardian and staff capabilities apart.
+- **Grants:** the one `guardian` role (closed, system, capability delivery
+  only) is granted on `membership_role_assignments`. That trigger accepts
+  `school` and `guardian` roles; a new `guardian` grant needs an active
+  Guardian account link on the same membership.
+- **Unchanged:** the Group invariants of this ADR (no Group or platform role
+  on a membership grant, and none of either scope's capabilities on a
+  Guardian role).
+- CLAUDE.md rule 25 is amended accordingly.

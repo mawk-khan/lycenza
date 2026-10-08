@@ -60,6 +60,7 @@ use App\Http\Controllers\App\GuardianAccountInvitationController;
 use App\Http\Controllers\App\GuardianAccountLinkController;
 use App\Http\Controllers\App\GuardianCommunicationPreferenceController;
 use App\Http\Controllers\App\GuardianController;
+use App\Http\Controllers\App\GuardianPortalOffboardingController;
 use App\Http\Controllers\App\HostelController;
 use App\Http\Controllers\App\HostelResidencyController;
 use App\Http\Controllers\App\HostelRoomController;
@@ -109,6 +110,7 @@ use App\Http\Controllers\App\Platform\PlatformRoleAdminController;
 use App\Http\Controllers\App\Platform\PlatformSchoolAdminController;
 use App\Http\Controllers\App\Platform\SchoolElevationController;
 use App\Http\Controllers\App\Platform\SchoolGroupAdminController;
+use App\Http\Controllers\App\Portal\GuardianCommunicationController;
 use App\Http\Controllers\App\SchoolSettingsController;
 use App\Http\Controllers\App\SchoolSetupController;
 use App\Http\Controllers\App\SchoolSwitchController;
@@ -603,6 +605,12 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         Route::post('/{guardian}/account-link', [GuardianAccountLinkController::class, 'store'])->name('account-link.store');
         Route::delete('/{guardian}/account-link', [GuardianAccountLinkController::class, 'destroy'])->name('account-link.destroy');
 
+        // POR.1 (ADR 0070 §9.2): Guardian off-boarding -- revoke the portal
+        // grant and account link; suspend the membership only when it holds no
+        // staff role. guardians.manage + school.members.manage + fresh MFA.
+        Route::post('/{guardian}/portal-offboard', [GuardianPortalOffboardingController::class, 'store'])
+            ->whereUuid('guardian')->name('portal-offboard');
+
         // Phase 5D.3: invite/resend/revoke -- provisions a NEW
         // User/SchoolMembership via the acceptance flow, distinct from
         // account-link above (which only ever links an EXISTING one).
@@ -639,6 +647,21 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
     // same convention as SchoolSetupController above. Capability checks
     // live inside CommunicationHubController itself (AuthorizesCapability
     // trait).
+    // POR.1 (ADR 0070 §10.1, §17, §18.2): the read-only Guardian portal inbox --
+    // web/session only (no API), development only until POR-L1 (E46). Every
+    // route: `portal-development-only` FIRST, then the Guardian capability;
+    // the controller resolves ActingGuardian fresh; ids are UUID-constrained
+    // and anything not this Guardian's is the same 404.
+    Route::prefix('app/portal/communications')->name('app.portal.communications.')
+        ->middleware(['portal-development-only', 'capability:portal.communications.view'])
+        ->group(function (): void {
+            Route::get('/', [GuardianCommunicationController::class, 'index'])->name('index');
+            Route::get('/announcements/{announcement}', [GuardianCommunicationController::class, 'show'])
+                ->whereUuid('announcement')->name('show');
+            Route::get('/announcements/{announcement}/attachments/{attachment}/download', [GuardianCommunicationController::class, 'download'])
+                ->whereUuid(['announcement', 'attachment'])->name('attachments.download');
+        });
+
     Route::prefix('app/communications')->name('app.communications.')->group(function (): void {
         // Phase 5A.8 §33: the Hub's root is now the operational Inbox
         // (App\Domain\Communications\Http\Controllers\CommunicationInboxController),

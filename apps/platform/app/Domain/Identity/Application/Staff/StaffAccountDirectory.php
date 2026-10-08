@@ -28,8 +28,10 @@ final class StaffAccountDirectory
     public function for(School $school): array
     {
         return $this->context->withSchool($school, function () use ($school): array {
+            // POR.1: staff = `school`-scope grants only; a Guardian's portal grant never lists them here.
             $grants = MembershipRoleAssignment::query()
                 ->where('school_id', $school->id)
+                ->staff()
                 ->with('role')
                 ->get()
                 ->groupBy('school_membership_id');

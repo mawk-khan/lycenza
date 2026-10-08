@@ -1,8 +1,9 @@
 # ADR 0070: Guardian/Student Portal Contract (POR.0)
 
-- Status: **Accepted — POR.0 contract only (2026-10-08; documentation only).**
-  Nothing in this ADR is implemented. POR.1 needs a separate, explicit owner
-  authorisation. No legal status changes: **POR-L1 (ADR 0058 row E46) is a
+- Status: **Accepted — POR.0 contract (2026-10-08). POR.1 IMPLEMENTED FOR
+  DEVELOPMENT (2026-10-08, §24):** Guardian foundation + read-only
+  Communications inbox, refused in code outside local/testing
+  (`PortalAvailability`). POR.2 onward needs separate owner authorisation. No legal status changes: **POR-L1 (ADR 0058 row E46) is a
   DRAFT REQUEST — NOT SENT, NOT ANSWERED**, and every production statement
   below waits on it.
 - Date: 2026-10-08
@@ -580,11 +581,12 @@ POR.1 contains:
 - allow, deny, cross-School and RLS tests;
 - architecture guards.
 
-**Regression cadence (owner decision, 2026-10-08):**
-- the canonical full regression runs **only when the counter reaches 5/5**,
-  not earlier for a cross-domain slice;
-- POR.1 is expected to be round 4/5 and gets focused and broad suites;
-- the next full regression falls on the following executable round.
+**Regression cadence:** POR.1 is a major cross-domain integration (Identity,
+authorization, Communications, membership lifecycle, database authorization
+constraints), so **CLAUDE.md rule 82's "sooner after any major cross-domain
+integration" applies: the canonical full regression runs on the final POR.1
+tree before publication** (owner direction for POR.1, 2026-10-08, superseding
+the 5/5-only wording recorded here at POR.0).
 
 ## 20. Alternatives considered
 
@@ -683,3 +685,161 @@ None blocks this contract.
   - E16 (expires 2026-10-28; production qualification, outside POR);
   - the TCH-L1 historical-date clarification (teacher Attendance; separate,
     `docs/security/TCH-L1-HISTORICAL-DATE-CLARIFICATION-REQUEST.md`).
+
+## 24. POR.1 — as built (2026-10-08; development only)
+
+### 24.1 Scope and authority
+- **Fourth scope:** migration `2026_12_12_090000_add_guardian_authorization_scope`,
+  amending ADR 0045 and rule 25:
+  - `roles_scope_check` admits `guardian`;
+  - `capabilities_guardian_namespace_check`: `portal.*` keys live only in the
+    `guardian` namespace;
+  - `membership_role_assignments` accepts `school` and `guardian` roles, and a
+    new `guardian` grant needs an active Guardian link on the same membership;
+  - `trg_sgal_portal_grant_guard`: an active Guardian link cannot end (or move
+    membership or persona) while its membership still holds an active
+    `guardian` grant;
+  - two new revocation reasons, `staff_offboarded` and `guardian_link_revoked`.
+- **Rollback:** `down()` refuses while any `guardian` grant or new-reason row
+  exists. Otherwise it restores the three-scope rules exactly; rollback proof
+  passed.
+- **Capability and role:**
+  - `portal.communications.view` (namespace `guardian`) only;
+  - the closed system role `guardian` (scope `guardian`, not
+    runtime-assignable) carries only it;
+  - no Attendance or Fees key is reserved.
+- **Grant writer:** `GuardianPortalRoleGrants` (Identity) is the only writer of
+  `guardian` grants:
+  - idempotent `grant()`, called only by `GuardianAccountActivationService`
+    when the Guardian's active link sits on that membership;
+  - `revokeAll()`, called before any Guardian link ends.
+- **Staff code:** `StaffRoleCatalog` grants `school`-scope roles only, so the
+  Guardian role is never staff-assignable.
+
+### 24.2 Identity and scope
+- **`ActingGuardianResolver` (Identity):** User → active membership in the
+  current active School → exactly one active Guardian link → active persona →
+  ≥ 1 eligible relationship. Fresh on every call; no cache, session or
+  TenantCache.
+- **`GuardianStudentScope` (Guardians):**
+  - POR.1 uses only `isActiveGuardian()` and `hasEligibleStudent()`;
+  - the predicate is `is_legal_guardian = true` to an `active` Student — an
+    engineering fail-closed default pending POR-L1, not a legal conclusion;
+  - live, School-scoped, never cached.
+
+### 24.3 Lifecycle as built
+- **One Student lost** (relationship deleted, or the legal-guardian flag
+  cleared): out of scope on the next check. Other eligible Students keep the
+  portal.
+- **Last eligible relationship lost:** ActingGuardian fails on the next
+  request. The grant stays recorded but grants nothing (tested); Guardians
+  never calls Identity.
+- **Link revoked** (`AccountLinkService::unlinkGuardian`, `guardians.manage`):
+  the School access lock, then the `guardian` grant is revoked
+  (`guardian_link_revoked`), then the link. Capability cache forgotten inside
+  the transaction and after commit.
+- **Guardian off-boarding** (`GuardianOffboardingService`,
+  `POST /app/guardians/{guardian}/portal-offboard`):
+  - needs `guardians.manage` + `school.members.manage` + a fresh MFA code;
+  - never the actor's own membership;
+  - revokes the grant, then the link, then any **pending Guardian invitation**
+    (so it cannot re-create them), then suspends the membership only when it
+    holds no active staff grant;
+  - audit `guardian.portal_offboarded`.
+- **Staff off-boarding of a dual staff + Guardian membership:** staff roles
+  only (`staff_offboarded`); membership stays active; reactivation re-grants
+  staff roles (ADR 0059 amendment).
+  - "Dual" means a **live, activated Guardian**: an active `guardian` grant,
+    which only invitation acceptance creates, AND a resolving ActingGuardian.
+  - A bare account link an administrator attached (for example to their own
+    membership) never shields a staff membership from suspension. This came
+    from the POR.1 security review and is tested.
+- **Membership suspension:** denies both identities. `CapabilityResolver` and
+  `RequireSchoolContext` already require an active membership.
+
+### 24.4 Account security (what each mechanism does)
+
+| Mechanism | Effect |
+|---|---|
+| Session invalidation / forced sign-out | `credential_version` bump (`CredentialChangeService`: recovery, `platform:user-password-reset`); every existing session is signed out (`EnforceCredentialVersion`). The person can sign in again with the new credential |
+| Credential reset or recovery | as above. Not a suspension |
+| Membership suspension | one School; both identities in it denied |
+| Guardian off-boarding | one School; portal and link end; membership suspended only if no staff role |
+| Staff off-boarding | one School; staff roles end; Guardian identity kept |
+| Durable account-wide disable | **none for an administrator.** `users.is_disabled` exists, and every authorization path honours it, but the only application writer is E21.4 User minimisation (an erasure step, not a suspension tool). Complete account suspension is therefore per School (off-boarding or suspension in each School) plus a credential reset. A durable account-wide disable is a separate platform feature, not POR scope |
+
+### 24.5 Production block
+- `PortalAvailability` (code, `local`/`testing` only; no config, env or
+  request input) behind the `portal-development-only` middleware (fixed 403
+  `PORTAL_UNAVAILABLE`), and re-asserted first in every
+  `GuardianAnnouncementReadService` method. Tested with the middleware
+  bypassed.
+- Dashboard navigation shows the portal only when the block, the capability
+  and a live ActingGuardian all hold.
+
+### 24.6 Surfaces
+- **Routes:** `GET /app/portal/communications` (`?unread=1`), `GET
+  …/announcements/{announcement}` and `GET
+  …/announcements/{announcement}/attachments/{attachment}/download`.
+  - all session web routes (Inertia), UUID-constrained;
+  - `portal-development-only` first, then
+    `capability:portal.communications.view`;
+  - then ActingGuardian in the controller.
+- **Visibility** (`GuardianAnnouncementReadService`, Communications):
+  published announcements whose audience snapshot names this Guardian persona
+  in this School. Not a dual-role User's staff mail; anything else is the same
+  404.
+- **Read state:** opening marks only that User's own in-app delivery read
+  (existing `AnnouncementService::markRead`).
+- **Attachments:** only those of a visible announcement; audited
+  `communication_attachment.downloaded` with `surface = guardian_portal` and
+  `guardianId`.
+- **Other changes:**
+  - `/app/school-setup` now needs `school.profile.view` (§9.6);
+  - the dashboard "School setup" link follows it.
+- **Not built:** replies, compose, conversations (POR.4), Student surfaces,
+  API, mobile.
+
+### 24.7 Race and lock review
+- **The School access lock:** `SchoolAccessLock` (the existing per-School
+  `staff-access:` advisory key) is taken first by:
+  - staff access changes;
+  - Guardian activation;
+  - Guardian unlink;
+  - Guardian off-boarding.
+
+  So activation vs off-boarding, staff vs Guardian off-boarding, and grant vs
+  revoke serialize before any row lock. Row order after it is School FOR
+  SHARE (where taken) → link → membership → grants. No path takes them in
+  another order.
+- **Reads:** inbox reads take no locks. An inbox request racing an off-boarding
+  or a relationship removal either sees the state before the commit (a
+  read-only answer) or after it (denied). The next request is always denied.
+- **Capability cache:** forgotten inside the transaction and after commit. The
+  live ActingGuardian check bounds authority regardless of the cache.
+- **School switch:** every request re-validates School context. A stale route
+  id resolves in the new School, giving the same 404.
+- **Guardian unlink vs the S5 lock order:** the Guardian↔Student relationship
+  path (Student first, then grants and relationships) touches no link,
+  membership or grant row, so the orders don't intersect.
+
+### 24.8 Staff attachment download now needs `communications.view`
+- **What was found:** the POR.1 security review (MEDIUM) found that the staff
+  Hub's `GET /app/communications/attachments/{attachment}/download` checked
+  no capability, only creator, recipient or participant. So once staff
+  off-boarding could leave a dual person's membership active, they could keep
+  downloading staff thread and announcement attachments by id.
+- **The fix:** the route now calls
+  `authorizeCapability('communications.view')`, like every other Hub page
+  (including the announcement page itself). Every existing authorization
+  rule is unchanged after that.
+- **Who loses access:** a role-less member who was a resolved recipient (for
+  example of a School-wide announcement) — they could never open the
+  announcement itself.
+- **Guardians:** they read their own attachments through the portal route.
+- **Tests:** the existing recipient test now covers both a refusal and an
+  allow; a dual-persona regression test was added.
+
+### 24.9 Legal
+**POR-L1 — DRAFT REQUEST / NOT SENT / NOT ANSWERED.** No production clearance
+is inferred. E39–E42, E35–E37, E21, E28 and E30–E32 are unchanged.
