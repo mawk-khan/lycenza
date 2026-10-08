@@ -2,12 +2,14 @@
 
 namespace Tests\Feature\Students;
 
+use App\Domain\Examinations\Application\Marks\StudentMarkTelemetry;
 use App\Domain\Guardians\Application\StudentGuardianRelationshipService;
 use App\Domain\Guardians\Infrastructure\RelationshipType;
 use App\Domain\Guardians\Infrastructure\StudentGuardianRelationship;
 use App\Domain\Students\Application\StudentProcessingAuthorizationService;
 use App\Domain\Students\Domain\ProcessingAuthorizationPurpose;
 use App\Domain\Students\Infrastructure\StudentProcessingAuthorization;
+use App\Support\Observability\Metrics\Series;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Process\Process;
@@ -45,14 +47,14 @@ class GuardianProcessingAuthorizationLockOrderTest extends TestCase
      * The holder takes its first locks, the contender is observed blocked, the holder takes its next locks, then both
      * finish. @return array{0: string, 1: string}
      */
-    private function steppedRace(array $holderCommand, array $contenderCommand): array
+    private function steppedRace(array $holderCommand, array $contenderCommand, array $contenderEnv = []): array
     {
         $dir = sys_get_temp_dir().'/lockorder_'.bin2hex(random_bytes(8));
         mkdir($dir);
         $session = 'lockorder_'.bin2hex(random_bytes(6));
         $holder = new Process($holderCommand, null, ['CONCURRENCY_HOLD_DIR' => $dir]);
         $holder->setTimeout(180);
-        $contender = new Process($contenderCommand, null, ['CONCURRENCY_SESSION_NAME' => $session]);
+        $contender = new Process($contenderCommand, null, ['CONCURRENCY_SESSION_NAME' => $session, ...$contenderEnv]);
         $contender->setTimeout(180);
         try {
             $holder->start();
@@ -244,12 +246,18 @@ class GuardianProcessingAuthorizationLockOrderTest extends TestCase
         $f = $this->family();
         $events = fn () => $this->inMarksSchool($f['school'], fn () => DB::table('school_audit_events')->where('event_type', 'like', 'examinations.student_mark.%')->count());
 
+        $metrics = tempnam(sys_get_temp_dir(), 'mark_metrics_');
         [$other, $entry] = $this->steppedRace(
             $this->op('paper-cycle', $f['school']->id, $f['student']->id, $f['paper']->id),
             $this->record($f, '55.5'),
+            ['METRICS_DUMP_FILE' => $metrics],
         );
 
         $this->assertSame(['ok', 'refused:STUDENT_MARK_RETRY_REQUIRED'], [$other, $entry]);
+        // S5 observability follow-up: the victim's process counted the true deadlock exactly once, with two closed labels.
+        $recorded = json_decode((string) file_get_contents($metrics), true);
+        @unlink($metrics);
+        $this->assertSame([Series::key(StudentMarkTelemetry::RETRYABLE_ABORTS, ['operation' => 'record', 'reason' => 'deadlock']) => 1], array_filter($recorded, fn (string $k) => str_starts_with($k, 'lycenza_student_mark_'), ARRAY_FILTER_USE_KEY));
         $this->assertNull($this->markOf($f, $f['student']), 'no mark');
         $this->assertSame(0, $this->inMarksSchool($f['school'], fn () => DB::table('student_mark_revisions')->count()), 'no revision');
         $this->assertSame(0, $events(), 'no audit row');
@@ -257,6 +265,27 @@ class GuardianProcessingAuthorizationLockOrderTest extends TestCase
         $this->recordMarks($f, [$this->entry($f['student'], 'present', '55.5')]);
         $this->assertSame(['55.50', 1], [(string) $this->markOf($f, $f['student'])->value, $this->markOf($f, $f['student'])->version]);
         $this->assertSame(1, $events());
+    }
+
+    /** P (teacher): the same TRUE deadlock against the teacher entry path -- the same boundary, the same single count. */
+    #[Test]
+    public function p_a_deadlock_victim_teacher_mark_write_is_a_clean_retryable_refusal_counted_once(): void
+    {
+        $f = $this->family();
+        $metrics = tempnam(sys_get_temp_dir(), 'mark_metrics_');
+
+        [$other, $entry] = $this->steppedRace(
+            $this->op('paper-cycle', $f['school']->id, $f['student']->id, $f['paper']->id),
+            $this->record($f, '56', teacher: true),
+            ['METRICS_DUMP_FILE' => $metrics],
+        );
+
+        $this->assertSame(['ok', 'refused:STUDENT_MARK_RETRY_REQUIRED'], [$other, $entry]);
+        $recorded = json_decode((string) file_get_contents($metrics), true);
+        @unlink($metrics);
+        $this->assertSame([Series::key(StudentMarkTelemetry::RETRYABLE_ABORTS, ['operation' => 'record', 'reason' => 'deadlock']) => 1], array_filter($recorded, fn (string $k) => str_starts_with($k, 'lycenza_student_mark_'), ARRAY_FILTER_USE_KEY));
+        $this->assertNull($this->markOf($f, $f['student']), 'no mark');
+        $this->assertSame(0, $this->inMarksSchool($f['school'], fn () => DB::table('school_audit_events')->where('event_type', 'like', 'examinations.student_mark.%')->count()), 'no audit row');
     }
 
     /** Guardian unlink vs a consent being recorded on the same relationship -- both orders, no raw error, no evidence loss. */

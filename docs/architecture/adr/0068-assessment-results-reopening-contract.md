@@ -1900,7 +1900,9 @@ Three distinctions hold:
 - **Audit, errors and logs.**
   - Audit carries ids, versions, reason codes and counts only.
   - Errors are fixed text plus the caller's own Student id.
-  - The marks files have no `Log::` or metrics call.
+  - The marks files have no `Log::` call. Their one metrics call (S5
+    follow-up, 2026-10-08) is the retryable-abort counter, made only from
+    `RetryableAbort` with two closed labels (guard-pinned).
   - `QueryException`s are translated.
 - **No prohibited consumer.**
   - No marks reference exists in Analytics, `Support/Ai`, Webhooks, Events,
@@ -1970,6 +1972,21 @@ entries were kept, with dated notes. Locations:
   - StudentMark writes translate a deadlock / serialization abort into 409
     `STUDENT_MARK_RETRY_REQUIRED`.
   - RES.5 stays CLOSED; S8 stays open.
+  - **Observability follow-up — DONE 2026-10-08:** a translated abort was
+    invisible to operations. It now counts once in
+    `lycenza_student_mark_retryable_aborts_total{operation, reason}`.
+    - Recorded through the shared `MetricsRecorder` (ADR 0051), at the one
+      translation point.
+    - Labels: `operation` is `record`, `paper_lock`, `correction_request`,
+      `correction_approve` or `correction_reject`; `reason` is `deadlock` or
+      `serialization_failure`.
+    - It carries no identifier, value, SQL, SQLSTATE text or message, and
+      nothing is logged.
+    - The response, the rollback and the "no automatic retry" rule are
+      unchanged.
+    - A metrics-store failure never reaches the request.
+    - A true PostgreSQL deadlock is proven to count once, for both
+      administrative and teacher entry.
 
   *Original text:* the order differs from
   the processing-authorization seam's. Recommend a Students slice to align

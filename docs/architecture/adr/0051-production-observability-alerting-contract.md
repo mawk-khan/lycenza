@@ -787,3 +787,15 @@ is complete; O12 is **not** operationally complete in production.
 
 **Note (Phase 0O.6, 2026-09-26):** the O16 boundary in §23 is resolved by
 ADR 0052; supply-chain findings never become runtime metric labels.
+
+## Amendment — StudentMark retryable aborts (2026-10-08)
+
+ADR 0068 §27.11 (S5 observability follow-up) adds one counter to the closed
+catalog, `lycenza_student_mark_retryable_aborts_total{operation, reason}`,
+and one label key, `reason`.
+- `reason` is a closed cause vocabulary (`deadlock`, `serialization_failure`).
+  It never carries an SQLSTATE or a message.
+- The vocabulary lives in `MetricCatalog` (`MARK_RETRY_OPERATIONS`,
+  `MARK_RETRY_REASONS`).
+- Recording uses the standard best-effort `MetricsRecorder`.
+- No alert rule is added.

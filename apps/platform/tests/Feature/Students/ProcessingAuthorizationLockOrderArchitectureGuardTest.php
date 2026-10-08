@@ -82,9 +82,10 @@ class ProcessingAuthorizationLockOrderArchitectureGuardTest extends TestCase
         $this->assertDoesNotMatchRegularExpression('/catch \((\\\\?Throwable|\\\\?Exception)\b/', $abort, 'never a blanket catch');
 
         $marks = 'Domain/Examinations/Application/Marks/';
-        foreach (['StudentMarkService.php' => ['record'], 'StudentMarkCorrectionService.php' => ['request', 'approve', 'reject'], 'StudentMarkLockService.php' => ['lock']] as $file => $methods) {
-            foreach ($methods as $method) {
-                $this->assertMatchesRegularExpression('/return RetryableAbort::translate\(fn \(\): \w+ => \$this->context->withSchool\(/', $this->method($marks.$file, $method), "{$file}::{$method}() translates a retryable abort");
+        // The S5 observability follow-up: each boundary names its own closed operation (the metric label).
+        foreach (['StudentMarkService.php' => ['record' => 'Record'], 'StudentMarkCorrectionService.php' => ['request' => 'CorrectionRequest', 'approve' => 'CorrectionApprove', 'reject' => 'CorrectionReject'], 'StudentMarkLockService.php' => ['lock' => 'PaperLock']] as $file => $methods) {
+            foreach ($methods as $method => $operation) {
+                $this->assertMatchesRegularExpression('/return RetryableAbort::translate\(StudentMarkOperation::'.$operation.', fn \(\): \w+ => \$this->context->withSchool\(/', $this->method($marks.$file, $method), "{$file}::{$method}() translates a retryable abort as {$operation}");
             }
         }
         foreach (['StudentMarkService.php', 'StudentMarkCorrectionService.php'] as $file) {

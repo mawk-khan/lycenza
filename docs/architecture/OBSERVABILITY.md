@@ -621,3 +621,17 @@ real environment:
   unchanged.
 - **Logs** (counts only; never a salary, name, tax identifier or payroll
   value): `retention.payroll_prune.completed`/`.dry_run`/`.unconfigured`.
+
+## StudentMark retryable aborts (ADR 0068 §27.11, 2026-10-08)
+
+- **Metric.** `lycenza_student_mark_retryable_aborts_total{operation,
+  reason}` counts StudentMark requests PostgreSQL aborted as a deadlock
+  victim or a serialization failure. Each was answered 409
+  `STUDENT_MARK_RETRY_REQUIRED`: nothing was saved, the caller may retry,
+  and there is no automatic retry.
+- **Labels.** `operation` has 5 closed values; `reason` (a new label key) is
+  `deadlock` or `serialization_failure`. No identifier, value, SQLSTATE or
+  message.
+- **Reading it.** A sustained rate means real write contention on marks,
+  worth investigating. It is not an error budget, and **no alert** is added
+  in this slice.

@@ -461,6 +461,10 @@ side:
     row.
   - A retry re-runs every check: P3, ownership, basis, paper, year and
     version.
+  - Each translated abort counts once in
+    `lycenza_student_mark_retryable_aborts_total{operation, reason}`
+    (2026-10-08; ADR 0068 §27.11). The metric is a caller-retry conflict
+    signal, not data loss.
 
 ## Note — retained consent evidence keeps its Guardian relationship (2026-10-07)
 

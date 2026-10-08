@@ -916,3 +916,39 @@ same rules against raw SQL, a future writer or an accidental service bypass.
 - **S1** (ADR 0069) is a different rule: it freezes the Offering's
   required/elective meaning. S6 freezes which Offering a marked paper
   refers to. The two compose, and neither replaces the other.
+
+## Retryable-abort metric (S5 follow-up, 2026-10-08; ADR 0068 §27.11)
+
+**What it counts.** `lycenza_student_mark_retryable_aborts_total` counts
+StudentMark requests that PostgreSQL aborted as a deadlock victim (`40P01`)
+or a serialization failure (`40001`). Those requests are the ones answered
+409 `STUDENT_MARK_RETRY_REQUIRED`.
+
+**What it means.** It is a **caller-retry conflict** signal, not data loss:
+- nothing was saved — no mark, revision, correction, lock or audit row;
+- the caller re-sends the whole request and every check re-runs;
+- there is **no automatic retry**.
+
+| Label | Closed values |
+|---|---|
+| `operation` | `record` (administrative and teacher entry), `paper_lock`, `correction_request`, `correction_approve`, `correction_reject` |
+| `reason` | `deadlock`, `serialization_failure` |
+
+**Where it is recorded.**
+- Exactly once per translated abort, in `RetryableAbort::translate()`,
+  through `StudentMarkTelemetry` and the shared `MetricsRecorder`
+  (ADR 0051).
+- It is recorded outside the rolled-back transaction, so the rollback never
+  erases it.
+- It is best effort: a metrics-store failure is swallowed and counted by the
+  recorder, and the 409 is unchanged.
+
+**What it never contains.** No Student, mark, paper, Employee, User or School
+identifier or name. No value or status, and no SQL, SQLSTATE text,
+constraint or exception message. Nothing is logged.
+
+The closed vocabulary lives in `MetricCatalog`
+(`MARK_RETRY_OPERATIONS` / `MARK_RETRY_REASONS`), so the catalog never
+imports the marks module. `StudentMarkOperation` and `StudentMarkTelemetry`
+are test-pinned to it, and every other database error keeps its existing
+handling.

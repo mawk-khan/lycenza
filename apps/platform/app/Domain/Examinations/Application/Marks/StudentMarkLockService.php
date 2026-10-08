@@ -36,7 +36,7 @@ class StudentMarkLockService
     {
         StudentMarkAvailability::assertAvailable();
 
-        return RetryableAbort::translate(fn (): ExaminationPaperMarkState => $this->context->withSchool($school, fn (): ExaminationPaperMarkState => DB::transaction(function () use ($school, $examinationPaperId, $actor): ExaminationPaperMarkState {
+        return RetryableAbort::translate(StudentMarkOperation::PaperLock, fn (): ExaminationPaperMarkState => $this->context->withSchool($school, fn (): ExaminationPaperMarkState => DB::transaction(function () use ($school, $examinationPaperId, $actor): ExaminationPaperMarkState {
             $paper = ExaminationPaper::query()->where('school_id', $school->id)->whereKey($examinationPaperId)->lockForUpdate()->firstOrFail();
 
             $state = ExaminationPaperMarkState::query()->where('school_id', $school->id)->where('examination_paper_id', $paper->id)->lockForUpdate()->first();

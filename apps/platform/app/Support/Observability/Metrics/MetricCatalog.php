@@ -39,6 +39,8 @@ final class MetricCatalog
         'to',
         // ADR 0055: the closed email purpose catalog.
         'message_class',
+        // ADR 0068 §27.11 (S5 follow-up): why a StudentMark transaction was aborted (closed: deadlock / serialization_failure).
+        'reason',
     ];
 
     public const REQUEST_SURFACES = ['web', 'api_v1', 'api_partner', 'api_internal', 'health'];
@@ -49,6 +51,15 @@ final class MetricCatalog
 
     /** PostgreSQL SQLSTATE classes worth distinguishing; anything else is `other`. */
     public const SQLSTATE_CLASSES = ['08', '22', '23', '25', '28', '40', '42', '53', '54', '55', '57', '58', 'XX', 'P0', 'other'];
+
+    /**
+     * ADR 0068 §27.11 (S5 follow-up): the student-mark transaction boundaries that translate a retryable abort,
+     * and why. Owned here so the catalog never depends on the marks module; the marks side's operation enum and
+     * telemetry are test-pinned to exactly these values.
+     */
+    public const MARK_RETRY_OPERATIONS = ['record', 'paper_lock', 'correction_request', 'correction_approve', 'correction_reject'];
+
+    public const MARK_RETRY_REASONS = ['deadlock', 'serialization_failure'];
 
     /** App\Support\ApiClients\PartnerCredentialAuthenticator's closed outcomes. */
     public const PARTNER_AUTH_OUTCOMES = ['malformed', 'unknown_key', 'client_missing', 'secret_mismatch', 'credential_revoked', 'credential_expired', 'client_revoked'];
@@ -87,6 +98,9 @@ final class MetricCatalog
             'lycenza_retention_rows_total' => self::counter('Retention maintenance rows by family and outcome.', ['operation' => RetentionMetrics::families(), 'outcome' => RetentionMetrics::OUTCOMES]),
             // E21.2F: reviewed data-subject erasure case transitions (no subject identifiers).
             'lycenza_erasure_case_transitions_total' => self::counter('Reviewed erasure case lifecycle transitions.', ['state' => ['requested', 'approved', 'partially_approved', 'denied', 'executing', 'completed']]),
+            // ADR 0068 §27.11 (S5 follow-up): student-mark requests PostgreSQL aborted as a deadlock victim or
+            // serialization failure (answered 409 STUDENT_MARK_RETRY_REQUIRED). Never Student, mark, paper, School or value.
+            'lycenza_student_mark_retryable_aborts_total' => self::counter('Student-mark requests aborted by PostgreSQL as a deadlock victim or serialization failure and answered 409 STUDENT_MARK_RETRY_REQUIRED (nothing saved; the caller may retry; no automatic retry).', ['operation' => self::MARK_RETRY_OPERATIONS, 'reason' => self::MARK_RETRY_REASONS]),
             'lycenza_idempotency_requests_total' => self::counter('Idempotency-Key outcomes (formerly idempotency_{outcome}_total log lines).', ['outcome' => ['new', 'replay', 'conflict', 'in_progress', 'failed']]),
 
             // Health and dependencies

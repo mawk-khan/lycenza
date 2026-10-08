@@ -83,7 +83,7 @@ class StudentMarkService
         usort($entries, fn (StudentMarkEntry $a, StudentMarkEntry $b) => strcmp($a->studentId, $b->studentId));
 
         // S5: a deadlock / serialization abort is a retryable 409 (STUDENT_MARK_RETRY_REQUIRED); nothing else is translated.
-        return RetryableAbort::translate(fn (): array => $this->context->withSchool($school, fn (): array => DB::transaction(function () use ($school, $examinationPaperId, $entries, $actor, $guard): array {
+        return RetryableAbort::translate(StudentMarkOperation::Record, fn (): array => $this->context->withSchool($school, fn (): array => DB::transaction(function () use ($school, $examinationPaperId, $entries, $actor, $guard): array {
             $guard?->holdActor($school);
 
             $paper = ExaminationPaper::query()->where('school_id', $school->id)->whereKey($examinationPaperId)->sharedLock()->first();

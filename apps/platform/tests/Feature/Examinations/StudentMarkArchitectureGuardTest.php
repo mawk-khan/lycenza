@@ -371,4 +371,34 @@ class StudentMarkArchitectureGuardTest extends TestCase
         $this->assertStringNotContainsString("'subject_offering_id' =>", $update[0] ?? '');
         $this->assertStringContainsString('ExaminationPaperMarksRecordedException', $papers, 'the documented 409 for a marked paper\'s maximum and date');
     }
+
+    /**
+     * S5 observability follow-up (ADR 0068 §27.11): the marks files make exactly ONE kind of metrics call -- the
+     * retryable-abort counter, through StudentMarkTelemetry, from RetryableAbort's translation only. No other metric,
+     * no logging, no second emission point; the classifier never gains a third SQLSTATE.
+     */
+    #[Test]
+    public function the_only_marks_telemetry_is_the_retryable_abort_counter_from_one_boundary(): void
+    {
+        $recorders = $callers = [];
+        foreach ($this->markFiles() as $file) {
+            $code = $this->code($file);
+            if (str_contains($code, 'MetricsRecorder') || str_contains($code, '->counter(') || str_contains($code, '->observe(') || str_contains($code, '->gauge(')) {
+                $recorders[] = basename($file);
+            }
+            if (str_contains($code, 'StudentMarkTelemetry::class') || str_contains($code, '->retryableAbort(')) {
+                $callers[] = basename($file);
+            }
+        }
+        $this->assertSame(['StudentMarkTelemetry.php'], $recorders, 'only StudentMarkTelemetry touches the metrics recorder');
+        $this->assertSame(['RetryableAbort.php'], $callers, 'only RetryableAbort records the retryable abort');
+
+        $telemetry = $this->code(app_path('Domain/Examinations/Application/Marks/StudentMarkTelemetry.php'));
+        $this->assertSame(1, substr_count($telemetry, '->counter('), 'one counter');
+        $this->assertStringContainsString("['operation' => \$operation->value, 'reason' => \$reason]", $telemetry, 'two closed labels, nothing else');
+
+        $abort = $this->code(app_path('Domain/Examinations/Application/Marks/RetryableAbort.php'));
+        $this->assertSame(1, substr_count($abort, '->retryableAbort('), 'one emission point per translated abort');
+        $this->assertStringContainsString("public const array REASONS = ['40P01' => 'deadlock', '40001' => 'serialization_failure'];", $abort);
+    }
 }

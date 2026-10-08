@@ -941,6 +941,18 @@ Detail per stage:
     - The RES.4 paper-date rule is unchanged (RES-L2 open); RES stays
       CLOSED; S8 stays open.
     - Regression cadence: round 4/5.
+  - **StudentMark retryable-abort metric — COMPLETE (2026-10-08; ADR 0068
+    §27.11 S5 follow-up):**
+    - `lycenza_student_mark_retryable_aborts_total{operation, reason}`
+      counts each 409 `STUDENT_MARK_RETRY_REQUIRED` once, through the shared
+      `MetricsRecorder`.
+    - Closed labels; no identifiers, values, SQLSTATE or messages.
+    - The response, rollback and "no automatic retry" rule are unchanged.
+    - A true deadlock is proven to count once, for administrative and
+      teacher entry.
+    - RES stays CLOSED.
+    - Regression cadence: round 5/5 — canonical full regression on the
+      exact published tree; counter reset to 0/5.
   - Regression cadence: round 2/5 after the `c9d9762` checkpoint (executable
     corrections, confined to the marks paths; focused and broad suites).
 - **Not sequenced:** results, finalization, publication, report cards,

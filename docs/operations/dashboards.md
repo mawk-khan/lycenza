@@ -41,6 +41,7 @@ construction. Guard-tested: every metric named here exists in
 | Account recovery (ADR 0056) | `max by (state) (lycenza_account_recovery_enabled)`, `sum by (outcome) (increase(lycenza_account_recovery_requests_total[1h]))`, `sum by (outcome) (increase(lycenza_account_recovery_issuance_total[1h]))`, `sum by (outcome) (increase(lycenza_account_recovery_resets_total[1h]))` |
 | Automation | `sum by (outcome) (increase(lycenza_automation_executions_total[1h]))`, `lycenza_automation_pending_executions`, `lycenza_automation_overdue_executions`, `increase(lycenza_automation_review_items_created_total[1d])` |
 | Partner auth failures | `sum by (outcome) (increase(lycenza_partner_auth_failures_total[1h]))` |
+| StudentMark retryable aborts (ADR 0068 §27.11) | `sum by (operation, reason) (increase(lycenza_student_mark_retryable_aborts_total[1h]))` — caller-retry conflicts (nothing saved, no automatic retry), not data loss |
 
 ## 4. Backup and recovery
 

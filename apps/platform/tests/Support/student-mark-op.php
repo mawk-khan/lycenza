@@ -15,6 +15,7 @@ use App\Domain\TeachingAssignments\Application\ElectiveTeachingAssignmentService
 use App\Domain\TeachingAssignments\Application\TeachingAssignmentService;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Observability\Metrics\MetricStore;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Console\Kernel;
 use Tests\Support\Concurrency\HeldTransaction;
@@ -104,4 +105,9 @@ try {
     echo 'error:'.$e::class;
 } finally {
     $context->clearAll();
+    // S5 observability follow-up: a parent test can read this process's (array) metric store.
+    $dump = getenv('METRICS_DUMP_FILE');
+    if ($dump !== false && $dump !== '') {
+        file_put_contents($dump, json_encode($app->make(MetricStore::class)->all()));
+    }
 }

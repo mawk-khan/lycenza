@@ -68,7 +68,7 @@ class StudentMarkCorrectionService
             throw new StudentMarkCorrectionInvalidException;
         }
 
-        return RetryableAbort::translate(fn (): StudentMarkCorrection => $this->context->withSchool($school, fn (): StudentMarkCorrection => DB::transaction(function () use ($school, $examinationPaperId, $studentMarkId, $expectedVersion, $status, $value, $reasonCode, $actor): StudentMarkCorrection {
+        return RetryableAbort::translate(StudentMarkOperation::CorrectionRequest, fn (): StudentMarkCorrection => $this->context->withSchool($school, fn (): StudentMarkCorrection => DB::transaction(function () use ($school, $examinationPaperId, $studentMarkId, $expectedVersion, $status, $value, $reasonCode, $actor): StudentMarkCorrection {
             $paper = $this->lockedPaper($school, $examinationPaperId);
             $mark = StudentMark::query()->where('school_id', $school->id)->where('examination_paper_id', $paper->id)->whereKey($studentMarkId)->firstOrFail();
             $proposed = StudentMarkService::normalizedValue($mark->student_id, $status, $value, (string) $paper->max_marks);
@@ -120,7 +120,7 @@ class StudentMarkCorrectionService
     {
         StudentMarkAvailability::assertAvailable();
 
-        return RetryableAbort::translate(fn (): StudentMarkCorrection => $this->context->withSchool($school, fn (): StudentMarkCorrection => DB::transaction(function () use ($school, $correctionId, $actor): StudentMarkCorrection {
+        return RetryableAbort::translate(StudentMarkOperation::CorrectionApprove, fn (): StudentMarkCorrection => $this->context->withSchool($school, fn (): StudentMarkCorrection => DB::transaction(function () use ($school, $correctionId, $actor): StudentMarkCorrection {
             [$paper, $correction] = $this->pendingForDecision($school, $correctionId, $actor);
             $mark = StudentMark::query()->where('school_id', $school->id)->whereKey($correction->student_mark_id)->firstOrFail();
 
@@ -159,7 +159,7 @@ class StudentMarkCorrectionService
     {
         StudentMarkAvailability::assertAvailable();
 
-        return RetryableAbort::translate(fn (): StudentMarkCorrection => $this->context->withSchool($school, fn (): StudentMarkCorrection => DB::transaction(function () use ($school, $correctionId, $actor): StudentMarkCorrection {
+        return RetryableAbort::translate(StudentMarkOperation::CorrectionReject, fn (): StudentMarkCorrection => $this->context->withSchool($school, fn (): StudentMarkCorrection => DB::transaction(function () use ($school, $correctionId, $actor): StudentMarkCorrection {
             [$paper, $correction] = $this->pendingForDecision($school, $correctionId, $actor);
 
             $correction->forceFill([
