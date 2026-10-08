@@ -1960,7 +1960,23 @@ entries were kept, with dated notes. Locations:
     constrains the switch once dependent academic evidence exists.
 - **S2 — teacher marks UI:** RES.4/RES.4A are session JSON only. That is
   future UI/product work, not promised by this contract.
-- **S3 — the Visitors timestamp flake:** `VisitorsRlsIsolationTest` can get
+- **S3 — the Visitors timestamp flake:** **DONE 2026-10-08:**
+  - Root cause, reproduced: the fixture passed `checked_out_at => now()`,
+    which runs BEFORE the factory's `checked_in_at => now()`. Both are
+    stored to the whole second, so the row broke
+    `visitor_visits_checkout_after_checkin_check` whenever a second
+    boundary fell between the two reads. That was 3 in 3,000 real-clock
+    runs, with no backward clock needed; WSL2 steps only add to it.
+  - Fixture: `VisitorVisitFactory::checkedOut()` derives the check-out from
+    the row's own check-in, through `createCheckedOutVisitorVisit()`. Both
+    inverted call sites use it.
+  - Production had the cousin: `checkOut()` wrote `now()` against the
+    stored check-in, so a backward step or node skew got a 500. It now
+    records `max(now, checked_in_at)`.
+  - The CHECK is unchanged and now pinned by a test. RLS assertions are
+    unchanged. No schema change. RES.5 stays CLOSED.
+
+  *Original text:* `VisitorsRlsIsolationTest` can get
   `checked_out_at < checked_in_at` from two `now()` calls under a WSL2 clock
   step. The class passes in isolation; a separate reliability correction.
 - **S4 — formal teacher determinations:** E37 (RES-L2) and the E35 teacher

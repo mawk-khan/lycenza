@@ -616,6 +616,24 @@ Verified: all six tests, 10 consecutive runs each, while 16 CPU-bound
 busy loops saturated the container -- 60/60 passed.
 
 
+## Ordered timestamps in test data (S3, 2026-10-08)
+
+When a row has an ordered pair of instants (check-in / check-out, start /
+end), derive the later one from the earlier one: one clock read plus a
+duration. Never take each from its own `now()`.
+- A call-site `now()` is evaluated **before** the factory's own `now()`.
+  A fixture passing only the later instant therefore captures it first.
+- Whole-second columns hide the inversion until a second boundary falls
+  between the two reads. `VisitorsRlsIsolationTest` failed about 1 run in
+  1,000 this way, with no backward clock involved. WSL2 clock steps make it
+  worse.
+- Use the factory state that derives the pair, for example
+  `VisitorVisitFactory::checkedOut()` / `createCheckedOutVisitorVisit()`,
+  or literal instants.
+- Tests that need a moving clock drive it per call (`travelTo`, or a
+  `Carbon::setTestNow` sequence, which the framework resets after each
+  test), never `sleep`.
+
 ## Committed platform-root fixtures (Phase 0O.1A)
 
 The database refuses a grantor-less platform grant from the runtime role,

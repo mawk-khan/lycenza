@@ -106,7 +106,7 @@ class VisitorLifecycleTest extends TestCase
         [$user, $school] = $this->createSchoolAdmin('school_admin');
         $campus = $this->createCampus($school);
         $visitor = $this->createVisitor($school);
-        $visit = $this->createVisitorVisit($visitor, $campus, ['status' => 'checked_out', 'checked_out_at' => now()]);
+        $visit = $this->createCheckedOutVisitorVisit($visitor, $campus);
         $client = $this->withHeader('Authorization', 'Bearer '.$this->token($user));
 
         $client->patchJson("/api/v1/schools/{$school->id}/visitors/{$visitor->id}", ['status' => 'inactive'])->assertOk();

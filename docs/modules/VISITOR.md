@@ -182,6 +182,13 @@ plus `checked_out_at IS NULL OR checked_out_at >= checked_in_at` —
 mirrors `transport_student_assignments_status_end_consistency_check`
 exactly.
 
+**Check-out clock (S3, 2026-10-08).** `checkOut()` records
+`max(now, checked_in_at)`. If the checking-out node's clock reads earlier
+than the stored check-in (a backward NTP/VM step, or skew between the node
+that checked in and this one), the check-out is recorded at the check-in
+instant instead of being refused with a 500 by the CHECK above. The CHECK
+stays the authority; `checked_in_at` is still never rewritten.
+
 ## 10. One-active-visit invariant
 
 Enforced with a PostgreSQL partial unique index:

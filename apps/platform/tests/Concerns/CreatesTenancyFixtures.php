@@ -887,6 +887,20 @@ trait CreatesTenancyFixtures
         );
     }
 
+    /** S3: a checked-out Visit whose check-out derives from its own check-in (VisitorVisitFactory::checkedOut()). */
+    protected function createCheckedOutVisitorVisit(Visitor $visitor, Campus $campus, array $attributes = []): VisitorVisit
+    {
+        return app(TenantContext::class)->withSchool(
+            $visitor->school,
+            // The attributes go in BEFORE checkedOut(), so an overridden checked_in_at is the one it derives from.
+            fn () => VisitorVisit::factory()->state(array_merge([
+                'school_id' => $visitor->school_id,
+                'visitor_id' => $visitor->id,
+                'campus_id' => $campus->id,
+            ], $attributes))->checkedOut()->create(),
+        );
+    }
+
     // --- Phase 10D: Hostel fixtures -----------------------------------------
 
     protected function createHostel(School $school, Campus $campus, array $attributes = []): Hostel

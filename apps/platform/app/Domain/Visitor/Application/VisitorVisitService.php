@@ -110,6 +110,13 @@ class VisitorVisitService
      * needing route-level idempotency (VISITOR.md "Check-out
      * idempotency decision"). The original `checked_in_at` is never
      * rewritten.
+     *
+     * S3: `checked_out_at` is never earlier than the stored `checked_in_at`.
+     * If this node's clock reads earlier (a backward NTP/VM step, or clock
+     * skew between the node that checked in and this one) the check-out is
+     * recorded at the check-in instant instead of being refused by
+     * `visitor_visits_checkout_after_checkin_check`, which stays the
+     * authority.
      */
     public function checkOut(VisitorVisit $visit, ?User $actor = null): VisitorVisit
     {
@@ -117,7 +124,7 @@ class VisitorVisitService
             $affected = VisitorVisit::query()
                 ->where('id', $visit->id)
                 ->where('status', 'checked_in')
-                ->update(['status' => 'checked_out', 'checked_out_at' => now()]);
+                ->update(['status' => 'checked_out', 'checked_out_at' => now()->max($visit->checked_in_at)]);
 
             if ($affected === 0) {
                 throw new VisitAlreadyCheckedOutException;

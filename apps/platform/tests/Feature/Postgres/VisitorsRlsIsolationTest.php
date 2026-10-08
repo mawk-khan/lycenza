@@ -134,7 +134,7 @@ class VisitorsRlsIsolationTest extends TestCase
         $school = $this->createSchool();
         $campus = $this->createCampus($school);
         $visitor = $this->createVisitor($school);
-        $visit = $this->createVisitorVisit($visitor, $campus, ['status' => 'checked_out', 'checked_out_at' => now()]);
+        $visit = $this->createCheckedOutVisitorVisit($visitor, $campus);
 
         $this->setSchool($school->id);
 

@@ -963,6 +963,17 @@ Detail per stage:
     - No authorization, environment, schema or legal change. RES stays
       CLOSED.
     - Regression cadence: round 1/5 after the `e2b31647` checkpoint.
+  - **S3 — COMPLETE (2026-10-08; ADR 0068 §27.11):** the Visitors timestamp
+    flake.
+    - Root cause: an inverted fixture (the check-out `now()` was read before
+      the factory's check-in `now()`) plus whole-second storage. Reproduced
+      deterministically and at 3 in 3,000 real-clock runs.
+    - The fixture now derives the check-out from the check-in.
+    - Production `checkOut()` records `max(now, checked_in_at)`, so a
+      backward clock step is no longer a 500.
+    - The CHECK is unchanged and pinned; RLS tests are unchanged.
+    - RES stays CLOSED.
+    - Regression cadence: round 2/5.
   - Regression cadence: round 2/5 after the `c9d9762` checkpoint (executable
     corrections, confined to the marks paths; focused and broad suites).
 - **Not sequenced:** results, finalization, publication, report cards,
