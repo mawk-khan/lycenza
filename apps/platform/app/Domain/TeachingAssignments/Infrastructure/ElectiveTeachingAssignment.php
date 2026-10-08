@@ -42,6 +42,8 @@ class ElectiveTeachingAssignment extends Model
     /** The same closed end-reason catalogue as TeachingAssignment (`elective_teaching_assignments_end_shape_check`). */
     public const array END_REASONS = TeachingAssignment::END_REASONS;
 
+    public const string END_REASON_EMPLOYMENT_ENDED = TeachingAssignment::END_REASON_EMPLOYMENT_ENDED;
+
     protected $table = 'elective_teaching_assignments';
 
     /** @var list<string> */

@@ -38,6 +38,9 @@ use LogicException;
  * periods() and hold() are unchanged: required ownership never reads the
  * elective fact, and no existing consumer sees elective periods.
  *
+ * S7 (ADR 0063 §47): a row voided by an employment end (ends_on = starts_on
+ * - 1) never covered a day, so it is no period; hold() never covers it.
+ *
  * The Employee is the caller's ActingEmployee; this class never resolves
  * one and never decides authorization by itself.
  */
@@ -51,6 +54,7 @@ class TeachingOwnership
         return $this->context->withSchool($school, fn () => TeachingAssignment::query()
             ->where('school_id', $school->id)
             ->where('employee_id', $employeeId)
+            ->where(fn ($q) => $q->whereNull('ends_on')->orWhereColumn('ends_on', '>=', 'starts_on')) // S7: a voided row never owned a day
             ->orderBy('starts_on')
             ->orderBy('id')
             ->get()
@@ -95,6 +99,7 @@ class TeachingOwnership
         return $this->context->withSchool($school, fn () => ElectiveTeachingAssignment::query()
             ->where('school_id', $school->id)
             ->where('employee_id', $employeeId)
+            ->where(fn ($q) => $q->whereNull('ends_on')->orWhereColumn('ends_on', '>=', 'starts_on')) // S7: a voided row never owned a day
             ->orderBy('starts_on')
             ->orderBy('id')
             ->get()

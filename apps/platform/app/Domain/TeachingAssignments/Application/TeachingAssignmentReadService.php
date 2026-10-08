@@ -89,6 +89,7 @@ class TeachingAssignmentReadService
             'startsOn' => $startsOn,
             'endsOn' => $endsOn,
             'state' => match (true) {
+                $endsOn !== null && $endsOn < $startsOn => 'past', // S7: voided by an employment end, never owned a day
                 $today < $startsOn => 'upcoming',
                 $endsOn !== null && $today > $endsOn => 'past',
                 default => 'current',
@@ -138,6 +139,7 @@ class TeachingAssignmentReadService
             'startsOn' => $startsOn,
             'endsOn' => $endsOn,
             'state' => match (true) {
+                $endsOn !== null && $endsOn < $startsOn => 'past', // S7: voided by an employment end, never owned a day
                 $today < $startsOn => 'upcoming',
                 $endsOn !== null && $today > $endsOn => 'past',
                 default => 'current',

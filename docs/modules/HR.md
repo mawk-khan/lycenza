@@ -555,7 +555,9 @@ deceased).
   Assignment under that Employment to the same `ends_on` date (Option A
   from the brief — chosen over rejecting the call until assignments are
   manually closed first, since that would make ending an Employment
-  error-prone for the common case). Never touches `users`/
+  error-prone for the common case). Since S7 (ADR 0063 §47) the same
+  transaction also ends the Employee's teaching ownership through the
+  `EmploymentEndParticipant` port. Never touches `users`/
   `school_memberships` — account deactivation stays a distinct, explicit
   action outside this checkpoint (principle 2.6).
 
@@ -3749,6 +3751,21 @@ planned or current employment (`pre_joining`, `active` or `notice_period`)
 covering a date. It locks the Employee and that EmploymentRecord `FOR SHARE`,
 so an archive or `EmploymentService::end()` serializes with the caller.
 TeachingAssignments uses it when creating an assignment (ADR 0063 §30).
+Since S7 it also asks `coveringEndsOn()` (the covering record's last day,
+in the same transaction), so an assignment never outlasts its employment.
+
+### S7 addition — `EmploymentEndParticipant` (ADR 0063 §47, 2026-10-08)
+
+`EmploymentService::end()` calls every participant tagged
+`EmploymentEndParticipant::TAG`. It does so inside its transaction, after
+the EmploymentRecord lock, HR's own assignment closure and before
+`EmploymentEnded`, so authority the employment granted ends with it
+atomically. The registration lives in `AppServiceProvider`, and HR names no
+implementer (guard-pinned).
+
+Today's single participant ends teaching ownership, required and elective,
+so a rehire of the same Employee never revives an old assignment. A
+participant that throws refuses the whole end. ActingEmployee is unchanged.
 
 It is administrative planning, not identity: `ActingEmployeeResolver`
 remains the only way to identify an acting User, with its stricter

@@ -44,7 +44,10 @@ class TeachingAssignment extends Model
     use BelongsToSchool, GeneratesUuidV7;
 
     /** The closed end-reason catalogue (`teaching_assignments_end_shape_check`). */
-    public const array END_REASONS = ['completed', 'reassigned', 'employment_ended'];
+    public const array END_REASONS = ['completed', 'reassigned', self::END_REASON_EMPLOYMENT_ENDED];
+
+    /** S7 (ADR 0063 §47): the one reason that may also void an unstarted row or shorten an ended one (the database checks it). */
+    public const string END_REASON_EMPLOYMENT_ENDED = 'employment_ended';
 
     protected $table = 'teaching_assignments';
 

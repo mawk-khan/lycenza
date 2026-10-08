@@ -14,7 +14,9 @@
   **Amended 2026-10-07:** E33 APPROVED WITH CONDITIONS (§42); controls built
   (§43) and verified (§44), §40 superseded in part by §42; TCH-E elective
   ownership (§45); RES.4 teacher marks as a development-only consumer
-  (§46).
+  (§46). **Amended 2026-10-08 (S7, §47):** ending an employment ends the
+  teaching ownership it granted, required and elective, in the same
+  transaction; a rehire never revives it.
 - Date: 2026-09-30
 - Programme: **TCH — Teacher Identity & Ownership-Based Authorization**
   (`docs/roadmap/MASTER-ROADMAP.md`, "Post-foundation product programmes").
@@ -543,7 +545,7 @@ TCH.1 and TCH.2 must close these races:
 |---|---|
 | Employee link changed or unlinked while authorization executes | The consumer reads the Employee `FOR SHARE` in its transaction; link and unlink take it `FOR UPDATE` |
 | Membership suspended during a teacher write | The consumer reads the membership `FOR SHARE`, uncached; suspension already takes it `FOR UPDATE` (`StaffAccessService`) |
-| Employment ends while a TeachingAssignment is created | Creation reads the EmploymentRecord `FOR SHARE`; `EmploymentService::end` locks it `FOR UPDATE` |
+| Employment ends while a TeachingAssignment is created | Creation reads the EmploymentRecord `FOR SHARE`; `EmploymentService::end` locks it `FOR UPDATE` (and, since S7 §47, then ends the Employee's assignment rows `FOR UPDATE` in the same transaction) |
 | A TeachingAssignment ends during an owned-resource write | The consumer reads the assignment `FOR SHARE`; ending takes it `FOR UPDATE` |
 | Two overlapping assignments created concurrently | Advisory lock on the assignment key + overlap check (§10) |
 
@@ -822,6 +824,9 @@ derives ownership from `TimetableEntry` or `ActingEmployeeResolver`
   context, Section, Offering, `starts_on`, creator, `created_at`), any update
   other than the single end, an extension of an existing `ends_on`, and any
   change to an ended row.
+  - *Amended by S7 (§47):* with `end_reason = 'employment_ended'` only, the
+    CHECK also admits a void row (`ends_on = starts_on - 1`) and the trigger
+    lets an ended row's `ends_on` move earlier. Both tables.
 - **Tenancy and indexes:** forced RLS, `TenantRls::revokeDelete`. Indexes
   `unique(id, school_id)`, the key index `(school_id, employee_id,
   section_id, subject_offering_id, starts_on)` and the context index
@@ -3301,3 +3306,115 @@ ownership side.
 - **No effect on E33 or teacher Attendance.** Attendance authority still
   never implies marks authority, and marks authority never implies
   Attendance.
+
+## 47. S7 — ending employment ends teaching ownership (2026-10-08)
+
+**Executable hardening slice (ADR 0068 §27.11 S7).** Before it, ending an
+employment left the Employee's teaching assignments open. ActingEmployee
+eligibility hid them only until a rehire of the same Employee row; after the
+rehire, old open assignments granted ownership again — Attendance, LMS,
+Curriculum Delivery and the RES.4 teacher marks path all honoured them.
+
+### 47.1 Rule
+- `EmploymentService::end()` ends, **in its own transaction**, every
+  required (`teaching_assignments`) and elective
+  (`elective_teaching_assignments`) row of the Employee that would grant
+  ownership after the employment's last day `D`.
+- A rehire owns nothing until a **new** assignment is created.
+- History is never deleted and `starts_on` is never rewritten.
+
+### 47.2 End-date semantics (per row, reason `employment_ended`, actor = the HR actor)
+| Row before the end | After |
+|---|---|
+| Started on or before `D`, open or ending after `D` (scheduled or already ended) | `ends_on = D` — ownership holds through the last employed day (the inclusive HR interval), never after |
+| Not started by `D` (`starts_on > D`) | **voided**: `ends_on = starts_on − 1`; it never covers a date and stays as a row |
+| Already ending on or before `D` | untouched |
+
+- `ended_at` / `ended_by_user_id` / `end_reason` record the latest end. The
+  earlier end stays in its own audit event; the new
+  `teaching_assignment.ended` / `elective_teaching_assignment.ended` event
+  adds `previousEndReason` and `employmentEndsOn`.
+- `TeachingOwnership::periods()` / `electivePeriods()` omit void rows; the
+  `hold*()` reads never cover them; the create overlap check ignores them (a
+  rehire may reassign the same key across their dates); the administrative
+  list shows them as `past`, never `upcoming`.
+
+### 47.3 Architecture
+- **Port.** HR owns `EmploymentEndParticipant` (tag
+  `hr.employment_end_participants`). `EmploymentService::end()` calls every
+  participant after closing HR's own assignments and before
+  `EmploymentEnded`. The binding lives in `AppServiceProvider` (the
+  `FinancialPeriodCloseParticipant` precedent), so HR still never references
+  Teaching Assignments (guard-pinned).
+- **Participant.** `EmploymentEndedTeachingOwnership` calls
+  `TeachingAssignmentService::endForEmployment()`, then
+  `ElectiveTeachingAssignmentService::endForEmployment()`. One writer per
+  table stays true.
+- **Authorization.** The path re-checks `hr.employees.assignments.manage`,
+  the capability that ends the employment. An HR operator needs no
+  `teaching.assignments.manage`, and a teaching administrator cannot use
+  this path.
+- **Lock order.** EmploymentRecord `FOR UPDATE` (HR) → required rows → elective
+  rows, each `FOR UPDATE` in id order. **No assignment-key advisory lock:**
+  `create()` takes its key *before* the EmploymentRecord, so taking it here,
+  after, could deadlock. A create either committed first (its row is seen
+  and ended) or waits on the EmploymentRecord and then sees the end. This is
+  the identity-first order every teacher use already takes (§20).
+- **Create-time cap.** `EmploymentCoverage::coveringEndsOn()` (HR). A
+  required or elective create whose `ends_on` is open or after the covering
+  employment's last day is refused with 422
+  `TEACHING_ASSIGNMENT_BEYOND_EMPLOYMENT`. Assignments for a fixed-term
+  employment therefore cannot outlive it either.
+- **ActingEmployee unchanged.** It stays the separate use-time predicate
+  (§11); S7 changes ownership rows, never eligibility.
+
+### 47.4 Database
+Migration `2026_12_11_090000_end_teaching_ownership_with_employment`, both
+tables, `employment_ended` only:
+- the date-range CHECK also admits `ends_on = starts_on − 1` (written with
+  `IS NOT DISTINCT FROM`, so a NULL reason cannot turn the CHECK NULL and
+  slip through — caught by the existing raw-SQL invariant tests);
+- the history trigger lets an ended row's `ends_on` move **earlier**;
+  extending, another reason, or any identity change on an ended row stays
+  refused.
+- `down()` refuses while a void row exists and changes nothing else.
+
+### 47.5 Unchanged
+- The RES.4 paper-date rule (§46; RES-L2 Q5/Q10 open). A paper scheduled
+  while the teacher owned the class stays theirs to read and, while open, to
+  correct after a rehire.
+- The ADR 0063 E33 conditions, the capabilities, the routes, and all
+  legal-register statuses.
+
+### 47.6 Residuals (recorded, not built)
+- **Legacy rows.** Assignments created before S7 for a fixed-term
+  employment (an `ends_on` set at hire, never `end()`ed) may still run past
+  it. Development data only; production is not live.
+- **Archive / restore.** An archived Employee owns nothing (ActingEmployee
+  refuses); restoring them revives their assignments. This is intended: the
+  employment never ended.
+- **Raw SQL.** A raw `employment_records` update bypasses the port. The
+  application has one writer (`EmploymentService`); it is not
+  database-enforced.
+
+### 47.7 Proof
+- `EmploymentEndTeachingOwnershipTest` covers:
+  - required and elective ends;
+  - the inclusive boundary;
+  - void, shortened and untouched rows;
+  - rehire with no resurrection;
+  - co-teacher and cross-School isolation;
+  - audit;
+  - authorization;
+  - the create-time cap;
+  - every surface: Attendance, LMS, Curriculum Delivery and RES.4.
+- `EmploymentEndTeachingOwnershipConcurrencyTest` runs real-process races:
+  - X1: authorization vs end;
+  - X2 / X3: required / elective create vs end, both orders;
+  - X4: rehire vs the stale assignment;
+  - X5: teacher StudentMark vs end, both orders.
+- `TeachingAssignmentEmploymentEndGuardTest` proves the raw-SQL
+  CHECK/trigger shapes.
+- `EmploymentEndArchitectureGuardTest` pins the structure.
+- Mutation checks: omitting the required or the elective call, or skipping
+  already-ended rows, fails the tests.

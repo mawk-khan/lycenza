@@ -928,6 +928,19 @@ Detail per stage:
     - Student-first (S5) preserved;
     - races with consent recording are proven.
     - Regression cadence: round 3/5.
+  - **S7 — COMPLETE (2026-10-08; ADR 0063 §47):** ending an employment ends
+    teaching ownership.
+    - `EmploymentService::end()` ends the Employee's required and elective
+      assignments in the same transaction, through an HR-owned participant
+      port, so HR still does not depend on Teaching Assignments.
+    - Ownership holds through the employment's last day; unstarted rows are
+      voided; no deletes; no start rewritten.
+    - A rehire owns nothing until a new assignment. Creation can no longer
+      outlast the covering employment.
+    - Real-process races X1–X5; rollback proof; mutation checks.
+    - The RES.4 paper-date rule is unchanged (RES-L2 open); RES stays
+      CLOSED; S8 stays open.
+    - Regression cadence: round 4/5.
   - Regression cadence: round 2/5 after the `c9d9762` checkpoint (executable
     corrections, confined to the marks paths; focused and broad suites).
 - **Not sequenced:** results, finalization, publication, report cards,

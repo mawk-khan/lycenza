@@ -4,11 +4,13 @@ namespace App\Providers;
 
 use App\Domain\Finance\Application\Periods\FinancialPeriodCloseParticipant;
 use App\Domain\Finance\Application\Retention\FinanceRetentionParticipant;
+use App\Domain\HR\Application\EmploymentEndParticipant;
 use App\Domain\Leave\Application\AttendancePresenceConflictReader;
 use App\Domain\Payments\Application\ChargePeriodStateParticipant;
 use App\Domain\Payments\Application\Retention\ChargeRetentionParticipant;
 use App\Domain\Payroll\Application\Retention\PayrollLedgerRetentionParticipant;
 use App\Domain\StaffAttendance\Application\StaffAttendancePresenceReader;
+use App\Domain\TeachingAssignments\Application\EmploymentEndedTeachingOwnership;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Ai\AiContextTokenService;
@@ -89,6 +91,11 @@ class AppServiceProvider extends ServiceProvider
         // E21.3A2 (ADR 0064 §17): the modules that decide when Finance
         // evidence they reference may expire (Payroll: never, under D9).
         $this->app->tag([ChargeRetentionParticipant::class, PayrollLedgerRetentionParticipant::class], FinanceRetentionParticipant::TAG);
+
+        // S7 (ADR 0063 §47): the authority an employment granted ends with it.
+        // Registered here, not in HR, so HR never references Teaching
+        // Assignments (which depends on HR).
+        $this->app->tag([EmploymentEndedTeachingOwnership::class], EmploymentEndParticipant::TAG);
 
         // HRX.3 (ADR 0065 §24.5): Leave's approval port, implemented by Staff
         // Attendance. Bound here, not in Leave, so Leave never references the

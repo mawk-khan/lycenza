@@ -29,7 +29,10 @@ describes the as-built module.
 - **Depends on** HR (the Employee; `EmploymentCoverage` for the employment
   check) and Academic Structure (Section, SubjectOffering, AcademicYear), by
   composite foreign key and through tenant-scoped reads.
-- **Never depended on** by HR or Academic Structure.
+- **Never depended on** by HR or Academic Structure. Since S7 (ADR 0063
+  §47) Teaching Assignments *implements* HR's `EmploymentEndParticipant`
+  port (`EmploymentEndedTeachingOwnership`, bound in `AppServiceProvider`);
+  HR still references nothing here.
 - **Five consumers,** all through `TeachingOwnership` (and its period
   types) only:
   - Curriculum Delivery (TCH.3), on the delivery's dates;
@@ -83,8 +86,25 @@ Structural guarantees:
   - an active Employee with a `pre_joining`, `active` or `notice_period`
     employment covering `starts_on` (HR's `EmploymentCoverage`, which also
     allows planning a future hire);
-  - **no overlapping period for the same Employee, Section and Offering.**
+  - **no overlapping period for the same Employee, Section and Offering;**
+  - since S7, an `ends_on` no later than the covering employment's last day
+    when that employment has one (`EmploymentCoverage::coveringEndsOn()`);
+    open-ended or longer is 422 `TEACHING_ASSIGNMENT_BEYOND_EMPLOYMENT`.
 - **`end()`** sets the last effective day and a closed reason, once.
+- **`endForEmployment()`** (S7, ADR 0063 §47) runs only inside
+  `EmploymentService::end()`, through `EmploymentEndedTeachingOwnership`,
+  authorized by `hr.employees.assignments.manage`. Every row of the
+  Employee that would grant ownership after the employment's last day `D`
+  ends with reason `employment_ended`:
+  - a started row: `ends_on = D`, including one already ended later;
+  - a row not started by `D`: voided (`ends_on = starts_on − 1`; it never
+    covers a date, overlaps nothing and is listed as `past`);
+  - a row ending by `D` already: untouched.
+
+  No delete and no new `starts_on`. Rows are taken `FOR UPDATE` in id order
+  after the EmploymentRecord, with no assignment-key lock. A rehire owns
+  nothing until a new assignment.
+  `ElectiveTeachingAssignmentService` has the same method for its table.
 
 Rules:
 - There is no update, no repointing, no delete and no cancellation. A
@@ -151,8 +171,14 @@ eligible (corrected at the E21.2G closure audit).
 ## 7. Known limitations
 
 - **No cancellation of a future assignment.** ADR 0063 defines none. The
-  earliest end is the start date, which still leaves one owned day. A real
-  cancellation needs a later, explicit contract refinement.
+  earliest administrative end is the start date, which still leaves one
+  owned day. A real cancellation needs a later, explicit contract
+  refinement. The one exception is an employment end (S7), which voids a
+  not-yet-started row.
+- **Legacy rows (S7 residual).** An assignment created before S7 for a
+  fixed-term employment (an `ends_on` set at hire, never ended through
+  `EmploymentService::end()`) may still run past it. This is development
+  data only.
 - **No class-teacher/homeroom or substitute entity.** Temporary cover is a
   short dated assignment (ADR 0063 D-02, D-15). Electives have their own
   Offering-wide fact since TCH-E (section 9).

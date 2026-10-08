@@ -353,6 +353,20 @@ first with a 404 that names nothing. Domain refusals (403 `*_NOT_OWNED`, 422
   - Read for access decisions only through `TeachingOwnership`, by Curriculum Delivery (TCH.3), Attendance (TCH.4), LMS Learning Content (TCH.5C) and LMS Assignments (TCH.5D).
   - `TimetableEntry.teacher_id` is scheduling evidence and never grants
     access.
+  - **Ownership never outlives the employment (S7, ADR 0063 §47).**
+    - `EmploymentService::end()` (`hr.employees.assignments.manage`) ends,
+      in the same transaction, every required and elective assignment of
+      the Employee that would grant ownership after the employment's last
+      day.
+    - A rehire of the same Employee owns nothing until an administrator
+      creates a new assignment.
+    - That path is authorized by the HR capability that ends the
+      employment, re-checked in the Teaching Assignments writer. It is
+      reachable only from the end itself; `teaching.assignments.manage`
+      cannot invoke it.
+    - Creation refuses an assignment that would outlast the covering
+      employment.
+    - ActingEmployee eligibility remains a separate, use-time check.
 - **No role-name check, ever.**
   - A Teacher role is a capability bundle, never authorization: a Teacher
     without qualifying ownership reaches no owned resource.

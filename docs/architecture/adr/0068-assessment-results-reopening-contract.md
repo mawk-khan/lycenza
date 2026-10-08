@@ -24,7 +24,8 @@
   enforced in code, administrative marks refused in code outside
   local/testing (RES-L1), and the §21.6 paper id UUID-constrained.
   **S1 done (2026-10-07, ADR 0069):** SubjectOffering classification frozen
-  once academic evidence exists.
+  once academic evidence exists. **S7 done (2026-10-08, ADR 0063 §47):**
+  ending an employment ends its teaching ownership; a rehire never revives it.
 - Date: 2026-10-06
 - Programme: **RES — Assessment & results** (`MASTER-ROADMAP.md`,
   "Post-foundation product programmes", order 5).
@@ -2012,9 +2013,25 @@ entries were kept, with dated notes. Locations:
     the application only;
   - a locked mark's provenance columns are not pinned by the database lock
     guard.
-- **S7 — employment end leaves teaching assignments open:** after a rehire,
-  old open assignments count again. This is tied to the RES-L2 Q5/Q10
-  questions.
+- **S7 — employment end leaves teaching assignments open:** **DONE
+  2026-10-08 (ADR 0063 §47):**
+  - `EmploymentService::end()` ends, in the same transaction, every required
+    and elective assignment that would grant ownership after the
+    employment's last day, through an HR-owned participant port (HR still
+    never depends on Teaching Assignments).
+  - Ownership holds up to and including that day. A not-yet-started
+    assignment is voided (ends the day before it began); an end scheduled
+    later is brought back; rows already ending by then are untouched;
+    nothing is deleted and no start is rewritten.
+  - A rehire therefore owns nothing until a new assignment. New assignments
+    can no longer outlast the covering employment (422
+    `TEACHING_ASSIGNMENT_BEYOND_EMPLOYMENT`).
+  - The RES.4 paper-date rule is unchanged: a paper scheduled while the
+    teacher owned the class stays theirs (RES-L2 Q5/Q10 still open).
+  - RES.5 stays CLOSED; S8 stays open.
+
+  *Original text:* after a rehire, old open assignments count again. This
+  is tied to the RES-L2 Q5/Q10 questions.
 - **S8 — cosmetic:** `StudentMarkController::index` does not catch
   `ExaminationException`. If the service-level marks block ever fired
   without its middleware, the grid would answer a generic 500 instead of the

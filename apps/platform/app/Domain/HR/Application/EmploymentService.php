@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Container\Attributes\Tag;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
@@ -59,6 +60,8 @@ class EmploymentService
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly AssignmentClosureCascade $closureCascade,
+        /** @var iterable<EmploymentEndParticipant> */
+        #[Tag(EmploymentEndParticipant::TAG)] private readonly iterable $endParticipants = [],
     ) {}
 
     /**
@@ -196,6 +199,12 @@ class EmploymentService
      * clean exception (`InvalidEmploymentEffectiveDateException`)
      * rather than surfacing the database's own CHECK-constraint
      * violation.
+     *
+     * S7 (ADR 0063 §47): after HR's own assignments close, every
+     * `EmploymentEndParticipant` ends the authority this employment
+     * granted (teaching ownership, required and elective) in the SAME
+     * transaction -- a later rehire of the same Employee therefore never
+     * resurrects it. A participant that throws refuses the whole end.
      */
     public function end(EmploymentRecord $employment, string $endsOn, User $actor, string $status = 'separated'): EmploymentRecord
     {
@@ -227,6 +236,11 @@ class EmploymentService
                 $locked->assignments()->whereNull('ends_on')->update(['ends_on' => $endsOn]);
 
                 $this->closureCascade->clearDanglingManagerReferences($closedAssignmentIds->all());
+
+                // S7 (ADR 0063 §47): authority the employment granted ends with it, in this transaction.
+                foreach ($this->endParticipants as $participant) {
+                    $participant->employmentEnded($school, $locked->employee_id, $endsOn, $actor);
+                }
 
                 $this->audit->school($school, 'hr.employment.ended', actor: $actor, subject: $locked, metadata: [
                     'employeeId' => $locked->employee_id,

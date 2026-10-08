@@ -83,6 +83,37 @@ class EmploymentCoverage
     }
 
     /**
+     * S7 (ADR 0063 §47): the last day (inclusive) of the planned or current
+     * employment covering $date -- null when it is open-ended or when nothing
+     * covers $date. Call it after hold() answered COVERED, in the same
+     * transaction: hold() already holds that record FOR SHARE, so an
+     * EmploymentService::end() cannot move it in between. A grant that runs
+     * past this day would outlive the employment that justifies it.
+     *
+     * @param  string  $date  School-local Y-m-d
+     */
+    public function coveringEndsOn(School $school, string $employeeId, string $date): ?string
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new LogicException('EmploymentCoverage::coveringEndsOn() must run inside a database transaction.');
+        }
+
+        return $this->context->withSchool($school, function () use ($school, $employeeId, $date): ?string {
+            $endsOn = EmploymentRecord::query()
+                ->where('school_id', $school->id)
+                ->where('employee_id', $employeeId)
+                ->where('starts_on', '<=', $date)
+                ->where(fn ($q) => $q->whereNull('ends_on')->orWhere('ends_on', '>=', $date))
+                ->whereIn('status', self::PLANNED_OR_CURRENT_STATUSES)
+                ->sharedLock()
+                ->first()
+                ?->ends_on;
+
+            return $endsOn?->toDateString();
+        });
+    }
+
+    /**
      * HRX.1 (ADR 0065 §3): the same administrative answer for ONE
      * EmploymentRecord -- "does this employment, of an active Employee, plan
      * or hold an engagement overlapping [from, to]?" -- for Leave's policy

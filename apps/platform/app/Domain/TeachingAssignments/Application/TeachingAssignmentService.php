@@ -8,6 +8,7 @@ use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\HR\Application\EmploymentCoverage;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\TeachingAssignments\Application\Exceptions\AcademicYearNotOpenException;
+use App\Domain\TeachingAssignments\Application\Exceptions\AssignmentBeyondEmploymentException;
 use App\Domain\TeachingAssignments\Application\Exceptions\AssignmentOutsideAcademicYearException;
 use App\Domain\TeachingAssignments\Application\Exceptions\EmployeeNotAssignableException;
 use App\Domain\TeachingAssignments\Application\Exceptions\InvalidAssignmentDatesException;
@@ -26,6 +27,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
+use LogicException;
 
 /**
  * TCH.2 (ADR 0063 sections 7-10, 15, 20, 22) -- the ONE write path for
@@ -66,6 +68,9 @@ class TeachingAssignmentService
     public const string CAPABILITY_VIEW = 'teaching.assignments.view';
 
     public const string CAPABILITY_MANAGE = 'teaching.assignments.manage';
+
+    /** S7: the employment-end path is authorized by the HR capability that ends the employment, never by this module's own. */
+    public const string CAPABILITY_EMPLOYMENT_END = 'hr.employees.assignments.manage';
 
     private const string OPEN_YEAR_STATUSES = 'draft|active';
 
@@ -133,6 +138,12 @@ class TeachingAssignmentService
                 EmploymentCoverage::EMPLOYEE_NOT_FOUND => throw (new ModelNotFoundException)->setModel(Employee::class, [$employeeId]),
                 default => throw new EmployeeNotAssignableException,
             };
+
+            // S7 (ADR 0063 §47): ownership never outlives the employment covering its start.
+            $employmentEndsOn = $this->coverage->coveringEndsOn($school, $employeeId, $startsOn);
+            if ($employmentEndsOn !== null && ($endsOn === null || $endsOn > $employmentEndsOn)) {
+                throw new AssignmentBeyondEmploymentException;
+            }
 
             if ($this->overlaps($school->id, $employeeId, $section->id, $offering->id, $startsOn, $endsOn)) {
                 throw new TeachingAssignmentOverlapException;
@@ -220,6 +231,75 @@ class TeachingAssignmentService
         }));
     }
 
+    /**
+     * S7 (ADR 0063 §47): the employment-end path -- called only by
+     * EmploymentEndedTeachingOwnership, inside EmploymentService::end()'s
+     * transaction (the EmploymentRecord is already FOR UPDATE and ended).
+     * Every row of the Employee that would grant ownership after $endsOn
+     * ends, reason `employment_ended`, by the HR actor:
+     * - started by $endsOn (open, scheduled past it, or already ended past
+     *   it): ends_on = $endsOn -- ownership holds through the last employed
+     *   day, never after;
+     * - not started by $endsOn: voided -- ends_on = starts_on - 1, so it never
+     *   covers a date; the row stays as history;
+     * - ending on or before $endsOn already: untouched.
+     * Never a delete, never a new starts_on. The rows are taken FOR UPDATE in
+     * id order with NO advisory key: create() takes its key BEFORE the
+     * EmploymentRecord, so taking one here, after it, could deadlock. A
+     * create() of this Employee either committed first (its row is seen
+     * here) or waits on the EmploymentRecord and then sees the end.
+     *
+     * Authorized by the HR capability that ends the employment.
+     *
+     * @param  string  $endsOn  School-local Y-m-d, the employment's last day (inclusive)
+     */
+    public function endForEmployment(School $school, string $employeeId, string $endsOn, User $actor): void
+    {
+        $this->authorizeCapabilityFor($actor, TeachingAssignmentService::CAPABILITY_EMPLOYMENT_END, $school);
+
+        if (DB::transactionLevel() === 0) {
+            throw new LogicException('endForEmployment() runs only inside the employment-end transaction.');
+        }
+
+        $this->context->withSchool($school, function () use ($school, $employeeId, $endsOn, $actor): void {
+            $rows = TeachingAssignment::query()
+                ->where('school_id', $school->id)
+                ->where('employee_id', $employeeId)
+                ->where(fn ($q) => $q->whereNull('ends_on')->orWhere('ends_on', '>', $endsOn))
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($rows as $assignment) {
+                $startsOn = $assignment->starts_on->toDateString();
+                $target = $startsOn > $endsOn ? $assignment->starts_on->copy()->subDay()->toDateString() : $endsOn;
+                $previousEndsOn = $assignment->ends_on?->toDateString();
+
+                if ($previousEndsOn !== null && $target >= $previousEndsOn) {
+                    continue; // already voided at its own start (an earlier employment end)
+                }
+
+                $previousEndReason = $assignment->end_reason;
+                $assignment->forceFill([
+                    'ends_on' => $target,
+                    'ended_at' => now(),
+                    'ended_by_user_id' => $actor->id,
+                    'end_reason' => TeachingAssignment::END_REASON_EMPLOYMENT_ENDED,
+                ])->save();
+
+                $this->audit->school($school, 'teaching_assignment.ended', actor: $actor, subject: $assignment, metadata: [
+                    'teachingAssignmentId' => $assignment->id,
+                    'employeeId' => $employeeId,
+                    'previousEndsOn' => $previousEndsOn,
+                    'previousEndReason' => $previousEndReason,
+                    'endsOn' => $target,
+                    'endReason' => TeachingAssignment::END_REASON_EMPLOYMENT_ENDED,
+                    'employmentEndsOn' => $endsOn,
+                ]);
+            }
+        });
+    }
+
     /** The per-key advisory lock (transaction-scoped), the FeeSettingsService convention. */
     public static function lockKeyName(string $schoolId, string $employeeId, string $sectionId, string $subjectOfferingId): string
     {
@@ -238,6 +318,8 @@ class TeachingAssignmentService
      * existing.starts_on <= new.ends_on (or +inf) AND
      * new.starts_on <= existing.ends_on (or +inf). Ended rows count with
      * their final ends_on -- ended_at is history, never an overlap rule.
+     * A row voided by an employment end (S7: ends_on = starts_on - 1)
+     * covers no day and overlaps nothing.
      */
     private function overlaps(string $schoolId, string $employeeId, string $sectionId, string $subjectOfferingId, string $startsOn, ?string $endsOn): bool
     {
@@ -248,6 +330,7 @@ class TeachingAssignmentService
             ->where('subject_offering_id', $subjectOfferingId)
             ->when($endsOn !== null, fn ($q) => $q->where('starts_on', '<=', $endsOn))
             ->where(fn ($q) => $q->whereNull('ends_on')->orWhere('ends_on', '>=', $startsOn))
+            ->where(fn ($q) => $q->whereNull('ends_on')->orWhereColumn('ends_on', '>=', 'starts_on')) // S7: a voided row covers no day
             ->exists();
     }
 }
