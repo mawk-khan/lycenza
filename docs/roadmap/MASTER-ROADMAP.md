@@ -58,8 +58,10 @@ waived or complete.
   - E17 before any production SendGrid use;
   - E21 before any retention period. E21.1 (2026-10-01, docs only) issued
     the decision request `docs/security/E21-RETENTION-DECISION-REQUEST.md`
-    (decisions E21-D0–D13). E21 is still OPEN, and three latent email-prune
-    defects must be fixed before a mail period is set;
+    (decisions E21-D0–D13). E21 is still OPEN. *(2026-10-08: the three
+    latent email-prune defects L1–L3 were fixed in E21.2A, 2026-10-01; see
+    the E21 decision request "L1–L3 are fixed". E21 needs legal
+    ratification and production configuration, not engineering.)*;
   - no real School data to external providers;
   - no deployment, purchases or production secrets without explicit owner
     authorization.
@@ -3119,7 +3121,8 @@ parallel, and the email provider tail) — not started.
   decisions with neutral options, a determination template and no immediate
   retention-safety defect. **E21 remains OPEN — owner/legal/compliance
   decisions required.** It also needs an email-prune code tail (L1–L3)
-  before `MAIL_RETENTION_DAYS` is set.
+  before `MAIL_RETENTION_DAYS` is set. *(2026-10-08: L1–L3 fixed in
+  E21.2A.)*
 
 **0O.13 — Transactional Email Provider Selection & Integration Contract
 (2026-09-29, docs-only, ADR 0060).**
