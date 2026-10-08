@@ -239,5 +239,5 @@ Subject Offering from `starts_on` to `ends_on`".
     owned read.
   - Ownership still grants nothing by itself: marks also need
     `examinations.marks.teacher`, MFA, an ActingEmployee, P3 and ADR 0038.
-  - Production is refused in code pending RES-L2 and the teacher RES-L0
-    re-review.
+  - Production is refused in code pending RES-L2 (E37), the teacher RES-L0
+    re-review (E35) and RES-L1 (E36).

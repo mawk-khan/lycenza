@@ -1428,6 +1428,16 @@ only.
 - **Results and onward** (E39–E42, E44) remain blocked for design and
   development.
 
+## Note — RES thread closed (2026-10-08)
+
+**No legal determination. No row status changes.** ADR 0068 §27.13 closes
+the RES thread for development (handoff ready). The following remain as
+recorded:
+- E36 (RES-L1) still blocks all production StudentMark, refused in code.
+- E37 (RES-L2) and the E35 teacher re-review still block teacher marks.
+- E38–E44 still block their own scope.
+- E33 still covers teacher Attendance only and never StudentMark.
+
 ## Note — PAY-L1 registered (2026-10-07)
 
 **No legal determination.** Row E45 records a gap that ADR 0036 §9 already

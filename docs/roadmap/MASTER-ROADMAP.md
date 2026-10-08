@@ -737,7 +737,7 @@ CLOSED by RES.5 (2026-10-07)**:
 | RES.2 | COMPLETE — development implemented; production blocked (RES-L1, refused in code) |
 | RES.3 | COMPLETE — development implemented; production blocked (RES-L1, refused in code) |
 | RES.4 | COMPLETE — development implemented; teacher production blocked (E37, E35 re-review, RES-L1; refused in code) |
-| RES.4A | COMPLETE |
+| RES.4A | COMPLETE — development implemented; production blocked as RES.4 (refused in code) |
 | RES.5 | COMPLETE — CURRENT REOPENED SCOPE CLOSED |
 
 Future gated programmes, not started:
@@ -886,6 +886,8 @@ Detail per stage:
   - Also: the OpenAPI 409 for paper update, three closure guards, a
     definitive lock order and authorization/production-gate matrices, and
     about 25 drift corrections.
+  - RES.5 regression cadence: round 2/5 after the `c9d9762` checkpoint (executable
+    corrections, confined to the marks paths; focused and broad suites).
   - Follow-ups S1–S8 are recorded and are not blockers.
   - **S1 — COMPLETE (2026-10-07, ADR 0069):** SubjectOffering
     required/elective classification frozen once dependent academic
@@ -916,6 +918,8 @@ Detail per stage:
       was being re-pointed from.
     - A marked paper keeps its Examination and Offering.
     - Rollback proof; mutation checks.
+    - Residuals S6c / S6d (LOW, raw SQL only; no application path reaches
+      them) are deferred (ADR 0068 §27.11).
     - RES stays CLOSED.
     - Regression cadence: round 2/5 (focused and broad suites; the triggers
       touch only StudentMark writes and paper identity updates).
@@ -986,8 +990,20 @@ Detail per stage:
       overdue or fined.
     - The CHECK is unchanged and now pinned; no schema change.
     - Regression cadence: round 3/5.
-  - Regression cadence: round 2/5 after the `c9d9762` checkpoint (executable
-    corrections, confined to the marks paths; focused and broad suites).
+  - **RES THREAD — CLOSED / HANDOFF READY (2026-10-08; ADR 0068 §27.13).**
+    - The final follow-up audit found no correctness blocker. Only stale
+      current-state wording was corrected.
+    - **Development closure only.** No legal row changed, and production
+      stays refused in code.
+    - Remaining work leaves this thread:
+      - external legal: E35, E36, E37, E38–E44;
+      - S2, the teacher marks UI;
+      - S6c / S6d, raw-SQL hardening;
+      - two non-RES teaching-ownership residuals (ADR 0063 §47.6).
+    - Shared test database: a stray schema `CREATE` grant was revoked. That
+      was environment drift; the repository was unchanged.
+    - The next phase is chosen by a separate Post-RES Roadmap & Next-Phase
+      Readiness Audit; nothing starts automatically.
 - **Not sequenced:** results, finalization, publication, report cards,
   transcripts and Student/Guardian access, until RES-L4 – RES-L7 are
   answered and each has its own contract.

@@ -34,8 +34,8 @@ This table is a design reference, not a list of implemented roles.
   verified ActingEmployee and TeachingAssignment ownership — see
   "Ownership-based authorization" below. The fifth,
   `examinations.marks.teacher` (RES.4, ADR 0068 §25), is development only.
-  It is refused in code outside `local` / `testing` while RES-L2 and the
-  teacher RES-L0 re-review are undetermined.
+  It is refused in code outside `local` / `testing` while RES-L2 (E37), the
+  teacher RES-L0 re-review (E35) and RES-L1 (E36) are open.
 
 | Actor | Nature | Typical scope | Notes |
 |---|---|---|---|

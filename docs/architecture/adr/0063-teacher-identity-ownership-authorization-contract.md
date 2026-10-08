@@ -3396,6 +3396,16 @@ tables, `employment_ended` only:
 - **Raw SQL.** A raw `employment_records` update bypasses the port. The
   application has one writer (`EmploymentService`); it is not
   database-enforced.
+- **Past dates after a rehire (recorded by the RES thread closure audit,
+  2026-10-08).** Ownership is dated. A rehired teacher still owns dates up
+  to the old employment's last day, so they can correct Attendance or
+  record Curriculum Delivery for those dates. §47.5 decides this only for
+  the RES.4 paper-date rule. Whether Attendance corrections and Curriculum
+  Delivery should allow it is an open owner question.
+- **Employments ended before S7 (same audit).** The S7 migration changed
+  constraints only. An employment `end()`ed before S7 can still have open
+  assignments, which a rehire would revive. Development data only;
+  production is not live.
 
 ### 47.7 Proof
 - `EmploymentEndTeachingOwnershipTest` covers:

@@ -26,6 +26,10 @@
   **S1 done (2026-10-07, ADR 0069):** SubjectOffering classification frozen
   once academic evidence exists. **S7 done (2026-10-08, ADR 0063 §47):**
   ending an employment ends its teaching ownership; a rehire never revives it.
+  **Post-closure follow-ups (§27.11):** S1, S3, S5 (with the retryable-abort
+  metric), S6, S7 and S8 done; S2, S6c and S6d deferred; S4 and RES-L1
+  external. **RES THREAD — CLOSED / HANDOFF READY (2026-10-08, §27.13):**
+  development closure only, not legal clearance or production enablement.
 - Date: 2026-10-06
 - Programme: **RES — Assessment & results** (`MASTER-ROADMAP.md`,
   "Post-foundation product programmes", order 5).
@@ -2100,3 +2104,45 @@ Future, separately gated programmes:
 - statutory academic rules (RES-L9).
 
 None starts automatically.
+
+### 27.13 RES thread closure (2026-10-08)
+**RES THREAD — CLOSED / HANDOFF READY.** A final read-only audit at `6010ec7`
+re-verified the RES.5 decisions and every §27.11 follow-up against code,
+tests and documentation. It confirmed:
+- every StudentMark integrity rule holds;
+- teacher ownership ends with employment;
+- no lock-order cycle exists between normal application paths;
+- the production blocks are in place;
+- the legal register is as recorded;
+- no Results artifact exists;
+- RES-L8 retention is `policy_unresolved`.
+
+It found no correctness blocker. It corrected only stale current-state
+wording (AUTHORIZATION.md, TEACHING-ASSIGNMENTS.md, the roadmap RES.4A row,
+DOMAIN-MAP, EXAMINATIONS.md and this header). This is **development
+closure**: no legal row changed and nothing is enabled in production.
+
+**Remaining work, owned outside this thread:**
+1. **External legal / privacy:**
+   - E36 (RES-L1), which blocks all production marks;
+   - E37 (RES-L2) and the E35 teacher re-review, which block teacher marks;
+   - E38–E44 (RES-L3–L9).
+2. **Deferred RES product / UI:** S2, the teacher marks UI. The session-JSON
+   backend is complete.
+3. **Deferred database hardening**, all LOW and unreachable from the
+   application:
+   - S6c, a raw-SQL provenance change on a locked mark;
+   - S6d, the freeze triggers under raw `REPEATABLE READ` / `SERIALIZABLE`
+     sessions. The only stricter isolation in the application is two
+     Finance snapshots, which touch no evidence table;
+   - consent recording takes the Student before the relationship only
+     through foreign-key trigger name order. It is pinned by a real-process
+     race test, but it is implicit.
+4. **Non-RES follow-ups:**
+   - two teaching-ownership residuals recorded in ADR 0063 §47.6;
+   - the Library loan clock correction is done (`6010ec7`);
+   - the shared test database's stray schema `CREATE` grant was revoked, as
+     environment drift with no repository change.
+
+The next phase is chosen by a separate **Post-RES Roadmap & Next-Phase
+Readiness Audit**, never from memory and never automatically.

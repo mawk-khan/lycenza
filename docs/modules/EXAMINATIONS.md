@@ -880,7 +880,11 @@ development. Three corrections came out of the audit:
 - **UUID-constrained paper id.** The administrative marks paper id is
   UUID-constrained.
 
-Follow-ups S1–S8 are listed in ADR 0068 §27.11.
+Follow-ups S1–S8 are listed in ADR 0068 §27.11. S1, S3, S5, S6, S7 and S8
+are done. S2 (teacher marks UI) and the raw-SQL residuals S6c / S6d are
+deferred; S4 and RES-L1 are external. **The RES thread is CLOSED / HANDOFF
+READY (2026-10-08, ADR 0068 §27.13)**: development only, and production
+stays refused in code.
 
 ## StudentMark database defence (S6, 2026-10-07; ADR 0068 §27.11)
 
