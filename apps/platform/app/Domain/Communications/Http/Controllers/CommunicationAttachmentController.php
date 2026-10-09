@@ -91,7 +91,12 @@ class CommunicationAttachmentController extends Controller
      */
     public function storeForThread(Request $request, TenantContext $context, CommunicationAttachmentService $service, string $thread): RedirectResponse
     {
-        $context->requireSchool();
+        // POR.5 (ADR 0070 §28.4): a pending thread attachment exists only to be
+        // sent with a staff Hub reply, so uploading it needs that reply's own
+        // capability, not participation alone -- a Guardian-only member is a
+        // participant too (the §24.8 download fix, applied to the writes).
+        $school = $context->requireSchool();
+        $this->authorizeCapability('communications.reply', $school);
         $actor = $context->actor();
 
         $model = CommunicationThread::query()->findOrFail($thread);
@@ -112,7 +117,8 @@ class CommunicationAttachmentController extends Controller
 
     public function destroyForThread(TenantContext $context, CommunicationAttachmentService $service, string $thread, string $attachment): RedirectResponse
     {
-        $context->requireSchool();
+        $school = $context->requireSchool();
+        $this->authorizeCapability('communications.reply', $school);
         $actor = $context->actor();
 
         $model = CommunicationThread::query()->findOrFail($thread);

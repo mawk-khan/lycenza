@@ -57,7 +57,7 @@ function formatDate(value: string | null): string {
             :description="
                 filter === 'unread'
                     ? 'You have read every message.'
-                    : 'The School has not sent you any messages yet.'
+                    : 'No messages addressed to you as a Guardian yet.'
             "
         />
 

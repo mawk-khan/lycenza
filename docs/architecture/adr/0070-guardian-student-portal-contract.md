@@ -10,8 +10,9 @@
   the payments applied to that Student (read-only, MFA, never a whole shared
   payment). **POR.4 IMPLEMENTED FOR DEVELOPMENT (2026-10-09, §27):** a
   Guardian's existing School conversations and idempotent, in-app-only text
-  replies (MFA; no Guardian-initiated conversation). POR.5 (closure audit)
-  needs separate owner authorisation. No legal status changes: **POR-L1 (ADR 0058 row E46) is a
+  replies (MFA; no Guardian-initiated conversation). **POR.5 CLOSURE AUDIT
+  (2026-10-09, §28): POR DEVELOPMENT — CLOSED / PRODUCTION GATED** (two
+  executable corrections, §28.4). No legal status changes: **POR-L1 (ADR 0058 row E46) is a
   DRAFT REQUEST — NOT SENT, NOT ANSWERED**, and every production statement
   below waits on it.
 - Date: 2026-10-08
@@ -279,7 +280,7 @@ Guardians owns `GuardianStudentScope` (`App\Domain\Guardians\Application`).
 |---|---|---|
 | `portal.communications.view` | POR.1 | Read own Guardian deliveries: inbox, unread, announcement, attachment |
 | `portal.attendance.view` | POR.2 | Read in-scope Students' attendance |
-| `portal.fees.view` | POR.3 | Read in-scope Students' fee statements and their own receipts |
+| `portal.fees.view` | POR.3 | Read in-scope Students' fee statements and their own receipts *(as built, §26.5: the payments applied to that Student, never a receipt)* |
 | `portal.communications.reply` | POR.4 (built, §27) | Reply in a conversation the Guardian takes part in (always with `portal.communications.view`) |
 
 ### 8.2 Delivery: a closed Guardian system role in its own scope
@@ -289,7 +290,8 @@ Guardians owns `GuardianStudentScope` (`App\Domain\Guardians\Application`).
   guard test pins that no application code compares the role key.
 - **Its own scope (amends ADR 0045 and rule 25 when POR.1 is built):**
   - the role gets its own `roles.scope = 'guardian'`;
-  - `portal.*` keys get their own `portal` capability namespace;
+  - `portal.*` keys get their own `portal` capability namespace *(as built,
+    §24.1: the namespace is named `guardian`)*;
   - so `trg_role_capabilities_scope` refuses a `portal.*` key on any staff
     role, and any staff key on the Guardian role. That makes the separation
     **database-enforced**, as rule 25 requires.
@@ -335,7 +337,7 @@ Guardians owns `GuardianStudentScope` (`App\Domain\Guardians\Application`).
 | **Last relationship in a School ends** | the same, through ActingGuardian's "≥ 1 relationship" rule (§5.2) | All portal authority in that School stops on the next request. The role grant and link stay in place but grant nothing. Guardians never calls into Identity (rule 4); a School that wants a clean record runs Guardian off-boarding |
 | **Loss of Guardian access to one School** (the School ends portal use for this Guardian) | **Guardian off-boarding** (new in POR.1, Identity), under `guardians.manage` AND `school.members.manage`, in one transaction: revoke the AccountLink (existing `unlinkGuardian`); revoke the `guardian` role grant (history kept); and **suspend the membership only if it holds no `school`-scope role** | All portal authority in that School stops. Audit, links and grant history remain. Staff access, if any, is untouched |
 | **Complete Guardian account suspension** (compromise, incident, legal restriction) | Per School: the off-boarding above, or membership suspension. Account-wide: the existing credential reset (`CredentialChangeService` through `platform:user-password-reset` or recovery bumps `credential_version`, which signs out every session) | Every session ends at once. Access in each School ends with that School's off-boarding |
-| **Reinstatement** | Guardian re-invitation and activation (new link, new grant row); membership reactivation | Never revives an old grant or link row |
+| **Reinstatement** | Guardian re-invitation and activation (new link, new grant row); membership reactivation | Never revives an old grant or link row. *(POR.5, §28.7: a Guardian-only membership suspended by off-boarding has no application reactivation path yet — staff reactivation refuses a non-staff membership — so re-activation leaves the portal refused. Fails closed; deferred.)* |
 
 ### 9.3 Why not one flag
 - A **relationship** answers "which child".
@@ -396,7 +398,9 @@ the read capability its sibling setup pages already use
 ### 10.3 POR.3 — Fees (`portal.fees.view` + scope + MFA)
 - **Statement:** per in-scope Student, through a new Guardian-safe entry
   point beside the staff-bound `StudentFeeStatementReadService`.
-- **Receipts:** shown only when **every** allocated Student is in scope;
+- **Receipts** *(as built, §26.5: no receipt is ever shown; only the
+  amounts applied to the authorised Student, with the receipt number as a
+  reference)*: shown only when **every** allocated Student is in scope;
   otherwise only that Student's allocation line is shown (sibling isolation;
   `PaymentReceiptReadService` exposes `studentIds` and `manualReference`
   today).
@@ -438,6 +442,8 @@ the read capability its sibling setup pages already use
     that lapses between list and detail triggers step-up.
   - **Communications inbox (POR.1):** not required by this contract. POR-L1
     Q22–Q23 may impose it for production.
+  - **Conversations and replies (POR.4, §27.8):** MFA required on every
+    route, list and thread included.
 - **Fresh re-verification** (`FreshMfaRequirement`, a code entered now) is
   reserved for consequential actions. No read in POR.1–POR.3 needs it.
   No parallel MFA framework.
@@ -469,6 +475,12 @@ the read capability its sibling setup pages already use
 | Attendance view | `attendance.guardian.viewed` (POR.2) | Includes `studentId`. This deliberately differs from `TeacherAttendanceReadAudit`, which omits Student ids because teacher reads are roster reads; a Guardian read is about one child |
 | Fee statement / receipt | `fee_statement.guardian_viewed`, `payment_receipt.guardian_viewed` (POR.3) | Same fields as `fee_statement.viewed`, plus the Guardian fields |
 
+*POR.5 correction (2026-10-09):* the events as built are named
+`fee_statement.guardian.viewed` and `payment_allocation.guardian.viewed` (no
+receipt is shown). Attachment downloads now also carry `surface` and
+`guardianId`. The full, current inventory, including the conversation and
+lifecycle events, is §28.10.
+
 ### 13.3 Classification and retention of the audit
 - Portal audit rows identify a Student and a Guardian. That is Sensitive
   personal data; no content makes it Highly Sensitive.
@@ -497,7 +509,8 @@ Children's data stays Highly Sensitive whenever combined as
 `DATA-CLASSIFICATION.md` says. Nothing ships to real Schools before POR-L1.
 
 ## 15. Retention and legal gates
-- **Retention:** no new tables in POR.1–POR.3 beyond the planned grant rows,
+- **Retention:** *(POR.4 added only the column
+  `communication_messages.idempotency_key`, §27.5; no new category.)* no new tables in POR.1–POR.3 beyond the planned grant rows,
   which sit in `membership_role_assignments` and its existing history. No
   periods are invented. E21 governs.
 - **Legal gates:** see the gate map in §18.1.
@@ -531,7 +544,9 @@ No Student-account infrastructure is prepared in POR.0–POR.3.
     checks a `portal.*` key.
   - **Personal access tokens:** a Guardian may still mint one, but it
     reaches nothing portal-related. Whether to hide or refuse token
-    issuance for Guardian-only memberships is decided in POR.1.
+    issuance for Guardian-only memberships is decided in POR.1. *(POR.5,
+    §28.7: not decided. A Guardian may still mint a token, which reaches no
+    portal surface and carries no capability; open, not a blocker.)*
   - **Mobile:** `apps/mobile` is a Phase 0A skeleton and imposes nothing.
 - API and mobile are later, separately gated work.
 
@@ -544,6 +559,10 @@ No Student-account infrastructure is prepared in POR.0–POR.3.
 | Guardian Attendance | Allowed | After authorisation; fail-closed predicate | Gated: POR-L1, E21 |
 | Guardian fees and receipts | Allowed | After authorisation | Gated: POR-L1, E21, E30–E32 |
 | Guardian replies | Allowed | Separately sliced (POR.4) | Gated: POR-L1, Communications production conditions |
+
+*POR.5 (2026-10-09):* every Guardian row above is now **built for
+development** (POR.1–POR.4) and refused in code in production. The current
+gate matrix is §28.12.
 | Student accounts and surfaces | **Blocked** | Blocked | Blocked |
 | Marks, results, report cards, transcripts | **Blocked** (E39–E42) | Blocked | Blocked (also E35–E37) |
 | Online fee payment | Out of scope | Blocked (E28) | Blocked |
@@ -566,7 +585,7 @@ So "implemented" cannot silently become "production enabled". An
 architecture guard pins that the gate is present on every route and entry
 point.
 
-## 19. Implementation slices (planned; none started)
+## 19. Implementation slices (planned at POR.0; POR.1–POR.4 built for development, POR.5 closure, §24–§28)
 
 | Slice | Content |
 |---|---|
@@ -692,7 +711,7 @@ None blocks this contract.
   - a predicate change;
   - a jurisdiction change.
 - **Not affected:**
-  - E16 (expires 2026-10-28; production qualification, outside POR);
+  - E16 (valid through 2026-10-28, expires 2026-10-29; production qualification, outside POR);
   - the TCH-L1 historical-date clarification (teacher Attendance; separate,
     `docs/security/TCH-L1-HISTORICAL-DATE-CLARIFICATION-REQUEST.md`).
 
@@ -999,7 +1018,8 @@ No new lock order is introduced.
 ### 25.10 Legal
 **POR-L1 — DRAFT REQUEST / NOT SENT / NOT ANSWERED.** Its questions (Q2
 period, Q6–Q9 who qualifies, Q13–Q15 ending access and history, Q22–Q23 MFA)
-already cover this slice, so the draft is unchanged. No production clearance
+already cover this slice, so the draft is unchanged. *(POR.5 correction:
+POR.2 did narrowly annotate Q2, with the pre-relationship-dates question.)* No production clearance
 is inferred.
 
 ## 26. POR.3 — Guardian fee statement and payments applied to a Student, as built (2026-10-09; development only)
@@ -1270,7 +1290,9 @@ unchanged. No fee, late fee or disclosure is declared lawful.
   5. the Guardian's own participant row FOR SHARE.
 - **Effect:** an off-boarding, unlink, membership suspension, participant
   removal or closure either committed before the reply (which then refuses)
-  or waits until the reply commits. Proven in two real OS processes with an
+  or waits until the reply commits. *(POR.5, §28.6: off-boarding, removal
+  and closure are proven in real processes; unlink and suspension take the
+  same rows in the same order, shown by analysis, not by a race test.)* Proven in two real OS processes with an
   observed lock wait (`GuardianConversationConcurrencyTest`: duplicate
   submission, off-boarding both orders, participant removal, closure).
 - **Not locked:** a Guardian↔Student relationship change or persona
@@ -1344,3 +1366,278 @@ history after a relationship ends) were narrowly annotated with the
 development behaviour. Production stays refused in code
 (`PortalAvailability`). E21, E28, E30–E32, E35–E37 and E39–E42 are
 unchanged.
+
+## 28. POR.5 — closure and readiness audit (2026-10-09)
+
+### 28.1 Verdict
+**POR DEVELOPMENT — CLOSED / PRODUCTION GATED.**
+- POR.0–POR.4 are built and verified for development, with two executable
+  corrections made by this audit (§28.4).
+- Production stays refused in code (`PortalAvailability`).
+- **POR-L1 / E46 — DRAFT REQUEST / NOT SENT / NOT ANSWERED.**
+
+### 28.2 Method
+- Read-only first, from baseline `393d299`, the POR.4 canonical regression
+  checkpoint.
+- Four independent read-only reviews covered:
+  - authorization, routes, MFA and the production gate;
+  - the data surfaces and sibling isolation;
+  - database defences, tenancy and lock order;
+  - documentation and legal wording.
+- Their load-bearing claims were verified, the focused suites re-run, and a
+  DDEV demo walk-through done (§28.13).
+
+### 28.3 Slice status
+| Slice | State |
+|---|---|
+| POR.0 | Contract + POR-L1 draft published (3b6ae0e) |
+| POR.1 | Guardian scope, role, ActingGuardian, off-boarding, inbox — built (a288292) |
+| POR.2 | GuardianStudentScope + Attendance — built (534bca9) |
+| POR.3 | Fee statement + payments applied — built (ee0fc4e) |
+| POR.4 | Conversations + idempotent replies — built (393d299) |
+| POR.5 | This audit |
+
+### 28.4 Executable corrections (closure blockers, fixed)
+1. **MEDIUM — staff Hub thread writes checked participation only.**
+   - **Routes:** `POST|DELETE /app/communications/{thread}/attachments…` and
+     `POST /app/communications/{thread}/archive|unarchive` needed only an
+     active participant row.
+   - **Impact:** a Guardian-only member is a participant of every thread they
+     joined as the Guardian. So they could upload or remove a pending
+     attachment, or change their archive state, through the staff Hub, with
+     no capability, no MFA and no production gate. That contradicts §27's
+     "no upload" (it is the §24.8 class, applied to writes).
+   - **Fix:** uploads and removals now need `communications.reply` (a thread
+     attachment is only ever sent with a staff Hub reply); archive and
+     unarchive need `communications.view`, like every Hub page.
+   - **Test:** `a_guardian_participant_cannot_write_through_the_staff_hub_thread_routes`
+     (refused for the Guardian, kept for staff).
+2. **LOW — rule 6 consistency.**
+   - **Gap:** the Attendance and inbox read services did not re-check their
+     capability in-service, and the inbox's self-check did not compare the
+     School. Fees' and Attendance's `students()` and the inbox's `inbox()`
+     took no actor.
+   - **Fix:** every public portal read method now takes the User and re-checks
+     self, School and capability (`assertSelf`). The inbox's unread lookup
+     also filters `school_id` explicitly.
+   - **Test:** `every_read_service_rechecks_its_capability_and_school_without_the_route`.
+- **Also:** the inbox's empty state no longer claims "The School has not
+  sent you any messages yet" (see §28.7 on School-wide announcements). And
+  `trg_sgal_portal_grant_guard`'s refusal to move a link to another persona
+  gained a raw-SQL pin.
+
+### 28.5 Route inventory (`/app/portal`, web/session only)
+| Method | URI | Capability | MFA | Student scope | Writes / downloads |
+|---|---|---|---|---|---|
+| GET | `/app/portal/communications` | `portal.communications.view` | — | — | — |
+| GET | `…/communications/announcements/{id}` | same | — | — | own read state |
+| GET | `…/announcements/{id}/attachments/{id}/download` | same | — | — | download (audited) |
+| GET | `/app/portal/attendance`, `…/students/{id}` | `portal.attendance.view` | yes | yes | read audited |
+| GET | `/app/portal/fees`, `…/students/{id}`, `…/students/{id}/payments/{id}` | `portal.fees.view` | yes | yes | reads audited |
+| GET | `/app/portal/conversations`, `…/{thread}` | `portal.communications.view` | yes | Student participants | own read cursor |
+| POST | `…/conversations/{thread}/replies` | `.view` + `portal.communications.reply` | yes | Student participants | **write** (throttled, idempotent, audited) |
+| GET | `…/conversations/{thread}/attachments/{id}/download` | `portal.communications.view` | yes | Student participants | download (audited) |
+- **Every route:** `auth`, `school-context`, `portal-development-only`
+  (first), the capability, then a fresh ActingGuardian in the controller.
+- **Elsewhere:** no `/api` route checks a `portal.*` key. The only staff-side
+  POR route is `POST /app/guardians/{guardian}/portal-offboard`, which needs
+  `guardians.manage`, `school.members.manage` and a fresh MFA code.
+
+### 28.6 Integrity findings (verified in code)
+- **Actor:** `ActingGuardianResolver` resolves fresh, never cached:
+  active membership → exactly one active Guardian link → active persona →
+  ≥ 1 eligible relationship. Ambiguity fails closed.
+  - One School per session: the demo confirmed nothing resolves until a
+    School is selected.
+  - Writes use `resolveLocked()`.
+- **Capabilities:**
+  - four `portal.*` keys in namespace `guardian`, carried only by the closed
+    `guardian` role, which carries nothing else;
+  - the database refuses the crossings (raw-SQL tested);
+  - no role-name checks;
+  - "staff" means a `school`-scope grant everywhere it is counted.
+- **Lifecycle:** one Student lost, last relationship lost, unlink,
+  off-boarding, staff off-boarding of a dual persona, and membership
+  suspension all behave as §9.2 says, with the exception in §28.7.
+  - Only `AccountLinkService` and `GuardianOffboardingService` end a link,
+    and the database refuses any other order.
+- **PortalAvailability:** the first statement of all 12 public methods of
+  the four portal services; no configuration, environment or request bypass.
+- **MFA:**
+  - inbox: none (contract);
+  - Attendance, Fees, conversation reads and replies: enrolled factor plus
+    current, factor-bound assurance.
+  - No lower-assurance alternate route: staff Hub and `/api` paths need
+    `school`-scope keys a Guardian cannot hold.
+- **Finance:** a shared Payment is shown only as the amount applied to this
+  Student. No sibling ids, names, allocations or counts. Totals come from
+  `ChargeStateReader`; dates are in the School's timezone.
+- **Conversations:** the §27 rules hold.
+  - Threads with another Guardian are withheld.
+  - Student-participant threads follow the live scope.
+  - Guardian-only threads stay visible while ActingGuardian resolves (§27.2,
+    POR-L1 Q15).
+  - No external side effect: `communication.message_created.v1` has no
+    consumer, and the webhook registry lists only `platform.webhook_test.v1`.
+- **Tenancy:** every portal query runs under `TenantContext::withSchool`
+  with an explicit `school_id`, on the runtime connection only (no admin or
+  retention connection). No cross-School path was found.
+- **Lock order:** no pair of paths takes overlapping rows in opposite order.
+  - Link, membership and grant writers all take the School access lock first.
+  - Reply takes link → membership FOR SHARE and never takes the School access
+    lock.
+  - Staff suspension never locks the link.
+  - Student-first relationship paths share no rows with reply or
+    off-boarding.
+  - Real-process proof covers reply vs duplicate, off-boarding (both orders),
+    participant removal and closure. Unlink, suspension and activation vs
+    off-boarding are shown by analysis only.
+- **POR.1 corrections intact:** the staff Hub attachment download needs
+  `communications.view`; `/app/school-setup` needs `school.profile.view`.
+
+### 28.7 Known limitations and documented debt (not blockers)
+- **School-wide (membership-audience) announcements do not reach the
+  Guardian inbox.**
+  - **Cause:** the inbox shows only announcements whose audience snapshot
+    names the Guardian persona (§10.1).
+  - **Effect:** a School-wide notice creates an in-app delivery for a
+    Guardian's membership that no Guardian surface shows, and delivery
+    counts include it.
+  - **Workaround:** to reach Guardians, staff use a Guardian audience.
+  - **Status:** deferred; an owner/product decision. The §10.1 branch
+    "recipient rows created through that persona's link" needs no separate
+    code: every link-created recipient row has a matching Guardian snapshot
+    row.
+- **Reinstatement of an off-boarded Guardian-only membership:** no
+  application reactivation path (§9.2 note). Fails closed. Deferred.
+- **Sender-participant database gap (pre-existing Communications debt).**
+  - **The gap:** no database rule ties `communication_messages.sender_user_id`
+    to an active participant.
+  - **Why it is contained:**
+    - both application writers enforce it: `CommunicationMessageService::send()`,
+      and announcements (`thread_id` NULL by CHECK);
+    - the Guardian path holds the participant FOR SHARE;
+    - a bypass needs raw SQL by code running as the application in the same
+      School (RLS checks `school_id`).
+  - **Status:** defence-in-depth debt for a future Communications slice, not
+    POR.
+- **Trigger write-skew:** the guardian-grant INSERT check and the link-end
+  trigger read without row locks. So two concurrent *raw* writers could pair
+  an active grant with a revoked link. Every application writer holds the
+  School access lock, which closes it in practice. Documented, not changed.
+- **Personal access tokens for Guardian-only members:** issuance is not
+  refused (§17); a token reaches no portal surface. Open.
+- **Throttle quota:** `throttle:guardian-portal-reply` runs before the
+  portal gate and capability (framework priority), so a refused request
+  still uses the User's quota. No security impact.
+
+### 28.8 Deferred POR scope
+| Item | Needs |
+|---|---|
+| Guardian-started conversations | owner/product decision (recipients, Student context, School policy) + POR-L1 Q5 |
+| Guardian reply uploads | an upload contract (validation, scanning) + owner decision |
+| Multi-Guardian conversations in the portal | POR-L1 Q11–Q12 |
+| History after a relationship ends | POR-L1 Q15 |
+| School-wide announcements in the Guardian inbox | owner/product decision |
+| Off-boarded Guardian-only reinstatement | owner decision + a lifecycle contract |
+| Student accounts and Student self-service | POR-L1 Q16–Q21 + its own contract (§16) |
+| API / bearer and mobile portal | its own contract (§17; ADR 0049 MFA) |
+| Exports and PDFs | separate authorisation (§11) |
+| Cross-School Guardian aggregate | separate contract (§7, §11) |
+| Marks, results, report cards, transcripts | E39–E42 (+ E35–E37); prohibited here |
+
+### 28.9 Capability inventory
+| Key | Scope / namespace | Carrier | Surfaces | Staff may hold? | Database enforcement |
+|---|---|---|---|---|---|
+| `portal.communications.view` | guardian | closed `guardian` role | inbox, conversations | no | namespace check + `trg_role_capabilities_scope`; guardian grant needs an active link |
+| `portal.attendance.view` | guardian | same | Attendance | no | same |
+| `portal.fees.view` | guardian | same | Fees | no | same |
+| `portal.communications.reply` | guardian | same | replies (with `.view`) | no | same |
+- The `guardian` role can hold no staff key.
+- Application enforcement is the route `capability:` middleware plus the
+  in-service re-check (§28.4).
+
+### 28.10 Audit-event inventory
+| Event | Metadata (never content) |
+|---|---|
+| `attendance.guardian.viewed` | guardianId, accountLinkId, studentId, academicYearId, from, to, recordCount, surface |
+| `fee_statement.guardian.viewed` | guardianId, accountLinkId, studentId, academicYearId, lineCount, surface |
+| `payment_allocation.guardian.viewed` | guardianId, accountLinkId, studentId, paymentId, allocationCount, surface |
+| `communication_attachment.downloaded` (`surface = guardian_portal`) | announcementId or threadId, guardianId |
+| `communication.guardian.replied` | guardianId, accountLinkId, threadId, messageId, surface, studentIds only for a Student-involving thread |
+| `guardian.portal_role_granted` / `_revoked` | schoolMembershipId (+ reason) |
+| `guardian.portal_offboarded` | guardianId, schoolMembershipId, revokedPortalGrants, membershipSuspended, staffIdentityRetained |
+| `guardian.account_unlinked` | guardianId, schoolMembershipId, studentId null |
+- The actor, School, timestamp and request id are in the envelope.
+- Not audited: inbox list, announcement open, conversation list and thread
+  view (§13.2; POR-L1 Q28).
+- Classification: Sensitive (`DATA-CLASSIFICATION.md`). Retention category
+  `audit`; the period is E21, and none is set here.
+
+### 28.11 Database defences relied on
+- the four-scope `roles_scope_check`;
+- `capabilities_guardian_namespace_check`;
+- `trg_role_capabilities_scope`;
+- the membership-role-assignment scope function (a guardian grant needs an
+  active link);
+- `trg_sgal_portal_grant_guard` (status, membership and persona);
+- the history guard;
+- `communication_messages_sender_idempotency_unique`;
+- `communication_messages_idempotency_thread_check`;
+- composite same-School foreign keys;
+- forced RLS.
+
+Each is pinned by raw-SQL tests (`GuardianScopeDatabaseInvariantsTest`,
+`GuardianConversationPortalTest`). Application-only by design: the
+GuardianStudentScope predicate, participant-only and open-only replies, and
+"suspend only without a staff grant".
+
+### 28.12 Production-gate matrix
+| Surface | Development | Production blockers |
+|---|---|---|
+| Guardian announcement inbox | built (POR.1) | POR-L1 (E46), E21 |
+| Guardian Attendance | built (POR.2) | POR-L1, E21 |
+| Guardian fee statement + payments applied | built (POR.3) | POR-L1, E21, E30–E32 |
+| Guardian conversations + replies | built (POR.4) | POR-L1, E21 |
+| Student accounts and surfaces | not developed (blocked) | POR-L1 Q16–Q21 + own contract |
+| Marks, results, report cards, transcripts | prohibited | E39–E42, E35–E37 |
+| Online payment | out of scope | E28 |
+
+All production use is also refused in code until `PortalAvailability` is
+lifted by a reviewed change. Release qualification (E16 and others) is a
+separate gate.
+
+### 28.13 Demo review (rule 82)
+`ddev demo-reset` on the published code, then an HTTP walk-through.
+
+**`guardian01`:**
+1. Sign-in works, but no School is resolved until one is selected.
+2. The portal navigation appears; every staff page is 403.
+3. The inbox opens without MFA. It is empty: the demo's announcements are
+   School-wide, per §28.7.
+4. Attendance, Fees and Conversations return "MFA required" until a factor
+   is enrolled, then step-up, then open. Single-child indexes redirect to
+   that child.
+
+**The School Admin and the Guardian together:**
+1. The School Admin starts a Guardian conversation from the staff Hub.
+2. The Guardian reads it and replies.
+3. A resubmission of the same form is one message.
+4. Changed text with the same key is refused.
+5. The staff Hub shows the reply attributed to the Guardian.
+
+### 28.14 Regression
+- **Checkpoint:** the canonical checkpoint stays `393d299`.
+- **This audit's code change:** narrow. Two controller capability gates and
+  in-service re-checks on read paths; no schema, lock or shared-writer
+  change. Focused and broad suites covered it.
+- **No canonical re-run:** the checkpoint isn't materially invalidated.
+- **Counter:** 1/5 (one executable unit since the checkpoint).
+
+### 28.15 Legal
+**POR-L1 / E46 — DRAFT REQUEST / NOT SENT / NOT ANSWERED.**
+- The draft's description of the build was brought up to date, and Q11,
+  Q22, Q23 and Q28 were narrowly annotated. Nothing was answered or sent.
+- E21, E28, E30–E32, E33, E35–E37 and E39–E42 are unchanged.
+- The TCH-L1 historical-date clarification stays a separate draft, not
+  sent.

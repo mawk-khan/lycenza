@@ -597,3 +597,7 @@ policy. POR.4 adds a Guardian-portal **reader and replier** on top:
   Portal access additionally needs the live ActingGuardian, so an unlinked,
   off-boarded or suspended Guardian loses the portal, while the thread and its
   history stay intact for the School.
+- **POR.5 (ADR 0070 §28.4):** participation alone no longer authorizes the
+  staff Hub's thread writes. Pending-attachment upload and removal need
+  `communications.reply`; archive and unarchive need `communications.view`.
+  A Guardian participant uses the portal.

@@ -88,10 +88,13 @@ class GuardianScopeDatabaseInvariantsTest extends TestCase
     {
         $school = $this->createSchool();
         $p = $this->portalGuardian($school);
+        $otherPersona = $this->createGuardian($school);
         $this->setSchool($school->id);
 
         $this->assertRejected(fn () => DB::table('student_guardian_account_links')->where('id', $p['link']->id)->update(['status' => 'revoked', 'unlinked_at' => now()]), 'revoke the guardian-scope role grant');
         $this->assertRejected(fn () => DB::table('student_guardian_account_links')->where('id', $p['link']->id)->update(['school_membership_id' => $this->createMembership($this->createUser(), $school)->id]), 'revoke the guardian-scope role grant');
+        // POR.5: nor move the link to another Guardian persona.
+        $this->assertRejected(fn () => DB::table('student_guardian_account_links')->where('id', $p['link']->id)->update(['guardian_id' => $otherPersona->id]), 'revoke the guardian-scope role grant');
 
         // Grant first, then the link: allowed (the application order).
         DB::transaction(function () use ($p) {

@@ -25,13 +25,14 @@ class GuardianCommunicationController extends Controller
     public function index(Request $request, TenantContext $context, ActingGuardianResolver $guardians, GuardianAnnouncementReadService $inbox): Response
     {
         $school = $context->requireSchool();
-        $guardian = $guardians->require($context->actor(), $school);
+        $actor = $context->actor();
+        $guardian = $guardians->require($actor, $school);
         $unreadOnly = $request->boolean('unread');
 
         return Inertia::render('App/Portal/Communications/Index', [
             'schoolName' => $school->name,
             'filter' => $unreadOnly ? 'unread' : 'all',
-            'items' => $inbox->inbox($school, $guardian, $unreadOnly),
+            'items' => $inbox->inbox($school, $guardian, $actor, $unreadOnly),
         ]);
     }
 

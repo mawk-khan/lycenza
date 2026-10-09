@@ -6,9 +6,11 @@ use App\Domain\Communications\Application\AnnouncementService;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Domain\Communications\Infrastructure\CommunicationAttachment;
 use App\Domain\Identity\Application\Portal\ActingGuardian;
+use App\Domain\Identity\Application\Portal\GuardianPortalAccessDeniedException;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Authorization\CapabilityResolver;
 use App\Support\Portal\PortalAvailability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
@@ -35,6 +37,8 @@ use Illuminate\Support\Str;
  */
 final class GuardianAnnouncementReadService
 {
+    public const CAPABILITY = 'portal.communications.view';
+
     private const LIMIT = 50;
 
     private const OVERFETCH = 200;
@@ -43,14 +47,16 @@ final class GuardianAnnouncementReadService
         private readonly TenantContext $context,
         private readonly AnnouncementService $announcements,
         private readonly AuditRecorder $audit,
+        private readonly CapabilityResolver $capabilities,
     ) {}
 
     /**
      * @return list<array{id: string, title: string, preview: string, sender: ?string, publishedAt: ?string, unread: bool, priority: string, hasAttachments: bool}>
      */
-    public function inbox(School $school, ActingGuardian $guardian, bool $unreadOnly = false): array
+    public function inbox(School $school, ActingGuardian $guardian, User $actor, bool $unreadOnly = false): array
     {
         PortalAvailability::assertAvailable();
+        $this->assertSelf($school, $guardian, $actor);
 
         return $this->context->withSchool($school, function () use ($school, $guardian, $unreadOnly): array {
             $announcements = $this->visible($school, $guardian)
@@ -87,7 +93,7 @@ final class GuardianAnnouncementReadService
     public function show(School $school, ActingGuardian $guardian, User $actor, string $announcementId): array
     {
         PortalAvailability::assertAvailable();
-        $this->assertSelf($guardian, $actor);
+        $this->assertSelf($school, $guardian, $actor);
 
         return $this->context->withSchool($school, function () use ($school, $guardian, $actor, $announcementId): array {
             $announcement = $this->visible($school, $guardian)->whereKey($announcementId)
@@ -118,7 +124,7 @@ final class GuardianAnnouncementReadService
     public function attachmentForDownload(School $school, ActingGuardian $guardian, User $actor, string $announcementId, string $attachmentId): CommunicationAttachment
     {
         PortalAvailability::assertAvailable();
-        $this->assertSelf($guardian, $actor);
+        $this->assertSelf($school, $guardian, $actor);
 
         return $this->context->withSchool($school, function () use ($school, $guardian, $actor, $announcementId, $attachmentId): CommunicationAttachment {
             $announcement = $this->visible($school, $guardian)->whereKey($announcementId)->first()
@@ -167,6 +173,7 @@ final class GuardianAnnouncementReadService
         return DB::table('communication_recipients as cr')
             ->join('communication_deliveries as cd', 'cd.recipient_id', '=', 'cr.id')
             ->whereIn('cr.message_id', $messageIds)
+            ->where('cr.school_id', $guardian->schoolId)
             ->where('cr.recipient_user_id', $guardian->userId)
             ->where('cd.channel', 'in_app')
             ->whereNull('cd.read_at')
@@ -175,10 +182,15 @@ final class GuardianAnnouncementReadService
             ->all();
     }
 
-    private function assertSelf(ActingGuardian $guardian, User $actor): void
+    /** POR.5 (ADR 0070 §28.4, rule 6): this User's ActingGuardian in this School, and the capability re-checked here. */
+    private function assertSelf(School $school, ActingGuardian $guardian, User $actor): void
     {
-        if ($guardian->userId !== $actor->id) {
+        if ($guardian->userId !== $actor->id || $guardian->schoolId !== $school->id) {
             throw (new ModelNotFoundException)->setModel(CommunicationAnnouncement::class);
+        }
+
+        if (! $this->capabilities->canInSchool($actor, self::CAPABILITY, $school)) {
+            throw new GuardianPortalAccessDeniedException;
         }
     }
 }

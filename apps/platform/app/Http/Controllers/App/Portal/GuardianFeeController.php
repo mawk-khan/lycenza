@@ -23,7 +23,8 @@ class GuardianFeeController extends Controller
     public function index(TenantContext $context, ActingGuardianResolver $guardians, GuardianFeeReadService $fees): Response|RedirectResponse
     {
         $school = $context->requireSchool();
-        $students = $fees->students($school, $guardians->require($context->actor(), $school));
+        $actor = $context->actor();
+        $students = $fees->students($school, $guardians->require($actor, $school), $actor);
 
         if (count($students) === 1) {
             return redirect("/app/portal/fees/students/{$students[0]['id']}");
@@ -40,7 +41,7 @@ class GuardianFeeController extends Controller
 
         return Inertia::render('App/Portal/Fees/Show', [
             'schoolName' => $school->name,
-            'students' => $fees->students($school, $guardian),
+            'students' => $fees->students($school, $guardian, $actor),
             'statement' => $fees->statement($school, $guardian, $actor, $student),
         ]);
     }

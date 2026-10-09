@@ -1439,6 +1439,22 @@ recorded:
 - E38–E44 still block their own scope.
 - E33 still covers teacher Attendance only and never StudentMark.
 
+## Note — POR built for development and closed (POR.1–POR.5, 2026-10-09)
+
+**No legal determination.** Row E46 is unchanged: **POR-L1 — DRAFT REQUEST,
+NOT SENT, NOT ANSWERED.**
+- **Built for development only:** the Guardian inbox, a linked Student's
+  Attendance and fees (payments applied, never a receipt), and conversations
+  with text replies. The POR.5 closure audit is ADR 0070 §28.
+- **Production:** every surface is refused in code (`PortalAvailability`)
+  until E46 is answered and its production conditions are met. E21, E28,
+  E30–E32, E33, E35–E37 and E39–E42 are unchanged.
+- **The draft request:** its description of the build was brought up to date
+  and Q11, Q22, Q23 and Q28 narrowly annotated. Nothing was answered.
+- **E16:** valid through 2026-10-28 (the exceptions expire 2026-10-29). No
+  fresh scan or decision has been recorded since 2026-09-29. This is
+  separate from POR.
+
 ## Note — POR-L1 registered (POR.0, 2026-10-08)
 
 **No legal determination. No other row changes.** Row E46 records POR-L1

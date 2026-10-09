@@ -2,24 +2,30 @@
 
 namespace Tests\Feature\Portal;
 
+use App\Domain\Attendance\Application\Portal\GuardianAttendanceReadService;
 use App\Domain\Communications\Application\CommunicationAttachmentService;
 use App\Domain\Communications\Application\CommunicationMessageService;
 use App\Domain\Communications\Application\CommunicationThreadService;
+use App\Domain\Communications\Application\Portal\GuardianAnnouncementReadService;
 use App\Domain\Guardians\Infrastructure\ContactType;
 use App\Domain\Identity\Application\AccountInvitationService;
 use App\Domain\Identity\Application\AccountLinkService;
 use App\Domain\Identity\Application\GuardianAccountActivationService;
+use App\Domain\Identity\Application\Portal\ActingGuardian;
 use App\Domain\Identity\Application\Portal\ActingGuardianResolver;
 use App\Domain\Identity\Application\Portal\GuardianOffboardingException;
 use App\Domain\Identity\Application\Portal\GuardianOffboardingService;
+use App\Domain\Identity\Application\Portal\GuardianPortalAccessDeniedException;
 use App\Domain\Identity\Application\Staff\StaffAccessService;
 use App\Domain\Identity\Application\Staff\StaffAccountDirectory;
 use App\Domain\Identity\Application\Staff\StaffAccountException;
+use App\Domain\Payments\Application\Portal\GuardianFeeReadService;
 use App\Models\MembershipRoleAssignment;
 use App\Models\Role;
 use App\Models\SchoolMembership;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -381,5 +387,33 @@ class GuardianPortalAuthorizationTest extends TestCase
 
         $this->assertSame('revoked', app(TenantContext::class)->withSchool($school, fn () => DB::table('identity_account_invitations')
             ->where('guardian_id', $p['guardian']->id)->value('status')));
+    }
+
+    #[Test]
+    public function every_read_service_rechecks_its_capability_and_school_without_the_route(): void
+    {
+        // POR.5 (ADR 0070 §28.4, rule 6): a future non-route caller cannot skip the capability.
+        $school = $this->createSchool();
+        $p = $this->portalGuardian($school);
+        $guardian = app(ActingGuardianResolver::class)->require($p['user'], $school);
+        $calls = [
+            fn () => app(GuardianAnnouncementReadService::class)->inbox($school, $guardian, $p['user']),
+            fn () => app(GuardianAttendanceReadService::class)->students($school, $guardian, $p['user']),
+            fn () => app(GuardianFeeReadService::class)->students($school, $guardian, $p['user']),
+        ];
+        foreach ($calls as $call) {
+            $call();
+        }
+
+        DB::table('role_capabilities')->where('role_id', Role::query()->where('key', Role::GUARDIAN)->value('id'))->delete();
+        app(CapabilityResolver::class)->forgetCache($p['user'], $school);
+        foreach ($calls as $call) {
+            $this->assertThrows($call, GuardianPortalAccessDeniedException::class);
+        }
+
+        // An ActingGuardian of another School is never accepted.
+        $foreign = new ActingGuardian($this->createSchool()->id, $guardian->userId, $guardian->membershipId, $guardian->accountLinkId, $guardian->guardianId);
+        $this->assertThrows(fn () => app(GuardianAnnouncementReadService::class)->inbox($school, $foreign, $p['user']), ModelNotFoundException::class);
+        $this->assertThrows(fn () => app(GuardianAttendanceReadService::class)->students($school, $foreign, $p['user']), ModelNotFoundException::class);
     }
 }

@@ -407,11 +407,11 @@ class CommunicationHubController extends Controller
     }
 
     /**
-     * Phase 5A.7 §29 -- participant-specific archive/unarchive. Not
-     * capability-gated: the same "inherently self-scoped, cannot
-     * affect anyone else" reasoning Phase 5A.5's preference controller
-     * documents -- the real gate is genuinely being an active
-     * participant of this thread.
+     * Phase 5A.7 §29 -- participant-specific archive/unarchive: inherently
+     * self-scoped (the real gate is genuinely being an active participant
+     * of this thread). Since POR.5 (ADR 0070 §28.4) it also needs the Hub's
+     * `communications.view`: Guardian-only members are thread participants
+     * too, and the staff Hub is not their surface.
      */
     public function archive(TenantContext $context, CommunicationThreadService $service, string $thread): RedirectResponse
     {
@@ -425,7 +425,11 @@ class CommunicationHubController extends Controller
 
     private function toggleArchive(TenantContext $context, CommunicationThreadService $service, string $thread, bool $archived): RedirectResponse
     {
-        $context->requireSchool();
+        // POR.5 (ADR 0070 §28.4): still self-scoped, but a staff Hub write --
+        // so it needs the Hub's own `communications.view`, like every Hub page.
+        // A Guardian-only participant has none and uses the portal instead.
+        $school = $context->requireSchool();
+        $this->authorizeCapability('communications.view', $school);
         $actor = $context->actor();
 
         $model = CommunicationThread::query()->findOrFail($thread);

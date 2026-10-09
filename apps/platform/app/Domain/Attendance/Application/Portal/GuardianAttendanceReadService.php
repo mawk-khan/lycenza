@@ -5,10 +5,12 @@ namespace App\Domain\Attendance\Application\Portal;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\Guardians\Application\GuardianStudentScope;
 use App\Domain\Identity\Application\Portal\ActingGuardian;
+use App\Domain\Identity\Application\Portal\GuardianPortalAccessDeniedException;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Authorization\CapabilityResolver;
 use App\Support\Portal\PortalAvailability;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
@@ -45,6 +47,8 @@ final class GuardianAttendanceReadService
 {
     public const AUDIT_EVENT = 'attendance.guardian.viewed';
 
+    public const CAPABILITY = 'portal.attendance.view';
+
     public const MAX_DAYS = 62;
 
     public const DEFAULT_DAYS = 30;
@@ -53,12 +57,14 @@ final class GuardianAttendanceReadService
         private readonly TenantContext $context,
         private readonly GuardianStudentScope $scope,
         private readonly AuditRecorder $audit,
+        private readonly CapabilityResolver $capabilities,
     ) {}
 
     /** @return list<array{id: string, name: string}> */
-    public function students(School $school, ActingGuardian $guardian): array
+    public function students(School $school, ActingGuardian $guardian, User $actor): array
     {
         PortalAvailability::assertAvailable();
+        $this->assertSelf($school, $guardian, $actor);
 
         return $this->scope->eligibleStudents($school, $guardian->guardianId);
     }
@@ -75,9 +81,7 @@ final class GuardianAttendanceReadService
     {
         PortalAvailability::assertAvailable();
 
-        if ($guardian->userId !== $actor->id || $guardian->schoolId !== $school->id) {
-            throw (new ModelNotFoundException)->setModel(Student::class);
-        }
+        $this->assertSelf($school, $guardian, $actor);
 
         return $this->context->withSchool($school, function () use ($school, $guardian, $actor, $studentId, $from, $to): array {
             $student = collect($this->scope->eligibleStudents($school, $guardian->guardianId))->firstWhere('id', $studentId)
@@ -154,5 +158,21 @@ final class GuardianAttendanceReadService
         }
 
         return ['from' => $start->toDateString(), 'to' => $end->toDateString()];
+    }
+
+    /**
+     * POR.5 (ADR 0070 §28.4, rule 6): the ActingGuardian must be this User's
+     * in this School, and the capability is re-checked here, not only by the
+     * route -- as the Fees and conversation services already do.
+     */
+    private function assertSelf(School $school, ActingGuardian $guardian, User $actor): void
+    {
+        if ($guardian->userId !== $actor->id || $guardian->schoolId !== $school->id) {
+            throw (new ModelNotFoundException)->setModel(Student::class);
+        }
+
+        if (! $this->capabilities->canInSchool($actor, self::CAPABILITY, $school)) {
+            throw new GuardianPortalAccessDeniedException;
+        }
     }
 }

@@ -233,7 +233,7 @@ class GuardianFeePortalTest extends TestCase
         $service = app(GuardianFeeReadService::class);
         $this->app['env'] = 'production';
         try {
-            $this->assertThrows(fn () => $service->students($w['school'], $guardian), PortalUnavailableException::class);
+            $this->assertThrows(fn () => $service->students($w['school'], $guardian, $w['g']['user']), PortalUnavailableException::class);
             $this->assertThrows(fn () => $service->statement($w['school'], $guardian, $w['g']['user'], $w['a']->id), PortalUnavailableException::class);
             $this->assertThrows(fn () => $service->payment($w['school'], $guardian, $w['g']['user'], $w['a']->id, $w['shared']->paymentId), PortalUnavailableException::class);
         } finally {

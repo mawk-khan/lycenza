@@ -322,7 +322,7 @@ class GuardianAttendancePortalTest extends TestCase
 
         $this->app['env'] = 'production';
         try {
-            $this->assertThrows(fn () => $service->students($w['school'], $guardian), PortalUnavailableException::class);
+            $this->assertThrows(fn () => $service->students($w['school'], $guardian, $g['user']), PortalUnavailableException::class);
             $this->assertThrows(fn () => $service->history($w['school'], $guardian, $g['user'], $g['student']->id), PortalUnavailableException::class);
         } finally {
             $this->app['env'] = 'testing';

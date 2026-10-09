@@ -26,7 +26,8 @@ class GuardianAttendanceController extends Controller
     public function index(TenantContext $context, ActingGuardianResolver $guardians, GuardianAttendanceReadService $attendance): Response|RedirectResponse
     {
         $school = $context->requireSchool();
-        $students = $attendance->students($school, $guardians->require($context->actor(), $school));
+        $actor = $context->actor();
+        $students = $attendance->students($school, $guardians->require($actor, $school), $actor);
 
         if (count($students) === 1) {
             return redirect("/app/portal/attendance/students/{$students[0]['id']}");
@@ -55,7 +56,7 @@ class GuardianAttendanceController extends Controller
 
         return Inertia::render('App/Portal/Attendance/Show', [
             'schoolName' => $school->name,
-            'students' => $attendance->students($school, $guardian),
+            'students' => $attendance->students($school, $guardian, $actor),
             'attendance' => $attendance->history($school, $guardian, $actor, $student, $request->query('from'), $request->query('to')),
             'maxDays' => GuardianAttendanceReadService::MAX_DAYS,
         ]);

@@ -359,6 +359,31 @@ class GuardianConversationPortalTest extends TestCase
     }
 
     #[Test]
+    public function a_guardian_participant_cannot_write_through_the_staff_hub_thread_routes(): void
+    {
+        Storage::fake('local');
+        $w = $this->world();
+        $pending = app(CommunicationAttachmentService::class)->uploadForThread($w['thread'], $w['staff'], UploadedFile::fake()->create('staff.pdf', 1, 'application/pdf'));
+
+        // POR.5 (ADR 0070 §28.4): participation alone is not Hub authority --
+        // no upload, removal or archive state through the staff routes.
+        $this->asGuardian($w['g']['user'], $w['school']);
+        $this->post("/app/communications/{$w['thread']->id}/attachments", ['file' => UploadedFile::fake()->create('guardian.pdf', 1, 'application/pdf')])->assertForbidden();
+        $this->delete("/app/communications/{$w['thread']->id}/attachments/{$pending->id}")->assertForbidden();
+        $this->post("/app/communications/{$w['thread']->id}/archive")->assertForbidden();
+        $this->post("/app/communications/{$w['thread']->id}/unarchive")->assertForbidden();
+
+        $this->assertSame(1, app(TenantContext::class)->withSchool($w['school'], fn () => DB::table('communication_attachments')->where('communication_thread_id', $w['thread']->id)->count()));
+        $this->assertFalse(app(TenantContext::class)->withSchool($w['school'], fn () => (bool) CommunicationThreadParticipant::query()->where('thread_id', $w['thread']->id)->where('user_id', $w['g']['user']->id)->value('archived')));
+
+        // Staff with the Hub capabilities keep these writes.
+        $this->signInTo($w['staff'], $w['school']);
+        $this->post("/app/communications/{$w['thread']->id}/attachments", ['file' => UploadedFile::fake()->create('more.pdf', 1, 'application/pdf')])->assertRedirect();
+        $this->delete("/app/communications/{$w['thread']->id}/attachments/{$pending->id}")->assertRedirect();
+        $this->post("/app/communications/{$w['thread']->id}/archive")->assertRedirect('/app/communications/conversations');
+    }
+
+    #[Test]
     public function lifecycle_changes_deny_the_next_reply(): void
     {
         $w = $this->world();

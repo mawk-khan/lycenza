@@ -74,9 +74,10 @@ final class GuardianFeeReadService
     ) {}
 
     /** @return list<array{id: string, name: string}> */
-    public function students(School $school, ActingGuardian $guardian): array
+    public function students(School $school, ActingGuardian $guardian, User $actor): array
     {
         PortalAvailability::assertAvailable();
+        $this->assertSelf($school, $guardian, $actor);
 
         return $this->scope->eligibleStudents($school, $guardian->guardianId);
     }

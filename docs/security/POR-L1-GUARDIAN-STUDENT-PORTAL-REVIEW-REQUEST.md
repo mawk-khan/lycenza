@@ -1,6 +1,11 @@
 # POR-L1 — Guardian- and Student-facing portal access to Student information: Review Request
 
 **Status at drafting (2026-10-08): DRAFT REQUEST — NOT SENT, NOT ANSWERED.**
+
+**Current status (2026-10-09, POR.5 closure): still DRAFT REQUEST — NOT SENT,
+NOT ANSWERED.** The Guardian surfaces (a)–(e) below are built for
+development only and are refused in code in production. Nothing has been
+sent, and no answer has been recorded or inferred.
 This document asks a question. It records no approval, and nothing in it may
 be read as one.
 
@@ -16,7 +21,8 @@ be read as one.
   - E21 (retention periods).
 - **Engineering contract:**
   `docs/architecture/adr/0070-guardian-student-portal-contract.md` (POR.0,
-  documentation only; nothing is built).
+  documentation only at drafting; since then POR.1–POR.4 are built for
+  development only, §24–§28, and refused in code in production).
 - **Prior determinations:**
   - `STUDENTMARK-CHILDRENS-DATA-DETERMINATION.md`: Guardian- and
     Student-facing surfaces "each … requires its own future determination
@@ -57,18 +63,26 @@ each surface**:
      late, excused; no reasons are recorded);
    - (c) a linked Student's fee statement;
    - (d) receipts for payments covering that Student, never another
-     Student's details;
-   - later, separately: (e) replying in a School conversation.
+     Student's details *(as built: never a receipt; only the amount of each
+     payment applied to that Student, with the receipt number as a
+     reference; see Q4)*;
+   - later, separately: (e) replying in a School conversation *(as built
+     for development: reading and replying in text to conversations the
+     School started with the Guardian; no Guardian-started conversation;
+     see Q5)*.
 4. **How:**
    - read-only (except replies in (e), and marking one's own message read);
    - web only, signed in;
-   - MFA required for (b)–(d);
+   - MFA required for (b)–(d) *(as built: also for (e), conversation reads
+     and replies; only the announcement inbox (a) needs none)*;
    - one School at a time;
    - no search across Students;
    - an unknown or unauthorised Student is indistinguishable from a
      non-existent one.
 5. **Audit:** each child-specific read is recorded with the Guardian, School,
-   Student identifier and surface — never the content.
+   Student identifier and surface — never the content. *(As built: Attendance
+   and fee views, attachment downloads and replies are recorded; conversation
+   reads are not, including those with a Student participant. See Q28.)*
 6. **Not included:**
    - marks, results, report cards, transcripts (E42/E39–E41);
    - Student accounts;
@@ -126,7 +140,10 @@ Please answer each. For each, say whether it affects **design**,
 10. **School responsibility:** what must the School record or verify for
     restrictions? Who is accountable for keeping it current?
 11. **Several Guardians:** for one Student, do all qualifying Guardians get
-    equal access?
+    equal access? (The development build gives each qualifying Guardian the
+    same surfaces independently, but withholds from the portal any
+    conversation that includes another Guardian; see Q12. *Annotated
+    2026-10-09 by POR.5.*)
 12. **Visibility between Guardians:** may Guardians see each other's portal
     activity? Must they be prevented? (The development build withholds from
     the portal any conversation that includes another Guardian, for example
@@ -165,7 +182,11 @@ Please answer each. For each, say whether it affects **design**,
 22. **Guardian MFA:** is it required? For which surfaces?
 23. **Different assurance per surface:** may different surfaces require
     different MFA assurance (e.g. none for the message inbox, required for
-    attendance and fees)?
+    attendance and fees)? (The development build requires an enrolled
+    factor and a current verification for attendance, fees and
+    conversations, reading and replying alike, and none for the announcement
+    inbox. There is no per-reply re-verification. ADR 0070 §12, §27.8.
+    *Annotated 2026-10-09 by POR.5; also relevant to Q22.*)
 
 **Basis and obligations**
 24. **Legal basis:** what is the legal basis? Is the School's recorded
@@ -179,7 +200,13 @@ Please answer each. For each, say whether it affects **design**,
 
 **Audit and retention**
 28. **Audit:** which reads must be audited? Is the proposed envelope (§1.5)
-    sufficient, excessive or insufficient?
+    sufficient, excessive or insufficient? (As built, these are audited:
+    attendance views, fee-statement and payment views, attachment
+    downloads, and each Guardian reply. All carry identifiers and counts,
+    never content. These are not audited: the inbox list, opening an
+    announcement, and listing or reading a conversation, including one with
+    a Student participant. Is that acceptable? ADR 0070 §28.10. *Annotated
+    2026-10-09 by POR.5.*)
 29. **Audit retention:** how does audit retention interact with the open
     retention decisions (E21)?
 
