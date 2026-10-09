@@ -5,8 +5,10 @@
   Communications inbox, refused in code outside local/testing
   (`PortalAvailability`). **POR.2 IMPLEMENTED FOR DEVELOPMENT (2026-10-09,
   §25):** GuardianStudentScope per-Student authority + a linked Student's
-  minimized Attendance (active academic year only, MFA). POR.3 onward needs
-  separate owner authorisation. No legal status changes: **POR-L1 (ADR 0058 row E46) is a
+  minimized Attendance (active academic year only, MFA). **POR.3 IMPLEMENTED
+  FOR DEVELOPMENT (2026-10-09, §26):** a linked Student's fee statement and
+  the payments applied to that Student (read-only, MFA, never a whole shared
+  payment). POR.4 onward needs separate owner authorisation. No legal status changes: **POR-L1 (ADR 0058 row E46) is a
   DRAFT REQUEST — NOT SENT, NOT ANSWERED**, and every production statement
   below waits on it.
 - Date: 2026-10-08
@@ -994,3 +996,150 @@ No new lock order is introduced.
 period, Q6–Q9 who qualifies, Q13–Q15 ending access and history, Q22–Q23 MFA)
 already cover this slice, so the draft is unchanged. No production clearance
 is inferred.
+
+## 26. POR.3 — Guardian fee statement and payments applied to a Student, as built (2026-10-09; development only)
+
+### 26.1 Capability and authority
+- `portal.fees.view` is in the `guardian` namespace and on the closed
+  `guardian` role only (raw-SQL tested: no staff role can hold it). Existing
+  Guardians receive it through the role, with no new grant row.
+- **Every read requires:**
+  - session authentication and the current School;
+  - `portal-development-only`;
+  - `capability:portal.fees.view`;
+  - `mfa-page` (enrolled factor plus current, factor-bound assurance);
+  - a fresh ActingGuardian;
+  - the requested Student in **GuardianStudentScope** (the POR.2 predicate,
+    unchanged: legal guardian, active Student, active Guardian, same School);
+  - PortalAvailability, re-asserted in every service method.
+- A Finance administrator who is also a parent still sees only their own
+  child through the portal (tested). Staff authority never widens it.
+
+### 26.2 Read seam (Payments-owned; the staff services are unchanged)
+- `App\Domain\Payments\Application\Portal\GuardianFeeReadService` is a
+  separate entry point. The staff `StudentFeeStatementReadService` and
+  `PaymentReceiptReadService` are neither reused nor changed (a guard pins
+  this).
+- **Charge facts:** come through Fees' new
+  `ChargeService::statementLinesForStudentWithin()`, which embeds the scope
+  predicate in the charge query, so authorization and read are one
+  statement.
+- **Balances:** from the authoritative `ChargeStateReader`:
+  - outstanding = amount − allocations − live adjustments;
+  - nothing owed once a charge is cancelled.
+
+  There is no second calculation. Totals are sums of the shown lines.
+
+### 26.3 Statement projection
+- **Per charge:**
+  - description, fee head, billing period, due date;
+  - `currentYear` (whether it belongs to the active academic year);
+  - status (`outstanding` / `settled` / `cancelled`);
+  - amount, adjustments (live total), paid total, outstanding;
+  - for each payment applied **to that charge**: `paymentId` (for the detail
+    page), settled date, method, the School receipt **number**, and the
+    **amount applied to that charge** only.
+- **Totals:** charged (excluding cancelled charges), adjusted, paid,
+  outstanding.
+- **Never shown:**
+  - charge, fee-head and academic-year ids;
+  - adjustment categories (concession, scholarship, waiver) and concession
+    ids;
+  - assessment time;
+  - late-fee link ids;
+  - a Payment's total, source or provider, manual reference, settlement
+    account, journal or recorder;
+  - any other Student's charge, allocation or id;
+  - any family or household total.
+
+### 26.4 History boundary
+- **Shown:**
+  - every charge of the School's **active academic year**;
+  - any charge of another year (earlier, or already assessed for a later
+    year) that is **still outstanding**.
+- **Not shown:** settled or cancelled charges of other years.
+- **So:** the Guardian's outstanding total equals the Student's
+  authoritative all-years outstanding (tested against the staff statement),
+  and nothing owed is hidden.
+- With no active year, only charges still owed are shown.
+- Financial periods whose detail has expired (E21.3A2) are handled by the
+  same `ChargeStateReader`.
+- This is a development bound, not a legal access period (POR-L1 Q3, Q4,
+  Q15).
+
+### 26.5 Payments: "applied to this Student", never a whole receipt
+- **The problem:** a Payment may pay several Students' charges (siblings),
+  and its receipt (`PaymentReceipt`, ADR 0062 §17) documents the **whole
+  Payment**.
+- **Guardians are never shown that document or the Payment's total.** The
+  detail page `GET
+  /app/portal/fees/students/{student}/payments/{payment}` is **"Payment
+  applied to {Student}"**. It shows:
+  - the settled date, method and the School receipt number (labelled as a
+    reference: "this is not the receipt itself");
+  - only that Payment's allocations to **this Student's visible charges**;
+  - their sum, `appliedTotal`.
+- **Not found:** a Payment with no such allocation (a sibling's, another
+  School's, unknown, or one allocated only to settled other-year charges)
+  is the same 404.
+- **Example:** one 940.00 cash Payment pays 300.00 of Student A's tuition and
+  640.00 of sibling B's fee. A Guardian authorised only for A sees "300.00
+  applied to this fee", and "Applied to A: 300.00" on the detail page. They
+  never see 940.00, 640.00, B's name, id, fee or count, or the other
+  allocation (tested; a mutation reporting the payment total is caught).
+- **Why the receipt number is safe:** it is shared-payment metadata that
+  discloses no sibling, no amount and no count. It resolves nothing in the
+  portal; it is only a reference for asking the School.
+- **Guardian of both siblings:** they see each child separately, with no
+  combined view.
+
+### 26.6 Reversals, refunds, corrections
+- Posted Payments are immutable, with no refund, void or reversal (rule 91,
+  ADR 0031).
+- What the domain does have is shown truthfully through the charge state:
+  - a **cancelled charge** shows `cancelled` and owes nothing;
+  - a **cancelled adjustment** no longer counts in the live adjustment
+    total.
+- The Guardian has no action of any kind.
+
+### 26.7 Audit
+- `fee_statement.guardian.viewed`: `guardianId`, `accountLinkId`,
+  `studentId`, `academicYearId`, `lineCount`, `surface`.
+- `payment_allocation.guardian.viewed`: `guardianId`, `accountLinkId`,
+  `studentId`, `paymentId`, `allocationCount`, `surface`.
+- Never an amount, description or sibling id.
+- One event per successful read. Denied reads write nothing.
+- Category `audit` (D1); E21 governs the period.
+
+### 26.8 Consistency
+- No new locks.
+- **Revocations:** a read racing any of these sees the before or the after
+  state, and the next request is denied:
+  - relationship, link or membership revocation;
+  - Student deactivation;
+  - role revocation.
+- **Financial writes:** an allocation, cancellation or adjustment is
+  committed atomically by the Finance services, so a read sees each
+  transaction whole or not at all.
+- **Other cases:**
+  - stale URLs after a School switch: 404;
+  - MFA expiry: step-up;
+  - stale capability cache: bounded by the live checks.
+
+### 26.8a Security review (POR.3)
+- **One MEDIUM finding, fixed and tested:** payment dates were shown one day
+  early in Schools east of UTC. `settled_at` is School-local midnight stored
+  in UTC; the Guardian views now convert to the School's timezone, like the
+  staff screens.
+- **LOW suggestions taken:**
+  - the service re-checks `portal.fees.view` itself, as defence in depth;
+  - the payment page says it lists only what was applied to the fees shown
+    for this child.
+- **Noted:** the 1000-charge cap per statement read, shared with the staff
+  statement, is theoretical.
+
+### 26.9 Legal
+**POR-L1 — DRAFT REQUEST / NOT SENT / NOT ANSWERED.** Q3 and Q4 were
+narrowly annotated with the development behaviour (other-year dues; the
+applied amount instead of the whole receipt). E21, E28 and E30–E32 are
+unchanged. No fee, late fee or disclosure is declared lawful.

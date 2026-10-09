@@ -231,8 +231,10 @@ class ChargeServiceTest extends TestCase
         // FEE.5: lateFeeCandidates()/lateFeeSource() are read-only late-fee facts.
         // E21.3A: ledgerFacts()/adjustmentLedgerFacts() are read-only facts for
         // the financial-period close (Payments' charge states).
+        // POR.3 (ADR 0070 §26): statementLinesForStudentWithin() is a read-only
+        // twin of statementLinesForStudent() with the Guardian scope embedded.
         $this->assertFalse(method_exists(ChargeService::class, 'update'));
-        $this->assertSame(['assess', 'cancel', 'lockChargeForAllocation', 'liveAdjustmentTotalsFor', 'statementLinesForStudent', 'statementLinesForCharges', 'lateFeeCandidates', 'lateFeeSource', 'uncancelledChargesForStudent', 'ledgerFacts', 'adjustmentLedgerFacts'], array_values(array_filter(
+        $this->assertSame(['assess', 'cancel', 'lockChargeForAllocation', 'liveAdjustmentTotalsFor', 'statementLinesForStudent', 'statementLinesForStudentWithin', 'statementLinesForCharges', 'lateFeeCandidates', 'lateFeeSource', 'uncancelledChargesForStudent', 'ledgerFacts', 'adjustmentLedgerFacts'], array_values(array_filter(
             array_map(fn ($m) => $m->name, (new \ReflectionClass(ChargeService::class))->getMethods(\ReflectionMethod::IS_PUBLIC)),
             fn ($name) => $name !== '__construct',
         )));

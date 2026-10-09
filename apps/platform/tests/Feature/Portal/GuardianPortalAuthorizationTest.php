@@ -66,7 +66,7 @@ class GuardianPortalAuthorizationTest extends TestCase
         $link = app(GuardianAccountActivationService::class)->accept($school, $invitation, null, 'a-strong-password-1');
         $user = $link->membership->user;
 
-        $this->assertEqualsCanonicalizing(['portal.attendance.view', 'portal.communications.view'], $this->caps($user, $school), 'Guardian activation delivers the portal capabilities and nothing else.');
+        $this->assertEqualsCanonicalizing(['portal.attendance.view', 'portal.communications.view', 'portal.fees.view'], $this->caps($user, $school), 'Guardian activation delivers the portal capabilities and nothing else.');
         $this->assertSame([Role::GUARDIAN], $this->activeRoleKeys($school, $link->membership));
         $this->assertNotNull($this->resolver()->resolve($user, $school));
 
@@ -81,7 +81,7 @@ class GuardianPortalAuthorizationTest extends TestCase
     {
         $this->assertSame(['guardian'], DB::table('roles as r')->join('role_capabilities as rc', 'rc.role_id', '=', 'r.id')
             ->where('rc.capability_key', 'like', 'portal.%')->distinct()->orderBy('r.key')->pluck('r.key')->all());
-        $this->assertSame(['portal.attendance.view', 'portal.communications.view'], DB::table('roles as r')->join('role_capabilities as rc', 'rc.role_id', '=', 'r.id')
+        $this->assertSame(['portal.attendance.view', 'portal.communications.view', 'portal.fees.view'], DB::table('roles as r')->join('role_capabilities as rc', 'rc.role_id', '=', 'r.id')
             ->where('r.key', Role::GUARDIAN)->orderBy('rc.capability_key')->pluck('rc.capability_key')->all());
         $this->assertSame('guardian', DB::table('roles')->where('key', Role::GUARDIAN)->value('scope'));
         $this->assertSame('guardian', DB::table('capabilities')->where('key', 'portal.communications.view')->value('namespace'));
@@ -239,7 +239,7 @@ class GuardianPortalAuthorizationTest extends TestCase
         // Staff off-boarding: staff authority ends, the Guardian identity and portal stay.
         app(StaffAccessService::class)->suspend($school, $admin, $membership->id);
         $this->assertSame(SchoolMembership::STATUS_ACTIVE, app(TenantContext::class)->withSchool($school, fn () => $membership->fresh()->status));
-        $this->assertEqualsCanonicalizing(['portal.attendance.view', 'portal.communications.view'], $this->caps($user, $school));
+        $this->assertEqualsCanonicalizing(['portal.attendance.view', 'portal.communications.view', 'portal.fees.view'], $this->caps($user, $school));
         $this->assertNotNull($this->resolver()->resolve($user, $school));
 
         // Staff reactivation of the staff-offboarded dual membership restores staff roles only.

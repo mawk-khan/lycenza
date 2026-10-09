@@ -598,6 +598,24 @@ is a relationship-scoped authorization problem (same shape as
 `finance.*` staff capability grant — deferred until a concrete
 checkpoint needs it.
 
+**POR.3 (2026-10-09; ADR 0070 §26; development only).** That checkpoint is
+built as a Guardian-only, read-only view. There is still no Student view.
+- **Authority:** `portal.fees.view` + ActingGuardian + Guardians'
+  `GuardianStudentScope` (legal guardian + active Student, fail-closed
+  pending POR-L1) + current MFA + `PortalAvailability`.
+- **Read seam:** `App\Domain\Payments\Application\Portal\GuardianFeeReadService`,
+  separate from the staff statement and receipt services, which are
+  unchanged.
+- **Shown:**
+  - the active academic year's charges, plus any other year's charge still
+    owed;
+  - authoritative balances from `ChargeStateReader`;
+  - for each payment, only the amount applied to this Student, with the
+    School receipt number as a reference.
+- **Never shown:** a whole shared Payment, its total, a sibling, adjustment
+  categories, internal ids or references, or any family total.
+- **No actions:** no payment, refund, export or PDF.
+
 ## Payroll boundary
 
 Per `DOMAIN-MAP.md`, `Payroll` depends on `HR, Finance` — never the

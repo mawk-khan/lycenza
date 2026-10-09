@@ -95,9 +95,16 @@ Please answer each. For each, say whether it affects **design**,
    relationship's start; ADR 0070 §25.4.) *(Added 2026-10-09 by POR.2;
    still a draft, not sent.)*
 3. **Fee statements:** may Guardians see a linked Student's fee statement,
-   including concessions or waivers?
+   including concessions or waivers? (The development build shows the
+   current academic year's charges plus any other year's charge still owed,
+   and adjustments only as a total, without category; ADR 0070 §26.3–§26.4.
+   *Annotated 2026-10-09 by POR.3; still a draft, not sent.*)
 4. **Receipts:** may Guardians see receipts? How must a payment that covers
-   several Students (siblings) be shown?
+   several Students (siblings) be shown? (The development build never shows
+   the whole receipt or payment total. It shows only the amount applied to
+   the authorised Student, with the School receipt number as a reference.
+   Should the payer's identity or the receipt number be shown at all?
+   ADR 0070 §26.5. *Annotated 2026-10-09 by POR.3.*)
 5. **Replies and conversations:** may Guardians reply to or start
    conversations? Does creating content need anything beyond reading?
 

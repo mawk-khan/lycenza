@@ -112,6 +112,7 @@ use App\Http\Controllers\App\Platform\SchoolElevationController;
 use App\Http\Controllers\App\Platform\SchoolGroupAdminController;
 use App\Http\Controllers\App\Portal\GuardianAttendanceController;
 use App\Http\Controllers\App\Portal\GuardianCommunicationController;
+use App\Http\Controllers\App\Portal\GuardianFeeController;
 use App\Http\Controllers\App\SchoolSettingsController;
 use App\Http\Controllers\App\SchoolSetupController;
 use App\Http\Controllers\App\SchoolSwitchController;
@@ -674,6 +675,21 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
             Route::get('/', [GuardianAttendanceController::class, 'index'])->name('index');
             Route::get('/students/{student}', [GuardianAttendanceController::class, 'show'])
                 ->whereUuid('student')->name('show');
+        });
+
+    // POR.3 (ADR 0070 §26): a linked Student's fees -- web/session only, read-only,
+    // development only (POR-L1). `portal-development-only` FIRST, then the Guardian
+    // capability, then current MFA assurance; the read seam embeds the live
+    // GuardianStudentScope. Anything not this Guardian's Student or this Student's
+    // Payment is the same 404. No payment, refund, export or PDF route.
+    Route::prefix('app/portal/fees')->name('app.portal.fees.')
+        ->middleware(['portal-development-only', 'capability:portal.fees.view', 'mfa-page'])
+        ->group(function (): void {
+            Route::get('/', [GuardianFeeController::class, 'index'])->name('index');
+            Route::get('/students/{student}', [GuardianFeeController::class, 'show'])
+                ->whereUuid('student')->name('show');
+            Route::get('/students/{student}/payments/{payment}', [GuardianFeeController::class, 'payment'])
+                ->whereUuid(['student', 'payment'])->name('payment');
         });
 
     Route::prefix('app/communications')->name('app.communications.')->group(function (): void {

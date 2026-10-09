@@ -36,20 +36,26 @@ class PortalArchitectureGuardTest extends TestCase
         $this->assertSame([
             'app.portal.attendance.index', 'app.portal.attendance.show',
             'app.portal.communications.attachments.download', 'app.portal.communications.index', 'app.portal.communications.show',
-        ], $routes->map(fn (Route $r) => (string) $r->getName())->sort()->values()->all(), 'POR.1 inbox + POR.2 Attendance only: no reply, compose, Student search, Fees or marks route.');
+            'app.portal.fees.index', 'app.portal.fees.payment', 'app.portal.fees.show',
+        ], $routes->map(fn (Route $r) => (string) $r->getName())->sort()->values()->all(), 'POR.1 inbox + POR.2 Attendance + POR.3 Fees only: no reply, compose, Student search, payment, refund, export or marks route.');
 
         foreach ($routes as $route) {
             $middleware = $route->gatherMiddleware();
             $this->assertContains('school-context', $middleware, $route->uri());
             $this->assertSame(['GET', 'HEAD'], $route->methods(), $route->uri().' is read-only.');
             $attendance = str_starts_with($route->uri(), 'app/portal/attendance');
+            $fees = str_starts_with($route->uri(), 'app/portal/fees');
             $block = array_search('portal-development-only', $middleware, true);
-            $capability = array_search($attendance ? 'capability:portal.attendance.view' : 'capability:portal.communications.view', $middleware, true);
+            $capability = array_search(match (true) {
+                $attendance => 'capability:portal.attendance.view',
+                $fees => 'capability:portal.fees.view',
+                default => 'capability:portal.communications.view',
+            }, $middleware, true);
             $this->assertIsInt($block, $route->uri().' carries the production block.');
             $this->assertIsInt($capability, $route->uri().' carries its portal capability.');
             $this->assertLessThan($capability, $block, 'The production block answers first.');
-            if ($attendance) {
-                $this->assertContains('mfa-page', $middleware, $route->uri().': Guardian Attendance needs current MFA assurance (ADR 0070 §12).');
+            if ($attendance || $fees) {
+                $this->assertContains('mfa-page', $middleware, $route->uri().': Guardian Attendance and Fees need current MFA assurance (ADR 0070 §12).');
             }
         }
 
@@ -77,6 +83,15 @@ class PortalArchitectureGuardTest extends TestCase
         foreach (['students', 'history'] as $method) {
             $this->assertMatchesRegularExpression('/public function '.$method.'\([^{]*\{\s*PortalAvailability::assertAvailable\(\);/', $attendance, "{$method}() refuses outside local/testing first");
         }
+        $fees = $this->code(app_path('Domain/Payments/Application/Portal/GuardianFeeReadService.php'));
+        foreach (['students', 'statement', 'payment'] as $method) {
+            $this->assertMatchesRegularExpression('/public function '.$method.'\([^{]*\{\s*PortalAvailability::assertAvailable\(\);/', $fees, "{$method}() refuses outside local/testing first");
+        }
+        // POR.3: Fees' charge read embeds the scope predicate; the staff statement service is never reused.
+        $this->assertStringContainsString('statementLinesForStudentWithin($school, $studentId, $this->scope->eligibleStudentIdsQuery(', $fees);
+        $this->assertStringNotContainsString('StudentFeeStatementReadService', $fees);
+        $this->assertStringNotContainsString('PaymentReceiptReadService', $fees);
+
         // POR.2: the Student filter and the scope's predicate sit INSIDE the Attendance query.
         $this->assertStringContainsString("->whereIn('se.student_id', \$this->scope->eligibleStudentIdsQuery(", $attendance);
         $scope = $this->code(app_path('Domain/Guardians/Application/GuardianStudentScope.php'));

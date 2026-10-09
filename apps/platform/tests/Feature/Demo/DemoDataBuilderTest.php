@@ -160,7 +160,7 @@ class DemoDataBuilderTest extends TestCase
         $this->assertSame([], $resolver->schoolCapabilities($this->user('student@example.test'), $school), 'No Student portal: no capability.');
         // POR.1 (ADR 0070 §24): an activated Guardian holds exactly the Guardian portal capability,
         // delivered by the closed `guardian`-scope role -- never a staff capability.
-        $this->assertEqualsCanonicalizing(['portal.attendance.view', 'portal.communications.view'], $resolver->schoolCapabilities($this->user('guardian01@example.test'), $school));
+        $this->assertEqualsCanonicalizing(['portal.attendance.view', 'portal.communications.view', 'portal.fees.view'], $resolver->schoolCapabilities($this->user('guardian01@example.test'), $school));
 
         // TCH.3: the demo teacher holds the production Teacher role -- exactly
         // one owned-scope capability, reaching only what her

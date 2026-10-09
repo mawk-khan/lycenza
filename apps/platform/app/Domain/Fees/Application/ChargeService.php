@@ -31,6 +31,7 @@ use App\Support\Audit\AuditRecorder;
 use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -362,6 +363,21 @@ class ChargeService
     }
 
     /**
+     * POR.3 (ADR 0070 §26): one Student's lines, where the Student must ALSO be
+     * in `$eligibleStudentIds` (a caller-supplied id subquery, e.g. Guardians'
+     * GuardianStudentScope predicate) -- the authorization and the read are one
+     * statement. Same lines and semantics as statementLinesForStudent().
+     *
+     * @return list<ChargeStatementLine>
+     */
+    public function statementLinesForStudentWithin(School $school, string $studentId, QueryBuilder $eligibleStudentIds): array
+    {
+        return $this->statementLines($school, fn ($q) => $q
+            ->where('student_id', $studentId)
+            ->whereIn('student_id', $eligibleStudentIds));
+    }
+
+    /**
      * FEE.4: the same lines for named charges (a receipt's allocations).
      *
      * @param  list<string>  $chargeIds
@@ -454,7 +470,7 @@ class ChargeService
     }
 
     /**
-     * @param  callable(\Illuminate\Database\Query\Builder): mixed  $scope
+     * @param  callable(QueryBuilder): mixed  $scope
      * @return list<LateFeeSourceFacts>
      */
     private function lateFeeSources(School $school, callable $scope): array

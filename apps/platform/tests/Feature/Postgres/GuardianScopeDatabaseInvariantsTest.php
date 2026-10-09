@@ -43,7 +43,7 @@ class GuardianScopeDatabaseInvariantsTest extends TestCase
         $platform = Role::query()->where('key', 'platform_super_admin')->value('id');
 
         foreach ([[$guardian, 'students.view'], [$guardian, 'communications.view'], [$guardian, 'group.schools.view'], [$guardian, 'platform.schools.view'],
-            [$schoolAdmin, 'portal.communications.view'], [$schoolAdmin, 'portal.attendance.view'], [$groupAdmin, 'portal.communications.view'], [$platform, 'portal.communications.view']] as [$role, $capability]) {
+            [$schoolAdmin, 'portal.communications.view'], [$schoolAdmin, 'portal.attendance.view'], [$schoolAdmin, 'portal.fees.view'], [$groupAdmin, 'portal.communications.view'], [$platform, 'portal.communications.view']] as [$role, $capability]) {
             $this->assertRejected(fn () => DB::table('role_capabilities')->insert(['role_id' => $role, 'capability_key' => $capability]), 'scopes never mix');
         }
 

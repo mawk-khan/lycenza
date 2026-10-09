@@ -133,7 +133,7 @@ final class DemoAccountCatalog
             ['Group Admin', 'group.admin@example.test', 'Group scope only: views the Lycenza Demo Trust and its two Schools, enters one via elevated access (MFA required); no School permission.'],
             ['Teacher', 'teacher@example.test', 'Teacher role + Staff Self-Service role, linked to an Employee: My Curriculum Delivery, My Attendance, My Learning Content and My Assignments for the one class she is assigned (G8-A Mathematics); My Leave, My Staff Attendance and My Payslips for herself; every other module is 403.'],
             ['Student', 'student@example.test', 'Linked Student account: no student portal exists; modules are 403.'],
-            ['Guardian', 'guardian01@example.test', 'Activated Guardian account: the Guardian portal inbox and her child\'s attendance (POR.1–POR.2, development only; attendance needs MFA); every staff module is 403.'],
+            ['Guardian', 'guardian01@example.test', 'Activated Guardian account: the Guardian portal inbox and her child\'s attendance and fees (POR.1–POR.3, development only; attendance and fees need MFA); every staff module is 403.'],
         ];
 
         $operationsHints = [

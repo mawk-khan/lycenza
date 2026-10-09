@@ -237,6 +237,9 @@ class CapabilityAndRoleSeeder extends Seeder
             // POR.2 (ADR 0070 §25): a linked Student's minimized Attendance -- also needs
             // GuardianStudentScope (that Student, live) and current MFA assurance.
             ['key' => 'portal.attendance.view', 'label' => "Read a linked Student's Attendance in the portal", 'namespace' => 'guardian'],
+            // POR.3 (ADR 0070 §26): a linked Student's minimized fee statement and the
+            // payments applied to that Student -- GuardianStudentScope and MFA too.
+            ['key' => 'portal.fees.view', 'label' => "Read a linked Student's fees in the portal", 'namespace' => 'guardian'],
 
             // Phase 1B.4 (docs/modules/STUDENT-ENROLLMENT.md
             // "Authorization") -- Student academic placement/enrollment,
@@ -1496,6 +1499,7 @@ class CapabilityAndRoleSeeder extends Seeder
                 'capabilities' => [
                     'portal.communications.view',
                     'portal.attendance.view',
+                    'portal.fees.view',
                 ],
             ],
             'staff_self_service' => [
