@@ -6,6 +6,7 @@ use App\Domain\Documents\Infrastructure\Document;
 use App\Domain\LMS\Application\AssignmentService;
 use App\Models\Role;
 use App\Models\User;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
@@ -163,8 +164,8 @@ class TeacherLearningContentDocumentsTest extends TestCase
         // A role carrying only lms.content.teacher reaches Learning Content
         // attachments, never Assignment ones (TCH.5D's own capability).
         $w = $this->contentWorld();
-        $role = Role::query()->create(['key' => 'test.content_only.'.Str::uuid(), 'name' => 'Content only', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync(['lms.content.teacher']);
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test.content_only.'.Str::uuid(), 'name' => 'Content only', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['lms.content.teacher']));
         [$teacher] = $this->contentTeacher($w, roleKey: $role->key);
         $assignment = app(AssignmentService::class)->create($w['school'], $w['offering']->id, ['title' => 'Worksheet', 'due_on' => '2026-10-30'], $w['admin']);
         app(AssignmentService::class)->publish($w['school'], $assignment, $w['admin']);

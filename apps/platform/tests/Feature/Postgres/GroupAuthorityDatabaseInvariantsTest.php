@@ -3,6 +3,7 @@
 namespace Tests\Feature\Postgres;
 
 use App\Models\Role;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -24,17 +25,17 @@ class GroupAuthorityDatabaseInvariantsTest extends TestCase
     {
         // POR.1 (ADR 0070 §8.2; ADR 0045 amendment): `guardian` is the fourth scope.
         $this->assertSame([], DB::table('roles')->whereNotIn('scope', ['platform', 'school', 'group', 'guardian'])->pluck('key')->all());
-        $this->assertRejected(fn () => DB::table('roles')->insert(['id' => (string) Str::uuid7(), 'key' => 'x_'.Str::random(6), 'name' => 'X', 'scope' => 'trust', 'is_system' => false]), 'roles_scope_check');
+        $this->assertRejected(fn () => LocalCatalogueFixtures::asOwner(fn () => DB::table('roles')->insert(['id' => (string) Str::uuid7(), 'key' => 'x_'.Str::random(6), 'name' => 'X', 'scope' => 'trust', 'is_system' => false])), 'roles_scope_check');
 
-        $this->assertRejected(fn () => DB::table('capabilities')->insert(['key' => 'group.bogus.x', 'label' => 'X', 'namespace' => 'school']), 'capabilities_group_namespace_check');
-        $this->assertRejected(fn () => DB::table('capabilities')->insert(['key' => 'students.bogus', 'label' => 'X', 'namespace' => 'group']), 'capabilities_group_namespace_check');
+        $this->assertRejected(fn () => LocalCatalogueFixtures::asOwner(fn () => DB::table('capabilities')->insert(['key' => 'group.bogus.x', 'label' => 'X', 'namespace' => 'school'])), 'capabilities_group_namespace_check');
+        $this->assertRejected(fn () => LocalCatalogueFixtures::asOwner(fn () => DB::table('capabilities')->insert(['key' => 'students.bogus', 'label' => 'X', 'namespace' => 'group'])), 'capabilities_group_namespace_check');
 
         $groupAdmin = Role::query()->where('key', 'group_admin')->value('id');
         $schoolAdmin = Role::query()->where('key', 'school_admin')->value('id');
         $platform = Role::query()->where('key', 'platform_super_admin')->value('id');
 
         foreach ([[$groupAdmin, 'students.view'], [$groupAdmin, 'platform.schools.view'], [$schoolAdmin, 'group.schools.view'], [$platform, 'group.schools.elevate']] as [$role, $capability]) {
-            $this->assertRejected(fn () => DB::table('role_capabilities')->insert(['role_id' => $role, 'capability_key' => $capability]), 'scopes never mix');
+            $this->assertRejected(fn () => LocalCatalogueFixtures::asOwner(fn () => DB::table('role_capabilities')->insert(['role_id' => $role, 'capability_key' => $capability])), 'scopes never mix');
         }
 
         $this->assertSame(['group.reporting.view', 'group.schools.elevate', 'group.schools.view'], DB::table('role_capabilities')->where('role_id', $groupAdmin)->orderBy('capability_key')->pluck('capability_key')->all());

@@ -337,6 +337,8 @@ class DatabaseRoleVerifier
         );
         $results[] = CheckResult::of('platform_root_boundary', $boundary !== null && $boundary->enabled && $boundary->owner_check);
 
+        $results = [...$results, ...$this->roleCatalogueChecks($role)];
+
         $functions = DB::select(
             "select p.proname, p.prosecdef, coalesce(array_to_string(p.proconfig, ','), '') as config, p.prosrc as src,
                     pg_get_userbyid(p.proowner) as owner, has_function_privilege(?, p.oid, 'EXECUTE') as runtime_exec,
@@ -373,6 +375,55 @@ class DatabaseRoleVerifier
         $narrowFinance = array_filter($finance, fn ($f) => in_array($f->proname, self::FINANCE_FUNCTIONS, true)
             && str_contains($f->config, 'search_path=') && $f->owner !== $role && $f->runtime_exec && ! $f->public_exec);
         $results[] = CheckResult::of('finance_period_functions_narrow', count($narrowFinance) === count(self::FINANCE_FUNCTIONS) && count($finance) === count(self::FINANCE_FUNCTIONS));
+
+        return $results;
+    }
+
+    /**
+     * SR.1 (ADR 0071 §11): the staff role catalogue's database foundation --
+     * the runtime role cannot write the catalogue, a role cannot be deleted
+     * out from under its grant history, role identity is immutable, the
+     * retirement and grant-right columns exist, every new School-role grant
+     * passes the grantor-coverage trigger (with its administrative-boundary
+     * check), and the local/testing fixture seam exists only where it may.
+     *
+     * @return list<CheckResult>
+     */
+    private function roleCatalogueChecks(string $runtime): array
+    {
+        $writable = [];
+        foreach (['roles', 'role_capabilities', 'capabilities'] as $table) {
+            foreach (['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE'] as $privilege) {
+                if (DB::selectOne('select has_table_privilege(?, ?, ?) as p', [$runtime, $table, $privilege])->p) {
+                    $writable[] = "{$table}:{$privilege}";
+                }
+            }
+        }
+        $results = [CheckResult::of('role_catalogue_runtime_read_only', $writable === [], $writable === [] ? '' : count($writable).' grant(s)')];
+
+        $fk = DB::selectOne("select confdeltype from pg_constraint where conname = 'membership_role_assignments_role_id_foreign'");
+        $results[] = CheckResult::of('role_grant_history_restricted', $fk !== null && in_array($fk->confdeltype, ['r', 'a'], true));
+
+        $triggers = DB::select(
+            "select t.tgname, t.tgenabled = 'O' as enabled, p.prosrc as src from pg_trigger t join pg_proc p on p.oid = t.tgfoid
+             where t.tgname in ('trg_roles_identity', 'trg_membership_role_assignments_grantor', 'trg_capabilities_grant_right')",
+        );
+        $byName = collect($triggers)->keyBy('tgname');
+        $identity = $byName->get('trg_roles_identity');
+        $grantor = $byName->get('trg_membership_role_assignments_grantor');
+        $results[] = CheckResult::of('role_identity_immutable', $identity !== null && $identity->enabled && str_contains($identity->src, 'NEW.key IS DISTINCT FROM OLD.key'));
+        $results[] = CheckResult::of('role_grantor_coverage_enforced', $grantor !== null && $grantor->enabled
+            && str_contains($grantor->src, 'pg_has_role') && str_contains($grantor->src, 'retired_at') && str_contains($grantor->src, 'grant_right')
+            && $byName->has('trg_capabilities_grant_right'));
+
+        $columns = DB::selectOne(
+            "select exists (select 1 from information_schema.columns where table_name = 'roles' and column_name = 'retired_at') as retired,
+                    exists (select 1 from information_schema.columns where table_name = 'capabilities' and column_name = 'grant_right') as grant_right",
+        );
+        $results[] = CheckResult::of('role_lifecycle_columns', (bool) $columns->retired && (bool) $columns->grant_right);
+
+        $seam = (bool) DB::selectOne("select exists (select 1 from pg_namespace where nspname = 'local_fixtures') as present")->present;
+        $results[] = CheckResult::of('local_fixture_seam_absent_outside_development', ! $seam || app()->environment(['local', 'testing']));
 
         return $results;
     }

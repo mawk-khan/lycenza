@@ -9,6 +9,7 @@ use App\Models\Role;
 use App\Models\SchoolMembership;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -56,10 +57,10 @@ class HrCapabilityCacheHardeningTest extends TestCase
         $membershipA = $this->createMembership($user, $schoolA);
         $this->createMembership($user, $schoolB);
 
-        $role = Role::query()->create([
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create([
             'key' => 'test.hr_view.'.Str::uuid(), 'name' => 'Test HR View', 'scope' => 'school', 'is_system' => false,
-        ]);
-        $role->capabilities()->sync(['hr.employees.view']);
+        ]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['hr.employees.view']));
         $this->assignSchoolRole($membershipA, $role->key);
 
         $resolver = app(CapabilityResolver::class);
@@ -74,10 +75,10 @@ class HrCapabilityCacheHardeningTest extends TestCase
         $school = $this->createSchool();
         $user = $this->createUser();
         $membership = $this->createMembership($user, $school);
-        $role = Role::query()->create([
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create([
             'key' => 'test.hr_view.'.Str::uuid(), 'name' => 'Test HR View', 'scope' => 'school', 'is_system' => false,
-        ]);
-        $role->capabilities()->sync(['hr.employees.view']);
+        ]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['hr.employees.view']));
         $this->assignSchoolRole($membership, $role->key);
 
         $resolver = app(CapabilityResolver::class);
@@ -176,10 +177,10 @@ class HrCapabilityCacheHardeningTest extends TestCase
 
         $this->assertFalse($resolver->canInSchool($actor, 'hr.employees.view', $school));
 
-        $role = Role::query()->create([
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create([
             'key' => 'test.hr_view.'.Str::uuid(), 'name' => 'Test HR View', 'scope' => 'school', 'is_system' => false,
-        ]);
-        $role->capabilities()->sync(['hr.employees.view']);
+        ]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['hr.employees.view']));
         $this->assignSchoolRole($membership, $role->key);
         $resolver->forgetCache($actor, $school);
 

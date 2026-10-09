@@ -8,6 +8,7 @@ use App\Models\Role;
 use App\Models\SchoolMembership;
 use App\Models\User;
 use App\Support\Tenancy\TenantRls;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -237,8 +238,8 @@ class MyLeaveTest extends TestCase
     /** @param  list<string>  $capabilities */
     private function grant(array $w, User $user, array $capabilities): User
     {
-        $role = Role::query()->create(['key' => 'test.'.Str::random(8), 'name' => 'Test', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync($capabilities);
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test.'.Str::random(8), 'name' => 'Test', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync($capabilities));
         $membership = SchoolMembership::query()->where('school_id', $w['school']->id)->where('user_id', $user->id)->firstOrFail();
         $this->assignSchoolRole($membership, $role->key);
 

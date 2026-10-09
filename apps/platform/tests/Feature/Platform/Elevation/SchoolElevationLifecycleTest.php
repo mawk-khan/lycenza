@@ -10,6 +10,7 @@ use App\Support\Auth\Mfa\MfaAdminResetService;
 use App\Support\Auth\Mfa\MfaFactorService;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\ElevationContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -343,10 +344,11 @@ class SchoolElevationLifecycleTest extends TestCase
 
     private function removeElevateCapabilityFromRoot(): void
     {
-        DB::table('role_capabilities')
-            ->where('role_id', DB::table('roles')->where('key', 'platform_super_admin')->value('id'))
+        $root = DB::table('roles')->where('key', 'platform_super_admin')->value('id');
+        LocalCatalogueFixtures::asOwner(fn () => DB::table('role_capabilities')
+            ->where('role_id', $root)
             ->where('capability_key', 'platform.schools.elevate')
-            ->delete();
+            ->delete());
     }
 
     private function assertTerminated(SchoolElevation $elevation, string $reason): void

@@ -8,6 +8,7 @@ use App\Models\PlatformAuditEvent;
 use App\Models\SchoolGroup;
 use App\Models\SchoolMembership;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -255,7 +256,7 @@ class SchoolGroupGovernanceTest extends TestCase
         );
 
         // A viewer without grant management sees no grant list.
-        DB::table('role_capabilities')->where('capability_key', 'platform.school_group_grants.manage')->delete();
+        LocalCatalogueFixtures::asOwner(fn () => DB::table('role_capabilities')->where('capability_key', 'platform.school_group_grants.manage')->delete());
         app(CapabilityResolver::class)->forgetCache($admin);
         $this->get("/app/platform/groups/{$group->id}")->assertInertia(fn (AssertableInertia $p) => $p->where('grants', null));
 

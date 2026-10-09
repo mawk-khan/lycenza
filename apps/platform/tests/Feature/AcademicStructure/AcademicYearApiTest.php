@@ -4,6 +4,7 @@ namespace Tests\Feature\AcademicStructure;
 
 use App\Models\Role;
 use App\Models\SchoolMembership;
+use App\Support\Testing\LocalCatalogueFixtures;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
@@ -32,8 +33,9 @@ class AcademicYearApiTest extends TestCase
     #[Test]
     public function a_member_without_the_view_capability_is_denied(): void
     {
-        $role = Role::query()->create(['key' => 'no-academics-'.uniqid(), 'name' => 'No Academics', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync([]);
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'no-academics-'.uniqid(), 'name' => 'No Academics', 'scope' => 'school', 'is_system' => false]));
+        // SR.1: an empty role is never grantable -- a role holding only an unrelated capability.
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['students.view']));
 
         $school = $this->createSchool();
         $user = $this->createUser();
@@ -48,8 +50,8 @@ class AcademicYearApiTest extends TestCase
     #[Test]
     public function the_view_capability_alone_allows_reads_but_not_writes(): void
     {
-        $role = Role::query()->create(['key' => 'academics-viewer-'.uniqid(), 'name' => 'Academics Viewer', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync(['academics.years.view']);
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'academics-viewer-'.uniqid(), 'name' => 'Academics Viewer', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['academics.years.view']));
 
         $school = $this->createSchool();
         $user = $this->createUser();

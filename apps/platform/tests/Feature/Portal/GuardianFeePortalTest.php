@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Portal\PortalUnavailableException;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -213,7 +214,7 @@ class GuardianFeePortalTest extends TestCase
 
         // Without the fees capability on the Guardian role: refused.
         session(['mfa_verified_at' => now()->toIso8601String()]);
-        DB::table('role_capabilities')->where('role_id', Role::query()->where('key', Role::GUARDIAN)->value('id'))->where('capability_key', 'portal.fees.view')->delete();
+        LocalCatalogueFixtures::removeRoleCapability(Role::query()->where('key', Role::GUARDIAN)->firstOrFail(), 'portal.fees.view');
         app(CapabilityResolver::class)->forgetCache($w['g']['user'], $w['school']);
         $this->get($url)->assertForbidden();
     }
@@ -301,7 +302,7 @@ class GuardianFeePortalTest extends TestCase
     {
         $w = $this->world();
         $guardian = app(ActingGuardianResolver::class)->require($w['g']['user'], $w['school']);
-        DB::table('role_capabilities')->where('role_id', Role::query()->where('key', Role::GUARDIAN)->value('id'))->where('capability_key', 'portal.fees.view')->delete();
+        LocalCatalogueFixtures::removeRoleCapability(Role::query()->where('key', Role::GUARDIAN)->firstOrFail(), 'portal.fees.view');
         app(CapabilityResolver::class)->forgetCache($w['g']['user'], $w['school']);
 
         $this->assertThrows(fn () => app(GuardianFeeReadService::class)->statement($w['school'], $guardian, $w['g']['user'], $w['a']->id), GuardianPortalAccessDeniedException::class);

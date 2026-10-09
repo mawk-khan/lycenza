@@ -4,6 +4,7 @@ namespace Tests;
 
 use App\Models\School;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -61,6 +62,18 @@ abstract class TestCase extends BaseTestCase
 
     /** @var array<string, mixed>|null the two connections' configuration as the test began (verified by TestDatabaseGuard at boot) */
     private ?array $bootConnections = null;
+
+    /**
+     * SR.1 (ADR 0071 §11): the local/testing catalogue fixture seam is
+     * installed once per process, through the verified admin connection,
+     * before the test's transaction opens.
+     */
+    protected function setUpTraits()
+    {
+        LocalCatalogueFixtures::install();
+
+        return parent::setUpTraits();
+    }
 
     protected function setUp(): void
     {

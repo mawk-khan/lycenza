@@ -9,6 +9,7 @@ use App\Domain\Documents\Infrastructure\Document;
 use App\Models\Role;
 use App\Models\SchoolMembership;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -187,13 +188,13 @@ class DocumentHttpRateLimitTest extends TestCase
         $this->createMembership($user, $schoolB);
 
         foreach ([$schoolA, $schoolB] as $school) {
-            $role = Role::query()->create([
+            $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create([
                 'key' => 'test.documents_view.'.Str::uuid(),
                 'name' => 'Test Documents View',
                 'scope' => 'school',
                 'is_system' => false,
-            ]);
-            $role->capabilities()->sync(['hr.employees.documents.view']);
+            ]));
+            LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['hr.employees.documents.view']));
             $membership = SchoolMembership::query()->where('user_id', $user->id)->where('school_id', $school->id)->first();
             $this->assignSchoolRole($membership, $role->key);
         }

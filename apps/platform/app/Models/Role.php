@@ -37,7 +37,8 @@ class Role extends Model
         // runtime_assignable (Phase 0N.7, ADR 0046): set only from the code
         // catalog; database-guarded (system platform roles only, never the
         // root role, never with a root-reserved capability).
-        return ['is_system' => 'boolean', 'runtime_assignable' => 'boolean'];
+        // retired_at (SR.1, ADR 0071 §11.4): written only by a reviewed migration.
+        return ['is_system' => 'boolean', 'runtime_assignable' => 'boolean', 'retired_at' => 'datetime'];
     }
 
     /** @return BelongsToMany<Capability, $this> */

@@ -96,13 +96,13 @@ class PayrollIdempotencyRealConcurrencyTest extends TestCase
 
         // The ad hoc roles are a GLOBAL catalog table, not School-owned
         // -- School::delete()'s cascade never reaches them. Deleting
-        // Role rows cascades to role_capabilities (and to any surviving
-        // membership_role_assignments row) via their own FKs, so this
-        // is safe regardless of whether the School delete above
-        // succeeded.
+        // Role rows cascades to role_capabilities. SR.1 (ADR 0071): it runs
+        // on the admin role (the runtime role cannot write the catalogue), and
+        // a role with surviving grant history is now RESTRICTed -- the School
+        // delete above removes those grants first.
         if ($this->adHocRoleIds !== []) {
             try {
-                Role::query()->whereIn('id', $this->adHocRoleIds)->delete();
+                Role::on('pgsql_admin')->whereIn('id', $this->adHocRoleIds)->delete();
             } catch (\Throwable) {
                 // Best-effort, same rationale as above.
             }

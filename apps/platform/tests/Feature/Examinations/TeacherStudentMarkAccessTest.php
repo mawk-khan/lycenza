@@ -19,6 +19,7 @@ use App\Domain\Students\Application\StudentEnrollmentService;
 use App\Domain\TeachingAssignments\Application\TeachingAssignmentService;
 use App\Models\Role;
 use App\Models\SchoolAuditEvent;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
@@ -212,8 +213,8 @@ class TeacherStudentMarkAccessTest extends TestCase
         $this->assertThrows(fn () => $this->teacherRecord($w, $unlinked, [$this->entry($student, 'present', '1')]), ActingEmployeeUnavailableException::class);
 
         // Ownership without the capability: a role carrying only teacher Attendance is refused marks.
-        $role = Role::query()->create(['key' => 'test.attendance_only.'.Str::uuid(), 'name' => 'Attendance only', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync(['attendance.teacher']);
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test.attendance_only.'.Str::uuid(), 'name' => 'Attendance only', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['attendance.teacher']));
         [$attendanceOnly, $attendanceEmployee] = $this->markTeacher($w, roleKey: $role->key);
         $this->ownSection($w, $attendanceEmployee, 'a1');
         $this->assertThrows(fn () => $this->teacherRead($w, $attendanceOnly), AuthorizationException::class);
@@ -319,13 +320,15 @@ class TeacherStudentMarkAccessTest extends TestCase
         $student = $this->markStudent($w, 'a1');
         $this->teacherRecord($w, $teacher, [$this->entry($student, 'present', '10')]);
 
+        // An accidental grant to an administrative role changes nothing: the block is not a capability.
+        // (Fixtures are written before the environment switch: the SR.1 fixture seam is local/testing only.)
+        $admin = $this->createUserWithCapabilities($w['school'], ['examinations.marks.teacher', 'examinations.marks.manage']);
+
         foreach (['production', 'staging'] as $environment) {
             $this->app['env'] = $environment;
             $this->assertThrows(fn () => $this->teacherRead($w, $teacher), TeacherStudentMarksUnavailableException::class);
             $this->assertThrows(fn () => $this->teacherRecord($w, $teacher, [$this->entry($student, 'present', '11', 1)]), TeacherStudentMarksUnavailableException::class);
 
-            // An accidental grant to an administrative role changes nothing: the block is not a capability.
-            $admin = $this->createUserWithCapabilities($w['school'], ['examinations.marks.teacher', 'examinations.marks.manage']);
             $this->assertThrows(fn () => $this->teacherRead($w, $admin), TeacherStudentMarksUnavailableException::class);
         }
         $this->app['env'] = 'testing';

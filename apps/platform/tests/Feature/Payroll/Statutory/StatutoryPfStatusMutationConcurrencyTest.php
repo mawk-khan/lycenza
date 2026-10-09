@@ -66,7 +66,8 @@ class StatutoryPfStatusMutationConcurrencyTest extends TestCase
         // table (PayrollCapabilityRegistryTest's "nobody by default"
         // scan would otherwise see it forever after).
         if ($this->startedAt !== null) {
-            Role::query()->where('key', 'like', 'test.capability_grant.%')->where('created_at', '>=', $this->startedAt)->delete();
+            // SR.1: the runtime role cannot write the catalogue; the admin role removes the fixture role.
+            Role::on('pgsql_admin')->where('key', 'like', 'test.capability_grant.%')->where('created_at', '>=', $this->startedAt)->delete();
         }
 
         parent::tearDown();

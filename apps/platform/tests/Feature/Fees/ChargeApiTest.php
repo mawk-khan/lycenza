@@ -3,6 +3,7 @@
 namespace Tests\Feature\Fees;
 
 use App\Models\Role;
+use App\Support\Testing\LocalCatalogueFixtures;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesFeesFixtures;
 use Tests\Concerns\CreatesFinanceFixtures;
@@ -28,8 +29,8 @@ class ChargeApiTest extends TestCase
 
     private function viewerRole(array $capabilities): Role
     {
-        $role = Role::query()->create(['key' => 'charges-viewer-'.uniqid(), 'name' => 'Charges Viewer', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync($capabilities);
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'charges-viewer-'.uniqid(), 'name' => 'Charges Viewer', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync($capabilities));
 
         return $role;
     }

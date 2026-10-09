@@ -1,7 +1,8 @@
 # ADR 0071: Staff Role Catalogue & Least-Privilege Access Contract (SR.0)
 
-- Status: **Accepted — SR.0 contract (2026-10-09), documentation only.**
-  Nothing is implemented. SR.1 needs separate owner authorisation.
+- Status: **Accepted — SR.0 contract (2026-10-09). SR.1 CATALOGUE DATABASE
+  HARDENING BUILT (2026-10-09, §23).** SR.2 needs separate owner
+  authorisation.
 - Date: 2026-10-09
 - Programme: **SR — Staff Role Catalogue & Least-Privilege Access**
   (`MASTER-ROADMAP.md`, post-foundation programme 7).
@@ -658,6 +659,144 @@ is kept.
   plus an explicit grant right suffices; domain maker/checker stays.
 - **A new authorization scope for operational staff:** rejected. Operational
   staff are School staff; the four scopes are sufficient.
+
+## 23. SR.1 — catalogue database hardening, as built (2026-10-09)
+
+### 23.1 Migration `2026_12_14_090000_harden_staff_role_catalogue`
+| Change | As built |
+|---|---|
+| Runtime catalogue writes | `REVOKE INSERT, UPDATE, DELETE, TRUNCATE` on `roles`, `role_capabilities`, `capabilities` from `school_os_app` (SELECT kept) |
+| Grant history | `membership_role_assignments_role_id_foreign` is now `ON DELETE RESTRICT` (was CASCADE). The other references to `roles` (`platform_role_assignments`, `group_role_assignments`, `staff_account_invitation_roles`) were already RESTRICT; `role_capabilities` stays CASCADE (a definition, not history; deleting a role with history is refused anyway) |
+| Identity | `trg_roles_identity`: `key`, `scope` **and `is_system`** never change. `is_system` is included because flipping it would move a row into or out of the staff catalogue. Retirement is one-way. Display `name` stays mutable (administrative role only) |
+| Retirement | `roles.retired_at`. A retired role receives no new grant (any scope, any writer); active grants stay active and keep authorizing until revoked (§11.4: retirement stops NEW grants only) |
+| Grant-right metadata | `capabilities.grant_right` (nullable self-FK, RESTRICT; CHECK not self); `trg_capabilities_grant_right` refuses chains (a grant right is never itself covered). **No grant-right capability exists yet:** SR.2 creates `school.roles.grant.*` |
+| Grantor coverage | `trg_membership_role_assignments_grantor` (BEFORE INSERT), below |
+
+### 23.2 The grantor-coverage trigger
+**Every new grant:** the role must not be retired and must hold at least
+one capability.
+
+**For a `school`-scope role written by the runtime role:**
+- `assigned_by_user_id` is required;
+- the assigner must be an enabled User, not the grantee, with an ACTIVE
+  membership in the **same** School, holding **`school.roles.manage`** (held,
+  never covered);
+- every capability of the role must be held through the assigner's
+  active `school`-scope grants, or covered by a held grant right;
+- `guardian`-scope grants never count toward this authority.
+
+**Locking:** the assigner's membership and active grants are read FOR SHARE.
+
+**Exceptions, both narrow:**
+- (a) the administrative boundary (`pg_has_role(current_user, owner)`, the
+  0O.1A pattern);
+- (b) the ADR 0047 bootstrap: `school_admin` on a `provisioning` School,
+  assigned by an enabled User holding `platform.schools.manage` through an
+  active platform grant.
+
+**Other scopes:** Guardian-scope grants keep their link rule; other scopes
+are refused by the scope trigger, which still runs.
+
+| Case | Result |
+|---|---|
+| School Admin grants `teacher` in their School | allowed |
+| Assigner lacks a capability of the role (no covering grant right) | refused: "does not hold or cover every capability" |
+| Assigner covers the role but lacks `school.roles.manage` | refused |
+| Assigner is a School Admin of another School | refused: "no active membership in this School" |
+| Assigner's membership suspended, user disabled, or grant revoked | refused |
+| Assigner's only grant is the Guardian role | refused: no `school.roles.manage` |
+| Grant to oneself | refused |
+| Target role retired | refused: "is retired" |
+| Target role has no capability | refused: "has no capabilities" |
+| Platform root grants `school_admin`, School `provisioning` | allowed (bootstrap) |
+| Platform root grants `principal`, School `provisioning` | refused (no exception; normal path fails) |
+| Platform root grants `school_admin`, School `active` | refused |
+| Platform auditor or other non-School user grants `school_admin`, School `provisioning` | refused |
+| `assigned_by_user_id` NULL from the runtime role | refused: "must name its assigning user" |
+| Written below the administrative boundary | allowed (retired and empty still refused) |
+
+**Honest limit:** the database checks the authority of the **recorded**
+assigner. It cannot authenticate who that is: there is no per-person
+database identity, and every request uses `school_os_app`. A
+compromised application can therefore still forge an assigner that does
+hold the authority. The rule stops a bug, a raw script or a misrouted call
+from writing a grant beyond the recorded assigner's authority, and the
+recorded assigner stays accountable in the immutable history and audit.
+The bootstrap exception has the same property: it runs on the runtime
+role, as every platform request does, but only for `school_admin`, only on
+a `provisioning` School, and only for an assigner holding
+`platform.schools.manage`. School authority can never satisfy it, since
+School roles can never hold platform capabilities (rule 25).
+
+### 23.3 Race safety
+- **The race:** a grant racing the revocation (or suspension) of its
+  assigner's authority.
+- **Resolution:** the assigner's grants and membership are locked FOR
+  SHARE, so the revocation either commits first (the grant re-reads under
+  the lock and is refused) or waits for the grant to commit.
+- **Proof:** two real OS processes with an observed lock wait, both orders
+  (`StaffRoleGrantorRaceTest`).
+- **Lock order:** the trigger locks only the **assigner's** rows, after
+  the application has locked the target's. Every staff-access path takes the
+  School access lock first, and invitation acceptance, which does not yet
+  take it (SR.2), locks membership then grants in the same order. No cycle
+  arises.
+- **Left for SR.2:** the application's pre-transaction `grantable()`
+  window and the invitation locking. The database is the backstop meanwhile.
+
+### 23.4 Catalogue and seeding
+- **Staff catalogue filter:** `StaffRoleCatalog` now offers only
+  `scope = 'school'`, `is_system`, non-retired roles with ≥ 1 capability.
+  Production is unchanged: the same four roles.
+- **Seeding:** `CapabilityAndRoleSeeder` writes through `pgsql_admin`
+  (`CATALOGUE_CONNECTION`). CI's seed step carries the admin credentials;
+  deployment seeding needs the admin connection, exactly as migrations do
+  (ADR 0021).
+
+### 23.5 The local/testing fixture seam
+`App\Support\Testing\LocalCatalogueFixtures` handles fixture roles and
+grantor-less fixture grants inside the caller's transaction.
+- **Mechanism:** an owner-privileged `local_fixtures.exec` function replays
+  only role-catalogue and role-grant writes, captured in pretend mode.
+- **Where it can be installed:**
+  - only in a local or testing environment (refused in code);
+  - only through the verified admin connection, by `TestCase` once per
+    process and by `ddev demo-reset` (`platform:install-local-fixtures`).
+- **Guards:**
+  - `platform:verify-database` FAILS if the `local_fixtures` schema exists
+    anywhere else;
+  - an architecture guard registers it as a sanctioned grant writer.
+- **What used it:** the central test helpers (`assignSchoolRole`,
+  `createUserWithCapabilities`), 68 adapted test files, the
+  database-invariant probes (now run as owner, so the constraint under test
+  still fires), and the guarded demo builder.
+- **Changed fixture:** one test that granted a zero-capability role now
+  uses a plain member, since empty roles are not grantable.
+
+### 23.6 Verification tooling
+`DatabaseRoleVerifier` adds these checks:
+- `role_catalogue_runtime_read_only`;
+- `role_grant_history_restricted`;
+- `role_identity_immutable`;
+- `role_grantor_coverage_enforced`;
+- `role_lifecycle_columns`;
+- `local_fixture_seam_absent_outside_development`.
+
+### 23.7 Rollback
+- `down()` refuses while any role is retired or any grant right is mapped.
+- Otherwise it restores the exact previous state: privileges, CASCADE,
+  triggers and columns. That makes a rollback a true inverse, following the
+  history-guard migration's convention; documented, since the inverse
+  reinstates the pre-SR.1 weaknesses.
+- Rollback and re-apply proved IDENTICAL.
+
+### 23.8 Not in SR.1
+- the thirteen roles (SR.3);
+- the `school.roles.grant.*` capabilities and the application class-grant
+  rule, in-transaction re-check, revoke rule, invitation locking and
+  `role_grant_refused` audit (SR.2);
+- demo persona transition (SR.3);
+- the EmploymentRecord gap stays open until SR.3–SR.4.
 
 ## Appendix A — capability-class map (v1, all 174 `school` capabilities)
 Grant-right coverage appears only where `school_admin` does not hold the key

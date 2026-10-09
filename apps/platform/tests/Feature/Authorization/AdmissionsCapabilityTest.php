@@ -7,6 +7,7 @@ use App\Models\MembershipRoleAssignment;
 use App\Models\Role;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Support\Facades\Gate;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -113,13 +114,13 @@ class AdmissionsCapabilityTest extends TestCase
         $user = $this->createUser();
         $school = $this->createSchool();
         $membership = $this->createMembership($user, $school);
-        $customRole = Role::query()->create(['key' => 'test_admissions_officer', 'name' => 'Test Admissions Officer', 'scope' => 'school', 'is_system' => false]);
-        $customRole->capabilities()->sync(['admissions.manage']);
-        app(TenantContext::class)->withSchool($school, fn () => MembershipRoleAssignment::query()->create([
+        $customRole = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test_admissions_officer', 'name' => 'Test Admissions Officer', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $customRole->capabilities()->sync(['admissions.manage']));
+        app(TenantContext::class)->withSchool($school, fn () => LocalCatalogueFixtures::asOwner(fn () => MembershipRoleAssignment::query()->create([
             'school_id' => $school->id,
             'school_membership_id' => $membership->id,
             'role_id' => $customRole->id,
-        ]));
+        ])));
 
         $this->assertTrue(Gate::forUser($user)->allows('capability', ['admissions.manage', $school]));
         $this->assertFalse(Gate::forUser($user)->allows('capability', ['admissions.view', $school]));

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Payments;
 
 use App\Models\Role;
+use App\Support\Testing\LocalCatalogueFixtures;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesFeesFixtures;
 use Tests\Concerns\CreatesFinanceFixtures;
@@ -36,8 +37,9 @@ class PaymentApiTest extends TestCase
     #[Test]
     public function a_member_without_finance_payments_view_is_denied(): void
     {
-        $role = Role::query()->create(['key' => 'no-payments-'.uniqid(), 'name' => 'No Payments', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync([]);
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'no-payments-'.uniqid(), 'name' => 'No Payments', 'scope' => 'school', 'is_system' => false]));
+        // SR.1: an empty role is never grantable -- a role holding only an unrelated capability.
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['students.view']));
         $school = $this->createSchool();
         $user = $this->createUser();
         $membership = $this->createMembership($user, $school);

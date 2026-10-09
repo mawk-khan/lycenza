@@ -8,6 +8,7 @@ use App\Models\Role;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
@@ -66,11 +67,11 @@ class StudentAdminUiTest extends TestCase
         $school = $this->createSchool();
         $viewer = $this->createUser();
         $membership = $this->createMembership($viewer, $school);
-        $role = Role::query()->create(['key' => 'test_students_viewer_ui', 'name' => 'Test', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync(['students.view']);
-        app(TenantContext::class)->withSchool($school, fn () => MembershipRoleAssignment::query()->create([
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test_students_viewer_ui', 'name' => 'Test', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['students.view']));
+        app(TenantContext::class)->withSchool($school, fn () => LocalCatalogueFixtures::asOwner(fn () => MembershipRoleAssignment::query()->create([
             'school_id' => $school->id, 'school_membership_id' => $membership->id, 'role_id' => $role->id,
-        ]));
+        ])));
         $this->activate($viewer, $school);
 
         $this->get('/app/students')->assertInertia(fn ($page) => $page
@@ -236,11 +237,11 @@ class StudentAdminUiTest extends TestCase
         $user = $this->createUser();
         $school = $this->createSchool();
         $membership = $this->createMembership($user, $school);
-        $role = Role::query()->create(['key' => 'test_students_viewer_edit', 'name' => 'Test', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync(['students.view']);
-        app(TenantContext::class)->withSchool($school, fn () => MembershipRoleAssignment::query()->create([
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test_students_viewer_edit', 'name' => 'Test', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['students.view']));
+        app(TenantContext::class)->withSchool($school, fn () => LocalCatalogueFixtures::asOwner(fn () => MembershipRoleAssignment::query()->create([
             'school_id' => $school->id, 'school_membership_id' => $membership->id, 'role_id' => $role->id,
-        ]));
+        ])));
         $this->activate($user, $school);
         $student = $this->createStudent($school, ['student_number' => 'S-1001']);
 

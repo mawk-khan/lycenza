@@ -9,6 +9,7 @@ use App\Domain\LMS\Infrastructure\LearningContent;
 use App\Models\Role;
 use App\Models\SchoolAuditEvent;
 use App\Models\User;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
@@ -297,8 +298,8 @@ class TeacherLearningContentAccessTest extends TestCase
         $this->as($noCapability, $w)->getJson($this->my($w))->assertForbidden();
 
         // Any role carrying the capability satisfies the same formula.
-        $role = Role::query()->create(['key' => 'test.content_lead.'.Str::uuid(), 'name' => 'Content lead', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync(['lms.content.teacher']);
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test.content_lead.'.Str::uuid(), 'name' => 'Content lead', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['lms.content.teacher']));
         [$custom] = $this->contentTeacher($w, roleKey: $role->key);
         $this->create($w, $custom, ['sectionA'])->assertCreated();
     }

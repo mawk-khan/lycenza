@@ -7,6 +7,7 @@ use App\Models\MembershipRoleAssignment;
 use App\Models\Role;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Support\Facades\Gate;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -72,13 +73,13 @@ class EnrollmentCapabilityTest extends TestCase
         $user = $this->createUser();
         $school = $this->createSchool();
         $membership = $this->createMembership($user, $school);
-        $viewOnlyRole = Role::query()->create(['key' => 'test_enrollment_viewer', 'name' => 'Test Enrollment Viewer', 'scope' => 'school', 'is_system' => false]);
-        $viewOnlyRole->capabilities()->sync(['enrollments.view']);
-        app(TenantContext::class)->withSchool($school, fn () => MembershipRoleAssignment::query()->create([
+        $viewOnlyRole = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test_enrollment_viewer', 'name' => 'Test Enrollment Viewer', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $viewOnlyRole->capabilities()->sync(['enrollments.view']));
+        app(TenantContext::class)->withSchool($school, fn () => LocalCatalogueFixtures::asOwner(fn () => MembershipRoleAssignment::query()->create([
             'school_id' => $school->id,
             'school_membership_id' => $membership->id,
             'role_id' => $viewOnlyRole->id,
-        ]));
+        ])));
 
         $this->assertTrue(Gate::forUser($user)->allows('capability', ['enrollments.view', $school]));
         $this->assertFalse(Gate::forUser($user)->allows('capability', ['enrollments.manage', $school]));
@@ -90,13 +91,13 @@ class EnrollmentCapabilityTest extends TestCase
         $user = $this->createUser();
         $school = $this->createSchool();
         $membership = $this->createMembership($user, $school);
-        $manageOnlyRole = Role::query()->create(['key' => 'test_enrollment_manager', 'name' => 'Test Enrollment Manager', 'scope' => 'school', 'is_system' => false]);
-        $manageOnlyRole->capabilities()->sync(['enrollments.manage']);
-        app(TenantContext::class)->withSchool($school, fn () => MembershipRoleAssignment::query()->create([
+        $manageOnlyRole = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test_enrollment_manager', 'name' => 'Test Enrollment Manager', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $manageOnlyRole->capabilities()->sync(['enrollments.manage']));
+        app(TenantContext::class)->withSchool($school, fn () => LocalCatalogueFixtures::asOwner(fn () => MembershipRoleAssignment::query()->create([
             'school_id' => $school->id,
             'school_membership_id' => $membership->id,
             'role_id' => $manageOnlyRole->id,
-        ]));
+        ])));
 
         $this->assertTrue(Gate::forUser($user)->allows('capability', ['enrollments.manage', $school]));
         $this->assertFalse(Gate::forUser($user)->allows('capability', ['enrollments.view', $school]));

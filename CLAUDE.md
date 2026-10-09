@@ -1083,3 +1083,20 @@ Prefer the option documented in an existing ADR
 covers the situation, raise it rather than guessing — this codebase is
 still small enough that a wrong early pattern is expensive to unwind
 once several modules copy it.
+
+93. **The role catalogue is read-only at runtime and grant history is
+    permanent (ADR 0071, SR.1).** `school_os_app` cannot write `roles`,
+    `role_capabilities` or `capabilities`; the catalogue is written only by
+    migrations and `CapabilityAndRoleSeeder` through `pgsql_admin`. Roles
+    are retired (`retired_at`, one-way), never deleted
+    (`membership_role_assignments.role_id` is RESTRICT), and `key`, `scope`
+    and `is_system` never change. Every runtime School-role grant names an
+    assigning User who, in the SAME School, holds `school.roles.manage` and
+    covers every capability of the role (held, or through a held
+    `capabilities.grant_right`); `trg_membership_role_assignments_grantor`
+    enforces it, with only the administrative boundary and the ADR 0047
+    `provisioning` bootstrap as exceptions. A retired or empty role is never
+    granted. Test fixtures and the guarded demo write roles and grantor-less
+    grants only through `App\Support\Testing\LocalCatalogueFixtures`
+    (local/testing only; `platform:verify-database` fails if its schema
+    exists elsewhere) -- never by re-granting the runtime role privileges.

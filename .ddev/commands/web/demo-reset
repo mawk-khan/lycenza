@@ -113,6 +113,10 @@ SQL
 echo "demo-reset: migrating (pgsql_admin)"
 php artisan migrate --database=pgsql_admin --force --no-interaction
 
+# SR.1 (ADR 0071 §11): the demo's non-system roles and grantor-less grants go
+# through the local/testing catalogue fixture seam (refused outside local).
+php artisan platform:install-local-fixtures --no-interaction
+
 # Flush this project's private DDEV Redis (no host port, unreachable from
 # anything else) BEFORE seeding: stale sessions/caches/queued jobs from a
 # previous dataset would otherwise point at rows that no longer exist.

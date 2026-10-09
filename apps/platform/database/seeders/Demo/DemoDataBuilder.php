@@ -36,7 +36,6 @@ use App\Domain\Students\Infrastructure\Student;
 use App\Models\Campus;
 use App\Models\FeatureFlagSchoolOverride;
 use App\Models\GroupRoleAssignment;
-use App\Models\MembershipRoleAssignment;
 use App\Models\PlatformRoleAssignment;
 use App\Models\Role;
 use App\Models\School;
@@ -45,6 +44,7 @@ use App\Models\SchoolMembership;
 use App\Models\User;
 use App\Support\FeatureFlags\FeatureFlagResolver;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Support\Str;
 
 /**
@@ -281,13 +281,7 @@ final class DemoDataBuilder
         $this->account('Principal', $principal, $this->school->name, 'principal system role: academics, students, operations; no Finance/Payroll');
 
         $hrPayroll = $this->user('Farah Khan (HR & Payroll, demo role)', 'hr.payroll@example.test');
-        $role = Role::query()->create([
-            'key' => self::DEMO_HR_PAYROLL_ROLE_KEY,
-            'name' => 'Demo: HR & Payroll Officer',
-            'scope' => 'school',
-            'is_system' => false,
-        ]);
-        $role->capabilities()->sync(self::DEMO_HR_PAYROLL_CAPABILITIES);
+        LocalCatalogueFixtures::createRole(self::DEMO_HR_PAYROLL_CAPABILITIES, 'school', self::DEMO_HR_PAYROLL_ROLE_KEY, 'Demo: HR & Payroll Officer');
         $this->assignSchoolRole($this->member($hrPayroll, $this->school), self::DEMO_HR_PAYROLL_ROLE_KEY);
         $this->account('HR & Payroll Officer (demo-only custom role)', $hrPayroll, $this->school->name, 'HR incl. sensitive records, payslips, statutory payroll');
 
@@ -717,13 +711,8 @@ final class DemoDataBuilder
     private function buildOperationsDeskAccounts(): void
     {
         foreach (DemoAccountCatalog::OPERATIONS_DESK_ROLES as $key => $definition) {
-            $role = Role::query()->create([
-                'key' => $key,
-                'name' => $definition['name'],
-                'scope' => 'school',
-                'is_system' => false,
-            ]);
-            $role->capabilities()->sync($definition['capabilities']);
+            // SR.1: demo-only roles go through the local/testing catalogue seam.
+            LocalCatalogueFixtures::createRole($definition['capabilities'], 'school', $key, $definition['name']);
 
             $user = $this->user($definition['user'], $definition['email']);
             $this->assignSchoolRole($this->member($user, $this->school), $key);
@@ -765,13 +754,9 @@ final class DemoDataBuilder
 
     private function assignSchoolRole(SchoolMembership $membership, string $roleKey): void
     {
-        $role = $this->role($roleKey, 'school');
-
-        $this->context->withSchool($membership->school, fn () => MembershipRoleAssignment::query()->create([
-            'school_id' => $membership->school_id,
-            'school_membership_id' => $membership->id,
-            'role_id' => $role->id,
-        ]));
+        // SR.1 (ADR 0071 §11): the demo's grants carry no assigning User, so
+        // they are written through the local/testing seam (demo-guarded).
+        LocalCatalogueFixtures::grantRole($membership, $this->role($roleKey, 'school'));
     }
 
     private function account(string $persona, User $user, string $school, string $access): void

@@ -5,6 +5,7 @@ namespace Tests\Feature\Postgres;
 use App\Domain\Identity\Application\Staff\OneTimeCredential;
 use App\Models\Role;
 use App\Support\Tenancy\TenantRls;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -85,14 +86,18 @@ class StaffAccountDatabaseInvariantsTest extends TestCase
         $membership = $this->createMembership($this->createUser(), $school);
         $grant = $this->assignSchoolRole($membership, 'principal');
         $this->inSchool($school->id);
+        $principalId = $this->roleId('principal');
+        $schoolAdminId = $this->roleId('school_admin');
 
-        $this->assertRefused(fn () => DB::table('membership_role_assignments')->insert([
-            'id' => (string) Str::uuid7(), 'school_id' => $school->id, 'school_membership_id' => $membership->id, 'role_id' => $this->roleId('principal'),
-        ]), 'membership_role_assignments_one_active');
-        $this->assertRefused(fn () => DB::table('membership_role_assignments')->insert([
-            'id' => (string) Str::uuid7(), 'school_id' => $school->id, 'school_membership_id' => $membership->id, 'role_id' => $this->roleId('school_admin'),
+        // SR.1: written below the administrative boundary, so the history and
+        // uniqueness rules under test (not the grantor rule) are what refuse them.
+        $this->assertRefused(fn () => LocalCatalogueFixtures::asOwner(fn () => DB::table('membership_role_assignments')->insert([
+            'id' => (string) Str::uuid7(), 'school_id' => $school->id, 'school_membership_id' => $membership->id, 'role_id' => $principalId,
+        ])), 'membership_role_assignments_one_active');
+        $this->assertRefused(fn () => LocalCatalogueFixtures::asOwner(fn () => DB::table('membership_role_assignments')->insert([
+            'id' => (string) Str::uuid7(), 'school_id' => $school->id, 'school_membership_id' => $membership->id, 'role_id' => $schoolAdminId,
             'revoked_at' => now(), 'revocation_reason' => 'revoked',
-        ]), 'cannot be created already revoked');
+        ])), 'cannot be created already revoked');
         $this->assertRefused(fn () => DB::table('membership_role_assignments')->where('id', $grant->id)->update(['role_id' => $this->roleId('school_admin')]), 'the only permitted change is revocation');
         $this->assertRefused(fn () => DB::table('membership_role_assignments')->where('id', $grant->id)->update(['revoked_at' => now(), 'revocation_reason' => 'fired']), 'membership_role_assignments_revocation_check');
         $this->assertRefused(fn () => DB::table('membership_role_assignments')->where('id', $grant->id)->delete(), 'permission denied for table membership_role_assignments');
@@ -100,10 +105,10 @@ class StaffAccountDatabaseInvariantsTest extends TestCase
         DB::table('membership_role_assignments')->where('id', $grant->id)->update(['revoked_at' => now(), 'revocation_reason' => 'revoked']);
         $this->assertRefused(fn () => DB::table('membership_role_assignments')->where('id', $grant->id)->update(['revoked_at' => null, 'revocation_reason' => null]), 'cannot be reactivated');
 
-        // A re-grant is a NEW row.
-        DB::table('membership_role_assignments')->insert([
-            'id' => (string) Str::uuid7(), 'school_id' => $school->id, 'school_membership_id' => $membership->id, 'role_id' => $this->roleId('principal'),
-        ]);
+        // A re-grant is a NEW row (fixture write, below the administrative boundary).
+        LocalCatalogueFixtures::asOwner(fn () => DB::table('membership_role_assignments')->insert([
+            'id' => (string) Str::uuid7(), 'school_id' => $school->id, 'school_membership_id' => $membership->id, 'role_id' => $principalId,
+        ]));
         $this->assertSame(2, DB::table('membership_role_assignments')->where('school_membership_id', $membership->id)->count());
 
         $privileges = DB::connection('pgsql_admin')->selectOne("select has_table_privilege('school_os_app', 'membership_role_assignments', 'DELETE') as d");

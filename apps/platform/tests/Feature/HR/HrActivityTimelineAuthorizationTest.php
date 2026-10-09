@@ -13,6 +13,7 @@ use App\Domain\HR\Application\ReportingHierarchyService;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Models\Role;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Auth\Access\AuthorizationException;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -175,8 +176,8 @@ class HrActivityTimelineAuthorizationTest extends TestCase
         $schoolB = $this->createSchool();
         $user = $this->createUser();
         $membershipA = $this->createMembership($user, $schoolA);
-        $role = Role::query()->create(['key' => 'test.timeline.'.uniqid(), 'name' => 'Test Timeline', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync(['hr.employees.personal.view']);
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test.timeline.'.uniqid(), 'name' => 'Test Timeline', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['hr.employees.personal.view']));
         $this->assignSchoolRole($membershipA, $role->key);
         $this->createMembership($user, $schoolB);
 
@@ -230,8 +231,8 @@ class HrActivityTimelineAuthorizationTest extends TestCase
         $employee = $this->createEmployee($school);
         $user = $this->createUser();
         $membership = $this->createMembership($user, $school, status: 'suspended');
-        $role = Role::query()->create(['key' => 'test.timeline.suspended.'.uniqid(), 'name' => 'Test', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync(['hr.employees.personal.view']);
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test.timeline.suspended.'.uniqid(), 'name' => 'Test', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['hr.employees.personal.view']));
         $this->assignSchoolRole($membership, $role->key);
 
         $this->expectException(AuthorizationException::class);

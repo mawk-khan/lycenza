@@ -58,6 +58,9 @@ class StaffAccountArchitectureGuardTest extends TestCase
             'app/Domain/Identity/Application/Staff/StaffAccessService.php',
             // POR.1 (ADR 0070 §8.2): the only writer of the closed `guardian`-scope grant.
             'app/Domain/Identity/Application/Portal/GuardianPortalRoleGrants.php',
+            // SR.1 (ADR 0071 §11): the local/testing fixture seam (refused outside
+            // local/testing; its schema fails platform:verify-database elsewhere).
+            'app/Support/Testing/LocalCatalogueFixtures.php',
         ];
 
         foreach ($this->appSources() as $path => $source) {

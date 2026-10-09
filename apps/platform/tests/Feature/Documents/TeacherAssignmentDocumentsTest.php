@@ -5,6 +5,7 @@ namespace Tests\Feature\Documents;
 use App\Domain\Documents\Infrastructure\Document;
 use App\Models\Role;
 use App\Models\User;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
@@ -180,8 +181,8 @@ class TeacherAssignmentDocumentsTest extends TestCase
     public function a_role_with_only_the_assignment_capability_reaches_no_learning_content_attachment(): void
     {
         $w = $this->contentWorld();
-        $role = Role::query()->create(['key' => 'test.assignments_only.'.Str::uuid(), 'name' => 'Assignments only', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync(['lms.assignments.teacher']);
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test.assignments_only.'.Str::uuid(), 'name' => 'Assignments only', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['lms.assignments.teacher']));
         [$teacher] = $this->contentTeacher($w, roleKey: $role->key);
         $shared = $this->adminContent($w);
         $documentId = $this->upload($w, $w['admin'], 'learning-content', $shared->id)->json('data.document_id');

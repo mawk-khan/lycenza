@@ -11,6 +11,7 @@ use App\Domain\TeachingAssignments\Infrastructure\TeachingAssignment;
 use App\Models\Role;
 use App\Models\SchoolAuditEvent;
 use App\Models\User;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -120,8 +121,8 @@ class TeacherAttendanceAccessTest extends TestCase
     public function a_role_carrying_only_the_curriculum_delivery_capability_is_refused_attendance(): void
     {
         $w = $this->teacherAttendanceWorld();
-        $role = Role::query()->create(['key' => 'test.cd_only.'.Str::uuid(), 'name' => 'Delivery only', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync(['curriculum.delivery.teacher']);
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test.cd_only.'.Str::uuid(), 'name' => 'Delivery only', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['curriculum.delivery.teacher']));
         [$user, $employee] = $this->teacher($w, roleKey: $role->key);
         $this->own($w, $employee, '2026-06-01');
 
@@ -155,8 +156,8 @@ class TeacherAttendanceAccessTest extends TestCase
     public function any_role_carrying_the_capability_works_the_same(): void
     {
         $w = $this->teacherAttendanceWorld();
-        $role = Role::query()->create(['key' => 'test.register_keeper.'.Str::uuid(), 'name' => 'Register keeper', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync(['attendance.teacher']);
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test.register_keeper.'.Str::uuid(), 'name' => 'Register keeper', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['attendance.teacher']));
         [$user, $employee] = $this->teacher($w, roleKey: $role->key);
         $this->own($w, $employee, '2026-06-01');
 

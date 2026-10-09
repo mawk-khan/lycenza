@@ -9,6 +9,7 @@ use App\Domain\HR\Infrastructure\Employee;
 use App\Models\Role;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Auth\Access\AuthorizationException;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -36,8 +37,8 @@ class HrMultiSchoolAuthorizationTest extends TestCase
         $user = $this->createUser();
 
         $membershipA = $this->createMembership($user, $schoolA);
-        $role = Role::query()->create(['key' => 'test.hr.'.uniqid(), 'name' => 'Test HR', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync(['hr.employees.view']);
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test.hr.'.uniqid(), 'name' => 'Test HR', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['hr.employees.view']));
         $this->assignSchoolRole($membershipA, $role->key);
 
         $this->createMembership($user, $schoolB); // ordinary member, no role
@@ -101,8 +102,8 @@ class HrMultiSchoolAuthorizationTest extends TestCase
         $user = $this->createUser();
 
         $membershipA = $this->createMembership($user, $schoolA);
-        $role = Role::query()->create(['key' => 'test.hr.'.uniqid(), 'name' => 'Test HR', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync(['hr.employees.manage']);
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test.hr.'.uniqid(), 'name' => 'Test HR', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['hr.employees.manage']));
         $this->assignSchoolRole($membershipA, $role->key);
 
         $resolver = app(CapabilityResolver::class);

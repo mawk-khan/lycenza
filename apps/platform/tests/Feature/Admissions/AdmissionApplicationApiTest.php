@@ -14,6 +14,7 @@ use App\Models\School;
 use App\Models\SchoolAuditEvent;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -195,11 +196,11 @@ class AdmissionApplicationApiTest extends TestCase
         ['applicant' => $applicant, 'year' => $year, 'campus' => $campus, 'gradeLevel' => $gradeLevel] = $this->buildContext($school);
         $user = $this->createUser();
         $membership = $this->createMembership($user, $school);
-        $viewOnly = Role::query()->create(['key' => 'test_adm_viewer_'.Str::random(8), 'name' => 'Test', 'scope' => 'school', 'is_system' => false]);
-        $viewOnly->capabilities()->sync(['admissions.view']);
-        app(TenantContext::class)->withSchool($school, fn () => MembershipRoleAssignment::query()->create([
+        $viewOnly = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test_adm_viewer_'.Str::random(8), 'name' => 'Test', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $viewOnly->capabilities()->sync(['admissions.view']));
+        app(TenantContext::class)->withSchool($school, fn () => LocalCatalogueFixtures::asOwner(fn () => MembershipRoleAssignment::query()->create([
             'school_id' => $school->id, 'school_membership_id' => $membership->id, 'role_id' => $viewOnly->id,
-        ]));
+        ])));
 
         $this->asUser($user)
             ->withHeader('Idempotency-Key', 'create-app-002')
@@ -312,11 +313,11 @@ class AdmissionApplicationApiTest extends TestCase
         $application = $this->createAdmissionApplication($applicant, $year, $campus, $gradeLevel);
         $user = $this->createUser();
         $membership = $this->createMembership($user, $school);
-        $viewOnly = Role::query()->create(['key' => 'test_adm_viewer2_'.Str::random(8), 'name' => 'Test', 'scope' => 'school', 'is_system' => false]);
-        $viewOnly->capabilities()->sync(['admissions.view']);
-        app(TenantContext::class)->withSchool($school, fn () => MembershipRoleAssignment::query()->create([
+        $viewOnly = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test_adm_viewer2_'.Str::random(8), 'name' => 'Test', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $viewOnly->capabilities()->sync(['admissions.view']));
+        app(TenantContext::class)->withSchool($school, fn () => LocalCatalogueFixtures::asOwner(fn () => MembershipRoleAssignment::query()->create([
             'school_id' => $school->id, 'school_membership_id' => $membership->id, 'role_id' => $viewOnly->id,
-        ]));
+        ])));
 
         $this->asUser($user)
             ->withHeader('Idempotency-Key', 'submit-app-002')

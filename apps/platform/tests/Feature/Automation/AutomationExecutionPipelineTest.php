@@ -30,6 +30,7 @@ use App\Support\Authorization\CapabilityResolver;
 use App\Support\Events\IdempotentConsumerGuard;
 use App\Support\FeatureFlags\FeatureFlagResolver;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Database\Seeders\Demo\DemoBuildResult;
 use Database\Seeders\Demo\DemoDataBuilder;
 use Illuminate\Support\Carbon;
@@ -257,11 +258,12 @@ class AutomationExecutionPipelineTest extends TestCase
                 app(TenantContext::class)->withSchool($w->school, function () use ($w, $owner): void {
                     $membership = SchoolMembership::query()->where('user_id', $owner->id)->where('school_id', $w->school->id)->firstOrFail();
                     MembershipRoleAssignment::query()->where('school_membership_id', $membership->id)->active()->update(['revoked_at' => now(), 'revocation_reason' => MembershipRoleAssignment::REASON_REVOKED]);
-                    MembershipRoleAssignment::query()->create([
+                    $principal = Role::query()->where('key', 'principal')->value('id');
+                    LocalCatalogueFixtures::asOwner(fn () => MembershipRoleAssignment::query()->create([
                         'school_membership_id' => $membership->id,
-                        'role_id' => Role::query()->where('key', 'principal')->value('id'),
+                        'role_id' => $principal,
                         'school_id' => $w->school->id,
-                    ]);
+                    ]));
                 });
             }, OwnerAuthorityVerifier::OWNER_CAPABILITY_MISSING],
         ];

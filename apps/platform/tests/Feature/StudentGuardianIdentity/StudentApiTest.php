@@ -7,6 +7,7 @@ use App\Models\MembershipRoleAssignment;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
@@ -229,11 +230,11 @@ class StudentApiTest extends TestCase
         $user = $this->createUser();
         $school = $this->createSchool();
         $membership = $this->createMembership($user, $school);
-        $viewOnly = Role::query()->create(['key' => 'test_students_viewer_http', 'name' => 'Test', 'scope' => 'school', 'is_system' => false]);
-        $viewOnly->capabilities()->sync(['students.view']);
-        app(TenantContext::class)->withSchool($school, fn () => MembershipRoleAssignment::query()->create([
+        $viewOnly = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test_students_viewer_http', 'name' => 'Test', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $viewOnly->capabilities()->sync(['students.view']));
+        app(TenantContext::class)->withSchool($school, fn () => LocalCatalogueFixtures::asOwner(fn () => MembershipRoleAssignment::query()->create([
             'school_id' => $school->id, 'school_membership_id' => $membership->id, 'role_id' => $viewOnly->id,
-        ]));
+        ])));
 
         $this->asUser($user)
             ->withHeader('Idempotency-Key', 'create-student-002')

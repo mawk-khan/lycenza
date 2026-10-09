@@ -101,6 +101,10 @@ What it does, in order:
    drops and recreates schema `public` in DDEV database `db`, and re-grants
    default privileges.
 4. `php artisan migrate --database=pgsql_admin --force`.
+4a. `php artisan platform:install-local-fixtures` -- the local/testing
+   role-catalogue fixture seam (SR.1, ADR 0071 §23.5). The demo's
+   non-system roles and grantor-less grants need it; it is refused outside
+   local/testing.
 5. Flushes this project's private Redis (stale sessions, caches and
    queued jobs) and empties DDEV's Mailpit -- both **before** seeding, so
    the jobs and invitation e-mails the seed produces survive.

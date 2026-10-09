@@ -6,6 +6,7 @@ use App\Domain\Fees\Infrastructure\FeeConcession;
 use App\Models\Role;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Feature\Fees\Concerns\CreatesFeeConcessionFixtures;
@@ -25,8 +26,8 @@ class FeeConcessionUiTest extends TestCase
 
     private function memberWith(array $capabilities, School $school): User
     {
-        $role = Role::query()->create(['key' => 'fee-concession-ui-'.uniqid(), 'name' => 'Test', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync($capabilities);
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'fee-concession-ui-'.uniqid(), 'name' => 'Test', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync($capabilities));
         $user = $this->createUser();
         $this->assignSchoolRole($this->createMembership($user, $school), $role->key);
         $this->signIn($user, $school);

@@ -172,6 +172,8 @@ class StudentMarkHttpTest extends TestCase
         $this->as($w['admin'], $w['school']);
         $this->withoutMiddleware(PreventRequestForgery::class);
         $fixed = ['error' => ['code' => 'STUDENT_MARKS_UNAVAILABLE', 'message' => 'Student marks are not available in this environment.', 'status' => 403]];
+        // Fixtures first: the SR.1 fixture seam is local/testing only.
+        $checker = $this->checker($w);
 
         foreach (['production', 'staging'] as $environment) {
             $this->app['env'] = $environment;
@@ -184,7 +186,7 @@ class StudentMarkHttpTest extends TestCase
 
             $this->assertThrows(fn () => $this->grid($w), StudentMarksUnavailableException::class);
             $this->assertThrows(fn () => $this->recordMarks($w, [$this->entry($this->markStudent($w), 'present', '1')]), StudentMarksUnavailableException::class);
-            $this->assertThrows(fn () => $this->approveCorrection($w, $correction, $this->checker($w)), StudentMarksUnavailableException::class);
+            $this->assertThrows(fn () => $this->approveCorrection($w, $correction, $checker), StudentMarksUnavailableException::class);
             $this->app['env'] = 'testing';
         }
         $this->assertSame(['50.00', 1, 'pending'], [(string) $this->markOf($w, $student)->value, $this->markOf($w, $student)->version, $this->freshCorrection($w, $correction)->status]);

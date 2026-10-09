@@ -16,6 +16,7 @@ use App\Models\SchoolAuditEvent;
 use App\Models\SchoolGroup;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
@@ -212,8 +213,8 @@ class GroupCurriculumCoverageReportTest extends TestCase
         $otherAdmin = $this->groupAdmin($otherGroup);
 
         // A Group role WITHOUT group.reporting.view.
-        $viewOnly = Role::query()->create(['key' => 'test.group_viewer.'.Str::random(6), 'name' => 'Viewer', 'scope' => 'group', 'is_system' => false]);
-        $viewOnly->capabilities()->sync(['group.schools.view']);
+        $viewOnly = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test.group_viewer.'.Str::random(6), 'name' => 'Viewer', 'scope' => 'group', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $viewOnly->capabilities()->sync(['group.schools.view']));
         $viewer = $this->createUser();
         $this->enrollActiveMfaFactor($viewer);
         $this->grantGroupRole($viewer, $group, $viewOnly->key);

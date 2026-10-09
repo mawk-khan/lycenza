@@ -6,6 +6,7 @@ use App\Domain\Identity\Application\AccountLinkService;
 use App\Models\Role;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Tenancy\TenantRls;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -44,12 +45,12 @@ class GuardianScopeDatabaseInvariantsTest extends TestCase
 
         foreach ([[$guardian, 'students.view'], [$guardian, 'communications.view'], [$guardian, 'communications.reply'], [$guardian, 'group.schools.view'], [$guardian, 'platform.schools.view'],
             [$schoolAdmin, 'portal.communications.view'], [$schoolAdmin, 'portal.attendance.view'], [$schoolAdmin, 'portal.fees.view'], [$schoolAdmin, 'portal.communications.reply'], [$groupAdmin, 'portal.communications.view'], [$platform, 'portal.communications.view']] as [$role, $capability]) {
-            $this->assertRejected(fn () => DB::table('role_capabilities')->insert(['role_id' => $role, 'capability_key' => $capability]), 'scopes never mix');
+            $this->assertRejected(fn () => LocalCatalogueFixtures::asOwner(fn () => DB::table('role_capabilities')->insert(['role_id' => $role, 'capability_key' => $capability])), 'scopes never mix');
         }
 
-        $this->assertRejected(fn () => DB::table('capabilities')->insert(['key' => 'portal.bogus', 'label' => 'X', 'namespace' => 'school']), 'capabilities_guardian_namespace_check');
-        $this->assertRejected(fn () => DB::table('capabilities')->insert(['key' => 'students.bogus', 'label' => 'X', 'namespace' => 'guardian']), 'capabilities_guardian_namespace_check');
-        $this->assertRejected(fn () => DB::table('roles')->insert(['id' => (string) Str::uuid7(), 'key' => 'x_'.Str::random(6), 'name' => 'X', 'scope' => 'parent', 'is_system' => false]), 'roles_scope_check');
+        $this->assertRejected(fn () => LocalCatalogueFixtures::asOwner(fn () => DB::table('capabilities')->insert(['key' => 'portal.bogus', 'label' => 'X', 'namespace' => 'school'])), 'capabilities_guardian_namespace_check');
+        $this->assertRejected(fn () => LocalCatalogueFixtures::asOwner(fn () => DB::table('capabilities')->insert(['key' => 'students.bogus', 'label' => 'X', 'namespace' => 'guardian'])), 'capabilities_guardian_namespace_check');
+        $this->assertRejected(fn () => LocalCatalogueFixtures::asOwner(fn () => DB::table('roles')->insert(['id' => (string) Str::uuid7(), 'key' => 'x_'.Str::random(6), 'name' => 'X', 'scope' => 'parent', 'is_system' => false])), 'roles_scope_check');
     }
 
     #[Test]

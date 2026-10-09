@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Postgres;
 
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -30,24 +31,25 @@ class PlatformRoleAssignmentInvariantsTest extends TestCase
 
         // The root role holds root-reserved capabilities, so the trigger
         // refuses it even before the CHECK constraint is evaluated.
-        $this->assertRejected(fn () => DB::table('roles')->where('key', 'platform_super_admin')->update(['runtime_assignable' => true]), 'a role holding a root-reserved capability cannot be runtime-assignable');
-        $this->assertRejected(fn () => DB::table('roles')->where('key', 'school_admin')->update(['runtime_assignable' => true]), 'roles_runtime_assignable_check');
-        $this->assertRejected(fn () => DB::table('roles')->where('key', 'group_admin')->update(['runtime_assignable' => true]), 'roles_runtime_assignable_check');
-        $this->assertRejected(fn () => DB::table('roles')->insert(['id' => (string) Str::uuid7(), 'key' => 'custom_'.Str::random(5), 'name' => 'X', 'scope' => 'platform', 'is_system' => false, 'runtime_assignable' => true]), 'roles_runtime_assignable_check');
+        $this->assertRejected(fn () => LocalCatalogueFixtures::asOwner(fn () => DB::table('roles')->where('key', 'platform_super_admin')->update(['runtime_assignable' => true])), 'a role holding a root-reserved capability cannot be runtime-assignable');
+        $this->assertRejected(fn () => LocalCatalogueFixtures::asOwner(fn () => DB::table('roles')->where('key', 'school_admin')->update(['runtime_assignable' => true])), 'roles_runtime_assignable_check');
+        $this->assertRejected(fn () => LocalCatalogueFixtures::asOwner(fn () => DB::table('roles')->where('key', 'group_admin')->update(['runtime_assignable' => true])), 'roles_runtime_assignable_check');
+        $this->assertRejected(fn () => LocalCatalogueFixtures::asOwner(fn () => DB::table('roles')->insert(['id' => (string) Str::uuid7(), 'key' => 'custom_'.Str::random(5), 'name' => 'X', 'scope' => 'platform', 'is_system' => false, 'runtime_assignable' => true])), 'roles_runtime_assignable_check');
     }
 
     #[Test]
     public function a_runtime_assignable_role_never_holds_a_root_reserved_capability(): void
     {
+        $auditor = $this->roleId('platform_auditor');
         foreach (['platform.role_grants.manage', 'platform.schools.manage'] as $capability) {
-            $this->assertRejected(fn () => DB::table('role_capabilities')->insert(['role_id' => $this->roleId('platform_auditor'), 'capability_key' => $capability]), 'root-reserved capability');
+            $this->assertRejected(fn () => LocalCatalogueFixtures::asOwner(fn () => DB::table('role_capabilities')->insert(['role_id' => $auditor, 'capability_key' => $capability])), 'root-reserved capability');
         }
 
         // Nor can a role already holding one be made runtime-assignable.
         $id = (string) Str::uuid7();
-        DB::table('roles')->insert(['id' => $id, 'key' => 'sys_'.Str::random(5), 'name' => 'X', 'scope' => 'platform', 'is_system' => true]);
-        DB::table('role_capabilities')->insert(['role_id' => $id, 'capability_key' => 'platform.schools.manage']);
-        $this->assertRejected(fn () => DB::table('roles')->where('id', $id)->update(['runtime_assignable' => true]), 'root-reserved capability');
+        LocalCatalogueFixtures::asOwner(fn () => DB::table('roles')->insert(['id' => $id, 'key' => 'sys_'.Str::random(5), 'name' => 'X', 'scope' => 'platform', 'is_system' => true]));
+        LocalCatalogueFixtures::asOwner(fn () => DB::table('role_capabilities')->insert(['role_id' => $id, 'capability_key' => 'platform.schools.manage']));
+        $this->assertRejected(fn () => LocalCatalogueFixtures::asOwner(fn () => DB::table('roles')->where('id', $id)->update(['runtime_assignable' => true])), 'root-reserved capability');
 
         $this->assertSame(['platform.audit.view'], DB::table('role_capabilities')->where('role_id', $this->roleId('platform_auditor'))->pluck('capability_key')->all());
     }

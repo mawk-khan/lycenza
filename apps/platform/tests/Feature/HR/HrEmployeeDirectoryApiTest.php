@@ -5,6 +5,7 @@ namespace Tests\Feature\HR;
 use App\Domain\HR\Application\EmployeeAssignmentService;
 use App\Domain\HR\Application\EmploymentService;
 use App\Models\Role;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -66,13 +67,13 @@ class HrEmployeeDirectoryApiTest extends TestCase
         $membershipA = $this->createMembership($user, $schoolA);
         $this->createMembership($user, $schoolB);
 
-        $role = Role::query()->create([
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create([
             'key' => 'test.hr_view.'.Str::uuid(),
             'name' => 'Test HR View',
             'scope' => 'school',
             'is_system' => false,
-        ]);
-        $role->capabilities()->sync(['hr.employees.view']);
+        ]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['hr.employees.view']));
         $this->assignSchoolRole($membershipA, $role->key);
 
         $token = $this->token($user);

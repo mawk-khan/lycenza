@@ -11,6 +11,7 @@ use App\Models\Role;
 use App\Models\SchoolAuditEvent;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -121,9 +122,10 @@ class StaffInvitationTest extends TestCase
         // A School role carrying a capability the admin does not hold is an escalation.
         $held = app(CapabilityResolver::class)->schoolCapabilities($admin, $school);
         $foreign = Capability::query()->where('namespace', 'school')->whereNotIn('key', $held)->value('key')
-            ?? Capability::query()->create(['key' => 'school.test_only_capability', 'label' => 'Test only', 'namespace' => 'school'])->key;
-        $role = Role::query()->create(['key' => 'test_escalation_role', 'name' => 'Escalation', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->attach($foreign);
+            ?? LocalCatalogueFixtures::asOwner(fn () => Capability::query()->create(['key' => 'school.test_only_capability', 'label' => 'Test only', 'namespace' => 'school']))->key;
+        // SR.1: only SYSTEM School roles are in the catalogue, so the escalation probe is one.
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test_escalation_role', 'name' => 'Escalation', 'scope' => 'school', 'is_system' => true]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->attach($foreign));
         $this->inviteStaff($admin, $school, 'a@example.test', ['test_escalation_role'])->assertStatus(422)
             ->assertJsonPath('error.message', StaffAccountException::MESSAGES['role_escalation']);
 

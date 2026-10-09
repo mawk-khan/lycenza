@@ -70,6 +70,9 @@ class OperatorVerificationCommandsTest extends TestCase
             // E21-RH.6
             'retention_read_helpers_closed', 'retention_deletes_guarded', 'runtime_retention_deletes_revoked', 'retention_eligibility_guards',
             'retention_role_selects_exact',
+            // SR.1 (ADR 0071 §23.6)
+            'role_catalogue_runtime_read_only', 'role_grant_history_restricted', 'role_identity_immutable',
+            'role_grantor_coverage_enforced', 'role_lifecycle_columns', 'local_fixture_seam_absent_outside_development',
         ] as $code) {
             $this->assertArrayHasKey($code, $results);
             $this->assertSame(CheckResult::PASS, $results[$code]->status, $code);

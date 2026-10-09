@@ -68,6 +68,7 @@ use App\Models\SchoolMembership;
 use App\Models\User;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -107,18 +108,42 @@ trait CreatesTenancyFixtures
         ]);
     }
 
+    /**
+     * A fixture School-role grant. SR.1 (ADR 0071 §11): the runtime role may
+     * only write a grant that names a covering assigning User, so fixtures
+     * write theirs through the local/testing seam, below the administrative
+     * boundary, inside the test's transaction.
+     */
     protected function assignSchoolRole(SchoolMembership $membership, string $roleKey): MembershipRoleAssignment
     {
         $role = Role::query()->where('key', $roleKey)->where('scope', 'school')->firstOrFail();
 
-        return app(TenantContext::class)->withSchool(
-            $membership->school,
-            fn () => MembershipRoleAssignment::query()->create([
-                'school_id' => $membership->school_id,
-                'school_membership_id' => $membership->id,
-                'role_id' => $role->id,
-            ]),
-        );
+        return LocalCatalogueFixtures::grantRole($membership, $role);
+    }
+
+    /**
+     * A fixture role with exactly $capabilities (SR.1: the runtime role cannot
+     * write the catalogue; see LocalCatalogueFixtures).
+     *
+     * @param  list<string>  $capabilities
+     */
+    protected function createFixtureRole(array $capabilities, string $scope = 'school', ?string $key = null, string $name = 'Test Capability Grant', bool $isSystem = false): Role
+    {
+        return LocalCatalogueFixtures::createRole($capabilities, $scope, $key, $name, $isSystem);
+    }
+
+    /**
+     * Runs catalogue/grant WRITES (no reads) with the local/testing seam's
+     * administrative privileges, inside the test's transaction.
+     *
+     * @template T
+     *
+     * @param  \Closure(): T  $writes
+     * @return T
+     */
+    protected function asCatalogueOwner(\Closure $writes): mixed
+    {
+        return LocalCatalogueFixtures::asOwner($writes);
     }
 
     /**
@@ -220,14 +245,7 @@ trait CreatesTenancyFixtures
         $membership = $this->createMembership($user, $school, $status);
 
         if ($capabilities !== []) {
-            $role = Role::query()->create([
-                'key' => 'test.capability_grant.'.(string) Str::uuid(),
-                'name' => 'Test Capability Grant',
-                'scope' => 'school',
-                'is_system' => false,
-            ]);
-            $role->capabilities()->sync($capabilities);
-            $this->assignSchoolRole($membership, $role->key);
+            LocalCatalogueFixtures::grantRole($membership, $this->createFixtureRole(array_values($capabilities)));
         }
 
         return $user;

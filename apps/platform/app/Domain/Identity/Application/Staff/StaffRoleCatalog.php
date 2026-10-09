@@ -143,10 +143,24 @@ final class StaffRoleCatalog
         return true;
     }
 
-    /** @return Collection<int, Role> */
+    /**
+     * SR.1 (ADR 0071 §10.1, §11.5): the staff catalogue is the School-scope,
+     * SYSTEM, non-retired roles with at least one capability -- never a
+     * Guardian/platform/Group role, a retired role, an empty role or a
+     * non-system (demo/test) row.
+     *
+     * @return Collection<int, Role>
+     */
     private function schoolRoles(): Collection
     {
-        return Role::query()->where('scope', 'school')->with('capabilities')->orderBy('name')->get();
+        return Role::query()
+            ->where('scope', 'school')
+            ->where('is_system', true)
+            ->whereNull('retired_at')
+            ->whereHas('capabilities')
+            ->with('capabilities')
+            ->orderBy('name')
+            ->get();
     }
 
     /**

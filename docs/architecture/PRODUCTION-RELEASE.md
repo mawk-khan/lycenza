@@ -181,6 +181,10 @@ names the database it is about to touch first (rule 54).
    Service identities are a closed code catalog with configured keys (ADR
    0053); nothing about them is seeded. `DemoSeeder` refuses
    anywhere but a developer's DDEV (`DemoEnvironmentGuard`).
+   **SR.1 (ADR 0071 §23.4):** the runtime role can no longer write the role
+   catalogue, so `CapabilityAndRoleSeeder` writes `capabilities`, `roles`
+   and `role_capabilities` through `pgsql_admin`. This step therefore needs
+   the admin connection's credentials, exactly as step 6 does.
 8. **Operator-only, first release only:**
    - `php artisan platform:bootstrap-root` — interactive, creates the first
      platform account and provisions root (§5); later root accounts use

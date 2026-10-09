@@ -7,6 +7,7 @@ use App\Models\SchoolAuditEvent;
 use App\Models\SchoolMembership;
 use App\Models\WebhookEndpoint;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
@@ -47,8 +48,8 @@ class WebhookEndpointApiTest extends TestCase
     #[Test]
     public function the_view_capability_alone_allows_reads_but_not_writes(): void
     {
-        $role = Role::query()->create(['key' => 'webhook-viewer-'.uniqid(), 'name' => 'Webhook Viewer', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync(['integrations.webhooks.view']);
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'webhook-viewer-'.uniqid(), 'name' => 'Webhook Viewer', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['integrations.webhooks.view']));
 
         $school = $this->createSchool();
         $user = $this->createUser();

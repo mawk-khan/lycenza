@@ -12,6 +12,7 @@ use App\Models\SchoolElevation;
 use App\Models\SchoolMembership;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route as RouteFacade;
@@ -196,8 +197,8 @@ class GroupDerivedElevationTest extends TestCase
         $this->assertEquals(['outcome_code' => 'school_not_in_group', 'reason_code' => 'operational_support', 'authority_type' => 'group', 'school_group_id' => $group->id], $denial->metadata);
 
         // A Group role without group.schools.elevate.
-        $viewOnly = Role::query()->create(['key' => 'test_group_viewer', 'name' => 'Viewer', 'scope' => 'group', 'is_system' => false]);
-        $viewOnly->capabilities()->sync(['group.schools.view']);
+        $viewOnly = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test_group_viewer', 'name' => 'Viewer', 'scope' => 'group', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $viewOnly->capabilities()->sync(['group.schools.view']));
         $viewer = $this->createUser();
         $this->enrollActiveMfaFactor($viewer);
         $this->grantGroupRole($viewer, $group, 'test_group_viewer');
@@ -296,8 +297,9 @@ class GroupDerivedElevationTest extends TestCase
 
         // Role loses the capability (no in-app path yet): the uncached Group
         // check sees it at once.
-        DB::table('role_capabilities')->where('role_id', Role::query()->where('key', 'group_admin')->value('id'))
-            ->where('capability_key', 'group.schools.elevate')->delete();
+        $groupAdmin = Role::query()->where('key', 'group_admin')->value('id');
+        LocalCatalogueFixtures::asOwner(fn () => DB::table('role_capabilities')->where('role_id', $groupAdmin)
+            ->where('capability_key', 'group.schools.elevate')->delete());
 
         $this->get('/app')->assertInertia(fn (AssertableInertia $p) => $p
             ->where('elevation', null)

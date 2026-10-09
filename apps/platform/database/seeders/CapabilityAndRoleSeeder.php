@@ -16,6 +16,9 @@ use Illuminate\Database\Seeder;
  */
 class CapabilityAndRoleSeeder extends Seeder
 {
+    /** SR.1 (ADR 0071 §11): catalogue writes go through the migration/admin role. */
+    public const CATALOGUE_CONNECTION = 'pgsql_admin';
+
     public function run(): void
     {
         $capabilities = [
@@ -922,8 +925,10 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'teaching.assignments.manage', 'label' => 'Create and end Teaching Assignments', 'namespace' => 'school'],
         ];
 
+        // SR.1 (ADR 0071 §11): the runtime role cannot write the catalogue, so
+        // the catalogue is written through the migration/admin connection.
         foreach ($capabilities as $capability) {
-            Capability::query()->updateOrCreate(['key' => $capability['key']], $capability);
+            Capability::on(self::CATALOGUE_CONNECTION)->updateOrCreate(['key' => $capability['key']], $capability);
         }
 
         $roles = [
@@ -1518,7 +1523,7 @@ class CapabilityAndRoleSeeder extends Seeder
         ];
 
         foreach ($roles as $key => $definition) {
-            $role = Role::query()->updateOrCreate(
+            $role = Role::on(self::CATALOGUE_CONNECTION)->updateOrCreate(
                 ['key' => $key],
                 [
                     'name' => $definition['name'],

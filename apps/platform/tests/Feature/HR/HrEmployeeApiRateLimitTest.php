@@ -3,6 +3,7 @@
 namespace Tests\Feature\HR;
 
 use App\Models\Role;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
@@ -180,13 +181,13 @@ class HrEmployeeApiRateLimitTest extends TestCase
         $membershipB = $this->createMembership($user, $schoolB);
 
         foreach ([$membershipA, $membershipB] as $membership) {
-            $role = Role::query()->create([
+            $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create([
                 'key' => 'test.hr_view.'.Str::uuid(),
                 'name' => 'Test HR View',
                 'scope' => 'school',
                 'is_system' => false,
-            ]);
-            $role->capabilities()->sync(['hr.employees.view']);
+            ]));
+            LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['hr.employees.view']));
             $this->assignSchoolRole($membership, $role->key);
         }
 

@@ -7,6 +7,7 @@ use App\Domain\HR\Infrastructure\Employee;
 use App\Models\Role;
 use App\Models\School;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
@@ -57,8 +58,8 @@ class HrEmployeeImportAuthorizationTest extends TestCase
         $schoolB = $this->createSchool();
         $user = $this->createUser();
         $membershipA = $this->createMembership($user, $schoolA);
-        $role = Role::query()->create(['key' => 'test.import.'.uniqid(), 'name' => 'Test', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync(['hr.employees.manage']);
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test.import.'.uniqid(), 'name' => 'Test', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['hr.employees.manage']));
         $this->assignSchoolRole($membershipA, $role->key);
         $this->createMembership($user, $schoolB);
 

@@ -17,6 +17,7 @@ use App\Models\Role;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -146,11 +147,11 @@ class AdmissionConversionApiTest extends TestCase
         ['section' => $section, 'application' => $application] = $this->buildAcceptedContext($school);
         $user = $this->createUser();
         $membership = $this->createMembership($user, $school);
-        $viewOnly = Role::query()->create(['key' => 'test_adm_viewer_conv_'.Str::random(8), 'name' => 'Test', 'scope' => 'school', 'is_system' => false]);
-        $viewOnly->capabilities()->sync(['admissions.view']);
-        app(TenantContext::class)->withSchool($school, fn () => MembershipRoleAssignment::query()->create([
+        $viewOnly = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test_adm_viewer_conv_'.Str::random(8), 'name' => 'Test', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $viewOnly->capabilities()->sync(['admissions.view']));
+        app(TenantContext::class)->withSchool($school, fn () => LocalCatalogueFixtures::asOwner(fn () => MembershipRoleAssignment::query()->create([
             'school_id' => $school->id, 'school_membership_id' => $membership->id, 'role_id' => $viewOnly->id,
-        ]));
+        ])));
 
         $this->asUser($user)
             ->withHeader('Idempotency-Key', 'convert-denied-001')
@@ -169,11 +170,11 @@ class AdmissionConversionApiTest extends TestCase
         ['section' => $section, 'application' => $application] = $this->buildAcceptedContext($school);
         $user = $this->createUser();
         $membership = $this->createMembership($user, $school);
-        $manageOnly = Role::query()->create(['key' => 'test_adm_manager_conv_'.Str::random(8), 'name' => 'Test', 'scope' => 'school', 'is_system' => false]);
-        $manageOnly->capabilities()->sync(['admissions.manage']);
-        app(TenantContext::class)->withSchool($school, fn () => MembershipRoleAssignment::query()->create([
+        $manageOnly = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test_adm_manager_conv_'.Str::random(8), 'name' => 'Test', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $manageOnly->capabilities()->sync(['admissions.manage']));
+        app(TenantContext::class)->withSchool($school, fn () => LocalCatalogueFixtures::asOwner(fn () => MembershipRoleAssignment::query()->create([
             'school_id' => $school->id, 'school_membership_id' => $membership->id, 'role_id' => $manageOnly->id,
-        ]));
+        ])));
 
         $response = $this->asUser($user)
             ->withHeader('Idempotency-Key', 'convert-manage-only-001')

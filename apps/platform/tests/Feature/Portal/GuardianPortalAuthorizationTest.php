@@ -25,6 +25,7 @@ use App\Models\Role;
 use App\Models\SchoolMembership;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -405,7 +406,7 @@ class GuardianPortalAuthorizationTest extends TestCase
             $call();
         }
 
-        DB::table('role_capabilities')->where('role_id', Role::query()->where('key', Role::GUARDIAN)->value('id'))->delete();
+        LocalCatalogueFixtures::setRoleCapabilities(Role::query()->where('key', Role::GUARDIAN)->firstOrFail(), []);
         app(CapabilityResolver::class)->forgetCache($p['user'], $school);
         foreach ($calls as $call) {
             $this->assertThrows($call, GuardianPortalAccessDeniedException::class);

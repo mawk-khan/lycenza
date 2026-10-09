@@ -4,6 +4,7 @@ namespace Tests\Feature\App;
 
 use App\Models\Role;
 use App\Models\User;
+use App\Support\Testing\LocalCatalogueFixtures;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesFeesFixtures;
 use Tests\Concerns\CreatesFinanceFixtures;
@@ -33,8 +34,8 @@ class FinanceUiTest extends TestCase
 
     private function roleWith(array $capabilities): Role
     {
-        $role = Role::query()->create(['key' => 'finance-ui-'.uniqid(), 'name' => 'Test', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync($capabilities);
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'finance-ui-'.uniqid(), 'name' => 'Test', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync($capabilities));
 
         return $role;
     }
@@ -43,7 +44,11 @@ class FinanceUiTest extends TestCase
     {
         $user = $this->createUser();
         $membership = $this->createMembership($user, $school);
-        $this->assignSchoolRole($membership, $this->roleWith($capabilities)->key);
+        // SR.1 (ADR 0071 §6.3): an empty role is never grantable, so "no Finance
+        // capability" is a plain member with no role at all.
+        if ($capabilities !== []) {
+            $this->assignSchoolRole($membership, $this->roleWith($capabilities)->key);
+        }
         $this->activate($user, $school);
 
         return $user;

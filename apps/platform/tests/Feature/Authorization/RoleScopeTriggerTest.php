@@ -6,6 +6,7 @@ use App\Models\MembershipRoleAssignment;
 use App\Models\PlatformRoleAssignment;
 use App\Models\Role;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
@@ -113,16 +114,18 @@ class RoleScopeTriggerTest extends TestCase
                     // school_id says School B, but school_membership_id
                     // belongs to School A -- the composite FK must
                     // reject this.
-                    MembershipRoleAssignment::query()->create([
+                    // SR.1: written below the administrative boundary, so the
+                    // composite FK (not the grantor rule) is what refuses it.
+                    LocalCatalogueFixtures::asOwner(fn () => MembershipRoleAssignment::query()->create([
                         'school_id' => $schoolB->id,
                         'school_membership_id' => $membershipInA->id,
                         'role_id' => $role->id,
-                    ]);
+                    ]));
                 });
             });
             $this->fail('Expected a QueryException from the composite foreign key.');
         } catch (QueryException $e) {
-            $this->assertNotNull($e);
+            $this->assertStringContainsString('membership_role_assignments_school_membership_id_school_id_fore', $e->getMessage());
         }
     }
 }

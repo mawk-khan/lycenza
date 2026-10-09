@@ -15,6 +15,7 @@ use App\Models\School;
 use App\Models\SchoolAuditEvent;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
@@ -48,21 +49,21 @@ class StudentEnrollmentApiTest extends TestCase
     private function grantViewOnly(User $user, School $school): void
     {
         $membership = $this->createMembership($user, $school);
-        $role = Role::query()->create(['key' => 'test_enrollment_viewer_http_'.Str::random(8), 'name' => 'Test', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync(['enrollments.view']);
-        app(TenantContext::class)->withSchool($school, fn () => MembershipRoleAssignment::query()->create([
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test_enrollment_viewer_http_'.Str::random(8), 'name' => 'Test', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['enrollments.view']));
+        app(TenantContext::class)->withSchool($school, fn () => LocalCatalogueFixtures::asOwner(fn () => MembershipRoleAssignment::query()->create([
             'school_id' => $school->id, 'school_membership_id' => $membership->id, 'role_id' => $role->id,
-        ]));
+        ])));
     }
 
     private function grantManageOnly(User $user, School $school): void
     {
         $membership = $this->createMembership($user, $school);
-        $role = Role::query()->create(['key' => 'test_enrollment_manager_http_'.Str::random(8), 'name' => 'Test', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync(['enrollments.manage']);
-        app(TenantContext::class)->withSchool($school, fn () => MembershipRoleAssignment::query()->create([
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test_enrollment_manager_http_'.Str::random(8), 'name' => 'Test', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['enrollments.manage']));
+        app(TenantContext::class)->withSchool($school, fn () => LocalCatalogueFixtures::asOwner(fn () => MembershipRoleAssignment::query()->create([
             'school_id' => $school->id, 'school_membership_id' => $membership->id, 'role_id' => $role->id,
-        ]));
+        ])));
     }
 
     /**

@@ -8,6 +8,7 @@ use App\Models\MembershipRoleAssignment;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
@@ -125,11 +126,11 @@ class GuardianApiTest extends TestCase
         $school = $this->createSchool();
         $viewer = $this->createUser();
         $membership = $this->createMembership($viewer, $school);
-        $viewOnly = Role::query()->create(['key' => 'test_guardians_viewer_http', 'name' => 'Test', 'scope' => 'school', 'is_system' => false]);
-        $viewOnly->capabilities()->sync(['guardians.view']);
-        app(TenantContext::class)->withSchool($school, fn () => MembershipRoleAssignment::query()->create([
+        $viewOnly = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test_guardians_viewer_http', 'name' => 'Test', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $viewOnly->capabilities()->sync(['guardians.view']));
+        app(TenantContext::class)->withSchool($school, fn () => LocalCatalogueFixtures::asOwner(fn () => MembershipRoleAssignment::query()->create([
             'school_id' => $school->id, 'school_membership_id' => $membership->id, 'role_id' => $viewOnly->id,
-        ]));
+        ])));
 
         $this->asUser($viewer)
             ->withHeader('Idempotency-Key', 'create-guardian-002')
@@ -233,11 +234,11 @@ class GuardianApiTest extends TestCase
 
         $viewer = $this->createUser();
         $membership = $this->createMembership($viewer, $school);
-        $viewOnly = Role::query()->create(['key' => 'test_guardians_viewer_contacts_http', 'name' => 'Test', 'scope' => 'school', 'is_system' => false]);
-        $viewOnly->capabilities()->sync(['guardians.view']);
-        app(TenantContext::class)->withSchool($school, fn () => MembershipRoleAssignment::query()->create([
+        $viewOnly = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test_guardians_viewer_contacts_http', 'name' => 'Test', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $viewOnly->capabilities()->sync(['guardians.view']));
+        app(TenantContext::class)->withSchool($school, fn () => LocalCatalogueFixtures::asOwner(fn () => MembershipRoleAssignment::query()->create([
             'school_id' => $school->id, 'school_membership_id' => $membership->id, 'role_id' => $viewOnly->id,
-        ]));
+        ])));
 
         $this->asUser($viewer)
             ->withHeader('Idempotency-Key', 'add-contact-002')

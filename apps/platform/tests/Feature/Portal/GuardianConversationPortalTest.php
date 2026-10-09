@@ -21,6 +21,7 @@ use App\Models\User;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Portal\PortalUnavailableException;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -110,7 +111,7 @@ class GuardianConversationPortalTest extends TestCase
 
     private function dropRoleCapability(string $capability): void
     {
-        DB::table('role_capabilities')->where('role_id', Role::query()->where('key', Role::GUARDIAN)->value('id'))->where('capability_key', $capability)->delete();
+        LocalCatalogueFixtures::removeRoleCapability(Role::query()->where('key', Role::GUARDIAN)->firstOrFail(), $capability);
     }
 
     #[Test]
@@ -317,7 +318,7 @@ class GuardianConversationPortalTest extends TestCase
         $this->reply($w['thread'], 'No reply capability')->assertForbidden();
 
         // Reply alone, without view, opens nothing either.
-        DB::table('role_capabilities')->insert(['role_id' => Role::query()->where('key', Role::GUARDIAN)->value('id'), 'capability_key' => 'portal.communications.reply']);
+        LocalCatalogueFixtures::addRoleCapability(Role::query()->where('key', Role::GUARDIAN)->firstOrFail(), 'portal.communications.reply');
         $this->dropRoleCapability('portal.communications.view');
         app(CapabilityResolver::class)->forgetCache($w['g']['user'], $w['school']);
         $this->get("/app/portal/conversations/{$w['thread']->id}")->assertForbidden();

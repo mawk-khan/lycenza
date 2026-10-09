@@ -144,6 +144,9 @@ jobs:
           DB_DATABASE: school_os_test
           DB_USERNAME: school_os_app
           DB_PASSWORD: school_os_app_local_only_password
+          # SR.1 (ADR 0071 §11): the catalogue is written through pgsql_admin.
+          DB_ADMIN_USERNAME: school_os
+          DB_ADMIN_PASSWORD: school_os
         run: php artisan db:seed --class=CapabilityAndRoleSeeder --force
 
       - name: Pint (formatting)

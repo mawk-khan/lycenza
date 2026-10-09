@@ -4,6 +4,7 @@ namespace Tests\Feature\Finance;
 
 use App\Models\Role;
 use App\Models\SchoolMembership;
+use App\Support\Testing\LocalCatalogueFixtures;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesFinanceFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -28,8 +29,8 @@ class JournalEntryApiTest extends TestCase
 
     private function viewerRole(array $capabilities): Role
     {
-        $role = Role::query()->create(['key' => 'finance-viewer-'.uniqid(), 'name' => 'Finance Viewer', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync($capabilities);
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'finance-viewer-'.uniqid(), 'name' => 'Finance Viewer', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync($capabilities));
 
         return $role;
     }
@@ -47,7 +48,8 @@ class JournalEntryApiTest extends TestCase
     #[Test]
     public function a_member_without_finance_ledger_view_is_denied(): void
     {
-        $role = $this->viewerRole([]);
+        // SR.1: an empty role is never grantable -- a role holding only an unrelated capability.
+        $role = $this->viewerRole(['students.view']);
         $school = $this->createSchool();
         $user = $this->createUser();
         $membership = $this->createMembership($user, $school);

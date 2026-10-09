@@ -12,6 +12,7 @@ use App\Models\Role;
 use App\Models\SchoolAuditEvent;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -141,8 +142,8 @@ class TeacherCurriculumDeliveryAccessTest extends TestCase
     public function any_role_carrying_the_capability_works_the_same_the_role_label_is_never_consulted(): void
     {
         $w = $this->teacherWorld();
-        $role = Role::query()->create(['key' => 'test.class_lead.'.Str::uuid(), 'name' => 'Class lead', 'scope' => 'school', 'is_system' => false]);
-        $role->capabilities()->sync(['curriculum.delivery.teacher']);
+        $role = LocalCatalogueFixtures::asOwner(fn () => Role::query()->create(['key' => 'test.class_lead.'.Str::uuid(), 'name' => 'Class lead', 'scope' => 'school', 'is_system' => false]));
+        LocalCatalogueFixtures::asOwner(fn () => $role->capabilities()->sync(['curriculum.delivery.teacher']));
         [$user, $employee] = $this->teacher($w, roleKey: $role->key);
         $this->own($w, $employee);
 
