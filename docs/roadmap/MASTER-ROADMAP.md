@@ -47,6 +47,16 @@ waived or complete.
 - **E16.** The decision `OWNER-0O-E16-2026-09-29` is historical evidence. It
   may lapse (2026-10-29); final qualification needs a fresh scan and
   decision on its own date.
+  *(Post-POR roadmap audit, 2026-10-09; a fact, not a new decision:* the
+  lapse is not confined to final qualification. From 2026-10-29 (UTC) the
+  `ci.yml` `supply-chain` job fails on every push to `main` and every pull
+  request, because `qualify audit` loads the exceptions before it reports
+  (`qualify.py` `cmd_audit`). `qualify rescan` also refuses to run once the
+  file has expired. After that date, a renewal needs a fresh scan through the
+  full qualification pipeline (`qualify all`; its scan stage does not load
+  the exceptions) and then a new owner decision, rather than a cheap re-scan
+  of retained SBOMs. PHPUnit and the release tooling tests are
+  unaffected. Main is unprotected (E03), so merges are not blocked.)*
 - **E03 is GOVERNANCE_REQUIRED — DEFERRED TO FINAL PROJECT / PRODUCTION
   HARDENING.** The temporary `main` ruleset created on 2026-09-29 was
   removed the same day for active development. The E03 evidence merged by
