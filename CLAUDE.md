@@ -1100,3 +1100,23 @@ once several modules copy it.
     grants only through `App\Support\Testing\LocalCatalogueFixtures`
     (local/testing only; `platform:verify-database` fails if its schema
     exists elsewhere) -- never by re-granting the runtime role privileges.
+
+94. **Who may grant or revoke a School role is decided by
+    `App\Domain\Identity\Application\Staff\RoleGrantAuthority`, inside the
+    mutation transaction, after the School access lock and the target's
+    locks (ADR 0071 §24, SR.2).** An issuer grants a role only when they hold
+    `school.roles.manage` in that School with an active membership, are not
+    the grantee, the role is not retired or empty, and every capability is
+    held or covered by a held class grant right
+    (`school.roles.grant.{hr,hr_sensitive,payroll_sensitive}`; coverage only
+    in `App\Support\Authorization\CapabilityClasses::GRANT_RIGHTS`, mirrored
+    in `capabilities.grant_right`). Revoking one role needs the same
+    authority; off-boarding does not. Invitation issue, resend and acceptance
+    take the School access lock, and acceptance re-validates the issuer's
+    CURRENT authority. A grant right authorizes role grants only -- never
+    check one for data access, and never put one on an operational role. A
+    refused decision is audited once as
+    `school.membership.role_grant_refused` (classes, never capabilities);
+    validation is never audited. Never pre-check grant authority outside
+    the transaction as the deciding check, and never rely on the database
+    trigger as normal control flow.

@@ -21,7 +21,9 @@ final class StaffAccountException extends RuntimeException
         'invalid_email' => 'Enter a valid email address.',
         'roles_required' => 'Choose at least one School role.',
         'role_unknown' => 'Choose roles from the list.',
-        'role_escalation' => 'You can only grant roles whose permissions you hold yourself.',
+        'role_escalation' => 'You can only grant roles whose permissions you hold, or are authorised to grant, yourself.',
+        'revoke_escalation' => 'You can only remove roles that you could grant yourself. Ask an administrator who can, or off-board the staff account.',
+        'role_unavailable' => 'That role is no longer offered.',
         'already_member' => 'That person is already a member of this School.',
         'already_invited' => 'That address already has a pending invitation. Resend or revoke it instead.',
         'invitation_not_pending' => 'That invitation is no longer pending.',
@@ -36,8 +38,40 @@ final class StaffAccountException extends RuntimeException
         'last_administrator' => 'This would leave the School without an administrator who can manage staff. Add or keep another administrator first.',
     ];
 
-    public function __construct(public readonly string $outcome)
+    /**
+     * @param  array<string, mixed>  $refusal  SR.2: set only for a refused role-grant authority
+     *                                         decision -- the `school.membership.role_grant_refused` metadata
+     *                                         (classes, never capabilities), recorded after the rollback
+     */
+    public function __construct(public readonly string $outcome, public readonly array $refusal = [])
     {
         parent::__construct(self::MESSAGES[$outcome] ?? 'This action is not possible.');
+    }
+
+    /**
+     * SR.2 (ADR 0071 §13): a refused role-grant (or revoke) authority decision.
+     * The person sees a bounded message; the audit metadata carries the
+     * refusal code and, for `not_covered`, the uncovered CLASSES only.
+     *
+     * @param  array<string, mixed>  $context  stage, roleKey, schoolMembershipId, invitationId
+     */
+    public static function refusedGrant(RoleGrantDecision $decision, array $context): self
+    {
+        $refusal = (string) $decision->refusal;
+        $outcome = match ($refusal) {
+            'inactive_issuer', 'not_role_manager' => 'not_authorized',
+            'self_administration' => 'self_administration',
+            'retired', 'empty_role' => 'role_unavailable',
+            default => ($context['stage'] ?? null) === 'revoke' ? 'revoke_escalation' : 'role_escalation',
+        };
+
+        return new self($outcome, array_filter([
+            'stage' => $context['stage'] ?? null,
+            'schoolMembershipId' => $context['schoolMembershipId'] ?? null,
+            'invitationId' => $context['invitationId'] ?? null,
+            'roleKey' => $context['roleKey'] ?? null,
+            'refusal' => $refusal,
+            'uncoveredClasses' => $decision->uncoveredClasses === [] ? null : $decision->uncoveredClasses,
+        ], fn ($value) => $value !== null));
     }
 }

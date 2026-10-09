@@ -28,7 +28,10 @@ use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
  * always the trusted, selected School (`school-context`), never a
  * client-supplied id.
  *
- * - view: `school.members.view`;
+ * - view the staff list: `school.members.view`;
+ * - view the role catalogue and role assignments (who holds which role, the
+ *   roles an invitation carries): `school.roles.view` (SR.2, ADR 0071 §10.4)
+ *   -- a viewing capability only: it never satisfies any mutation;
  * - invite: `school.members.manage` + `school.roles.manage`;
  * - resend / revoke an invitation: `school.members.manage`;
  * - off-board (suspend) / reactivate: `school.members.manage` +
@@ -64,9 +67,12 @@ class StaffAccountController extends Controller
             throw new AccessDeniedHttpException('You cannot view this School\'s staff accounts.');
         }
 
+        $canViewRoles = $this->roles->canViewRoles($user, $school);
+
         return Inertia::render('App/StaffAccounts/Index', [
-            ...$this->directory->for($school),
-            'roleCatalog' => $this->roles->catalogFor($user, $school),
+            ...$this->directory->for($school, withRoles: $canViewRoles),
+            'roleCatalog' => $canViewRoles ? $this->roles->catalogFor($user, $school) : [],
+            'canViewRoles' => $canViewRoles,
             'canInvite' => $this->roles->canAdminister($user, $school),
             'canManageMembers' => $this->roles->canManageMembers($user, $school),
             'canManageRoles' => $this->roles->canManageRoles($user, $school),

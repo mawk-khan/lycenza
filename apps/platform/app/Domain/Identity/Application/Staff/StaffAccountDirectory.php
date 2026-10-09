@@ -17,6 +17,11 @@ use App\Support\Tenancy\TenantContext;
  * its member's address, status, active roles, and pending/recent
  * invitations. Never another School, a platform or Group role, a password,
  * a token or HR data.
+ *
+ * SR.2 (ADR 0071 §10.4): role assignments -- a member's active roles and the
+ * roles an invitation carries -- are shown only to a viewer holding
+ * `school.roles.view` ($withRoles); `school.members.view` alone lists who has
+ * staff access, not with which roles.
  */
 final class StaffAccountDirectory
 {
@@ -25,9 +30,9 @@ final class StaffAccountDirectory
     /**
      * @return array{staff: list<array<string, mixed>>, invitations: list<array<string, mixed>>}
      */
-    public function for(School $school): array
+    public function for(School $school, bool $withRoles = true): array
     {
-        return $this->context->withSchool($school, function () use ($school): array {
+        return $this->context->withSchool($school, function () use ($school, $withRoles): array {
             // POR.1: staff = `school`-scope grants only; a Guardian's portal grant never lists them here.
             $grants = MembershipRoleAssignment::query()
                 ->where('school_id', $school->id)
@@ -44,7 +49,7 @@ final class StaffAccountDirectory
                 ->sortBy(fn (SchoolMembership $m) => [$m->status !== SchoolMembership::STATUS_ACTIVE, mb_strtolower((string) $m->user?->name)])
                 ->values();
 
-            $staff = $memberships->map(function (SchoolMembership $m) use ($grants): array {
+            $staff = $memberships->map(function (SchoolMembership $m) use ($grants, $withRoles): array {
                 $active = $grants->get($m->id, collect())->filter(fn (MembershipRoleAssignment $g) => $g->isActive());
 
                 return [
@@ -54,7 +59,7 @@ final class StaffAccountDirectory
                     // E21.4: a minimized former member shows as "Former user", with no address.
                     'email' => $m->user?->publicEmail(),
                     'status' => $m->status,
-                    'roles' => $active->map(fn (MembershipRoleAssignment $g) => ['key' => $g->role->key, 'name' => $g->role->name])->sortBy('name')->values()->all(),
+                    'roles' => $withRoles ? $active->map(fn (MembershipRoleAssignment $g) => ['key' => $g->role->key, 'name' => $g->role->name])->sortBy('name')->values()->all() : [],
                     'joinedAt' => $m->joined_at?->toIso8601String(),
                 ];
             })->all();
@@ -79,7 +84,7 @@ final class StaffAccountDirectory
                     'id' => $i->id,
                     'email' => $i->destination_email,
                     'status' => $i->effectiveStatus(),
-                    'roles' => $roleNames->get($i->id, collect())->map(fn (StaffAccountInvitationRole $r) => $r->role->name)->sort()->values()->all(),
+                    'roles' => $withRoles ? $roleNames->get($i->id, collect())->map(fn (StaffAccountInvitationRole $r) => $r->role->name)->sort()->values()->all() : [],
                     'expiresAt' => $i->expires_at->toIso8601String(),
                     'createdAt' => $i->created_at->toIso8601String(),
                 ])->values()->all(),

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Identity\Application\Staff;
 
+use App\Domain\Identity\Application\SchoolAccessLock;
 use App\Domain\Identity\Infrastructure\StaffAccountInvitation;
 use App\Domain\Identity\Infrastructure\StaffAccountInvitationRole;
 use App\Models\Role;
@@ -37,6 +38,17 @@ use Illuminate\Support\Facades\Validator;
  * roles, its email (outbox, ADR 0055) and its audit record commit together,
  * under SchoolOperationalGuard.
  *
+ * SR.2 (ADR 0071 §10.1, §14): issue, resend and revoke run under the School
+ * access lock (SchoolAccessLock, taken FIRST, like every other staff-access
+ * mutation), and the issuer's authority over every invited role is decided
+ * INSIDE that transaction (RoleGrantAuthority: held or covered by a held
+ * grant right; the role active and non-empty) -- never on a stale
+ * pre-transaction read. A resend re-issues the invitation under the
+ * RESENDER's authority (they become its issuer of record, whose current
+ * authority acceptance re-validates), so a resend can never carry role
+ * intent the resender could not grant. A refused decision is audited once
+ * (`school.membership.role_grant_refused`) after the rollback.
+ *
  * Anti-enumeration (ADR 0059 section 15): the School learns only its OWN
  * facts (the address is already its member, or already has a pending
  * invitation). Every other identity state -- unknown, another School's
@@ -62,6 +74,8 @@ final class StaffInvitationService
         private readonly SchoolOperationalGuard $guard,
         private readonly TenantContext $context,
         private readonly AuditRecorder $audit,
+        private readonly RoleGrantAuthority $authority,
+        private readonly RoleGrantRefusalAudit $refusals,
     ) {}
 
     /**
@@ -78,7 +92,7 @@ final class StaffInvitationService
             throw new StaffAccountException('invalid_email');
         }
 
-        $roles = $this->roles->grantable($actor, $school, $roleKeys);
+        $roles = $this->roles->resolve($roleKeys);
 
         if (! $this->emailProviders->criticalEmailAvailable()) {
             throw new StaffAccountException('email_unavailable');
@@ -88,9 +102,12 @@ final class StaffInvitationService
 
         try {
             return DB::transaction(function () use ($school, $actor, $email, $roles): StaffAccountInvitation {
-                $this->requireOperational($school);
+                $this->lockAndRequireOperational($school);
 
                 return $this->context->withSchool($school, function () use ($school, $actor, $email, $roles): StaffAccountInvitation {
+                    $this->authorizeRoles($school, $actor, $roles, 'invitation');
+                    $this->roles->requireIssuer($actor, $school);
+
                     if ($this->isOwnMember($school, $email)) {
                         throw new StaffAccountException('already_member');
                     }
@@ -116,6 +133,10 @@ final class StaffInvitationService
             });
         } catch (UniqueConstraintViolationException) {
             throw new StaffAccountException('already_invited');
+        } catch (StaffAccountException $e) {
+            $this->refusals->recordAfterRollback($school, $actor, $e);
+
+            throw $e;
         }
     }
 
@@ -136,17 +157,25 @@ final class StaffInvitationService
 
         $this->limiter->hit($school->id, $actor->id);
 
-        return DB::transaction(function () use ($school, $actor, $invitationId): StaffAccountInvitation {
-            $this->requireOperational($school);
+        try {
+            return DB::transaction(function () use ($school, $actor, $invitationId): StaffAccountInvitation {
+                $this->lockAndRequireOperational($school);
 
-            return $this->context->withSchool($school, function () use ($school, $actor, $invitationId): StaffAccountInvitation {
-                $invitation = $this->lockPending($school, $invitationId);
-                $roles = $invitation->roles()->with('role')->get()->map(fn (StaffAccountInvitationRole $r) => $r->role)->all();
-                $this->end($school, $actor, $invitation, 'reissued');
+                return $this->context->withSchool($school, function () use ($school, $actor, $invitationId): StaffAccountInvitation {
+                    $invitation = $this->lockPending($school, $invitationId);
+                    $roles = $invitation->roles()->with('role')->get()->map(fn (StaffAccountInvitationRole $r) => $r->role)->sortBy('key')->values()->all();
+                    // SR.2: the resender becomes the issuer of record -- only roles they could grant now.
+                    $this->authorizeRoles($school, $actor, $roles, 'invitation_resend', $invitation->id);
+                    $this->end($school, $actor, $invitation, 'reissued');
 
-                return $this->create($school, $actor, $invitation->destination_email, $roles);
+                    return $this->create($school, $actor, $invitation->destination_email, $roles);
+                });
             });
-        });
+        } catch (StaffAccountException $e) {
+            $this->refusals->recordAfterRollback($school, $actor, $e);
+
+            throw $e;
+        }
     }
 
     /**
@@ -157,7 +186,7 @@ final class StaffInvitationService
         $this->roles->requireMemberManager($actor, $school);
 
         DB::transaction(function () use ($school, $actor, $invitationId): void {
-            $this->requireOperational($school);
+            $this->lockAndRequireOperational($school);
 
             $this->context->withSchool($school, function () use ($school, $actor, $invitationId): void {
                 $this->end($school, $actor, $this->lockPending($school, $invitationId), 'revoked');
@@ -165,10 +194,31 @@ final class StaffInvitationService
         });
     }
 
-    private function requireOperational(School $school): void
+    /** SR.2 (ADR 0071 §14): the School access lock FIRST, then the School FOR SHARE. */
+    private function lockAndRequireOperational(School $school): void
     {
+        SchoolAccessLock::hold($school->id);
+
         if (! $this->guard->holdOperational($school->id)) {
             throw new StaffAccountException('school_not_operational');
+        }
+    }
+
+    /**
+     * Every invited role decided under the locks, before anything is written.
+     *
+     * @param  list<Role>  $roles
+     *
+     * @throws StaffAccountException
+     */
+    private function authorizeRoles(School $school, User $actor, array $roles, string $stage, ?string $invitationId = null): void
+    {
+        foreach ($roles as $role) {
+            $decision = $this->authority->forGrant($actor, $school, $role, lock: true);
+
+            if (! $decision->allowed()) {
+                throw StaffAccountException::refusedGrant($decision, ['stage' => $stage, 'invitationId' => $invitationId, 'roleKey' => $role->key]);
+            }
         }
     }
 

@@ -4,7 +4,9 @@ namespace Database\Seeders;
 
 use App\Models\Capability;
 use App\Models\Role;
+use App\Support\Authorization\CapabilityClasses;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Seeds the platform capability/role catalog only (section 17, 18) --
@@ -54,6 +56,13 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'school.members.manage', 'label' => 'Manage school members', 'namespace' => 'school'],
             ['key' => 'school.roles.view', 'label' => 'View school role assignments', 'namespace' => 'school'],
             ['key' => 'school.roles.manage', 'label' => 'Manage school role assignments', 'namespace' => 'school'],
+            // SR.2 (ADR 0071 §6.1): class-scoped GRANT RIGHTS (authority class).
+            // They authorize granting a role whose covered capabilities the
+            // issuer does not hold, and confer no data access of their own.
+            // Coverage: App\Support\Authorization\CapabilityClasses::GRANT_RIGHTS.
+            ['key' => 'school.roles.grant.hr', 'label' => 'Grant staff roles carrying HR administration capabilities', 'namespace' => 'school'],
+            ['key' => 'school.roles.grant.hr_sensitive', 'label' => 'Grant staff roles carrying Highly Sensitive employee-record capabilities', 'namespace' => 'school'],
+            ['key' => 'school.roles.grant.payroll_sensitive', 'label' => 'Grant staff roles carrying payroll compensation capabilities', 'namespace' => 'school'],
             ['key' => 'school.audit.view', 'label' => 'View school audit log', 'namespace' => 'school'],
 
             // Phase 0C (section 48) -- minimal infrastructure-administration
@@ -931,6 +940,21 @@ class CapabilityAndRoleSeeder extends Seeder
             Capability::on(self::CATALOGUE_CONNECTION)->updateOrCreate(['key' => $capability['key']], $capability);
         }
 
+        // SR.2 (ADR 0071 §6.1, §7): the grant-right coverage, written from the
+        // one code-owned map once every key exists. A mapping no longer in the
+        // map is cleared first, so the column always equals the code map.
+        $catalogue = DB::connection(self::CATALOGUE_CONNECTION);
+        $catalogue->table('capabilities')
+            ->whereNotNull('grant_right')
+            ->whereNotIn('key', array_keys(CapabilityClasses::GRANT_RIGHTS))
+            ->update(['grant_right' => null]);
+        foreach (CapabilityClasses::GRANT_RIGHTS as $covered => $grantRight) {
+            $catalogue->table('capabilities')
+                ->where('key', $covered)
+                ->where(fn ($q) => $q->whereNull('grant_right')->orWhere('grant_right', '!=', $grantRight))
+                ->update(['grant_right' => $grantRight]);
+        }
+
         $roles = [
             'platform_super_admin' => [
                 'name' => 'Platform Super Admin',
@@ -979,6 +1003,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     'school.settings.view', 'school.settings.manage',
                     'school.members.view', 'school.members.manage',
                     'school.roles.view', 'school.roles.manage',
+                    // SR.2 (ADR 0071 §6.1): the three grant rights -- school_admin only.
+                    'school.roles.grant.hr', 'school.roles.grant.hr_sensitive', 'school.roles.grant.payroll_sensitive',
                     'school.audit.view',
                     'integrations.webhooks.view', 'integrations.webhooks.manage',
                     'integrations.api_clients.view', 'integrations.api_clients.manage',

@@ -38,6 +38,8 @@ const props = defineProps<{
     staff: StaffMember[];
     invitations: Invitation[];
     roleCatalog: RoleOption[];
+    // SR.2 (ADR 0071 §10.4): role assignments are shown only with school.roles.view.
+    canViewRoles: boolean;
     canInvite: boolean;
     canManageMembers: boolean;
     canManageRoles: boolean;
@@ -272,7 +274,7 @@ function isSelf(member: StaffMember): boolean {
                 <thead>
                     <tr class="text-slate-600">
                         <th class="py-1">Email</th>
-                        <th>Roles</th>
+                        <th v-if="canViewRoles">Roles</th>
                         <th>Status</th>
                         <th>Expires</th>
                         <th></th>
@@ -281,7 +283,7 @@ function isSelf(member: StaffMember): boolean {
                 <tbody>
                     <tr v-for="invitation in pending" :key="invitation.id" class="border-t">
                         <td class="py-1">{{ invitation.email }}</td>
-                        <td>{{ invitation.roles.join(', ') }}</td>
+                        <td v-if="canViewRoles">{{ invitation.roles.join(', ') }}</td>
                         <td>{{ statusLabel[invitation.status] ?? invitation.status }}</td>
                         <td>{{ day(invitation.expiresAt) }}</td>
                         <td class="space-x-2 text-right">
@@ -334,7 +336,7 @@ function isSelf(member: StaffMember): boolean {
                             Remove access (suspend)
                         </button>
                     </div>
-                    <div class="mt-1 flex flex-wrap items-center gap-2 text-sm">
+                    <div v-if="canViewRoles" class="mt-1 flex flex-wrap items-center gap-2 text-sm">
                         <span v-if="member.roles.length === 0" class="text-slate-600">No role</span>
                         <span
                             v-for="role in member.roles"

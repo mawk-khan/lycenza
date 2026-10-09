@@ -1,8 +1,8 @@
 # ADR 0071: Staff Role Catalogue & Least-Privilege Access Contract (SR.0)
 
 - Status: **Accepted — SR.0 contract (2026-10-09). SR.1 CATALOGUE DATABASE
-  HARDENING BUILT (2026-10-09, §23).** SR.2 needs separate owner
-  authorisation.
+  HARDENING BUILT (2026-10-09, §23). SR.2 GRANT AUTHORITY, CONCURRENCY &
+  AUDIT BUILT (2026-10-09, §24).** SR.3 needs separate owner authorisation.
 - Date: 2026-10-09
 - Programme: **SR — Staff Role Catalogue & Least-Privilege Access**
   (`MASTER-ROADMAP.md`, post-foundation programme 7).
@@ -796,6 +796,182 @@ grantor-less fixture grants inside the caller's transaction.
   rule, in-transaction re-check, revoke rule, invitation locking and
   `role_grant_refused` audit (SR.2);
 - demo persona transition (SR.3);
+- the EmploymentRecord gap stays open until SR.3–SR.4.
+
+## 24. SR.2 — grant authority, concurrency and audit, as built (2026-10-09)
+
+### 24.1 The grant rights (exact)
+Three `school`-namespace capabilities, class `authority`, seeded by
+`CapabilityAndRoleSeeder` (admin connection) onto `school_admin` only. The
+coverage lives in one code map, `App\Support\Authorization\CapabilityClasses::GRANT_RIGHTS`,
+and the seeder writes it to `capabilities.grant_right` (clearing any mapping
+no longer in the map); a test pins code = database = the list below.
+
+| Grant right | Covers (exactly) |
+|---|---|
+| `school.roles.grant.hr` (15) | `hr.categories.view`, `hr.categories.manage`, `hr.departments.view`, `hr.departments.manage`, `hr.positions.view`, `hr.positions.manage`, `hr.employees.assignments.view`, `hr.employees.assignments.manage`, `hr.employees.qualifications.view`, `hr.employees.qualifications.manage`, `hr.employees.documents.view`, `hr.employees.documents.manage`, `hr.employees.notes.view`, `hr.employees.notes.manage`, `hr.employees.personal.manage` |
+| `school.roles.grant.hr_sensitive` (2) | `hr.employees.sensitive.view`, `hr.employees.sensitive.manage` |
+| `school.roles.grant.payroll_sensitive` (2) | `payroll.compensation.sensitive.view`, `payroll.compensation.sensitive.manage` |
+
+- `school_admin` holds none of the 19 covered keys (D3 stands); `principal`,
+  `teacher`, `staff_self_service` and `guardian` hold no grant right.
+- No grant right is covered, chains or self-covers (SR.1 trigger + tests);
+  none covers an `authority`, `legal-gated` or `owned-scope` key, `portal.*`,
+  `examinations.marks.*` or `payroll.statutory.*`.
+- **Class map:** `CapabilityClasses::CLASSES` classifies all 177 `school`
+  capabilities (Appendix A's 174 + the three grant rights) from the closed
+  set; an exhaustive test fails on an unclassified or unknown key. Classes
+  are audit/display metadata, never an authorization input.
+- **No data access:** an architecture guard pins that only the code map
+  names a `school.roles.grant.*` key in `app/`.
+
+### 24.2 The application decision (`RoleGrantAuthority`)
+The application mirror of the SR.1 trigger (which stays the final
+backstop). A School role is grantable by an issuer when:
+1. the role is not retired and has ≥ 1 capability (grant only);
+2. the grantee is not the issuer;
+3. the issuer is enabled with an ACTIVE membership in this School;
+4. the issuer **holds** `school.roles.manage` there;
+5. every capability is held there, or covered by a held grant right.
+
+"Held" is read fresh from the database (never the 60-second cache), from
+the issuer's active **`school`-scope** grants only, exactly the trigger's
+join, so a `guardian` grant (and a dual persona's portal keys) never counts.
+Inside a mutation the issuer's membership and active grants are read
+`FOR SHARE`. No role key is an authorization input (guard extended: only
+`SchoolBootstrapAdministrationService` names a School role key in `app/`).
+
+Refusal codes (closed, `RoleGrantDecision::REFUSALS`): `inactive_issuer`,
+`not_role_manager`, `self_administration`, `retired`, `empty_role`,
+`not_covered`, `database_backstop`. User-facing outcomes stay bounded
+(`not_authorized` → 403; `role_escalation`, `revoke_escalation`,
+`role_unavailable`, `self_administration` → 422) and never name a
+capability, grant right, SQL or database role.
+
+### 24.3 Where it is decided, and the lock order
+Every path takes the School access lock first; the decision runs **after**
+the target locks, inside the transaction. Role keys are resolved before the
+transaction only as validation (system `school` roles; retired and emptied
+system roles resolve so the decision can refuse them explicitly).
+
+| Path | Order inside the transaction |
+|---|---|
+| `grantRole` | access lock → School FOR SHARE → `school.roles.manage` (fresh) → target membership FOR UPDATE → already-granted check → **decision** (issuer rows FOR SHARE) → INSERT (trigger) |
+| `reactivate` | access lock → School → members+roles manage → target FOR UPDATE → **decision for every chosen role** → User FOR UPDATE → reset revocations → INSERTs |
+| `revokeRole` | access lock → School → `school.roles.manage` → target FOR UPDATE → its grant FOR UPDATE → **revoke decision** → UPDATE |
+| `suspend` (off-boarding) | unchanged; not coverage-gated (§10.3) |
+| invitation `issue` | access lock → School → **decision for every role** → members+roles manage → pending-row lock → INSERT |
+| invitation `resend` | access lock → School → pending-row lock → **decision for every role, as the resender** → end + re-issue |
+| invitation `revoke` | access lock → School → pending-row lock (no role decision) |
+| `accept` | access lock → School → invitation FOR UPDATE → **issuer's current decision for every role** + `school.members.manage` (fresh) → User FOR UPDATE → membership + grants |
+
+No cycle: the issuer's rows are always taken FOR SHARE after the target's
+rows and before any User row, and all of these paths already serialize per
+School on the access lock.
+
+### 24.4 Revoke model
+- **Single-role revoke (§10.2):** the issuer must be able to grant that role
+  now (same rule, `forRevoke`), so nobody removes a role outside their own
+  administrative authority. A **retired or emptied role stays revocable**
+  (retirement stops new grants only).
+- **Deliberate asymmetry:** off-boarding (`suspend`) and the reactivation
+  reset revoke every staff grant without coverage (§10.3) -- the emergency
+  path.
+- **Grant-right loss:** an administrator who loses a grant right can no
+  longer grant or revoke roles that needed it (`revoke_escalation`), but the
+  grant is never stranded: any administrator holding the right can revoke
+  it, and off-boarding always removes it. Since the grant rights sit only
+  on `school_admin`, and the last-qualifying-administrator rule keeps one,
+  a School always has a holder unless a release changes that.
+
+### 24.5 Invitations
+- **Issue and resend** run under the access lock and decide every role
+  inside it. **Resend re-issues under the RESENDER's authority**: the
+  resender becomes the invitation's issuer of record (`invited_by_user_id`,
+  unchanged behaviour), so a resend now needs `school.roles.manage` and
+  coverage of every role, not only `school.members.manage`. Without this a
+  member manager could create an invitation that acceptance would refuse
+  anyway. Clarification of ADR 0059 §6, recorded here.
+- **Acceptance re-validates the issuer's CURRENT authority** (decided under
+  the lock, FOR SHARE): stale invitation-time authority never grants. A
+  revoked issuer, a lost grant right, a retired or emptied role all make the
+  invitation `invalid` (it stays pending until it expires or is revoked).
+- **Retirement concurrency:** retirement is a release action on the admin
+  connection and takes no School lock. A retirement committed before the
+  grant statement is seen (application decision and trigger both read
+  committed state) and refuses; a retirement still uncommitted when a grant
+  commits orders after it (the grant predates the retirement and stays
+  active until revoked, §11.4). Proven sequentially; there is no lock to
+  observe a real-process wait on.
+
+### 24.6 `school.roles.view`
+- **Settings → Staff accounts:** the staff list stays `school.members.view`;
+  the role catalogue, each member's active roles and an invitation's roles
+  are sent only with `school.roles.view` (`canViewRoles`).
+- **Catalogue payload:** key, name and `grantable` only -- never capability
+  keys, grant rights, retired or non-system rows.
+- **No mutation:** every grant/revoke/invite/reactivate route still checks
+  `school.roles.manage` (and `school.members.manage` where it did); a
+  viewer is 403.
+- **Effect:** `principal` (members.view, not roles.view, unchanged) now sees
+  who has staff access but not their roles -- the D6 decision applied.
+
+### 24.7 Audit
+- **`school.membership.role_grant_refused`:** one event per refused
+  decision, emitted only by the deciding service (never for validation --
+  unknown role, missing field, already granted, not found -- and never by the
+  HTTP capability gate). A refusal inside a mutation is recorded in its own
+  transaction after the rollback; an acceptance refusal in the committing
+  acceptance transaction. Metadata: `stage` (`grant`, `revoke`,
+  `reactivation`, `invitation`, `invitation_resend`,
+  `invitation_acceptance`), `schoolMembershipId` or `invitationId`,
+  `roleKey`, `refusal`, and for `not_covered` the `uncoveredClasses` -- never a
+  capability list, address or personal data. A trigger refusal after an
+  allowed decision (never expected) is translated once into
+  `database_backstop`.
+- **`school.membership.role_assigned`:** when a grant right was used, adds
+  `grantRights` (sorted, every right used) and `classes` (sorted classes of
+  the capabilities they covered); an ordinary grant is unchanged.
+- **Unchanged:** `role_revoked`, `suspended`, `staff_offboarded`,
+  `reactivated`, `staff.account_invited`.
+- **Clarification of §13:** the refusal set is wider than the four codes
+  named there (`inactive_issuer`, `not_role_manager`, `database_backstop`
+  added), and the sensitive-grant field is the list `grantRights`.
+
+### 24.8 MFA, bootstrap, scopes
+- Every staff-role mutation route still requires a fresh MFA code (test
+  over all seven routes). Action-level step-up stays SR.4.
+- The ADR 0047 bootstrap is untouched: `SchoolBootstrapAdministrationService`
+  writes the first `school_admin` directly (trigger exception unchanged);
+  no grant right is involved and this class never runs there.
+- Teacher, `staff_self_service` and Guardian semantics are unchanged.
+
+### 24.9 Proof
+- `StaffRoleGrantAuthorityTest` (22): mapping, classes, guards,
+  grantability, revoke, reactivation, invitations, acceptance, backstop, MFA,
+  `school.roles.view`.
+- `StaffRoleGrantParityTest`: 16 cases, application decision = raw
+  runtime INSERT outcome.
+- `StaffGrantAuthorityConcurrencyTest` (real processes, observed waits, both
+  orders): grant vs issuer revoke; grant vs grant-right revoke; acceptance vs
+  issuer revoke; revoke vs reactivation; revoke vs off-boarding; and
+  invitation issue and acceptance waiting on the School access lock ITSELF
+  (the holder touches no row they read, so only that lock can serialize).
+- **Mutation checks (11, all caught, all restored):** grant-right coverage
+  disabled; an authority key added to the grant-right map; an authority
+  class on a covered key; the `school.roles.manage` check removed (parity);
+  the in-transaction grant decision bypassed; the acceptance re-decision
+  bypassed; `school.roles.view` replaced by `school.members.view`; the
+  sensitive-grant metadata always written; the refusal audit dropped; the
+  revoke rule disabled; the access lock removed from acceptance and from
+  issue. The acceptance-lock removal first SURVIVED the issuer-revoke race
+  (the revocation's grant-row lock still serialized it), which is why the
+  lock-only race above was added.
+
+### 24.10 Not in SR.2
+- the thirteen roles, catalogue snapshot and class display (SR.3);
+- demo personas (SR.3);
+- module-by-module verification and action-level MFA (SR.4);
 - the EmploymentRecord gap stays open until SR.3–SR.4.
 
 ## Appendix A — capability-class map (v1, all 174 `school` capabilities)

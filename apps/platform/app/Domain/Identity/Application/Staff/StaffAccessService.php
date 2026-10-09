@@ -54,6 +54,20 @@ use Illuminate\Support\Facades\DB;
  * to remove each other's authority serialize; the invariant is evaluated
  * AFTER the change inside the transaction (never a pre-transaction count),
  * so exactly one of them can succeed if the other would leave none.
+ *
+ * SR.2 (ADR 0071 §6.2, §10, §14): WHO may grant or revoke WHICH role is
+ * RoleGrantAuthority's decision, taken INSIDE the transaction after the
+ * locks (School access lock -> School FOR SHARE -> target membership FOR
+ * UPDATE -> its grants -> the issuer's membership and active grants FOR
+ * SHARE -> the User FOR UPDATE on reactivation), never on a pre-transaction
+ * read. Grant (grantRole, reactivation): held or covered by a held grant
+ * right; the role active and non-empty. Revoke one role: the issuer must be
+ * able to grant it now (a retired or emptied role stays revocable).
+ * Off-boarding (suspend) and the reactivation reset are NOT coverage-gated
+ * (§10.3: the emergency path always removes every staff role). A refused
+ * decision rolls the mutation back and is then audited once
+ * (`school.membership.role_grant_refused`, RoleGrantRefusalAudit); the SR.1
+ * database grantor trigger stays the final backstop.
  */
 final class StaffAccessService
 {
@@ -76,6 +90,8 @@ final class StaffAccessService
         private readonly CapabilityResolver $capabilities,
         private readonly AuditRecorder $audit,
         private readonly ActingGuardianResolver $guardians,
+        private readonly RoleGrantAuthority $authority,
+        private readonly RoleGrantRefusalAudit $refusals,
     ) {}
 
     /**
@@ -129,10 +145,11 @@ final class StaffAccessService
      */
     public function reactivate(School $school, User $actor, string $membershipId, array $roleKeys): void
     {
-        $roles = $this->roles->grantable($actor, $school, $roleKeys);
+        $roles = $this->roles->resolve($roleKeys);
+        $refusal = ['stage' => 'reactivation', 'schoolMembershipId' => $membershipId, 'roleKey' => $roles[0]->key];
 
-        $this->run($school, $actor, [StaffRoleCatalog::MEMBERS, StaffRoleCatalog::ROLES], function () use ($school, $actor, $membershipId, $roles): User {
-            $membership = $this->lockStaffMembership($school, $actor, $membershipId);
+        $this->run($school, $actor, [StaffRoleCatalog::MEMBERS, StaffRoleCatalog::ROLES], function () use ($school, $actor, $membershipId, $roles, $refusal): User {
+            $membership = $this->lockStaffMembership($school, $actor, $membershipId, $refusal);
 
             // POR.1: a dual staff + Guardian membership off-boarded from staff
             // stays ACTIVE (its Guardian identity kept); it is "suspended" from
@@ -143,6 +160,12 @@ final class StaffAccessService
 
             if ($membership->status !== SchoolMembership::STATUS_SUSPENDED && ! $staffOffboarded) {
                 throw new StaffAccountException('not_suspended');
+            }
+
+            // SR.2: every chosen role decided under the locks, before any change.
+            $decisions = [];
+            foreach ($roles as $role) {
+                $decisions[$role->id] = $this->decideGrant($school, $actor, $membership, $role, 'reactivation');
             }
 
             $user = User::query()->whereKey($membership->user_id)->lockForUpdate()->firstOrFail();
@@ -158,7 +181,7 @@ final class StaffAccessService
             $membership->update(['status' => SchoolMembership::STATUS_ACTIVE]);
 
             foreach ($roles as $role) {
-                $this->grant($school, $actor, $membership, $role);
+                $this->grant($school, $actor, $membership, $role, $decisions[$role->id], 'reactivation');
             }
 
             $this->audit->school($school, self::REACTIVATED, actor: $actor, subject: $membership, metadata: [
@@ -168,7 +191,7 @@ final class StaffAccessService
             ]);
 
             return $user;
-        });
+        }, $refusal);
     }
 
     /**
@@ -176,10 +199,11 @@ final class StaffAccessService
      */
     public function grantRole(School $school, User $actor, string $membershipId, string $roleKey): void
     {
-        [$role] = $this->roles->grantable($actor, $school, [$roleKey]);
+        [$role] = $this->roles->resolve([$roleKey]);
+        $refusal = ['stage' => 'grant', 'schoolMembershipId' => $membershipId, 'roleKey' => $role->key];
 
-        $this->run($school, $actor, [StaffRoleCatalog::ROLES], function () use ($school, $actor, $membershipId, $role): User {
-            $membership = $this->lockStaffMembership($school, $actor, $membershipId);
+        $this->run($school, $actor, [StaffRoleCatalog::ROLES], function () use ($school, $actor, $membershipId, $role, $refusal): User {
+            $membership = $this->lockStaffMembership($school, $actor, $membershipId, $refusal);
 
             if ($membership->status !== SchoolMembership::STATUS_ACTIVE) {
                 throw new StaffAccountException('not_active');
@@ -195,10 +219,11 @@ final class StaffAccessService
                 throw new StaffAccountException('role_already_granted');
             }
 
-            $this->grant($school, $actor, $membership, $role);
+            $decision = $this->decideGrant($school, $actor, $membership, $role, 'grant');
+            $this->grant($school, $actor, $membership, $role, $decision, 'grant');
 
             return $membership->user;
-        });
+        }, $refusal);
     }
 
     /**
@@ -206,8 +231,10 @@ final class StaffAccessService
      */
     public function revokeRole(School $school, User $actor, string $membershipId, string $roleKey): void
     {
-        $this->run($school, $actor, [StaffRoleCatalog::ROLES], function () use ($school, $actor, $membershipId, $roleKey): User {
-            $membership = $this->lockStaffMembership($school, $actor, $membershipId);
+        $refusal = ['stage' => 'revoke', 'schoolMembershipId' => $membershipId, 'roleKey' => $roleKey];
+
+        $this->run($school, $actor, [StaffRoleCatalog::ROLES], function () use ($school, $actor, $membershipId, $roleKey, $refusal): User {
+            $membership = $this->lockStaffMembership($school, $actor, $membershipId, $refusal);
 
             $grant = MembershipRoleAssignment::query()
                 ->where('school_membership_id', $membership->id)
@@ -220,10 +247,17 @@ final class StaffAccessService
                 throw new StaffAccountException('role_not_granted');
             }
 
+            // SR.2 (ADR 0071 §10.2): only a role the issuer could grant now.
+            $role = Role::query()->findOrFail($grant->role_id);
+            $decision = $this->authority->forRevoke($actor, $school, $role, $membership->user_id, lock: true);
+            if (! $decision->allowed()) {
+                throw StaffAccountException::refusedGrant($decision, $refusal);
+            }
+
             $this->revokeGrant($school, $actor, $membership, $grant, MembershipRoleAssignment::REASON_REVOKED);
 
             return $membership->user;
-        });
+        }, $refusal);
     }
 
     /**
@@ -232,23 +266,57 @@ final class StaffAccessService
      * administrator invariant -> commit; the target's capability cache is
      * forgotten inside and again after commit.
      *
+     * SR.2: for a ROLE operation ($refusal set: grant, revoke, reactivation)
+     * an authorization refusal inside the transaction is a refused role-grant
+     * decision, audited once after the rollback.
+     *
      * @param  list<string>  $capabilities
      * @param  callable(): User  $change  returns the target User
+     * @param  array<string, mixed>|null  $refusal  stage / schoolMembershipId / roleKey of a role operation
      *
      * @throws StaffAccountException
      */
-    private function run(School $school, User $actor, array $capabilities, callable $change): void
+    private function run(School $school, User $actor, array $capabilities, callable $change, ?array $refusal = null): void
     {
-        $target = DB::transaction(function () use ($school, $actor, $capabilities, $change): User {
+        try {
+            $target = $this->transact($school, $actor, $capabilities, $change, $refusal);
+        } catch (StaffAccountException $e) {
+            $this->refusals->recordAfterRollback($school, $actor, $e);
+
+            throw $e;
+        }
+
+        DB::afterCommit(fn () => $this->capabilities->forgetCache($target, $school));
+        $this->capabilities->forgetCache($target, $school);
+    }
+
+    /**
+     * @param  list<string>  $capabilities
+     * @param  callable(): User  $change
+     * @param  array<string, mixed>|null  $refusal
+     */
+    private function transact(School $school, User $actor, array $capabilities, callable $change, ?array $refusal): User
+    {
+        return DB::transaction(function () use ($school, $actor, $capabilities, $change, $refusal): User {
             SchoolAccessLock::hold($school->id);
 
             if (! $this->guard->holdOperational($school->id)) {
                 throw new StaffAccountException('school_not_operational');
             }
 
-            $capabilities === [StaffRoleCatalog::ROLES]
-                ? $this->roles->requireRoleManager($actor, $school)
-                : $this->roles->requireIssuer($actor, $school);
+            try {
+                $capabilities === [StaffRoleCatalog::ROLES]
+                    ? $this->roles->requireRoleManager($actor, $school)
+                    : $this->roles->requireIssuer($actor, $school);
+            } catch (StaffAccountException $e) {
+                if ($refusal === null) {
+                    throw $e;
+                }
+
+                $reason = $this->authority->held($actor, $school) === null ? 'inactive_issuer' : 'not_role_manager';
+
+                throw StaffAccountException::refusedGrant(RoleGrantDecision::refuse($reason), $refusal);
+            }
 
             return $this->context->withSchool($school, function () use ($school, $change): User {
                 $target = $change();
@@ -261,17 +329,17 @@ final class StaffAccessService
                 return $target;
             });
         });
-
-        DB::afterCommit(fn () => $this->capabilities->forgetCache($target, $school));
-        $this->capabilities->forgetCache($target, $school);
     }
 
     /**
-     * A staff membership of THIS School, row-locked; never the actor's own.
+     * A staff membership of THIS School, row-locked; never the actor's own
+     * (for a role operation, an audited self-administration refusal).
+     *
+     * @param  array<string, mixed>|null  $refusal
      *
      * @throws StaffAccountException
      */
-    private function lockStaffMembership(School $school, User $actor, string $membershipId): SchoolMembership
+    private function lockStaffMembership(School $school, User $actor, string $membershipId, ?array $refusal = null): SchoolMembership
     {
         $membership = SchoolMembership::query()
             ->where('school_id', $school->id)
@@ -284,7 +352,9 @@ final class StaffAccessService
         }
 
         if ($membership->user_id === $actor->id) {
-            throw new StaffAccountException('self_administration');
+            throw $refusal === null
+                ? new StaffAccountException('self_administration')
+                : StaffAccountException::refusedGrant(RoleGrantDecision::refuse('self_administration'), $refusal);
         }
 
         // POR.1: ever held a `school`-scope role (history counts) -- a
@@ -298,19 +368,39 @@ final class StaffAccessService
         return $membership;
     }
 
-    private function grant(School $school, User $actor, SchoolMembership $membership, Role $role): void
+    /**
+     * SR.2: the grant authority decided under the locks; refused -> thrown
+     * (audited after the rollback).
+     *
+     * @throws StaffAccountException
+     */
+    private function decideGrant(School $school, User $actor, SchoolMembership $membership, Role $role, string $stage): RoleGrantDecision
     {
-        $grant = MembershipRoleAssignment::query()->create([
+        $decision = $this->authority->forGrant($actor, $school, $role, $membership->user_id, lock: true);
+
+        if (! $decision->allowed()) {
+            throw StaffAccountException::refusedGrant($decision, ['stage' => $stage, 'schoolMembershipId' => $membership->id, 'roleKey' => $role->key]);
+        }
+
+        return $decision;
+    }
+
+    private function grant(School $school, User $actor, SchoolMembership $membership, Role $role, RoleGrantDecision $decision, string $stage): void
+    {
+        $grant = RoleGrantAuthority::backstopped(fn () => MembershipRoleAssignment::query()->create([
             'school_id' => $school->id,
             'school_membership_id' => $membership->id,
             'role_id' => $role->id,
             'assigned_by_user_id' => $actor->id,
             'assigned_at' => now(),
-        ]);
+        ]), ['stage' => $stage, 'schoolMembershipId' => $membership->id, 'roleKey' => $role->key]);
 
+        // SR.2 (ADR 0071 §13): a grant made through a grant right records the
+        // rights used and the classes they covered; an ordinary grant stays lightweight.
         $this->audit->school($school, self::ROLE_ASSIGNED, actor: $actor, subject: $grant, metadata: [
             'schoolMembershipId' => $membership->id,
             'roleKey' => $role->key,
+            ...$decision->grantMetadata(),
         ]);
     }
 

@@ -18,13 +18,16 @@ use Illuminate\Support\Collection;
  *   `school.roles.manage`;
  * - resend / revoke an invitation: `school.members.manage`;
  * - grant / revoke one School role: `school.roles.manage`;
- * - view: `school.members.view`.
+ * - view the staff list: `school.members.view`;
+ * - view the role catalogue and role assignments: `school.roles.view`
+ *   (SR.2, ADR 0071 §10.4).
  *
- * Roles: only `scope = 'school'` roles (the closed School catalog; the
+ * Roles: only SYSTEM `scope = 'school'` roles (the closed School catalog; the
  * database triggers also refuse any other scope), resolved server-side from
  * keys -- never a client-supplied id, never a platform or Group role, never
- * a wildcard -- and only roles whose every capability the actor holds in
- * that School right now (no escalation).
+ * a wildcard. WHO may grant or revoke which role is RoleGrantAuthority's
+ * decision (SR.2, ADR 0071 §6.2: held or covered by a held grant right),
+ * taken inside each mutation's transaction.
  */
 final class StaffRoleCatalog
 {
@@ -34,7 +37,12 @@ final class StaffRoleCatalog
 
     public const ROLES = 'school.roles.manage';
 
-    public function __construct(private readonly CapabilityResolver $capabilities) {}
+    public const VIEW_ROLES = 'school.roles.view';
+
+    public function __construct(
+        private readonly CapabilityResolver $capabilities,
+        private readonly RoleGrantAuthority $authority,
+    ) {}
 
     public function canView(User $actor, School $school): bool
     {
@@ -75,31 +83,48 @@ final class StaffRoleCatalog
     }
 
     /**
-     * The closed School role catalog, with whether $actor may grant each.
+     * SR.2 (ADR 0071 §10.4): viewing the role catalogue and role assignments.
+     * Confers nothing else -- no grant, revoke or catalogue authority.
+     */
+    public function canViewRoles(User $actor, School $school): bool
+    {
+        return $this->holds($actor, $school, [self::VIEW_ROLES]);
+    }
+
+    /**
+     * The offered School role catalogue, with whether $actor may grant each
+     * now (RoleGrantAuthority, display only -- every mutation decides again
+     * inside its transaction). Key, name and the flag only: never a role's
+     * capability keys, grant rights or another person's authority.
      *
      * @return list<array{key: string, name: string, grantable: bool}>
      */
     public function catalogFor(User $actor, School $school): array
     {
-        $held = $this->fresh($actor, $school);
+        $roles = $this->schoolRoles();
+        $decisions = $this->authority->forCatalogue($actor, $school, $roles);
 
-        return $this->schoolRoles()
+        return $roles
             ->map(fn (Role $role) => [
                 'key' => $role->key,
                 'name' => $role->name,
-                'grantable' => $this->within($role, $held),
+                'grantable' => $decisions[$role->id]->allowed(),
             ])->values()->all();
     }
 
     /**
-     * Resolves role keys to School roles the actor may grant.
+     * Resolves submitted role keys to SYSTEM School-scope roles -- validation
+     * only (`roles_required` / `role_unknown`, never audited). Retired and
+     * emptied system roles resolve, so the authority decision refuses them
+     * explicitly (`role_unavailable`, audited) instead of hiding the reason;
+     * a non-system, Guardian, Group or platform key is simply unknown.
      *
      * @param  list<mixed>  $roleKeys
      * @return list<Role>
      *
      * @throws StaffAccountException
      */
-    public function grantable(User $actor, School $school, array $roleKeys): array
+    public function resolve(array $roleKeys): array
     {
         $keys = array_values(array_unique(array_filter($roleKeys, fn ($k) => is_string($k) && $k !== '')));
 
@@ -107,40 +132,18 @@ final class StaffRoleCatalog
             throw new StaffAccountException($keys === [] ? 'roles_required' : 'role_unknown');
         }
 
-        $roles = $this->schoolRoles()->whereIn('key', $keys)->values();
+        $roles = Role::query()
+            ->where('scope', 'school')
+            ->where('is_system', true)
+            ->whereIn('key', $keys)
+            ->orderBy('key')
+            ->get();
 
         if ($roles->count() !== count($keys)) {
             throw new StaffAccountException('role_unknown');
         }
 
-        $held = $this->fresh($actor, $school);
-
-        foreach ($roles as $role) {
-            if (! $this->within($role, $held)) {
-                throw new StaffAccountException('role_escalation');
-            }
-        }
-
         return $roles->all();
-    }
-
-    /**
-     * Whether every one of $roles is still within $actor's capabilities in
-     * $school -- re-checked when an invitation is accepted.
-     *
-     * @param  iterable<Role>  $roles
-     */
-    public function stillGrantable(User $actor, School $school, iterable $roles): bool
-    {
-        $held = $this->fresh($actor, $school);
-
-        foreach ($roles as $role) {
-            if ($role->scope !== 'school' || ! $this->within($role, $held)) {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     /**
@@ -161,14 +164,6 @@ final class StaffRoleCatalog
             ->with('capabilities')
             ->orderBy('name')
             ->get();
-    }
-
-    /**
-     * @param  list<string>  $held
-     */
-    private function within(Role $role, array $held): bool
-    {
-        return array_diff($role->capabilities->pluck('key')->all(), $held) === [];
     }
 
     /** @return list<string> */

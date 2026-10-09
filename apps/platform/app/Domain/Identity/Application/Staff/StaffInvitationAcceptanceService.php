@@ -3,6 +3,7 @@
 namespace App\Domain\Identity\Application\Staff;
 
 use App\Domain\Identity\Application\Credentials\CredentialChangeService;
+use App\Domain\Identity\Application\SchoolAccessLock;
 use App\Domain\Identity\Infrastructure\StaffAccountInvitation;
 use App\Domain\Identity\Infrastructure\StaffAccountInvitationRole;
 use App\Models\MembershipRoleAssignment;
@@ -27,13 +28,20 @@ use Illuminate\Validation\Rules\Password;
  * membership with its roles.
  *
  * One transaction, in this order:
+ * 0. SR.2 (ADR 0071 §14): the School access lock (SchoolAccessLock), FIRST,
+ *    exactly like every other staff-access mutation;
  * 1. SchoolOperationalGuard hold (a suspended School: invalid, the invitation
  *    left pending until it expires);
  * 2. the invitation row lock, inside the route's School context; pending,
  *    unexpired, constant-time secret match;
- * 3. the ISSUER re-checked now: still enabled, holding
- *    `school.members.manage` + `school.roles.manage`, the roles still within
- *    their capabilities -- otherwise invalid (fail closed);
+ * 3. the ISSUER's CURRENT authority re-decided now, under the lock (SR.2:
+ *    stale invitation-time authority never survives): still enabled with an
+ *    active membership, holding `school.members.manage` +
+ *    `school.roles.manage`, and every invited role still active, non-empty
+ *    and held or covered by a grant right they hold (RoleGrantAuthority,
+ *    issuer membership and grants FOR SHARE) -- otherwise invalid (fail
+ *    closed), and the refusal audited (`role_grant_refused`, stage
+ *    `invitation_acceptance`) in this committing transaction;
  * 4. identity by the invitation's canonical email:
  *    - no User: a NEW User (name + `Password::defaults()` password through
  *      CredentialChangeService::establishInitialPassword); an insert race is
@@ -62,12 +70,13 @@ final class StaffInvitationAcceptanceService
     public const REFUSED_PROTECTED = 'staff.account_invitation_refused_protected';
 
     public function __construct(
-        private readonly StaffRoleCatalog $roles,
         private readonly CredentialChangeService $credentials,
         private readonly SchoolOperationalGuard $guard,
         private readonly TenantContext $context,
         private readonly CapabilityResolver $capabilities,
         private readonly AuditRecorder $audit,
+        private readonly RoleGrantAuthority $authority,
+        private readonly RoleGrantRefusalAudit $refusals,
     ) {}
 
     public function accept(
@@ -90,7 +99,22 @@ final class StaffInvitationAcceptanceService
 
     private function attempt(School $school, string $selector, string $secret, ?User $signedIn, ?string $name, ?string $password, ?string $passwordConfirmation): CredentialOutcome
     {
+        try {
+            return $this->transact($school, $selector, $secret, $signedIn, $name, $password, $passwordConfirmation);
+        } catch (StaffAccountException $e) {
+            // Only the never-expected database backstop reaches here (the
+            // decision above already refused everything else, in-transaction).
+            $this->refusals->recordAfterRollback($school, $signedIn, $e);
+
+            return CredentialOutcome::of(CredentialOutcome::INVALID);
+        }
+    }
+
+    private function transact(School $school, string $selector, string $secret, ?User $signedIn, ?string $name, ?string $password, ?string $passwordConfirmation): CredentialOutcome
+    {
         return DB::transaction(function () use ($school, $selector, $secret, $signedIn, $name, $password, $passwordConfirmation): CredentialOutcome {
+            SchoolAccessLock::hold($school->id);
+
             if (! $this->guard->holdOperational($school->id)) {
                 return CredentialOutcome::of(CredentialOutcome::INVALID);
             }
@@ -109,47 +133,81 @@ final class StaffInvitationAcceptanceService
                 /** @var list<Role> $roles */
                 $roles = StaffAccountInvitationRole::query()
                     ->where('staff_account_invitation_id', $invitation->id)
-                    ->with('role.capabilities')
+                    ->with('role')
                     ->get()
                     ->map(fn (StaffAccountInvitationRole $row) => $row->role)
+                    ->sortBy('key')
+                    ->values()
                     ->all();
 
-                if (! $this->issuerStillAuthorized($school, $invitation, $roles)) {
+                $decisions = $this->issuerCurrentAuthority($school, $invitation, $roles, $signedIn);
+
+                if ($decisions === null) {
                     return CredentialOutcome::of(CredentialOutcome::INVALID);
                 }
 
                 $existing = User::query()->where('email', $invitation->destination_email)->lockForUpdate()->first();
 
                 if ($existing === null) {
-                    return $this->acceptAsNewUser($school, $invitation, $roles, $name, $password, $passwordConfirmation);
+                    return $this->acceptAsNewUser($school, $invitation, $roles, $decisions, $name, $password, $passwordConfirmation);
                 }
 
                 if ($signedIn === null || $signedIn->id !== $existing->id) {
                     return CredentialOutcome::of(CredentialOutcome::SIGN_IN_REQUIRED);
                 }
 
-                return $this->acceptAsExistingUser($school, $invitation, $roles, $existing);
+                return $this->acceptAsExistingUser($school, $invitation, $roles, $decisions, $existing);
             });
         });
     }
 
     /**
+     * SR.2: the issuer's CURRENT authority over every invited role, decided
+     * under the locks -- or null (refused, audited here: this transaction
+     * commits its `invalid` outcome, so the event persists).
+     *
      * @param  list<Role>  $roles
+     * @return array<string, RoleGrantDecision>|null role id => decision
      */
-    private function issuerStillAuthorized(School $school, StaffAccountInvitation $invitation, array $roles): bool
+    private function issuerCurrentAuthority(School $school, StaffAccountInvitation $invitation, array $roles, ?User $signedIn): ?array
     {
         $issuer = $invitation->invited_by_user_id !== null ? User::query()->find($invitation->invited_by_user_id) : null;
 
-        return $issuer !== null
-            && $roles !== []
-            && $this->roles->canAdminister($issuer, $school)
-            && $this->roles->stillGrantable($issuer, $school, $roles);
+        if ($issuer === null || $roles === []) {
+            return null;
+        }
+
+        $context = ['stage' => 'invitation_acceptance', 'invitationId' => $invitation->id];
+        $decisions = [];
+
+        foreach ($roles as $role) {
+            $decision = $this->authority->forGrant($issuer, $school, $role, lock: true);
+
+            if (! $decision->allowed()) {
+                $this->refusals->record($school, $signedIn, StaffAccountException::refusedGrant($decision, $context + ['roleKey' => $role->key])->refusal);
+
+                return null;
+            }
+
+            $decisions[$role->id] = $decision;
+        }
+
+        // The invitation contract: the issuer still administers staff here
+        // (fresh, from the rows already locked above -- never the cache).
+        if (! in_array(StaffRoleCatalog::MEMBERS, $this->authority->held($issuer, $school) ?? [], true)) {
+            $this->refusals->record($school, $signedIn, StaffAccountException::refusedGrant(RoleGrantDecision::refuse('not_role_manager'), $context + ['roleKey' => $roles[0]->key])->refusal);
+
+            return null;
+        }
+
+        return $decisions;
     }
 
     /**
      * @param  list<Role>  $roles
+     * @param  array<string, RoleGrantDecision>  $decisions
      */
-    private function acceptAsNewUser(School $school, StaffAccountInvitation $invitation, array $roles, ?string $name, ?string $password, ?string $passwordConfirmation): CredentialOutcome
+    private function acceptAsNewUser(School $school, StaffAccountInvitation $invitation, array $roles, array $decisions, ?string $name, ?string $password, ?string $passwordConfirmation): CredentialOutcome
     {
         $validator = Validator::make(
             ['name' => is_string($name) ? trim($name) : $name, 'password' => $password, 'password_confirmation' => $passwordConfirmation],
@@ -180,7 +238,7 @@ final class StaffInvitationAcceptanceService
         // Receiving the invitation proved control of the mailbox.
         $locked->forceFill(['email_verified_at' => now()])->save();
 
-        $membership = $this->grantMembership($school, $invitation, $roles, $locked);
+        $membership = $this->grantMembership($school, $invitation, $roles, $decisions, $locked);
 
         $this->audit->school($school, self::ACTIVATED, actor: $locked, subject: $membership, metadata: [
             'invitationId' => $invitation->id,
@@ -193,8 +251,9 @@ final class StaffInvitationAcceptanceService
 
     /**
      * @param  list<Role>  $roles
+     * @param  array<string, RoleGrantDecision>  $decisions
      */
-    private function acceptAsExistingUser(School $school, StaffAccountInvitation $invitation, array $roles, User $user): CredentialOutcome
+    private function acceptAsExistingUser(School $school, StaffAccountInvitation $invitation, array $roles, array $decisions, User $user): CredentialOutcome
     {
         if ($user->isDisabled() || ! $user->hasLocalCredential()) {
             return CredentialOutcome::of(CredentialOutcome::INVALID);
@@ -216,7 +275,7 @@ final class StaffInvitationAcceptanceService
             return CredentialOutcome::of(CredentialOutcome::INVALID);
         }
 
-        $membership = $this->grantMembership($school, $invitation, $roles, $user);
+        $membership = $this->grantMembership($school, $invitation, $roles, $decisions, $user);
 
         $this->audit->school($school, self::LINKED_EXISTING, actor: $user, subject: $membership, metadata: [
             'invitationId' => $invitation->id,
@@ -229,8 +288,9 @@ final class StaffInvitationAcceptanceService
 
     /**
      * @param  list<Role>  $roles
+     * @param  array<string, RoleGrantDecision>  $decisions
      */
-    private function grantMembership(School $school, StaffAccountInvitation $invitation, array $roles, User $user): SchoolMembership
+    private function grantMembership(School $school, StaffAccountInvitation $invitation, array $roles, array $decisions, User $user): SchoolMembership
     {
         $membership = SchoolMembership::query()->create([
             'user_id' => $user->id,
@@ -241,18 +301,19 @@ final class StaffInvitationAcceptanceService
         ]);
 
         foreach ($roles as $role) {
-            $grant = MembershipRoleAssignment::query()->create([
+            $grant = RoleGrantAuthority::backstopped(fn () => MembershipRoleAssignment::query()->create([
                 'school_id' => $school->id,
                 'school_membership_id' => $membership->id,
                 'role_id' => $role->id,
                 'assigned_by_user_id' => $invitation->invited_by_user_id,
                 'assigned_at' => now(),
-            ]);
+            ]), ['stage' => 'invitation_acceptance', 'invitationId' => $invitation->id, 'roleKey' => $role->key]);
 
             $this->audit->school($school, self::ROLE_ASSIGNED, actor: $user, subject: $grant, metadata: [
                 'schoolMembershipId' => $membership->id,
                 'roleKey' => $role->key,
                 'invitationId' => $invitation->id,
+                ...$decisions[$role->id]->grantMetadata(),
             ]);
         }
 
