@@ -88,7 +88,12 @@ Please answer each. For each, say whether it affects **design**,
 1. **Communications:** may Guardians read their own in-app messages,
    announcements and attachments?
 2. **Attendance:** may Guardians see a linked Student's attendance history?
-   Over what period?
+   Over what period? In particular, may a Guardian see Attendance dated
+   **before** their relationship was recorded, for example after a mid-year
+   change of custody or guardianship? (The development build shows the
+   current academic year, at most 62 days at a time, whatever the
+   relationship's start; ADR 0070 §25.4.) *(Added 2026-10-09 by POR.2;
+   still a draft, not sent.)*
 3. **Fee statements:** may Guardians see a linked Student's fee statement,
    including concessions or waivers?
 4. **Receipts:** may Guardians see receipts? How must a payment that covers

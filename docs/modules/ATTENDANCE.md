@@ -576,7 +576,8 @@ raw-SQL layer including the missing-context fail-closed case.
 Employee/staff attendance (Phase 0J/HR) · payroll attendance ·
 leave · timesheets · biometric/RFID capture · teacher self-service
 (since built by TCH.4, section 18) ·
-Student portal · Guardian portal · mobile attendance · medical absence
+Student portal · Guardian portal (since built for development by POR.2, see
+"Guardian portal view" below) · mobile attendance · medical absence
 reasons · free-text reasons · safeguarding/disciplinary notes ·
 Documents integration · Communications integration · automated absence
 notifications · Attendance analytics or dashboards · AI · timetable
@@ -740,3 +741,26 @@ foreign key. Correction history stays in the audit ledger (D1). The teacher
 provenance goes with the header.
 
 Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md` §5.8).
+
+## Guardian portal view (POR.2, 2026-10-09; ADR 0070 §25; development only)
+
+A Guardian can read one linked Student's attendance through the portal.
+Attendance owns the read seam,
+`App\Domain\Attendance\Application\Portal\GuardianAttendanceReadService`;
+no staff service is bypassed or reused.
+- **Who:** `portal.attendance.view` (the closed `guardian` role), a live
+  ActingGuardian, the Student in Guardians' `GuardianStudentScope` (legal
+  guardian + active Student, a fail-closed default pending POR-L1), and current
+  MFA assurance. Refused in code outside local/testing (`PortalAvailability`).
+- **What:** date, period start/end time and status only. Never the teacher,
+  submitter, subject, section, correction flag or history, and never another
+  Student's row.
+- **When:** the School's **active academic year only**, never after the
+  School-local today, at most 62 days per request (default the last 30). No
+  earlier year and no unlimited history.
+- **Query:** one statement; the scope predicate is embedded, so authorization
+  and read share one snapshot.
+- **Audit:** `attendance.guardian.viewed` per successful read (ids, window and
+  count; never a status).
+- **Dependencies:** Attendance now consumes Guardians (GuardianStudentScope)
+  and Identity (ActingGuardian). Neither depends back on Attendance.

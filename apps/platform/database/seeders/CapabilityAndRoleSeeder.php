@@ -234,6 +234,9 @@ class CapabilityAndRoleSeeder extends Seeder
             // Every use also needs a verified ActingGuardian and, outside
             // local/testing, POR-L1 (E46) -- PortalAvailability.
             ['key' => 'portal.communications.view', 'label' => 'Read own Guardian communications in the portal', 'namespace' => 'guardian'],
+            // POR.2 (ADR 0070 §25): a linked Student's minimized Attendance -- also needs
+            // GuardianStudentScope (that Student, live) and current MFA assurance.
+            ['key' => 'portal.attendance.view', 'label' => "Read a linked Student's Attendance in the portal", 'namespace' => 'guardian'],
 
             // Phase 1B.4 (docs/modules/STUDENT-ENROLLMENT.md
             // "Authorization") -- Student academic placement/enrollment,
@@ -1492,6 +1495,7 @@ class CapabilityAndRoleSeeder extends Seeder
                 'scope' => 'guardian',
                 'capabilities' => [
                     'portal.communications.view',
+                    'portal.attendance.view',
                 ],
             ],
             'staff_self_service' => [

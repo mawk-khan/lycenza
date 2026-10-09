@@ -110,6 +110,7 @@ use App\Http\Controllers\App\Platform\PlatformRoleAdminController;
 use App\Http\Controllers\App\Platform\PlatformSchoolAdminController;
 use App\Http\Controllers\App\Platform\SchoolElevationController;
 use App\Http\Controllers\App\Platform\SchoolGroupAdminController;
+use App\Http\Controllers\App\Portal\GuardianAttendanceController;
 use App\Http\Controllers\App\Portal\GuardianCommunicationController;
 use App\Http\Controllers\App\SchoolSettingsController;
 use App\Http\Controllers\App\SchoolSetupController;
@@ -660,6 +661,19 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
                 ->whereUuid('announcement')->name('show');
             Route::get('/announcements/{announcement}/attachments/{attachment}/download', [GuardianCommunicationController::class, 'download'])
                 ->whereUuid(['announcement', 'attachment'])->name('attachments.download');
+        });
+
+    // POR.2 (ADR 0070 §25): a linked Student's minimized Attendance -- web/session
+    // only, development only (POR-L1). `portal-development-only` FIRST, then the
+    // Guardian capability, then current MFA assurance (enrolled factor + window);
+    // the controller resolves ActingGuardian and the read seam the live
+    // GuardianStudentScope. Anything not this Guardian's Student is the same 404.
+    Route::prefix('app/portal/attendance')->name('app.portal.attendance.')
+        ->middleware(['portal-development-only', 'capability:portal.attendance.view', 'mfa-page'])
+        ->group(function (): void {
+            Route::get('/', [GuardianAttendanceController::class, 'index'])->name('index');
+            Route::get('/students/{student}', [GuardianAttendanceController::class, 'show'])
+                ->whereUuid('student')->name('show');
         });
 
     Route::prefix('app/communications')->name('app.communications.')->group(function (): void {

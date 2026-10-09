@@ -441,8 +441,10 @@ indexes" above and `tests/Feature/Postgres/GuardianContactIntegrityTest.php`.
   School staff via Sanctum, not a new public contract. A Guardian/
   Student-facing portal API remains unbuilt and explicitly out of
   scope. *(2026-10-08: the Guardian portal is contracted as POR, ADR 0070;
-  POR.1 built a session-only, development-only Guardian inbox on the web —
-  still no portal API.)*
+  POR.1 built a session-only, development-only Guardian inbox on the web, and
+  POR.2 (2026-10-09) `GuardianStudentScope`: the live per-Student portal
+  authority (legal guardian + active Student, fail-closed pending POR-L1)
+  plus a linked Student's minimized Attendance — still no portal API.)*
 - **Domain events** — none exist yet (Phase 1A.4/1A.5 added audit
   events for every Student/Guardian/relationship/contact mutation,
   matching GuardianContact's Phase 1A.3 precedent, but deliberately no

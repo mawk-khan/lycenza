@@ -200,6 +200,11 @@ class DashboardController extends Controller
                     && PortalAvailability::isAvailable()
                     && $capabilities->canInSchool($user, 'portal.communications.view', $school)
                     && $guardians->resolve($user, $school) !== null,
+                // POR.2: the Guardian Attendance link (the routes re-check everything, plus MFA).
+                'canViewGuardianAttendance' => $school !== null
+                    && PortalAvailability::isAvailable()
+                    && $capabilities->canInSchool($user, 'portal.attendance.view', $school)
+                    && $guardians->resolve($user, $school) !== null,
             ],
         ]);
     }

@@ -3,7 +3,10 @@
 - Status: **Accepted — POR.0 contract (2026-10-08). POR.1 IMPLEMENTED FOR
   DEVELOPMENT (2026-10-08, §24):** Guardian foundation + read-only
   Communications inbox, refused in code outside local/testing
-  (`PortalAvailability`). POR.2 onward needs separate owner authorisation. No legal status changes: **POR-L1 (ADR 0058 row E46) is a
+  (`PortalAvailability`). **POR.2 IMPLEMENTED FOR DEVELOPMENT (2026-10-09,
+  §25):** GuardianStudentScope per-Student authority + a linked Student's
+  minimized Attendance (active academic year only, MFA). POR.3 onward needs
+  separate owner authorisation. No legal status changes: **POR-L1 (ADR 0058 row E46) is a
   DRAFT REQUEST — NOT SENT, NOT ANSWERED**, and every production statement
   below waits on it.
 - Date: 2026-10-08
@@ -843,3 +846,151 @@ None blocks this contract.
 ### 24.9 Legal
 **POR-L1 — DRAFT REQUEST / NOT SENT / NOT ANSWERED.** No production clearance
 is inferred. E39–E42, E35–E37, E21, E28 and E30–E32 are unchanged.
+
+## 25. POR.2 — GuardianStudentScope and linked-Student Attendance, as built (2026-10-09; development only)
+
+### 25.1 POR.1 regression evidence, stated precisely
+POR.1's full regression ran on candidate **tree** `9a1412be…`. The published
+**commit** `a288292` has exactly that tree (`git rev-parse a288292^{tree}`
+gives `9a1412be43e2879d7013b8c524c228a002fb2af1`). The tested and published
+contents are byte-identical; the commit adds only the commit object.
+
+### 25.2 Capability
+- `portal.attendance.view` is in the `guardian` namespace and on the closed
+  `guardian` role only. The scope and namespace triggers keep it off every
+  staff role (raw-SQL tested).
+- Existing Guardians receive it through the role's capability set. No grant
+  row is added or duplicated.
+
+### 25.3 GuardianStudentScope, the per-Student authority
+- **One predicate source**, `eligibleStudentIdsQuery()`, live and School-scoped.
+  A Student is reachable only when all of these hold:
+  - a `student_guardian_relationships` row for the ActingGuardian's persona;
+  - `is_legal_guardian = true`;
+  - the Student's status is `active`;
+  - the Guardian persona's status is `active`;
+  - all rows are in this School (explicit `school_id` joins, plus RLS and the
+    composite keys).
+
+  `is_legal_guardian` is an **engineering fail-closed default pending POR-L1**,
+  not a legal conclusion. Withdrawn, transferred or inactive Students are out
+  of scope, so there is no historical access until POR-L1 answers.
+- **The full rule for one request:**
+  - session authentication and the current School;
+  - `portal-development-only`;
+  - `capability:portal.attendance.view`;
+  - `mfa-page`;
+  - ActingGuardian (active membership, one active Guardian link, active
+    persona, ≥ 1 eligible relationship);
+  - the requested Student in GuardianStudentScope;
+  - PortalAvailability, re-asserted in the service.
+- **Identity is not Student authority (tested):**
+  - the `guardian` role is not "every Student in the School";
+  - the link is not "every Student of the account";
+  - a membership (even a principal's) is not "every Student" — a principal who
+    is a Guardian reaches only their own child through the portal.
+- **Student choices** come only from `eligibleStudents()`, the Guardian's own
+  scope: id and display name. There is no search, roster, autocomplete or
+  sibling outside the scope. One eligible Student redirects straight to them.
+
+### 25.4 History window (deliberately narrow)
+- **Only the School's active academic year.** `academic_years` allows one
+  `active` year per School (database-enforced), and every attendance record
+  stores its `academic_year_id`; that is the window.
+- **Within it:**
+  - never after the School-local today (`schools.timezone`); every bound,
+    `from` and `to`, is a calendar day in the School's own timezone (a
+    security-review correction: mixing UTC once hid "today" east of UTC);
+  - at most **62 days** per request;
+  - default: the **last 30 days**;
+  - `from`/`to` are optional and clamped to the year start, the year end and
+    today;
+  - an over-long range is clamped from its end.
+- **Nothing else:**
+  - no earlier academic year;
+  - no relationship start date inferred from `created_at` (no repository
+    contract makes it an authorization-effective date);
+  - a School with no active year shows nothing.
+- This is a **development bound, not a legal access period**. POR-L1 Q2/Q15
+  decide production.
+
+### 25.5 Attendance read seam (Attendance-owned)
+- **Where:** `App\Domain\Attendance\Application\Portal\GuardianAttendanceReadService`.
+  It never reuses or bypasses a staff Attendance service.
+- **One query:** `attendance_records` ⋈ `attendance_sessions` ⋈
+  `student_enrollments`, each joined on `id` and `school_id`, filtered by
+  - `se.student_id = :student`;
+  - `se.student_id IN (GuardianStudentScope predicate)`;
+  - `ar.academic_year_id = active year`;
+  - the date window.
+
+  Authorization and data read are one statement under one snapshot.
+- **Returned:** `date`, `periodStart`, `periodEnd`, `status`
+  (present/absent/late/excused). Ordered by date descending, then period start,
+  then record id (deterministic).
+- **Excluded:**
+  - teacher;
+  - submitter;
+  - subject, section and enrollment;
+  - the correction flag (`corrected_at`) and history;
+  - session and record ids;
+  - any classmate or sibling row.
+
+  Attendance has no reason or remark fields to exclude.
+- **Empty:** the same page shape with `records: []`.
+
+### 25.6 Routes and UI (web/session only)
+- `GET /app/portal/attendance`: the Guardian's own eligible Students; exactly
+  one redirects to that Student.
+- `GET /app/portal/attendance/students/{student}`: UUID-constrained, with
+  optional `from`/`to` (`Y-m-d`; anything else is one fixed validation error
+  that never echoes the input).
+- Every route: `portal-development-only` FIRST, then
+  `capability:portal.attendance.view`, then `mfa-page`.
+- **UI:** read-only pages, no edit, export or PDF. The dashboard "Attendance"
+  link shows only when the gate, the capability and a live ActingGuardian hold.
+
+### 25.7 MFA
+`mfa-page` means an enrolled, confirmed factor (otherwise 403
+`mfa_required_not_enrolled`) **and** current session assurance within
+`MFA_ASSURANCE_WINDOW_MINUTES` (default 60), bound to that factor. A stale
+window or a reset factor gives 401 `mfa_step_up_required`. Every request
+re-checks it. The inbox stays MFA-free by contract.
+
+### 25.8 Audit
+- One `attendance.guardian.viewed` per successful read: actor User, School,
+  `guardianId`, `accountLinkId`, `studentId`, `academicYearId`, `from`, `to`,
+  `recordCount`, `surface = guardian_portal`.
+- Never a status or any Attendance content. Every field is server-derived, so
+  request input cannot forge any of them.
+- The chooser (names of one's own children) is not audited, like the inbox
+  list.
+- **Denied reads write nothing:** the existing convention is that only
+  successful protected reads are audited, and an inaccessible Student's data
+  is never touched.
+- The event lives in `school_audit_events`, category `audit` (D1); E21 governs
+  the period.
+
+### 25.9 Consistency and races (no new locks)
+Reads take no locks. A read racing any of the following sees either the
+before or the after state of the committed transaction, and the next request
+is always denied:
+- a relationship revoked or `is_legal_guardian` cleared;
+- a Student deactivated;
+- the Guardian link revoked or the membership suspended;
+- the role grant revoked.
+
+The data query re-applies the scope predicate, so a revocation committed
+between the scope check and the read already excludes the rows in the same
+request. Other cases:
+- **School switch:** a stale URL resolves in the new School's scope, so 404.
+- **MFA expiry:** the next request steps up.
+- **Capability cache:** bounded by the live ActingGuardian and scope checks.
+
+No new lock order is introduced.
+
+### 25.10 Legal
+**POR-L1 — DRAFT REQUEST / NOT SENT / NOT ANSWERED.** Its questions (Q2
+period, Q6–Q9 who qualifies, Q13–Q15 ending access and history, Q22–Q23 MFA)
+already cover this slice, so the draft is unchanged. No production clearance
+is inferred.

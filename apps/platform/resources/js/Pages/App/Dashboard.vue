@@ -55,6 +55,7 @@ interface Props {
         canViewCommunications: boolean;
         canViewSchoolSetup: boolean;
         canViewGuardianPortal: boolean;
+        canViewGuardianAttendance: boolean;
         canViewEnrollments: boolean;
         canViewEnrollmentRollovers: boolean;
         canViewAdmissions: boolean;
@@ -229,6 +230,9 @@ function activate(schoolId: string) {
                     <a class="underline" href="/app/portal/communications"
                         >Messages from the School</a
                     >
+                </li>
+                <li v-if="nav.canViewGuardianAttendance">
+                    <a class="underline" href="/app/portal/attendance">Attendance</a>
                 </li>
             </ul>
         </nav>

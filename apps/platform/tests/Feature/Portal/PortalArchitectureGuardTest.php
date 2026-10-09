@@ -33,18 +33,24 @@ class PortalArchitectureGuardTest extends TestCase
     public function every_portal_route_is_session_only_blocked_first_and_capability_gated(): void
     {
         $routes = collect(RouteFacade::getRoutes()->getRoutes())->filter(fn (Route $r) => str_starts_with($r->uri(), 'app/portal'));
-        $this->assertSame(['app.portal.communications.attachments.download', 'app.portal.communications.index', 'app.portal.communications.show'],
-            $routes->map(fn (Route $r) => (string) $r->getName())->sort()->values()->all(), 'POR.1 is the read-only inbox only: no reply, compose, Student, Attendance or Fees route.');
+        $this->assertSame([
+            'app.portal.attendance.index', 'app.portal.attendance.show',
+            'app.portal.communications.attachments.download', 'app.portal.communications.index', 'app.portal.communications.show',
+        ], $routes->map(fn (Route $r) => (string) $r->getName())->sort()->values()->all(), 'POR.1 inbox + POR.2 Attendance only: no reply, compose, Student search, Fees or marks route.');
 
         foreach ($routes as $route) {
             $middleware = $route->gatherMiddleware();
             $this->assertContains('school-context', $middleware, $route->uri());
             $this->assertSame(['GET', 'HEAD'], $route->methods(), $route->uri().' is read-only.');
+            $attendance = str_starts_with($route->uri(), 'app/portal/attendance');
             $block = array_search('portal-development-only', $middleware, true);
-            $capability = array_search('capability:portal.communications.view', $middleware, true);
+            $capability = array_search($attendance ? 'capability:portal.attendance.view' : 'capability:portal.communications.view', $middleware, true);
             $this->assertIsInt($block, $route->uri().' carries the production block.');
-            $this->assertIsInt($capability, $route->uri().' carries the portal capability.');
+            $this->assertIsInt($capability, $route->uri().' carries its portal capability.');
             $this->assertLessThan($capability, $block, 'The production block answers first.');
+            if ($attendance) {
+                $this->assertContains('mfa-page', $middleware, $route->uri().': Guardian Attendance needs current MFA assurance (ADR 0070 §12).');
+            }
         }
 
         foreach (RouteFacade::getRoutes()->getRoutes() as $route) {
@@ -67,6 +73,14 @@ class PortalArchitectureGuardTest extends TestCase
         foreach (['inbox', 'show', 'attachmentForDownload'] as $method) {
             $this->assertMatchesRegularExpression('/public function '.$method.'\([^{]*\{\s*PortalAvailability::assertAvailable\(\);/', $service, "{$method}() refuses outside local/testing first");
         }
+        $attendance = $this->code(app_path('Domain/Attendance/Application/Portal/GuardianAttendanceReadService.php'));
+        foreach (['students', 'history'] as $method) {
+            $this->assertMatchesRegularExpression('/public function '.$method.'\([^{]*\{\s*PortalAvailability::assertAvailable\(\);/', $attendance, "{$method}() refuses outside local/testing first");
+        }
+        // POR.2: the Student filter and the scope's predicate sit INSIDE the Attendance query.
+        $this->assertStringContainsString("->whereIn('se.student_id', \$this->scope->eligibleStudentIdsQuery(", $attendance);
+        $scope = $this->code(app_path('Domain/Guardians/Application/GuardianStudentScope.php'));
+        $this->assertSame(1, substr_count($scope, "'sgr.is_legal_guardian', true"), 'One predicate source (fail-closed default pending POR-L1).');
     }
 
     #[Test]
