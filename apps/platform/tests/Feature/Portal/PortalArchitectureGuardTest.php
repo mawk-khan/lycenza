@@ -36,15 +36,19 @@ class PortalArchitectureGuardTest extends TestCase
         $this->assertSame([
             'app.portal.attendance.index', 'app.portal.attendance.show',
             'app.portal.communications.attachments.download', 'app.portal.communications.index', 'app.portal.communications.show',
+            'app.portal.conversations.attachments.download', 'app.portal.conversations.index', 'app.portal.conversations.reply', 'app.portal.conversations.show',
             'app.portal.fees.index', 'app.portal.fees.payment', 'app.portal.fees.show',
-        ], $routes->map(fn (Route $r) => (string) $r->getName())->sort()->values()->all(), 'POR.1 inbox + POR.2 Attendance + POR.3 Fees only: no reply, compose, Student search, payment, refund, export or marks route.');
+        ], $routes->map(fn (Route $r) => (string) $r->getName())->sort()->values()->all(), 'POR.1 inbox + POR.2 Attendance + POR.3 Fees + POR.4 conversations only: no compose, edit, delete, upload, Student search, payment, refund, export or marks route.');
 
         foreach ($routes as $route) {
             $middleware = $route->gatherMiddleware();
             $this->assertContains('school-context', $middleware, $route->uri());
-            $this->assertSame(['GET', 'HEAD'], $route->methods(), $route->uri().' is read-only.');
             $attendance = str_starts_with($route->uri(), 'app/portal/attendance');
             $fees = str_starts_with($route->uri(), 'app/portal/fees');
+            $conversations = str_starts_with($route->uri(), 'app/portal/conversations');
+            $isReply = $route->getName() === 'app.portal.conversations.reply';
+            // POR.4: the one portal write is the conversation reply; everything else reads.
+            $this->assertSame($isReply ? ['POST'] : ['GET', 'HEAD'], $route->methods(), $route->uri());
             $block = array_search('portal-development-only', $middleware, true);
             $capability = array_search(match (true) {
                 $attendance => 'capability:portal.attendance.view',
@@ -54,8 +58,15 @@ class PortalArchitectureGuardTest extends TestCase
             $this->assertIsInt($block, $route->uri().' carries the production block.');
             $this->assertIsInt($capability, $route->uri().' carries its portal capability.');
             $this->assertLessThan($capability, $block, 'The production block answers first.');
-            if ($attendance || $fees) {
-                $this->assertContains('mfa-page', $middleware, $route->uri().': Guardian Attendance and Fees need current MFA assurance (ADR 0070 §12).');
+            if ($attendance || $fees || $conversations) {
+                $this->assertContains('mfa-page', $middleware, $route->uri().': Guardian Attendance, Fees and conversations need current MFA assurance (ADR 0070 §12, §27.8).');
+            }
+            if ($isReply) {
+                // The reply capability is ADDED to the read capability, never instead of it.
+                $this->assertContains('capability:portal.communications.reply', $middleware);
+                $this->assertContains('throttle:guardian-portal-reply', $middleware);
+            } else {
+                $this->assertNotContains('capability:portal.communications.reply', $middleware);
             }
         }
 
@@ -83,6 +94,17 @@ class PortalArchitectureGuardTest extends TestCase
         foreach (['students', 'history'] as $method) {
             $this->assertMatchesRegularExpression('/public function '.$method.'\([^{]*\{\s*PortalAvailability::assertAvailable\(\);/', $attendance, "{$method}() refuses outside local/testing first");
         }
+        $conversations = $this->code(app_path('Domain/Communications/Application/Portal/GuardianConversationService.php'));
+        foreach (['conversations', 'thread', 'reply', 'attachmentForDownload'] as $method) {
+            $this->assertMatchesRegularExpression('/public function '.$method.'\([^{]*\{\s*PortalAvailability::assertAvailable\(\);/', $conversations, "{$method}() refuses outside local/testing first");
+        }
+        // POR.4: every message goes through the authoritative writer; the portal never inserts one,
+        // and the write re-resolves the Guardian under its locks.
+        $this->assertStringContainsString('$this->messages->send(', $conversations);
+        $this->assertStringContainsString('$this->guardians->resolveLocked($actor, $school)', $conversations);
+        $this->assertDoesNotMatchRegularExpression("/CommunicationMessage::query\(\)->create|DB::table\('communication_messages'\)->insert/", $conversations);
+        $this->assertStringNotContainsString('createThread(', $conversations, 'No Guardian-initiated conversation (ADR 0070 §27.3).');
+
         $fees = $this->code(app_path('Domain/Payments/Application/Portal/GuardianFeeReadService.php'));
         foreach (['students', 'statement', 'payment'] as $method) {
             $this->assertMatchesRegularExpression('/public function '.$method.'\([^{]*\{\s*PortalAvailability::assertAvailable\(\);/', $fees, "{$method}() refuses outside local/testing first");

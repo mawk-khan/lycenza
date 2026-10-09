@@ -112,6 +112,7 @@ use App\Http\Controllers\App\Platform\SchoolElevationController;
 use App\Http\Controllers\App\Platform\SchoolGroupAdminController;
 use App\Http\Controllers\App\Portal\GuardianAttendanceController;
 use App\Http\Controllers\App\Portal\GuardianCommunicationController;
+use App\Http\Controllers\App\Portal\GuardianConversationController;
 use App\Http\Controllers\App\Portal\GuardianFeeController;
 use App\Http\Controllers\App\SchoolSettingsController;
 use App\Http\Controllers\App\SchoolSetupController;
@@ -690,6 +691,26 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
                 ->whereUuid('student')->name('show');
             Route::get('/students/{student}/payments/{payment}', [GuardianFeeController::class, 'payment'])
                 ->whereUuid(['student', 'payment'])->name('payment');
+        });
+
+    // POR.4 (ADR 0070 §27): a Guardian's existing School conversations and text
+    // replies -- web/session only, development only (POR-L1). `portal-development-only`
+    // FIRST, then the Guardian capability, then current MFA assurance. A reply also
+    // needs `portal.communications.reply` (never instead of `.view`) and its own
+    // User-keyed throttle. Anything not this Guardian's is the same 404. No compose,
+    // edit, delete, upload or API route.
+    Route::prefix('app/portal/conversations')->name('app.portal.conversations.')
+        ->middleware(['portal-development-only', 'capability:portal.communications.view', 'mfa-page'])
+        ->group(function (): void {
+            Route::get('/', [GuardianConversationController::class, 'index'])->name('index');
+            Route::get('/{thread}', [GuardianConversationController::class, 'show'])
+                ->whereUuid('thread')->name('show');
+            Route::post('/{thread}/replies', [GuardianConversationController::class, 'reply'])
+                ->whereUuid('thread')
+                ->middleware(['capability:portal.communications.reply', 'throttle:guardian-portal-reply'])
+                ->name('reply');
+            Route::get('/{thread}/attachments/{attachment}/download', [GuardianConversationController::class, 'download'])
+                ->whereUuid(['thread', 'attachment'])->name('attachments.download');
         });
 
     Route::prefix('app/communications')->name('app.communications.')->group(function (): void {

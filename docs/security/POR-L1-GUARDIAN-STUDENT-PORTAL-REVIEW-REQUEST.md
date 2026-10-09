@@ -107,6 +107,11 @@ Please answer each. For each, say whether it affects **design**,
    ADR 0070 §26.5. *Annotated 2026-10-09 by POR.3.*)
 5. **Replies and conversations:** may Guardians reply to or start
    conversations? Does creating content need anything beyond reading?
+   (The development build lets a Guardian read and reply in text to a
+   conversation the School started with them, in-app only, with current MFA.
+   It does not let a Guardian start a conversation; no recipient rule exists
+   for that yet. Is starting one acceptable, and with whom? ADR 0070 §27.
+   *Annotated 2026-10-09 by POR.4; still a draft, not sent.*)
 
 **Who qualifies**
 6. **Legal guardians only?** Is access limited to recorded legal guardians?
@@ -123,7 +128,10 @@ Please answer each. For each, say whether it affects **design**,
 11. **Several Guardians:** for one Student, do all qualifying Guardians get
     equal access?
 12. **Visibility between Guardians:** may Guardians see each other's portal
-    activity? Must they be prevented?
+    activity? Must they be prevented? (The development build withholds from
+    the portal any conversation that includes another Guardian, for example
+    both parents in one thread with a teacher. May such a shared
+    conversation be shown? ADR 0070 §27.2. *Annotated 2026-10-09 by POR.4.*)
 
 **Ending access**
 13. **Revocation:** when a relationship is ended or revoked, must access end
@@ -131,7 +139,13 @@ Please answer each. For each, say whether it affects **design**,
 14. **Withdrawal or transfer:** when a Student withdraws or transfers, must
     access end?
 15. **History after access ends:** after access ends, may a Guardian still
-    see historical records? For how long?
+    see historical records? For how long? (Conversations record no subject
+    Student. In the development build, a conversation without a Student
+    participant stays readable while the Guardian remains an active Guardian
+    of any child at the School, even if it concerned a child whose
+    relationship has ended. A conversation with a Student participant
+    follows that Student's live scope. ADR 0070 §27.2. *Annotated 2026-10-09
+    by POR.4.*)
 
 **Age and Student accounts**
 16. **Age 18:** at the Student's majority, must Guardian access end,

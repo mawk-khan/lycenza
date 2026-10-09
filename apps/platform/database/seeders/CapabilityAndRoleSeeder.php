@@ -240,6 +240,9 @@ class CapabilityAndRoleSeeder extends Seeder
             // POR.3 (ADR 0070 §26): a linked Student's minimized fee statement and the
             // payments applied to that Student -- GuardianStudentScope and MFA too.
             ['key' => 'portal.fees.view', 'label' => "Read a linked Student's fees in the portal", 'namespace' => 'guardian'],
+            // POR.4 (ADR 0070 §27): reply in an existing conversation the Guardian takes
+            // part in -- always together with `portal.communications.view`, plus MFA.
+            ['key' => 'portal.communications.reply', 'label' => 'Reply in own Guardian conversations in the portal', 'namespace' => 'guardian'],
 
             // Phase 1B.4 (docs/modules/STUDENT-ENROLLMENT.md
             // "Authorization") -- Student academic placement/enrollment,
@@ -1500,6 +1503,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'portal.communications.view',
                     'portal.attendance.view',
                     'portal.fees.view',
+                    'portal.communications.reply',
                 ],
             ],
             'staff_self_service' => [

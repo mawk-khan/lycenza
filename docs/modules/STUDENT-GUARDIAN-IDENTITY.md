@@ -445,7 +445,10 @@ indexes" above and `tests/Feature/Postgres/GuardianContactIntegrityTest.php`.
   POR.2 (2026-10-09) `GuardianStudentScope`: the live per-Student portal
   authority (legal guardian + active Student, fail-closed pending POR-L1)
   plus a linked Student's minimized Attendance, and POR.3 the same Student's fees
-  (statement + amounts applied to that Student) — still no portal API.)*
+  (statement + amounts applied to that Student), and POR.4 the Guardian's
+  existing School conversations with idempotent text replies (ADR 0070 §27;
+  `ActingGuardianResolver::resolveLocked()` for the write; no Guardian-started
+  conversation) — still no portal API.)*
 - **Domain events** — none exist yet (Phase 1A.4/1A.5 added audit
   events for every Student/Guardian/relationship/contact mutation,
   matching GuardianContact's Phase 1A.3 precedent, but deliberately no

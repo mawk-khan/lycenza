@@ -8,7 +8,10 @@
   minimized Attendance (active academic year only, MFA). **POR.3 IMPLEMENTED
   FOR DEVELOPMENT (2026-10-09, §26):** a linked Student's fee statement and
   the payments applied to that Student (read-only, MFA, never a whole shared
-  payment). POR.4 onward needs separate owner authorisation. No legal status changes: **POR-L1 (ADR 0058 row E46) is a
+  payment). **POR.4 IMPLEMENTED FOR DEVELOPMENT (2026-10-09, §27):** a
+  Guardian's existing School conversations and idempotent, in-app-only text
+  replies (MFA; no Guardian-initiated conversation). POR.5 (closure audit)
+  needs separate owner authorisation. No legal status changes: **POR-L1 (ADR 0058 row E46) is a
   DRAFT REQUEST — NOT SENT, NOT ANSWERED**, and every production statement
   below waits on it.
 - Date: 2026-10-08
@@ -277,7 +280,7 @@ Guardians owns `GuardianStudentScope` (`App\Domain\Guardians\Application`).
 | `portal.communications.view` | POR.1 | Read own Guardian deliveries: inbox, unread, announcement, attachment |
 | `portal.attendance.view` | POR.2 | Read in-scope Students' attendance |
 | `portal.fees.view` | POR.3 | Read in-scope Students' fee statements and their own receipts |
-| `portal.communications.reply` | POR.4 (proposed) | Reply in a conversation the Guardian takes part in |
+| `portal.communications.reply` | POR.4 (built, §27) | Reply in a conversation the Guardian takes part in (always with `portal.communications.view`) |
 
 ### 8.2 Delivery: a closed Guardian system role in its own scope
 - **The role:** one system role, `guardian`, carries **only** `portal.*`
@@ -403,6 +406,8 @@ the read capability its sibling setup pages already use
 - Under the School conversation policy and the existing participant
   authorization.
 - Creating content is a different legal question from reading it (POR-L1 Q5).
+- **Built (§27):** existing-thread reading and text replies only; Guardian
+  initiation deferred.
 
 ## 11. Prohibited and deferred surfaces
 - marks, results, report cards, transcripts (E39–E42, E35–E37 unchanged);
@@ -1143,3 +1148,199 @@ is inferred.
 narrowly annotated with the development behaviour (other-year dues; the
 applied amount instead of the whole receipt). E21, E28 and E30–E32 are
 unchanged. No fee, late fee or disclosure is declared lawful.
+
+## 27. POR.4 — Guardian conversations and replies, as built (2026-10-09; development only)
+
+### 27.1 Capability
+- `portal.communications.reply` (namespace `guardian`) is on the closed
+  `guardian` role only. The scope triggers keep it off every staff role
+  (raw-SQL tested). Existing Guardian grants receive it through the role,
+  with no new grant rows.
+- A reply needs **both** `portal.communications.view` and
+  `portal.communications.reply`; neither substitutes for the other. The
+  route checks both, and the service re-checks both, fresh, under its locks.
+
+### 27.2 Participant authority (Communications' own model, unchanged)
+- Conversation participation is `communication_thread_participants`, keyed
+  by `(thread_id, user_id)`, with Phase 5D.1 provenance (`participant_kind`,
+  `guardian_id`, `student_id`). A Guardian joins only when staff with
+  `communications.conversations.guardians` create a thread through
+  `ConversationParticipantAuthorizationService` under the School conversation
+  policy.
+- **A thread is a Guardian's in the portal** (`GuardianConversationService::visible()`)
+  only when all of the following hold:
+  - this User's own row joined **as this Guardian persona**
+    (`participant_kind = guardian`, this `guardian_id`) and has not left. A
+    dual-role User's staff participation (`membership`) never counts;
+  - **no other Guardian persona** takes part, whether or not they have left.
+    Guardian-to-Guardian visibility (§11) is withheld pending POR-L1 Q11–Q12;
+    such a thread stays in the staff Hub only;
+  - **every Student participant is in the Guardian's live
+    GuardianStudentScope**. A Student-involving thread is Student-scoped, so
+    it fails closed when that Student leaves scope.
+- On top, every request needs PortalAvailability, the capability and this
+  User's live ActingGuardian (§24.2). Losing the link, the membership, the
+  persona or the last eligible relationship ends the whole portal.
+- **History after a relationship ends:** Communications threads carry no
+  subject-Student reference; Phase 5D.1 §22 keeps participation history
+  untouched and ties access to participation plus an active membership. A
+  Guardian-only thread (no Student participant) therefore stays readable
+  while the Guardian remains an active Guardian of any eligible child; a
+  Student-involving thread follows that Student's live scope. Recorded in
+  POR-L1 Q15; not a legal conclusion.
+
+### 27.3 Initiation: deferred
+- The repository has **no Guardian-initiated conversation contract.** Phase
+  5D.1 defines staff-initiated Guardian participation only and lists
+  Guardian-to-Guardian chat as out of scope. It names no recipient set,
+  Student context or School policy for a Guardian starting a thread.
+- **POR.4 therefore builds existing-thread reading and replying only.** No
+  compose route, no `createThread` call (architecture-guarded), no staff
+  directory or search.
+- **The decision needed:** whom a Guardian may start a conversation with
+  (class teacher, subject teacher, office), whether a Student context is
+  required, the School policy toggle, and POR-L1 Q5's answer on creating
+  content.
+
+### 27.4 Read model
+- **List** (`/app/portal/conversations`): visible threads, newest activity
+  first, at most 50. Each shows the subject, open or closed, the other current
+  participants' display names, a 120-character preview, and unread state
+  from the existing `ConversationReadModel` (no portal-only unread model).
+- **Thread:** messages newest page first (30 per page, shown oldest-first).
+  Each shows the sender's display name ("You" for own), text, time and
+  attachment name, type and size.
+- **Not exposed:** User, membership, link or Guardian ids of anyone;
+  roles or capabilities; priority; delivery or provider data; other
+  participants' read state.
+- **Read state:** opening a thread moves only this participant's own
+  `last_read_at` (`CommunicationThreadService::markRead`).
+- **Attachments:** only those already sent with a message of a visible
+  thread, never another participant's pending upload. Audited
+  `communication_attachment.downloaded` with `surface = guardian_portal` and
+  `guardianId`.
+- Anything inaccessible (unknown, another Guardian's, staff-only, another
+  School's, out-of-scope Student, a pending or foreign attachment) is the
+  same 404.
+
+### 27.5 Reply write path and idempotency
+- **Writer:** `GuardianConversationService::reply()` → the one authoritative
+  writer, `CommunicationMessageService::send()` (recipients, in-app
+  deliveries, `last_activity_at`, `communication.message.created`, the
+  outbox event). The portal never inserts a message itself.
+- **Content:** plain text, trimmed, 1–10,000 characters (the staff Hub's own
+  limit), no NUL, valid UTF-8; priority is always `normal`; no attachment
+  ids; forged fields are ignored. Stored and rendered as text (no `v-html`).
+  Validation messages are fixed and never echo the input.
+- **Idempotency (rules 29–33):**
+  - the thread page issues a fresh UUID key with every render (the
+    Finance/Fees web-form convention); a resubmission of that form reuses it;
+  - the key is claimed on the message itself: migration
+    `2026_12_13_090000_add_idempotency_key_to_communication_messages` adds
+    `communication_messages.idempotency_key`, the partial unique index
+    `communication_messages_sender_idempotency_unique (school_id,
+    sender_user_id, idempotency_key)` and the check
+    `communication_messages_idempotency_thread_check` (keys only on
+    conversation messages);
+  - **scope:** School + sender. Two Schools, or two Users, reusing one literal
+    key never collide;
+  - **replay:** same User + same key + same thread + identical text returns
+    the original message; any other reuse (another thread, changed text) is
+    refused ("This reply form has expired"). Nothing is written;
+  - **concurrency:** a transaction-scoped advisory lock on (School, User,
+    key) serializes same-key requests, so the second sees the first's
+    message. The unique index stays the authoritative claim; a violation is
+    re-run once through the full checks and answers the committed message;
+  - authority is re-evaluated before any replay (rule 32);
+  - the staff Hub keeps `idempotency_key` NULL (unchanged).
+- **Rollback:** `down()` drops the index, the check and the column; only
+  de-duplication metadata is lost. Rollback and re-apply proved identical.
+
+### 27.6 Locks and races
+- **Reply transaction order:**
+  1. School FOR SHARE (`SchoolOperationalGuard`, rule 86);
+  2. the Guardian's active account link FOR SHARE, then its membership FOR
+     SHARE (`ActingGuardianResolver::resolveLocked()`, Identity-owned) —
+     the same order Guardian unlink and off-boarding take them FOR UPDATE,
+     after the School access lock, which a reply never takes;
+  3. the reply-key advisory lock;
+  4. the thread FOR NO KEY UPDATE (the lock its `last_activity_at` update
+     takes anyway, so two replies never upgrade a shared lock into a
+     deadlock);
+  5. the Guardian's own participant row FOR SHARE.
+- **Effect:** an off-boarding, unlink, membership suspension, participant
+  removal or closure either committed before the reply (which then refuses)
+  or waits until the reply commits. Proven in two real OS processes with an
+  observed lock wait (`GuardianConversationConcurrencyTest`: duplicate
+  submission, off-boarding both orders, participant removal, closure).
+- **Not locked:** a Guardian↔Student relationship change or persona
+  deactivation (before/after semantics; the next request is denied).
+  Capability revocation happens only with the link (§24.3), so it serializes
+  through the link lock; the service re-reads capabilities with the cache
+  forgotten.
+- **School switch:** each request resolves the current School; a stale thread
+  id is the same 404.
+
+### 27.7 Abuse control
+- The staff Hub reply has no throttle. The portal reply gets one, keyed by
+  User only (rule 61): `throttle:guardian-portal-reply`, 10 per minute. It
+  can't be bypassed by changing the form key or the School (tested). No new
+  moderation or content-scanning was invented.
+
+### 27.8 MFA
+- Every conversation route (list, thread, download, reply) needs `mfa-page`:
+  an enrolled factor plus current, factor-bound assurance (60 minutes), as
+  for Attendance and Fees.
+- **Why stricter than the POR.1 inbox:** conversation content is private and
+  may be Highly Sensitive (§14), and the reply is the portal's first write.
+- No fresh per-reply re-verification (`FreshMfaRequirement` stays for
+  consequential administrative actions). POR-L1 Q22–Q23 may change this.
+
+### 27.9 External delivery
+- A conversation message creates **in-app deliveries only**
+  (`CommunicationMessageService` → `createInAppDelivery`; the in-app driver
+  sends nothing outside).
+- `communication.message_created.v1` is outboxed, but no webhook, automation
+  or notification consumer handles it. No email, SMS, push or provider
+  processing is introduced. E17/E18 are untouched.
+
+### 27.10 Audit, sender attribution, edit/delete, retention
+- **Audit:** `communication.guardian.replied` records `guardianId`,
+  `accountLinkId`, `threadId`, `messageId`, `surface = guardian_portal` and,
+  only for a Student-involving thread, `studentIds`. It never records the
+  text. The writer's own `communication.message.created` is kept. A replay
+  writes nothing.
+- **Sender:** `communication_messages.sender_user_id` is the User, as for
+  every message. The Guardian capacity is on the sender's participant row
+  (`participant_kind = guardian`, `guardian_id`) and in the append-only
+  audit. No staff or employee field is used, and a later link change
+  rewrites nothing.
+- **Edit, delete, recall, moderation:** none.
+- **Retention:** Guardian replies are ordinary `communication_messages` rows
+  under the existing Communications retention (E21.2C). No new category or
+  period. E21 still governs.
+
+### 27.11 Security review (POR.4)
+- **HIGH / MEDIUM:** none. The review was independent and read-only. It
+  traced the change against the staff Hub, unlink, off-boarding, staff-access
+  and invitation code. These held: visibility, capability separation, lock
+  order (no cycle with off-boarding, unlink, staff suspension or staff
+  sends), idempotency scope and replay order, in-app-only delivery, the
+  minimized projection (no `v-html`), the attachment binding, the User-keyed
+  throttle, and ignored forged fields.
+- **LOW, accepted:** a Guardian↔Student relationship end or a persona
+  deactivation is not locked against an in-flight reply. A reply racing it
+  may commit just after it (before/after semantics, §27.6), and the next
+  request is denied. Unlink, off-boarding, suspension, removal and closure
+  are fully serialized.
+- **LOW, taken:** the reply key is lower-cased before it is used, so the
+  advisory lock and the stored uuid always agree. The unique index already
+  resolved case variants to one message.
+
+### 27.12 Legal
+**POR-L1 — DRAFT REQUEST / NOT SENT / NOT ANSWERED.** Q5 (replies;
+initiation deferred), Q12 (multi-Guardian threads withheld) and Q15 (thread
+history after a relationship ends) were narrowly annotated with the
+development behaviour. Production stays refused in code
+(`PortalAvailability`). E21, E28, E30–E32, E35–E37 and E39–E42 are
+unchanged.

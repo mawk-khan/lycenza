@@ -44,6 +44,12 @@ class CommunicationMessageService
      *                                             participant -- or a stale upload from an earlier abandoned
      *                                             compose -- can never be silently attached to a message it was
      *                                             never intended for.
+     * @param  string|null  $idempotencyKey  POR.4 (ADR 0070 §27): a server-issued form
+     *                                       key stored on the message; the unique index
+     *                                       communication_messages_sender_idempotency_unique
+     *                                       makes a duplicate a constraint violation. The
+     *                                       caller owns replay/conflict (GuardianConversationService).
+     *                                       The staff Hub passes none.
      */
     public function send(
         CommunicationThread $thread,
@@ -51,8 +57,9 @@ class CommunicationMessageService
         string $body,
         CommunicationPriority $priority = CommunicationPriority::Normal,
         array $attachmentIds = [],
+        ?string $idempotencyKey = null,
     ): CommunicationMessage {
-        return $this->context->withSchool($thread->school, function () use ($thread, $sender, $body, $priority, $attachmentIds) {
+        return $this->context->withSchool($thread->school, function () use ($thread, $sender, $body, $priority, $attachmentIds, $idempotencyKey) {
             // The participant check must run INSIDE withSchool(): the
             // thread_participants row is RLS-protected, and this
             // service method may be called without an ambient
@@ -76,7 +83,7 @@ class CommunicationMessageService
 
             $deliveryIds = [];
 
-            $message = DB::transaction(function () use ($thread, $sender, $body, $priority, $attachmentIds, &$deliveryIds) {
+            $message = DB::transaction(function () use ($thread, $sender, $body, $priority, $attachmentIds, $idempotencyKey, &$deliveryIds) {
                 $message = CommunicationMessage::query()->create([
                     'school_id' => $thread->school_id,
                     'thread_id' => $thread->id,
@@ -85,6 +92,7 @@ class CommunicationMessageService
                     'body' => $body,
                     'priority' => $priority->value,
                     'status' => 'sent',
+                    'idempotency_key' => $idempotencyKey,
                 ]);
 
                 if ($attachmentIds !== []) {

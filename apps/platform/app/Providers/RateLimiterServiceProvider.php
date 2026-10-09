@@ -94,6 +94,13 @@ class RateLimiterServiceProvider extends ServiceProvider
         RateLimiter::for('finance-payment-recording', fn (Request $request) => Limit::perMinute(30)
             ->by('finance-payment-recording:'.($request->user()?->getAuthIdentifier() ?? $request->ip())));
 
+        // POR.4 (ADR 0070 §27.7): Guardian portal replies -- the first portal
+        // write. Keyed by the signed-in User only (rule 61), so switching School,
+        // changing the form key or retrying never yields a fresh bucket. Generous
+        // for a person typing; a bound on scripted flooding, not a workflow limit.
+        RateLimiter::for('guardian-portal-reply', fn (Request $request) => Limit::perMinute(10)
+            ->by('guardian-portal-reply:'.($request->user()?->getAuthIdentifier() ?? $request->ip())));
+
         // Webhook administration specifically (section 31): tighter
         // than general School mutations -- creating an endpoint,
         // rotating a secret, or forcing a redelivery are inherently

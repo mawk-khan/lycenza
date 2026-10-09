@@ -570,3 +570,30 @@ Given this UI completion closes the one deferred item Phase 5D.1
 explicitly flagged, a Final Integration Gate is the more natural
 immediate next step before opening a new sub-feature — but this is a
 product-sequencing decision for the requester, not made here.
+
+---
+
+# POR.4 addendum — Guardian portal conversations (2026-10-09; development only)
+
+ADR 0070 §27. The Phase 5D.1 model above is **unchanged**: staff still start
+every Guardian conversation through
+`ConversationParticipantAuthorizationService` under the School conversation
+policy. POR.4 adds a Guardian-portal **reader and replier** on top:
+
+- **Seam:** `App\Domain\Communications\Application\Portal\GuardianConversationService`
+  (`/app/portal/conversations`, `portal.communications.view` +
+  `portal.communications.reply`, current MFA, `PortalAvailability`).
+- **Which threads:** a thread the User joined **as their Guardian persona**
+  (`participant_kind = guardian`, their live ActingGuardian's `guardian_id`,
+  not left), with no other Guardian persona, and only Student participants in
+  their live `GuardianStudentScope`. Their staff (`membership`) participation
+  stays in the staff Hub.
+- **Writes:** text replies only, through the unchanged
+  `CommunicationMessageService::send()` (in-app deliveries only).
+  Idempotent on a server-issued key stored in
+  `communication_messages.idempotency_key` (unique per School + sender). No
+  thread creation, upload, edit, delete or priority.
+- **Lifecycle (§22 above):** participation history is still never deleted.
+  Portal access additionally needs the live ActingGuardian, so an unlinked,
+  off-boarded or suspended Guardian loses the portal, while the thread and its
+  history stay intact for the School.

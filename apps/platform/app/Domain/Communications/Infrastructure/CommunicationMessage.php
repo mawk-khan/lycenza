@@ -46,7 +46,7 @@ class CommunicationMessage extends Model
 
     protected $fillable = [
         'school_id', 'thread_id', 'announcement_id', 'sender_user_id', 'message_type', 'body',
-        'priority', 'status', 'reply_to_message_id', 'edited_at',
+        'priority', 'status', 'reply_to_message_id', 'edited_at', 'idempotency_key',
     ];
 
     protected function casts(): array

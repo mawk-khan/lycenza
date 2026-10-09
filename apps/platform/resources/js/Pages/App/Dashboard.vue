@@ -232,6 +232,9 @@ function activate(schoolId: string) {
                         >Messages from the School</a
                     >
                 </li>
+                <li>
+                    <a class="underline" href="/app/portal/conversations">Conversations</a>
+                </li>
                 <li v-if="nav.canViewGuardianAttendance">
                     <a class="underline" href="/app/portal/attendance">Attendance</a>
                 </li>
