@@ -510,6 +510,7 @@ No capability per movement type. `school_admin` and `principal` hold
 all four by default, matching the established "day-to-day operational
 parity" precedent. No dedicated "Storekeeper" system role was created
 — a School wanting narrower staff can already compose a custom role.
+*(SR.0 correction, 2026-10-09: a School cannot compose, create or configure a role — no runtime role writer exists (ADR 0059 §1), and tenant-custom roles are deferred (ADR 0063 T3). The fixed system catalogue in ADR 0071 provides `stores_officer` (all four `inventory.*` keys).)*
 
 Proven: `tests/Feature/Authorization/InventoryCapabilityTest.php` (12
 tests) — catalog integrity, no speculative capabilities, default role

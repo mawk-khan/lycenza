@@ -2208,7 +2208,7 @@ precedent of Principal handling ledger postings or reversals, and
 inventing one now would be exactly the "surprising broad default
 assignment" the brief warns against. A School wanting a dedicated
 Accountant-style role can configure one itself later without this
-checkpoint inventing it. No role name is ever checked in code --
+checkpoint inventing it. *(SR.0 correction, 2026-10-09: a School cannot compose, create or configure a role — no runtime role writer exists (ADR 0059 §1), and tenant-custom roles are deferred (ADR 0063 T3). The fixed system catalogue in ADR 0071 provides `accountant` (no `ledger.reverse`, no `periods.manage`, no concession approval) and `cashier` (payments and charge view only).)* No role name is ever checked in code --
 every check is `Gate::authorize('capability', [...])` via
 `AuthorizesCapability` (the same mechanism every other module uses).
 

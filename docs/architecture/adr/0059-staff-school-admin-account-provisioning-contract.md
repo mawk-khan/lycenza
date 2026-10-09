@@ -263,7 +263,13 @@ so none are possible.
   non-School role.
 
 **No escalation.** The issuer may name only roles whose capability set is a
-subset of the issuer's **current** capabilities in that School. A
+subset of the issuer's **current** capabilities in that School. *(Amended by
+ADR 0071 §6 and §10, SR.0, 2026-10-09, effective from SR.2:
+- a capability may also be covered by a class-scoped grant right the
+  issuer holds (`school.roles.grant.{hr,hr_sensitive,payroll_sensitive}`);
+- the check runs inside the mutation transaction;
+- a single-role revoke needs the same coverage;
+- the database enforces grantor coverage from SR.1.)* A
 `school_admin` may invite another `school_admin`, as `AUTHORIZATION.md`
 already expects.
 
@@ -984,3 +990,25 @@ independent.
 - Every change takes one per-School access lock first (`SchoolAccessLock`,
   the existing `staff-access:` key), shared with Guardian activation,
   unlinking and off-boarding.
+
+## Amendment — SR.0 Staff Role Catalogue (2026-10-09, ADR 0071)
+
+Documentation only; implementation is SR.1–SR.4.
+- **§1 "Only two School roles exist":** historical. Since TCH and HRX the
+  School catalogue is `school_admin`, `principal`, `teacher` and
+  `staff_self_service`. ADR 0071 adds thirteen fixed operational system
+  roles (§4 there).
+- **Still true:** no runtime writer of `roles` or `role_capabilities`
+  (ADR 0071 §11 makes this database-enforced in SR.1); tenant-custom roles
+  remain future.
+- **§6.1 no escalation:** extended by class-scoped grant rights (ADR 0071
+  §6), re-evaluated inside the transaction. Revoking a single role needs
+  coverage. Whole-membership off-boarding stays uncovered as an emergency
+  safety mechanism (ADR 0071 §10.3).
+- **Invitation issue and acceptance** take the School access lock (ADR 0071
+  §14). A refused escalation is audited as
+  `school.membership.role_grant_refused` (ADR 0071 §13).
+- **Viewing** the role catalogue and assignments uses `school.roles.view`
+  (ADR 0071 §10.4).
+- **Bootstrap:** the ADR 0047 path keeps working through a narrow,
+  database-checked exception (ADR 0071 §11.6(b)).

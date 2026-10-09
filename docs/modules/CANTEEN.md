@@ -551,7 +551,7 @@ directory/stock split with a THIRD pair for financial configuration:
 
 No dedicated "Canteen Staff"/"Cashier" system role was created — a
 School wanting narrower staff can already compose a custom role from
-these six capabilities.
+these six capabilities. *(SR.0 correction, 2026-10-09: a School cannot compose, create or configure a role — no runtime role writer exists (ADR 0059 §1), and tenant-custom roles are deferred (ADR 0063 T3). The fixed system catalogue in ADR 0071 provides `canteen_operator` (directory and orders; `canteen.settings.*` stays with `school_admin`, and inventory is a separate `stores_officer` grant).)*
 
 Proven: `tests/Feature/Authorization/CanteenCapabilityTest.php`
 (catalog integrity, no speculative capabilities, default role grants,

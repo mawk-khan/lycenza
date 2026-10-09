@@ -348,7 +348,7 @@ both view and manage in an area is granted both explicitly.
 No new dedicated driver/transport-staff system role was created (not
 genuinely required for this checkpoint — a School wanting narrower
 Transport-only staff can already compose a custom role from these six
-capabilities via the existing role system).
+capabilities via the existing role system). *(SR.0 correction, 2026-10-09: a School cannot compose, create or configure a role — no runtime role writer exists (ADR 0059 §1), and tenant-custom roles are deferred (ADR 0063 T3). The fixed system catalogue in ADR 0071 provides `transport_coordinator` (all six keys).)*
 
 Proven: `tests/Feature/Authorization/TransportCapabilityTest.php` (13
 tests, 51 assertions) — catalog integrity, no speculative capabilities,

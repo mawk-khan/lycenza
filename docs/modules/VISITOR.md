@@ -430,7 +430,7 @@ operational parity" precedent already established for `library.*`/
 `transport.*` on those roles. No dedicated "Receptionist" system role
 was created — not genuinely required; a School wanting narrower
 front-desk-only staff can already compose a custom role from these four
-capabilities via the existing role system.
+capabilities via the existing role system. *(SR.0 correction, 2026-10-09: a School cannot compose, create or configure a role — no runtime role writer exists (ADR 0059 §1), and tenant-custom roles are deferred (ADR 0063 T3). The fixed system catalogue in ADR 0071 provides `front_office` (all four `visitor.*` keys).)*
 
 Proven: `tests/Feature/Authorization/VisitorCapabilityTest.php` (12
 tests, 33 assertions) — catalog integrity, no speculative capabilities,

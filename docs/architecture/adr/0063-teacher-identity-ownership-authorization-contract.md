@@ -436,6 +436,10 @@ A later checkpoint (TCH.3) adds one minimum production system School role,
   - The production least-privilege gap is recorded as a finding for a
     future, separate staff-authorization programme. For example, FEE.3
     maker/checker needs two School Admin actors in production (§2.3).
+  - *(Amended by ADR 0071 / SR.0, 2026-10-09: that programme is SR. It
+    contracts thirteen fixed non-teaching School system roles with
+    class-scoped grant rights. T3 (tenant-custom roles) and D-02 are
+    unchanged, and no operational role carries a `*.teacher` key.)*
 - **T3 — tenant-custom roles: future (existing decision).** TCH creates no
   School-owned roles, no role designer and no arbitrary bundles, and it
   keeps the global `roles` ownership model.

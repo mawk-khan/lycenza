@@ -2382,7 +2382,7 @@ index/show pattern); every mutation route additionally carries BOTH
   profile/Campus administration.
 - No new role was created (`registrar`/`academic_admin`/etc.) -- the
   capability architecture already permits future custom role
-  assignments without inventing role semantics now.
+  assignments without inventing role semantics now. *(SR.0 correction, 2026-10-09: a School cannot compose, create or configure a role — no runtime role writer exists (ADR 0059 §1), and tenant-custom roles are deferred (ADR 0063 T3). The fixed system catalogue in ADR 0071 provides no enrollment or registrar role (none is in the v1 catalogue).)*
 
 ### Route inventory (10 routes)
 

@@ -28,7 +28,9 @@ This table is a design reference, not a list of implemented roles.
   (platform), `group_admin` (Group), and `school_admin`, `principal` and
   `teacher` (School);
 - every other row here is a design-reference actor, with no production
-  role;
+  role *(ADR 0071, SR.0 2026-10-09, contracts fixed roles for the
+  Accountant, HR Staff, Librarian, Receptionist, Transport Staff and
+  Admissions Staff personas, among others; they are not built until SR.3)*;
 - the Teacher row is implemented by ADR 0063 (TCH): the `teacher` role is a
   bundle of five owned-scope capabilities whose every use also needs a
   verified ActingEmployee and TeachingAssignment ownership — see
@@ -115,6 +117,19 @@ of the AI Gateway's capability check (ADR 0014's "Domain service" step)
   The DDEV demo adds non-system `demo.*` roles only behind its local-demo
   guard. Tenant-custom roles are future work; ADR 0063 adds no custom roles,
   only the minimal system `teacher` role (TCH.3).
+  *(Current, 2026-10-09:*
+  - *HRX added the system `staff_self_service` role, and POR the separately
+    scoped `guardian` role.*
+  - *ADR 0071 (SR.0, contract only; built from SR.1) adds thirteen fixed
+    operational School system roles: `hr_officer`, `hr_sensitive_records`,
+    `payroll_officer`, `accountant`, `cashier`, `librarian`,
+    `transport_coordinator`, `hostel_warden`, `front_office`,
+    `stores_officer`, `canteen_operator`, `admissions_officer` and
+    `communications_coordinator`.*
+  - *It also adds class-scoped grant rights (`school.roles.grant.*`) that
+    let `school_admin` appoint HR, HR-sensitive and payroll-sensitive staff
+    without itself holding that data access.*
+  - *Tenant-custom roles stay future.)*
 - **Assignment, kept structurally separate by scope**:
   `platform_role_assignments` (central) for platform roles,
   `membership_role_assignments` (tenant-owned, RLS-protected) for
@@ -850,6 +865,7 @@ already received.
 
 - **Grant.** School Admin only, by default. A School may grant it to a
   cashier-style role of its own; the demo's `demo.finance_officer` holds it.
+  *(SR.0 correction, 2026-10-09: a School cannot compose, create or configure a role — no runtime role writer exists (ADR 0059 §1), and tenant-custom roles are deferred (ADR 0063 T3). The fixed system catalogue in ADR 0071 provides `cashier` and `accountant`; the demo moves to them in SR.3.)*
 - **What does not imply it:** `finance.payments.view`, `finance.charges.*`
   and `finance.ledger.*`. `finance.payments.manage` does not exist.
 - **Double check.** The Inertia controller checks it, and
@@ -1045,7 +1061,8 @@ No new capability.
 
 Tenant-custom roles (role *assignment* exists: Settings → Staff accounts
 grants and revokes School roles from the closed catalog, ADR 0059; role
-*creation* does not), ownership-based authorization beyond the four TCH
+*creation* does not; ADR 0071 keeps it that way and instead contracts a
+fixed operational catalogue), ownership-based authorization beyond the four TCH
 teacher surfaces (ADR 0063 §38 lists what stays outside TCH), a real "platform admin enters a
 specific School's context" elevation workflow (the brief in section 12
 deliberately asked for only the *foundation*, proven by denial — see

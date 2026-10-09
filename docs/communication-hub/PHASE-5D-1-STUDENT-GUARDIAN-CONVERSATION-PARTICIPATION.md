@@ -125,7 +125,7 @@ Two new narrow capabilities (never a role-name check):
   justifying their `guardians.manage` grant).
 - `communications.conversations.students` — granted to **no** system
   role by default (brief's stricter safeguarding instruction). A
-  School must explicitly create/extend a role with it, and even then
+  School must explicitly create/extend a role with it *(SR.0 correction, 2026-10-09: a School cannot compose, create or configure a role — no runtime role writer exists (ADR 0059 §1), and tenant-custom roles are deferred (ADR 0063 T3). The fixed system catalogue in ADR 0071 provides no role. `communications.conversations.students` is legal-gated and on no role, including `communications_coordinator`.)*, and even then
   the school-level policy toggle (§7) independently defaults Student
   conversations to disabled.
 

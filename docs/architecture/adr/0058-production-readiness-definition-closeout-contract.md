@@ -612,6 +612,7 @@ with secrets.
 | E44 | RES-L9 — statutory academic rules: attendance thresholds for examinations, RTE / no-detention implications, mandatory examination requirements | ADR 0068 §16 | Legal | Mandatory (RES, post-v1) | LEGAL_REVIEW_REQUIRED (nothing encodes them; **blocks any slice that would**) | Qualified answer recorded before any such rule is modelled | Future legal record | Legal + Owner | No (post-v1; blocks the RES slice named) |
 | E45 | PAY-L1 — ESI wage ceiling for employees with a disability (commonly reported ₹25,000): basis, qualifying definition, evidence, contribution-period timing, rates; and the privacy terms for holding the disability-status fact it needs | ADR 0036 §9 ("Explicitly deferred") | Legal + Privacy | Mandatory (Payroll statutory) | LEGAL_REVIEW_REQUIRED (request drafted 2026-10-07, not sent: `docs/security/PAY-L1-ESI-DISABILITY-THRESHOLD-REVIEW-REQUEST.md`; the general ESI rule is implemented; the disability branch, any disability fact and golden fixture ESI-12 wait for the answer) | Qualified answer to Q1–Q9 recorded in a determination document | Future legal record + ADR 0036 amendment | Legal + Privacy + Owner | Owner to decide (affects only Schools employing staff with a disability earning between the general and the disability ceiling; disclosed on every payslip) |
 | E46 | POR-L1 — Guardian- and Student-facing portal access to Student information: per surface (own Communications, linked Student Attendance, fee statements, receipts, replies), who qualifies (legal guardian / non-legal-guardian parent / separated parents / court restrictions), ending access, multiple Guardians, the age-18 transition, Student accounts and age-appropriate capabilities, Guardian MFA, legal basis and DPDP obligations, audit, production conditions, re-review. **Distinct from E42** (marks/results access), E39–E41, E35–E37, E28 and E21 | ADR 0070 (POR.0) | Legal + Privacy | Mandatory (POR) | LEGAL_REVIEW_REQUIRED (request drafted 2026-10-08, **not sent, not answered**: `docs/security/POR-L1-GUARDIAN-STUDENT-PORTAL-REVIEW-REQUEST.md`; blocks **production** of every Guardian surface and **design and development** of any Student account or Student-facing surface; Guardian surfaces may be designed and, once the owner authorises each slice, developed behind the code-level `PortalAvailability` block) | Qualified answer to Q1–Q32 recorded in a determination document | Future legal record + ADR 0070 amendment | Legal + Privacy + Owner | No (post-v1 programme) |
+| E47 | SR-L1 — explicit School staff personas (ADR 0071 fixed catalogue: `hr_officer`, `hr_sensitive_records`, `payroll_officer`, `accountant`, `cashier`, `admissions_officer`, operational desk roles) reaching already-built Highly Sensitive data: HR identifiers and bank data, salaries/payroll results, children's fee and payment data, admissions data. Asks whether a notice, a processing-register update or conditions are needed. **Distinct from** E45, E35–E44, E46, E21 and E33 | ADR 0071 (SR.0) | Legal + Privacy | Recommended (SR) | QUESTION DRAFTED (2026-10-09, **not sent, not answered**: `docs/security/SR-L1-STAFF-ROLE-PERSONAS-DPO-QUESTION.md`). Development is **not** blocked; whether an answer is needed before production use of the new personas is the owner's decision | Qualified answer to (a)–(e) recorded in a determination document, or an owner decision that none is needed | Future legal record + ADR 0071 amendment | Legal + Privacy + Owner | Owner to decide |
 
 A row moves to `EVIDENCE_COMPLETE` only by a dated, reviewed repository
 change that names its evidence location. The move is appended to
@@ -1438,6 +1439,35 @@ recorded:
 - E37 (RES-L2) and the E35 teacher re-review still block teacher marks.
 - E38–E44 still block their own scope.
 - E33 still covers teacher Attendance only and never StudentMark.
+
+## Note — SR.0: the EmploymentRecord production finding and SR-L1 (2026-10-09)
+
+**No legal determination.** ADR 0071 (SR.0, documentation only) records an
+**O1-relevant production-readiness finding**:
+- `EmploymentService` is the only creator of EmploymentRecords, and it
+  requires `hr.employees.assignments.manage`. Employee import requires the
+  same capability for employment data.
+- No production role holds that capability (it is one of 26 School
+  capabilities held by no role).
+- So no ordinary production School can establish an EmploymentRecord, and
+  ActingEmployee resolves nothing. Teacher identity, `staff_self_service`,
+  reporting-line leave, staff attendance and payroll runs are therefore
+  unusable in production, independent of their own legal gates (E33 and
+  others).
+
+This is a missing authorization-catalogue prerequisite, **not** a defect in
+TCH, HRX or Payroll. The SR programme (ADR 0071) closes the authorization
+side.
+- **Production evidence:** E33's production re-verification and any O1
+  evidence for these surfaces must include a School able to create
+  EmploymentRecords (an `hr_officer`, SR.3–SR.4).
+- **New row E47 (SR-L1):** a DPO question, drafted, **not sent, not
+  answered**. It does not block development.
+
+ADR 0071 also records that the runtime role can write `roles`,
+`role_capabilities` and `capabilities`, and that
+`membership_role_assignments.role_id` is `ON DELETE CASCADE`. Both are
+corrected in SR.1. E16 is unchanged and separate.
 
 ## Note — POR built for development and closed (POR.1–POR.5, 2026-10-09)
 
