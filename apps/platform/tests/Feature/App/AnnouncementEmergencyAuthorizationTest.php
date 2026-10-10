@@ -10,6 +10,7 @@ use App\Domain\Communications\Domain\CommunicationRequirement;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -20,7 +21,15 @@ use Tests\TestCase;
  */
 class AnnouncementEmergencyAuthorizationTest extends TestCase
 {
-    use CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CreatesCommunicationFixtures, CreatesTenancyFixtures, ProvidesSensitiveActionMfa;
+
+    /** SR.4 (ADR 0071 §26.7): an Emergency publish -- each request gets a fresh code or current MFA assurance. */
+    public function call($method, $uri, $parameters = [], $cookies = [], $files = [], $server = [], $content = null)
+    {
+        $this->applySensitiveActionMfa($method, $uri, $parameters, $content, '#^/app/communications/announcements/[^/]+/publish$#', null);
+
+        return parent::call($method, $uri, $parameters, $cookies, $files, $server, $content);
+    }
 
     private function activate($user, $school): void
     {

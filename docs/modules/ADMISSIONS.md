@@ -538,6 +538,21 @@ Student and Guardian records through the trusted services without
 `students.manage` is recorded, not broadened; SR.4 verifies whether this
 boundary is the intended one.)*
 
+*(SR.4, 2026-10-10, ADR 0071 §26.6: verified and RETAINED as an explicit
+trusted seam.
+- Conversion creates only the new Student (identity from the Applicant
+  record), its enrolment in a Section matching the application, an optional
+  NEW Guardian and contact, and ONE relationship from the new Student to a
+  Guardian.
+- It never updates an existing Student or Guardian.
+- `link_existing` now refuses an inactive Guardian
+  (`ADMISSION_GUARDIAN_NOT_ACTIVE`).
+- `admissions_officer` cannot edit Students, administer Guardians or link
+  Guardians outside conversion (403).
+- Recorded for the owner, not changed: `link_existing` with
+  `is_legal_guardian` gives that Guardian portal visibility of the new
+  Student.)*
+
 ## 14. Search / PII
 
 **Searchable in v1** (staff-facing list/filter, not yet implemented,

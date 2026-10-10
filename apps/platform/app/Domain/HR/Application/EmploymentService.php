@@ -60,6 +60,7 @@ class EmploymentService
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly AssignmentClosureCascade $closureCascade,
+        private readonly HrSelfAdministrationGuard $selfAdministration,
         /** @var iterable<EmploymentEndParticipant> */
         #[Tag(EmploymentEndParticipant::TAG)] private readonly iterable $endParticipants = [],
     ) {}
@@ -93,6 +94,9 @@ class EmploymentService
                 // Mirrors EmployeeNumberAllocator/AcademicYearService's lock-then-
                 // check-then-write pattern.
                 Employee::query()->where('id', $employee->id)->lockForUpdate()->firstOrFail();
+
+                // SR.4 (ADR 0071 §26.2): never your own employment.
+                $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'employment.create');
 
                 $this->assertNoOverlap($employee, $startsOn, $endsOn);
 
@@ -148,6 +152,8 @@ class EmploymentService
 
         return $this->context->withSchool($school, function () use ($school, $employment, $attributes, $actor) {
             return DB::transaction(function () use ($school, $employment, $attributes, $actor) {
+                $this->selfAdministration->refuseOwnEmployee($actor, $employment->employee_id, 'employment.update');
+
                 try {
                     $employment->update($attributes);
                 } catch (QueryException $e) {
@@ -217,6 +223,9 @@ class EmploymentService
 
         return $this->context->withSchool($school, function () use ($school, $employment, $endsOn, $status, $actor) {
             return DB::transaction(function () use ($school, $employment, $endsOn, $status, $actor) {
+                // SR.4 (ADR 0071 §26.2): Employee FOR SHARE before the record, the ActingEmployee lock order.
+                $this->selfAdministration->refuseOwnEmployee($actor, $employment->employee_id, 'employment.end');
+
                 $locked = EmploymentRecord::query()->where('id', $employment->id)->lockForUpdate()->firstOrFail();
 
                 if ($locked->ends_on !== null) {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { computed, reactive, ref } from 'vue';
+import MfaCodeField from '../../../../Components/MfaCodeField.vue';
 import StatusBadge from '../../../../Components/StatusBadge.vue';
 import { formatMoney } from '../../../../money';
 import { idempotencyKey, clearIdempotencyKey } from '../../../../idempotency';
@@ -67,6 +68,8 @@ interface Props {
     run: Run;
     postings: Posting[];
     canViewSensitive: boolean;
+    sensitiveNeedsMfa: boolean;
+    hasMfaFactor: boolean;
     results: ResultRow[] | null;
     calculationOutcome: {
         resolvedCount: number;
@@ -194,6 +197,23 @@ function submitCorrectionDelta(): void {
     });
 }
 
+// SR.4 (ADR 0071 §26.7): approve, post and reverse each need a fresh code.
+const mfaCode = ref('');
+const mfaError = ref<string | null>(null);
+function mfaOptions(scope: string) {
+    return {
+        onSuccess: () => {
+            clearIdempotencyKey(scope);
+            mfaCode.value = '';
+            mfaError.value = null;
+        },
+        onError: (errors: Record<string, string>) => {
+            mfaError.value = errors.mfa_code ?? null;
+            mfaCode.value = '';
+        },
+    };
+}
+
 // -- Approve --------------------------------------------------------------
 
 const approving = ref(false);
@@ -205,10 +225,10 @@ function approve(): void {
     const key = idempotencyKey(`payroll-approve-${props.run.id}`);
     router.post(
         `/app/payroll/runs/${props.run.id}/approve`,
-        {},
+        { mfa_code: mfaCode.value },
         {
             headers: { 'Idempotency-Key': key },
-            onSuccess: () => clearIdempotencyKey(`payroll-approve-${props.run.id}`),
+            ...mfaOptions(`payroll-approve-${props.run.id}`),
             onFinish: () => (approving.value = false),
         },
     );
@@ -225,10 +245,10 @@ function post(): void {
     const key = idempotencyKey(`payroll-post-${props.run.id}`);
     router.post(
         `/app/payroll/runs/${props.run.id}/post`,
-        {},
+        { mfa_code: mfaCode.value },
         {
             headers: { 'Idempotency-Key': key },
-            onSuccess: () => clearIdempotencyKey(`payroll-post-${props.run.id}`),
+            ...mfaOptions(`payroll-post-${props.run.id}`),
             onFinish: () => (posting.value = false),
         },
     );
@@ -251,10 +271,10 @@ function reverse(): void {
     const key = idempotencyKey(`payroll-reverse-${props.run.id}`);
     router.post(
         `/app/payroll/runs/${props.run.id}/reverse`,
-        { reason: reverseReason.value || undefined },
+        { reason: reverseReason.value || undefined, mfa_code: mfaCode.value },
         {
             headers: { 'Idempotency-Key': key },
-            onSuccess: () => clearIdempotencyKey(`payroll-reverse-${props.run.id}`),
+            ...mfaOptions(`payroll-reverse-${props.run.id}`),
             onFinish: () => (reversing.value = false),
         },
     );
@@ -532,7 +552,11 @@ const reversalPosting = computed(
             <h2 class="text-sm font-medium text-slate-900">
                 {{ isFinal ? 'Calculation results' : 'Calculation preview' }}
             </h2>
-            <p v-if="!canViewSensitive" class="mt-1 text-sm text-slate-500">
+            <p v-if="sensitiveNeedsMfa" class="mt-1 text-sm text-amber-700">
+                Financial results need a recent multi-factor sign-in. Sign out and sign in again
+                with your authentication code to see them.
+            </p>
+            <p v-else-if="!canViewSensitive" class="mt-1 text-sm text-slate-500">
                 You don't hold payroll.compensation.sensitive.view -- financial results are not
                 shown.
             </p>
@@ -589,15 +613,23 @@ const reversalPosting = computed(
                 A different authorized user must approve this payroll run. The preparer of a run may
                 never approve it themselves, regardless of what capabilities they hold.
             </p>
-            <button
-                v-else-if="canApprove"
-                type="button"
-                :disabled="approving"
-                class="mt-2 rounded bg-emerald-700 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-                @click="approve"
-            >
-                {{ approving ? 'Approving…' : 'Approve run' }}
-            </button>
+            <div v-else-if="canApprove" class="mt-2 space-y-2">
+                <MfaCodeField
+                    id="payroll-approve-mfa"
+                    v-model="mfaCode"
+                    :has-mfa-factor="hasMfaFactor"
+                    action="Approving a payroll run"
+                    :error="mfaError"
+                />
+                <button
+                    type="button"
+                    :disabled="approving || !hasMfaFactor"
+                    class="rounded bg-emerald-700 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                    @click="approve"
+                >
+                    {{ approving ? 'Approving…' : 'Approve run' }}
+                </button>
+            </div>
             <p v-else class="mt-1 text-sm text-slate-500">
                 You don't hold payroll.runs.approve -- you cannot approve this run.
             </p>
@@ -628,9 +660,18 @@ const reversalPosting = computed(
                     Missing deduction ledger mapping for:
                     {{ accountingReadiness.missingDeductionMappings.join(', ') }}
                 </p>
+                <div class="mt-3">
+                    <MfaCodeField
+                        id="payroll-post-mfa"
+                        v-model="mfaCode"
+                        :has-mfa-factor="hasMfaFactor"
+                        action="Posting a payroll run"
+                        :error="mfaError"
+                    />
+                </div>
                 <button
                     type="button"
-                    :disabled="posting || !accountingReadiness.readyToPost"
+                    :disabled="posting || !accountingReadiness.readyToPost || !hasMfaFactor"
                     class="mt-3 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
                     @click="post"
                 >
@@ -668,9 +709,16 @@ const reversalPosting = computed(
                     placeholder="Reason (optional)"
                     class="w-full max-w-md rounded border border-slate-300 px-3 py-2 text-sm"
                 />
+                <MfaCodeField
+                    id="payroll-reverse-mfa"
+                    v-model="mfaCode"
+                    :has-mfa-factor="hasMfaFactor"
+                    action="Reversing a payroll posting"
+                    :error="mfaError"
+                />
                 <button
                     type="button"
-                    :disabled="reversing"
+                    :disabled="reversing || !hasMfaFactor"
                     class="rounded bg-red-700 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
                     @click="reverse"
                 >

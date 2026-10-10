@@ -65,7 +65,7 @@ export interface paths {
         /** List a School's registered webhook endpoints (Phase 0C.3). */
         get: operations["listWebhookEndpoints"];
         put?: never;
-        /** Registers a new webhook endpoint. The plaintext signing secret is returned ONCE, in this response only (section 7) -- it is never retrievable again afterward. Requires integrations.webhooks.manage. */
+        /** Registers a new webhook endpoint. The plaintext signing secret is returned ONCE, in this response only (section 7) -- it is never retrievable again afterward. Requires integrations.webhooks.manage. SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode). */
         post: operations["createWebhookEndpoint"];
         delete?: never;
         options?: never;
@@ -99,7 +99,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Rotates the signing secret with a documented overlap window (section 9) -- the new plaintext secret is returned ONCE, here only. Requires integrations.webhooks.manage. */
+        /** Rotates the signing secret with a documented overlap window (section 9) -- the new plaintext secret is returned ONCE, here only. Requires integrations.webhooks.manage. SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode). */
         post: operations["rotateWebhookEndpointSecret"];
         delete?: never;
         options?: never;
@@ -133,7 +133,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Re-enables a disabled endpoint. */
+        /** Re-enables a disabled endpoint. SR.4 (ADR 0071 §26.7) -- needs a fresh MFA code (`mfa_code`, see StepUpMfaCode). */
         post: operations["enableWebhookEndpoint"];
         delete?: never;
         options?: never;
@@ -1041,7 +1041,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Highly Sensitive EmployeeDocument metadata -- a SEPARATE, narrowly-authorized read path from the general Profile endpoint (section 12/14/59). Requires hr.employees.sensitive.view. Never returns a storage path/disk or a file URL; a successful non-empty read is audited exactly once (hr.employee_document.sensitive_viewed) by the underlying service, not by this endpoint itself. Phase 8A.15: rate-limited by the stricter `hr-api-sensitive-reads` policy (20/min, School+actor-keyed) rather than the 120/min policy the other three HR endpoints share. */
+        /** Highly Sensitive EmployeeDocument metadata -- a SEPARATE, narrowly-authorized read path from the general Profile endpoint (section 12/14/59). Requires hr.employees.sensitive.view. Never returns a storage path/disk or a file URL; a successful non-empty read is audited exactly once (hr.employee_document.sensitive_viewed) by the underlying service, not by this endpoint itself. Phase 8A.15: rate-limited by the stricter `hr-api-sensitive-reads` policy (20/min, School+actor-keyed) rather than the 120/min policy the other three HR endpoints share. SR.4 (ADR 0071 §26.7): needs current MFA assurance (`mfa`) -- a bearer token minted under the caller's current factor. */
         get: operations["getEmployeeSensitiveDocuments"];
         put?: never;
         post?: never;
@@ -2981,7 +2981,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reverses a posted journal entry via LedgerAdministrationService::reverse() (a new, inverse journal entry -- the original is never mutated). Requires finance.ledger.reverse (a separate capability from finance.ledger.post). NOT a generic HTTP-idempotent endpoint -- reversal has its own structural at-most-once semantics (JOURNAL_ENTRY_ALREADY_REVERSED, 409, on a repeat). Phase 0O.11A: a Payment's settlement journal entry is refused with JOURNAL_ENTRY_NOT_REVERSIBLE (409) -- reversing it directly would leave the Payment posted against a reversed entry. */
+        /** Reverses a posted journal entry via LedgerAdministrationService::reverse() (a new, inverse journal entry -- the original is never mutated). Requires finance.ledger.reverse (a separate capability from finance.ledger.post). NOT a generic HTTP-idempotent endpoint -- reversal has its own structural at-most-once semantics (JOURNAL_ENTRY_ALREADY_REVERSED, 409, on a repeat). Phase 0O.11A: a Payment's settlement journal entry is refused with JOURNAL_ENTRY_NOT_REVERSIBLE (409) -- reversing it directly would leave the Payment posted against a reversed entry. SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode). */
         post: operations["reverseJournalEntry"];
         delete?: never;
         options?: never;
@@ -3687,7 +3687,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Cancels one posted adjustment through a Finance reversal (the charge amount never changes). Requires finance.fee_concessions.approve. */
+        /** Cancels one posted adjustment through a Finance reversal (the charge amount never changes). Requires finance.fee_concessions.approve. SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode). */
         post: operations["cancelFeeAdjustment"];
         delete?: never;
         options?: never;
@@ -4016,7 +4016,7 @@ export interface paths {
         /** Lists an EmploymentRecord's compensation assignment history -- identity and effective dates ONLY, never an amount (ADR 0034 "Sensitive values"). Requires payroll.compensation.view. */
         get: operations["listCompensationAssignments"];
         put?: never;
-        /** Assigns compensation for an EmploymentRecord against an ACTIVE salary structure -- Highly Sensitive (writes actual per-component amounts). Requires payroll.compensation.sensitive.manage (granted to no default role). */
+        /** Assigns compensation for an EmploymentRecord against an ACTIVE salary structure -- Highly Sensitive (writes actual per-component amounts). Requires payroll.compensation.sensitive.manage (SR.3: `payroll_officer`, granted through school.roles.grant.payroll_sensitive). SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode). */
         post: operations["assignCompensation"];
         delete?: never;
         options?: never;
@@ -6161,6 +6161,10 @@ export interface components {
                 /** @description Field-level validation errors, present only on 422 responses. */
                 errors?: Record<string, never> | null;
             };
+        };
+        /** @description SR.4 (ADR 0071 §26.7): a Highly Sensitive or financially consequential action re-verifies the caller's MFA now -- a current TOTP code of the caller's ACTIVE factor, or one of their unused recovery codes; each is single-use. Missing, wrong or used, or no enrolled factor: 422 with `error.errors.mfa_code`. Checked after the capability (a caller without it gets 403 and spends no code) and before any change. On an `Idempotency-Key` route the 422 is recorded for that key, like any validation failure -- retry with a new key and a new code; a retry of a SUCCESSFUL request with the same key and body is replayed, never re-verified. */
+        StepUpMfaCode: {
+            mfa_code: string;
         };
         /** @description Phase 0G.6: an exact decimal amount plus its explicit currency -- NEVER a JSON number/float (docs/architecture/adr/0030). `amount` is a plain decimal string, at most 12 integer digits and 2 fractional digits (matching every Phase 0G table's NUMERIC(14,2) columns); no scientific notation, no locale formatting. */
         Money: {
@@ -11131,6 +11135,8 @@ export interface operations {
                     name: string;
                     /** @description https:// only in production -- see docs/security/INTEGRATION-SECURITY.md (SSRF policy). */
                     url: string;
+                    /** @description Fresh MFA code -- see StepUpMfaCode. */
+                    mfa_code: string;
                 };
             };
         };
@@ -11166,7 +11172,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description URL rejected by SSRF validation, or otherwise invalid. */
+            /** @description URL rejected by SSRF validation, `mfa_code` refused (see StepUpMfaCode), or otherwise invalid. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11222,7 +11228,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StepUpMfaCode"];
+            };
+        };
         responses: {
             /** @description Rotated. */
             200: {
@@ -11236,6 +11246,15 @@ export interface operations {
                             secret: string;
                         };
                     };
+                };
+            };
+            /** @description `mfa_code` refused (missing, wrong, used, or no enrolled factor -- `error.errors.mfa_code`; see StepUpMfaCode), or invalid input. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };
@@ -11275,7 +11294,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StepUpMfaCode"];
+            };
+        };
         responses: {
             /** @description Enabled. */
             200: {
@@ -11286,6 +11309,15 @@ export interface operations {
                     "application/json": {
                         data: components["schemas"]["WebhookEndpoint"];
                     };
+                };
+            };
+            /** @description `mfa_code` refused (missing, wrong, used, or no enrolled factor -- `error.errors.mfa_code`; see StepUpMfaCode), or invalid input. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };
@@ -11305,6 +11337,8 @@ export interface operations {
                 "application/json": {
                     /** @example school.setting.changed.v1 */
                     event_type: string;
+                    /** @description Fresh MFA code -- see StepUpMfaCode. */
+                    mfa_code: string;
                 };
             };
         };
@@ -13893,14 +13927,14 @@ export interface operations {
                     };
                 };
             };
-            /** @description Missing/invalid bearer token. */
+            /** @description Missing/invalid bearer token, or (SR.4, ADR 0071 §26.7: a Highly Sensitive read needs CURRENT MFA assurance) `mfa_step_up_required` -- the token was minted before the caller's current MFA factor was activated; issue a new token. */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Authenticated but lacking hr.employees.sensitive.view in this School -- identical response whether or not sensitive documents actually exist (no existence oracle, section 60). */
+            /** @description Authenticated but lacking hr.employees.sensitive.view in this School -- identical response whether or not sensitive documents actually exist (no existence oracle, section 60) -- or `mfa_required_not_enrolled` (the caller has no active MFA factor; SR.4, ADR 0071 §26.7). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -20728,7 +20762,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["JournalEntryInput"];
+                "application/json": components["schemas"]["JournalEntryInput"] & components["schemas"]["StepUpMfaCode"];
             };
         };
         responses: {
@@ -20843,10 +20877,12 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: {
+        requestBody: {
             content: {
                 "application/json": {
                     reason?: string | null;
+                    /** @description Fresh MFA code -- see StepUpMfaCode. */
+                    mfa_code: string;
                 };
             };
         };
@@ -20889,6 +20925,15 @@ export interface operations {
             };
             /** @description JOURNAL_ENTRY_ALREADY_REVERSED or JOURNAL_ENTRY_NOT_REVERSIBLE (a Payment-owned entry). */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `mfa_code` refused (missing, wrong, used, or no enrolled factor -- `error.errors.mfa_code`; see StepUpMfaCode), or invalid input. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -23789,7 +23834,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["FeeAdjustmentCancelInput"];
+                "application/json": components["schemas"]["FeeAdjustmentCancelInput"] & components["schemas"]["StepUpMfaCode"];
             };
         };
         responses: {
@@ -23831,6 +23876,15 @@ export interface operations {
             };
             /** @description FEE_ADJUSTMENT_ALREADY_CANCELLED. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `mfa_code` refused (missing, wrong, used, or no enrolled factor -- `error.errors.mfa_code`; see StepUpMfaCode), or invalid input. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -25154,7 +25208,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CompensationAssignmentInput"];
+                "application/json": components["schemas"]["CompensationAssignmentInput"] & components["schemas"]["StepUpMfaCode"];
             };
         };
         responses: {
@@ -25236,14 +25290,14 @@ export interface operations {
                     };
                 };
             };
-            /** @description Missing/invalid bearer token. */
+            /** @description Missing/invalid bearer token, or (SR.4, ADR 0071 §26.7: a Highly Sensitive read needs CURRENT MFA assurance) `mfa_step_up_required` -- the token was minted before the caller's current MFA factor was activated; issue a new token. */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Authenticated but lacking payroll.compensation.sensitive.view in this School. */
+            /** @description Lacking the capability in this School, or `mfa_required_not_enrolled` (the caller has no active MFA factor). */
             403: {
                 headers: {
                     [name: string]: unknown;

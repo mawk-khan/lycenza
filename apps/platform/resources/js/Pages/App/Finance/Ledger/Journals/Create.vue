@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { useForm } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import MfaCodeField from '../../../../../Components/MfaCodeField.vue';
 import { formatMoney, sumAmounts } from '../../../../../money';
 
 interface Props {
     accounts: Array<{ id: string; code: string; name: string; currency: string }>;
+    hasMfaFactor: boolean;
 }
 
 defineProps<Props>();
@@ -23,10 +25,13 @@ const form = useForm<{
     currency: string;
     description: string;
     lines: LineInput[];
+    mfa_code: string;
 }>({
     currency: 'INR',
     description: '',
     lines: [emptyLine(), emptyLine()],
+    // SR.4 (ADR 0071 §26.7): posting needs a fresh code.
+    mfa_code: '',
 });
 
 function addLine(): void {
@@ -49,7 +54,7 @@ const totalCredits = computed(() =>
 const balancePreview = computed(() => totalDebits.value === totalCredits.value);
 
 function submit(): void {
-    form.post('/app/finance/journal-entries');
+    form.post('/app/finance/journal-entries', { onError: () => form.reset('mfa_code') });
 }
 </script>
 
@@ -172,9 +177,17 @@ function submit(): void {
                 </p>
             </div>
 
+            <MfaCodeField
+                id="journal-post-mfa"
+                v-model="form.mfa_code"
+                :has-mfa-factor="hasMfaFactor"
+                action="Posting a journal entry"
+                :error="form.errors.mfa_code"
+            />
+
             <button
                 type="submit"
-                :disabled="form.processing"
+                :disabled="form.processing || !hasMfaFactor"
                 class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
             >
                 Post journal entry

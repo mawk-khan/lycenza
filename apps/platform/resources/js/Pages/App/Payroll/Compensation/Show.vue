@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useForm } from '@inertiajs/vue3';
 import { reactive, ref } from 'vue';
+import MfaCodeField from '../../../../Components/MfaCodeField.vue';
 import { formatMoney } from '../../../../money';
 
 interface Assignment {
@@ -33,7 +34,9 @@ interface Props {
     assignments: Assignment[];
     structureOptions: StructureOption[];
     canViewSensitive: boolean;
+    sensitiveNeedsMfa: boolean;
     canManageSensitive: boolean;
+    hasMfaFactor: boolean;
 }
 
 const props = defineProps<Props>();
@@ -73,6 +76,8 @@ const form = useForm({
     salary_structure_id: '',
     effective_from: '',
     fixed_values: [] as Array<{ salary_structure_component_id: string; amount: string }>,
+    // SR.4 (ADR 0071 §26.7): assigning compensation needs a fresh code.
+    mfa_code: '',
 });
 
 function selectStructure(id: string): void {
@@ -90,6 +95,7 @@ function submit(): void {
             showForm.value = false;
             form.reset();
         },
+        onError: () => form.reset('mfa_code'),
     });
 }
 </script>
@@ -173,14 +179,27 @@ function submit(): void {
                 </div>
             </div>
 
+            <MfaCodeField
+                id="compensation-mfa"
+                v-model="form.mfa_code"
+                :has-mfa-factor="hasMfaFactor"
+                action="Assigning compensation"
+                :error="form.errors.mfa_code"
+            />
+
             <button
                 type="submit"
-                :disabled="form.processing"
+                :disabled="form.processing || !hasMfaFactor"
                 class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
             >
                 {{ form.processing ? 'Assigning…' : 'Assign compensation' }}
             </button>
         </form>
+
+        <p v-if="sensitiveNeedsMfa" class="mt-4 text-sm text-amber-700">
+            Compensation amounts need a recent multi-factor sign-in. Sign out and sign in again with
+            your authentication code to see them.
+        </p>
 
         <table class="mt-4 w-full text-left text-sm">
             <thead>

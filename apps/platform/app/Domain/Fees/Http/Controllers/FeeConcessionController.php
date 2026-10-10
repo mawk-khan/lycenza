@@ -13,6 +13,7 @@ use App\Domain\Fees\Infrastructure\FeeAdjustment;
 use App\Domain\Fees\Infrastructure\FeeConcession;
 use App\Http\Controllers\Controller;
 use App\Models\School;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -90,8 +91,11 @@ class FeeConcessionController extends Controller
         return response()->json(['data' => FeeSetupPresenter::concession($concessions->withdraw($school, $concession, $request->user()))]);
     }
 
-    public function approve(Request $request, School $school, string $concession, FeeConcessionService $concessions): JsonResponse
+    /** SR.4 (ADR 0071 §26.7): approve, revoke and adjustment cancellation need a fresh `mfa_code`. */
+    public function approve(Request $request, School $school, string $concession, FeeConcessionService $concessions, FreshMfaRequirement $mfa): JsonResponse
     {
+        $mfa->requireForAction($request, $request->user());
+
         return response()->json(['data' => FeeSetupPresenter::concession($concessions->approve($school, $concession, $request->user()))]);
     }
 
@@ -100,8 +104,10 @@ class FeeConcessionController extends Controller
         return response()->json(['data' => FeeSetupPresenter::concession($concessions->reject($school, $concession, $request->user()))]);
     }
 
-    public function revoke(Request $request, School $school, string $concession, FeeConcessionService $concessions): JsonResponse
+    public function revoke(Request $request, School $school, string $concession, FeeConcessionService $concessions, FreshMfaRequirement $mfa): JsonResponse
     {
+        $mfa->requireForAction($request, $request->user());
+
         return response()->json(['data' => FeeSetupPresenter::concession($concessions->revoke($school, $concession, $request->user()))]);
     }
 
@@ -116,9 +122,10 @@ class FeeConcessionController extends Controller
             ->map(fn (FeeAdjustment $a) => FeeSetupPresenter::adjustment($a))->values()->all()]);
     }
 
-    public function cancelAdjustment(Request $request, School $school, string $adjustment, FeeConcessionService $concessions): JsonResponse
+    public function cancelAdjustment(Request $request, School $school, string $adjustment, FeeConcessionService $concessions, FreshMfaRequirement $mfa): JsonResponse
     {
         $validated = $request->validate(['reason' => ['nullable', 'string', 'max:255']]);
+        $mfa->requireForAction($request, $request->user());
 
         return response()->json(['data' => FeeSetupPresenter::adjustment($concessions->cancelAdjustment($school, $adjustment, $request->user(), $validated['reason'] ?? null))]);
     }

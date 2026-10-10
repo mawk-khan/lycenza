@@ -154,7 +154,8 @@ class HrEmployeeLifecycleReadModelTest extends TestCase
         $hrUser = $this->createUserWithCapabilities($school, [
             'hr.employees.manage', 'hr.employees.assignments.manage', 'hr.employees.assignments.view', 'hr.employees.personal.view',
         ]);
-        $hrActorEmployee = app(EmployeeService::class)->create($school, ['full_name' => 'HR Staff', 'user_id' => $hrUser->id], $hrUser);
+        // SR.4 (ADR 0071 §26.2): another HR holder links the actor's own Employee.
+        $hrActorEmployee = app(EmployeeService::class)->create($school, ['full_name' => 'HR Staff', 'user_id' => $hrUser->id], $this->fullHrActor($school));
         $targetEmployee = $this->createEmployee($school);
         $employment = app(EmploymentService::class)->create($targetEmployee, ['employment_type' => 'permanent', 'starts_on' => '2022-01-01'], $hrUser);
 

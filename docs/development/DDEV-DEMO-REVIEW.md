@@ -294,6 +294,24 @@ and `communications_coordinator`. Roles cannot be created or edited at
 runtime (Settings → Staff accounts lists and assigns them only). A person
 with two jobs holds two roles -- the Canteen & Stores persona shows this.
 
+**SR.4 (ADR 0071 §26, 2026-10-10).**
+- **Enrol MFA first.** Demo personas have no MFA factor. Enrol one at
+  **Account security** before trying any of these, each of which asks for an
+  authentication code:
+  - payroll approve, post and reverse, and compensation assignment;
+  - journal posting and reversal;
+  - offline payment recording;
+  - concession approve, revoke and adjustment cancellation;
+  - highly sensitive HR records;
+  - webhook administration;
+  - an Emergency publish.
+- **Amounts need a recent MFA sign-in.** Payroll amounts and run results show
+  only after a recent MFA sign-in.
+- **HR & Payroll persona:**
+  - can no longer configure payroll accounting (School Admin does);
+  - cannot change their own employee record, employment, attendance or pay
+    (another administrator does).
+
 Every operations persona above now holds production roles. The `demo.*`
 roles of earlier versions (HR & Payroll super-role, Finance Officer with
 ledger reversal, Canteen & Stores, ...) are gone. The **only** demo-only

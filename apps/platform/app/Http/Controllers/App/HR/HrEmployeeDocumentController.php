@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\App\HR;
 
 use App\Domain\HR\Application\EmployeeDocumentService;
+use App\Domain\HR\Http\Support\HighlySensitiveDocumentStepUp;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeDocument;
 use App\Http\Controllers\Controller;
@@ -28,9 +29,9 @@ use Illuminate\Validation\Rule;
  */
 class HrEmployeeDocumentController extends Controller
 {
-    public function store(Request $request, TenantContext $context, EmployeeDocumentService $service, string $employee): RedirectResponse
+    public function store(Request $request, TenantContext $context, EmployeeDocumentService $service, HighlySensitiveDocumentStepUp $stepUp, string $employee): RedirectResponse
     {
-        $context->requireSchool();
+        $school = $context->requireSchool();
         abort_if(! Str::isUuid($employee), 404);
 
         $model = Employee::query()->findOrFail($employee);
@@ -47,19 +48,21 @@ class HrEmployeeDocumentController extends Controller
             'expires_on' => ['sometimes', 'nullable', 'date'],
         ]);
 
+        $stepUp->requireFor($request, $context->actor(), $school, $validated['classification_tier'] ?? null, null);
         $service->register($model, $validated, $context->actor());
 
         return redirect("/app/hr/employees/{$model->id}");
     }
 
-    public function archive(TenantContext $context, EmployeeDocumentService $service, string $employee, string $document): RedirectResponse
+    public function archive(Request $request, TenantContext $context, EmployeeDocumentService $service, HighlySensitiveDocumentStepUp $stepUp, string $employee, string $document): RedirectResponse
     {
-        $context->requireSchool();
+        $school = $context->requireSchool();
         abort_if(! Str::isUuid($employee) || ! Str::isUuid($document), 404);
 
         $employeeModel = Employee::query()->findOrFail($employee);
         $documentModel = EmployeeDocument::query()->findOrFail($document);
 
+        $stepUp->requireFor($request, $context->actor(), $school, $documentModel->classification_tier, $documentModel->classification_tier);
         $service->archive($employeeModel, $documentModel, $context->actor());
 
         return redirect("/app/hr/employees/{$employeeModel->id}");

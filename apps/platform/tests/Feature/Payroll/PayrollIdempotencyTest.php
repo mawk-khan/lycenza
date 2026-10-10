@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -36,11 +37,26 @@ use Tests\TestCase;
  */
 class PayrollIdempotencyTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, ProvidesSensitiveActionMfa;
+
+    /** @var array<string, array{mfa_code: string}> */
+    private array $codesByKey = [];
 
     private function token($user): string
     {
-        return $user->createToken('test-device')->plainTextToken;
+        return $this->mfaToken($user);
+    }
+
+    /**
+     * SR.4 (ADR 0071 §26.7): one fresh code per Idempotency-Key and route --
+     * a retry with the same key resends the IDENTICAL body (with its
+     * already-used code) and is replayed by the middleware, never re-verified.
+     *
+     * @return array{mfa_code: string}
+     */
+    private function mfaFor(string $key, string $url, string $token): array
+    {
+        return $this->codesByKey[$key.' '.$url] ??= $this->mfaBody($token);
     }
 
     private function as(string $token): self
@@ -139,12 +155,12 @@ class PayrollIdempotencyTest extends TestCase
         $f = $this->makeCalculatedRun();
 
         $first = $this->as($f['approverToken'])->withHeader('Idempotency-Key', 'approve-replay-key')
-            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/approve");
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/approve", $this->mfaFor('approve-replay-key', "/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/approve", $f['approverToken']));
         $first->assertOk();
         $this->assertNull($first->headers->get('Idempotency-Replayed'));
 
         $second = $this->as($f['approverToken'])->withHeader('Idempotency-Key', 'approve-replay-key')
-            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/approve");
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/approve", $this->mfaFor('approve-replay-key', "/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/approve", $f['approverToken']));
         $second->assertOk();
         $second->assertHeader('Idempotency-Replayed', 'true');
         // assertEquals, not assertSame -- PHP's `===` on arrays also
@@ -164,15 +180,15 @@ class PayrollIdempotencyTest extends TestCase
     {
         $f = $this->makeApprovedRun();
         $this->as($f['posterToken'])->withHeader('Idempotency-Key', 'post-for-conflict-test')
-            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post")
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post", $this->mfaFor('post-for-conflict-test', "/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post", $f['posterToken']))
             ->assertCreated();
 
         $first = $this->as($f['posterToken'])->withHeader('Idempotency-Key', 'reverse-conflict-key')
-            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/reverse", ['reason' => 'first reason']);
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/reverse", ['reason' => 'first reason'] + $this->mfaFor('reverse-conflict-key', "/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/reverse", $f['posterToken']));
         $first->assertCreated();
 
         $second = $this->as($f['posterToken'])->withHeader('Idempotency-Key', 'reverse-conflict-key')
-            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/reverse", ['reason' => 'a materially different reason']);
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/reverse", ['reason' => 'a materially different reason'] + $this->mfaFor('reverse-conflict-key', "/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/reverse", $f['posterToken']));
 
         $second->assertStatus(409);
         $second->assertJsonPath('error.code', 'IDEMPOTENCY_KEY_CONFLICT');
@@ -197,7 +213,7 @@ class PayrollIdempotencyTest extends TestCase
         $f = $this->makeCalculatedRun();
 
         $this->as($f['approverToken'])->withHeader('Idempotency-Key', 'revoked-approve-key')
-            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/approve")
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/approve", $this->mfaFor('revoked-approve-key', "/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/approve", $f['approverToken']))
             ->assertOk();
 
         // Revoke by disabling the actor outright -- the same mechanism
@@ -208,7 +224,7 @@ class PayrollIdempotencyTest extends TestCase
         Auth::forgetGuards();
 
         $replayAttempt = $this->as($f['approverToken'])->withHeader('Idempotency-Key', 'revoked-approve-key')
-            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/approve");
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/approve", $this->mfaFor('revoked-approve-key', "/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/approve", $f['approverToken']));
 
         // Phase 0O.3 (ADR 0049 section 2): a disabled account's token no longer authenticates at all -- 401, still before idempotency.
         $replayAttempt->assertUnauthorized();
@@ -221,7 +237,7 @@ class PayrollIdempotencyTest extends TestCase
         $f = $this->makeApprovedRun();
 
         $first = $this->as($f['posterToken'])->withHeader('Idempotency-Key', 'post-retry-key')
-            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post");
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post", $this->mfaFor('post-retry-key', "/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post", $f['posterToken']));
         $first->assertCreated();
         $journalEntryId = $first->json('data.journalEntryId');
 
@@ -230,7 +246,7 @@ class PayrollIdempotencyTest extends TestCase
         // must replay the ORIGINAL success, not
         // PAYROLL_INVALID_RUN_TRANSITION.
         $retry = $this->as($f['posterToken'])->withHeader('Idempotency-Key', 'post-retry-key')
-            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post");
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post", $this->mfaFor('post-retry-key', "/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post", $f['posterToken']));
         $retry->assertCreated();
         $retry->assertHeader('Idempotency-Replayed', 'true');
         $this->assertSame($journalEntryId, $retry->json('data.journalEntryId'));
@@ -245,16 +261,16 @@ class PayrollIdempotencyTest extends TestCase
     {
         $f = $this->makeApprovedRun();
         $this->as($f['posterToken'])->withHeader('Idempotency-Key', 'post-before-reverse-retry')
-            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post")
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post", $this->mfaFor('post-before-reverse-retry', "/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post", $f['posterToken']))
             ->assertCreated();
 
         $first = $this->as($f['posterToken'])->withHeader('Idempotency-Key', 'reverse-retry-key')
-            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/reverse");
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/reverse", $this->mfaFor('reverse-retry-key', "/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/reverse", $f['posterToken']));
         $first->assertCreated();
         $reversalJournalEntryId = $first->json('data.journalEntryId');
 
         $retry = $this->as($f['posterToken'])->withHeader('Idempotency-Key', 'reverse-retry-key')
-            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/reverse");
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/reverse", $this->mfaFor('reverse-retry-key', "/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/reverse", $f['posterToken']));
         $retry->assertCreated();
         $retry->assertHeader('Idempotency-Replayed', 'true');
         $this->assertSame($reversalJournalEntryId, $retry->json('data.journalEntryId'));
@@ -276,12 +292,12 @@ class PayrollIdempotencyTest extends TestCase
         $sharedKey = 'shared-literal-key-across-post-and-reverse';
 
         $postResponse = $this->as($f['posterToken'])->withHeader('Idempotency-Key', $sharedKey)
-            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post");
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post", $this->mfaFor($sharedKey, "/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post", $f['posterToken']));
         $postResponse->assertCreated();
         $this->assertNull($postResponse->headers->get('Idempotency-Replayed'));
 
         $reverseResponse = $this->as($f['posterToken'])->withHeader('Idempotency-Key', $sharedKey)
-            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/reverse");
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/reverse", $this->mfaFor($sharedKey, "/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/reverse", $f['posterToken']));
         $reverseResponse->assertCreated();
         $this->assertNull($reverseResponse->headers->get('Idempotency-Replayed'), 'reverse must genuinely execute, never be treated as a replay of the post response.');
         $this->assertNotSame($postResponse->json('data.journalEntryId'), $reverseResponse->json('data.journalEntryId'));
@@ -305,11 +321,11 @@ class PayrollIdempotencyTest extends TestCase
         $f = $this->makeApprovedRun();
 
         $this->as($f['posterToken'])->withHeader('Idempotency-Key', 'post-event-replay-key')
-            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post")
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post", $this->mfaFor('post-event-replay-key', "/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post", $f['posterToken']))
             ->assertCreated();
 
         $replay = $this->as($f['posterToken'])->withHeader('Idempotency-Key', 'post-event-replay-key')
-            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post");
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post", $this->mfaFor('post-event-replay-key', "/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post", $f['posterToken']));
         $replay->assertCreated();
         $replay->assertHeader('Idempotency-Replayed', 'true');
 
@@ -326,15 +342,15 @@ class PayrollIdempotencyTest extends TestCase
     {
         $f = $this->makeApprovedRun();
         $this->as($f['posterToken'])->withHeader('Idempotency-Key', 'post-before-reversal-event-replay')
-            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post")
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post", $this->mfaFor('post-before-reversal-event-replay', "/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/post", $f['posterToken']))
             ->assertCreated();
 
         $this->as($f['posterToken'])->withHeader('Idempotency-Key', 'reversal-event-replay-key')
-            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/reverse")
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/reverse", $this->mfaFor('reversal-event-replay-key', "/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/reverse", $f['posterToken']))
             ->assertCreated();
 
         $replay = $this->as($f['posterToken'])->withHeader('Idempotency-Key', 'reversal-event-replay-key')
-            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/reverse");
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/reverse", $this->mfaFor('reversal-event-replay-key', "/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/reverse", $f['posterToken']));
         $replay->assertCreated();
         $replay->assertHeader('Idempotency-Replayed', 'true');
 

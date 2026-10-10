@@ -2,7 +2,9 @@
 
 namespace App\Domain\Payroll\Application;
 
+use App\Domain\HR\Application\HrSelfAdministrationGuard;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
+use App\Domain\Payroll\Application\Exceptions\PayrollSelfAdministrationException;
 use App\Domain\Payroll\Infrastructure\PayrollPeriod;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Models\User;
@@ -39,7 +41,10 @@ class PayrollRunAdministrationService
 {
     use AuthorizesCapability;
 
-    public function __construct(private readonly PayrollRunService $runs) {}
+    public function __construct(
+        private readonly PayrollRunService $runs,
+        private readonly HrSelfAdministrationGuard $selfAdministration,
+    ) {}
 
     public function createRun(PayrollPeriod $period, User $actor): PayrollRun
     {
@@ -61,6 +66,10 @@ class PayrollRunAdministrationService
     public function recordManualOverride(PayrollRun $run, EmploymentRecord $employmentRecord, array $componentAmounts, string $reason, User $actor): void
     {
         $this->authorizeCapabilityFor($actor, 'payroll.runs.prepare', $run->school);
+        // SR.4 (ADR 0071 §26.4): nobody sets their own pay.
+        if ($this->selfAdministration->ownsEmployment($actor, $run->school, $employmentRecord->id)) {
+            throw new PayrollSelfAdministrationException('run.manual_override');
+        }
 
         $this->runs->recordManualOverride($run, $employmentRecord, $componentAmounts, $reason, $actor);
     }
@@ -71,6 +80,10 @@ class PayrollRunAdministrationService
     public function recordCorrectionDelta(PayrollRun $run, EmploymentRecord $employmentRecord, array $lines, string $reason, User $actor): void
     {
         $this->authorizeCapabilityFor($actor, 'payroll.runs.prepare', $run->school);
+        // SR.4 (ADR 0071 §26.4): nobody sets their own pay.
+        if ($this->selfAdministration->ownsEmployment($actor, $run->school, $employmentRecord->id)) {
+            throw new PayrollSelfAdministrationException('run.correction_delta');
+        }
 
         $this->runs->recordCorrectionDelta($run, $employmentRecord, $lines, $reason, $actor);
     }

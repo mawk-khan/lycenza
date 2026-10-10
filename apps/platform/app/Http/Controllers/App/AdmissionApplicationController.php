@@ -9,6 +9,7 @@ use App\Domain\Admissions\Application\AdmissionApplicationReadService;
 use App\Domain\Admissions\Application\AdmissionApplicationService;
 use App\Domain\Admissions\Application\AdmissionConversionService;
 use App\Domain\Admissions\Application\Exceptions\AdmissionApplicationAlreadyConvertedException;
+use App\Domain\Admissions\Application\Exceptions\AdmissionGuardianNotActiveException;
 use App\Domain\Admissions\Application\Exceptions\AdmissionGuardianSelectionRequiredException;
 use App\Domain\Admissions\Application\Exceptions\CrossSchoolAdmissionReferenceException;
 use App\Domain\Admissions\Application\Exceptions\IncompatibleConversionSectionException;
@@ -295,7 +296,7 @@ class AdmissionApplicationController extends Controller
             throw ValidationException::withMessages(['starts_on' => [$e->getMessage()]]);
         } catch (AdmissionGuardianSelectionRequiredException $e) {
             throw ValidationException::withMessages(['guardian.contact_value' => [$e->getMessage()]]);
-        } catch (CrossSchoolRelationshipException|DuplicateRelationshipException $e) {
+        } catch (AdmissionGuardianNotActiveException|CrossSchoolRelationshipException|DuplicateRelationshipException $e) {
             throw ValidationException::withMessages(['guardian.guardian_id' => [$e->getMessage()]]);
         } catch (InvalidArgumentException $e) {
             throw ValidationException::withMessages(['guardian.contact_value' => [$e->getMessage()]]);

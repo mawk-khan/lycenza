@@ -302,3 +302,19 @@ database function (the runtime role keeps no DELETE). A revocation is final
 and an expiry is never extended, so a current credential is never eligible;
 the secret is only a hash and unusable from that end. `last_used_at` is never
 the trigger; API clients (configuration) stay. Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md` §5.9).
+
+## Webhook administration step-up (SR.4, 2026-10-10, ADR 0071 §26.7)
+
+These webhook actions send School data somewhere new, so each needs a fresh
+MFA code (`mfa_code`, see the OpenAPI `StepUpMfaCode` schema):
+- registering an endpoint;
+- rotating, and so revealing, its secret;
+- re-enabling an endpoint;
+- subscribing it to an event.
+
+The code is checked after `integrations.webhooks.manage`. On these
+`Idempotency-Key` routes, a refused code is the key's deterministic 422:
+retry with a new key and a new code.
+
+Disabling, unsubscribing and redelivery to an already-registered endpoint
+need none.

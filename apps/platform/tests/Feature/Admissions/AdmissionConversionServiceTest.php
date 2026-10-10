@@ -8,6 +8,7 @@ use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\Admissions\Application\AdmissionApplicationService;
 use App\Domain\Admissions\Application\AdmissionConversionService;
 use App\Domain\Admissions\Application\Exceptions\AdmissionApplicationAlreadyConvertedException;
+use App\Domain\Admissions\Application\Exceptions\AdmissionGuardianNotActiveException;
 use App\Domain\Admissions\Application\Exceptions\AdmissionGuardianSelectionRequiredException;
 use App\Domain\Admissions\Application\Exceptions\IncompatibleConversionSectionException;
 use App\Domain\Admissions\Application\Exceptions\InvalidAdmissionApplicationTransitionException;
@@ -460,6 +461,27 @@ class AdmissionConversionServiceTest extends TestCase
         $this->assertSame(0, $this->relationshipCount($school));
         $fresh = $this->fresh($school, $application->id);
         $this->assertSame('accepted', $fresh->status);
+    }
+
+    #[Test]
+    public function linking_an_inactive_guardian_is_refused_and_leaves_no_student_behind(): void
+    {
+        // SR.4 (ADR 0071 §26.6): the conversion seam adds one relationship to an
+        // ACTIVE Guardian only -- reviving an inactive record stays Guardian
+        // administration (`guardians.manage`).
+        ['school' => $school, 'section' => $section, 'application' => $application] = $this->buildAcceptedContext();
+        $inactive = $this->createGuardian($school, ['status' => 'inactive']);
+
+        try {
+            $this->service()->convert($application, 'S-5005', $section, '05', '2026-06-01', GuardianConversionInstruction::linkExisting($inactive, RelationshipType::Mother));
+            $this->fail('Expected AdmissionGuardianNotActiveException.');
+        } catch (AdmissionGuardianNotActiveException) {
+            // expected
+        }
+
+        $this->assertSame(0, $this->studentCount($school));
+        $this->assertSame(0, $this->relationshipCount($school));
+        $this->assertSame('accepted', $this->fresh($school, $application->id)->status);
     }
 
     #[Test]

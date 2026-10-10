@@ -83,8 +83,8 @@ class VisitorVisitController extends Controller
 
         $visitors = Visitor::query()
             ->where('status', 'active')
-            ->when($term !== '', fn ($q) => $q->where('full_name', 'ilike', "%{$term}%")
-                ->orWhere('phone', 'ilike', "%{$term}%"))
+            ->when($term !== '', fn ($q) => $q->where(fn ($w) => $w->where('full_name', 'ilike', "%{$term}%")
+                ->orWhere('phone', 'ilike', "%{$term}%")))
             ->limit(10)
             ->get();
 

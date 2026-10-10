@@ -31,6 +31,19 @@ class FreshMfaRequirement
         }
     }
 
+    /**
+     * SR.4 (ADR 0071 §26.7): the one step-up for a Highly Sensitive or
+     * financially consequential action, web or bearer API alike -- the
+     * request's `mfa_code` (a current TOTP code or an unused recovery code)
+     * re-verified now. Call it AFTER the capability check (an unauthorized
+     * caller gets its 403, never burns a code) and OUTSIDE the business
+     * transaction (a rollback must never un-consume a code).
+     */
+    public function requireForAction(Request $request, User $user): void
+    {
+        $this->require($request, $user, $request->input('mfa_code'));
+    }
+
     public function hasActiveFactor(User $user): bool
     {
         return $this->mfa->hasActiveFactor($user);

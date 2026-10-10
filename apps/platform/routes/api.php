@@ -566,7 +566,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->middleware(['private-no-store', 'capability:hr.employees.personal.view', 'throttle:hr-api-reads'])
                 ->name('schools.employees.activity.index');
             Route::get('/employees/{employee}/sensitive-documents', [EmployeeSensitiveDocumentController::class, 'index'])
-                ->middleware(['private-no-store', 'capability:hr.employees.sensitive.view', 'throttle:hr-api-sensitive-reads'])
+                ->middleware(['private-no-store', 'capability:hr.employees.sensitive.view', 'mfa', 'throttle:hr-api-sensitive-reads'])
                 ->name('schools.employees.sensitive-documents.index');
 
             // --- Phase 8A closure correction (item 3): HR mutation
@@ -1786,7 +1786,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->middleware(['capability:payroll.compensation.sensitive.manage', 'throttle:school-api-mutations'])
                 ->name('schools.employment-records.compensation-assignments.store');
             Route::get('/compensation-assignments/{compensationAssignment}/values', [CompensationAssignmentController::class, 'values'])
-                ->middleware('capability:payroll.compensation.sensitive.view')
+                ->middleware(['capability:payroll.compensation.sensitive.view', 'mfa'])
                 ->name('schools.compensation-assignments.values');
 
             Route::post('/payroll-periods', [PayrollPeriodController::class, 'store'])
@@ -1855,7 +1855,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->name('schools.payroll-runs.approve');
 
             Route::get('/payroll-runs/{payrollRun}/results', [PayrollRunPostingController::class, 'results'])
-                ->middleware('capability:payroll.compensation.sensitive.view')
+                ->middleware(['capability:payroll.compensation.sensitive.view', 'mfa'])
                 ->name('schools.payroll-runs.results');
 
             // Phase 9.10: on-demand payslip render, never persisted.
@@ -1864,7 +1864,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             // PayslipReadService's own docblock) -- eligibility
             // (approved/posted only) is enforced inside the service.
             Route::get('/payroll-runs/{payrollRun}/payslips/{employmentRecord}', [PayslipController::class, 'show'])
-                ->middleware('capability:payroll.compensation.sensitive.view')
+                ->middleware(['capability:payroll.compensation.sensitive.view', 'mfa'])
                 ->name('schools.payroll-runs.payslips.show');
 
             // HRX.5 (ADR 0065 §26.10): the run's captured HRX absence EVIDENCE

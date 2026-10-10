@@ -13,6 +13,7 @@ use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeCategory;
 use App\Domain\HR\Infrastructure\Position;
 use App\Http\Controllers\Controller;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
@@ -129,6 +130,8 @@ class HrEmployeeController extends Controller
             'positions' => ! $canManageAssignments ? [] : Position::query()->where('status', 'active')->orderBy('name')->get(['id', 'name'])->toArray(),
             'departments' => ! $canManageAssignments ? [] : Department::query()->where('status', 'active')->orderBy('name')->get(['id', 'name'])->toArray(),
             'employeeCategories' => ! $canManageAssignments ? [] : EmployeeCategory::query()->where('status', 'active')->orderBy('name')->get(['id', 'name'])->toArray(),
+            // SR.4 (ADR 0071 §26.7): registering a highly sensitive record needs a fresh code.
+            'hasMfaFactor' => app(FreshMfaRequirement::class)->hasActiveFactor($actor),
         ]);
     }
 

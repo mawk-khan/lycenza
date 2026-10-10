@@ -23,6 +23,7 @@ use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
@@ -208,6 +209,7 @@ class FeeConcessionController extends Controller
                 'cancelAdjustments' => $canApprove,
                 'isRequester' => $isRequester,
             ],
+            'hasMfaFactor' => app(FreshMfaRequirement::class)->hasActiveFactor($actor),
         ]);
     }
 
@@ -216,9 +218,10 @@ class FeeConcessionController extends Controller
         return $this->act($context, FeeConcessionService::REQUEST, $concession, fn ($school, $actor) => $concessions->withdraw($school, $concession, $actor));
     }
 
-    public function approve(TenantContext $context, FeeConcessionService $concessions, string $concession): RedirectResponse
+    /** SR.4 (ADR 0071 §26.7): approval posts the concession adjustment -- a fresh code. */
+    public function approve(Request $request, TenantContext $context, FeeConcessionService $concessions, string $concession): RedirectResponse
     {
-        return $this->act($context, FeeConcessionService::APPROVE, $concession, fn ($school, $actor) => $concessions->approve($school, $concession, $actor));
+        return $this->act($context, FeeConcessionService::APPROVE, $concession, fn ($school, $actor) => $concessions->approve($school, $concession, $actor), $request);
     }
 
     public function reject(TenantContext $context, FeeConcessionService $concessions, string $concession): RedirectResponse
@@ -226,9 +229,10 @@ class FeeConcessionController extends Controller
         return $this->act($context, FeeConcessionService::APPROVE, $concession, fn ($school, $actor) => $concessions->reject($school, $concession, $actor));
     }
 
-    public function revoke(TenantContext $context, FeeConcessionService $concessions, string $concession): RedirectResponse
+    /** SR.4 (ADR 0071 §26.7): revoking changes what is owed -- a fresh code. */
+    public function revoke(Request $request, TenantContext $context, FeeConcessionService $concessions, string $concession): RedirectResponse
     {
-        return $this->act($context, FeeConcessionService::APPROVE, $concession, fn ($school, $actor) => $concessions->revoke($school, $concession, $actor));
+        return $this->act($context, FeeConcessionService::APPROVE, $concession, fn ($school, $actor) => $concessions->revoke($school, $concession, $actor), $request);
     }
 
     public function cancelAdjustment(Request $request, TenantContext $context, FeeConcessionService $concessions, string $adjustment): RedirectResponse
@@ -236,6 +240,8 @@ class FeeConcessionController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability(FeeConcessionService::APPROVE, $school);
         $validated = $request->validate(['reason' => ['nullable', 'string', 'max:255']]);
+        // SR.4 (ADR 0071 §26.7): cancelling a posted adjustment -- a fresh code.
+        app(FreshMfaRequirement::class)->requireForAction($request, $context->actor());
 
         try {
             $concessions->cancelAdjustment($school, $adjustment, $context->actor(), $validated['reason'] ?? null);
@@ -263,11 +269,19 @@ class FeeConcessionController extends Controller
         return back();
     }
 
-    /** @param callable(School, User): mixed $operation */
-    private function act(TenantContext $context, string $capability, string $concession, callable $operation): RedirectResponse
+    /**
+     * $stepUp: the request whose `mfa_code` must be re-verified (after the
+     * capability, before the decision) -- a financially consequential decision.
+     *
+     * @param  callable(School, User): mixed  $operation
+     */
+    private function act(TenantContext $context, string $capability, string $concession, callable $operation, ?Request $stepUp = null): RedirectResponse
     {
         $school = $context->requireSchool();
         $this->authorizeCapability($capability, $school);
+        if ($stepUp !== null) {
+            app(FreshMfaRequirement::class)->requireForAction($stepUp, $context->actor());
+        }
         $url = "/app/finance/concessions/{$concession}";
 
         try {

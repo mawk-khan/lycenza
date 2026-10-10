@@ -1125,3 +1125,21 @@ once several modules copy it.
     validation is never audited. Never pre-check grant authority outside
     the transaction as the deciding check, and never rely on the database
     trigger as normal control flow.
+
+95. **Nobody administers their own HR identity or pay, and sensitive actions
+    re-verify MFA through the one existing mechanism (ADR 0071 §26, SR.4).**
+    - **HR self-administration:** `HrSelfAdministrationGuard` refuses, for
+      every actor, linking an Employee to oneself, and changing the link,
+      employment, assignments, reporting line, lifecycle or staff attendance
+      of the Employee linked to oneself. ActingEmployee authority must never
+      be manufacturable through HR writes.
+    - **Pay:** Payroll refuses one's own compensation, manual overrides and
+      correction deltas.
+    - **Fresh MFA on consequential writes:** use
+      `FreshMfaRequirement::requireForAction()` -- after the capability check,
+      outside the business transaction, on web and API alike.
+    - **Highly Sensitive reads:** need current assurance (`mfa`, `mfa-page`,
+      `SensitiveReadAssurance`; a bearer token counts only if it was minted
+      under the current factor).
+    - **Never:** add a module-specific MFA mechanism, a step-up on ordinary
+      reads, or a role-name check.

@@ -32,10 +32,11 @@ class EmployeeUserLinkageTest extends TestCase
     {
         [$user, $school] = $this->createSchoolAdmin();
 
+        // SR.4 (ADR 0071 §26.2): another HR holder makes the link -- never the linked User themselves.
         $employee = app(EmployeeService::class)->create($school, [
             'full_name' => 'Asha Verma',
             'user_id' => $user->id,
-        ], $user);
+        ], $this->fullHrActor($school));
 
         $this->assertSame($user->id, $employee->user_id);
     }
@@ -128,7 +129,7 @@ class EmployeeUserLinkageTest extends TestCase
     public function a_users_membership_being_later_suspended_does_not_retroactively_break_an_established_linkage(): void
     {
         [$user, $school] = $this->createSchoolAdmin();
-        $employee = app(EmployeeService::class)->create($school, ['full_name' => 'Asha Verma', 'user_id' => $user->id], $user);
+        $employee = app(EmployeeService::class)->create($school, ['full_name' => 'Asha Verma', 'user_id' => $user->id], $this->fullHrActor($school));
 
         SchoolMembership::query()
             ->where('user_id', $user->id)

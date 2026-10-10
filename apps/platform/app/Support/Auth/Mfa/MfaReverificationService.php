@@ -49,7 +49,9 @@ class MfaReverificationService
         $verified = $this->challenge->verifyTotp($factor, $code)
             || $this->recoveryCodes->consume($user, $code);
 
-        if ($verified) {
+        // A bearer (session-less) request proves the code for this action
+        // only; there is no session assurance to refresh (SR.4, ADR 0071 §26.7).
+        if ($verified && $request->hasSession()) {
             $this->challenge->establishAssurance($request);
         }
 

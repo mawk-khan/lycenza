@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\Feature\Fees\Concerns\CreatesFeeConcessionFixtures;
 use Tests\TestCase;
 
@@ -22,7 +23,15 @@ use Tests\TestCase;
  */
 class FeeConcessionUiTest extends TestCase
 {
-    use CreatesFeeConcessionFixtures;
+    use CreatesFeeConcessionFixtures, ProvidesSensitiveActionMfa;
+
+    /** SR.4 (ADR 0071 §26.7): concession approval, revocation and adjustment cancellation -- each request gets a fresh code or current MFA assurance. */
+    public function call($method, $uri, $parameters = [], $cookies = [], $files = [], $server = [], $content = null)
+    {
+        $this->applySensitiveActionMfa($method, $uri, $parameters, $content, '#^/app/finance/(concessions/[^/]+/(approve|revoke)|fee-adjustments/[^/]+/cancel)$#', null);
+
+        return parent::call($method, $uri, $parameters, $cookies, $files, $server, $content);
+    }
 
     private function memberWith(array $capabilities, School $school): User
     {

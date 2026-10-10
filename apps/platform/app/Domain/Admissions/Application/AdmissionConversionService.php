@@ -4,6 +4,7 @@ namespace App\Domain\Admissions\Application;
 
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\Admissions\Application\Exceptions\AdmissionApplicationAlreadyConvertedException;
+use App\Domain\Admissions\Application\Exceptions\AdmissionGuardianNotActiveException;
 use App\Domain\Admissions\Application\Exceptions\AdmissionGuardianSelectionRequiredException;
 use App\Domain\Admissions\Application\Exceptions\IncompatibleConversionSectionException;
 use App\Domain\Admissions\Application\Exceptions\InvalidAdmissionApplicationTransitionException;
@@ -225,6 +226,14 @@ class AdmissionConversionService
             }
         } else {
             $guardianModel = $guardian->existingGuardian;
+
+            // SR.4 (ADR 0071 §26.6): the trusted seam links only an ACTIVE
+            // Guardian, re-read inside this transaction (another School's
+            // Guardian is invisible here and is refused by link() itself).
+            $status = Guardian::query()->whereKey($guardianModel->id)->sharedLock()->value('status');
+            if ($status !== null && $status !== 'active') {
+                throw new AdmissionGuardianNotActiveException;
+            }
         }
 
         $relationship = $this->relationshipService->link($student, $guardianModel, $guardian->relationshipType, [

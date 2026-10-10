@@ -175,7 +175,8 @@ class HrActivityTimelineLinkageTest extends TestCase
     {
         $school = $this->createSchool();
         $hrUser = $this->createUserWithCapabilities($school, ['hr.employees.manage', 'hr.employees.personal.manage', 'hr.employees.personal.view']);
-        $actorEmployee = app(EmployeeService::class)->create($school, ['full_name' => 'Actor Employee', 'user_id' => $hrUser->id], $hrUser);
+        // SR.4 (ADR 0071 §26.2): another HR holder links the actor's own Employee.
+        $actorEmployee = app(EmployeeService::class)->create($school, ['full_name' => 'Actor Employee', 'user_id' => $hrUser->id], $this->fullHrActor($school));
         $subjectEmployee = $this->createEmployee($school, ['full_name' => 'Subject Employee']);
 
         // The Employee whose OWN linked User performs an action on a

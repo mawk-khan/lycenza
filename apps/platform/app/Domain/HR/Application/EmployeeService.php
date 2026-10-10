@@ -54,6 +54,7 @@ class EmployeeService
         private readonly EmployeeNumberFormatter $formatter,
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly HrSelfAdministrationGuard $selfAdministration,
     ) {}
 
     /**
@@ -167,6 +168,8 @@ class EmployeeService
 
         return $this->context->withSchool($school, function () use ($school, $employee, $actor) {
             return DB::transaction(function () use ($school, $employee, $actor) {
+                $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'archive');
+
                 if ($employee->record_status === 'archived') {
                     return $employee;
                 }
@@ -195,6 +198,8 @@ class EmployeeService
 
         return $this->context->withSchool($school, function () use ($school, $employee, $actor) {
             return DB::transaction(function () use ($school, $employee, $actor) {
+                $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'restore');
+
                 if ($employee->record_status === 'active') {
                     return $employee;
                 }
@@ -257,6 +262,9 @@ class EmployeeService
                     throw new EmployeeNotLinkedException($locked->id);
                 }
 
+                // SR.4 (ADR 0071 §26.2): never unlink yourself.
+                $this->selfAdministration->refuseSelfLink($actor, $locked->user_id, 'unlink');
+
                 $previousUserId = $locked->user_id;
                 $locked->update(['user_id' => null]);
 
@@ -287,6 +295,9 @@ class EmployeeService
      */
     private function link(School $school, Employee $employee, string $userId, User $actor): void
     {
+        // SR.4 (ADR 0071 §26.2): never link an Employee to yourself.
+        $this->selfAdministration->refuseSelfLink($actor, $userId, 'link');
+
         $membership = SchoolMembership::query()
             ->where('school_id', $school->id)
             ->where('user_id', $userId)

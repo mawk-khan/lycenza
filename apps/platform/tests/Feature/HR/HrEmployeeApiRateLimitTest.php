@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -21,11 +22,11 @@ use Tests\TestCase;
  */
 class HrEmployeeApiRateLimitTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, ProvidesSensitiveActionMfa;
 
     private function token($user): string
     {
-        return $user->createToken('test-device')->plainTextToken;
+        return $this->mfaToken($user);
     }
 
     #[Test]

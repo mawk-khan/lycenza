@@ -21,6 +21,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -39,7 +40,15 @@ use Tests\TestCase;
  */
 class PayrollUiTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, ProvidesSensitiveActionMfa;
+
+    /** SR.4 (ADR 0071 §26.7): payroll approve/post/reverse and compensation writes; sensitive payroll reads -- each request gets a fresh code or current MFA assurance. */
+    public function call($method, $uri, $parameters = [], $cookies = [], $files = [], $server = [], $content = null)
+    {
+        $this->applySensitiveActionMfa($method, $uri, $parameters, $content, '#^/app/payroll/(runs/[^/]+/(approve|post|reverse)|compensation/[^/]+)$#', '#^/app/payroll/(runs/[^/]+(/payslips/[^/]+)?|compensation/[^/]+|compensation-assignments/[^/]+/values)$#');
+
+        return parent::call($method, $uri, $parameters, $cookies, $files, $server, $content);
+    }
 
     private function activate(User $user, School $school): void
     {

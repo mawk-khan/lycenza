@@ -10,6 +10,7 @@ use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\LocalCatalogueFixtures;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -20,11 +21,17 @@ use Tests\TestCase;
  */
 class WebhookEndpointApiTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, ProvidesSensitiveActionMfa;
+
+    /** SR.4 (ADR 0071 §26.7): registering, rotating, re-enabling and subscribing send a fresh code. */
+    public function postJson($uri, array $data = [], array $headers = [], $options = 0)
+    {
+        return parent::postJson($uri, $this->withStepUpCode($uri, $data, '#/webhook-endpoints(/[^/]+/(rotate-secret|enable|subscriptions))?$#'), $headers, $options);
+    }
 
     private function token($user): string
     {
-        return $user->createToken('test-device')->plainTextToken;
+        return $this->mfaToken($user);
     }
 
     #[Test]

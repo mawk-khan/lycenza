@@ -8,6 +8,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Auth;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -22,11 +23,12 @@ use Tests\TestCase;
  */
 class PayrollApiTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, ProvidesSensitiveActionMfa;
 
     private function token($user): string
     {
-        return $user->createToken('test-device')->plainTextToken;
+        // SR.4 (ADR 0071 §26.7): sensitive reads need a token minted after the owner's factor.
+        return $this->mfaToken($user);
     }
 
     /**
@@ -132,7 +134,7 @@ class PayrollApiTest extends TestCase
 
         $this->actingWithCapabilities($f['school'], ['payroll.runs.approve'])
             ->withHeader('Idempotency-Key', 'approve-key-001')
-            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/approve")
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/approve", $this->mfaBody())
             ->assertOk()
             ->assertJsonPath('data.status', 'approved');
     }
@@ -179,7 +181,7 @@ class PayrollApiTest extends TestCase
 
         $approverToken = $this->authToken($f['school'], ['payroll.runs.approve']);
         $this->as($approverToken)->withHeader('Idempotency-Key', 'payslip-http-approve-key')
-            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/approve")
+            ->postJson("/api/v1/schools/{$f['school']->id}/payroll-runs/{$f['runId']}/approve", $this->mfaBody($approverToken))
             ->assertOk();
 
         $this->actingWithCapabilities($f['school'], ['payroll.runs.view'])
@@ -258,7 +260,7 @@ class PayrollApiTest extends TestCase
             'salary_structure_id' => $structure,
             'effective_from' => '2025-01-01',
             'fixed_values' => [['salary_structure_component_id' => $basicSc, 'amount' => '50000.00']],
-        ])->assertCreated();
+        ] + $this->mfaBody($adminToken))->assertCreated();
 
         $period = $this->as($adminToken)->postJson("/api/v1/schools/{$school->id}/payroll-periods", [
             'period_month' => '2026-09-01',
@@ -275,12 +277,12 @@ class PayrollApiTest extends TestCase
 
         $approverToken = $this->authToken($school, ['payroll.runs.approve']);
         $this->as($approverToken)->withHeader('Idempotency-Key', 'approve-run-key')
-            ->postJson("/api/v1/schools/{$school->id}/payroll-runs/{$run}/approve")
+            ->postJson("/api/v1/schools/{$school->id}/payroll-runs/{$run}/approve", $this->mfaBody($approverToken))
             ->assertOk()->assertJsonPath('data.status', 'approved');
 
         $posterToken = $this->authToken($school, ['payroll.runs.post', 'payroll.runs.reverse', 'payroll.compensation.sensitive.view']);
         $this->as($posterToken)->withHeader('Idempotency-Key', 'post-run-key')
-            ->postJson("/api/v1/schools/{$school->id}/payroll-runs/{$run}/post")
+            ->postJson("/api/v1/schools/{$school->id}/payroll-runs/{$run}/post", $this->mfaBody($posterToken))
             ->assertCreated()->assertJsonPath('data.postingKind', 'original');
 
         $this->as($posterToken)->getJson("/api/v1/schools/{$school->id}/payroll-runs/{$run}/results")
@@ -321,7 +323,7 @@ class PayrollApiTest extends TestCase
         // unrestricted reverse direction (Checkpoint 9.5), proven here
         // over HTTP too.
         $this->as($posterToken)->withHeader('Idempotency-Key', 'reverse-run-key')
-            ->postJson("/api/v1/schools/{$school->id}/payroll-runs/{$run}/reverse")
+            ->postJson("/api/v1/schools/{$school->id}/payroll-runs/{$run}/reverse", $this->mfaBody($posterToken))
             ->assertCreated()->assertJsonPath('data.postingKind', 'reversal');
     }
 
@@ -357,7 +359,7 @@ class PayrollApiTest extends TestCase
             'salary_structure_id' => $structure,
             'effective_from' => '2025-01-01',
             'fixed_values' => [['salary_structure_component_id' => $basicSc, 'amount' => '50000.00']],
-        ])->json('data.id');
+        ] + $this->mfaBody())->json('data.id');
 
         $period = $admin->postJson("/api/v1/schools/{$school->id}/payroll-periods", [
             'period_month' => '2026-09-01',

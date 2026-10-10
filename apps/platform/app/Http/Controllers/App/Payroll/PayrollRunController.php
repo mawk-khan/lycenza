@@ -19,6 +19,9 @@ use App\Domain\Payroll\Infrastructure\SalaryComponent;
 use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
+use App\Support\Auth\Mfa\SensitiveReadAssurance;
+use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
@@ -49,6 +52,8 @@ use Inertia\Response;
  */
 class PayrollRunController extends Controller
 {
+    use AuthorizesCapability;
+
     public function store(TenantContext $context, string $payrollPeriod, PayrollRunAdministrationService $service): RedirectResponse
     {
         $context->requireSchool();
@@ -149,10 +154,13 @@ class PayrollRunController extends Controller
         return redirect("/app/payroll/runs/{$run->id}")->with('status', "HRX evidence checked: {$result['changed']} of {$result['checked']} changed since capture.");
     }
 
-    public function approve(Request $request, TenantContext $context, string $payrollRun, PayrollRunAdministrationService $service): RedirectResponse
+    public function approve(Request $request, TenantContext $context, string $payrollRun, PayrollRunAdministrationService $service, FreshMfaRequirement $mfa): RedirectResponse
     {
-        $context->requireSchool();
+        $school = $context->requireSchool();
         $run = PayrollRun::query()->findOrFail($payrollRun);
+        // SR.4 (ADR 0071 §26.7): capability first, then a fresh code, outside the approval transaction.
+        $this->authorizeCapability('payroll.runs.approve', $school);
+        $mfa->requireForAction($request, $context->actor());
         $service->approve($run, $context->actor());
 
         return redirect("/app/payroll/runs/{$run->id}");
@@ -179,7 +187,10 @@ class PayrollRunController extends Controller
             : [];
         $summary = $runs->getRun($school, $run->id, $actor);
 
-        $canViewSensitive = $capabilities->canInSchool($actor, 'payroll.compensation.sensitive.view', $school);
+        // SR.4 (ADR 0071 §26.7): run results are Highly Sensitive -- shown
+        // only with current MFA assurance; a holder without it is told why.
+        $holdsSensitive = $capabilities->canInSchool($actor, 'payroll.compensation.sensitive.view', $school);
+        $canViewSensitive = $holdsSensitive && app(SensitiveReadAssurance::class)->holds(request());
         $resultDetails = $canViewSensitive ? $results->listResults($school, $run->id, $actor) : null;
 
         $userIds = array_values(array_filter([$summary->preparedByUserId, $summary->approvedByUserId, $summary->postedByUserId]));
@@ -312,6 +323,8 @@ class PayrollRunController extends Controller
                 'reason' => $p->reason,
             ])->all(),
             'canViewSensitive' => $canViewSensitive,
+            'sensitiveNeedsMfa' => $holdsSensitive && ! $canViewSensitive,
+            'hasMfaFactor' => app(FreshMfaRequirement::class)->hasActiveFactor($actor),
             'results' => $resultDetails === null ? null : array_map(fn (PayrollRunResultDetail $r) => [
                 'employmentRecordId' => $r->employmentRecordId,
                 'employeeId' => $r->employeeId,

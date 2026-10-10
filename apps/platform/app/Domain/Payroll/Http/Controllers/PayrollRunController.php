@@ -11,6 +11,7 @@ use App\Domain\Payroll\Infrastructure\PayrollPeriod;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Http\Controllers\Controller;
 use App\Models\School;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -123,9 +124,12 @@ class PayrollRunController extends Controller
         ]]);
     }
 
-    public function approve(Request $request, School $school, string $payrollRun, PayrollRunAdministrationService $service): JsonResponse
+    public function approve(Request $request, School $school, string $payrollRun, PayrollRunAdministrationService $service, FreshMfaRequirement $mfa): JsonResponse
     {
         $run = PayrollRun::query()->findOrFail($payrollRun);
+        // SR.4 (ADR 0071 §26.7): `mfa_code` re-verified now; a refusal is a
+        // deterministic 422 for this Idempotency-Key (retry with a new key).
+        $mfa->requireForAction($request, $request->user());
         $run = $service->approve($run, $request->user());
 
         return response()->json(['data' => $this->present(PayrollRunSummary::fromModel($run))]);

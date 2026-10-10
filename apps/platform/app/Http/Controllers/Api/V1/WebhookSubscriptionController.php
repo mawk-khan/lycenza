@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Models\WebhookEndpoint;
 use App\Models\WebhookSubscription;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Webhooks\WebhookSubscriptionService;
 use Illuminate\Http\JsonResponse;
@@ -17,7 +18,8 @@ class WebhookSubscriptionController extends Controller
 {
     use AuthorizesCapability;
 
-    public function store(Request $request, School $school, string $webhookEndpoint, WebhookSubscriptionService $service): JsonResponse
+    /** SR.4 (ADR 0071 §26.7): subscribing sends a new event stream out -- a fresh `mfa_code`. */
+    public function store(Request $request, School $school, string $webhookEndpoint, WebhookSubscriptionService $service, FreshMfaRequirement $mfa): JsonResponse
     {
         $this->authorizeCapability('integrations.webhooks.manage', $school);
 
@@ -26,6 +28,7 @@ class WebhookSubscriptionController extends Controller
         $validated = $request->validate([
             'event_type' => ['required', 'string', 'max:255'],
         ]);
+        $mfa->requireForAction($request, $request->user());
 
         try {
             $subscription = $service->subscribe($endpoint, $validated['event_type'], $request->user());

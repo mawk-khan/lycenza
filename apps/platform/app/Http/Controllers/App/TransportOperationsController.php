@@ -97,8 +97,8 @@ class TransportOperationsController extends Controller
 
         $vehicles = TransportVehicle::query()
             ->where('status', 'active')
-            ->when($term !== '', fn ($q) => $q->where('code', 'ilike', "%{$term}%")
-                ->orWhere('registration_number', 'ilike', "%{$term}%"))
+            ->when($term !== '', fn ($q) => $q->where(fn ($w) => $w->where('code', 'ilike', "%{$term}%")
+                ->orWhere('registration_number', 'ilike', "%{$term}%")))
             ->limit(10)
             ->get();
 
@@ -118,8 +118,8 @@ class TransportOperationsController extends Controller
 
         $employees = Employee::query()
             ->where('record_status', 'active')
-            ->when($term !== '', fn ($q) => $q->where('employee_number', 'ilike', "%{$term}%")
-                ->orWhere('full_name', 'ilike', "%{$term}%"))
+            ->when($term !== '', fn ($q) => $q->where(fn ($w) => $w->where('employee_number', 'ilike', "%{$term}%")
+                ->orWhere('full_name', 'ilike', "%{$term}%")))
             ->limit(10)
             ->get();
 

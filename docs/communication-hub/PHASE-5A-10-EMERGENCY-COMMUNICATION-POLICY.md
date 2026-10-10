@@ -462,3 +462,14 @@ Escalation Foundation is the reasonable alternative if multi-channel
 urgency is the more pressing product need, but it depends on a real
 SMS/WhatsApp/Push provider integration this repository does not have
 yet.
+
+## SR.4 amendment (2026-10-10, ADR 0071 §26.7): fresh MFA on Emergency publish
+
+Publishing an Emergency announcement now also needs a fresh MFA code
+(`mfa_code`). It is checked after `communications.emergency` and the explicit
+acknowledgement, before the publish.
+
+A standard publish needs none.
+
+`communications.emergency` stays School Admin only. The
+`communications_coordinator` role cannot declare or publish an Emergency.

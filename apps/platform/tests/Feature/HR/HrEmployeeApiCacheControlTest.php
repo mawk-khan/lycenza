@@ -8,6 +8,7 @@ use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -19,11 +20,11 @@ use Tests\TestCase;
  */
 class HrEmployeeApiCacheControlTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, ProvidesSensitiveActionMfa;
 
     private function token($user): string
     {
-        return $user->createToken('test-device')->plainTextToken;
+        return $this->mfaToken($user);
     }
 
     #[Test]

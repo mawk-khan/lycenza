@@ -10,6 +10,7 @@ use App\Domain\Payroll\Application\PayrollRunResultReadService;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Http\Controllers\Controller;
 use App\Models\School;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -49,22 +50,25 @@ class PayrollRunPostingController extends Controller
         ]);
     }
 
-    public function post(Request $request, School $school, string $payrollRun, PayrollPostingAdministrationService $service): JsonResponse
+    public function post(Request $request, School $school, string $payrollRun, PayrollPostingAdministrationService $service, FreshMfaRequirement $mfa): JsonResponse
     {
         $run = PayrollRun::query()->findOrFail($payrollRun);
+        // SR.4 (ADR 0071 §26.7): a fresh code, before the posting transaction.
+        $mfa->requireForAction($request, $request->user());
         $record = $request->attributes->get('idempotency_record');
         $posting = $service->post($run, $request->user(), $record);
 
         return response()->json(['data' => PayrollRunPostingSummary::fromModel($posting)->toArray()], 201);
     }
 
-    public function reverse(Request $request, School $school, string $payrollRun, PayrollPostingAdministrationService $service): JsonResponse
+    public function reverse(Request $request, School $school, string $payrollRun, PayrollPostingAdministrationService $service, FreshMfaRequirement $mfa): JsonResponse
     {
         $run = PayrollRun::query()->findOrFail($payrollRun);
 
         $validated = $request->validate([
             'reason' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
+        $mfa->requireForAction($request, $request->user());
 
         $record = $request->attributes->get('idempotency_record');
         $posting = $service->reverse($run, $request->user(), $validated['reason'] ?? null, $record);

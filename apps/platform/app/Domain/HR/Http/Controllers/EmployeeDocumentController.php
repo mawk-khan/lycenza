@@ -3,6 +3,7 @@
 namespace App\Domain\HR\Http\Controllers;
 
 use App\Domain\HR\Application\EmployeeDocumentService;
+use App\Domain\HR\Http\Support\HighlySensitiveDocumentStepUp;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeDocument;
 use App\Http\Controllers\Controller;
@@ -25,7 +26,7 @@ use Illuminate\Validation\Rule;
  */
 class EmployeeDocumentController extends Controller
 {
-    public function store(Request $request, School $school, string $employee, EmployeeDocumentService $service): JsonResponse
+    public function store(Request $request, School $school, string $employee, EmployeeDocumentService $service, HighlySensitiveDocumentStepUp $stepUp): JsonResponse
     {
         abort_if(! Str::isUuid($employee), 404);
 
@@ -44,12 +45,13 @@ class EmployeeDocumentController extends Controller
             'uploaded_at' => ['sometimes', 'nullable', 'date'],
         ]);
 
+        $stepUp->requireFor($request, $request->user(), $school, $validated['classification_tier'] ?? null, null);
         $document = $service->register($model, $validated, $request->user());
 
         return response()->json(['data' => $this->present($document)], 201);
     }
 
-    public function update(Request $request, School $school, string $employee, string $document, EmployeeDocumentService $service): JsonResponse
+    public function update(Request $request, School $school, string $employee, string $document, EmployeeDocumentService $service, HighlySensitiveDocumentStepUp $stepUp): JsonResponse
     {
         abort_if(! Str::isUuid($employee) || ! Str::isUuid($document), 404);
 
@@ -66,18 +68,20 @@ class EmployeeDocumentController extends Controller
             'expires_on' => ['sometimes', 'nullable', 'date'],
         ]);
 
+        $stepUp->requireFor($request, $request->user(), $school, $validated['classification_tier'] ?? $documentModel->classification_tier, $documentModel->classification_tier);
         $updated = $service->update($employeeModel, $documentModel, $validated, $request->user());
 
         return response()->json(['data' => $this->present($updated)]);
     }
 
-    public function archive(Request $request, School $school, string $employee, string $document, EmployeeDocumentService $service): JsonResponse
+    public function archive(Request $request, School $school, string $employee, string $document, EmployeeDocumentService $service, HighlySensitiveDocumentStepUp $stepUp): JsonResponse
     {
         abort_if(! Str::isUuid($employee) || ! Str::isUuid($document), 404);
 
         $employeeModel = Employee::query()->findOrFail($employee);
         $documentModel = EmployeeDocument::query()->findOrFail($document);
 
+        $stepUp->requireFor($request, $request->user(), $school, $documentModel->classification_tier, $documentModel->classification_tier);
         $archived = $service->archive($employeeModel, $documentModel, $request->user());
 
         return response()->json(['data' => $this->present($archived)]);

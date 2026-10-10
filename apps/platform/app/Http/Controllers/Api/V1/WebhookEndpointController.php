@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Models\WebhookEndpoint;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Webhooks\SsrfRejectedException;
 use App\Support\Webhooks\WebhookEndpointService;
@@ -36,7 +37,13 @@ class WebhookEndpointController extends Controller
         ]);
     }
 
-    public function store(Request $request, School $school, WebhookEndpointService $service): JsonResponse
+    /**
+     * SR.4 (ADR 0071 §26.7): registering a destination, rotating (and so
+     * revealing) a secret, re-enabling an endpoint and subscribing it to an
+     * event each send School data somewhere new -- a fresh `mfa_code`.
+     * Disabling and unsubscribing only reduce flow and need none.
+     */
+    public function store(Request $request, School $school, WebhookEndpointService $service, FreshMfaRequirement $mfa): JsonResponse
     {
         // Authorized by the `capability:` ROUTE middleware (before
         // `idempotent`, routes/api.php) -- not this trait -- so a
@@ -46,6 +53,7 @@ class WebhookEndpointController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'url' => ['required', 'string', 'max:2048'],
         ]);
+        $mfa->requireForAction($request, $request->user());
 
         try {
             [$endpoint, $secret] = $service->create($school, $validated['name'], $validated['url'], $request->user());
@@ -71,10 +79,11 @@ class WebhookEndpointController extends Controller
         return response()->json(['data' => $this->present($endpoint)]);
     }
 
-    public function rotateSecret(Request $request, School $school, string $webhookEndpoint, WebhookEndpointService $service): JsonResponse
+    public function rotateSecret(Request $request, School $school, string $webhookEndpoint, WebhookEndpointService $service, FreshMfaRequirement $mfa): JsonResponse
     {
         // Authorized by the `capability:` ROUTE middleware -- see store().
         $endpoint = WebhookEndpoint::query()->findOrFail($webhookEndpoint);
+        $mfa->requireForAction($request, $request->user());
         $secret = $service->rotateSecret($endpoint, $request->user());
 
         return response()->json(['data' => $this->present($endpoint->refresh()) + ['secret' => $secret]]);
@@ -90,11 +99,12 @@ class WebhookEndpointController extends Controller
         return response()->json(['data' => $this->present($endpoint->refresh())]);
     }
 
-    public function enable(Request $request, School $school, string $webhookEndpoint, WebhookEndpointService $service): JsonResponse
+    public function enable(Request $request, School $school, string $webhookEndpoint, WebhookEndpointService $service, FreshMfaRequirement $mfa): JsonResponse
     {
         $this->authorizeCapability('integrations.webhooks.manage', $school);
 
         $endpoint = WebhookEndpoint::query()->findOrFail($webhookEndpoint);
+        $mfa->requireForAction($request, $request->user());
         $service->enable($endpoint, $request->user());
 
         return response()->json(['data' => $this->present($endpoint->refresh())]);

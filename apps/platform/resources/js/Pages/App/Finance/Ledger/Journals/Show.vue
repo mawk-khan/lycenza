@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3';
 import { ref } from 'vue';
+import MfaCodeField from '../../../../../Components/MfaCodeField.vue';
 import { formatMoney } from '../../../../../money';
 
 interface JournalLine {
@@ -26,6 +27,7 @@ interface JournalEntryDetail {
 interface Props {
     journalEntry: JournalEntryDetail;
     canReverse: boolean;
+    hasMfaFactor: boolean;
 }
 
 const props = defineProps<Props>();
@@ -33,6 +35,9 @@ const props = defineProps<Props>();
 const reversing = ref(false);
 const reason = ref('');
 const reversalError = ref('');
+// SR.4 (ADR 0071 §26.7): reversal needs a fresh code.
+const mfaCode = ref('');
+const mfaError = ref<string | null>(null);
 
 function reverse(): void {
     const confirmed = window.confirm(
@@ -44,11 +49,14 @@ function reverse(): void {
     reversalError.value = '';
     router.post(
         `/app/finance/journal-entries/${props.journalEntry.id}/reverse`,
-        { reason: reason.value || undefined },
+        { reason: reason.value || undefined, mfa_code: mfaCode.value },
         {
             onError: (errors) => {
-                reversalError.value =
-                    errors.reversal ?? 'That journal entry could not be reversed.';
+                mfaError.value = errors.mfa_code ?? null;
+                mfaCode.value = '';
+                reversalError.value = errors.mfa_code
+                    ? ''
+                    : (errors.reversal ?? 'That journal entry could not be reversed.');
             },
             onFinish: () => (reversing.value = false),
         },
@@ -148,9 +156,18 @@ function reverse(): void {
                     class="mt-1 w-full max-w-md rounded border border-slate-300 px-3 py-2 text-sm"
                 />
             </div>
+            <div class="mt-3">
+                <MfaCodeField
+                    id="journal-reverse-mfa"
+                    v-model="mfaCode"
+                    :has-mfa-factor="hasMfaFactor"
+                    action="Reversing a journal entry"
+                    :error="mfaError"
+                />
+            </div>
             <button
                 type="button"
-                :disabled="reversing"
+                :disabled="reversing || !hasMfaFactor"
                 class="mt-3 rounded border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
                 @click="reverse"
             >

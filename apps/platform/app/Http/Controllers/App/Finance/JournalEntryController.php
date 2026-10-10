@@ -18,6 +18,7 @@ use App\Domain\Finance\Application\LedgerReadService;
 use App\Domain\Finance\Application\PostJournalEntryData;
 use App\Domain\Finance\Domain\JournalSide;
 use App\Http\Controllers\Controller;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Money\Exceptions\InvalidMoneyException;
@@ -107,6 +108,7 @@ class JournalEntryController extends Controller
         $accounts = $service->listAccounts($school, $context->actor());
 
         return Inertia::render('App/Finance/Ledger/Journals/Create', [
+            'hasMfaFactor' => app(FreshMfaRequirement::class)->hasActiveFactor($context->actor()),
             'accounts' => $accounts
                 ->filter(fn (LedgerAccountSummary $a) => $a->status === 'active')
                 ->map(fn (LedgerAccountSummary $a) => ['id' => $a->ledgerAccountId, 'code' => $a->code, 'name' => $a->name, 'currency' => $a->currency])
@@ -115,7 +117,7 @@ class JournalEntryController extends Controller
         ]);
     }
 
-    public function store(Request $request, TenantContext $context, LedgerAdministrationService $service): RedirectResponse
+    public function store(Request $request, TenantContext $context, LedgerAdministrationService $service, FreshMfaRequirement $mfa): RedirectResponse
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('finance.ledger.post', $school);
@@ -137,6 +139,9 @@ class JournalEntryController extends Controller
             ),
             $validated['lines'],
         );
+
+        // SR.4 (ADR 0071 §26.7): a fresh code, outside the posting transaction.
+        $mfa->requireForAction($request, $context->actor());
 
         try {
             $result = $service->post($school, new PostJournalEntryData(
@@ -167,10 +172,11 @@ class JournalEntryController extends Controller
         return Inertia::render('App/Finance/Ledger/Journals/Show', [
             'journalEntry' => $this->presentDetail($detail),
             'canReverse' => $capabilities->canInSchool($context->actor(), 'finance.ledger.reverse', $school),
+            'hasMfaFactor' => app(FreshMfaRequirement::class)->hasActiveFactor($context->actor()),
         ]);
     }
 
-    public function reverse(Request $request, TenantContext $context, LedgerAdministrationService $service, string $journalEntry): RedirectResponse
+    public function reverse(Request $request, TenantContext $context, LedgerAdministrationService $service, FreshMfaRequirement $mfa, string $journalEntry): RedirectResponse
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('finance.ledger.reverse', $school);
@@ -178,6 +184,8 @@ class JournalEntryController extends Controller
         $validated = $request->validate([
             'reason' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
+
+        $mfa->requireForAction($request, $context->actor());
 
         try {
             $result = $service->reverse($school, $journalEntry, $context->actor(), $validated['reason'] ?? null);

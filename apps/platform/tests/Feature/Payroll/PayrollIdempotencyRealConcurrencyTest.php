@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Process\Process;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -42,7 +43,7 @@ use Tests\TestCase;
  */
 class PayrollIdempotencyRealConcurrencyTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, ProvidesSensitiveActionMfa;
 
     /** @var array<int, string> */
     protected $connectionsToTransact = [];
@@ -128,7 +129,9 @@ class PayrollIdempotencyRealConcurrencyTest extends TestCase
     public function two_real_concurrent_post_requests_with_the_same_key_produce_exactly_one_journal_entry(): void
     {
         $runId = $this->makeApprovedRun();
-        $token = $this->poster->createToken('concurrency-test')->plainTextToken;
+        $token = $this->mfaToken($this->poster, 'concurrency-test');
+        // SR.4 (ADR 0071 §26.7): both racers send the IDENTICAL body, one fresh code.
+        $this->body = json_encode($this->mfaBody($token), JSON_THROW_ON_ERROR);
 
         $this->startServer();
 
@@ -242,6 +245,8 @@ class PayrollIdempotencyRealConcurrencyTest extends TestCase
         $this->fail('Local PHP server did not start in time. stderr: '.$this->server->getErrorOutput());
     }
 
+    private string $body = '{}';
+
     private function startCurl(string $url, string $token, string $idempotencyKey): Process
     {
         $process = new Process([
@@ -250,7 +255,7 @@ class PayrollIdempotencyRealConcurrencyTest extends TestCase
             '-H', "Authorization: Bearer {$token}",
             '-H', "Idempotency-Key: {$idempotencyKey}",
             '-H', 'Content-Type: application/json',
-            '-d', '{}',
+            '-d', $this->body,
         ]);
         $process->start();
 

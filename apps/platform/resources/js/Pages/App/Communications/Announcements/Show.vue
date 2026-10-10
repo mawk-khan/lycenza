@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { router } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { router, usePage } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import MfaCodeField from '../../../../Components/MfaCodeField.vue';
 
 interface AnnouncementDetail {
     id: string;
@@ -108,6 +109,7 @@ interface Props {
     canSubmitForApproval: boolean;
     canWithdrawApproval: boolean;
     canApprove: boolean;
+    hasMfaFactor: boolean;
 }
 
 const props = defineProps<Props>();
@@ -185,15 +187,26 @@ const scheduledAtInput = ref('');
 // before an Emergency publish -- distinct from the composer-time
 // acknowledgement already captured when Emergency was first declared.
 const publishAcknowledged = ref(false);
+// SR.4 (ADR 0071 §26.7): an Emergency publish also needs a fresh code.
+const emergencyMfaCode = ref('');
+const page = usePage();
+const emergencyMfaError = computed(
+    () => (page.props.errors as Record<string, string>).mfa_code ?? null,
+);
 
 function publish() {
     publishing.value = true;
     router.post(
         `/app/communications/announcements/${props.announcement.id}/publish`,
         props.announcement.dispatchMode === 'emergency'
-            ? { acknowledged: publishAcknowledged.value }
+            ? { acknowledged: publishAcknowledged.value, mfa_code: emergencyMfaCode.value }
             : {},
-        { onFinish: () => (publishing.value = false) },
+        {
+            onFinish: () => {
+                publishing.value = false;
+                emergencyMfaCode.value = '';
+            },
+        },
     );
 }
 
@@ -693,6 +706,15 @@ function formatFileSize(bytes: number): string {
                 I understand this will publish an Emergency communication and may bypass configured
                 quiet hours on channels the school has explicitly enabled that for.
             </label>
+            <div class="mt-3">
+                <MfaCodeField
+                    id="emergency-publish-mfa"
+                    v-model="emergencyMfaCode"
+                    :has-mfa-factor="hasMfaFactor"
+                    action="Publishing an Emergency communication"
+                    :error="emergencyMfaError"
+                />
+            </div>
         </div>
 
         <div v-if="canEdit || canCancel" class="mt-6 flex gap-2">
@@ -704,7 +726,8 @@ function formatFileSize(bytes: number): string {
                 type="button"
                 :disabled="
                     publishing ||
-                    (announcement.dispatchMode === 'emergency' && !publishAcknowledged)
+                    (announcement.dispatchMode === 'emergency' &&
+                        (!publishAcknowledged || !hasMfaFactor))
                 "
                 class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
                 @click="publish"

@@ -28,6 +28,7 @@ use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Models\SchoolMembership;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\SchoolTimezone;
@@ -313,6 +314,7 @@ class AnnouncementController extends Controller
                 && ! $model->isEmergency() && $approvalRequirement->required,
             'canWithdrawApproval' => ($isCreator || $canManage) && $model->isPendingApproval(),
             'canApprove' => $canApprove && $model->isPendingApproval(),
+            'hasMfaFactor' => app(FreshMfaRequirement::class)->hasActiveFactor($context->actor()),
         ]);
     }
 
@@ -393,6 +395,13 @@ class AnnouncementController extends Controller
             throw ValidationException::withMessages([
                 'acknowledged' => ['You must acknowledge this Emergency communication before publishing.'],
             ]);
+        }
+
+        // SR.4 (ADR 0071 §26.7): an Emergency publish skips approval and may
+        // bypass quiet hours -- a fresh MFA code, after the capability and
+        // the acknowledgement, never for a standard publish.
+        if ($model->isEmergency()) {
+            app(FreshMfaRequirement::class)->requireForAction($request, $actor);
         }
 
         try {

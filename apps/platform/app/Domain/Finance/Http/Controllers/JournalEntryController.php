@@ -14,6 +14,7 @@ use App\Domain\Finance\Application\PostJournalEntryData;
 use App\Domain\Finance\Domain\JournalSide;
 use App\Http\Controllers\Controller;
 use App\Models\School;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Money\Exceptions\InvalidMoneyException;
 use App\Support\Money\Money;
 use Illuminate\Http\JsonResponse;
@@ -90,7 +91,7 @@ class JournalEntryController extends Controller
         return response()->json(['data' => $this->presentDetail($detail)]);
     }
 
-    public function store(Request $request, School $school, LedgerAdministrationService $service): JsonResponse
+    public function store(Request $request, School $school, LedgerAdministrationService $service, FreshMfaRequirement $mfa): JsonResponse
     {
         $validated = $request->validate([
             'currency' => ['required', 'string', 'regex:/^[A-Z]{3}$/'],
@@ -109,6 +110,8 @@ class JournalEntryController extends Controller
             );
         }, $validated['lines']);
 
+        // SR.4 (ADR 0071 §26.7): a fresh code, before the posting transaction.
+        $mfa->requireForAction($request, $request->user());
         $result = $service->post($school, new PostJournalEntryData(
             currency: $validated['currency'],
             description: $validated['description'],
@@ -118,12 +121,13 @@ class JournalEntryController extends Controller
         return response()->json(['data' => $this->presentResult($result)], 201);
     }
 
-    public function reverse(Request $request, School $school, string $journalEntry, LedgerAdministrationService $service): JsonResponse
+    public function reverse(Request $request, School $school, string $journalEntry, LedgerAdministrationService $service, FreshMfaRequirement $mfa): JsonResponse
     {
         $validated = $request->validate([
             'reason' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
 
+        $mfa->requireForAction($request, $request->user());
         $result = $service->reverse($school, $journalEntry, $request->user(), $validated['reason'] ?? null);
 
         return response()->json(['data' => $this->presentResult($result)], 201);

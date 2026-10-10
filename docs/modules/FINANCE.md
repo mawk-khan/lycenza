@@ -5308,3 +5308,21 @@ Library fine references, as it does `canteen_orders`.
   registered (anchors, `TenantRetentionCatalog`, classification tests). A
   table referencing `charges` requires a forward amendment of
   `retention_expire_finance_unit`, as `canteen_orders` has.
+
+## Sensitive-action MFA (SR.4, 2026-10-10, ADR 0071 §26.7)
+
+**Fresh MFA code (`mfa_code`, a current TOTP code or an unused recovery code;
+web and API):**
+- ledger post and reverse;
+- offline payment recording;
+- fee concession approve and revoke;
+- adjustment cancellation;
+- period close (unchanged since E21.3A).
+
+**How it is checked:** after the capability (a caller without it gets 403 and
+spends no code), and before any change.
+
+**Not stepped up:** viewing and routine management.
+
+**Roles:** `accountant` posts but never reverses, closes or approves; the
+cashier finds Students only through the payment seam (ADR 0071 §26.3).

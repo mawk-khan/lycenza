@@ -3,7 +3,9 @@
 - Status: **Accepted — SR.0 contract (2026-10-09). SR.1 CATALOGUE DATABASE
   HARDENING BUILT (2026-10-09, §23). SR.2 GRANT AUTHORITY, CONCURRENCY &
   AUDIT BUILT (2026-10-09, §24). SR.3 PRODUCTION CATALOGUE & DEMO
-  TRANSITION BUILT (2026-10-09, §25).** SR.4 needs separate owner
+  TRANSITION BUILT (2026-10-09, §25). SR.4 LEAST-PRIVILEGE VERIFICATION &
+  SENSITIVE-ACTION CONTROLS BUILT (2026-10-10, §26; amends §4.3 —
+  `payroll_officer` 9 → 8 keys —, §8 and §9).** SR.5 needs separate owner
   authorisation.
 - Date: 2026-10-09
 - Programme: **SR — Staff Role Catalogue & Least-Privilege Access**
@@ -1065,6 +1067,339 @@ edit or clone role control.
 - Legal and privacy gates unchanged: SR-L1 drafted, unsent; statutory
   payroll, marks (RES-L0), TCH-L1, HRX, E21 as before.
 - Not in SR.3: module-by-module verification and action-level MFA (SR.4).
+
+## 26. SR.4 — module-by-module least-privilege verification and sensitive-action controls, as built (2026-10-10)
+
+SR.4 exercised every SR.3 role through the real HTTP routes and Application
+services, with each role granted by the School's own administrator through
+the real SR.2 rule (no test-only capability sets). It closes the
+EmploymentRecord finding (§1.3), fixes the self-elevation paths the HR
+identity substrate opened, makes one evidence-based catalogue correction
+(§26.5), and implements the action-level MFA contracted in §8. History above
+is not rewritten; this section amends §4.3, §8 and §9 where it says so.
+
+### 26.1 The EmploymentRecord → ActingEmployee chain — CLOSED
+`EmploymentChainProductionPathTest` proves the whole chain with production
+roles and real paths only:
+- **Roles:** School Admin grants `hr_officer` (through
+  `school.roles.grant.hr`) and `payroll_officer` (through
+  `school.roles.grant.payroll_sensitive`) over HTTP with a fresh MFA code.
+- **Identity, by the HR officer:**
+  - the position, Employee, EmploymentRecord and primary assignment over the
+    browser routes;
+  - the User link over the JSON API;
+  - the reporting line over the browser.
+- **ActingEmployee:** resolves to exactly that Employee and EmploymentRecord.
+- **Teacher authority:** after a `teacher` grant plus a TeachingAssignment, a
+  register is taken for the owned Section only; another Section returns 404.
+  - The HR officer alone is not a teacher (403).
+  - `teacher` + `librarian` adds the Library and leaves ownership unchanged.
+- **Leave:**
+  - the HR officer configures leave;
+  - the employee requests it on the self-service path;
+  - the reporting-line manager (`principal`, holding `hr.leave.approve`)
+    approves it;
+  - the HR officer is refused on the manager path.
+- **Staff attendance:**
+  - the HR officer records the register;
+  - the employee reads their own attendance only (`/app/my-staff-attendance`);
+  - HR administration pages refuse the employee.
+- **Payroll:** the payroll officer assigns compensation to that EmploymentRecord
+  with a fresh code. Statutory payroll and the accounting configuration refuse
+  them.
+- **Legal gates:**
+  - no operational or self-service role carries a legal-gated key;
+  - `teacher`'s `examinations.marks.teacher` stays refused in production in
+    code (RES-L0).
+
+Cross-School: an identity linked in School A is never the acting Employee
+in School B (§26.10).
+
+### 26.2 HR self-administration — a demonstrated self-elevation, fixed
+**Finding.** The substrate held by `hr_officer` (`hr.employees.manage`,
+`hr.employees.assignments.manage`) had no actor-equals-target guard.
+- **Teaching hijack (needs `hr_officer` + `teacher`):**
+  - unlink a teacher's Employee and link it to oneself;
+  - ActingEmployee then resolves to that Employee, and teaching ownership
+    (keyed by `employee_id`) follows it.
+- **Leave self-approval (`hr_officer` alone):**
+  - unlink oneself, then submit and approve one's own leave on the
+    administrative path (`hr.leave.manage`);
+  - both the service check and `leave_decisions_no_self_decision` derive the
+    decider from the CURRENT link, so neither catches it.
+- **Pay-history disclosure (needs `staff_self_service`):** relink to a
+  colleague's Employee and read their payslips.
+- **Other self-administration:** an officer could record or correct their own
+  staff attendance, and choose their own reporting manager.
+
+**Rule (application layer, every actor, capability-neutral; rule 24).**
+`App\Domain\HR\Application\HrSelfAdministrationGuard`, called inside each
+writer's transaction (Employee read FOR SHARE first, the ActingEmployee lock
+order). An actor never:
+- links an Employee to themselves (create, import, `linkUser`);
+- unlinks, archives or restores the Employee linked to them;
+- creates, updates or ends their own employment (and so never separates or
+  rehires themselves), or creates, ends or promotes their own assignment;
+- sets a reporting line on which their own Employee is either side;
+- records or corrects their own staff attendance (a register naming the
+  recorder is refused as a whole).
+
+Another holder of the same capability does it. The refusal is
+`HrSelfAdministrationException` (403 `HR_SELF_ADMINISTRATION`), rendered on
+every surface: the `/api` envelope, JSON 403, or a browser form error.
+
+**Residual (recorded, not code).**
+- An officer who was never linked can act on an unlinked Employee record that
+  is in fact their own; the system cannot know. The own link is made by
+  another HR holder.
+- A relink to a colluding OTHER user is an ordinary audited HR correction
+  (`employee.user_linked`/`unlinked`), not self-elevation.
+- Self-access to one's OWN HR notes and documents is unchanged. It is an owner
+  decision for SR.5 (§26.13).
+
+### 26.3 Module-by-module verification (production roles, real routes)
+| Role | Works (verified) | Refused (verified) | Notes |
+|---|---|---|---|
+| `hr_officer` | the full §26.1 chain; leave configuration and administration; staff attendance | teacher surfaces, manager-path leave decisions, payroll, Finance, School administration, any self-administration (§26.2) | administrative leave decisions via `hr.leave.manage` (§26.8) |
+| `hr_sensitive_records` | highly sensitive HR document records (fresh MFA), sensitive reads (MFA assurance) | — | add-on only |
+| `payroll_officer` | structures, compensation (fresh MFA), periods, run preparation | approve, post, reverse, the accounting configuration (§26.5), statutory payroll, own pay (§26.4) | |
+| `accountant` | ledger post (fresh MFA), Finance pages, payment recording, concession requests | ledger reverse, period close, concession approve, Payroll, HR, staff administration | |
+| `cashier` | payment pages and the payment Student search with no `students.*` key; payment recording (fresh MFA) | Students, journal posting, concessions | the search returns `id`, number and name only; any status (dues of a withdrawn Student remain collectable) |
+| `librarian` | catalogue, circulation, fine policy READ | fine policy publication, fine void (school_admin only), Students, Finance | fines are assessed at check-in by the trusted seam (§26.6) |
+| `transport_coordinator` | routes, vehicles, operations, assignments | Finance, Students, Hostel, Canteen | fee-selection seam (§26.6) |
+| `hostel_warden` | hostels, residency | Finance, Students, Transport | fee-selection seam (§26.6) |
+| `front_office` | visitor directory and visits | Students, HR, Finance, staff administration | host search: active Employee id and name only |
+| `stores_officer` | items, locations, stock | Canteen, canteen settings, Finance | no Finance effect anywhere in Inventory |
+| `canteen_operator` | items, outlets, orders | canteen settings, Inventory, Finance | + `stores_officer`: exactly the union, settings still refused |
+| `admissions_officer` | admissions; conversion (trusted seam, §26.6) | editing Students, Guardian administration, linking Guardians outside conversion | an inactive Guardian is never linked (fixed) |
+| `communications_coordinator` | announcements, templates, Guardian conversations | approvals, Emergency declaration, Student conversations (legal-gated) | Guardian participant search shows the Guardian's children's names (within `communications.conversations.guardians`) |
+
+Tests: `ProductionRoleWorkflowsTest`, `EmploymentChainProductionPathTest`,
+`HrSelfAdministrationTest`, `SensitiveActionMfaTest`.
+
+### 26.4 Payroll findings
+- **`payroll.periods.manage` is maker-level and stays on `payroll_officer`.**
+  It creates, opens and closes monthly periods.
+  - Close is irreversible (`trg_payroll_periods_validate_transition`), but its only
+    effect is that no new regular or correction run can be created in that
+    period.
+  - It does not lock existing runs and has no ledger effect; a correction may
+    name any open period.
+  - It needs no step-up MFA.
+- **Nobody sets their own pay (new, application layer).** A payroll maker never:
+  - assigns compensation to the EmploymentRecord of the Employee linked to them;
+  - records a manual override or correction delta for it.
+
+  The refusal is `PayrollSelfAdministrationException` (403
+  `PAYROLL_SELF_ADMINISTRATION`). This also covers the realistic
+  `hr_officer` + `payroll_officer` combination.
+- **Approve ≠ post still has no actor rule** (§9 unchanged). School Admin both
+  approves and posts. The approver may approve a run containing their own pay
+  (owner decision, §26.13).
+- **Manual overrides and correction deltas** are maker inputs under
+  `payroll.runs.prepare`. The fresh-MFA checker approval reviews them. They are
+  not step-up actions themselves.
+
+### 26.5 Capability-set correction (dated 2026-10-10): `payroll_officer` loses `payroll.accounting.manage`
+This amends §4.3 and §25.1. The role now has **8 keys**.
+
+**Evidence:**
+- `payroll.accounting.manage` maps the School's salary expense and payable
+  accounts.
+- `PayrollPostingService` resolves them **live at posting**, not at approval.
+  So the maker could re-point where an already-approved run posts, after the
+  checker approved it.
+- Preparing a run never needs the mapping. Posting does, and posting belongs to
+  `school_admin`, which keeps it.
+
+**Not changed:**
+- `payroll.structures.manage` stays: a SalaryComponent's liability account is
+  fixed at creation, with no update path, so it is no post-approval lever.
+- No grant-right change: the key is held by `school_admin`.
+
+**Pinned by:**
+- `StaffRoleCatalogueSnapshotTest`;
+- `PayrollCapabilityRegistryTest` (the key is now listed among the officer's
+  forbidden checker-side keys);
+- the seeder re-syncs capability links, so existing Schools converge on
+  deploy.
+
+### 26.6 Trusted-service seam inventory
+Cross-domain effects the caller causes without holding the destination
+domain's capability:
+
+| Seam | Caller capability | Downstream effect | Why trusted / confinement | Proof |
+|---|---|---|---|---|
+| Admission conversion | `admissions.manage` | creates the Student (identity from the Applicant record), its enrolment (Section must match the application), an optional NEW Guardian and contact, ONE relationship, the admission fee intent | never updates an existing Student or Guardian; `link_existing` adds one relationship to an existing **active** same-School Guardian (SR.4 fix); no auto-merge; one transaction | `AdmissionConversionServiceTest` (incl. `linking_an_inactive_guardian_is_refused_and_leaves_no_student_behind`, `linking_a_foreign_school_guardian_is_rejected_and_leaves_no_student_behind`); `ProductionRoleWorkflowsTest::the_admissions_officer_runs_admissions_without_student_or_guardian_administration` |
+| Transport assignment / Hostel residency → fee selection | `transport.assignments.manage` / `hostel.residency.manage` | an OPTIONAL fee selection (intent, no amount, no charge) for the active year; withdrawn on end | head only from the route/room mapping; active head; active enrolment; FEE structure owns the amount; Finance assesses; `OperationalFeeSourceArchitectureGuardTest` pins the callers | `TransportFeeSelectionTest`, `HostelFeeSelectionTest` |
+| Library check-in → fine Charge | `library.circulation.manage` | a real Charge from the highest published policy (rate, grace, cap) | amount computed and re-derived by `library_fines_guard`; no backdating; policy and void are school_admin-only | `LibraryFineTest` |
+| Canteen fulfilment → Charge + stock issue | `canteen.orders.manage` | `ChargeService::assess` (frozen order total) and `InventoryStockService::issueMany` (recipe × quantity) | billing accounts are school_admin-only (`canteen.settings.manage`); one transaction | `CanteenOrderFulfillmentTest` |
+| Manual payment → Student lookup | `finance.payments.record` | reads Student id, number and name and outstanding charges | read only, School-scoped | `ManualPaymentUiTest`, `ProductionRoleWorkflowsTest` (cashier) |
+| HR employment end → teaching ownership | `hr.employees.assignments.manage` | ends teaching assignments (S7, ADR 0063 §47) | the authority-reducing direction only; never on one's own employment (§26.2) | `EmploymentEndTeachingOwnershipTest` |
+
+Recorded for the owner (§26.13), not changed:
+- **Fee-head mappings sit under operational keys.** Transport route mapping
+  (`transport.routes.manage`), hostel and room mapping
+  (`hostel.directory.manage`) and the admission fee head
+  (`admissions.manage`) may name ANY active fee head.
+  - Combined with the owner-accepted "ending a reused selection withdraws it"
+    (ADR 0067 §31.7), a desk role can withdraw a selection another source or
+    Finance made on the same head.
+- **Canteen price and quantity.** The item price
+  (`canteen.directory.manage`) and the order quantity have no upper bound.
+- **`link_existing` + legal guardian = portal visibility.** A conversion with
+  `link_existing` and `is_legal_guardian` gives that Guardian's portal
+  visibility of the new Student.
+
+### 26.7 Sensitive-action MFA (implements §8)
+One definition and two mechanisms, both existing:
+- **Fresh MFA (writes):** `FreshMfaRequirement::requireForAction()`. The
+  request's `mfa_code` must be a current TOTP code (its step is claimed, so it
+  is single-use) or an unused recovery code of the caller's ACTIVE factor.
+  - It runs after the capability, so an unauthorized caller gets 403 and spends
+    no code.
+  - It runs outside the business transaction, so a rollback never un-consumes a
+    code.
+  - On a bearer request it proves the action only: there is no session
+    assurance to refresh.
+  - On an `Idempotency-Key` route, a refusal is the deterministic 422 for that
+    key; a successful request's retry is replayed, never re-verified.
+- **Current assurance (reads):** the `mfa` / `mfa-page` middleware and
+  `SensitiveReadAssurance`.
+  - **Session request:** `mfa_verified_at` within the window, bound to the
+    current factor (E33).
+  - **Bearer request (new):** a personal access token minted at or after
+    activation of the caller's CURRENT factor. Human tokens are issued only
+    with a fresh code (ADR 0049 §2), so an MFA reset ends the old tokens'
+    assurance.
+- **UI and contract:**
+  - `MfaCodeField.vue` is the one code field.
+  - Pages show why sensitive amounts are hidden without assurance
+    (`sensitiveNeedsMfa`).
+  - The OpenAPI contract has `StepUpMfaCode`.
+
+| Action | Fresh MFA | Capability | Production-enabled | Legal gate |
+|---|---|---|---|---|
+| HR-sensitive read (highly sensitive document metadata, API) | no — current assurance (`mfa`) | `hr.employees.sensitive.view` | yes | HRX (health structurally absent); SR-L1 pending |
+| HR-sensitive write (register, re-classify into or out of, or archive a highly sensitive record; web + API) | **yes** | `hr.employees.sensitive.manage` | yes | as above |
+| Payroll compensation sensitive read (values, run results, administrative payslip; web + API) | no — current assurance | `payroll.compensation.sensitive.view` | yes | SR-L1 pending |
+| Payroll compensation sensitive write (assign; web + API) | **yes** | `payroll.compensation.sensitive.manage` | yes | — |
+| Payroll approve (web + API) | **yes** | `payroll.runs.approve` | yes | statutory parts separately gated (E45) |
+| Payroll post (web + API) | **yes** | `payroll.runs.post` | yes | as above |
+| Payroll reverse (web + API) | **yes** | `payroll.runs.reverse` | yes | as above |
+| Ledger post (web + API) | **yes** | `finance.ledger.post` | yes | — |
+| Ledger reverse (web + API) | **yes** | `finance.ledger.reverse` | yes | — |
+| Offline payment recording (web) | **yes** | `finance.payments.record` | yes | — |
+| Fee concession approve, revoke, cancel adjustment (web + API) | **yes** | `finance.fee_concessions.approve` | yes | E32: no RTE category exists |
+| Finance period close (web) | **yes** (unchanged, E21.3A) | `finance.periods.manage` | yes | E21 |
+| Webhook register, rotate secret, re-enable, subscribe (API) | **yes** | `integrations.webhooks.manage` | yes | — |
+| Emergency communication publish (web) | **yes** | `communications.emergency` | yes | — |
+
+**Deliberately without step-up:**
+- **Restricted-tier HR document writes, standard publishes, webhook disable
+  and unsubscribe, redelivery to an already-registered endpoint:** they reduce
+  or repeat existing flow.
+- **Payroll period close:** no financial effect.
+- **Library fine void:** school_admin only and not contracted in §8.
+- **Ordinary operational reads:** Library, Transport, Hostel, Visitor,
+  Inventory, Canteen and Admissions pages.
+
+### 26.8 Separation of duties (re-verified)
+- **Fee concession:** request vs. approve and reject, app + DB, unchanged.
+  `accountant` requests; approval needs `.approve` (School Admin).
+  - Revoke and cancel-adjustment have no requester rule. `accountant` holds
+    neither.
+- **Ledger:** post vs. reverse has no actor rule (§9 unchanged; `journal_entries`
+  stores no actor). `accountant` posts; reversal stays with School Admin, who
+  can reverse their own posting (owner decision, §26.13).
+- **Payroll:** prepare vs. approve, app + DB, unchanged. No combination of SR.3
+  roles holds approve, post or reverse.
+- **Library fine void:** no actor rule; School Admin only (§9 unchanged).
+- **Leave:** the self-decision refusal (app + DB) is now unbypassable for a
+  linked actor (§26.2).
+  - `hr_officer` decides leave on the ADMINISTRATIVE path through
+    `hr.leave.manage` (ADR 0065). This is HR leave administration, not the
+    reporting-line path that `hr.leave.approve` names.
+- **Communications:** send vs. approve, app only, unchanged.
+
+### 26.9 Role-combination audit
+- **`hr_officer` + `hr_sensitive_records`:** the union only; sensitive writes
+  need a fresh code.
+- **`hr_officer` + `payroll_officer`:** no self-pay (§26.4); no approve, post or
+  reverse; no accounting configuration.
+- **`accountant` + `cashier`:** the union (the cashier's keys are a subset); no
+  reversal, close or approval.
+- **`teacher` + `hr_officer`:** the teaching hijack is closed (§26.2); the
+  officer never grants themselves `teacher` (SR.2).
+- **`teacher` + `librarian`:** additive; ownership unchanged (§26.1).
+- **`canteen_operator` + `stores_officer`:** the union; canteen settings stay
+  School Admin only.
+
+No combination manufactures authority after §26.2 and §26.4.
+
+### 26.10 Multi-School
+One person, two Schools, different roles (`librarian` in A, `accountant` in
+B), through real browser workflows:
+- each School works with only that School's role, and the other module
+  refuses;
+- a School B journal entry is never visible in A;
+- an HR identity linked in A is never the acting Employee in B.
+
+A survived mutation (dropping the School filter in `ActingEmployeeResolver`)
+is still refused by `SchoolScope`/RLS under the request's TenantContext. That
+is defence in depth, recorded in the proof.
+
+### 26.11 Legal and privacy boundary
+- **No legal question was resolved in code.**
+  - TCH-L1/E33, RES-L0, statutory payroll (E45), HRX-L1 to L4, E21 and E31/E32
+    are unchanged.
+  - E31 and E32 remain documentation-level gates with no code switch, as
+    before.
+- **SR-L1 (E47) stays drafted, unsent and unanswered.** SR.4 newly enables no
+  Highly Sensitive persona: it only adds controls (MFA, self-administration,
+  the accounting key removal). The production dependency recorded in §18 is
+  unchanged.
+
+### 26.12 Data-exposure fix: lookup searches
+Five lookup searches combined `status = 'active'` with an ungrouped
+`orWhere`, which returned inactive same-School records on a name match:
+- Transport students, routes and vehicles;
+- Hostel students;
+- Library students and copies;
+- Visitor visitors (including the phone number);
+- Transport drivers.
+
+The term matches are now grouped. Pinned by
+`ProductionRoleWorkflowsTest::lookup_seams_return_active_records_only`.
+
+### 26.13 Open for SR.5 or owner decision (recorded, not changed)
+- **Approver and own pay:** an approver may approve a run containing their own
+  pay, and approve ≠ post has no actor rule.
+- **Ledger:** School Admin may reverse their own posting.
+- **HR self-access:** an `hr_officer` reads and changes their own HR notes and
+  documents.
+- **Fee-head mappings** under operational keys (§26.6).
+- **Canteen** price and quantity bounds (§26.6).
+- **Conversion `link_existing` with `is_legal_guardian`** gives portal
+  visibility (§26.6).
+- **Communications participant search** shows Guardians' children's names.
+
+### 26.14 Proof and status
+- **Tests:**
+  - `HrSelfAdministrationTest` (7);
+  - `EmploymentChainProductionPathTest`;
+  - `ProductionRoleWorkflowsTest` (9);
+  - `SensitiveActionMfaTest` (4);
+  - the admissions inactive-Guardian case;
+  - existing suites updated to send codes through the real
+    `FreshMfaRequirement` (`ProvidesSensitiveActionMfa`).
+- **Mutation checks:** 17 caught. One survived for a documented
+  defence-in-depth reason (§26.10).
+- **No schema change in SR.4.** The rules are application-layer;
+  `platform:verify-database` stays green.
+- **Status:**
+  - the EmploymentRecord finding is **CLOSED**;
+  - SR.5 (closure audit + canonical regression) awaits owner authorization.
 
 ## Appendix A — capability-class map (v1, all 174 `school` capabilities)
 Grant-right coverage appears only where `school_admin` does not hold the key

@@ -173,13 +173,15 @@ class PayrollCapabilityRegistryTest extends TestCase
     public function no_other_default_role_receives_a_non_sensitive_payroll_capability(): void
     {
         // SR.3 (ADR 0071 §4.3): `payroll_officer` is the one other holder -- the
-        // maker side only, never approve, post or reverse (checker, §9).
+        // maker side only, never approve, post or reverse (checker, §9), and
+        // since SR.4 (§26.5) never the accounting configuration, which decides
+        // where an already-approved run posts.
         $officer = Role::query()->where('key', 'payroll_officer')->firstOrFail()->capabilities->pluck('key')->all();
         $this->assertSame(
-            ['payroll.accounting.manage', 'payroll.compensation.view', 'payroll.periods.manage', 'payroll.runs.prepare', 'payroll.runs.view', 'payroll.structures.manage', 'payroll.structures.view'],
+            ['payroll.compensation.view', 'payroll.periods.manage', 'payroll.runs.prepare', 'payroll.runs.view', 'payroll.structures.manage', 'payroll.structures.view'],
             collect($officer)->filter(fn (string $key) => in_array($key, self::SCHOOL_ADMIN_DEFAULT_KEYS, true))->sort()->values()->all(),
         );
-        foreach (['payroll.runs.approve', 'payroll.runs.post', 'payroll.runs.reverse'] as $checker) {
+        foreach (['payroll.runs.approve', 'payroll.runs.post', 'payroll.runs.reverse', 'payroll.accounting.manage'] as $checker) {
             $this->assertNotContains($checker, $officer);
         }
 

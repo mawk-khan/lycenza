@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { router, usePage } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+import MfaCodeField from '../../../../Components/MfaCodeField.vue';
 import { formatMoney } from '../../../../money';
 
 interface Concession {
@@ -49,16 +50,28 @@ interface Props {
         cancelAdjustments: boolean;
         isRequester: boolean;
     };
+    hasMfaFactor: boolean;
 }
 
 const props = defineProps<Props>();
 const page = usePage();
 const actionError = computed(() => (page.props.errors as Record<string, string>).action);
 const base = `/app/finance/concessions/${props.concession.id}`;
+// SR.4 (ADR 0071 §26.7): approve, revoke and adjustment cancellation need a fresh code.
+const mfaCode = ref('');
+const mfaError = computed(() => (page.props.errors as Record<string, string>).mfa_code ?? null);
+const needsCode = computed(
+    () => props.can.decide || props.can.revoke || props.can.cancelAdjustments,
+);
+const stepUpActions = ['approve', 'revoke'];
 
 function act(action: string, question: string): void {
     if (window.confirm(question)) {
-        router.post(`${base}/${action}`, {}, { preserveScroll: true });
+        const data = stepUpActions.includes(action) ? { mfa_code: mfaCode.value } : {};
+        router.post(`${base}/${action}`, data, {
+            preserveScroll: true,
+            onFinish: () => (mfaCode.value = ''),
+        });
     }
 }
 
@@ -68,7 +81,11 @@ function cancelAdjustment(a: Adjustment): void {
             'Cancel this adjustment? A reversing journal entry is posted; the amount is owed again.',
         )
     ) {
-        router.post(`/app/finance/fee-adjustments/${a.id}/cancel`, {}, { preserveScroll: true });
+        router.post(
+            `/app/finance/fee-adjustments/${a.id}/cancel`,
+            { mfa_code: mfaCode.value },
+            { preserveScroll: true, onFinish: () => (mfaCode.value = '') },
+        );
     }
 }
 </script>
@@ -131,6 +148,16 @@ function cancelAdjustment(a: Adjustment): void {
                 <dd>{{ concession.revokedAt }}</dd>
             </div>
         </dl>
+
+        <section v-if="needsCode" class="mt-8 border-t border-slate-200 pt-6">
+            <MfaCodeField
+                id="concession-mfa"
+                v-model="mfaCode"
+                :has-mfa-factor="hasMfaFactor"
+                action="Approving, revoking or cancelling a concession adjustment"
+                :error="mfaError"
+            />
+        </section>
 
         <section
             v-if="concession.status === 'pending'"

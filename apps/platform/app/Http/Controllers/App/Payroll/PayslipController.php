@@ -6,7 +6,10 @@ use App\Domain\Payroll\Application\Exceptions\PayrollException;
 use App\Domain\Payroll\Application\PayslipPresenter;
 use App\Domain\Payroll\Application\PayslipReadService;
 use App\Http\Controllers\Controller;
+use App\Support\Auth\Mfa\SensitiveReadAssurance;
+use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -37,9 +40,14 @@ use Inertia\Response;
  */
 class PayslipController extends Controller
 {
-    public function show(TenantContext $context, string $payrollRun, string $employmentRecord, PayslipReadService $service): Response
+    use AuthorizesCapability;
+
+    public function show(Request $request, TenantContext $context, string $payrollRun, string $employmentRecord, PayslipReadService $service, SensitiveReadAssurance $assurance): Response
     {
         $school = $context->requireSchool();
+        // SR.4 (ADR 0071 §26.7): an administrative payslip is Highly Sensitive -- capability, then current MFA assurance.
+        $this->authorizeCapability('payroll.compensation.sensitive.view', $school);
+        $assurance->requireForPage($request);
 
         try {
             $payslip = $service->render($school, $payrollRun, $employmentRecord, $context->actor());

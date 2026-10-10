@@ -214,7 +214,7 @@ paths:
         Registers a new webhook endpoint. The plaintext signing secret
         is returned ONCE, in this response only (section 7) -- it is
         never retrievable again afterward. Requires
-        integrations.webhooks.manage.
+        integrations.webhooks.manage. SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode).
       parameters:
         - name: schoolId
           in: path
@@ -227,10 +227,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [name, url]
+              required: [name, url, mfa_code]
               properties:
                 name: { type: string, maxLength: 255 }
                 url: { type: string, maxLength: 2048, description: "https:// only in production -- see docs/security/INTEGRATION-SECURITY.md (SSRF policy)." }
+                mfa_code: { type: string, maxLength: 32, description: "Fresh MFA code -- see StepUpMfaCode." }
       responses:
         "201":
           description: Created.
@@ -251,7 +252,7 @@ paths:
                         properties:
                           secret: { type: string, description: "Plaintext HMAC signing secret -- shown once." }
         "422":
-          description: URL rejected by SSRF validation, or otherwise invalid.
+          description: URL rejected by SSRF validation, `mfa_code` refused (see StepUpMfaCode), or otherwise invalid.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -295,7 +296,7 @@ paths:
       summary: >
         Rotates the signing secret with a documented overlap window
         (section 9) -- the new plaintext secret is returned ONCE, here
-        only. Requires integrations.webhooks.manage.
+        only. Requires integrations.webhooks.manage. SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode).
       parameters:
         - name: schoolId
           in: path
@@ -306,6 +307,11 @@ paths:
           required: true
           schema: { type: string, format: uuid }
         - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StepUpMfaCode" }
       responses:
         "200":
           description: Rotated.
@@ -325,6 +331,11 @@ paths:
                         required: [secret]
                         properties:
                           secret: { type: string }
+        "422":
+          description: "`mfa_code` refused (missing, wrong, used, or no enrolled factor -- `error.errors.mfa_code`; see StepUpMfaCode), or invalid input."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /schools/{schoolId}/webhook-endpoints/{webhookEndpointId}/disable:
     post:
@@ -353,7 +364,7 @@ paths:
   /schools/{schoolId}/webhook-endpoints/{webhookEndpointId}/enable:
     post:
       operationId: enableWebhookEndpoint
-      summary: Re-enables a disabled endpoint.
+      summary: "Re-enables a disabled endpoint. SR.4 (ADR 0071 §26.7) -- needs a fresh MFA code (`mfa_code`, see StepUpMfaCode)."
       parameters:
         - name: schoolId
           in: path
@@ -363,6 +374,11 @@ paths:
           in: path
           required: true
           schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StepUpMfaCode" }
       responses:
         "200":
           description: Enabled.
@@ -373,6 +389,11 @@ paths:
                 required: [data]
                 properties:
                   data: { $ref: "#/components/schemas/WebhookEndpoint" }
+        "422":
+          description: "`mfa_code` refused (missing, wrong, used, or no enrolled factor -- `error.errors.mfa_code`; see StepUpMfaCode), or invalid input."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /schools/{schoolId}/webhook-endpoints/{webhookEndpointId}/subscriptions:
     post:
@@ -396,9 +417,10 @@ paths:
           application/json:
             schema:
               type: object
-              required: [event_type]
+              required: [event_type, mfa_code]
               properties:
                 event_type: { type: string, example: school.setting.changed.v1 }
+                mfa_code: { type: string, maxLength: 32, description: "Fresh MFA code -- see StepUpMfaCode." }
       responses:
         "201":
           description: Created.
@@ -2112,7 +2134,9 @@ paths:
         service, not by this endpoint itself. Phase 8A.15: rate-limited
         by the stricter `hr-api-sensitive-reads` policy (20/min,
         School+actor-keyed) rather than the 120/min policy the other
-        three HR endpoints share.
+        three HR endpoints share. SR.4 (ADR 0071 §26.7): needs current
+        MFA assurance (`mfa`) -- a bearer token minted under the caller's
+        current factor.
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { $ref: "#/components/parameters/EmployeeId" }
@@ -2127,12 +2151,18 @@ paths:
                 properties:
                   data: { type: array, items: { $ref: "#/components/schemas/EmployeeSensitiveDocument" } }
         "401":
-          description: Missing/invalid bearer token.
+          description: >
+            Missing/invalid bearer token, or (SR.4, ADR 0071 §26.7: a Highly
+            Sensitive read needs CURRENT MFA assurance) `mfa_step_up_required`
+            -- the token was minted before the caller's current MFA factor
+            was activated; issue a new token.
         "403":
           description: >
             Authenticated but lacking hr.employees.sensitive.view in
             this School -- identical response whether or not sensitive
-            documents actually exist (no existence oracle, section 60).
+            documents actually exist (no existence oracle, section 60) --
+            or `mfa_required_not_enrolled` (the caller has no active MFA
+            factor; SR.4, ADR 0071 §26.7).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -6255,7 +6285,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/JournalEntryInput" }
+            schema: { allOf: [{ $ref: "#/components/schemas/JournalEntryInput" }, { $ref: "#/components/schemas/StepUpMfaCode" }] }
       responses:
         "201":
           description: Created.
@@ -6321,18 +6351,20 @@ paths:
         (JOURNAL_ENTRY_ALREADY_REVERSED, 409, on a repeat). Phase 0O.11A:
         a Payment's settlement journal entry is refused with
         JOURNAL_ENTRY_NOT_REVERSIBLE (409) -- reversing it directly would
-        leave the Payment posted against a reversed entry.
+        leave the Payment posted against a reversed entry. SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode).
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { $ref: "#/components/parameters/JournalEntryId" }
       requestBody:
-        required: false
+        required: true
         content:
           application/json:
             schema:
               type: object
+              required: [mfa_code]
               properties:
                 reason: { type: string, maxLength: 255, nullable: true }
+                mfa_code: { type: string, maxLength: 32, description: "Fresh MFA code -- see StepUpMfaCode." }
       responses:
         "201":
           description: Created (the new reversing journal entry).
@@ -6341,6 +6373,11 @@ paths:
               schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/JournalEntryResult" } } }
         "401":
           description: Missing/invalid bearer token.
+        "422":
+          description: "`mfa_code` refused (missing, wrong, used, or no enrolled factor -- `error.errors.mfa_code`; see StepUpMfaCode), or invalid input."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "403":
           description: Authenticated but lacking finance.ledger.reverse in this School.
           content:
@@ -8017,7 +8054,7 @@ paths:
     post:
       operationId: cancelFeeAdjustment
       summary: >
-        Cancels one posted adjustment through a Finance reversal (the charge amount never changes). Requires finance.fee_concessions.approve.
+        Cancels one posted adjustment through a Finance reversal (the charge amount never changes). Requires finance.fee_concessions.approve. SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode).
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { name: adjustmentId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -8025,7 +8062,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/FeeAdjustmentCancelInput" }
+            schema: { allOf: [{ $ref: "#/components/schemas/FeeAdjustmentCancelInput" }, { $ref: "#/components/schemas/StepUpMfaCode" }] }
       responses:
         "200":
           description: OK
@@ -8034,6 +8071,11 @@ paths:
               schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeAdjustment" } } }
         "401":
           description: Missing/invalid bearer token.
+        "422":
+          description: "`mfa_code` refused (missing, wrong, used, or no enrolled factor -- `error.errors.mfa_code`; see StepUpMfaCode), or invalid input."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "403":
           description: Authenticated but lacking finance.fee_concessions.approve in this School.
           content:
@@ -8778,7 +8820,8 @@ paths:
         Assigns compensation for an EmploymentRecord against an ACTIVE
         salary structure -- Highly Sensitive (writes actual per-component
         amounts). Requires payroll.compensation.sensitive.manage
-        (granted to no default role).
+        (SR.3: `payroll_officer`, granted through school.roles.grant.payroll_sensitive).
+        SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode).
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { $ref: "#/components/parameters/EmploymentRecordId" }
@@ -8786,7 +8829,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/CompensationAssignmentInput" }
+            schema: { allOf: [{ $ref: "#/components/schemas/CompensationAssignmentInput" }, { $ref: "#/components/schemas/StepUpMfaCode" }] }
       responses:
         "201":
           description: Created.
@@ -8833,9 +8876,15 @@ paths:
             application/json:
               schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/CompensationAssignmentValue" } } } }
         "401":
-          description: Missing/invalid bearer token.
+          description: >
+            Missing/invalid bearer token, or (SR.4, ADR 0071 §26.7: a Highly
+            Sensitive read needs CURRENT MFA assurance) `mfa_step_up_required`
+            -- the token was minted before the caller's current MFA factor
+            was activated; issue a new token.
         "403":
-          description: Authenticated but lacking payroll.compensation.sensitive.view in this School.
+          description: >
+            Lacking the capability in this School, or `mfa_required_not_enrolled`
+            (the caller has no active MFA factor).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -14624,6 +14673,22 @@ components:
               nullable: true
               description: Field-level validation errors, present only on 422 responses.
 
+    StepUpMfaCode:
+      type: object
+      required: [mfa_code]
+      description: >
+        SR.4 (ADR 0071 §26.7): a Highly Sensitive or financially consequential
+        action re-verifies the caller's MFA now -- a current TOTP code of the
+        caller's ACTIVE factor, or one of their unused recovery codes; each
+        is single-use. Missing, wrong or used, or no enrolled factor: 422 with
+        `error.errors.mfa_code`. Checked after the capability (a caller
+        without it gets 403 and spends no code) and before any change. On an
+        `Idempotency-Key` route the 422 is recorded for that key, like any
+        validation failure -- retry with a new key and a new code; a retry of
+        a SUCCESSFUL request with the same key and body is replayed, never
+        re-verified.
+      properties:
+        mfa_code: { type: string, maxLength: 32 }
     Money:
       type: object
       description: >

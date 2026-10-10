@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { router, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
+import MfaCodeField from '../../../../Components/MfaCodeField.vue';
 import StatusBadge from '../../../../Components/StatusBadge.vue';
 
 interface Summary {
@@ -150,6 +151,7 @@ interface Props {
     positions: RefOption[];
     departments: RefOption[];
     employeeCategories: RefOption[];
+    hasMfaFactor: boolean;
 }
 
 const props = defineProps<Props>();
@@ -407,6 +409,8 @@ const documentForm = useForm({
     size_bytes: 0,
     issued_on: '',
     expires_on: '',
+    // SR.4 (ADR 0071 §26.7): only a highly sensitive record needs a fresh code.
+    mfa_code: '',
 });
 function submitDocument(): void {
     documentForm.post(`${base}/hr-document-records`, {
@@ -415,6 +419,7 @@ function submitDocument(): void {
             showDocumentForm.value = false;
             documentForm.reset();
         },
+        onError: () => documentForm.reset('mfa_code'),
     });
 }
 function archiveDocument(id: string): void {
@@ -1645,9 +1650,21 @@ function removeNote(id: string): void {
                         />
                     </div>
                 </div>
+                <div v-if="documentForm.classification_tier === 'highly_sensitive'" class="mt-3">
+                    <MfaCodeField
+                        id="hr-document-mfa"
+                        v-model="documentForm.mfa_code"
+                        :has-mfa-factor="hasMfaFactor"
+                        action="Registering a highly sensitive record"
+                        :error="documentForm.errors.mfa_code"
+                    />
+                </div>
                 <button
                     type="submit"
-                    :disabled="documentForm.processing"
+                    :disabled="
+                        documentForm.processing ||
+                        (documentForm.classification_tier === 'highly_sensitive' && !hasMfaFactor)
+                    "
                     class="mt-3 rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
                 >
                     Register document

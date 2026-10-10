@@ -3,6 +3,7 @@
 namespace App\Domain\StaffAttendance\Application;
 
 use App\Domain\HR\Application\EmploymentCoverage;
+use App\Domain\HR\Application\HrSelfAdministrationGuard;
 use App\Domain\Leave\Application\LeaveCoverageReader;
 use App\Domain\Leave\Application\LeaveLocks;
 use App\Domain\Leave\Application\StaffCalendarService;
@@ -57,6 +58,7 @@ class StaffAttendanceService
         private readonly EmploymentCoverage $coverage,
         private readonly StaffCalendarService $calendar,
         private readonly LeaveCoverageReader $leave,
+        private readonly HrSelfAdministrationGuard $selfAdministration,
     ) {}
 
     /** One EmploymentRecord on one date. An existing record is corrected, never recorded again. */
@@ -69,6 +71,7 @@ class StaffAttendanceService
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $date, $item, $actor) {
             $this->guard->requireOperational($school->id);
             $this->holdEmployment($school, $item, $date);
+            $this->selfAdministration->refuseOwnEmployment($actor, $item['employmentRecordId'], 'staff_attendance.record');
             LeaveLocks::staffEmployment($school, $item['employmentRecordId'], shared: true);
             LeaveLocks::staffDays($school, $item['employmentRecordId'], [$date]);
 
@@ -107,6 +110,8 @@ class StaffAttendanceService
             $this->guard->requireOperational($school->id);
             foreach ($validated as $item) {
                 $this->holdEmployment($school, $item, $date);
+                // SR.4 (ADR 0071 §26.2): nobody records their own attendance; the register refuses as a whole.
+                $this->selfAdministration->refuseOwnEmployment($actor, $item['employmentRecordId'], 'staff_attendance.record');
             }
             foreach ($validated as $item) {
                 LeaveLocks::staffEmployment($school, $item['employmentRecordId'], shared: true);
@@ -145,6 +150,7 @@ class StaffAttendanceService
             $identity = StaffAttendanceRecord::query()->where('school_id', $school->id)->findOrFail($recordId);
             $date = $identity->attendance_date->toDateString();
             $this->holdEmployment($school, ['employmentRecordId' => $identity->employment_record_id, 'position' => null], $date, currentOnly: false);
+            $this->selfAdministration->refuseOwnEmployment($actor, $identity->employment_record_id, 'staff_attendance.correct');
             LeaveLocks::staffEmployment($school, $identity->employment_record_id, shared: true);
             LeaveLocks::staffDays($school, $identity->employment_record_id, [$date]);
             LeaveLocks::calendar($school, shared: true);

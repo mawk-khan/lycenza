@@ -13,6 +13,8 @@ use App\Domain\Payroll\Application\SalaryStructureComponentSummary;
 use App\Domain\Payroll\Application\SalaryStructureSummary;
 use App\Domain\Payroll\Infrastructure\SalaryStructure;
 use App\Http\Controllers\Controller;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
+use App\Support\Auth\Mfa\SensitiveReadAssurance;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
@@ -84,10 +86,12 @@ class CompensationController extends Controller
         ]);
     }
 
-    public function show(TenantContext $context, PayrollCompensationReadService $compensation, PayrollStructureReadService $structures, CapabilityResolver $capabilities, string $employmentRecord): Response
+    public function show(Request $request, TenantContext $context, PayrollCompensationReadService $compensation, PayrollStructureReadService $structures, CapabilityResolver $capabilities, SensitiveReadAssurance $assurance, FreshMfaRequirement $mfa, string $employmentRecord): Response
     {
         $school = $context->requireSchool();
         $actor = $context->actor();
+        $holdsSensitive = $capabilities->canInSchool($actor, 'payroll.compensation.sensitive.view', $school);
+        $assured = $assurance->holds($request);
         $record = EmploymentRecord::query()->findOrFail($employmentRecord);
 
         $assignments = $compensation->listAssignments($school, $record, $actor);
@@ -135,15 +139,20 @@ class CompensationController extends Controller
                 'effectiveTo' => $a->effectiveTo?->toDateString(),
             ], $assignments),
             'structureOptions' => $structureOptions,
-            'canViewSensitive' => $capabilities->canInSchool($actor, 'payroll.compensation.sensitive.view', $school),
+            // SR.4 (ADR 0071 §26.7): amounts need current MFA assurance to be
+            // read and a fresh code to be written.
+            'canViewSensitive' => $holdsSensitive && $assured,
+            'sensitiveNeedsMfa' => $holdsSensitive && ! $assured,
             'canManageSensitive' => $capabilities->canInSchool($actor, 'payroll.compensation.sensitive.manage', $school),
+            'hasMfaFactor' => $mfa->hasActiveFactor($actor),
         ]);
     }
 
-    public function store(Request $request, TenantContext $context, PayrollCompensationAdministrationService $service, string $employmentRecord): RedirectResponse
+    public function store(Request $request, TenantContext $context, PayrollCompensationAdministrationService $service, FreshMfaRequirement $mfa, string $employmentRecord): RedirectResponse
     {
         $school = $context->requireSchool();
         $record = EmploymentRecord::query()->findOrFail($employmentRecord);
+        $this->authorizeCapability('payroll.compensation.sensitive.manage', $school);
 
         $validated = $request->validate([
             'salary_structure_id' => ['required', 'uuid'],
@@ -160,14 +169,19 @@ class CompensationController extends Controller
             $validated['fixed_values'],
         );
 
+        // SR.4 (ADR 0071 §26.7): a fresh code, outside the assignment transaction.
+        $mfa->requireForAction($request, $context->actor());
         $service->assign($school, $record, $structure, Carbon::parse($validated['effective_from']), $fixedValues, $context->actor());
 
         return redirect("/app/payroll/compensation/{$record->id}");
     }
 
-    public function values(TenantContext $context, PayrollCompensationReadService $service, string $compensationAssignment): JsonResponse
+    public function values(Request $request, TenantContext $context, PayrollCompensationReadService $service, SensitiveReadAssurance $assurance, string $compensationAssignment): JsonResponse
     {
         $school = $context->requireSchool();
+        // SR.4 (ADR 0071 §26.7): capability, then current MFA assurance.
+        $this->authorizeCapability('payroll.compensation.sensitive.view', $school);
+        $assurance->requireForJson($request);
         $values = $service->getAssignmentValues($school, $compensationAssignment, $context->actor());
 
         return response()->json([

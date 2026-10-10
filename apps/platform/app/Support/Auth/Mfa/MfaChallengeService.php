@@ -8,6 +8,7 @@ use App\Support\Auth\AssuranceFreshness;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Laravel\Sanctum\PersonalAccessToken;
 use PragmaRX\Google2FA\Google2FA;
 
 /**
@@ -111,6 +112,12 @@ class MfaChallengeService
 
     public function hasValidAssurance(Request $request): bool
     {
+        // SR.4 (ADR 0071 §26.7): a session-less bearer request carries no
+        // session assurance; its human API token is the assurance instead.
+        if (! $request->hasSession()) {
+            return $this->hasValidTokenAssurance($request);
+        }
+
         $verifiedAt = $request->session()->get('mfa_verified_at');
 
         if (! AssuranceFreshness::isFresh($verifiedAt, (int) config('mfa.assurance_window_minutes'))) {
@@ -128,6 +135,31 @@ class MfaChallengeService
         $activatedAt = $factor === null ? null : ($factor->confirmed_at ?? $factor->created_at);
 
         return $activatedAt === null || $activatedAt->getTimestamp() <= Carbon::parse((string) $verifiedAt)->getTimestamp();
+    }
+
+    /**
+     * SR.4 (ADR 0071 §26.7): assurance for a bearer request. A human API
+     * token is issued only after a FRESH code under an enrolled factor
+     * (ADR 0049 §2, ApiTokenController), so a personal access token minted
+     * AT OR AFTER the activation of the user's CURRENT active factor carries
+     * that factor's assurance for its (bounded, at most 90-day) lifetime --
+     * the same factor binding as the session rule above. No factor, any
+     * other token type, or a token minted before the current factor (e.g.
+     * before an administrative MFA reset) is no assurance.
+     */
+    private function hasValidTokenAssurance(Request $request): bool
+    {
+        $user = $request->user();
+        $token = $user instanceof User ? $user->currentAccessToken() : null;
+
+        if (! $token instanceof PersonalAccessToken || $token->created_at === null) {
+            return false;
+        }
+
+        $factor = $this->activeFactorFor($user);
+        $activatedAt = $factor === null ? null : ($factor->confirmed_at ?? $factor->created_at);
+
+        return $activatedAt !== null && $activatedAt->getTimestamp() <= $token->created_at->getTimestamp();
     }
 
     public function clearAssurance(Request $request): void

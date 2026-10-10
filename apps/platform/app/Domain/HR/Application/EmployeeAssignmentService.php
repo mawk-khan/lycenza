@@ -49,6 +49,7 @@ class EmployeeAssignmentService
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly AssignmentClosureCascade $closureCascade,
+        private readonly HrSelfAdministrationGuard $selfAdministration,
     ) {}
 
     /**
@@ -84,6 +85,9 @@ class EmployeeAssignmentService
 
         return $this->context->withSchool($school, function () use ($school, $employment, $position, $campus, $department, $startsOn, $endsOn, $actor) {
             return DB::transaction(function () use ($school, $employment, $position, $campus, $department, $startsOn, $endsOn, $actor) {
+                // SR.4 (ADR 0071 §26.2): never your own assignments.
+                $this->selfAdministration->refuseOwnEmployee($actor, $employment->employee_id, 'assignment.create');
+
                 $assignment = EmployeeAssignment::query()->create([
                     'school_id' => $school->id,
                     'employment_record_id' => $employment->id,
@@ -121,6 +125,8 @@ class EmployeeAssignmentService
 
         return $this->context->withSchool($school, function () use ($school, $assignment, $endsOn, $actor) {
             return DB::transaction(function () use ($school, $assignment, $endsOn, $actor) {
+                $this->selfAdministration->refuseOwnEmployee($actor, $assignment->employmentRecord->employee_id, 'assignment.end');
+
                 $assignment->update(['ends_on' => $endsOn]);
 
                 $this->closureCascade->clearDanglingManagerReferences([$assignment->id]);
@@ -177,6 +183,8 @@ class EmployeeAssignmentService
 
         return $this->context->withSchool($school, function () use ($school, $assignment, $actor) {
             return DB::transaction(function () use ($school, $assignment, $actor) {
+                $this->selfAdministration->refuseOwnEmployee($actor, $assignment->employmentRecord->employee_id, 'assignment.primary');
+
                 EmployeeAssignment::query()
                     ->where('employment_record_id', $assignment->employment_record_id)
                     ->where('is_primary', true)

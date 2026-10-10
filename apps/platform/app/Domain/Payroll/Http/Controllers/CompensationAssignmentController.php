@@ -11,6 +11,7 @@ use App\Domain\Payroll\Application\PayrollCompensationReadService;
 use App\Domain\Payroll\Infrastructure\SalaryStructure;
 use App\Http\Controllers\Controller;
 use App\Models\School;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -48,7 +49,7 @@ class CompensationAssignmentController extends Controller
         ]);
     }
 
-    public function store(Request $request, School $school, string $employmentRecord, PayrollCompensationAdministrationService $service): JsonResponse
+    public function store(Request $request, School $school, string $employmentRecord, PayrollCompensationAdministrationService $service, FreshMfaRequirement $mfa): JsonResponse
     {
         $record = EmploymentRecord::query()->findOrFail($employmentRecord);
 
@@ -67,6 +68,8 @@ class CompensationAssignmentController extends Controller
             $validated['fixed_values'],
         );
 
+        // SR.4 (ADR 0071 §26.7): a fresh code for a Highly Sensitive write.
+        $mfa->requireForAction($request, $request->user());
         $assignment = $service->assign(
             $school, $record, $structure, Carbon::parse($validated['effective_from']), $fixedValues, $request->user(),
         );

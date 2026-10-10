@@ -17,6 +17,7 @@ use App\Domain\Payments\Application\RecordManualPaymentData;
 use App\Domain\Payments\Domain\ManualPaymentMethod;
 use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Money\Exceptions\InvalidMoneyException;
 use App\Support\Money\Money;
@@ -91,6 +92,7 @@ class ManualPaymentController extends Controller
                 $service->outstandingChargesForStudent($school, $student->id, $context->actor()),
             ),
             'preselectedChargeId' => $validated['charge_id'] ?? null,
+            'hasMfaFactor' => app(FreshMfaRequirement::class)->hasActiveFactor($context->actor()),
         ]);
     }
 
@@ -126,7 +128,7 @@ class ManualPaymentController extends Controller
         ]);
     }
 
-    public function store(Request $request, TenantContext $context, ManualPaymentRecordingService $service): RedirectResponse
+    public function store(Request $request, TenantContext $context, ManualPaymentRecordingService $service, FreshMfaRequirement $mfa): RedirectResponse
     {
         $school = $context->requireSchool();
         $this->authorizeCapability(ManualPaymentRecordingService::CAPABILITY, $school);
@@ -147,6 +149,11 @@ class ManualPaymentController extends Controller
         foreach ($validated['allocations'] as $index => $allocation) {
             $allocations[] = new ChargeAllocationInput($allocation['charge_id'], $this->parseAmount($allocation['amount'], "allocations.{$index}.amount"));
         }
+
+        // SR.4 (ADR 0071 §26.7): a posted Payment is immutable (no v1
+        // correction), so recording one needs a fresh code -- outside the
+        // recording transaction.
+        $mfa->requireForAction($request, $context->actor());
 
         try {
             $result = $service->record($school, new RecordManualPaymentData(

@@ -6,6 +6,7 @@ use App\Domain\Fees\Infrastructure\FeeConcession;
 use App\Models\User;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\Feature\Fees\Concerns\CreatesFeeConcessionFixtures;
 use Tests\TestCase;
 
@@ -17,11 +18,25 @@ use Tests\TestCase;
  */
 class FeeConcessionApiTest extends TestCase
 {
-    use CreatesFeeConcessionFixtures;
+    use CreatesFeeConcessionFixtures, ProvidesSensitiveActionMfa;
+
+    private ?User $actor = null;
 
     private function as(array $w, User $actor): static
     {
+        $this->actor = $actor;
+
         return $this->actingAs($actor)->withHeader('X-School-Id', $w['school']->id);
+    }
+
+    /** SR.4 (ADR 0071 §26.7): approve, revoke and adjustment cancellation send a fresh code. */
+    public function json($method, $uri, array $data = [], array $headers = [], $options = 0)
+    {
+        if ($method === 'POST' && $this->actor !== null && preg_match('#/(fee-concessions/[^/]+/(approve|revoke)|fee-adjustments/[^/]+/cancel)$#', $uri) === 1) {
+            $data += ['mfa_code' => $this->freshMfaCode($this->actor)];
+        }
+
+        return parent::json($method, $uri, $data, $headers, $options);
     }
 
     private function base(array $w): string

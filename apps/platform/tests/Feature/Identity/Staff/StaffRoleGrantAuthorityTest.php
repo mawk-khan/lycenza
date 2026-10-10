@@ -69,7 +69,7 @@ class StaffRoleGrantAuthorityTest extends TestCase
         'hr.staff_attendance.view', 'hr.staff_attendance.manage',
     ];
 
-    /** ADR 0071 §4.3 `payroll_officer` (9 keys). */
+    /** ADR 0071 §4.3 as contracted in SR.0 (9 keys) -- a fixture for the payroll grant right; the seeded role drops `payroll.accounting.manage` (SR.4 §26.5). */
     private const PAYROLL_OFFICER_KEYS = [
         'payroll.structures.view', 'payroll.structures.manage', 'payroll.compensation.view',
         'payroll.compensation.sensitive.view', 'payroll.compensation.sensitive.manage',

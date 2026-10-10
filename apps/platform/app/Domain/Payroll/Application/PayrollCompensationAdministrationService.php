@@ -2,7 +2,9 @@
 
 namespace App\Domain\Payroll\Application;
 
+use App\Domain\HR\Application\HrSelfAdministrationGuard;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
+use App\Domain\Payroll\Application\Exceptions\PayrollSelfAdministrationException;
 use App\Domain\Payroll\Infrastructure\EmployeeCompensationAssignment;
 use App\Domain\Payroll\Infrastructure\SalaryStructure;
 use App\Models\School;
@@ -29,7 +31,10 @@ class PayrollCompensationAdministrationService
 {
     use AuthorizesCapability;
 
-    public function __construct(private readonly CompensationService $compensation) {}
+    public function __construct(
+        private readonly CompensationService $compensation,
+        private readonly HrSelfAdministrationGuard $selfAdministration,
+    ) {}
 
     /**
      * @param  list<FixedComponentValueInput>  $fixedValues
@@ -43,6 +48,10 @@ class PayrollCompensationAdministrationService
         User $actor,
     ): EmployeeCompensationAssignment {
         $this->authorizeCapabilityFor($actor, 'payroll.compensation.sensitive.manage', $school);
+        // SR.4 (ADR 0071 §26.4): nobody sets their own pay.
+        if ($this->selfAdministration->ownsEmployment($actor, $school, $employmentRecord->id)) {
+            throw new PayrollSelfAdministrationException('compensation.assign');
+        }
 
         return $this->compensation->assign($school, $employmentRecord, $structure, $effectiveFrom, $fixedValues, $actor);
     }

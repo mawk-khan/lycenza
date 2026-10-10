@@ -1574,14 +1574,14 @@ class CapabilityAndRoleSeeder extends Seeder
                     'hr.employees.sensitive.view', 'hr.employees.sensitive.manage',
                 ],
             ],
-            'payroll_officer' => [ // ADR 0071 §4.3
+            'payroll_officer' => [ // ADR 0071 §4.3; SR.4 §26.5: no payroll.accounting.manage
                 'name' => 'Payroll Officer',
                 'scope' => 'school',
                 'capabilities' => [
                     'payroll.structures.view', 'payroll.structures.manage',
                     'payroll.compensation.view', 'payroll.compensation.sensitive.view',
                     'payroll.compensation.sensitive.manage', 'payroll.periods.manage',
-                    'payroll.runs.view', 'payroll.runs.prepare', 'payroll.accounting.manage',
+                    'payroll.runs.view', 'payroll.runs.prepare',
                 ],
             ],
             'accountant' => [ // ADR 0071 §4.4

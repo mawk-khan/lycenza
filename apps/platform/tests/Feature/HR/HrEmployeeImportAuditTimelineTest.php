@@ -97,7 +97,8 @@ class HrEmployeeImportAuditTimelineTest extends TestCase
         $hrUser = $this->createUserWithCapabilities($school, [
             'hr.employees.manage', 'hr.employees.personal.manage', 'hr.employees.assignments.manage', 'hr.employees.personal.view',
         ]);
-        $hrActorEmployee = app(EmployeeService::class)->create($school, ['full_name' => 'HR Staff Member', 'user_id' => $hrUser->id], $hrUser);
+        // SR.4 (ADR 0071 §26.2): another HR holder links the actor's own Employee.
+        $hrActorEmployee = app(EmployeeService::class)->create($school, ['full_name' => 'HR Staff Member', 'user_id' => $hrUser->id], $this->fullHrActor($school));
 
         $result = app(EmployeeImportService::class)->import($school, $hrUser, [['full_name' => 'Imported Employee']]);
         $importedEmployeeId = $result->rows[0]->employeeId;

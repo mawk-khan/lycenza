@@ -301,6 +301,12 @@ mirroring `hr.employees.sensitive.*`'s identical "nobody by default"
 treatment for Highly Sensitive per-Employee data; a School wanting a
 role to see/assign actual salary figures must grant that explicitly.
 *(SR.0 correction, 2026-10-09: a School cannot compose, create or configure a role — no runtime role writer exists (ADR 0059 §1), and tenant-custom roles are deferred (ADR 0063 T3). The fixed system catalogue in ADR 0071 provides `payroll_officer`, whose two compensation-sensitive keys are granted only through `school.roles.grant.payroll_sensitive`; `payroll.statutory.*` stays on no role (legal-gated).)* *(SR.3 update, 2026-10-09: implemented — the fixed production catalogue is seeded by `CapabilityAndRoleSeeder` and snapshot-pinned; ADR 0071 §25.)*
+*(SR.4 update, 2026-10-10, ADR 0071 §26.4–§26.7:*
+- *`payroll_officer` no longer holds `payroll.accounting.manage` (8 keys): the salary expense and payable mapping is resolved live at posting, so a maker could re-point an approved run. `school_admin`, who posts, keeps it.*
+- *Nobody assigns, overrides or corrects their own pay (`PAYROLL_SELF_ADMINISTRATION`).*
+- *Approve, post, reverse and compensation assignment need a fresh MFA code (`mfa_code`, web and API).*
+- *Amounts (compensation values, run results, administrative payslips) need current MFA assurance.*
+- *Payroll period close stays maker-level: it is irreversible but only stops new runs in that period.)*
 `principal` and every other school-scoped role receive none of the
 thirteen (`PayrollCapabilityRegistryTest`).
 

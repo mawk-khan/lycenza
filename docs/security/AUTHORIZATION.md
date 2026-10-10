@@ -133,6 +133,10 @@ of the AI Gateway's capability check (ADR 0014's "Domain service" step)
     let `school_admin` appoint HR, HR-sensitive and payroll-sensitive staff
     without itself holding that data access.*
   - *Tenant-custom roles stay future.)*
+  *(SR.4, 2026-10-10: every role verified through real routes; `payroll_officer`
+  no longer holds `payroll.accounting.manage` (8 keys); HR self-administration
+  and self-pay refused; sensitive-action MFA -- see "Sensitive-action MFA and
+  self-administration" below and ADR 0071 §26.)*
 - **Assignment, kept structurally separate by scope**:
   `platform_role_assignments` (central) for platform roles,
   `membership_role_assignments` (tenant-owned, RLS-protected) for
@@ -1059,6 +1063,46 @@ No new capability.
   Staff Attendance administrators. Own payslips never show HRX inputs.
 - **No operation** deducts wages, sets NCP days or overrides evidence
   (HRX-L4 open; `PayrollHrxOpenApiCoverageTest`).
+
+## Sensitive-action MFA and self-administration (SR.4, ADR 0071 §26 — built 2026-10-10)
+
+**Fresh MFA for consequential writes:**
+- **The control:** `FreshMfaRequirement::requireForAction()` requires a
+  request `mfa_code` (a current TOTP code or an unused recovery code, single
+  use).
+  - It runs after the capability and outside the business transaction.
+  - It works on the browser and on the bearer API alike.
+- **Where it applies:**
+  - payroll approve, post and reverse, and compensation assignment;
+  - ledger post and reverse;
+  - offline payment recording;
+  - fee concession approve, revoke and adjustment cancellation;
+  - highly sensitive HR document writes;
+  - webhook register, rotate, re-enable and subscribe;
+  - Emergency publishing;
+  - Finance period close (since E21.3A).
+
+**Current MFA assurance for Highly Sensitive reads:**
+- **The control:** `mfa` / `mfa-page` / `SensitiveReadAssurance`.
+  - **Session request:** a sign-in verified within the window under the
+    current factor.
+  - **Bearer request:** a human token minted under the current factor.
+- **Where it applies:** payroll amounts, run results and administrative
+  payslips; highly sensitive HR document metadata.
+
+**Never a step-up:** ordinary operational reads.
+
+**Self-administration (application layer, every actor; never a role check):**
+- **HR substrate.** Nobody links an Employee to themselves, or changes the
+  link, employment, assignments, reporting line, lifecycle or staff attendance
+  of the Employee linked to them (`HrSelfAdministrationGuard`, 403
+  `HR_SELF_ADMINISTRATION`). ActingEmployee authority (teaching ownership,
+  self-service, leave decisions, payslips) therefore cannot be manufactured
+  through HR mutations.
+- **Pay.** Nobody assigns, overrides or corrects their own pay (403
+  `PAYROLL_SELF_ADMINISTRATION`).
+
+**Recorded for SR.5 or owner decision:** ADR 0071 §26.13.
 
 ## What is NOT yet implemented
 

@@ -4,6 +4,7 @@ namespace Tests\Feature\Identity\Staff;
 
 use App\Domain\HR\Application\EmployeeService;
 use App\Domain\HR\Application\EmploymentService;
+use App\Domain\HR\Application\Exceptions\HrException;
 use App\Domain\Identity\Application\Staff\RoleGrantAuthority;
 use App\Domain\Identity\Application\Staff\RoleGrantRefusalAudit;
 use App\Domain\Identity\Application\Staff\StaffAccessService;
@@ -75,6 +76,17 @@ class ProductionStaffRolesTest extends TestCase
             ->flatMap(fn (Role $role) => $role->capabilities->pluck('key'))->unique()->sort()->values()->all();
 
         return $capabilities;
+    }
+
+    private function hrRefusal(callable $operation): string
+    {
+        try {
+            $operation();
+        } catch (HrException $e) {
+            return $e->errorCode();
+        }
+
+        return 'allowed';
     }
 
     private function refusal(callable $operation): string
@@ -225,13 +237,17 @@ class ProductionStaffRolesTest extends TestCase
         }
         $this->assertSame([], array_values(array_filter($before, fn ($key) => str_starts_with($key, 'school.') || str_starts_with($key, 'payroll.') || str_starts_with($key, 'finance.'))));
 
-        // Linking their OWN User to an Employee and giving it employment makes
-        // ActingEmployee resolvable -- and changes no capability: every
-        // ActingEmployee surface still needs a role grant the officer cannot make.
+        // SR.4 (ADR 0071 §26.2): the officer never links or employs themselves;
+        // a peer HR officer does. ActingEmployee then resolves -- and that
+        // changes no capability: every ActingEmployee surface still needs a
+        // role grant the officer cannot make.
+        [$peer] = $this->staffMember($school, 'hr_officer');
         $employee = app(EmployeeService::class)->create($school, ['full_name' => 'Self Linked', 'employee_number' => 'SR3-SELF'], $officer);
-        $linked = app(EmployeeService::class)->linkUser($employee, $officer->id, $officer);
+        $this->assertSame('HR_SELF_ADMINISTRATION', $this->hrRefusal(fn () => app(EmployeeService::class)->linkUser($employee, $officer->id, $officer)));
+        $linked = app(EmployeeService::class)->linkUser($employee, $officer->id, $peer);
         $this->assertSame($officer->id, $linked->user_id);
-        app(EmploymentService::class)->create($linked, ['employment_type' => 'permanent', 'starts_on' => '2024-01-01'], $officer);
+        $this->assertSame('HR_SELF_ADMINISTRATION', $this->hrRefusal(fn () => app(EmploymentService::class)->create($linked, ['employment_type' => 'permanent', 'starts_on' => '2024-01-01'], $officer)));
+        app(EmploymentService::class)->create($linked, ['employment_type' => 'permanent', 'starts_on' => '2024-01-01'], $peer);
 
         $this->assertSame($before, $this->capabilities($officer, $school), 'The HR identity substrate grants no capability.');
         $this->assertSame('not_authorized', $this->refusal(fn () => $this->access()->grantRole($school, $officer, $membership->id, 'teacher')));

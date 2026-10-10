@@ -5,6 +5,8 @@ namespace App\Http\Controllers\App\Payroll;
 use App\Domain\Payroll\Application\PayrollPostingAdministrationService;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Http\Controllers\Controller;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
+use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,23 +26,30 @@ use Illuminate\Http\Request;
  */
 class PayrollRunPostingController extends Controller
 {
-    public function post(TenantContext $context, string $payrollRun, PayrollPostingAdministrationService $service): RedirectResponse
+    use AuthorizesCapability;
+
+    public function post(Request $request, TenantContext $context, string $payrollRun, PayrollPostingAdministrationService $service, FreshMfaRequirement $mfa): RedirectResponse
     {
-        $context->requireSchool();
+        $school = $context->requireSchool();
         $run = PayrollRun::query()->findOrFail($payrollRun);
+        // SR.4 (ADR 0071 §26.7): capability first, then a fresh code, outside the posting transaction.
+        $this->authorizeCapability('payroll.runs.post', $school);
+        $mfa->requireForAction($request, $context->actor());
         $service->post($run, $context->actor());
 
         return redirect("/app/payroll/runs/{$run->id}");
     }
 
-    public function reverse(Request $request, TenantContext $context, string $payrollRun, PayrollPostingAdministrationService $service): RedirectResponse
+    public function reverse(Request $request, TenantContext $context, string $payrollRun, PayrollPostingAdministrationService $service, FreshMfaRequirement $mfa): RedirectResponse
     {
-        $context->requireSchool();
+        $school = $context->requireSchool();
         $run = PayrollRun::query()->findOrFail($payrollRun);
+        $this->authorizeCapability('payroll.runs.reverse', $school);
 
         $validated = $request->validate([
             'reason' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
+        $mfa->requireForAction($request, $context->actor());
 
         $service->reverse($run, $context->actor(), $validated['reason'] ?? null);
 

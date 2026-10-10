@@ -10,6 +10,7 @@ use Tests\Concerns\CreatesFeesFixtures;
 use Tests\Concerns\CreatesFinanceFixtures;
 use Tests\Concerns\CreatesPaymentsFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -25,7 +26,15 @@ use Tests\TestCase;
  */
 class FinanceUiTest extends TestCase
 {
-    use CreatesFeesFixtures, CreatesFinanceFixtures, CreatesPaymentsFixtures, CreatesTenancyFixtures;
+    use CreatesFeesFixtures, CreatesFinanceFixtures, CreatesPaymentsFixtures, CreatesTenancyFixtures, ProvidesSensitiveActionMfa;
+
+    /** SR.4 (ADR 0071 §26.7): ledger posting and reversal -- each request gets a fresh code or current MFA assurance. */
+    public function call($method, $uri, $parameters = [], $cookies = [], $files = [], $server = [], $content = null)
+    {
+        $this->applySensitiveActionMfa($method, $uri, $parameters, $content, '#^/app/finance/journal-entries(/[^/]+/reverse)?$#', null);
+
+        return parent::call($method, $uri, $parameters, $cookies, $files, $server, $content);
+    }
 
     private function activate(User $user, $school): void
     {

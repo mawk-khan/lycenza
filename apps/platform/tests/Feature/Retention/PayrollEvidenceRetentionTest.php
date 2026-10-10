@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\PendingCommand;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CommitsRetentionFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\Feature\Retention\Concerns\CreatesPayrollRetentionFixtures;
 use Tests\TestCase;
 
@@ -28,7 +29,7 @@ use Tests\TestCase;
  */
 class PayrollEvidenceRetentionTest extends TestCase
 {
-    use CommitsRetentionFixtures, CreatesPayrollRetentionFixtures;
+    use CommitsRetentionFixtures, CreatesPayrollRetentionFixtures, ProvidesSensitiveActionMfa;
 
     protected function setUp(): void
     {
@@ -302,6 +303,8 @@ class PayrollEvidenceRetentionTest extends TestCase
 
         $viewer = $this->createUserWithCapabilities($school, ['payroll.runs.view', 'payroll.compensation.sensitive.view', 'payroll.statutory.exports.generate', 'payroll.statutory.view', 'payroll.statutory.identifiers.view']);
         $this->actingAs($viewer)->post("/app/schools/{$school->id}/activate");
+        // SR.4 (ADR 0071 §26.7): payroll amounts need current MFA assurance.
+        $this->withMfaAssurance($viewer);
         $this->actingAs($viewer)->get("/app/payroll/runs/{$run->id}/payslips/{$record}")->assertOk();
 
         $this->prune()->assertSuccessful();
@@ -317,7 +320,7 @@ class PayrollEvidenceRetentionTest extends TestCase
 
         // The API says the same: the run flags it, the payslip is an ordinary not-found, exports refuse.
         $this->app['auth']->forgetGuards();
-        $api = $this->withHeader('Authorization', 'Bearer '.$viewer->createToken('test-device')->plainTextToken);
+        $api = $this->withHeader('Authorization', 'Bearer '.$this->mfaToken($viewer));
         $api->getJson("/api/v1/schools/{$school->id}/payroll-runs/{$run->id}")->assertOk()->assertJsonPath('data.resultsExpiredAt', fn ($v) => $v !== null);
         $api->getJson("/api/v1/schools/{$school->id}/payroll-runs/{$run->id}/payslips/{$record}")->assertNotFound();
         $api->getJson("/api/v1/schools/{$school->id}/payroll-runs/{$run->id}/statutory-exports/ecr")->assertStatus(409)->assertJsonPath('error.code', 'PAYROLL_RESULTS_EXPIRED');

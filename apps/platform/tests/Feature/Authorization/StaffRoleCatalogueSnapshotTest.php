@@ -73,7 +73,7 @@ class StaffRoleCatalogueSnapshotTest extends TestCase
             'library.circulation.view', 'library.fines.view',
         ],
         'payroll_officer' => [
-            'payroll.accounting.manage', 'payroll.compensation.sensitive.manage',
+            'payroll.compensation.sensitive.manage',
             'payroll.compensation.sensitive.view', 'payroll.compensation.view', 'payroll.periods.manage',
             'payroll.runs.prepare', 'payroll.runs.view', 'payroll.structures.manage',
             'payroll.structures.view',

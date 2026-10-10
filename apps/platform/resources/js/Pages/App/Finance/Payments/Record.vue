@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { router, useForm } from '@inertiajs/vue3';
 import { computed, reactive, ref, watch } from 'vue';
+import MfaCodeField from '../../../../Components/MfaCodeField.vue';
 import { formatMoney, subtractAmounts, sumAmounts } from '../../../../money';
 
 interface StudentCandidate {
@@ -28,6 +29,7 @@ interface Props {
     student: { id: string; name: string; studentNumber: string } | null;
     charges: OpenCharge[];
     preselectedChargeId: string | null;
+    hasMfaFactor: boolean;
 }
 
 const props = defineProps<Props>();
@@ -41,6 +43,8 @@ const form = useForm({
     settlement_ledger_account_id:
         props.settlementAccounts.length === 1 ? props.settlementAccounts[0].id : '',
     allocations: [] as Array<{ charge_id: string; amount: string }>,
+    // SR.4 (ADR 0071 §26.7): a posted payment is immutable -- recording needs a fresh code.
+    mfa_code: '',
 });
 
 // Amount applied per charge, as typed. A preselected charge (arriving
@@ -122,8 +126,10 @@ function review(): void {
 function record(): void {
     form.allocations = allocations.value.map((a) => ({ charge_id: a.charge.id, amount: a.amount }));
     form.post('/app/finance/payments/record', {
-        onError: () => {
-            reviewing.value = false;
+        onError: (errors) => {
+            form.reset('mfa_code');
+            // A refused code keeps the reviewed payment on screen.
+            reviewing.value = errors.mfa_code !== undefined && Object.keys(errors).length === 1;
         },
     });
 }
@@ -437,10 +443,20 @@ function record(): void {
                 </li>
             </ul>
 
+            <div class="mt-6">
+                <MfaCodeField
+                    id="payment-record-mfa"
+                    v-model="form.mfa_code"
+                    :has-mfa-factor="hasMfaFactor"
+                    action="Recording a payment"
+                    :error="form.errors.mfa_code"
+                />
+            </div>
+
             <div class="mt-6 flex gap-3">
                 <button
                     type="button"
-                    :disabled="form.processing"
+                    :disabled="form.processing || !hasMfaFactor"
                     class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                     @click="record"
                 >

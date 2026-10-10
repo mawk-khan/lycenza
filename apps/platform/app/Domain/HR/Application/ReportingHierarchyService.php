@@ -56,6 +56,7 @@ class ReportingHierarchyService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly HrSelfAdministrationGuard $selfAdministration,
     ) {}
 
     public function setManager(EmployeeAssignment $subordinate, ?EmployeeAssignment $manager, User $actor): EmployeeAssignment
@@ -71,6 +72,15 @@ class ReportingHierarchyService
             }
 
             return DB::transaction(function () use ($school, $subordinate, $manager, $actor) {
+                // SR.4 (ADR 0071 §26.2): never a reporting line you are on
+                // either side of -- choosing your own approver, or making
+                // yourself someone's. Employees FOR SHARE before the
+                // assignment locks (the ActingEmployee lock order).
+                $this->selfAdministration->refuseOwnEmployee($actor, $subordinate->employmentRecord->employee_id, 'reporting_line');
+                if ($manager !== null) {
+                    $this->selfAdministration->refuseOwnEmployee($actor, $manager->employmentRecord->employee_id, 'reporting_line');
+                }
+
                 $lockIds = $manager !== null ? [$subordinate->id, $manager->id] : [$subordinate->id];
                 sort($lockIds);
 

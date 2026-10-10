@@ -86,8 +86,8 @@ class LibraryCirculationController extends Controller
             ->with('title')
             ->where('status', 'active')
             ->whereDoesntHave('activeLoan')
-            ->when($term !== '', fn ($q) => $q->where('code', 'ilike', "%{$term}%")
-                ->orWhereHas('title', fn ($t) => $t->where('title', 'ilike', "%{$term}%")))
+            ->when($term !== '', fn ($q) => $q->where(fn ($w) => $w->where('code', 'ilike', "%{$term}%")
+                ->orWhereHas('title', fn ($t) => $t->where('title', 'ilike', "%{$term}%"))))
             ->limit(10)
             ->get();
 
@@ -107,9 +107,9 @@ class LibraryCirculationController extends Controller
 
         $students = Student::query()
             ->where('status', 'active')
-            ->when($term !== '', fn ($q) => $q->where('student_number', 'ilike', "%{$term}%")
+            ->when($term !== '', fn ($q) => $q->where(fn ($w) => $w->where('student_number', 'ilike', "%{$term}%")
                 ->orWhere('first_name', 'ilike', "%{$term}%")
-                ->orWhere('last_name', 'ilike', "%{$term}%"))
+                ->orWhere('last_name', 'ilike', "%{$term}%")))
             ->limit(10)
             ->get();
 

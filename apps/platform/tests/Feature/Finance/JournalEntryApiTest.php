@@ -8,6 +8,7 @@ use App\Support\Testing\LocalCatalogueFixtures;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesFinanceFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -20,11 +21,17 @@ use Tests\TestCase;
  */
 class JournalEntryApiTest extends TestCase
 {
-    use CreatesFinanceFixtures, CreatesTenancyFixtures;
+    use CreatesFinanceFixtures, CreatesTenancyFixtures, ProvidesSensitiveActionMfa;
+
+    /** SR.4 (ADR 0071 §26.7): posting and reversing send a fresh code for the acting token. */
+    public function postJson($uri, array $data = [], array $headers = [], $options = 0)
+    {
+        return parent::postJson($uri, $this->withStepUpCode($uri, $data, '#/journal-entries(/[^/]+/reverse)?$#'), $headers, $options);
+    }
 
     private function token($user): string
     {
-        return $user->createToken('test-device')->plainTextToken;
+        return $this->mfaToken($user);
     }
 
     private function viewerRole(array $capabilities): Role

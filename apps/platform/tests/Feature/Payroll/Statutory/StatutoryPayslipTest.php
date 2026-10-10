@@ -27,6 +27,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Carbon;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -38,7 +39,7 @@ use Tests\TestCase;
  */
 class StatutoryPayslipTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, ProvidesSensitiveActionMfa;
 
     private function context(): TenantContext
     {
@@ -254,7 +255,7 @@ class StatutoryPayslipTest extends TestCase
         $school = $this->createSchool();
         $built = $this->context()->withSchool($school, fn () => $this->buildPostedStatutoryRun($school));
         $viewer = $this->createUserWithCapabilities($school, ['payroll.compensation.sensitive.view', 'payroll.statutory.view']);
-        $token = $viewer->createToken('t')->plainTextToken;
+        $token = $this->mfaToken($viewer, 't');
 
         $raw = $this->withHeader('Authorization', 'Bearer '.$token)
             ->getJson("/api/v1/schools/{$school->id}/payroll-runs/{$built['run']->id}/payslips/{$built['employmentRecordId']}")

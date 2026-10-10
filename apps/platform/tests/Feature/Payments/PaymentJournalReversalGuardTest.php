@@ -14,6 +14,7 @@ use Tests\Concerns\CreatesFeesFixtures;
 use Tests\Concerns\CreatesFinanceFixtures;
 use Tests\Concerns\CreatesPaymentsFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -25,7 +26,7 @@ use Tests\TestCase;
  */
 class PaymentJournalReversalGuardTest extends TestCase
 {
-    use CreatesFeesFixtures, CreatesFinanceFixtures, CreatesPaymentsFixtures, CreatesTenancyFixtures;
+    use CreatesFeesFixtures, CreatesFinanceFixtures, CreatesPaymentsFixtures, CreatesTenancyFixtures, ProvidesSensitiveActionMfa;
 
     /**
      * @return array{0: School, 1: User, 2: string, 3: string, 4: object}
@@ -72,8 +73,9 @@ class PaymentJournalReversalGuardTest extends TestCase
     {
         [$school, $admin, $manualJournal] = $this->world();
 
-        $this->withHeader('Authorization', 'Bearer '.$admin->createToken('test-device')->plainTextToken)
-            ->postJson("/api/v1/schools/{$school->id}/journal-entries/{$manualJournal}/reverse")
+        $token = $this->mfaToken($admin);
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson("/api/v1/schools/{$school->id}/journal-entries/{$manualJournal}/reverse", $this->mfaBody($token))
             ->assertStatus(409)
             ->assertJsonPath('error.code', 'JOURNAL_ENTRY_NOT_REVERSIBLE');
     }
@@ -84,7 +86,7 @@ class PaymentJournalReversalGuardTest extends TestCase
         [$school, $admin, $manualJournal] = $this->world();
         $this->actingAs($admin)->post("/app/schools/{$school->id}/activate");
 
-        $this->post("/app/finance/journal-entries/{$manualJournal}/reverse")
+        $this->post("/app/finance/journal-entries/{$manualJournal}/reverse", ['mfa_code' => $this->freshMfaCode($admin)])
             ->assertRedirect("/app/finance/journal-entries/{$manualJournal}")
             ->assertSessionHasErrors('reversal');
     }

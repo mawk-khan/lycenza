@@ -4018,3 +4018,30 @@ HRX.5 mechanism closed / legal activation gated** (HRX-L1–L4 open).
 - **Lock order unchanged for HR.** The purge locks the Employee and its
   EmploymentRecords FOR UPDATE (the shared D9 floor), then each
   employment's `hrx.staff_employment` lock exclusively.
+
+## Self-administration (SR.4, 2026-10-10, ADR 0071 §26.2)
+
+**The rule.** Nobody changes their own place in the HR identity substrate:
+- linking an Employee to oneself;
+- unlinking, archiving or restoring the Employee linked to oneself;
+- creating, updating or ending one's own employment or assignments;
+- a reporting line on which one's own Employee is either side;
+- recording or correcting one's own staff attendance.
+
+These are all refused (`HrSelfAdministrationGuard`, 403
+`HR_SELF_ADMINISTRATION`) for every actor, School Admin included, and another
+HR holder does it.
+
+**Why.** It closes:
+- inheriting a teacher's classes by relinking their Employee;
+- approving one's own leave by unlinking oneself first;
+- reading a colleague's payslips by relinking.
+
+**Proof.** `HrSelfAdministrationTest`. The full production chain (HR officer
+→ Employee → link → EmploymentRecord → ActingEmployee → teacher,
+self-service, leave, staff attendance, payroll) is proven by
+`EmploymentChainProductionPathTest`. The ADR 0071 §1.3 EmploymentRecord
+finding is CLOSED.
+
+**Step-up.** Highly sensitive document writes need a fresh MFA code, and
+their metadata read needs current MFA assurance.
