@@ -69,39 +69,25 @@ final class DemoDataBuilder
     public const SCHOOL_GROUP_SLUG = 'lycenza-demo-trust';
 
     /**
-     * Custom, non-system role created ONLY for the demo: no seeded
-     * system role holds the HR-sensitive / payslip / statutory-payroll
-     * capabilities, and the application has no role-management UI, so
-     * without it those implemented screens could not be reviewed at
-     * all. It uses the real roles / role_capabilities /
-     * membership_role_assignments tables -- the same mechanism the test
-     * suite's createUserWithCapabilities() uses.
+     * SR.3 (ADR 0071 §17): the HR & Payroll persona holds the PRODUCTION roles
+     * `hr_officer` + `hr_sensitive_records` + `payroll_officer` (additive; no
+     * merged HR/payroll role), plus this ONE remaining demo-only, non-system
+     * role: exactly the five legally gated `payroll.statutory.*` capabilities,
+     * which no production role carries (ADR 0071 §5; statutory payroll stays
+     * gated), so the already-built statutory screens can still be reviewed
+     * locally. Payroll approval, posting and reversal stay with School Admin.
      */
-    public const DEMO_HR_PAYROLL_ROLE_KEY = 'demo.hr_payroll_officer';
+    public const DEMO_STATUTORY_ROLE_KEY = 'demo.payroll_statutory';
 
-    /** @var array<int, string> */
-    public const DEMO_HR_PAYROLL_CAPABILITIES = [
-        'hr.employees.view', 'hr.employees.manage',
-        'hr.employees.personal.view', 'hr.employees.personal.manage',
-        'hr.employees.assignments.view', 'hr.employees.assignments.manage',
-        'hr.employees.qualifications.view', 'hr.employees.qualifications.manage',
-        'hr.employees.documents.view', 'hr.employees.documents.manage',
-        'hr.employees.sensitive.view', 'hr.employees.sensitive.manage',
-        'hr.employees.notes.view', 'hr.employees.notes.manage',
-        'hr.departments.view', 'hr.departments.manage',
-        'hr.positions.view', 'hr.positions.manage',
-        'hr.categories.view', 'hr.categories.manage',
-        'payroll.structures.view', 'payroll.structures.manage',
-        'payroll.compensation.view',
-        'payroll.compensation.sensitive.view', 'payroll.compensation.sensitive.manage',
-        'payroll.periods.manage',
-        'payroll.runs.view', 'payroll.runs.prepare', 'payroll.runs.approve',
-        'payroll.runs.post', 'payroll.runs.reverse',
-        'payroll.accounting.manage',
+    /** @var list<string> */
+    public const DEMO_STATUTORY_CAPABILITIES = [
         'payroll.statutory.view', 'payroll.statutory.manage',
         'payroll.statutory.identifiers.view', 'payroll.statutory.identifiers.manage',
         'payroll.statutory.exports.generate',
     ];
+
+    /** @var list<string> production roles of the HR & Payroll persona */
+    public const HR_PAYROLL_ROLES = ['hr_officer', 'hr_sensitive_records', 'payroll_officer'];
 
     private const FIRST_NAMES = [
         'Aarav', 'Diya', 'Vihaan', 'Ananya', 'Arjun', 'Isha', 'Kabir', 'Meera', 'Reyansh', 'Saanvi',
@@ -280,10 +266,14 @@ final class DemoDataBuilder
         $this->assignSchoolRole($this->member($principal, $this->school), 'principal');
         $this->account('Principal', $principal, $this->school->name, 'principal system role: academics, students, operations; no Finance/Payroll');
 
-        $hrPayroll = $this->user('Farah Khan (HR & Payroll, demo role)', 'hr.payroll@example.test');
-        LocalCatalogueFixtures::createRole(self::DEMO_HR_PAYROLL_CAPABILITIES, 'school', self::DEMO_HR_PAYROLL_ROLE_KEY, 'Demo: HR & Payroll Officer');
-        $this->assignSchoolRole($this->member($hrPayroll, $this->school), self::DEMO_HR_PAYROLL_ROLE_KEY);
-        $this->account('HR & Payroll Officer (demo-only custom role)', $hrPayroll, $this->school->name, 'HR incl. sensitive records, payslips, statutory payroll');
+        $hrPayroll = $this->user('Farah Khan (HR & Payroll)', 'hr.payroll@example.test');
+        $hrPayrollMembership = $this->member($hrPayroll, $this->school);
+        foreach (self::HR_PAYROLL_ROLES as $roleKey) {
+            $this->assignSchoolRole($hrPayrollMembership, $roleKey);
+        }
+        LocalCatalogueFixtures::createRole(self::DEMO_STATUTORY_CAPABILITIES, 'school', self::DEMO_STATUTORY_ROLE_KEY, 'Demo: Statutory Payroll Review');
+        $this->assignSchoolRole($hrPayrollMembership, self::DEMO_STATUTORY_ROLE_KEY);
+        $this->account('HR & Payroll (production roles + demo statutory add-on)', $hrPayroll, $this->school->name, 'hr_officer + hr_sensitive_records + payroll_officer; demo-only statutory payroll review; approval/posting stay with School Admin');
 
         $multiSchool = $this->user('Rahul Joshi (two-school admin)', 'multi.school@example.test');
         $this->assignSchoolRole($this->member($multiSchool, $this->school), 'principal');
@@ -699,25 +689,23 @@ final class DemoDataBuilder
     }
 
     // ------------------------------------------------------------------
-    // Operations-desk accounts (demo-only roles, existing capabilities)
+    // Operations-desk accounts (production staff roles, ADR 0071 §17)
     // ------------------------------------------------------------------
 
     /**
-     * One demo-only, non-system school role per existing operations
-     * capability family (DemoAccountCatalog::OPERATIONS_DESK_ROLES), so
-     * each module can be reviewed by an account that has ONLY that
-     * module's access. Same mechanism as the HR & Payroll demo role.
+     * SR.3: each operations persona holds the PRODUCTION role(s) of its job
+     * (DemoAccountCatalog::OPERATIONS_DESKS) -- additive where a person does
+     * two jobs (canteen + stores), never a demo-only or merged role.
      */
     private function buildOperationsDeskAccounts(): void
     {
-        foreach (DemoAccountCatalog::OPERATIONS_DESK_ROLES as $key => $definition) {
-            // SR.1: demo-only roles go through the local/testing catalogue seam.
-            LocalCatalogueFixtures::createRole($definition['capabilities'], 'school', $key, $definition['name']);
-
-            $user = $this->user($definition['user'], $definition['email']);
-            $this->assignSchoolRole($this->member($user, $this->school), $key);
-            $families = array_values(array_unique(array_map(fn (string $capability) => strtok($capability, '.').'.*', $definition['capabilities'])));
-            $this->account($definition['persona'].' (demo-only role)', $user, $this->school->name, 'Only '.implode(' + ', $families).' (existing capabilities)');
+        foreach (DemoAccountCatalog::OPERATIONS_DESKS as $desk) {
+            $user = $this->user($desk['user'], $desk['email']);
+            $membership = $this->member($user, $this->school);
+            foreach ($desk['roles'] as $roleKey) {
+                $this->assignSchoolRole($membership, $roleKey);
+            }
+            $this->account($desk['persona'], $user, $this->school->name, 'Production role(s): '.implode(' + ', $desk['roles']));
         }
     }
 

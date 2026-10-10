@@ -94,10 +94,15 @@ final class StaffRoleCatalog
     /**
      * The offered School role catalogue, with whether $actor may grant each
      * now (RoleGrantAuthority, display only -- every mutation decides again
-     * inside its transaction). Key, name and the flag only: never a role's
-     * capability keys, grant rights or another person's authority.
+     * inside its transaction). Each entry: key, name, the `grantable` flag,
+     * and (SR.3, ADR 0071 §20) its presentation from StaffRolePresentation --
+     * functional group and group label, purpose, add-on marker and
+     * sensitivity labels derived from capability CLASSES -- in a stable
+     * functional order. Never a role's capability keys, grant rights or
+     * another person's authority. Display only -- never an authorization
+     * input.
      *
-     * @return list<array{key: string, name: string, grantable: bool}>
+     * @return list<array{key: string, name: string, grantable: bool, group: string, groupLabel: string, purpose: ?string, addOn: bool, sensitivity: list<string>}>
      */
     public function catalogFor(User $actor, School $school): array
     {
@@ -105,11 +110,28 @@ final class StaffRoleCatalog
         $decisions = $this->authority->forCatalogue($actor, $school, $roles);
 
         return $roles
-            ->map(fn (Role $role) => [
-                'key' => $role->key,
-                'name' => $role->name,
-                'grantable' => $decisions[$role->id]->allowed(),
-            ])->values()->all();
+            ->map(function (Role $role) use ($decisions): array {
+                $presentation = StaffRolePresentation::describe($role->key, $role->capabilities->pluck('key')->all());
+
+                return [
+                    'key' => $role->key,
+                    'name' => $role->name,
+                    'grantable' => $decisions[$role->id]->allowed(),
+                    'group' => $presentation['group'],
+                    'groupLabel' => $presentation['groupLabel'],
+                    'purpose' => $presentation['purpose'],
+                    'addOn' => $presentation['addOn'],
+                    'sensitivity' => $presentation['sensitivity'],
+                    '_order' => $presentation['order'],
+                ];
+            })
+            ->sortBy([['_order', 'asc'], ['name', 'asc']])
+            ->map(function (array $entry): array {
+                unset($entry['_order']);
+
+                return $entry;
+            })
+            ->values()->all();
     }
 
     /**

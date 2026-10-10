@@ -531,6 +531,13 @@ member authorized to convert an application should not additionally
 need `students.manage`/`enrollments.manage` just because the
 conversion command happens to call into those services internally.
 
+*(SR.3, 2026-10-09, ADR 0071 §4.8/§25: the fixed production role
+`admissions_officer` holds exactly `admissions.view` + `admissions.manage`
+-- no `students.*` or `guardians.*` key. That conversion therefore creates
+Student and Guardian records through the trusted services without
+`students.manage` is recorded, not broadened; SR.4 verifies whether this
+boundary is the intended one.)*
+
 ## 14. Search / PII
 
 **Searchable in v1** (staff-facing list/filter, not yet implemented,

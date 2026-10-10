@@ -55,8 +55,9 @@ class FinanceCapabilityRegistryTest extends TestCase
 
         $holders = Role::query()->where('scope', 'school')->where('is_system', true)->get()
             ->filter(fn (Role $role) => $role->capabilities->contains('key', 'finance.accounts.manage'))
-            ->pluck('key')->values()->all();
-        $this->assertSame(['school_admin'], $holders);
+            ->pluck('key')->sort()->values()->all();
+        // SR.3 (ADR 0071 §4.4): plus the production Accountant, the one other holder.
+        $this->assertSame(['accountant', 'school_admin'], $holders);
     }
 
     #[Test]

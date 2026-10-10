@@ -42,12 +42,16 @@ class FeeSetupCapabilityRegistryTest extends TestCase
             $this->assertContains($key, $admin, "school_admin must hold {$key}");
         }
 
-        foreach (Role::query()->where('scope', 'school')->where('key', '<>', 'school_admin')->where('is_system', true)->get() as $role) {
+        // SR.3 (ADR 0071 §4.4): the production Accountant is the ONE other
+        // system role holding fee setup; no other role does.
+        foreach (Role::query()->where('scope', 'school')->whereNotIn('key', ['school_admin', 'accountant'])->where('is_system', true)->get() as $role) {
             $granted = $role->capabilities->pluck('key')->all();
             foreach (self::FEE_1_CAPABILITIES as $key) {
                 $this->assertNotContains($key, $granted, "{$role->key} must NOT hold {$key} by default");
             }
         }
+        $accountant = Role::query()->where('key', 'accountant')->firstOrFail()->capabilities->pluck('key')->all();
+        $this->assertSame([], array_values(array_diff(self::FEE_1_CAPABILITIES, $accountant)), 'Accountant holds fee setup.');
 
         $principal = Role::query()->where('key', 'principal')->firstOrFail()->capabilities->pluck('key')->all();
         $this->assertEmpty(array_filter($principal, fn ($k) => str_starts_with($k, 'finance.')), 'Principal holds no Finance capability.');
@@ -61,37 +65,45 @@ class FeeSetupCapabilityRegistryTest extends TestCase
 
         $holders = Role::query()->where('scope', 'school')->where('is_system', true)->get()
             ->filter(fn (Role $role) => $role->capabilities->contains('key', 'finance.fee_assessments.run'))
-            ->pluck('key')->values()->all();
-        $this->assertSame(['school_admin'], $holders, 'Only School Admin runs fee assessments by default; never Principal.');
-        $this->assertContains('finance.fee_assessments.run', DemoAccountCatalog::OPERATIONS_DESK_ROLES['demo.finance_officer']['capabilities']);
+            ->pluck('key')->sort()->values()->all();
+        // SR.3 (ADR 0071 §4.4): the production Accountant runs fee assessments too; never Principal.
+        $this->assertSame(['accountant', 'school_admin'], $holders, 'School Admin and Accountant run fee assessments; never Principal.');
+        $this->assertContains('accountant', DemoAccountCatalog::OPERATIONS_DESKS['finance']['roles']);
     }
 
     #[Test]
     public function fee_3_concession_capabilities_follow_owner_decision_l(): void
     {
-        $officer = DemoAccountCatalog::OPERATIONS_DESK_ROLES['demo.finance_officer']['capabilities'];
+        $officer = $this->accountantCapabilities();
 
-        foreach (['finance.fee_concessions.view', 'finance.fee_concessions.request', 'finance.fee_concessions.approve'] as $key) {
+        // SR.3 (ADR 0071 §4.4, §9): the Accountant views and REQUESTS; only School Admin approves.
+        foreach (['finance.fee_concessions.view' => ['accountant', 'school_admin'], 'finance.fee_concessions.request' => ['accountant', 'school_admin'], 'finance.fee_concessions.approve' => ['school_admin']] as $key => $expected) {
             $this->assertSame('school', Capability::query()->where('key', $key)->value('namespace'), $key);
 
             $holders = Role::query()->where('scope', 'school')->where('is_system', true)->get()
                 ->filter(fn (Role $role) => $role->capabilities->contains('key', $key))
-                ->pluck('key')->values()->all();
-            $this->assertSame(['school_admin'], $holders, "{$key}: School Admin only by default; never Principal.");
+                ->pluck('key')->sort()->values()->all();
+            $this->assertSame($expected, $holders, "{$key}: never Principal.");
         }
 
         $this->assertContains('finance.fee_concessions.view', $officer);
         $this->assertContains('finance.fee_concessions.request', $officer);
-        $this->assertNotContains('finance.fee_concessions.approve', $officer, 'The demo officer requests; School Admin approves (maker/checker).');
+        $this->assertNotContains('finance.fee_concessions.approve', $officer, 'The Accountant requests; School Admin approves (maker/checker).');
     }
 
     #[Test]
-    public function the_demo_finance_officer_holds_fee_setup(): void
+    public function the_accountant_holds_fee_setup(): void
     {
-        $officer = DemoAccountCatalog::OPERATIONS_DESK_ROLES['demo.finance_officer']['capabilities'];
+        $officer = $this->accountantCapabilities();
 
         foreach (self::FEE_1_CAPABILITIES as $key) {
             $this->assertContains($key, $officer);
         }
+    }
+
+    /** @return list<string> the production Accountant role's capabilities (SR.3) */
+    private function accountantCapabilities(): array
+    {
+        return Role::query()->where('key', 'accountant')->where('is_system', true)->firstOrFail()->capabilities()->pluck('key')->all();
     }
 }

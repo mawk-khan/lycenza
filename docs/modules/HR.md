@@ -1518,7 +1518,7 @@ capability (`.personal.manage`, `.assignments.*`, `.qualifications.*`,
 `.documents.*`, `.sensitive.*`, `.notes.*`, `hr.departments.*`,
 `hr.positions.*`) is granted to **no system role by default** — a
 School's own role configuration (`school.roles.manage`) must add
-whichever of these a real "HR Staff" role needs. *(SR.0 correction, 2026-10-09: a School cannot compose, create or configure a role — no runtime role writer exists (ADR 0059 §1), and tenant-custom roles are deferred (ADR 0063 T3). The fixed system catalogue in ADR 0071 provides `hr_officer` (granted by a `school_admin` holding `school.roles.grant.hr`) and the add-on `hr_sensitive_records` (`school.roles.grant.hr_sensitive`); until SR.3 no production School can hold these keys, so no EmploymentRecord can be created (ADR 0071 §1.3).)* This closes 8A.0's own
+whichever of these a real "HR Staff" role needs. *(SR.0 correction, 2026-10-09: a School cannot compose, create or configure a role — no runtime role writer exists (ADR 0059 §1), and tenant-custom roles are deferred (ADR 0063 T3). The fixed system catalogue in ADR 0071 provides `hr_officer` (granted by a `school_admin` holding `school.roles.grant.hr`) and the add-on `hr_sensitive_records` (`school.roles.grant.hr_sensitive`); until SR.3 no production School can hold these keys, so no EmploymentRecord can be created (ADR 0071 §1.3; since SR.3 `hr_officer` holds them -- catalogue prerequisite implemented, end-to-end verification pending SR.4).)* *(SR.3 update, 2026-10-09: implemented — the fixed production catalogue is seeded by `CapabilityAndRoleSeeder` and snapshot-pinned; ADR 0071 §25.)* This closes 8A.0's own
 flagged P1 finding ("default role capability grants must not include
 sensitive/personal.manage") and extends the same conservative default
 to the newly-registered `.assignments.*`/`.qualifications.*`/
@@ -3290,7 +3290,7 @@ hr.positions.view                hr.positions.manage
 - **No system-defined role** (`school_admin`, `principal`,
   `platform_super_admin`) is granted `hr.employees.sensitive.*` by
   default in the Phase 8A seeder update — an explicit, reviewed grant
-  is required per School's own role configuration *(SR.0 correction, 2026-10-09: a School cannot compose, create or configure a role — no runtime role writer exists (ADR 0059 §1), and tenant-custom roles are deferred (ADR 0063 T3). The fixed system catalogue in ADR 0071 provides `hr_sensitive_records`, granted only through `school.roles.grant.hr_sensitive`.)*, per the brief's
+  is required per School's own role configuration *(SR.0 correction, 2026-10-09: a School cannot compose, create or configure a role — no runtime role writer exists (ADR 0059 §1), and tenant-custom roles are deferred (ADR 0063 T3). The fixed system catalogue in ADR 0071 provides `hr_sensitive_records`, granted only through `school.roles.grant.hr_sensitive`.)* *(SR.3 update, 2026-10-09: implemented — the fixed production catalogue is seeded by `CapabilityAndRoleSeeder` and snapshot-pinned; ADR 0071 §25.)*, per the brief's
   "do not automatically grant confidential HR permissions to every
   administrator" instruction. `school_admin` and `principal` do get
   `hr.employees.view`/`.manage`/`.personal.view` by default (directory

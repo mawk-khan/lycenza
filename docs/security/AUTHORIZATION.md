@@ -30,7 +30,8 @@ This table is a design reference, not a list of implemented roles.
 - every other row here is a design-reference actor, with no production
   role *(ADR 0071, SR.0 2026-10-09, contracts fixed roles for the
   Accountant, HR Staff, Librarian, Receptionist, Transport Staff and
-  Admissions Staff personas, among others; they are not built until SR.3)*;
+  Admissions Staff personas, among others; built in SR.3, 2026-10-09 --
+  see the role list below)*;
 - the Teacher row is implemented by ADR 0063 (TCH): the `teacher` role is a
   bundle of five owned-scope capabilities whose every use also needs a
   verified ActingEmployee and TeachingAssignment ownership — see
@@ -120,8 +121,10 @@ of the AI Gateway's capability check (ADR 0014's "Domain service" step)
   *(Current, 2026-10-09:*
   - *HRX added the system `staff_self_service` role, and POR the separately
     scoped `guardian` role.*
-  - *ADR 0071 (SR.0, contract only; built from SR.1) adds thirteen fixed
-    operational School system roles: `hr_officer`, `hr_sensitive_records`,
+  - *ADR 0071 (SR.0 contract; SR.1 database hardening, SR.2 grant
+    authority, SR.3 catalogue -- all built 2026-10-09) adds thirteen fixed
+    operational School system roles, seeded and snapshot-pinned
+    (`StaffRoleCatalogueSnapshotTest`): `hr_officer`, `hr_sensitive_records`,
     `payroll_officer`, `accountant`, `cashier`, `librarian`,
     `transport_coordinator`, `hostel_warden`, `front_office`,
     `stores_officer`, `canteen_operator`, `admissions_officer` and
@@ -865,7 +868,7 @@ already received.
 
 - **Grant.** School Admin only, by default. A School may grant it to a
   cashier-style role of its own; the demo's `demo.finance_officer` holds it.
-  *(SR.0 correction, 2026-10-09: a School cannot compose, create or configure a role — no runtime role writer exists (ADR 0059 §1), and tenant-custom roles are deferred (ADR 0063 T3). The fixed system catalogue in ADR 0071 provides `cashier` and `accountant`; the demo moves to them in SR.3.)*
+  *(SR.0 correction, 2026-10-09: a School cannot compose, create or configure a role — no runtime role writer exists (ADR 0059 §1), and tenant-custom roles are deferred (ADR 0063 T3). The fixed system catalogue in ADR 0071 provides `cashier` and `accountant`; the demo moves to them in SR.3.)* *(SR.3 update, 2026-10-09: implemented — the fixed production catalogue is seeded by `CapabilityAndRoleSeeder` and snapshot-pinned; ADR 0071 §25.)* *(SR.3, 2026-10-09: the demo now uses the production `accountant`; `demo.*` operations roles were removed, ADR 0071 §25.)*
 - **What does not imply it:** `finance.payments.view`, `finance.charges.*`
   and `finance.ledger.*`. `finance.payments.manage` does not exist.
 - **Double check.** The Inertia controller checks it, and

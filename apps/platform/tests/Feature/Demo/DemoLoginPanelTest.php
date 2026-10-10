@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\Demo;
 
-use App\Models\Capability;
+use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\Demo\DemoAccountCatalog;
 use Database\Seeders\Demo\DemoDataBuilder;
@@ -146,15 +146,14 @@ class DemoLoginPanelTest extends TestCase
     }
 
     #[Test]
-    public function operations_desk_roles_use_only_existing_catalog_capabilities(): void
+    public function operations_desks_hold_only_production_system_roles(): void
     {
-        $existing = Capability::query()->pluck('key')->all();
-
-        foreach (DemoAccountCatalog::OPERATIONS_DESK_ROLES as $key => $role) {
-            $this->assertStringStartsWith('demo.', $key);
-            $this->assertStringStartsWith('Demo: ', $role['name']);
-            foreach ($role['capabilities'] as $capability) {
-                $this->assertContains($capability, $existing, "{$key} uses unknown capability {$capability}");
+        // SR.3 (ADR 0071 §17): no demo-only operations role remains.
+        foreach (DemoAccountCatalog::OPERATIONS_DESKS as $key => $desk) {
+            $this->assertNotEmpty($desk['roles'], $key);
+            foreach ($desk['roles'] as $roleKey) {
+                $this->assertStringStartsNotWith('demo.', $roleKey);
+                $this->assertTrue(Role::query()->where('key', $roleKey)->where('scope', 'school')->where('is_system', true)->whereNull('retired_at')->exists(), "{$key}: {$roleKey} is a production School role");
             }
         }
     }

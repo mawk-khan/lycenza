@@ -168,7 +168,7 @@ only; no executable difference from `13cfba3`).
 - **Capabilities** today: `finance.ledger.view|post|reverse`,
   `finance.charges.view|manage`, `finance.payments.view|record`. All are
   granted to `school_admin` and the demo `demo.finance_officer`; **`principal`
-  holds no Finance capability**.
+  holds no Finance capability**. *(SR.3, 2026-10-09: the demo now uses the production `accountant`; `demo.*` operations roles were removed, ADR 0071 §25.)*
 
 ### 1.6 Absent today (none of this exists)
 
@@ -937,7 +937,7 @@ All are School-scope `finance.*` keys, following the existing convention
     today). The owner may choose `finance.fee_concessions.view` +
     `.approve` for the principal;
   - `demo.finance_officer`: all except `.approve`, so the DDEV demo shows
-    maker/checker.
+    maker/checker. *(SR.3, 2026-10-09: the demo now uses the production `accountant`; `demo.*` operations roles were removed, ADR 0071 §25.)*
 - **Enforcement.** Every mutation checks its capability in the Application
   administrative facade (the `ChargeAdministrationService` pattern). API
   routes add `capability:` middleware. No code branches on a role name

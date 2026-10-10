@@ -148,7 +148,7 @@ build it (§4–§6).
 - Demo-only roles (`demo.finance_officer`, `demo.librarian`, …) are created
   only behind `DemoEnvironmentGuard`. The demo teacher is a member **with no
   role**, linked to an Employee: "no teacher portal exists; modules are
-  403" [FACT `database/seeders/Demo/DemoDataBuilder.php:663-671`].
+  403" [FACT `database/seeders/Demo/DemoDataBuilder.php:663-671`]. *(SR.3, 2026-10-09: replaced by the production operational roles; only `demo.payroll_statutory` remains, ADR 0071 §25.)*
 - Every academic capability is held by `school_admin` and `principal` only,
   and the seeder records each teacher gap in code comments, e.g. "no
   `attendance.teacher` — v1 is admin-only" [FACT

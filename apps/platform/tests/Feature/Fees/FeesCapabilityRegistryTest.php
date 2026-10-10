@@ -82,18 +82,18 @@ class FeesCapabilityRegistryTest extends TestCase
     #[Test]
     public function no_other_default_role_receives_a_fees_capability(): void
     {
-        $otherRoleKeys = Role::query()
-            ->whereNotIn('key', ['school_admin'])
-            ->where('scope', 'school')
-            ->pluck('key');
+        // SR.3 (ADR 0071 §4.4, §4.5): exactly the production Accountant (view +
+        // manage) and Cashier (view) hold charge capabilities besides School Admin.
+        $contracted = [
+            'finance.charges.view' => ['accountant', 'cashier', 'school_admin'],
+            'finance.charges.manage' => ['accountant', 'school_admin'],
+        ];
 
-        foreach ($otherRoleKeys as $roleKey) {
-            $role = Role::query()->where('key', $roleKey)->firstOrFail();
-            $granted = $role->capabilities->pluck('key')->all();
-
-            foreach (self::FEES_CAPABILITY_KEYS as $key) {
-                $this->assertNotContains($key, $granted, "'{$roleKey}' must NOT receive '{$key}' by default.");
-            }
+        foreach (self::FEES_CAPABILITY_KEYS as $key) {
+            $holders = Role::query()->where('scope', 'school')->where('is_system', true)->get()
+                ->filter(fn (Role $role) => $role->capabilities->contains('key', $key))
+                ->pluck('key')->sort()->values()->all();
+            $this->assertSame($contracted[$key], $holders, "{$key}: no other role receives it by default.");
         }
     }
 }

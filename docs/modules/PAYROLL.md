@@ -300,7 +300,7 @@ the correction). Thirteen capabilities, all school-scoped:
 mirroring `hr.employees.sensitive.*`'s identical "nobody by default"
 treatment for Highly Sensitive per-Employee data; a School wanting a
 role to see/assign actual salary figures must grant that explicitly.
-*(SR.0 correction, 2026-10-09: a School cannot compose, create or configure a role — no runtime role writer exists (ADR 0059 §1), and tenant-custom roles are deferred (ADR 0063 T3). The fixed system catalogue in ADR 0071 provides `payroll_officer`, whose two compensation-sensitive keys are granted only through `school.roles.grant.payroll_sensitive`; `payroll.statutory.*` stays on no role (legal-gated).)*
+*(SR.0 correction, 2026-10-09: a School cannot compose, create or configure a role — no runtime role writer exists (ADR 0059 §1), and tenant-custom roles are deferred (ADR 0063 T3). The fixed system catalogue in ADR 0071 provides `payroll_officer`, whose two compensation-sensitive keys are granted only through `school.roles.grant.payroll_sensitive`; `payroll.statutory.*` stays on no role (legal-gated).)* *(SR.3 update, 2026-10-09: implemented — the fixed production catalogue is seeded by `CapabilityAndRoleSeeder` and snapshot-pinned; ADR 0071 §25.)*
 `principal` and every other school-scoped role receive none of the
 thirteen (`PayrollCapabilityRegistryTest`).
 

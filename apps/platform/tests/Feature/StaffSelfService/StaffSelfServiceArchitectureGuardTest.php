@@ -37,6 +37,12 @@ class StaffSelfServiceArchitectureGuardTest extends TestCase
     public function the_role_key_is_never_checked_by_application_code(): void
     {
         foreach ($this->phpFiles('') as $file) {
+            // SR.3 (ADR 0071 §19, §20): the staff catalogue's PRESENTATION map names
+            // role keys for display only (group, purpose); it is never consulted by
+            // an authorization decision (StaffRoleGrantAuthorityTest pins its use).
+            if (str_ends_with($file, 'Domain/Identity/Application/Staff/StaffRolePresentation.php')) {
+                continue;
+            }
             $this->assertStringNotContainsString('staff_self_service', $this->code($file), "{$file}: the role is a capability bundle, never an authorization condition");
         }
     }

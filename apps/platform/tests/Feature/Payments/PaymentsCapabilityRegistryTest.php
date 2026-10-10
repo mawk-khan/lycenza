@@ -90,18 +90,14 @@ class PaymentsCapabilityRegistryTest extends TestCase
     #[Test]
     public function no_other_default_role_receives_a_payments_capability(): void
     {
-        $otherRoleKeys = Role::query()
-            ->whereNotIn('key', ['school_admin'])
-            ->where('scope', 'school')
-            ->pluck('key');
-
-        foreach ($otherRoleKeys as $roleKey) {
-            $role = Role::query()->where('key', $roleKey)->firstOrFail();
-            $granted = $role->capabilities->pluck('key')->all();
-
-            foreach (self::PAYMENTS_CAPABILITY_KEYS as $key) {
-                $this->assertNotContains($key, $granted, "'{$roleKey}' must NOT receive '{$key}' by default.");
-            }
+        // SR.3 (ADR 0071 §4.4, §4.5): besides School Admin, exactly the
+        // production Accountant and Cashier hold the payment capabilities.
+        // "By default" = the SYSTEM catalogue (fixture roles are never defaults).
+        foreach (self::PAYMENTS_CAPABILITY_KEYS as $key) {
+            $holders = Role::query()->where('scope', 'school')->where('is_system', true)->get()
+                ->filter(fn (Role $role) => $role->capabilities->contains('key', $key))
+                ->pluck('key')->sort()->values()->all();
+            $this->assertSame(['accountant', 'cashier', 'school_admin'], $holders, "{$key}: no other role receives it by default.");
         }
     }
 }

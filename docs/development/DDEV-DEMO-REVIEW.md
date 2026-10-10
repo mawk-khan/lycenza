@@ -246,9 +246,9 @@ minute.
 
 | Persona | Email | Purpose | Main access | Known limitations |
 |---|---|---|---|---|
-| School Admin | `school.admin@example.test` | Broad review of every module | `school_admin` system role (116 capabilities): all modules incl. Finance and Payroll administration | HR departments/positions/categories, payslips and statutory screens are 403 (no system role holds them) |
-| Principal | `principal@example.test` | Academic administration | `principal` system role (80): academics, students, admissions, communications, operations, LMS | Finance, Payroll, HR org structure, canteen settings, comms analytics/audit are 403 |
-| HR & Payroll *(demo-only role)* | `hr.payroll@example.test` | HR and payroll depth | `demo.hr_payroll_officer` (37 existing `hr.*`/`payroll.*` capabilities): HR incl. sensitive records, payroll runs, payslips, statutory | No students/academics/finance access |
+| School Admin | `school.admin@example.test` | Broad review of every module | `school_admin` system role (151 capabilities, incl. the three SR.2 class grant rights): all modules incl. Finance and Payroll administration; Settings → Staff accounts shows the full fixed catalogue (17 roles) and can grant every one | HR departments/positions/categories, sensitive HR records, payroll amounts and statutory screens are 403 for her own account (she GRANTS those roles, she does not hold them, ADR 0071 D3) |
+| Principal | `principal@example.test` | Academic administration | `principal` system role (93): academics, students, admissions, communications, operations, LMS | Finance, Payroll, HR org structure, canteen settings, comms analytics/audit are 403; Staff accounts shows who has access but not their roles (no `school.roles.view`, SR.2) |
+| HR & Payroll | `hr.payroll@example.test` | HR and payroll depth | Production `hr_officer` + `hr_sensitive_records` + `payroll_officer` (additive, SR.3), plus the ONE remaining demo-only role `demo.payroll_statutory` (exactly the five legally gated `payroll.statutory.*` keys, so the built statutory screens stay reviewable) | Payroll approval, posting and reversal stay with School Admin (maker/checker); no students/academics/finance access |
 | Multi-school Admin | `multi.school@example.test` | School switching, tenant isolation | Principal at Demo School, School Admin at Annexe | Must pick a School after every login |
 | Annexe School Admin | `annexe.admin@example.test` | Tenant isolation | `school_admin` at the Annexe only (3 students) | Demo School records return 404 |
 | Platform Admin | `platform.admin@example.test` | Platform scope | `platform_super_admin` (14 `platform.*` capabilities, incl. `platform.schools.elevate`, School Group governance, `platform.audit.view`, `platform.role_grants.manage`) | `/app` shows a neutral "platform account, no School access" state, **Enter a School (elevated access)** (step 13), **School Groups (platform)** (step 13a), **Platform audit log** and **Platform roles** (step 13b), **Schools (platform)** (step 13c); School URLs return to `/app` without elevation and are 403 under it. Not a Group Admin |
@@ -257,13 +257,13 @@ minute.
 | Teacher | `teacher@example.test` | Owned teacher access (TCH, ADR 0063) | Production `teacher` role (exactly `curriculum.delivery.teacher`, `attendance.teacher`, `lms.content.teacher`, `lms.assignments.teacher` and, development only, `examinations.marks.teacher`), plus the separate `staff_self_service` role (HRX.4: `hr.leave.self`, `hr.staff_attendance.self`, `payroll.payslips.self`), linked to Employee EMP-000003 (Kavya Reddy), one TeachingAssignment: G8-A Mathematics | **My Curriculum Delivery**, **My Attendance**, **My Learning Content** and **My Assignments** for G8-A Mathematics only; **My Leave**, **My Staff Attendance** and **My Payslips** for herself (read-only attendance, posted payslips only); every School-wide module (Students, Timetable, TeachingAssignment admin, LMS admin) is 403. Teacher Attendance is production-blocked by open TCH-L1 (dated note: E33 determined 2026-10-07, ADR 0063 §42–§44; teacher marks refused in production code, ADR 0068 §25.3) |
 | Student | `student@example.test` | Current student experience | Member with no role, linked to Student LDS-0025 | **No student portal exists**: dashboard, preferences, account security only; modules (and, since POR.1, the School setup index) 403 |
 | Guardian | `guardian01@example.test` | Guardian portal (POR.1, ADR 0070) | Activated via the real invitation flow (linked to Guardian Priya Sharma, a legal guardian): the closed `guardian`-scope role, exactly `portal.communications.view`, `portal.attendance.view`, `portal.fees.view` and `portal.communications.reply` | Select the School first (one School per session). **Guardian portal → Messages from the School** (`/app/portal/communications`): read-only announcements addressed to her **as a Guardian** (empty in the demo: the seeded announcements are School-wide, which by design do not reach the Guardian inbox, ADR 0070 §28.7); **Attendance** (`/app/portal/attendance`, POR.2): her child's attendance for the active academic year; **Fees** (`/app/portal/fees`, POR.3): her child's statement and the amounts applied to that child; **Conversations** (`/app/portal/conversations`, POR.4): conversations the School started with her as a Guardian, with text replies (to see one, sign in as a School admin and start a conversation in the Communication Hub choosing Priya Sharma as the Guardian participant). Attendance, Fees and Conversations need an enrolled MFA factor and a current verification -- enrol under Account security first. Development only. Every staff module (including the staff Communication Hub and School setup) is 403 |
-| Finance Officer *(demo-only role)* | `finance.officer@example.test` | Finance in isolation | `demo.finance_officer`: only `finance.*` (7) -- ledger, journals, charges, payments, offline payment recording | Everything else 403 |
-| Librarian *(demo-only role)* | `library.operator@example.test` | Library in isolation | `demo.librarian`: only `library.*` (4) | No menu link: use `/app/library/titles`, `/app/library/circulation` |
-| Transport Coordinator *(demo-only role)* | `transport.operator@example.test` | Transport in isolation | `demo.transport_coordinator`: only `transport.*` (6) | No menu link: use `/app/transport/routes` |
-| Reception / Visitor Desk *(demo-only role)* | `reception@example.test` | Visitors in isolation | `demo.reception`: only `visitor.*` (4) | No menu link: use `/app/visitor/directory`, `/app/visitor/visits` |
-| Hostel Warden *(demo-only role)* | `hostel.warden@example.test` | Hostel in isolation | `demo.hostel_warden`: only `hostel.*` (4) | No menu link: use `/app/hostels`, `/app/hostel-residency` |
-| Canteen & Stores *(demo-only role)* | `canteen.operator@example.test` | Canteen + inventory | `demo.canteen_stores`: only `canteen.*` (6) + `inventory.*` (4) | Inventory has no menu link: `/app/inventory-stock` |
-| Communications Coordinator *(demo-only role)* | `communications@example.test` | Communication Hub in isolation | `demo.communications_coordinator`: exactly the Principal's 7 `communications.*` capabilities | Analytics/failed/audit/channel settings 403 (same as Principal) |
+| Accountant | `finance.officer@example.test` | Finance in isolation | Production `accountant` (12 `finance.*`): ledger posting, charges, fee setup and runs, payments, offline payment recording, concession requests | Ledger reversal, period closing and concession approval are School Admin's; everything else 403 |
+| Librarian | `library.operator@example.test` | Library in isolation | Production `librarian` (catalogue, circulation, `library.fines.view`) | Fine policy and voiding are School Admin's. No menu link: use `/app/library/titles`, `/app/library/circulation` |
+| Transport Coordinator | `transport.operator@example.test` | Transport in isolation | Production `transport_coordinator` (6 `transport.*`) | No menu link: use `/app/transport/routes` |
+| Front Office | `reception@example.test` | Visitors in isolation | Production `front_office` (4 `visitor.*`) | No menu link: use `/app/visitor/directory`, `/app/visitor/visits` |
+| Hostel Warden | `hostel.warden@example.test` | Hostel in isolation | Production `hostel_warden` (4 `hostel.*`) | No menu link: use `/app/hostels`, `/app/hostel-residency` |
+| Canteen & Stores | `canteen.operator@example.test` | Canteen + inventory | Two ADDITIVE production roles: `canteen_operator` (directory, orders) + `stores_officer` (4 `inventory.*`) -- never a merged role | Canteen settings are School Admin's. Inventory has no menu link: `/app/inventory-stock` |
+| Communications Coordinator | `communications@example.test` | Communication Hub in isolation | Production `communications_coordinator` (6 `communications.*`: view, send, reply, announce, templates, Guardian conversations) | Approval and emergency messages stay with Principal/School Admin; analytics/failed/audit/channel settings 403 |
 | *(pending invitation)* | `guardian02@example.test` | Guardian activation flow | -- | Not an account until the Mailpit invitation is accepted; not in the login panel |
 
 `DatabaseSeeder` also creates its pre-existing local convenience user
@@ -282,26 +282,33 @@ is cleared and you choose again. An account with no School membership --
 including the Platform Admin -- gets a neutral `/app` with no School data.
 Phase 0N.1; see `docs/architecture/PHASE-0N-READINESS.md` section 11.
 
-### About the demo-only roles
+### Production staff roles and the one remaining demo-only role
 
-The seeded system roles are only `platform_super_admin`, `school_admin` and
-`principal`, and the application has **no role-management UI**. Several
-implemented screens are therefore unreachable by any system role (HR
-org-structure and sensitive records, payslips, statutory payroll), and no
-account shows a single module in isolation. The demo creates non-system
-school roles -- all keys `demo.*`, all names `Demo: ...` -- through the real
-`roles` / `role_capabilities` / `membership_role_assignments` tables (the
-same mechanism the test suite uses), each holding **only capabilities that
-already exist** in `CapabilityAndRoleSeeder`. They are created solely by
-the guarded `DemoSeeder`, never by `DatabaseSeeder`, and are **not**
-product personas.
+Since SR.3 (ADR 0071 §25, 2026-10-09) the School staff catalogue is **17
+fixed system roles**: `school_admin`, `principal`, `teacher`,
+`staff_self_service` and the thirteen operational roles `hr_officer`,
+`hr_sensitive_records` (add-on), `payroll_officer`, `accountant`,
+`cashier`, `librarian`, `transport_coordinator`, `hostel_warden`,
+`front_office`, `stores_officer`, `canteen_operator`, `admissions_officer`
+and `communications_coordinator`. Roles cannot be created or edited at
+runtime (Settings → Staff accounts lists and assigns them only). A person
+with two jobs holds two roles -- the Canteen & Stores persona shows this.
+
+Every operations persona above now holds production roles. The `demo.*`
+roles of earlier versions (HR & Payroll super-role, Finance Officer with
+ledger reversal, Canteen & Stores, ...) are gone. The **only** demo-only
+role left is `demo.payroll_statutory` (non-system, `Demo: ...`, created
+solely by the guarded `DemoSeeder` through the local/testing catalogue
+seam): the statutory payroll screens are built but legally gated, and no
+production role carries `payroll.statutory.*`. `cashier` and
+`admissions_officer` exist in the catalogue but have no demo persona
+(School Admin can grant them to any staff member to review them).
 
 Considered and not created: a "canteen student" or any student/guardian
-self-service desk (no student- or guardian-facing capability exists), a
-`demo.teacher` role (the product's own `teacher` role is used instead, TCH.3), an examinations/timetable/attendance
-desk (those capabilities are held by the Principal already, and nothing new
-would become reviewable), and a platform-operations account beyond the
-Platform Admin (there is no platform UI to review).
+self-service desk (no student- or guardian-facing capability exists), an
+examinations/timetable/attendance desk (deferred: academic coordinator and
+exams officer, ADR 0071 §5), and a platform-operations account beyond the
+Platform Admin.
 
 ## 11. Implemented persona matrix
 
@@ -310,14 +317,14 @@ Platform Admin (there is no platform UI to review).
 | Platform super admin | Yes (`platform_role_assignments`, provisioned) | Yes | Platform | 14 `platform.*` | The neutral `/app` landing, platform elevation (enter one School for 30 minutes; opens no School page yet), School Group governance, the platform audit log and Platform Auditor grants; MFA-reset is a POST-only endpoint; operations status is API-only |
 | Platform auditor | Yes (`platform_role_assignments`, runtime grant, Phase 0N.7) | Yes | Platform | `platform.audit.view` | The platform audit log (MFA required) |
 | Group admin | Yes (`group_role_assignments`, Phase 0N.5) | Yes | One School Group per grant | 2 `group.*` | Read-only Group view; Group-derived elevation (opens no School page yet) |
-| School admin | Yes (system role `school_admin`) | Yes | One School per membership | 129 of the 155 School-scope capabilities (TCH.6 count; includes the four `*.teacher` capabilities, held only for no-escalation grantability) | Full admin UI |
-| Principal | Yes (system role `principal`) | Yes | One School | 82 capabilities (TCH.6 count): academic/student/ops subset, no `*.teacher` | Most admin UI except Finance, Payroll, HR org structure, canteen settings, comms analytics/failed/audit |
-| Custom school role | Yes (non-system `roles`), DB-seeded only | Yes | One School | Any catalog subset | Whatever its capabilities unlock (the demo's `demo.*` roles) |
+| School admin | Yes (system role `school_admin`) | Yes | One School per membership | 151 of the 177 School-scope capabilities (SR.3 count; includes the four `*.teacher` capabilities and the three class grant rights, held only for grant authority) | Full admin UI |
+| Principal | Yes (system role `principal`) | Yes | One School | 93 capabilities (SR.3 count): academic/student/ops subset, no `*.teacher` | Most admin UI except Finance, Payroll, HR org structure, canteen settings, comms analytics/failed/audit |
+| Custom school role | No runtime creation; one guarded demo-only row (`demo.payroll_statutory`) | Yes (demo) | One School | Statutory payroll keys only | The statutory payroll screens |
 | School member, no role (staff) | Yes (membership only); `employees.user_id` link | Yes | One School | None | Dashboard, School setup index, communication preferences, account security (MFA) |
 | Guardian | Yes (Phase 5D.3 invitation -> membership + account link) | Yes | One School | `portal.communications.view`, `portal.attendance.view`, `portal.fees.view`, `portal.communications.reply` (closed `guardian` role, POR.1–POR.4) | Guardian inbox, linked-child Attendance and Fees, own conversations with text replies (MFA except the inbox) only (development only) |
 | Student | Yes (Phase 5B account link) | Yes | One School | None | Same as "no role" -- **no student portal** |
 | Teacher | Yes (system role `teacher`, TCH.3-TCH.5D, ADR 0063) | Yes | One School, and only the classes a TeachingAssignment covers | 4 owned-scope `*.teacher` capabilities | My Curriculum Delivery, My Attendance, My Learning Content, My Assignments -- each needs a verified ActingEmployee and TeachingAssignment ownership; the role alone reaches nothing |
-| Finance / Library / Transport / Reception / Hostel / Canteen / Communications officers | **No** product roles -- each is a real, complete capability family, reviewable through a `demo.*` role | Yes (demo) | One School | One family each | That module only |
+| Operational staff (HR, payroll, finance, library, transport, hostel, front office, stores, canteen, admissions, communications) | **Yes** -- thirteen fixed system roles (SR.3, ADR 0071 §4) | Yes | One School per grant | Exactly each role's contracted set (snapshot-pinned) | That module only; additive roles combine |
 
 ## 12. Recommended review walkthrough
 

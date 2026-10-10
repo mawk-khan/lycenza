@@ -347,7 +347,7 @@ Communications domain.
 - Warden/staff assignment, a dedicated "Warden" role — the existing
   `hostel.directory.manage`/`hostel.residency.manage` capabilities
   already let a School compose whatever staffing role it needs.
-  *(SR.0 correction, 2026-10-09: a School cannot compose, create or configure a role — no runtime role writer exists (ADR 0059 §1), and tenant-custom roles are deferred (ADR 0063 T3). The fixed system catalogue in ADR 0071 provides `hostel_warden` (all four `hostel.*` keys).)*
+  *(SR.0 correction, 2026-10-09: a School cannot compose, create or configure a role — no runtime role writer exists (ADR 0059 §1), and tenant-custom roles are deferred (ADR 0063 T3). The fixed system catalogue in ADR 0071 provides `hostel_warden` (all four `hostel.*` keys).)* *(SR.3 update, 2026-10-09: implemented — the fixed production catalogue is seeded by `CapabilityAndRoleSeeder` and snapshot-pinned; ADR 0071 §25.)*
 - Meal plans, Canteen integration.
 - Visitor rules or coupling to the Visitor module — a Hostel Visitor
   is, if ever modeled, a Visitor-domain concept referencing a Campus

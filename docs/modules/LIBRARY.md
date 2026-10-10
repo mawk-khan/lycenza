@@ -235,7 +235,7 @@ work, not a rare/high-blast-radius action). No new system role (e.g. a
 dedicated "Librarian" role) was created — `docs/security/AUTHORIZATION.md`
 itself states tenant-custom roles remain future work; a School wanting
 a narrower Librarian-only grant already can via a custom role (proven
-directly in the authorization test suite). *(SR.0 correction, 2026-10-09: a School cannot compose, create or configure a role — no runtime role writer exists (ADR 0059 §1), and tenant-custom roles are deferred (ADR 0063 T3). The fixed system catalogue in ADR 0071 provides `librarian` (catalogue, circulation and `library.fines.view` only; `library.fines.manage` publishes fine policy and stays off it, as does `library.fines.void`). The "proof" used test-only fixture roles.)*
+directly in the authorization test suite). *(SR.0 correction, 2026-10-09: a School cannot compose, create or configure a role — no runtime role writer exists (ADR 0059 §1), and tenant-custom roles are deferred (ADR 0063 T3). The fixed system catalogue in ADR 0071 provides `librarian` (catalogue, circulation and `library.fines.view` only; `library.fines.manage` publishes fine policy and stays off it, as does `library.fines.void`). The "proof" used test-only fixture roles.)* *(SR.3 update, 2026-10-09: implemented — the fixed production catalogue is seeded by `CapabilityAndRoleSeeder` and snapshot-pinned; ADR 0071 §25.)*
 
 Enforcement is exclusively via `Gate::authorize('capability', ...)`
 (the `capability:` route middleware for `/api/v1`,

@@ -9,6 +9,7 @@ use App\Domain\Payments\Infrastructure\Payment;
 use App\Domain\Payments\Infrastructure\PaymentProviderEvent;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\GroupRoleAssignment;
+use App\Models\MembershipRoleAssignment;
 use App\Models\PlatformRoleAssignment;
 use App\Models\Role;
 use App\Models\School;
@@ -71,7 +72,7 @@ class DemoDataBuilderTest extends TestCase
             'platform.admin@example.test', 'platform.auditor@example.test', 'school.admin@example.test', 'principal@example.test',
             'hr.payroll@example.test', 'multi.school@example.test', 'annexe.admin@example.test',
             'group.admin@example.test', 'teacher@example.test', 'student@example.test', 'guardian01@example.test',
-            ...array_column(DemoAccountCatalog::OPERATIONS_DESK_ROLES, 'email'),
+            ...array_column(DemoAccountCatalog::OPERATIONS_DESKS, 'email'),
         ], $emails);
 
         // Every login-page shortcut is a real seeded account (and vice versa).
@@ -150,12 +151,20 @@ class DemoDataBuilderTest extends TestCase
         $this->assertFalse($resolver->canInSchool($hrPayroll, 'students.view', $school));
         $this->assertFalse($resolver->canInSchool($hrPayroll, 'finance.ledger.view', $school));
 
-        // The demo-only role is a real, non-system school role whose every
-        // capability exists in the seeded catalog.
-        $demoRole = Role::query()->where('key', DemoDataBuilder::DEMO_HR_PAYROLL_ROLE_KEY)->firstOrFail();
-        $this->assertFalse($demoRole->is_system);
-        $this->assertSame('school', $demoRole->scope);
-        $this->assertEqualsCanonicalizing(DemoDataBuilder::DEMO_HR_PAYROLL_CAPABILITIES, $demoRole->capabilities()->pluck('key')->all());
+        // SR.3 (ADR 0071 §17): HR & Payroll = the production hr_officer +
+        // hr_sensitive_records + payroll_officer roles, plus the ONE remaining
+        // demo-only role (exactly the five legally gated statutory keys). Never
+        // payroll approval, posting or reversal (School Admin keeps them).
+        $this->assertSame(['demo.payroll_statutory', 'hr_officer', 'hr_sensitive_records', 'payroll_officer'], $this->activeRoleKeys($hrPayroll, $school));
+        $this->assertSame(['hr_officer', 'hr_sensitive_records', 'payroll_officer'], DemoDataBuilder::HR_PAYROLL_ROLES);
+        $statutory = Role::query()->where('key', DemoDataBuilder::DEMO_STATUTORY_ROLE_KEY)->firstOrFail();
+        $this->assertFalse($statutory->is_system);
+        $this->assertSame('school', $statutory->scope);
+        $this->assertEqualsCanonicalizing(DemoDataBuilder::DEMO_STATUTORY_CAPABILITIES, $statutory->capabilities()->pluck('key')->all());
+        foreach (['payroll.runs.approve', 'payroll.runs.post', 'payroll.runs.reverse'] as $checker) {
+            $this->assertFalse($resolver->canInSchool($hrPayroll, $checker, $school), $checker);
+        }
+        $this->assertSame(['demo.payroll_statutory'], Role::query()->where('key', 'like', 'demo.%')->pluck('key')->all(), 'No other demo-only role remains.');
 
         $this->assertSame([], $resolver->schoolCapabilities($this->user('student@example.test'), $school), 'No Student portal: no capability.');
         // POR.1 (ADR 0070 §24): an activated Guardian holds exactly the Guardian portal capability,
@@ -171,14 +180,23 @@ class DemoDataBuilderTest extends TestCase
             'hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self',
         ], array_values($resolver->schoolCapabilities($this->user('teacher@example.test'), $school)));
 
-        // Operations desks: a demo-only, non-system role holding EXACTLY
-        // one existing capability family, in the Demo School only.
-        foreach (DemoAccountCatalog::OPERATIONS_DESK_ROLES as $key => $definition) {
-            $desk = $this->user($definition['email']);
-            $this->assertEqualsCanonicalizing($definition['capabilities'], $resolver->schoolCapabilities($desk, $school), $key);
-            $this->assertSame([], $resolver->schoolCapabilities($desk, $annexe), $key);
-            $this->assertFalse(Role::query()->where('key', $key)->firstOrFail()->is_system, $key);
+        // Operations desks (SR.3): PRODUCTION system roles only, in the Demo
+        // School only; canteen + stores are two additive roles, never merged.
+        foreach (DemoAccountCatalog::OPERATIONS_DESKS as $key => $desk) {
+            $user = $this->user($desk['email']);
+            $this->assertSame($desk['roles'], $this->activeRoleKeys($user, $school), $key);
+            $expected = Role::query()->whereIn('key', $desk['roles'])->with('capabilities')->get()
+                ->flatMap(fn (Role $role) => $role->capabilities->pluck('key'))->unique()->values()->all();
+            $this->assertEqualsCanonicalizing($expected, $resolver->schoolCapabilities($user, $school), $key);
+            $this->assertSame([], $resolver->schoolCapabilities($user, $annexe), $key);
+            foreach ($desk['roles'] as $roleKey) {
+                $this->assertTrue(Role::query()->where('key', $roleKey)->firstOrFail()->is_system, $roleKey);
+            }
         }
+        $this->assertSame(['canteen_operator', 'stores_officer'], DemoAccountCatalog::OPERATIONS_DESKS['canteen_stores']['roles']);
+        $this->assertFalse($resolver->canInSchool($this->user('canteen.operator@example.test'), 'canteen.settings.manage', $school));
+        $this->assertFalse($resolver->canInSchool($this->user('finance.officer@example.test'), 'finance.ledger.reverse', $school));
+        $this->assertFalse($resolver->canInSchool($this->user('communications@example.test'), 'communications.approve', $school));
         $this->assertFalse($resolver->canInSchool($this->user('library.operator@example.test'), 'students.view', $school));
         $this->assertFalse($resolver->canInSchool($this->user('finance.officer@example.test'), 'payroll.runs.view', $school));
 
@@ -287,5 +305,13 @@ class DemoDataBuilderTest extends TestCase
 
         app(TenantContext::class)->clearAllTolerantly();
         $this->flushSession();
+    }
+
+    /** @return list<string> active role keys of $user in $school, sorted */
+    private function activeRoleKeys(User $user, School $school): array
+    {
+        return app(TenantContext::class)->withSchool($school, fn () => MembershipRoleAssignment::query()
+            ->whereIn('school_membership_id', SchoolMembership::query()->where('user_id', $user->id)->where('school_id', $school->id)->select('id'))
+            ->active()->with('role')->get()->map(fn (MembershipRoleAssignment $grant) => $grant->role->key)->sort()->values()->all());
     }
 }

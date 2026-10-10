@@ -177,7 +177,13 @@ class StaffRoleCatalogueHardeningTest extends TestCase
 
         $keys = collect(app(StaffRoleCatalog::class)->catalogFor($admin, $school))->pluck('key');
 
-        $this->assertEqualsCanonicalizing(['principal', 'school_admin', 'staff_self_service', 'teacher'], $keys->all());
+        // The 17 School system roles (ADR 0071 §25.1; pinned by StaffRoleCatalogueSnapshotTest).
+        $this->assertEqualsCanonicalizing([
+            'principal', 'school_admin', 'staff_self_service', 'teacher',
+            'hr_officer', 'hr_sensitive_records', 'payroll_officer', 'accountant', 'cashier', 'librarian',
+            'transport_coordinator', 'hostel_warden', 'front_office', 'stores_officer', 'canteen_operator',
+            'admissions_officer', 'communications_coordinator',
+        ], $keys->all());
         foreach ([$retired->key, $empty->key, $custom->key, 'guardian', 'group_admin', 'platform_super_admin'] as $excluded) {
             $this->assertNotContains($excluded, $keys->all());
         }

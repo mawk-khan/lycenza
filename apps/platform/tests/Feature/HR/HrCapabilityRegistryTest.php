@@ -112,10 +112,15 @@ class HrCapabilityRegistryTest extends TestCase
     #[Test]
     public function no_system_role_receives_sensitive_capabilities_by_default(): void
     {
-        foreach (Role::query()->where('is_system', true)->get() as $role) {
+        // SR.3 (ADR 0071 §4.2, D3): the sensitive keys sit ONLY on the explicit
+        // add-on role `hr_sensitive_records` -- granted only through
+        // school.roles.grant.hr_sensitive -- never on school_admin, principal
+        // or hr_officer. Nobody holds them by default (no automatic grant).
+        foreach (Role::query()->where('is_system', true)->where('key', '<>', 'hr_sensitive_records')->get() as $role) {
             $granted = $role->capabilities->pluck('key')->all();
             $this->assertNotContains('hr.employees.sensitive.view', $granted, "{$role->key} must not receive hr.employees.sensitive.view by default.");
             $this->assertNotContains('hr.employees.sensitive.manage', $granted, "{$role->key} must not receive hr.employees.sensitive.manage by default.");
         }
+        $this->assertEqualsCanonicalizing(['hr.employees.sensitive.view', 'hr.employees.sensitive.manage'], Role::query()->where('key', 'hr_sensitive_records')->firstOrFail()->capabilities->pluck('key')->all());
     }
 }

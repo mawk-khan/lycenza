@@ -1100,6 +1100,11 @@ once several modules copy it.
     grants only through `App\Support\Testing\LocalCatalogueFixtures`
     (local/testing only; `platform:verify-database` fails if its schema
     exists elsewhere) -- never by re-granting the runtime role privileges.
+    The School staff catalogue is exactly the 17 system roles pinned by
+    `Tests\Feature\Authorization\StaffRoleCatalogueSnapshotTest` (ADR 0071
+    §4, §25); changing it is a reviewed release, never a runtime action, and
+    operational roles never carry an authority, legal-gated or owned-scope
+    capability.
 
 94. **Who may grant or revoke a School role is decided by
     `App\Domain\Identity\Application\Staff\RoleGrantAuthority`, inside the

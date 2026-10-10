@@ -2,7 +2,9 @@
 
 - Status: **Accepted — SR.0 contract (2026-10-09). SR.1 CATALOGUE DATABASE
   HARDENING BUILT (2026-10-09, §23). SR.2 GRANT AUTHORITY, CONCURRENCY &
-  AUDIT BUILT (2026-10-09, §24).** SR.3 needs separate owner authorisation.
+  AUDIT BUILT (2026-10-09, §24). SR.3 PRODUCTION CATALOGUE & DEMO
+  TRANSITION BUILT (2026-10-09, §25).** SR.4 needs separate owner
+  authorisation.
 - Date: 2026-10-09
 - Programme: **SR — Staff Role Catalogue & Least-Privilege Access**
   (`MASTER-ROADMAP.md`, post-foundation programme 7).
@@ -973,6 +975,96 @@ School on the access lock.
 - demo personas (SR.3);
 - module-by-module verification and action-level MFA (SR.4);
 - the EmploymentRecord gap stays open until SR.3–SR.4.
+
+## 25. SR.3 — production catalogue and demo transition, as built (2026-10-09)
+
+### 25.1 The thirteen roles (exact, seeded)
+`CapabilityAndRoleSeeder` (admin connection) seeds them as global
+`scope = 'school'`, `is_system` roles, exactly as §4 lists them; every key
+existed and none proved semantically incompatible.
+
+| Role (name) | Capabilities (exact) | Grant right school_admin uses |
+|---|---|---|
+| `hr_officer` (HR Officer) | the 23 keys of §4.1 | `school.roles.grant.hr` (15 covered keys) |
+| `hr_sensitive_records` (HR Sensitive Records, add-on) | `hr.employees.sensitive.view`, `hr.employees.sensitive.manage` | `school.roles.grant.hr_sensitive` |
+| `payroll_officer` (Payroll Officer) | the 9 keys of §4.3 | `school.roles.grant.payroll_sensitive` (2 covered keys) |
+| `accountant` (Accountant) | the 12 keys of §4.4 | none |
+| `cashier` (Cashier) | `finance.payments.view`, `finance.payments.record`, `finance.charges.view` | none |
+| `librarian` (Librarian) | `library.catalogue.{view,manage}`, `library.circulation.{view,manage}`, `library.fines.view` | none |
+| `transport_coordinator` | `transport.{routes,vehicles,assignments}.{view,manage}` | none |
+| `hostel_warden` | `hostel.{directory,residency}.{view,manage}` | none |
+| `front_office` | `visitor.{directory,visits}.{view,manage}` | none |
+| `stores_officer` | `inventory.{directory,stock}.{view,manage}` | none |
+| `canteen_operator` | `canteen.{directory,orders}.{view,manage}` | none |
+| `admissions_officer` | `admissions.view`, `admissions.manage` | none |
+| `communications_coordinator` | the 6 keys of §4.9 | none |
+
+- `school_admin` can grant all thirteen under the SR.2 rule (proven through
+  the real service, no test-only issuer grants); it still holds none of the
+  19 covered keys. `principal` gains nothing.
+- **Catalogue counts:** School system roles 4 → 17; system role-capability
+  links +84 (23+2+9+12+3+5+6+4+4+4+4+2+6); membership grants unchanged
+  (seeding grants nobody anything).
+- **Retirement:** the seeder upserts by key and synchronizes capability
+  links but never writes `retired_at`, so a retired production role stays
+  retired on every re-run (its definition is kept for history).
+
+### 25.2 Guards
+- `StaffRoleCatalogueSnapshotTest`: the exact `role -> sorted capabilities`
+  of all 17 School system roles (not retired, system, `school` scope, none
+  runtime-assignable); deferred roles absent; operational roles carry no
+  `authority`, `legal-gated` or `owned-scope` key, no grant right, no
+  `portal.*`/`*.teacher`/`*.self`/`examinations.marks.*`/
+  `payroll.statutory.*`; sensitive and checker keys only where §4 and §9
+  put them; grantability by school_admin; idempotent admin-only seeding that
+  grants nobody a role and never un-retires; the runtime role cannot seed.
+- `ProductionStaffRolesTest`: every role granted by school_admin through
+  the real rule with the grant right audited; principal, cross-School,
+  Guardian-only, self and retired refusals; fresh MFA on the HTTP grant;
+  additive combinations; the removable sensitive add-on; multi-School
+  isolation (HTTP); the HR identity substrate (an `hr_officer` linking their
+  own User to an Employee and creating employment changes no capability);
+  the catalogue presentation; no role-catalogue mutation route.
+- Existing "nobody else holds X" registry tests now pin the exact contracted
+  holders, over SYSTEM roles only (a committed fixture role from a
+  best-effort concurrency-test teardown is never a "default role").
+
+### 25.3 Staff accounts presentation
+`StaffRolePresentation` (display only; the one non-authorization place
+naming role keys besides the bootstrap target) gives each catalogue entry a
+functional group, stable order, a one-line purpose, an add-on marker
+(`hr_sensitive_records`) and sensitivity labels derived from capability
+CLASSES. Settings → Staff accounts shows a "School roles" table to holders of
+`school.roles.view`; `grantable` still comes from `RoleGrantAuthority`. No
+capability key or grant right reaches the page, and there is no create,
+edit or clone role control.
+
+### 25.4 Demo transition
+| Persona | Before | After |
+|---|---|---|
+| HR & Payroll | `demo.hr_payroll_officer` (37 keys incl. approve/post/reverse and statutory) | `hr_officer` + `hr_sensitive_records` + `payroll_officer` + demo-only `demo.payroll_statutory` (exactly the five `payroll.statutory.*` keys) |
+| Finance Officer | `demo.finance_officer` (incl. `finance.ledger.reverse`) | `accountant` |
+| Librarian | `demo.librarian` | `librarian` |
+| Transport | `demo.transport_coordinator` | `transport_coordinator` |
+| Reception | `demo.reception` | `front_office` |
+| Hostel | `demo.hostel_warden` | `hostel_warden` |
+| Canteen & Stores | `demo.canteen_stores` (incl. canteen settings) | `canteen_operator` + `stores_officer` (additive) |
+| Communications | `demo.communications_coordinator` (incl. approve) | `communications_coordinator` |
+
+- Demo-only roles actively used: 8 → 1. `demo.payroll_statutory` stays
+  because the built statutory screens are legally gated and no production
+  role carries them; it is never a production role.
+- Demo reset recreates the schema, so no grant history is affected.
+- `DDEV-DEMO-REVIEW.md` and the module docs carry dated SR.3 notes.
+
+### 25.5 Status
+- **EmploymentRecord finding (§1.3): catalogue prerequisite implemented in
+  SR.3; end-to-end verification pending SR.4.** Not closed: SR.4 proves the
+  HR Officer chain (Employee, link, EmploymentRecord, ActingEmployee, the
+  dependent surfaces under their own gates) and its self-elevation limits.
+- Legal and privacy gates unchanged: SR-L1 drafted, unsent; statutory
+  payroll, marks (RES-L0), TCH-L1, HRX, E21 as before.
+- Not in SR.3: module-by-module verification and action-level MFA (SR.4).
 
 ## Appendix A — capability-class map (v1, all 174 `school` capabilities)
 Grant-right coverage appears only where `school_admin` does not hold the key

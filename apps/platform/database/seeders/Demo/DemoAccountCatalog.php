@@ -9,123 +9,78 @@ namespace Database\Seeders\Demo;
  * lists them as login-form shortcuts, under the same guard). See
  * docs/development/DDEV-DEMO-REVIEW.md.
  *
- * Operations-desk roles are DEMO-ONLY, non-system school roles built
- * exclusively from capabilities that already exist in
- * CapabilityAndRoleSeeder -- each is one existing capability family
- * (finance.*, library.*, ...), so a reviewer can see that module in
- * isolation. They are never created by DatabaseSeeder and grant nothing
- * the catalog does not already define.
+ * SR.3 (ADR 0071 §17): the operations-desk personas hold the PRODUCTION
+ * staff roles (the fixed catalogue seeded by CapabilityAndRoleSeeder) --
+ * no demo-only role recreates a merged or broader job. A person with two
+ * jobs holds two roles (canteen + stores). The only demo-only role left is
+ * DemoDataBuilder::DEMO_STATUTORY_ROLE_KEY (the legally gated statutory
+ * payroll screens, which no production role carries).
  */
 final class DemoAccountCatalog
 {
     public const GROUP_PEOPLE = 'People';
 
-    public const GROUP_OPERATIONS = 'Operations desks (demo-only roles)';
+    public const GROUP_OPERATIONS = 'Operations desks (production roles)';
 
     /**
-     * @var array<string, array{name: string, email: string, user: string, persona: string, capabilities: list<string>}>
+     * Persona => the production School role keys it holds (additive grants).
+     *
+     * @var array<string, array{email: string, user: string, persona: string, roles: list<string>}>
      */
-    public const OPERATIONS_DESK_ROLES = [
-        'demo.finance_officer' => [
-            'name' => 'Demo: Finance Officer',
+    public const OPERATIONS_DESKS = [
+        'finance' => [
             'email' => 'finance.officer@example.test',
-            'user' => 'Neha Kapoor (Finance, demo role)',
-            'persona' => 'Finance Officer',
-            'capabilities' => [
-                'finance.ledger.view', 'finance.ledger.post', 'finance.ledger.reverse',
-                'finance.charges.view', 'finance.charges.manage', 'finance.payments.view',
-                'finance.payments.record',
-                // FEE.1: fee setup and ledger-account administration. The
-                // FEE.3 concession approval stays with School Admin (ADR
-                // 0062 §19 maker/checker separation).
-                'finance.accounts.manage', 'finance.fee_structures.view', 'finance.fee_structures.manage',
-                'finance.fee_assessments.run',
-                // FEE.3: view and request concessions; approval stays with
-                // School Admin so the demo shows maker/checker.
-                'finance.fee_concessions.view', 'finance.fee_concessions.request',
-            ],
+            'user' => 'Neha Kapoor (Accountant)',
+            'persona' => 'Accountant',
+            // ADR 0071 §4.4: no ledger reversal, period closing or concession
+            // approval -- School Admin approves (maker/checker).
+            'roles' => ['accountant'],
         ],
-        'demo.librarian' => [
-            'name' => 'Demo: Librarian',
+        'library' => [
             'email' => 'library.operator@example.test',
-            'user' => 'Leela Nair (Librarian, demo role)',
+            'user' => 'Leela Nair (Librarian)',
             'persona' => 'Librarian',
-            'capabilities' => [
-                'library.catalogue.view', 'library.catalogue.manage',
-                'library.circulation.view', 'library.circulation.manage',
-            ],
+            'roles' => ['librarian'],
         ],
-        'demo.transport_coordinator' => [
-            'name' => 'Demo: Transport Coordinator',
+        'transport' => [
             'email' => 'transport.operator@example.test',
-            'user' => 'Babu Rao (Transport, demo role)',
+            'user' => 'Babu Rao (Transport Coordinator)',
             'persona' => 'Transport Coordinator',
-            'capabilities' => [
-                'transport.routes.view', 'transport.routes.manage',
-                'transport.vehicles.view', 'transport.vehicles.manage',
-                'transport.assignments.view', 'transport.assignments.manage',
-            ],
+            'roles' => ['transport_coordinator'],
         ],
-        'demo.reception' => [
-            'name' => 'Demo: Reception / Visitor Desk',
+        'reception' => [
             'email' => 'reception@example.test',
-            'user' => 'Joseph Thomas (Reception, demo role)',
-            'persona' => 'Reception / Visitor Desk',
-            'capabilities' => [
-                'visitor.directory.view', 'visitor.directory.manage',
-                'visitor.visits.view', 'visitor.visits.manage',
-            ],
+            'user' => 'Joseph Thomas (Front Office)',
+            'persona' => 'Front Office',
+            'roles' => ['front_office'],
         ],
-        'demo.hostel_warden' => [
-            'name' => 'Demo: Hostel Warden',
+        'hostel' => [
             'email' => 'hostel.warden@example.test',
-            'user' => 'Savita Kulkarni (Hostel, demo role)',
+            'user' => 'Savita Kulkarni (Hostel Warden)',
             'persona' => 'Hostel Warden',
-            'capabilities' => [
-                'hostel.directory.view', 'hostel.directory.manage',
-                'hostel.residency.view', 'hostel.residency.manage',
-            ],
+            'roles' => ['hostel_warden'],
         ],
-        'demo.canteen_stores' => [
-            'name' => 'Demo: Canteen & Stores',
+        'canteen_stores' => [
             'email' => 'canteen.operator@example.test',
-            'user' => 'Ravi Menon (Canteen & Stores, demo role)',
+            'user' => 'Ravi Menon (Canteen Operator + Stores Officer)',
             'persona' => 'Canteen & Stores',
-            'capabilities' => [
-                'canteen.directory.view', 'canteen.directory.manage',
-                'canteen.orders.view', 'canteen.orders.manage',
-                'canteen.settings.view', 'canteen.settings.manage',
-                'inventory.directory.view', 'inventory.directory.manage',
-                'inventory.stock.view', 'inventory.stock.manage',
-            ],
+            // Two ADDITIVE production roles, never a merged canteen+stores role.
+            'roles' => ['canteen_operator', 'stores_officer'],
         ],
-        'demo.communications_coordinator' => [
-            'name' => 'Demo: Communications Coordinator',
+        'communications' => [
             'email' => 'communications@example.test',
-            'user' => 'Anita Desai (Communications, demo role)',
+            'user' => 'Anita Desai (Communications Coordinator)',
             'persona' => 'Communications Coordinator',
-            // Exactly the communications grant the seeded `principal`
-            // system role already carries -- nothing broader.
-            'capabilities' => [
-                'communications.view', 'communications.send', 'communications.reply',
-                'communications.announce', 'communications.templates.manage', 'communications.approve',
-                'communications.conversations.guardians',
-            ],
+            'roles' => ['communications_coordinator'],
         ],
     ];
 
-    /**
-     * Login-page shortcuts, in display order: persona, email, a short
-     * review hint describing the account's REAL access, and its group.
-     *
-     * @return list<array{persona: string, email: string, hint: string, group: string}>
-     */
     public static function loginShortcuts(): array
     {
         $people = [
             ['School Admin', 'school.admin@example.test', 'Broad school administration: every module incl. Finance and Payroll administration.'],
             ['Principal', 'principal@example.test', 'Academics, students, admissions, communications, operations, curriculum Analytics; Finance and Payroll are 403.'],
-            ['HR & Payroll', 'hr.payroll@example.test', 'Demo role: HR incl. sensitive records, payroll runs, payslips, statutory screens.'],
+            ['HR & Payroll', 'hr.payroll@example.test', 'HR Officer + HR Sensitive Records + Payroll Officer (production roles) plus the demo-only statutory-payroll role: HR incl. sensitive records, preparing payroll runs, statutory screens; approval and posting stay with School Admin.'],
             ['Multi-school Admin', 'multi.school@example.test', 'Principal at Demo School, School Admin at Annexe: School switching and tenant isolation.'],
             ['Annexe School Admin', 'annexe.admin@example.test', 'School Admin of the second School only: cannot see Demo School records.'],
             ['Platform Admin', 'platform.admin@example.test', 'Platform scope: elevated School entry (opens no School page), School Groups, platform audit log (needs MFA), Platform Auditor grants; no School membership.'],
@@ -137,13 +92,13 @@ final class DemoAccountCatalog
         ];
 
         $operationsHints = [
-            'demo.finance_officer' => 'Ledger accounts, journal entries, fee setup and runs, fee charges, payments, offline payment recording, and concession requests (School Admin approves) (Dashboard > Finance).',
-            'demo.librarian' => 'Catalogue and circulation at /app/library/titles and /app/library/circulation (no menu link).',
-            'demo.transport_coordinator' => 'Routes, vehicles, operations and assignments at /app/transport/routes (no menu link).',
-            'demo.reception' => 'Visitor directory and check-in/out at /app/visitor/directory and /app/visitor/visits (no menu link).',
-            'demo.hostel_warden' => 'Hostels, rooms, beds and residency at /app/hostels and /app/hostel-residency (no menu link).',
-            'demo.canteen_stores' => 'Canteen outlets, items, orders, settings (Dashboard) plus inventory at /app/inventory-stock.',
-            'demo.communications_coordinator' => 'Communication Hub with the Principal\'s communications access; nothing else.',
+            'finance' => 'Accountant: ledger posting, fee setup and runs, charges, payments, offline payment recording and concession requests; reversals and approvals stay with School Admin (Dashboard > Finance).',
+            'library' => 'Librarian: catalogue, circulation and fines (view) at /app/library/titles and /app/library/circulation (no menu link).',
+            'transport' => 'Transport Coordinator: routes, vehicles, operations and assignments at /app/transport/routes (no menu link).',
+            'reception' => 'Front Office: visitor directory and check-in/out at /app/visitor/directory and /app/visitor/visits (no menu link).',
+            'hostel' => 'Hostel Warden: hostels, rooms, beds and residency at /app/hostels and /app/hostel-residency (no menu link).',
+            'canteen_stores' => 'Canteen Operator + Stores Officer (two roles): canteen outlets, items and orders (Dashboard) plus inventory at /app/inventory-stock; canteen settings stay with School Admin.',
+            'communications' => 'Communications Coordinator: Communication Hub messages, announcements, templates and Guardian conversations; approval stays with the Principal or School Admin.',
         ];
 
         $shortcuts = [];
@@ -152,8 +107,8 @@ final class DemoAccountCatalog
             $shortcuts[] = ['persona' => $persona, 'email' => $email, 'hint' => $hint, 'group' => self::GROUP_PEOPLE];
         }
 
-        foreach (self::OPERATIONS_DESK_ROLES as $key => $role) {
-            $shortcuts[] = ['persona' => $role['persona'], 'email' => $role['email'], 'hint' => $operationsHints[$key], 'group' => self::GROUP_OPERATIONS];
+        foreach (self::OPERATIONS_DESKS as $key => $desk) {
+            $shortcuts[] = ['persona' => $desk['persona'], 'email' => $desk['email'], 'hint' => $operationsHints[$key], 'group' => self::GROUP_OPERATIONS];
         }
 
         return $shortcuts;

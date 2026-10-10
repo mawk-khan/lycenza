@@ -9,10 +9,19 @@ import { router } from '@inertiajs/vue3';
 import { computed, reactive, ref } from 'vue';
 import { postJson } from '../../../csrf';
 
+// SR.3 (ADR 0071 §20): the fixed staff catalogue, with presentation only --
+// a functional group, a purpose, an add-on marker and sensitivity labels
+// (classes, never permission keys). Whether a role can be granted comes from
+// the server (`grantable`); there is no role creation or editing here.
 interface RoleOption {
     key: string;
     name: string;
     grantable: boolean;
+    group: string;
+    groupLabel: string;
+    purpose: string | null;
+    addOn: boolean;
+    sensitivity: string[];
 }
 
 interface StaffMember {
@@ -252,9 +261,15 @@ function isSelf(member: StaffMember): boolean {
                 />
                 <fieldset>
                     <legend class="text-sm text-slate-600">Roles</legend>
-                    <label v-for="role in grantable" :key="role.key" class="mr-4 text-sm">
+                    <label
+                        v-for="role in grantable"
+                        :key="role.key"
+                        class="mr-4 text-sm"
+                        :title="role.purpose ?? undefined"
+                    >
                         <input v-model="inviteRoles" type="checkbox" :value="role.key" />
-                        {{ role.name }}
+                        {{ role.name
+                        }}<span v-if="role.addOn" class="text-slate-600"> (add-on)</span>
                     </label>
                 </fieldset>
                 <button
@@ -265,6 +280,39 @@ function isSelf(member: StaffMember): boolean {
                     Send invitation
                 </button>
             </form>
+        </section>
+
+        <section
+            v-if="canViewRoles && roleCatalog.length > 0"
+            class="mt-8"
+            data-testid="role-catalogue"
+        >
+            <h2 class="font-medium">School roles</h2>
+            <p class="mt-1 text-sm text-slate-600">
+                The fixed staff roles of this School. A person with more than one job receives more
+                than one role. Roles cannot be created or edited here.
+            </p>
+            <table class="mt-2 w-full text-left text-sm">
+                <thead>
+                    <tr class="text-slate-600">
+                        <th class="py-1">Role</th>
+                        <th>Area</th>
+                        <th>Purpose</th>
+                        <th>Reaches</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="role in roleCatalog" :key="role.key" class="border-t align-top">
+                        <td class="py-1">
+                            {{ role.name }}
+                            <span v-if="role.addOn" class="text-slate-600">(add-on)</span>
+                        </td>
+                        <td>{{ role.groupLabel }}</td>
+                        <td>{{ role.purpose }}</td>
+                        <td>{{ role.sensitivity.join(', ') }}</td>
+                    </tr>
+                </tbody>
+            </table>
         </section>
 
         <section class="mt-8">

@@ -76,6 +76,13 @@ class StaffRoleGrantAuthorityTest extends TestCase
         'payroll.periods.manage', 'payroll.runs.view', 'payroll.runs.prepare', 'payroll.accounting.manage',
     ];
 
+    /** SR.3: the offered catalogue -- the four original School roles and the thirteen production roles. */
+    private const SR3_CATALOGUE = [
+        'accountant', 'admissions_officer', 'canteen_operator', 'cashier', 'communications_coordinator', 'front_office',
+        'hostel_warden', 'hr_officer', 'hr_sensitive_records', 'librarian', 'payroll_officer', 'principal',
+        'school_admin', 'staff_self_service', 'stores_officer', 'teacher', 'transport_coordinator',
+    ];
+
     /** Staff administration without any grant right. */
     private const ADMIN_WITHOUT_GRANT_RIGHTS = ['school.members.view', 'school.members.manage', 'school.roles.view', 'school.roles.manage', 'hr.employees.view'];
 
@@ -286,9 +293,13 @@ class StaffRoleGrantAuthorityTest extends TestCase
             }
 
             // CLAUDE.md rule 24: no authorization by a School role key. The ADR 0047
-            // bootstrap target (`school_admin`) is the one sanctioned role identity.
+            // bootstrap target (`school_admin`) is the one sanctioned role identity;
+            // SR.3's StaffRolePresentation names keys for catalogue display only.
             if (preg_match("/['\"]({$staffRoleKeys})['\"]/", $source) === 1) {
-                $this->assertSame('app/Domain/Platform/Application/Schools/SchoolBootstrapAdministrationService.php', $path, "{$path} names a School role key.");
+                $this->assertContains($path, [
+                    'app/Domain/Platform/Application/Schools/SchoolBootstrapAdministrationService.php',
+                    'app/Domain/Identity/Application/Staff/StaffRolePresentation.php',
+                ], "{$path} names a School role key.");
             }
             $this->assertDoesNotMatchRegularExpression("/(->key|\\['key'\\])\\s*[!=]==?\\s*['\"]teacher['\"]|where\\(\\s*['\"](roles\\.)?key['\"]\\s*,\\s*['\"]teacher['\"]/", $source, "{$path} branches on the teacher role key.");
         }
@@ -670,8 +681,10 @@ class StaffRoleGrantAuthorityTest extends TestCase
         $this->enterSchool($viewer, $school);
         $this->get('http://localhost/app/settings/staff')->assertOk()->assertInertia(fn ($page) => $page
             ->where('canViewRoles', true)
-            ->where('roleCatalog', fn ($catalog) => collect($catalog)->pluck('key')->sort()->values()->all() === ['principal', 'school_admin', 'staff_self_service', 'teacher']
-                && collect($catalog)->every(fn ($role) => $role['grantable'] === false && array_keys($role) === ['key', 'name', 'grantable']))
+            ->where('roleCatalog', fn ($catalog) => collect($catalog)->pluck('key')->sort()->values()->all() === self::SR3_CATALOGUE
+                && collect($catalog)->every(fn ($role) => $role['grantable'] === false
+                    && array_keys($role) === ['key', 'name', 'grantable', 'group', 'groupLabel', 'purpose', 'addOn', 'sensitivity']
+                    && ! str_contains(json_encode($role), 'school.') && ! str_contains(json_encode($role), 'hr.')))
             ->where('staff', fn ($staff) => collect($staff)->contains(fn ($member) => $member['membershipId'] === $target->id && $member['roles'] === [['key' => 'staff_self_service', 'name' => 'Staff Self-Service']])));
 
         $this->staffPost($viewer, $school, "/members/{$target->id}/roles", ['role' => 'teacher'])->assertForbidden();

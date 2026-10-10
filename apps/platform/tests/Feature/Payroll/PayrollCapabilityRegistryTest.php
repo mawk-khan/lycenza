@@ -136,7 +136,17 @@ class PayrollCapabilityRegistryTest extends TestCase
     #[Test]
     public function no_default_role_receives_a_sensitive_compensation_or_statutory_capability(): void
     {
-        $roleKeys = Role::query()->where('scope', 'school')->pluck('key');
+        // SR.3 (ADR 0071 §4.3): the two compensation-sensitive keys sit ONLY on
+        // the explicit `payroll_officer` role (granted only through
+        // school.roles.grant.payroll_sensitive); statutory keys sit on no role.
+        $this->assertSame(
+            ['payroll.compensation.sensitive.manage', 'payroll.compensation.sensitive.view'],
+            Role::query()->where('key', 'payroll_officer')->firstOrFail()->capabilities->pluck('key')
+                ->filter(fn (string $key) => in_array($key, self::NOBODY_BY_DEFAULT_KEYS, true))->sort()->values()->all(),
+        );
+        // "By default" = the SYSTEM catalogue: committed non-system fixture roles
+        // (e.g. a best-effort concurrency-test teardown) are never defaults.
+        $roleKeys = Role::query()->where('scope', 'school')->where('is_system', true)->where('key', '<>', 'payroll_officer')->pluck('key');
 
         foreach ($roleKeys as $roleKey) {
             $role = Role::query()->where('key', $roleKey)->firstOrFail();
@@ -162,9 +172,21 @@ class PayrollCapabilityRegistryTest extends TestCase
     #[Test]
     public function no_other_default_role_receives_a_non_sensitive_payroll_capability(): void
     {
+        // SR.3 (ADR 0071 §4.3): `payroll_officer` is the one other holder -- the
+        // maker side only, never approve, post or reverse (checker, §9).
+        $officer = Role::query()->where('key', 'payroll_officer')->firstOrFail()->capabilities->pluck('key')->all();
+        $this->assertSame(
+            ['payroll.accounting.manage', 'payroll.compensation.view', 'payroll.periods.manage', 'payroll.runs.prepare', 'payroll.runs.view', 'payroll.structures.manage', 'payroll.structures.view'],
+            collect($officer)->filter(fn (string $key) => in_array($key, self::SCHOOL_ADMIN_DEFAULT_KEYS, true))->sort()->values()->all(),
+        );
+        foreach (['payroll.runs.approve', 'payroll.runs.post', 'payroll.runs.reverse'] as $checker) {
+            $this->assertNotContains($checker, $officer);
+        }
+
         $otherRoleKeys = Role::query()
-            ->whereNotIn('key', ['school_admin'])
+            ->whereNotIn('key', ['school_admin', 'payroll_officer'])
             ->where('scope', 'school')
+            ->where('is_system', true)
             ->pluck('key');
 
         foreach ($otherRoleKeys as $roleKey) {

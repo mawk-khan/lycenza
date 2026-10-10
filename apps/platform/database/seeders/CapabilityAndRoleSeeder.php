@@ -1546,8 +1546,135 @@ class CapabilityAndRoleSeeder extends Seeder
                     'payroll.payslips.self',
                 ],
             ],
+            // SR.3 (ADR 0071 §4): the fixed production staff catalogue -- thirteen
+            // operational School roles, exact capability sets (snapshot-pinned by
+            // Tests\Feature\Authorization\StaffRoleCatalogueSnapshotTest). Additive:
+            // a person with two jobs receives two roles. Sensitive capabilities are
+            // granted through the class grant rights, never by placing them on
+            // school_admin. No authority, legal-gated or owned-scope capability.
+            'hr_officer' => [ // ADR 0071 §4.1
+                'name' => 'HR Officer',
+                'scope' => 'school',
+                'capabilities' => [
+                    'hr.employees.view', 'hr.employees.manage', 'hr.employees.personal.view',
+                    'hr.employees.personal.manage', 'hr.employees.assignments.view',
+                    'hr.employees.assignments.manage', 'hr.employees.qualifications.view',
+                    'hr.employees.qualifications.manage', 'hr.employees.documents.view',
+                    'hr.employees.documents.manage', 'hr.employees.notes.view',
+                    'hr.employees.notes.manage', 'hr.departments.view', 'hr.departments.manage',
+                    'hr.positions.view', 'hr.positions.manage', 'hr.categories.view',
+                    'hr.categories.manage', 'hr.leave.view', 'hr.leave.manage',
+                    'hr.leave.configure', 'hr.staff_attendance.view', 'hr.staff_attendance.manage',
+                ],
+            ],
+            'hr_sensitive_records' => [ // ADR 0071 §4.2
+                'name' => 'HR Sensitive Records',
+                'scope' => 'school',
+                'capabilities' => [
+                    'hr.employees.sensitive.view', 'hr.employees.sensitive.manage',
+                ],
+            ],
+            'payroll_officer' => [ // ADR 0071 §4.3
+                'name' => 'Payroll Officer',
+                'scope' => 'school',
+                'capabilities' => [
+                    'payroll.structures.view', 'payroll.structures.manage',
+                    'payroll.compensation.view', 'payroll.compensation.sensitive.view',
+                    'payroll.compensation.sensitive.manage', 'payroll.periods.manage',
+                    'payroll.runs.view', 'payroll.runs.prepare', 'payroll.accounting.manage',
+                ],
+            ],
+            'accountant' => [ // ADR 0071 §4.4
+                'name' => 'Accountant',
+                'scope' => 'school',
+                'capabilities' => [
+                    'finance.accounts.manage', 'finance.ledger.view', 'finance.ledger.post',
+                    'finance.charges.view', 'finance.charges.manage',
+                    'finance.fee_structures.view', 'finance.fee_structures.manage',
+                    'finance.fee_assessments.run', 'finance.fee_concessions.view',
+                    'finance.fee_concessions.request', 'finance.payments.view',
+                    'finance.payments.record',
+                ],
+            ],
+            'cashier' => [ // ADR 0071 §4.5
+                'name' => 'Cashier',
+                'scope' => 'school',
+                'capabilities' => [
+                    'finance.payments.view', 'finance.payments.record', 'finance.charges.view',
+                ],
+            ],
+            'librarian' => [ // ADR 0071 §4.6
+                'name' => 'Librarian',
+                'scope' => 'school',
+                'capabilities' => [
+                    'library.catalogue.view', 'library.catalogue.manage',
+                    'library.circulation.view', 'library.circulation.manage', 'library.fines.view',
+                ],
+            ],
+            'transport_coordinator' => [ // ADR 0071 §4.7
+                'name' => 'Transport Coordinator',
+                'scope' => 'school',
+                'capabilities' => [
+                    'transport.routes.view', 'transport.routes.manage', 'transport.vehicles.view',
+                    'transport.vehicles.manage', 'transport.assignments.view',
+                    'transport.assignments.manage',
+                ],
+            ],
+            'hostel_warden' => [ // ADR 0071 §4.7
+                'name' => 'Hostel Warden',
+                'scope' => 'school',
+                'capabilities' => [
+                    'hostel.directory.view', 'hostel.directory.manage', 'hostel.residency.view',
+                    'hostel.residency.manage',
+                ],
+            ],
+            'front_office' => [ // ADR 0071 §4.7
+                'name' => 'Front Office',
+                'scope' => 'school',
+                'capabilities' => [
+                    'visitor.directory.view', 'visitor.directory.manage', 'visitor.visits.view',
+                    'visitor.visits.manage',
+                ],
+            ],
+            'stores_officer' => [ // ADR 0071 §4.7
+                'name' => 'Stores Officer',
+                'scope' => 'school',
+                'capabilities' => [
+                    'inventory.directory.view', 'inventory.directory.manage',
+                    'inventory.stock.view', 'inventory.stock.manage',
+                ],
+            ],
+            'canteen_operator' => [ // ADR 0071 §4.7
+                'name' => 'Canteen Operator',
+                'scope' => 'school',
+                'capabilities' => [
+                    'canteen.directory.view', 'canteen.directory.manage', 'canteen.orders.view',
+                    'canteen.orders.manage',
+                ],
+            ],
+            'admissions_officer' => [ // ADR 0071 §4.8
+                'name' => 'Admissions Officer',
+                'scope' => 'school',
+                'capabilities' => [
+                    'admissions.view', 'admissions.manage',
+                ],
+            ],
+            'communications_coordinator' => [ // ADR 0071 §4.9
+                'name' => 'Communications Coordinator',
+                'scope' => 'school',
+                'capabilities' => [
+                    'communications.view', 'communications.send', 'communications.reply',
+                    'communications.announce', 'communications.templates.manage',
+                    'communications.conversations.guardians',
+                ],
+            ],
         ];
 
+        // SR.3 (ADR 0071 §12, §25): the role rows are upserted by key and their
+        // capability links synchronized to exactly the definition above (stale
+        // links removed). `retired_at` is NEVER written here: a role retired by
+        // a reviewed release stays retired on every re-run (retirement is
+        // one-way, SR.1 trigger); no role row is ever deleted.
         foreach ($roles as $key => $definition) {
             $role = Role::on(self::CATALOGUE_CONNECTION)->updateOrCreate(
                 ['key' => $key],
