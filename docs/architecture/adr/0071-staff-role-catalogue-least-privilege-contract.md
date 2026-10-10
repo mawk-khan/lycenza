@@ -5,8 +5,8 @@
   AUDIT BUILT (2026-10-09, §24). SR.3 PRODUCTION CATALOGUE & DEMO
   TRANSITION BUILT (2026-10-09, §25). SR.4 LEAST-PRIVILEGE VERIFICATION &
   SENSITIVE-ACTION CONTROLS BUILT (2026-10-10, §26; amends §4.3 —
-  `payroll_officer` 9 → 8 keys —, §8 and §9).** SR.5 needs separate owner
-  authorisation.
+  `payroll_officer` 9 → 8 keys —, §8 and §9). SR.5 CLOSURE AUDIT PASSED
+  WITH CORRECTION (2026-10-10, §27). PROGRAMME PUBLISHED / CLOSED.**
 - Date: 2026-10-09
 - Programme: **SR — Staff Role Catalogue & Least-Privilege Access**
   (`MASTER-ROADMAP.md`, post-foundation programme 7).
@@ -1226,7 +1226,9 @@ This amends §4.3 and §25.1. The role now has **8 keys**.
 
 ### 26.6 Trusted-service seam inventory
 Cross-domain effects the caller causes without holding the destination
-domain's capability:
+domain's capability. *(SR.5 count, 2026-10-10: six rows, SEVEN seam types --
+Transport assignment and Hostel residency share one row because they use the
+same `FeeSourceSelectionService` seam with the same constraints.)*
 
 | Seam | Caller capability | Downstream effect | Why trusted / confinement | Proof |
 |---|---|---|---|---|
@@ -1400,6 +1402,158 @@ The term matches are now grouped. Pinned by
 - **Status:**
   - the EmploymentRecord finding is **CLOSED**;
   - SR.5 (closure audit + canonical regression) awaits owner authorization.
+
+## 27. SR.5 — closure audit (2026-10-10): PASS WITH CORRECTION — programme CLOSED
+
+A read-mostly audit of SR.0–SR.4 against the repository at `72c2cd7`.
+Agents mapped grant authority, the tests and the documentation; the
+load-bearing claims were then verified directly.
+
+### 27.1 Verified (unchanged)
+- **Catalogue:** exactly 17 active `is_system` School roles (§4 + §26.5):
+  - `payroll_officer` has 8 keys;
+  - the 13 operational sets match the snapshot;
+  - no unexpected School system role, and no non-system School role outside
+    the local demo.
+- **Classes and grant rights:**
+  - every School capability is classified;
+  - no operational role carries an authority, legal-gated or owned-scope key,
+    and none carries `portal.*`, `*.teacher`, `*.self`,
+    `examinations.marks.*` or `payroll.statutory.*`;
+  - the three grant rights cover exactly 15, 2 and 2 keys;
+  - only `school_admin` holds them, and it holds none of the 19 covered keys;
+  - no grant right covers another grant right or an authority key, and no
+    code checks a grant right for data access.
+- **Database:**
+  - `platform:verify-database` gives `failed=0`, with all seven Staff Roles
+    rows PASS;
+  - every role and grant trigger is present and enabled;
+  - raw-SQL refusals are covered (uncovered, cross-School, inactive,
+    disabled or Guardian-only issuer, self, retired, empty, no assigner,
+    the provisioning bootstrap) by `StaffRoleCatalogueHardeningTest` and
+    `StaffRoleGrantParityTest`.
+- **Seeding:** the seeder was run twice with an identical catalogue checksum.
+  It grants no membership a role and never un-retires a role.
+- **Authority:**
+  - `RoleGrantAuthority` is fresh (no cache) and FOR SHARE under the School
+    access lock in every grant, reactivation, revoke and invitation path;
+  - off-boarding stays exempt from coverage;
+  - the self-administration and last-qualifying-administrator guards hold,
+    and history is kept.
+  - Losing a grant right never strands a role: another qualifying
+    administrator revokes it, or off-boarding removes it.
+- **Concurrency (real processes, observed lock waits):**
+  - grant vs issuer revoke, and grant vs grant-right revoke;
+  - acceptance vs issuer revoke;
+  - the invitation lock;
+  - revoke vs reactivation and vs off-boarding.
+- **Chains and controls:**
+  - the §26.1 employment chain, the §26.2/§26.4 self-administration tests and
+    the §26.7 MFA matrix all re-run green;
+  - teacher, staff self-service and Guardian separation;
+  - multi-School.
+- **Audit:** assigned, revoked, refused (classes only, once), suspended,
+  off-boarded, reactivated, and the invitation lifecycle events. Retention
+  stays governed by E21.
+- **Live demo (`ddev demo-reset --build`):**
+  - the live database holds 17 roles, grant rights on `school_admin` only, and
+    `payroll_officer` with 8 keys;
+  - every persona is on its production role(s), with `demo.payroll_statutory`
+    as the only demo role;
+  - signed-in HTTP smoke of 11 personas: their modules return 200 and other
+    modules 403;
+  - Staff accounts shows School Admin all 17 roles, all grantable, and shows
+    the principal no catalogue.
+
+### 27.2 Corrections made in SR.5
+1. **Invitation resend and revoke** re-read `school.members.manage` INSIDE the
+   transaction under the School access lock, as issue already did.
+   - **Before:** a pre-transaction check only, so a revoke waiting on the lock
+     acted on stale authority.
+   - **Proof:**
+     `StaffGrantAuthorityConcurrencyTest::revoking_an_invitation_racing_the_loss_of_staff_administration_never_acts_on_stale_authority`.
+     It runs as real processes and fails without the fix (mutation S11).
+2. **The staff-mutation MFA test** now asserts the `mfa_code` refusal itself
+   on all seven routes. Reactivation targets a suspended member, so it can no
+   longer pass on `not_suspended`.
+3. **The OpenAPI contract** now carries `StepUpMfaCode` on payroll approve,
+   post and reverse and on concession approve and revoke (SR.4 had added it
+   to the code only). It documents current-assurance refusals on run results.
+   It replaces the stale "granted to no default role" wording for
+   `payroll.compensation.sensitive.*`. Shared types are regenerated.
+4. **Documentation drift corrected:**
+   - the roadmap SR heading;
+   - the DOMAIN-MAP SR note;
+   - an ADR 0059 amendment note;
+   - an ADR 0058 SR.3–SR.5 note (the EmploymentRecord finding is CLOSED);
+   - an HR.md pointer;
+   - the §26.6 seam count: six rows, **seven** seam types (Transport and
+     Hostel share the fee-selection row).
+
+### 27.3 Separation of duties — precise closure language
+Catalogue-level least privilege and the existing maker/checker contracts are
+verified. Additional actor-level SoD decisions remain deferred.
+
+| Hard control | Mechanism |
+|---|---|
+| Hard | concession request ≠ approve/reject (app + `fee_concessions_sod_check`) |
+| Hard | payroll prepare ≠ approve (app + `payroll_runs_sod_check`) |
+| Hard | no operational role holds both sides of any pair (§9, snapshot) |
+| Hard | nobody self-administers HR identity or pay (§26.2, §26.4) |
+| Hard | fresh MFA on every checker / consequential action (§26.7) |
+
+### 27.4 Open items — classified (none blocks Staff Roles closure)
+| Item | Blocks SR closure | Next owner / module | Rationale |
+|---|---|---|---|
+| A. School Admin may reverse their own ledger posting | NO | Owner → Finance | §9 recorded "no actor rule"; an owner SoD decision; `journal_entries` stores no actor |
+| B. The same actor may approve and post a payroll run | NO | Owner → Payroll | §9: "none is added in SR (owner may decide later)" |
+| C. An approver may approve a run containing their own pay | NO | Owner → Payroll | an actor-level SoD decision; the maker side is already refused (§26.4) |
+| D. An `hr_officer` reads and changes their own HR notes and documents | NO | Owner + DPO (with SR-L1) → HR | a privacy and self-access policy question, not an authority escalation |
+| E. Fee-head mappings under operational keys may name any active head | NO | Owner → Fees / OPF (ADR 0067) | a trusted-seam hardening item; withdrawal of a reused selection is owner-accepted (ADR 0067 §31.7) |
+| F. Canteen price and quantity have no upper bound | NO | Canteen backlog | module input hardening; settlement accounts stay admin-only |
+| G. Conversion `link_existing` with a legal guardian gives portal visibility | NO | Owner → Admissions + Guardian portal (POR-L1) | Guardian privacy; the portal is refused in production in code |
+| H. Guardian participant search shows children's names | NO | Communications / Guardian privacy (POR-L1, SR-L1) | within `communications.conversations.guardians`; a privacy minimisation question |
+
+**SR.5 audit observations (non-blocking, recorded):**
+- The grant-right guard scans only `app/` string literals.
+- There is no real-process race for invitation RESEND (revoke is now covered).
+- Neither the application nor the trigger locks the issuer's `users` row FOR
+  SHARE: a disablement racing a grant is decided by membership and grant
+  locks.
+- The backstop-audit test calls the audit directly. The service wiring exists
+  (`StaffAccessService`, acceptance).
+
+### 27.5 Legal, privacy and separate gates
+- **Unchanged:** TCH-L1/E33, RES-L0, HRX-L1 to L4, statutory payroll (E45),
+  the fee gates (E31/E32: documentation-level, no RTE category), E21.
+  - **SR-L1 (E47) stays DRAFTED, NOT SENT, NOT ANSWERED.**
+  - No role assignment is legal clearance.
+- **E16 is separate and still open:** 97 vulnerability-exception records are
+  valid through 2026-10-28 (they expire 2026-10-29). A fresh scan and a new
+  owner decision are required before then; the exception records are not
+  edited here.
+- **Staff Roles closure is not product production readiness.**
+
+### 27.6 Proof
+- **Focused sweep:** 4586 tests OK. Identity was then re-run green after the
+  correction.
+- **Mutations:** 11 of 11 caught, restored byte-for-byte (tree checksum
+  identical; DB privileges re-revoked and verified). The mutations:
+  - an authority key on `librarian`;
+  - `payroll.accounting.manage` back on `payroll_officer`;
+  - the HR and the payroll self-administration guards removed;
+  - fresh MFA removed from ledger post;
+  - the teacher-ownership filter removed;
+  - the issuer membership no longer School-bound;
+  - coverage weakened;
+  - the acceptance re-check removed;
+  - the SR.5 invitation-revoke re-check removed;
+  - runtime catalogue write privileges granted (the test and the verifier
+    both fail).
+- **Gates:** the canonical full regression and the publish gate on the exact
+  final tree (commit message).
+- **Status:** **Staff Role Catalogue & Least-Privilege Operations Access —
+  PUBLISHED / CLOSED.** EmploymentRecord finding: **CLOSED**.
 
 ## Appendix A — capability-class map (v1, all 174 `school` capabilities)
 Grant-right coverage appears only where `school_admin` does not hold the key

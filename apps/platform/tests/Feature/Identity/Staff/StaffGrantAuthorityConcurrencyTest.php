@@ -248,6 +248,27 @@ class StaffGrantAuthorityConcurrencyTest extends TestCase
     }
 
     #[Test]
+    public function revoking_an_invitation_racing_the_loss_of_staff_administration_never_acts_on_stale_authority(): void
+    {
+        // SR.5 (ADR 0071 §27): invitation revoke (and resend) re-read
+        // `school.members.manage` under the School access lock. The holder
+        // removes A's administration while A's revoke waits on that lock.
+        $this->fakeEmail();
+        $school = $this->school();
+        [$a, $ma] = $this->member($school, 'school_admin');
+        [$b] = $this->member($school, 'school_admin');
+        $email = $this->emails[] = 'sr5.race.revoke@example.test';
+        $invitation = app(StaffInvitationService::class)->issue($school, $a, $email, ['teacher']);
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->script('revoke-role', $school->id, $b->id, $ma->id, 'school_admin'),
+            $this->script('revoke-invitation', $school->id, $a->id, $invitation->id),
+        );
+        $this->assertSame(['revoked', 'rejected:not_authorized'], [$holder, $contender]);
+        $this->assertSame('pending', app(TenantContext::class)->withSchool($school, fn () => $invitation->fresh()->status));
+    }
+
+    #[Test]
     public function a_single_role_revoke_serializes_with_reactivation_and_off_boarding_without_losing_history(): void
     {
         $school = $this->school();

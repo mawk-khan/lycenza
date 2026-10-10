@@ -993,7 +993,7 @@ independent.
 
 ## Amendment — SR.0 Staff Role Catalogue (2026-10-09, ADR 0071)
 
-Documentation only; implementation is SR.1–SR.4.
+Documentation only; implementation is SR.1–SR.4. *(SR.5, 2026-10-10: built in SR.1–SR.4 and closed in SR.5, ADR 0071 §23–§27. SR.4 also added fresh MFA re-verification to the staff-role mutations' sensitive neighbours and the HR self-administration rule; SR.5 re-reads `school.members.manage` inside the invitation resend and revoke transactions.)*
 - **§1 "Only two School roles exist":** historical. Since TCH and HRX the
   School catalogue is `school_admin`, `principal`, `teacher` and
   `staff_self_service`. ADR 0071 adds thirteen fixed operational system

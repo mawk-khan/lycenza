@@ -7932,10 +7932,15 @@ paths:
     post:
       operationId: approveFeeConcession
       summary: >
-        Approves a pending request; never the requester's own (FEE_CONCESSION_SELF_APPROVAL). A targeted concession posts its adjustment (Dr concession account / Cr receivable) in the same transaction, refused -- never reduced -- beyond the charge's current outstanding (G1). Requires finance.fee_concessions.approve.
+        Approves a pending request; never the requester's own (FEE_CONCESSION_SELF_APPROVAL). A targeted concession posts its adjustment (Dr concession account / Cr receivable) in the same transaction, refused -- never reduced -- beyond the charge's current outstanding (G1). Requires finance.fee_concessions.approve. SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode).
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { name: concessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StepUpMfaCode" }
       responses:
         "200":
           description: OK
@@ -7956,6 +7961,11 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "409":
           description: FEE_CONCESSION_ILLEGAL_TRANSITION, CHARGE_FULLY_PAID, ADJUSTMENT_EXCEEDS_OUTSTANDING, FEE_CONCESSION_ACCOUNT_INVALID or CHARGE_ALREADY_CANCELLED.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "`mfa_code` refused (missing, wrong, used, or no enrolled factor -- `error.errors.mfa_code`; see StepUpMfaCode)."
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -7998,10 +8008,15 @@ paths:
     post:
       operationId: revokeFeeConcession
       summary: >
-        Revokes an approved STANDING concession: it stops applying to future charges; posted adjustments stay until cancelled. Requires finance.fee_concessions.approve.
+        Revokes an approved STANDING concession: it stops applying to future charges; posted adjustments stay until cancelled. Requires finance.fee_concessions.approve. SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode).
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { name: concessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StepUpMfaCode" }
       responses:
         "200":
           description: OK
@@ -8022,6 +8037,11 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "409":
           description: FEE_CONCESSION_ILLEGAL_TRANSITION.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "`mfa_code` refused (missing, wrong, used, or no enrolled factor -- `error.errors.mfa_code`; see StepUpMfaCode)."
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -8571,8 +8591,10 @@ paths:
   # Administration/Read boundary (App\Domain\Payroll\Application\*AdministrationService /
   # *ReadService) -- never a trusted core service or raw Eloquent model
   # directly. `payroll.compensation.sensitive.*`/`payroll.statutory.manage`
-  # are Highly Sensitive/reserved and granted to no default role (see
-  # docs/modules/PAYROLL.md "Authorization").
+  # are Highly Sensitive/reserved: `payroll.statutory.*` is granted to no
+  # role (legal-gated); `payroll.compensation.sensitive.*` only to the SR.3
+  # `payroll_officer` role (grant right school.roles.grant.payroll_sensitive)
+  # (see docs/modules/PAYROLL.md "Authorization", ADR 0071 §25-§26).
   /schools/{schoolId}/salary-components:
     get:
       operationId: listSalaryComponents
@@ -8863,7 +8885,7 @@ paths:
       summary: >
         Fetch one compensation assignment's actual per-component fixed
         amounts -- Highly Sensitive. Requires
-        payroll.compensation.sensitive.view (granted to no default
+        payroll.compensation.sensitive.view (SR.3: `payroll_officer`; never a default
         role). Audited exactly once per successful call; a denied
         attempt leaves no audit trail.
       parameters:
@@ -9225,11 +9247,16 @@ paths:
         authorized to approve merely because they can prepare payroll).
         The preparer of this run may never approve it, enforced at the
         actor level regardless of capability grants. Idempotency-Key
-        required.
+        required. SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode).
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { $ref: "#/components/parameters/PayrollRunId" }
         - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StepUpMfaCode" }
       responses:
         "200":
           description: OK
@@ -9263,7 +9290,7 @@ paths:
       summary: >
         Fetch a run's per-EmploymentRecord results (gross/deductions/net
         and lines) -- Highly Sensitive. Requires
-        payroll.compensation.sensitive.view (granted to no default
+        payroll.compensation.sensitive.view (SR.3: `payroll_officer`; never a default
         role).
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
@@ -9275,9 +9302,12 @@ paths:
             application/json:
               schema: { type: object, required: [data], properties: { data: { type: array, items: { $ref: "#/components/schemas/PayrollRunResult" } } } }
         "401":
-          description: Missing/invalid bearer token.
+          description: >
+            Missing/invalid bearer token, or (SR.4, ADR 0071 §26.7: amounts
+            need CURRENT MFA assurance) `mfa_step_up_required` -- the token
+            was minted before the caller's current MFA factor was activated.
         "403":
-          description: Authenticated but lacking payroll.compensation.sensitive.view in this School.
+          description: Authenticated but lacking payroll.compensation.sensitive.view in this School. Also `mfa_required_not_enrolled` when the caller has no active MFA factor (SR.4).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -9411,11 +9441,16 @@ paths:
         Idempotency-Key contract additionally guarantees that a lost
         response can be safely retried without a second JournalEntry
         (Phase 9.8 correction; completed inside the same transaction as
-        the posting itself via IdempotencyGuard::completeWithin()).
+        the posting itself via IdempotencyGuard::completeWithin()). SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode).
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { $ref: "#/components/parameters/PayrollRunId" }
         - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StepUpMfaCode" }
       responses:
         "201":
           description: Created.
@@ -9460,19 +9495,21 @@ paths:
         string is reused, since route_action is part of the
         idempotency scope. Reversing an original that already has a
         correction run is still allowed (ADR 0034 -- deliberately
-        unrestricted).
+        unrestricted). SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode).
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { $ref: "#/components/parameters/PayrollRunId" }
         - { $ref: "#/components/parameters/IdempotencyKey" }
       requestBody:
-        required: false
+        required: true
         content:
           application/json:
             schema:
               type: object
+              required: [mfa_code]
               properties:
                 reason: { type: string, maxLength: 255, nullable: true }
+                mfa_code: { type: string, maxLength: 32, description: "Fresh MFA code -- see StepUpMfaCode." }
       responses:
         "201":
           description: Created (the reversal posting).

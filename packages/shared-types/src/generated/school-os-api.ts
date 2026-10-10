@@ -3619,7 +3619,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approves a pending request; never the requester's own (FEE_CONCESSION_SELF_APPROVAL). A targeted concession posts its adjustment (Dr concession account / Cr receivable) in the same transaction, refused -- never reduced -- beyond the charge's current outstanding (G1). Requires finance.fee_concessions.approve. */
+        /** Approves a pending request; never the requester's own (FEE_CONCESSION_SELF_APPROVAL). A targeted concession posts its adjustment (Dr concession account / Cr receivable) in the same transaction, refused -- never reduced -- beyond the charge's current outstanding (G1). Requires finance.fee_concessions.approve. SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode). */
         post: operations["approveFeeConcession"];
         delete?: never;
         options?: never;
@@ -3653,7 +3653,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Revokes an approved STANDING concession: it stops applying to future charges; posted adjustments stay until cancelled. Requires finance.fee_concessions.approve. */
+        /** Revokes an approved STANDING concession: it stops applying to future charges; posted adjustments stay until cancelled. Requires finance.fee_concessions.approve. SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode). */
         post: operations["revokeFeeConcession"];
         delete?: never;
         options?: never;
@@ -4031,7 +4031,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Fetch one compensation assignment's actual per-component fixed amounts -- Highly Sensitive. Requires payroll.compensation.sensitive.view (granted to no default role). Audited exactly once per successful call; a denied attempt leaves no audit trail. */
+        /** Fetch one compensation assignment's actual per-component fixed amounts -- Highly Sensitive. Requires payroll.compensation.sensitive.view (SR.3: `payroll_officer`; never a default role). Audited exactly once per successful call; a denied attempt leaves no audit trail. */
         get: operations["getCompensationAssignmentValues"];
         put?: never;
         post?: never;
@@ -4204,7 +4204,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approves a calculated run -- the sole immutability boundary (ADR 0034). Requires payroll.runs.approve (a SEPARATE capability from payroll.runs.prepare -- an actor is never authorized to approve merely because they can prepare payroll). The preparer of this run may never approve it, enforced at the actor level regardless of capability grants. Idempotency-Key required. */
+        /** Approves a calculated run -- the sole immutability boundary (ADR 0034). Requires payroll.runs.approve (a SEPARATE capability from payroll.runs.prepare -- an actor is never authorized to approve merely because they can prepare payroll). The preparer of this run may never approve it, enforced at the actor level regardless of capability grants. Idempotency-Key required. SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode). */
         post: operations["approvePayrollRun"];
         delete?: never;
         options?: never;
@@ -4219,7 +4219,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Fetch a run's per-EmploymentRecord results (gross/deductions/net and lines) -- Highly Sensitive. Requires payroll.compensation.sensitive.view (granted to no default role). */
+        /** Fetch a run's per-EmploymentRecord results (gross/deductions/net and lines) -- Highly Sensitive. Requires payroll.compensation.sensitive.view (SR.3: `payroll_officer`; never a default role). */
         get: operations["getPayrollRunResults"];
         put?: never;
         post?: never;
@@ -4289,7 +4289,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Posts an approved run to Finance via PayrollPostingService -> LedgerService::post() (never a direct journal_entries write). Requires payroll.runs.post. Idempotency-Key required -- a row lock closes the concurrent-posting race window structurally (proven by a real two-process concurrency test), and the Idempotency-Key contract additionally guarantees that a lost response can be safely retried without a second JournalEntry (Phase 9.8 correction; completed inside the same transaction as the posting itself via IdempotencyGuard::completeWithin()). */
+        /** Posts an approved run to Finance via PayrollPostingService -> LedgerService::post() (never a direct journal_entries write). Requires payroll.runs.post. Idempotency-Key required -- a row lock closes the concurrent-posting race window structurally (proven by a real two-process concurrency test), and the Idempotency-Key contract additionally guarantees that a lost response can be safely retried without a second JournalEntry (Phase 9.8 correction; completed inside the same transaction as the posting itself via IdempotencyGuard::completeWithin()). SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode). */
         post: operations["postPayrollRun"];
         delete?: never;
         options?: never;
@@ -4306,7 +4306,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reverses a posted run's original posting via PayrollPostingService -> LedgerService::reverse() (a new, inverse journal entry -- the original is never mutated). Requires payroll.runs.reverse (a separate capability from payroll.runs.post). Idempotency-Key required -- structural at-most-once is still enforced independently (PAYROLL_RUN_ALREADY_REVERSED, 409, on a genuine repeat), and the Idempotency-Key contract additionally guarantees a lost response can be safely retried without a second reversal JournalEntry (Phase 9.8 correction). Posting and reversal never share a replay namespace even if the identical literal key string is reused, since route_action is part of the idempotency scope. Reversing an original that already has a correction run is still allowed (ADR 0034 -- deliberately unrestricted). */
+        /** Reverses a posted run's original posting via PayrollPostingService -> LedgerService::reverse() (a new, inverse journal entry -- the original is never mutated). Requires payroll.runs.reverse (a separate capability from payroll.runs.post). Idempotency-Key required -- structural at-most-once is still enforced independently (PAYROLL_RUN_ALREADY_REVERSED, 409, on a genuine repeat), and the Idempotency-Key contract additionally guarantees a lost response can be safely retried without a second reversal JournalEntry (Phase 9.8 correction). Posting and reversal never share a replay namespace even if the identical literal key string is reused, since route_action is part of the idempotency scope. Reversing an original that already has a correction run is still allowed (ADR 0034 -- deliberately unrestricted). SR.4 (ADR 0071 §26.7): needs a fresh MFA code (`mfa_code`, see StepUpMfaCode). */
         post: operations["reversePayrollRun"];
         delete?: never;
         options?: never;
@@ -23609,7 +23609,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StepUpMfaCode"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -23649,6 +23653,15 @@ export interface operations {
             };
             /** @description FEE_CONCESSION_ILLEGAL_TRANSITION, CHARGE_FULLY_PAID, ADJUSTMENT_EXCEEDS_OUTSTANDING, FEE_CONCESSION_ACCOUNT_INVALID or CHARGE_ALREADY_CANCELLED. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `mfa_code` refused (missing, wrong, used, or no enrolled factor -- `error.errors.mfa_code`; see StepUpMfaCode). */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -23729,7 +23742,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StepUpMfaCode"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -23769,6 +23786,15 @@ export interface operations {
             };
             /** @description FEE_CONCESSION_ILLEGAL_TRANSITION. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `mfa_code` refused (missing, wrong, used, or no enrolled factor -- `error.errors.mfa_code`; see StepUpMfaCode). */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -25909,7 +25935,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StepUpMfaCode"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -25990,14 +26020,14 @@ export interface operations {
                     };
                 };
             };
-            /** @description Missing/invalid bearer token. */
+            /** @description Missing/invalid bearer token, or (SR.4, ADR 0071 §26.7: amounts need CURRENT MFA assurance) `mfa_step_up_required` -- the token was minted before the caller's current MFA factor was activated. */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Authenticated but lacking payroll.compensation.sensitive.view in this School. */
+            /** @description Authenticated but lacking payroll.compensation.sensitive.view in this School. Also `mfa_required_not_enrolled` when the caller has no active MFA factor (SR.4). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -26205,7 +26235,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StepUpMfaCode"];
+            };
+        };
         responses: {
             /** @description Created. */
             201: {
@@ -26267,10 +26301,12 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: {
+        requestBody: {
             content: {
                 "application/json": {
                     reason?: string | null;
+                    /** @description Fresh MFA code -- see StepUpMfaCode. */
+                    mfa_code: string;
                 };
             };
         };

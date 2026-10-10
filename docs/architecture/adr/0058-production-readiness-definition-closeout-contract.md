@@ -1469,6 +1469,29 @@ ADR 0071 also records that the runtime role can write `roles`,
 `membership_role_assignments.role_id` is `ON DELETE CASCADE`. Both are
 corrected in SR.1. E16 is unchanged and separate.
 
+## Note — SR.3–SR.5: the EmploymentRecord finding closed; Staff Roles closed (2026-10-10)
+
+**No legal determination.**
+- **SR.3** (ADR 0071 §25) seeded the production `hr_officer`, which holds
+  `hr.employees.assignments.manage`.
+- **SR.4** (ADR 0071 §26.1) proved the whole chain with production roles
+  only, so the O1-relevant EmploymentRecord finding above is **CLOSED**. The
+  chain runs: School Admin grants `hr_officer` → Employee, User link,
+  EmploymentRecord and reporting line → ActingEmployee → teacher, staff
+  self-service, leave, staff attendance and payroll, each under its own gate.
+- **SR.4 also fixed:** HR self-administration and self-pay (a demonstrated
+  self-elevation) and narrowed `payroll_officer` to 8 keys. It added
+  sensitive-action MFA.
+- **SR.5** (ADR 0071 §27) closed the programme.
+
+**Unchanged:**
+- E33's production re-verification still needs the deployment checklist.
+- **E47 (SR-L1) stays drafted, not sent, not answered.**
+- E16 stays separate: its 97 exception records expire 2026-10-29, so it needs
+  a fresh scan and decision before 2026-10-28.
+- Actor-level separation-of-duties choices remain owner decisions (ADR 0071
+  §27).
+
 ## Note — POR built for development and closed (POR.1–POR.5, 2026-10-09)
 
 **No legal determination.** Row E46 is unchanged: **POR-L1 — DRAFT REQUEST,

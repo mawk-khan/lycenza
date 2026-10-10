@@ -641,6 +641,9 @@ class StaffRoleGrantAuthorityTest extends TestCase
     {
         [$admin, $school] = $this->staffAdmin();
         [, $target] = $this->staffMember($school, 'staff_self_service');
+        // SR.5: a SUSPENDED member, so reactivation reaches the MFA check rather than `not_suspended`.
+        [, $suspended] = $this->staffMember($school, 'staff_self_service');
+        app(StaffAccessService::class)->suspend($school, $admin, $suspended->id);
         $invitation = app(StaffInvitationService::class)->issue($school, $admin, 'mfa.check@example.test', ['teacher']);
 
         foreach ([
@@ -650,12 +653,13 @@ class StaffRoleGrantAuthorityTest extends TestCase
             ["/members/{$target->id}/roles", ['role' => 'teacher']],
             ["/members/{$target->id}/roles/staff_self_service/revoke", []],
             ["/members/{$target->id}/suspend", []],
-            ["/members/{$target->id}/reactivate", ['roles' => ['teacher']]],
+            ["/members/{$suspended->id}/reactivate", ['roles' => ['teacher']]],
         ] as [$path, $data]) {
-            $response = $this->staffPost($admin, $school, $path, $data, withCode: false);
-            $this->assertContains($response->status(), [403, 422], "{$path} without a fresh MFA code");
-            $this->assertArrayNotHasKey('granted', (array) $response->json());
+            // SR.5 (ADR 0071 §27): the refusal is the MFA refusal itself, on every route.
+            $this->staffPost($admin, $school, $path, $data, withCode: false)
+                ->assertStatus(422)->assertJsonStructure(['error' => ['errors' => ['mfa_code']]]);
         }
+        $this->assertSame('suspended', $suspended->fresh()->status);
 
         $this->assertSame(['staff_self_service'], $this->activeRoles($target));
         $this->assertSame('active', $target->fresh()->status);

@@ -162,6 +162,8 @@ final class StaffInvitationService
                 $this->lockAndRequireOperational($school);
 
                 return $this->context->withSchool($school, function () use ($school, $actor, $invitationId): StaffAccountInvitation {
+                    // SR.5 (ADR 0071 §27): staff-administration authority re-read under the lock, as issue() does.
+                    $this->roles->requireMemberManager($actor, $school);
                     $invitation = $this->lockPending($school, $invitationId);
                     $roles = $invitation->roles()->with('role')->get()->map(fn (StaffAccountInvitationRole $r) => $r->role)->sortBy('key')->values()->all();
                     // SR.2: the resender becomes the issuer of record -- only roles they could grant now.
@@ -189,6 +191,8 @@ final class StaffInvitationService
             $this->lockAndRequireOperational($school);
 
             $this->context->withSchool($school, function () use ($school, $actor, $invitationId): void {
+                // SR.5 (ADR 0071 §27): re-read under the lock -- a revoked administrator never ends an invitation on stale authority.
+                $this->roles->requireMemberManager($actor, $school);
                 $this->end($school, $actor, $this->lockPending($school, $invitationId), 'revoked');
             });
         });

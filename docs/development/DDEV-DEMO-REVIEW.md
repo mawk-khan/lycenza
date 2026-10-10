@@ -312,6 +312,27 @@ with two jobs holds two roles -- the Canteen & Stores persona shows this.
   - cannot change their own employee record, employment, attendance or pay
     (another administrator does).
 
+**SR.5 live review (2026-10-10, ADR 0071 §27).** `ddev demo-reset --build`
+was run and checked against the live demo.
+- **Database:** 17 School system roles; the three grant rights on
+  `school_admin` only; `payroll_officer` with 8 keys; `demo.payroll_statutory`
+  the only demo role (HR & Payroll only).
+- **Personas:** each persona holds exactly its production role(s) from the
+  table above.
+- **Signed-in HTTP smoke (11 personas):** each persona's module pages return
+  200, and unrelated modules return 403:
+  - HR & Payroll is refused payroll accounting, Finance, Students and Staff
+    accounts;
+  - Finance is refused HR and Staff accounts;
+  - Canteen & Stores is refused canteen settings and Finance;
+  - Communications is refused approvals and Students.
+- **Payroll and statutory landing pages** are navigation shells with no data:
+  they open and show only what the persona holds.
+- **Staff accounts:** School Admin sees all 17 roles, all grantable; the
+  principal sees the staff list and no role catalogue.
+- **Login throttle:** it is 6 attempts per minute per IP, so wait a minute
+  between rapid persona switches.
+
 Every operations persona above now holds production roles. The `demo.*`
 roles of earlier versions (HR & Payroll super-role, Finance Officer with
 ledger reversal, Canteen & Stores, ...) are gone. The **only** demo-only
