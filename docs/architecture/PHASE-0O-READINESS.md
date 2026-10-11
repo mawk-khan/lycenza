@@ -2407,3 +2407,60 @@ replacement).
 - **Phase Zero:** NOT COMPLETE (Phase 0O only).
 
 **Full-regression checkpoint:** `be69b55` (cadence counter **0/5**).
+
+## 49. Phase 0O / E16-R1 — Supply-chain vulnerability remediation (2026-10-11)
+
+**E16 fresh scan (2026-10-11, historical fact).** The fresh scan of `ef575bf`
+(run `local-20261011T070805Z-dd2d0259`, Grype 0.100.0, database built
+2026-10-11T06:30Z) ended **BLOCKED**:
+- **Critical:** 2 (CPython CVE-2026-19445; npm `shell-quote`
+  GHSA-pqg4-j6r4-53mv);
+- **High with a fix:** 12 advisories, 22 matches;
+- **New High without a fix:** 4 advisories, 18 matches.
+
+All 97 `OWNER-0O-E16-2026-09-29` records still matched. Evidence stays
+outside the repository, unchanged (`e16-2026-10-11/run2`).
+
+**E16-R1 remediation** (`ab8e1ae`, record:
+`docs/security/release-remediation/E16-R1-SUPPLY-CHAIN-REMEDIATION-2026-10-11.md`):
+- **Gateway:** CPython 3.14.7 → 3.14.8 (`python:3.14.8-slim-trixie@sha256:a2b82f3c…`),
+  which brings OpenSSL 3.5.7-1~deb13u3 and libpcre2 10.46-1~deb13u3. The
+  release-tool Python and the TLS helper follow it.
+- **App runtime base:** `debian:13.7-slim` digest refreshed (libpcre2).
+- **Composer:** `league/commonmark` 2.10.0 → 2.10.3.
+- **npm:**
+  - `concurrently` 10.0.6 (`shell-quote` 1.12.0), `vue` 3.5.43,
+    `source-map-js` 1.2.2, `brace-expansion` 5.0.12;
+  - the unpatched `braces` removed by replacing
+    `@vue/eslint-config-typescript` with its own two packages (resolved
+    ESLint configuration byte-identical).
+- **Unchanged:** `vulnerability-exceptions.json` is byte-identical; no
+  owner decision was made.
+
+**Post-remediation scan** (run `local-20261011T083057Z-af070f55`, new
+evidence `e16-2026-10-11/remediation`, no-cache build):
+
+| Image | Manifest digest | Matches |
+|---|---|---|
+| Application | `sha256:f29ef25567c58f6215a8a2770af52a6535f1981c00e12030ed3a13e3b91651df` | 205 |
+| AI Gateway | `sha256:8886e2fc750e661180e5683aa199b57d102d485fca7d2976e8c42b43298e1536` | 161 |
+
+- **Critical:** 0. **High with a fix:** 0.
+- **Language audits:** 0 blocking (3 Low/Moderate remain).
+- **Secrets:** 0. **`verify-images.sh`:** 133/133.
+- **Excepted:** 97 matches, all 97 records used.
+- **Residual:** 4 advisories without a fix, 18 matches, unexcepted:
+  - CVE-2026-107778 (krb5, app);
+  - CVE-2026-107161 (Cyrus SASL, app);
+  - CVE-2026-102010 and CVE-2026-95619 (libstdc++, both images).
+
+  Their exploitability evidence was re-verified on the remediated images
+  and is reported, not decided.
+
+**Statuses:**
+- **E16:** **REMEDIATION COMPLETE / FRESH OWNER DECISION REQUIRED**
+  (register: DECISION_REQUIRED, unchanged).
+  - The decision must cover the 18 residual matches.
+  - It must also replace the 97 records before they expire on 2026-10-29.
+    From that date the CI `supply-chain` job fails.
+- **Images:** not VERIFIED. **PUBLISHED = NONE, PROMOTED = NONE.**

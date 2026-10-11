@@ -581,7 +581,7 @@ with secrets.
 | E13 | Authorized OCI registry + permissions | ADR 0052 §5 | Deployment (provider) | Mandatory | PROVIDER_REQUIRED | Registry selected and authorized; permissions applied | Operator record | Owner + Operator | Yes |
 | E14 | Production signing identity/key custody | ADR 0052 §3, §5 | Governance | Mandatory | GOVERNANCE_REQUIRED | Custody configured; `artifact-policy.json` signing identity set by a reviewed change | `artifact-policy.json` | Owner + Security | Yes |
 | E15 | Signed, stored, verified, explicitly promoted digest; first promotion evidence retained; promoted-only deployment; rollback retention | ADR 0052 §3.14, §3.17, §3.19 | Deployment | Mandatory | DEPLOYMENT_REQUIRED | Same VERIFIED digest in registry; promotion event; `retained-releases.json` entry | `retained-releases.json`; `RELEASE-QUALIFICATION.md` | Operator | Yes |
-| E16 | Vulnerability exceptions valid at qualification/promotion | ADR 0052; `OWNER-0O6E-2026-09-26` (superseded 2026-09-29 by `OWNER-0O-E16-2026-09-29`) | Governance | Mandatory | DECISION_REQUIRED | Valid on the date, or fixed, or a new explicit decision. **Current (2026-09-29):** `OWNER-0O-E16-2026-09-29`, fresh scan, 97 records valid **through 2026-10-28** (expire 2026-10-29). A fix, or a further fresh decision, is still needed for the E02/E15 dates | `vulnerability-exceptions.json`; `0O-E16-2026-09-29-owner-security-decision.md` | Owner + Security | Yes |
+| E16 | Vulnerability exceptions valid at qualification/promotion | ADR 0052; `OWNER-0O6E-2026-09-26` (superseded 2026-09-29 by `OWNER-0O-E16-2026-09-29`) | Governance | Mandatory | DECISION_REQUIRED | Valid on the date, or fixed, or a new explicit decision. **Current (2026-09-29):** `OWNER-0O-E16-2026-09-29`, fresh scan, 97 records valid **through 2026-10-28** (expire 2026-10-29). A fix, or a further fresh decision, is still needed for the E02/E15 dates. **2026-10-11:** a fresh scan was blocked by Critical and fixable High findings; E16-R1 remediated them (0 Critical, 0 fixable High). 4 new no-fix advisories (18 matches) are unexcepted, so a **fresh owner decision is required** (Note — E16-R1) | `vulnerability-exceptions.json`; `0O-E16-2026-09-29-owner-security-decision.md`; `E16-R1-SUPPLY-CHAIN-REMEDIATION-2026-10-11.md` | Owner + Security | Yes |
 | E17 | Email provider selected + legal/processor review | ADR 0055 §23; §4.11 | Provider / Legal | Mandatory | LEGAL_REVIEW_REQUIRED | Selection decision (made: Twilio SendGrid, ADR 0060); processor review recorded | ADR 0060 (§20 legal amendment, future) | Owner + Legal | Yes |
 | E18 | Email provider code tail (event auth/normalization; HTTPS sending only if needed) | §4.11 | Provider tail (repository) | Mandatory | LEGAL_REVIEW_REQUIRED | Adapter per ADR 0060 §22, focused tests, sandbox gates (§21), full regression, O16 requalification | Future Phase 0O.13A | Engineering | Yes |
 | E19 | Sending domain, SPF, aligned DKIM, DMARC ≥ quarantine after ≥ 14 d aligned | ADR 0055 §17 | Deployment | Mandatory | DEPLOYMENT_REQUIRED | DNS evidence; aggregate-report summary; `MAIL_SENDING_VERIFIED` attestation | `EMAIL-DELIVERABILITY.md` checklist | Operator | Yes |
@@ -1491,6 +1491,29 @@ corrected in SR.1. E16 is unchanged and separate.
   a fresh scan and decision before 2026-10-28.
 - Actor-level separation-of-duties choices remain owner decisions (ADR 0071
   §27).
+
+## Note — E16-R1: supply-chain remediation; a fresh decision is required (2026-10-11)
+
+**No owner decision; register status unchanged (DECISION_REQUIRED).**
+- **Fresh scan.** The fresh E16 scan of `ef575bf` found findings that the
+  ADR 0052 evaluator never allows to be excepted:
+  - Critical: CPython CVE-2026-19445 and npm `shell-quote`;
+  - 12 High advisories with a fix.
+- **Remediation.** E16-R1 (`ab8e1ae`) removed all of them with narrow
+  dependency and base-digest updates. The rescan has 0 Critical and 0 High
+  with a fix.
+- **Existing exceptions.** The 97 `OWNER-0O-E16-2026-09-29` records still
+  match exactly. The file is byte-identical, and the records still expire
+  on 2026-10-29.
+- **Residual.** Four new Debian advisories with no fix are unexcepted:
+  CVE-2026-107778 (krb5), CVE-2026-107161 (Cyrus SASL), CVE-2026-102010 and
+  CVE-2026-95619 (libstdc++); 18 matches. Their re-verified exploitability
+  evidence is recorded in
+  `docs/security/release-remediation/E16-R1-SUPPLY-CHAIN-REMEDIATION-2026-10-11.md`.
+  It is evidence, not an acceptance.
+- **Next.** A fresh owner/security decision has to cover the residual set
+  and replace the expiring records. It needs separate authorization. No
+  image is VERIFIED until it exists.
 
 ## Note — POR built for development and closed (POR.1–POR.5, 2026-10-09)
 

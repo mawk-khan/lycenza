@@ -196,7 +196,7 @@ base image of the Dockerfile.
 
 Both production images have 0 CRITICAL and 0 HIGH with a fix (application:
 repository-built PHP 8.3.35 on curl 8.22.0 / libxml2 2.15.4; Gateway: CPython
-3.14.7). Their remaining HIGH-without-fix findings — 12 Debian 13
+3.14.7 at the time; 3.14.8 since E16-R1). Their remaining HIGH-without-fix findings — 12 Debian 13
 Essential-package advisories, 48 + 49 matches — are covered exactly by owner
 decision `OWNER-0O6E-2026-09-26`
 (`docs/security/release-remediation/0O.6E-owner-security-decision.md`),
@@ -208,7 +208,25 @@ digests and their `verify-artifact` result are recorded in
 `docs/security/release-remediation/0O.6F-RUNTIME-HARDENING-EXCEPTIONS.md`.
 **PUBLISHED = NONE, PROMOTED = NONE**: no registry, no production signing
 identity, no deployment. The pinned tool Python (lock freshness, pip-audit)
-is the Gateway's interpreter, CPython 3.14.7.
+is the Gateway's interpreter, CPython 3.14.8 since E16-R1.
+
+**E16-R1 (2026-10-11): REMEDIATION COMPLETE / FRESH OWNER DECISION
+REQUIRED.** A fresh scan on 2026-10-11 found new findings that no exception
+may cover: 2 Critical and 12 Highs with a fix. E16-R1 fixed them all:
+- Gateway CPython 3.14.8;
+- OpenSSL and libpcre2 Debian updates through refreshed base digests;
+- `league/commonmark` 2.10.3;
+- the npm `shell-quote`/`vue`/`source-map-js`/`brace-expansion` updates, and
+  `braces` removed.
+
+The rescan has 0 Critical and 0 High with a fix. The 97 records above
+still match and still expire on 2026-10-29.
+
+Four **new** Debian advisories have no fix and no exception (krb5, Cyrus
+SASL, and two in libstdc++; 18 matches). Until a fresh owner/security
+decision covers them, no image can be VERIFIED. This file records no such
+decision. See
+`docs/security/release-remediation/E16-R1-SUPPLY-CHAIN-REMEDIATION-2026-10-11.md`.
 
 ## Known limits (recorded, not claimed away)
 

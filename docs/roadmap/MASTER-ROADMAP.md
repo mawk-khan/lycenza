@@ -47,6 +47,10 @@ waived or complete.
 - **E16.** The decision `OWNER-0O-E16-2026-09-29` is historical evidence. It
   may lapse (2026-10-29); final qualification needs a fresh scan and
   decision on its own date.
+  *(2026-10-11: E16 — REMEDIATION COMPLETE / FRESH OWNER DECISION REQUIRED.
+  E16-R1 removed every Critical and fixable High that the fresh scan found.
+  Four new no-fix advisories await a fresh decision; see "E16 —
+  REMEDIATION COMPLETE" below.)*
   *(Post-POR roadmap audit, 2026-10-09; a fact, not a new decision:* the
   lapse is not confined to final qualification. From 2026-10-29 (UTC) the
   `ci.yml` `supply-chain` job fails on every push to `main` and every pull
@@ -3392,6 +3396,26 @@ merged commit is in `PHASE-0O-READINESS.md` §47 and after.
 - **Qualified:** `main` `be69b55`, both images VERIFIED (0 blocking; 48 and
   49 excepted). Regression 6,500 tests with only the ESI-12 skip.
 - **Full-regression checkpoint:** `be69b55` (counter 0/5, readiness §48).
+
+**E16 — REMEDIATION COMPLETE / FRESH OWNER DECISION REQUIRED (2026-10-11).**
+- **Fresh scan.** The 2026-10-11 fresh scan of `ef575bf` was BLOCKED by 2
+  Critical and 12 High-with-fix advisories.
+- **E16-R1 (`ab8e1ae`).** Fixed all of them:
+  - Gateway CPython 3.14.8, with OpenSSL and libpcre2 through the base;
+  - app base digest refresh;
+  - `league/commonmark` 2.10.3;
+  - npm `shell-quote`, `vue`, `source-map-js` and `brace-expansion`
+    updates, with `braces` removed.
+
+  The rescan has 0 Critical and 0 fixable High.
+- **Exceptions file.** Unchanged. Its 97 records still match and still
+  expire on 2026-10-29; from that date the CI `supply-chain` job fails.
+- **Residual.** Four new no-fix Debian advisories are unexcepted (krb5,
+  Cyrus SASL, 2× libstdc++; 18 matches).
+- **Next.** A fresh owner/security decision is needed, separately
+  authorized. E16 is **not** closed, and the gate is **not** current.
+- **Record:** `PHASE-0O-READINESS.md` §49;
+  `docs/security/release-remediation/E16-R1-SUPPLY-CHAIN-REMEDIATION-2026-10-11.md`.
 
 **Phase Zero scope closure (2026-09-29, docs-only, ADR 0061).** Phase 0H
 and Phase 0M are closed for Phase Zero, with their remaining scope deferred
