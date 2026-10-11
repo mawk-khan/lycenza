@@ -568,7 +568,7 @@ with secrets.
 |---|---|---|---|---|---|---|---|---|---|
 | E01 | Phase 0O repository foundations (0O.1–0O.11A) | ADRs 0049–0057 | Repository | Mandatory | REPOSITORY_COMPLETE | Implemented, tested, qualified | Readiness §13–§40 | Engineering | No |
 | E02 | Final regression + O16 qualification of the closeout commit | ADR 0052 §3.15; §5 item 1 | Repository | Mandatory | GOVERNANCE_REQUIRED | Fresh qualification of the closeout commit on protected `main`, after: E03 (protection active in reality); E18 (the selected provider's code merged); every other mandatory executable repository change; and E16 (every vulnerability exception valid on the qualification date, or replaced by fixes or a fresh decision). Both images VERIFIED. (Corrected 2026-09-29; read "after E03, E17, E24".) | Future readiness section; `RELEASE-QUALIFICATION.md` | Engineering + Operator | Yes |
-| E03 | `main` protected (branch rule or ruleset) | ADR 0052 §3.15; §4.6 | Governance | Mandatory | GOVERNANCE_REQUIRED | GitHub API/settings show protection; force-push and deletion refused | GitHub settings (not in repo); dated note in readiness | Owner | Yes |
+| E03 | `main` protected (branch rule or ruleset) | ADR 0052 §3.15; §4.6; ADR 0072 | Governance | Mandatory | GOVERNANCE_REQUIRED | GitHub API/settings show protection; force-push and deletion refused. (Amended 2026-10-11, E03.0: the live `main-protection` ruleset of ADR 0072 §5 — required `CI gate` from GitHub Actions, no bypass actors — read back in E03.2, and the ADR 0072 §25 closure proofs passed in E03.3. Status: E03 — CONTRACT PUBLISHED / CI REPAIR REQUIRED.) | GitHub settings (not in repo); ADR 0072; dated note in readiness (§52) | Owner | Yes |
 | E04 | S1 repository hardening, V1–V5 frozen | ADR 0049 §20 + amendment | Repository | Mandatory | REPOSITORY_COMPLETE | Guard tests; throttled `/api/v1`; empty partner catalog | Readiness §16 | Engineering | No |
 | E05 | S1 edge: `TRUSTED_PROXIES`, HTTPS detection, HSTS, client-IP limiting | ADR 0049 §12; ADR 0050 §2 | Deployment | Mandatory | DEPLOYMENT_REQUIRED | Real edge addresses configured; the three behaviours demonstrated | Operator evidence record | Operator | Yes |
 | E06 | S2 repository instrumentation and alerts | ADR 0051 §20 items 1–9 | Repository | Mandatory | REPOSITORY_COMPLETE | Metrics, logs, OBS rules, runbooks | Readiness §20 | Engineering | No |
@@ -1491,6 +1491,31 @@ corrected in SR.1. E16 is unchanged and separate.
   a fresh scan and decision before 2026-10-28.
 - Actor-level separation-of-duties choices remain owner decisions (ADR 0071
   §27).
+
+## Note — E03.0: main protection contract published; CI repair required (2026-10-11)
+
+**Register status unchanged: GOVERNANCE_REQUIRED.** Nothing on GitHub was
+configured. ADR 0072 is the E03 contract.
+- **History kept.** E03 was a deliberate deferral (the 2026-09-29 ruleset
+  was removed the same day for development speed), not an oversight.
+- **Why now.** E16-R1's two commits reached `origin/main` before their gates
+  finished, by a `git push` from this clone; the initiating process is
+  unknown. Local discipline alone is insufficient.
+- **Architecture (owner decision).** Option D-remote: a candidate is pushed
+  to `integration/*`, the aggregate `CI gate` passes on that exact SHA, and
+  only that SHA is fast-forwarded to `main`. Ruleset `main-protection`:
+  deletion and non-fast-forward blocked, linear history, `CI gate` required
+  from GitHub Actions, no bypass actors, no pull-request rule during active
+  development. PR + at least 1 independent approval + CODEOWNERS return at
+  production-stage hardening, before E02.
+- **Premise.** CI on `main` has never been green (239 runs: 229 failed, 10
+  cancelled). E03.1 repairs it (Laravel bootstrap ordering; gitleaks — 7
+  historical fixture findings in `2c92af358`, to be confirmed from the CI
+  log; Flutter), adds the gate and reaches remote parity
+  (MinIO/S3) before anything becomes required. E03.2 activates; E03.3
+  proves.
+- **E02** still requires E03 (protection active in reality) and is
+  otherwise unchanged. E16 is unchanged (current through 2026-11-09).
 
 ## Note — E16-P1: Critical exception policy reconciled (2026-10-11)
 

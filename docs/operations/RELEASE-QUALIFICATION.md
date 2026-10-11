@@ -16,6 +16,14 @@ Tooling reference: `infrastructure/release/README.md`.
 >   force-push and deletion refused);
 > - a **fresh** qualification runs from that protected boundary.
 >
+> *(2026-10-11, E03.0, ADR 0072.)* "Protected `main`" will mean the
+> `main-protection` ruleset: deletion and force push refused, linear
+> history, and a required `CI gate` from GitHub Actions on the exact SHA,
+> with no bypass actors. Candidates are validated on `integration/*` and
+> that exact SHA is fast-forwarded to `main`. Candidate-branch CI runs are
+> publication checks, never release artifacts. Not active yet: **E03 —
+> CONTRACT PUBLISHED / CI REPAIR REQUIRED.**
+>
 > A VERIFIED digest from before protection (such as `c4b1b6c` or the
 > current latest, `be69b55`, `PHASE-0O-READINESS.md` §48) is progress
 > evidence, not the release to promote. Exceptions must be valid on the

@@ -2202,6 +2202,10 @@ or ruleset on `main` that refuses force-pushes and deletion and routes
 changes through the controlled integration path. Then run all future work
 through protected `main`. `main` was unprotected on 2026-09-29 (public
 API: `protected: false`, no rulesets).
+*(2026-10-11, E03.0: the contract is ADR 0072 — protected exact-SHA
+publication with a required `CI gate`, no bypass actors, no PR during active
+development. Status: E03 — CONTRACT PUBLISHED / CI REPAIR REQUIRED; see
+§52.)*
 
 **Status:**
 - **O1:** RESOLVED AS DEFINITION OF DONE — NOT SATISFIED.
@@ -2643,3 +2647,66 @@ history.
 **Unchanged.** `OWNER-0O-E16-2026-10-11`, its 115 High records and the
 exception file are all unchanged. **E16 stays current through 2026-11-09**;
 the next decision is due before 2026-11-10.
+
+## 52. Phase 0O / E03.0 — Main branch protection & publication control contract (2026-10-11)
+
+Owner decisions, recorded as ADR 0072. **Nothing on GitHub was configured**:
+no ruleset, branch rule, workflow, hook, repository or editor setting.
+ADR 0058 row E03 stays **GOVERNANCE_REQUIRED**.
+
+**Baseline.** `HEAD` = `main` = `origin/main` = `f36714b`; clean tree; one
+worktree; the 2026-08-27 stash and the phase-1c remote branches untouched.
+
+**History (kept).** Ruleset `main` (id `24192267`, 2026-09-29): deletion and
+force push blocked, PR with 0 approvals, no required checks, no bypass
+actors. The owner removed it the same day because PR overhead was slowing
+active development; the PR #1 evidence was reverted (`5d8dce3`). This was a
+deliberate deferral, not an oversight.
+
+**New evidence (E16-R1).** `ab8e1ae` and `29785e1` reached `origin/main`
+before E16-R1's final gates finished. The local reflog records both as
+`update by push`, so a `git push` ran from this clone. The initiating
+process is unknown; IDE involvement is possible but unproven. The exact
+published tree was later fully validated (§49–§50). Classification:
+**non-blocking process-control deviation demonstrating that local
+publication discipline alone is insufficient.**
+
+**Remote state (public API, 2026-10-11).** Public repository owned by a
+personal user account; `main` `protected: false`; rulesets `[]`; effective
+rules `[]`; no required checks. Collaborators, deploy keys, protection
+detail and Actions permissions need authenticated owner access and were not
+read.
+
+**CI state.** 239 `CI` push runs on `main` since 2026-08-23: 229 failed, 10
+cancelled, 0 green.
+- **Laravel:** `composer install` runs before `.env` exists, so
+  `package:discover` boots production-like and `ProductionConfigurationGuard`
+  correctly refuses. Reproduced locally. **CI sequencing defect, not an
+  application defect.** The remote PHP suite has never run.
+- **Flutter:** `flutter analyze` failing since the first run.
+- **gitleaks:** the CI gitleaks step has failed since 2026-09-27. *Audit
+  correction:* the audit's "0 leaks locally, environmental" is wrong. The
+  identical full-history command at E03.0 finds **7** `generic-api-key`
+  findings, all literal DNS-verification fixture tokens in `2c92af358`
+  (Phase 0O.8A test fixtures, removed from the tree by `15b123c0`). CI's
+  secrets-scan was green in the last run before `2c92af358` and failed in
+  the first run after it. Confirmation from the authenticated CI log is
+  still required before any exact allowlist change (ADR 0072 §1.4.1,
+  §10).
+- Supply chain, AI Gateway, shared types and production images pass.
+
+**Decisions (ADR 0072 §2).** Option D-remote: candidate on `integration/*`,
+aggregate `CI gate` green on that exact SHA, then a fast-forward of that SHA
+to `main`. Ruleset `main-protection` (§5, pinned by
+`infrastructure/release/tests/test_main_protection_contract.py`). No PR and
+0 approvals now; PR + at least 1 independent approval + CODEOWNERS before
+E02. No merge queue. No bypass actor. Local canonical regression stays
+authoritative until remote parity (MinIO/S3) is proven. Workflow
+self-modification is an accepted development-stage residual risk, not
+acceptable for production promotion.
+
+**Next.** E03.1 CI repair (ADR 0072 §24), then E03.2 activation with live
+read-back, then E03.3 closure proofs (§25). Required checks are not
+activated before CI is green. Nothing starts automatically.
+
+**Status: E03 — CONTRACT PUBLISHED / CI REPAIR REQUIRED.**

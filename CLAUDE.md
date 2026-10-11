@@ -1143,3 +1143,19 @@ once several modules copy it.
       under the current factor).
     - **Never:** add a module-specific MFA mechanism, a step-up on ordinary
       reads, or a role-name check.
+
+96. **`main` moves only to an exact SHA that already passed remote checks,
+    by fast-forward (ADR 0072, E03).** Develop on a detached candidate or an
+    `integration/*` branch -- never commit ordinary work onto local `main`.
+    Run the gates, push the candidate to `integration/*`, and fast-forward
+    `main` to that same SHA only after its `CI gate` (GitHub Actions) is
+    green; if `main` moved, rebase and re-check the new SHA -- never reuse
+    another SHA's checks. Never force-push or delete `main`, never add a
+    ruleset bypass actor, and never treat a local hook, a documented ruleset
+    or a push-triggered workflow as protection. Until E03.2 activates
+    `main-protection` this is discipline, not enforcement (status: E03 --
+    CONTRACT PUBLISHED / CI REPAIR REQUIRED; CI is not green yet, so until
+    E03.1 the local gates and push-only-after-gates remain the publication
+    control). The local canonical regression stays authoritative until
+    remote parity is proven and recorded (ADR 0072 §11). Never change a
+    contributor's IDE settings to enforce this.

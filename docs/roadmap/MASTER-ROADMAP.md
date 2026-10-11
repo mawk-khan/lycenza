@@ -70,6 +70,16 @@ waived or complete.
   PR #1 was reverted (`5d8dce3`). Final hardening must protect `main`, block
   force-push and deletion, restore the pull-request path, record E03
   evidence and run E02 from protected `main`.
+  *(Dated correction, 2026-10-11, E03.0 owner decision, ADR 0072: E03 is
+  started now, after the E16-R1 early push showed that local publication
+  discipline alone is insufficient. "Restore the pull-request path" is
+  **revised**: the development stage uses protected exact-SHA direct
+  publication (a candidate on `integration/*` passes the required `CI gate`,
+  then that exact SHA is fast-forwarded to `main`; no bypass actors). PR +
+  at least 1 independent approval + CODEOWNERS are deferred to
+  production-stage hardening, before E02 final qualification. **E03 —
+  CONTRACT PUBLISHED / CI REPAIR REQUIRED**: CI on `main` has never been
+  green, so nothing is activated until E03.1 repairs it.)*
 - **Legal and security gates still bind** product work:
   - the Phase 0M reopening gate;
   - E17 before any production SendGrid use;
@@ -3447,6 +3457,22 @@ merged commit is in `PHASE-0O-READINESS.md` §47 and after.
 - **Unchanged.** E16 is still current through 2026-11-09 under
   `OWNER-0O-E16-2026-10-11`.
 - **Record:** `PHASE-0O-READINESS.md` §51.
+
+**E03 — CONTRACT PUBLISHED / CI REPAIR REQUIRED (E03.0, 2026-10-11).**
+- **Contract.** ADR 0072. Nothing on GitHub was configured.
+- **Decisions.** Option D-remote (exact-SHA integration-branch
+  publication); ruleset `main-protection` with deletion and force-push
+  blocked, linear history and a single required `CI gate` sourced from
+  GitHub Actions; no bypass actors; no PR and 0 approvals during active
+  development; no merge queue; CODEOWNERS and PR + independent review at
+  production stage; local pre-push guard as defence in depth only.
+- **Premise.** 239 `CI` runs on `main`, none green. E03.1 order: logs →
+  gitleaks → Laravel bootstrap → Flutter → `integration/**` trigger →
+  classifier → `CI gate` → MinIO/S3 parity → docs lane → exact-SHA and E16
+  freshness → drift check → green.
+- **Next.** E03.1 (CI repair), then E03.2 (activation and read-back), then
+  E03.3 (closure proofs). None starts automatically.
+- **Record:** `PHASE-0O-READINESS.md` §52.
 
 **Phase Zero scope closure (2026-09-29, docs-only, ADR 0061).** Phase 0H
 and Phase 0M are closed for Phase Zero, with their remaining scope deferred
