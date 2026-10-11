@@ -3,7 +3,9 @@
 Every threshold decision lives here -- qualify, verify-artifact and the
 scheduled re-scan all call evaluate(); nothing else interprets severities.
 
-- CRITICAL blocks, always.
+- CRITICAL blocks, always: a Critical is never exception-eligible (E16-P1, ADR 0052
+  section 3.7 amendment). A record that matches a Critical is refused and named
+  (`refused_exception`), never applied -- whatever its status, dates or approval.
 - HIGH blocks when a fix is available.
 - HIGH without a fix blocks unless a valid, unexpired exception matches.
 - MEDIUM / LOW / NEGLIGIBLE / UNKNOWN are recorded, never blocking here.
@@ -54,7 +56,10 @@ def evaluate(findings: Iterable[Finding], exceptions: list[VulnerabilityExceptio
             "version": finding.version, "severity": finding.severity, "fix_state": finding.fix_state,
             "severity_rated_by_source": finding.rated,
         }
-        if match is not None and reason == "high_fix_available":
+        if match is not None and reason == "critical":
+            used.add(match)
+            blocking.append({**record, "reason": reason, "refused_exception": exceptions[match].id})
+        elif match is not None and reason == "high_fix_available":
             used.add(match)
             blocking.append({**record, "reason": reason, "superseded_exception": exceptions[match].id})
         elif match is not None:

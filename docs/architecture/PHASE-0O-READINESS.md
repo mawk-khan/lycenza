@@ -2587,3 +2587,59 @@ is an ADR 0052 question for the owner.
   Overall production readiness is **not** claimed.
 - **Full-regression checkpoint:** `ea3d43d` (same-run complete
   regression), counter **0/5**.
+
+## 51. Phase 0O / E16-P1 — Critical vulnerability exception policy reconciled (2026-10-11)
+
+This resolves the §50 policy observation. Owner decision, recorded as the
+ADR 0052 E16-P1 amendment.
+
+**The rule.**
+- A **Critical is never exception-eligible**: before or after deployment,
+  with or without a fix, under any status, for any dates and under any
+  approval.
+- A Critical in a release candidate fails qualification. Remediation, or
+  removal of the component, is mandatory.
+- Owner decision R5's (Phase 0O.6B) `not_affected`/`false_positive`
+  allowance for a Critical is superseded.
+
+**After deployment.** A Critical in a running digest may be documented only
+as a **post-deployment emergency risk acknowledgement** in the incident
+record (`SUPPLY-CHAIN-INCIDENTS.md` §5).
+- It is never an exception record, and it qualifies nothing.
+- That digest, and any candidate that contains the Critical, cannot be
+  VERIFIED or promoted.
+- No structured mechanism for this record exists yet; that is governance
+  follow-up.
+
+**Enforcement, on every route to VERIFIED.**
+- **Evaluator.** `evaluate()` blocks a Critical before any exception
+  applies, and names a matching record as `refused_exception`.
+- **Validator.** `validate_exceptions()` refuses any record with severity
+  `critical`, which fails the whole file.
+- **Machine policy.** `exception_max_days.critical` is removed, and the
+  schema refuses it if it is reintroduced.
+
+`qualify audit`, `qualify rescan`, `verify-artifact`/`qualify verify` and
+`qualify all` all load the file through the validator and decide through
+the evaluator.
+
+**History.** No Critical record was ever active in the exception file's
+history.
+
+**Proof.**
+- **Release tooling:** 92 tests, OK. 6 new tests cover a Critical without an
+  exception; a Critical with an exact record under each status, fix state
+  and date window; the validator under each status with owner approval; the
+  policy maximum; the unchanged High rules; and the live decision.
+- **Mutation:** re-opening the evaluator hole fails 18 subtests, and
+  re-opening the validator hole fails 4. Both files were restored
+  byte-for-byte.
+- **Sanity checks with the hardened tooling:**
+  - `verify-artifact` re-verified the `ea3d43d` artifacts: **VERIFIED**
+    (app 60, Gateway 55 excepted; evidence unchanged);
+  - `qualify rescan` of their SBOMs with a fresh database: **PASS**, 0
+    blocking.
+
+**Unchanged.** `OWNER-0O-E16-2026-10-11`, its 115 High records and the
+exception file are all unchanged. **E16 stays current through 2026-11-09**;
+the next decision is due before 2026-11-10.

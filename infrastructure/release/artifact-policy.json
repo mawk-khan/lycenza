@@ -51,7 +51,6 @@
     "scanner_db_max_age_hours": 24,
     "exception_file": "infrastructure/release/vulnerability-exceptions.json",
     "exception_max_days": {
-      "critical": 30,
       "high": 30,
       "other": 90
     }

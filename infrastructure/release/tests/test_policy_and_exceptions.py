@@ -371,3 +371,81 @@ class CurrentDecisionEngineTest(unittest.TestCase):
             self.assertFalse(any(e.conditions for e in remaining), "the conditional records are withdrawn")
             result = evaluate([f for f in self.findings() if f.image == image], ctx.exceptions)
             self.assertEqual({r["id"] for r in result["blocking"]}, CONDITIONAL)
+
+
+class CriticalNeverExceptionEligibleTest(unittest.TestCase):
+    """E16-P1 (ADR 0052 section 3.7 amendment): no exception record can make a Critical pass -- at the
+    validator (the file) and, independently, at the one evaluator (every route: audit, rescan, verify, all)."""
+
+    DAY = date(2026, 10, 12)  # inside the live decision's window
+
+    def setUp(self) -> None:
+        self.policy = load_policy()
+        self.document = json.loads(EXCEPTIONS_FILE.read_text())
+
+    @staticmethod
+    def record(status: str = "accepted_risk", severity: str = "critical", created: date = date(2026, 10, 11),
+               expires: date = date(2026, 11, 10)):
+        from lycenza_release.exceptions import VulnerabilityException
+        return VulnerabilityException(id="CVE-2026-99990", status=status, image="app", package="libcrit1", version="1.0-1",
+                                      severity=severity, approved_by=DECISION, created=created, expires=expires)
+
+    @staticmethod
+    def finding(severity: str = "critical", fix_state: str = "not-fixed") -> Finding:
+        return Finding("grype", "app", "CVE-2026-99990", "libcrit1", "1.0-1", severity, fix_state)
+
+    def test_a_critical_without_an_exception_blocks(self) -> None:
+        result = evaluate([self.finding()], [])
+        self.assertEqual((result["verdict"], [r["reason"] for r in result["blocking"]]), ("FAIL", ["critical"]))
+
+    def test_a_critical_with_an_exactly_matching_exception_still_blocks_and_the_record_is_named(self) -> None:
+        """Whatever the status, fix state, dates or approval: refused, named, never excepted."""
+        for status in ("accepted_risk", "not_affected", "false_positive"):
+            for fix_state in ("not-fixed", "wont-fix", "fixed"):
+                for created, expires in ((date(2026, 10, 11), date(2026, 11, 10)), (date(2026, 12, 1), date(2026, 12, 31))):
+                    with self.subTest(status=status, fix_state=fix_state, created=created):
+                        result = evaluate([self.finding(fix_state=fix_state)], [self.record(status, created=created, expires=expires)])
+                        self.assertEqual(result["verdict"], "FAIL")
+                        self.assertEqual(result["excepted"], [])
+                        self.assertEqual([(r["reason"], r["refused_exception"]) for r in result["blocking"]],
+                                         [("critical", "CVE-2026-99990")])
+                        self.assertEqual(result["unused_exceptions"], [], "the refused record is reported on the finding")
+
+    def test_the_validator_refuses_any_critical_record_even_with_a_valid_window_and_owner_approval(self) -> None:
+        for status in ("accepted_risk", "not_affected", "false_positive"):
+            with self.subTest(status):
+                document = copy.deepcopy(self.document)
+                document["exceptions"][0].update(severity="critical", status=status)
+                valid, errors = validate_exceptions(document, self.policy, self.DAY)
+                self.assertEqual(valid, [], "any error invalidates the whole file")
+                self.assertIn("$.exceptions[0]: a Critical is never exception-eligible (ADR 0052 section 3.7, E16-P1)", errors)
+        document = copy.deepcopy(self.document)
+        document["exceptions"][0]["severity"] = "critical"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "exceptions.json"
+            path.write_text(json.dumps(document))
+            with self.assertRaises(ReleaseError) as caught:
+                load_exceptions(self.policy, self.DAY, path)
+        self.assertEqual(caught.exception.code, "exceptions_invalid")
+
+    def test_the_policy_declares_no_critical_exception_maximum(self) -> None:
+        self.assertEqual(self.policy["vulnerability_policy"]["blocking"]["critical"], "always")
+        self.assertNotIn("critical", self.policy["vulnerability_policy"]["exception_max_days"])
+        self.assertNotIn("critical", self.policy["vulnerability_policy"]["exception_required"])
+        reintroduced = copy.deepcopy(self.policy)
+        reintroduced["vulnerability_policy"]["exception_max_days"]["critical"] = 30
+        self.assertTrue(validate_policy(reintroduced), "a Critical exception maximum may not be reintroduced")
+
+    def test_high_rules_are_unchanged(self) -> None:
+        """A High without a fix may be excepted; a High with a fix and an expired High exception still fail."""
+        high = self.record("accepted_risk", severity="high")
+        self.assertEqual(evaluate([self.finding("high")], [high])["verdict"], "PASS")
+        fixed = evaluate([self.finding("high", "fixed")], [high])
+        self.assertEqual([(r["reason"], r["superseded_exception"]) for r in fixed["blocking"]], [("high_fix_available", "CVE-2026-99990")])
+        document = copy.deepcopy(self.document)
+        document["exceptions"][0]["expires"] = "2026-10-12"
+        self.assertIn("$.exceptions[0]: expired", validate_exceptions(document, self.policy, self.DAY)[1])
+
+    def test_the_live_decision_is_unaffected(self) -> None:
+        valid = load_exceptions(self.policy, self.DAY)
+        self.assertEqual((len(valid), {e.severity for e in valid}, {e.approved_by for e in valid}), (115, {"high"}, {DECISION}))

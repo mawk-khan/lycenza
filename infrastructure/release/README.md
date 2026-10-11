@@ -129,13 +129,19 @@ re-scan; secret and history scans clean.
 Rollback re-verification runs the same command against the retained
 evidence of the earlier digest (optionally with `--rescan-report` from a
 fresh scan). A newly found Critical in an old digest fails with
-`rescan_blocking_findings_require_judgement`: a human decision recorded as an
-exception, never an automatic pass — and never an automatic rollback.
+`rescan_blocking_findings_require_judgement`: a human incident decision
+(rebuild, or a post-deployment emergency risk acknowledgement under
+`docs/operations/SUPPLY-CHAIN-INCIDENTS.md` §5) — never an exception record
+(a Critical is never exception-eligible, E16-P1), never an automatic pass,
+and never an automatic rollback.
 
 ## Vulnerability policy (evaluate.py)
 
-- CRITICAL blocks. HIGH blocks when a fix is available. HIGH without a fix
-  blocks unless a valid exception matches. MEDIUM, LOW, NEGLIGIBLE and
+- CRITICAL blocks, always: a Critical is never exception-eligible (E16-P1).
+  A record matching a Critical is refused and named (`refused_exception`),
+  and a record with severity `critical` invalidates the whole file. HIGH
+  blocks when a fix is available. HIGH without a fix blocks unless a valid
+  exception matches. MEDIUM, LOW, NEGLIGIBLE and
   UNKNOWN are recorded, never blocking here.
 - Language advisories without a severity (pip-audit reports none; some
   Composer advisories) are treated as **HIGH** and as **fixable** — so they
@@ -146,7 +152,7 @@ exception, never an automatic pass — and never an automatic rollback.
 - An exception matches only on the exact image, advisory id (or alias),
   package, version **and** reported severity. Versions are exact only (ranges
   are refused: version ordering differs between dpkg, PEP 440 and SemVer).
-  Critical/High exceptions last at most 30 days, others at most 90; no
+  High exceptions last at most 30 days, others at most 90; no
   wildcards; an expired, future-dated, duplicate, unapproved or malformed
   entry invalidates the whole file (FAIL). The tooling validates the record;
   **it never decides whether a risk is acceptable** — `approved_by` references

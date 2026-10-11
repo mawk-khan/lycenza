@@ -3438,6 +3438,16 @@ merged commit is in `PHASE-0O-READINESS.md` §47 and after.
 - **Record:** `PHASE-0O-READINESS.md` §50.
 - **Full-regression checkpoint:** `ea3d43d` (counter 0/5).
 
+**E16-P1 — Critical exception policy reconciled (2026-10-11).**
+- **The rule.** A Critical is never exception-eligible (ADR 0052 E16-P1
+  amendment). The evaluator and validator enforce it on every route to
+  VERIFIED.
+- **After deployment.** A Critical can only be documented as an emergency
+  risk acknowledgement, which qualifies nothing.
+- **Unchanged.** E16 is still current through 2026-11-09 under
+  `OWNER-0O-E16-2026-10-11`.
+- **Record:** `PHASE-0O-READINESS.md` §51.
+
 **Phase Zero scope closure (2026-09-29, docs-only, ADR 0061).** Phase 0H
 and Phase 0M are closed for Phase Zero, with their remaining scope deferred
 post-v1. **Phase 0O is the only active Phase Zero closeout area.** See

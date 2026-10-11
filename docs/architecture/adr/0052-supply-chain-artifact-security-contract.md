@@ -167,7 +167,7 @@ JSON-Schema-validated; each entry:
 | `severity` | as reported |
 | `reason`, `compensating_control` | required text (no exploit payloads) |
 | `approved_by` | a reference to the human/security approval record (not validated as a person) |
-| `created`, `expires` | ISO dates; **Critical/High: at most 30 days**; any status: at most 90 days; none indefinite |
+| `created`, `expires` | ISO dates; **High: at most 30 days**; any status: at most 90 days; none indefinite. *(Originally "Critical/High: at most 30 days"; superseded 2026-10-11 by the E16-P1 amendment: a Critical is never exception-eligible.)* |
 
 The evaluator reads the **unmodified** scanner report and applies
 exceptions itself; the original finding stays in the evidence with its
@@ -320,7 +320,9 @@ data or secrets). Byte-for-byte reproducibility is **not** claimed in v1
 - Rollback redeploys a previously VERIFIED/PROMOTED digest — never a rebuild
   of an old commit — and re-runs verification (signature and evidence; a
   newly discovered Critical in an old image needs operator/security
-  judgement).
+  judgement — *since E16-P1 (2026-10-11), an incident decision recorded as a
+  post-deployment emergency risk acknowledgement, never an exception; that
+  digest cannot be re-verified while the Critical stands*).
 - Retain, at minimum, the current release, the approved rollback candidates
   and their evidence (SBOM, provenance, scan, signatures, verification
   record) for the life of the deployed artifact **plus the incident-response
@@ -367,7 +369,9 @@ leaked signing key (key custody: revoke/rotate and re-sign current releases;
 keyless: identity-policy compromise and certificate-identity review); a
 malicious or incorrect artifact (stop promotion, redeploy last good
 digest); a Critical CVE after deployment (scheduled re-scan alert, exception
-or rebuild decision). **No automatic production rollback.**
+or rebuild decision — *superseded 2026-10-11 by the E16-P1 amendment: rebuild,
+or a post-deployment emergency risk acknowledgement while remediation is
+urgent; never an exception*). **No automatic production rollback.**
 
 ## 4. Classification
 
@@ -711,3 +715,68 @@ no other advisory. The record is
 are qualified as recorded in the 0O.6F record. Deployment evidence (the real
 platform applying the contract, registry, production signing identity) is
 still outstanding. **PUBLISHED = NONE, PROMOTED = NONE.**
+
+## Amendment — E16-P1 Critical vulnerability exception policy (2026-10-11)
+
+**Owner decision (2026-10-11).** It resolves a contradiction found during
+E16-D1 (`PHASE-0O-READINESS.md` §50).
+
+**The contradiction.** Until this amendment, the contract said both:
+- **Critical always blocks:** §3.7 ("CRITICAL blocks"), the machine policy
+  (`blocking.critical: always`) and the evaluator's docstring;
+- **a Critical could be excepted:**
+  - §3.8 ("Critical/High: at most 30 days"), with the matching
+    `exception_max_days.critical: 30`;
+  - §3.20 and the incident runbook (a post-deployment "exception or rebuild
+    decision");
+  - owner decision R5 (Phase 0O.6B), which let an evidence-backed
+    `not_affected`/`false_positive` record stop a Critical blocking;
+  - the evaluator itself, which applied an exactly matching Critical record.
+
+**History.** No Critical record was ever active: the exception file's whole
+git history holds none. The nine genuine Criticals of Phase 0O.6B were
+remediated, not excepted.
+
+**1. Qualification exception.**
+- It exists only for an exception-eligible finding: a **High with no fix**.
+- A **Critical is never exception-eligible**, before or after deployment,
+  with or without a fix, under any status (`accepted_risk`,
+  `not_affected`, `false_positive`), for any dates and under any approval.
+- A Critical in a release candidate fails qualification. Remediation, or
+  removal of the vulnerable component, is mandatory.
+- This supersedes R5's `not_affected`/`false_positive` allowance for a
+  Critical. If a Critical match is believed to be a scanner false positive,
+  it must be resolved outside the exception mechanism: a corrected scanner
+  database, or removing the matched component. Scanner reports are never
+  edited (§3.8).
+
+**2. Post-deployment emergency risk acknowledgement.**
+- A Critical found in an already-deployed digest that cannot be fixed
+  immediately may be documented as an **incident record** under
+  `docs/operations/SUPPLY-CHAIN-INCIDENTS.md` §5. That record states the
+  exposure, the compensating controls and the remediation plan.
+- It is **not** an exception record and never enters
+  `vulnerability-exceptions.json`. It qualifies nothing:
+  - the digest cannot be re-verified while the Critical stands;
+  - no artifact containing the Critical can be VERIFIED or promoted, a
+    rollback candidate included;
+  - remediation stays mandatory and urgent.
+- The repository has no structured mechanism for this record yet. That is
+  recorded as governance follow-up work, not built here.
+
+**3. Enforcement.** The one rule is enforced in the one evaluator and
+validator, so it covers every route to VERIFIED: `qualify audit`,
+`qualify rescan`, `verify-artifact` (and therefore `qualify verify` and
+`qualify all`).
+- **Evaluator.** `evaluate()` blocks a Critical before any exception can
+  apply. A matching record is reported as `refused_exception`, never
+  applied.
+- **Validator.** `validate_exceptions()` refuses any record with severity
+  `critical`, which invalidates the whole file (`exceptions_invalid`).
+- **Machine policy.** `exception_max_days.critical` is removed, and the
+  schema refuses it if it is reintroduced.
+
+The High rules, the exception maximums for High and other severities, and
+the scanner thresholds are **unchanged**. The active decision
+`OWNER-0O-E16-2026-10-11` (115 High records, none Critical) is unaffected,
+and its validity is unchanged (through 2026-11-09).

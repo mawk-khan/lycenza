@@ -66,7 +66,7 @@ the run's `state/<image>.verification.json` (Confidential).
 
 | Code | Meaning / action |
 |---|---|
-| `vulnerability_policy_blocking_findings` | A Critical, a High with a fix, or a High without a fix and without a valid exception. Update the base digest or dependency in a reviewed change (never `audit fix` in CI), or record a time-bounded exception with a human security approval. |
+| `vulnerability_policy_blocking_findings` | A Critical, a High with a fix, or a High without a fix and without a valid exception. Update the base digest or dependency in a reviewed change (never `audit fix` in CI). Only a High without a fix may instead get a time-bounded exception with a human security approval: a Critical is never exception-eligible (ADR 0052, E16-P1 amendment), so it must be remediated or the component removed. |
 | `scanner_db_stale` | The Grype database was more than 24 h old at scan time — re-run qualification. |
 | `source_not_on_protected_main` | The commit is not reachable from `origin/main`; only protected `main` releases. |
 | `test_linkage_mismatch`, `build_linkage_mismatch`, `complete_regression_not_passed` | Tests, build and evidence did not come from one passing run on one commit — re-run the whole qualification. |
@@ -81,8 +81,9 @@ the run's `state/<image>.verification.json` (Confidential).
 Edit `infrastructure/release/vulnerability-exceptions.json` in a reviewed
 change: exact advisory id (or alias), image, package, **exact** version,
 the severity as reported, reason, compensating control, `approved_by` (the
-security approval record), `created`, `expires` (Critical/High ≤ 30 days,
-others ≤ 90). The tooling validates the record; the risk decision is human.
+security approval record), `created`, `expires` (High ≤ 30 days,
+others ≤ 90). A record with severity `critical` invalidates the whole file:
+a Critical is never exception-eligible (ADR 0052, E16-P1 amendment). The tooling validates the record; the risk decision is human.
 Expired entries fail every qualification until removed or renewed.
 
 Since Phase 0O.6F:

@@ -99,19 +99,33 @@ never trusted for promotion.)*
 2. **Decide** (operator + security):
    - **rebuild with the fix** — a reviewed base-digest or dependency update,
      full re-qualification, promotion, maintenance-window deployment; or
-   - **accept temporarily** — a time-bounded exception (≤ 30 days for
-     Critical/High) with a compensating control and an approval reference,
-     until the fix exists. Only while **no fix** exists: once a fix appears
-     the evaluator blocks the finding again (`high_fix_available`,
-     `superseded_exception`), and the answer is the rebuild.
+   - **High without a fix: accept temporarily** — a time-bounded exception
+     (≤ 30 days) with a compensating control and an approval reference,
+     until the fix exists. Once a fix appears the evaluator blocks the
+     finding again (`high_fix_available`, `superseded_exception`), and the
+     answer is the rebuild.
+   - **Critical: never an exception** (ADR 0052, E16-P1 amendment,
+     2026-10-11). If the deployed digest cannot be remediated immediately,
+     record a **post-deployment emergency risk acknowledgement** in the
+     incident record:
+     - what it records: the exposure, reachability, compensating controls,
+       the remediation plan and the owner;
+     - what it is not: an exception record. It never enters
+       `vulnerability-exceptions.json` and qualifies nothing. That digest
+       and every candidate containing the Critical cannot be VERIFIED or
+       promoted;
+     - what stays required: remediation, which is mandatory and urgent.
 3. Rollback candidates with the same finding are marked accordingly in the
    incident record; a rollback to them needs the same judgement.
 4. Never silence a finding by editing a scanner report: reports are kept
    unmodified and exceptions are applied by the evaluator.
 5. A genuine CRITICAL is never risk-accepted (owner decision R5, Phase
-   0O.6B): only an evidence-backed `false_positive`/`not_affected` record
-   (component absent, or vulnerable functionality genuinely unavailable) may
-   stop it blocking. When the vulnerable library is linked by a required
+   0O.6B). *R5 also let an evidence-backed `false_positive`/`not_affected`
+   record stop a Critical blocking; that allowance is superseded by the
+   E16-P1 amendment (2026-10-11).* A Critical is never exception-eligible
+   under any status. A suspected scanner false positive is resolved by a
+   corrected scanner database or by removing the matched component, never
+   by an exception or an edited report. When the vulnerable library is linked by a required
    runtime (as libcurl/libxml2 are by the official PHP binary) and the
    distribution has no fix, the options are waiting for the distribution,
    building the library from fixed upstream sources, or a base-family change

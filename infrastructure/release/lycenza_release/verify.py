@@ -296,8 +296,9 @@ def _rescan(ctx: Context) -> str:
     result = evaluate(fnd.grype(load_json(ctx.rescan_report), ctx.image), ctx.exceptions)
     ctx.vulnerability["rescan"] = result
     if result["verdict"] != "PASS":
-        # A newly found Critical in an old digest needs operator/security judgement
-        # (an exception record) -- never an automatic pass or an automatic rollback.
+        # A newly found Critical in an old digest needs an operator/security incident
+        # decision (rebuild, or a post-deployment emergency risk acknowledgement --
+        # never an exception record: E16-P1) -- never an automatic pass or rollback.
         raise ReleaseError("rescan_blocking_findings_require_judgement")
     return "rescan_passed"
 

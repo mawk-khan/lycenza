@@ -1492,6 +1492,22 @@ corrected in SR.1. E16 is unchanged and separate.
 - Actor-level separation-of-duties choices remain owner decisions (ADR 0071
   §27).
 
+## Note — E16-P1: Critical exception policy reconciled (2026-10-11)
+
+This resolves the E16-D1 owner follow-up.
+- **The rule.** Owner decision, ADR 0052 E16-P1 amendment: a Critical is
+  never exception-eligible.
+  - A Critical in a release candidate always fails qualification.
+  - A post-deployment Critical may be documented only as an emergency risk
+    acknowledgement in the incident record. That never qualifies or
+    promotes anything.
+- **Enforcement.** The evaluator and the exception validator enforce it on
+  every route to VERIFIED, and the Critical exception maximum is removed
+  from the machine policy.
+- **E16.** Unchanged: `OWNER-0O-E16-2026-10-11` (115 High records), current
+  through 2026-11-09. Register status unchanged.
+- **E03.** The E16-R1 early push stays only a cross-reference to E03.
+
 ## Note — E16-D1: fresh decision `OWNER-0O-E16-2026-10-11`; supply-chain gate current (2026-10-11)
 
 **Register status unchanged: DECISION_REQUIRED.** E16 must be valid again

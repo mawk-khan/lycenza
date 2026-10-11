@@ -14,6 +14,10 @@ approval: the advisory, the image/package and its exact status, the approved
 maximum duration (never above the policy maximum) and the approval's
 conditions must all match. A conditional exception is only a candidate here --
 verify-artifact applies it only with the condition's evidence.
+
+E16-P1: a Critical is never exception-eligible, so a record with severity
+`critical` invalidates the whole file -- whatever its status, dates or approval
+(the evaluator also refuses to apply one; defence in depth).
 """
 
 from __future__ import annotations
@@ -127,10 +131,13 @@ def validate_exceptions(document: Any, policy: dict[str, Any], today: date,
         if any(ch in WILDCARDS for field in ("id", "package", "version") for ch in entry[field]):
             errors.append(f"{where}: wildcards are not permitted")
             continue
+        if entry["severity"] == "critical":
+            errors.append(f"{where}: a Critical is never exception-eligible (ADR 0052 section 3.7, E16-P1)")
+            continue
         created = date.fromisoformat(entry["created"])
         expires = date.fromisoformat(entry["expires"])
         window = (expires - created).days
-        maximum = limits.get(entry["severity"], limits["other"])
+        maximum = limits.get(entry["severity"], limits["other"])  # critical never reaches here
         if created > today:
             errors.append(f"{where}: created in the future")
         if expires <= created:
