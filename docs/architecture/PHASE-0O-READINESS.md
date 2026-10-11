@@ -2464,3 +2464,126 @@ evidence `e16-2026-10-11/remediation`, no-cache build):
   - It must also replace the 97 records before they expire on 2026-10-29.
     From that date the CI `supply-chain` job fails.
 - **Images:** not VERIFIED. **PUBLISHED = NONE, PROMOTED = NONE.**
+
+## 50. Phase 0O / E16-D1 — Fresh owner decision `OWNER-0O-E16-2026-10-11`; VERIFIED (2026-10-11)
+
+**Fresh scan of the published E16-R1 tree** (`29785e1`, run
+`local-20261011T102807Z-af2b8e4f`, no-cache build, Grype 0.100.0, database
+built 2026-10-11 06:30Z):
+- 0 Critical, 0 High with a fix;
+- the 97 records of `OWNER-0O-E16-2026-09-29` still matched exactly (none
+  unused);
+- 18 unexcepted no-fix matches of 4 advisories;
+- language audits 0 blocking; secrets 0; `verify-images.sh` 133/133.
+
+**Debian 13 fix check.** The apt metadata of both images was refreshed. No
+residual package has a newer version. The only upgradable package is
+`liblzma5`, which has no Grype match.
+
+**Decision.** Owner/security approved `OWNER-0O-E16-2026-10-11`
+(`docs/security/release-remediation/0O-E16-2026-10-11-owner-security-decision.md`):
+- **Renewed: 97 records.** Each was re-verified on the new images:
+  - an ELF import scan of every object;
+  - package contents;
+  - the entrypoints.
+
+  Only the approval and the dates changed.
+- **Retired:** 0.
+- **New: 18 records**, classified per package:
+  - CVE-2026-107778 (krb5): `libkrb5-3` and `libgssapi-krb5-2`
+    accepted_risk; `libk5crypto3` and `libkrb5support0` not_affected;
+  - CVE-2026-107161 (Cyrus SASL): both packages not_affected, because the
+    DIGEST-MD5 plugin is not installed;
+  - CVE-2026-102010 and CVE-2026-95619 (libstdc++): `libstdc++6`
+    accepted_risk; `libgcc-s1` and `gcc-14-base` not_affected.
+
+  Severity stays High on every record.
+- **Active: 115 records** (60 app, 55 Gateway; 30 accepted_risk, 83
+  not_affected, 2 false_positive).
+- **Window:** created 2026-10-11, expires 2026-11-10 (30 days, the High
+  maximum). The last passing day is **2026-11-09**.
+- **Superseded:** `OWNER-0O-E16-2026-09-29` left the active approvals; its
+  record is unchanged.
+
+**Qualification of the decision commit.**
+- **Run:** `ea3d43d`, run `local-20261011T105502Z-4146a60d`, `qualify all`.
+- **Same-run complete regression:** 8,144 tests, 0 failures, ESI-12 skip
+  only (42 min). It ran on real PostgreSQL, Redis and MinIO, in the
+  isolated project.
+- **Gates:** Pint, Larastan, vue-tsc, ESLint, Prettier, build, Gateway
+  ruff/format/mypy/pytest, and the release tooling tests (86) all pass.
+- **Order of verification:**
+  - Before push, `verify-artifact` failed only `source_lineage`, because
+    the commit was not yet on `main`.
+  - After the push, `qualify verify` re-ran on the same signed evidence.
+
+**Results after the push:**
+
+| Image | Manifest digest | Config digest | `verify-artifact` |
+|---|---|---|---|
+| Application | `sha256:2f91b71da7d5b49c9888ebf1e7929e1dd2b70f943073969f609ad5488a35ab22` | `sha256:c63617c0f668d69071ad70e2d409f7779244c1e9e505a2cf5ccc0b283171e950` | **VERIFIED**: `exception_conditions_proven`, 0 blocking, 60 excepted |
+| AI Gateway | `sha256:bbeed9c09a277e8d49af057557399ae86f47a9be2ba4aeb00be4e12879d01f98` | `sha256:a4418b9ab0ffa851595723c3e9ae15a5fbbce06e652d446e863141f0430bb67e` | **VERIFIED**: `exception_conditions_proven`, 0 blocking, 55 excepted |
+
+- **SBOM sha256:**
+  - app `b1e9f002146c01d9a1bef4147b5f2fad42a81d3662e3b2b496e0073350608ad3`;
+  - Gateway `1e746c0c2c86456f9dade7427655994e8b3274289acbffbc7cdbe29e936ea002`.
+- **Evidence bundle:** sha256
+  `c001cd97dc7cb8b502d836b54814c36d50bd21dfdb2581248e8a142603d1da3e`,
+  signed with an ephemeral **non-production** key (private key destroyed).
+- **Evidence custody:** outside the repository
+  (`e16-2026-10-11/d1-fresh-scan`, `e16-2026-10-11/d1-qualify`).
+- **Successor rule:** met. The VERIFIED High/Critical set is identical to
+  the reviewed scan.
+- **PUBLISHED = NONE, PROMOTED = NONE.**
+
+**E16-R1 publication-order deviation (process record, non-blocking).**
+- **What happened.** `ab8e1ae` reached `origin/main` at 08:55:40Z and
+  `29785e1` at 09:01:31Z. Both arrived before E16-R1's full regression and
+  publish gate had finished. The agent's own later `git push` found nothing
+  left to send.
+- **Cause: not established.**
+  - No repository hook or local git configuration pushes.
+  - A Cursor/VS Code server is attached to the repository. Its user settings
+    have `git.autofetch: true` and `git.confirmSync: false`, so a Sync action
+    pushes without a prompt. Whether it did is unconfirmed.
+- **Consequence.** Every required gate later passed on exactly the
+  published tree (tree `597e3601`, 8,144 tests, 0 failures). No unverified
+  tree remains published, and no unexpected code difference was found.
+- **Classification:** a process deviation, not an unverified-code incident.
+  History was not rewritten.
+- **E16-D1 mitigation.** The candidate was committed on a detached HEAD
+  (`main` unchanged) until every gate passed. `ea3d43d` then reached
+  `origin/main` only through the authorized push at 11:57:51Z.
+- **Follow-up (non-blocking):** owner review of editor auto-sync settings.
+  The structural control is E03 (protected `main`), which stays
+  GOVERNANCE_REQUIRED and is not addressed here.
+
+**Policy observation (owner follow-up, non-blocking).** The evaluator
+honours an exactly matching exception record for a **Critical** finding:
+
+| Source | What it says |
+|---|---|
+| ADR 0052 §3.7 | "CRITICAL blocks" |
+| Machine policy | `blocking.critical: always` |
+| ADR 0052 §3.8 | a 30-day maximum for Critical exceptions |
+| ADR 0052 §3.17 | the post-deployment Critical runbook allows an "exception or rebuild decision" |
+| `verify.py` `_rescan` | expects an exception record for a newly found Critical in an old digest |
+
+That makes a human-approved Critical exception a documented design path,
+so E16-D1 did not change the evaluator. The live file holds no Critical
+record, and this is pinned by a release test. Whether a Critical exception
+should be refused at the release gate, and allowed only on the rescan path,
+is an ADR 0052 question for the owner.
+
+**Statuses:**
+- **E16:** **supply-chain gate CURRENT through 2026-11-09** under
+  `OWNER-0O-E16-2026-10-11`.
+  - Register: DECISION_REQUIRED (unchanged vocabulary). E16 must again be
+    valid on the final E02/E15 dates.
+  - A fresh scan and decision are needed before 2026-11-10. From that date
+    the CI `supply-chain` job fails.
+- **Not resolved by this:** E03 (GOVERNANCE_REQUIRED), E17, E18, E21,
+  SR-L1, the E33 production re-verification, and the other legal gates.
+  Overall production readiness is **not** claimed.
+- **Full-regression checkpoint:** `ea3d43d` (same-run complete
+  regression), counter **0/5**.

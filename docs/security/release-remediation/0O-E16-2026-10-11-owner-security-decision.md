@@ -300,3 +300,40 @@ decision, when:
   **PUBLISHED = NONE, PROMOTED = NONE**.
 - Final E02 (ADR 0058) is not satisfied by this decision. It resolves E16
   only, and only through 2026-11-09.
+
+## 8. Activation and qualified successor (2026-10-11)
+
+**Activation.** The records went live on `main` at
+`ea3d43d6799ca9274098dd9d019c3a75e46ef32b`. It was pushed only after every
+pre-publication gate passed.
+
+**Qualification.**
+- **Run:** `local-20261011T105502Z-4146a60d` (`qualify all`, started
+  10:55:02Z on the candidate commit before push).
+- **Regression:** same-run complete regression through
+  `regression-gates`: 8,144 tests, 0 failures, only the ESI-12 skip.
+- **Build:** fresh-builder, no-cache images.
+- **Scan:** Grype 0.100.0, database built 2026-10-11 06:30Z.
+- **Order of verification:**
+  - Before push, `verify-artifact` passed every check except
+    `source_lineage`, which can only pass once the commit is on `main`.
+  - After the push, `qualify verify` was re-run on the **same signed
+    evidence** and returned **VERIFIED**.
+
+Recorded in `PHASE-0O-READINESS.md` §50. It meets all four §5 successor
+conditions:
+1. **Source.** Built from the `main` commit that carries these records and
+   the runtime security contract.
+2. **Exact residual set.** The scanned High/Critical set is identical to the
+   reviewed scan: 115 findings, 16 advisories, 0 Critical, 0 High with a
+   fix.
+3. **Runtime hardening proven.** `verify-images.json` shows 133/133, and both
+   images report `exception_conditions_proven`.
+4. **VERIFIED:**
+
+   | Image | Manifest digest | Result |
+   |---|---|---|
+   | Application | `sha256:2f91b71da7d5b49c9888ebf1e7929e1dd2b70f943073969f609ad5488a35ab22` | 0 blocking, 60 excepted |
+   | Gateway | `sha256:bbeed9c09a277e8d49af057557399ae86f47a9be2ba4aeb00be4e12879d01f98` | 0 blocking, 55 excepted |
+
+**PUBLISHED = NONE, PROMOTED = NONE.**

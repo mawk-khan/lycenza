@@ -51,6 +51,9 @@ waived or complete.
   E16-R1 removed every Critical and fixable High that the fresh scan found.
   Four new no-fix advisories await a fresh decision; see "E16 —
   REMEDIATION COMPLETE" below.)*
+  *(2026-10-11, E16-D1: fresh decision `OWNER-0O-E16-2026-10-11`, 115
+  records; `ea3d43d` VERIFIED. **E16 supply-chain gate CURRENT through
+  2026-11-09.** A fresh scan and decision are needed before 2026-11-10.)*
   *(Post-POR roadmap audit, 2026-10-09; a fact, not a new decision:* the
   lapse is not confined to final qualification. From 2026-10-29 (UTC) the
   `ci.yml` `supply-chain` job fails on every push to `main` and every pull
@@ -3416,6 +3419,24 @@ merged commit is in `PHASE-0O-READINESS.md` §47 and after.
   authorized. E16 is **not** closed, and the gate is **not** current.
 - **Record:** `PHASE-0O-READINESS.md` §49;
   `docs/security/release-remediation/E16-R1-SUPPLY-CHAIN-REMEDIATION-2026-10-11.md`.
+
+**E16 — FRESH SCAN & OWNER DECISION PUBLISHED / SUPPLY-CHAIN GATE CURRENT (E16-D1, 2026-10-11).**
+- **Decision.** Owner/security approved `OWNER-0O-E16-2026-10-11` on a
+  fresh scan of the remediated `29785e1`:
+  - 0 Critical, 0 High with a fix;
+  - 97 records re-verified and renewed, plus 18 new (krb5, Cyrus SASL,
+    2× libstdc++);
+  - 115 records, valid through **2026-11-09**.
+- **Qualification.** `ea3d43d`: both images VERIFIED (app 60 and Gateway 55
+  excepted, 0 blocking).
+- **Superseded.** `OWNER-0O-E16-2026-09-29` is now history.
+- **Scope.** E16 only: E03, E17, E18, E21, SR-L1 and the E33 production
+  re-verification stay open, and overall production readiness is not
+  claimed.
+- **Process deviation.** E16-R1's early push is recorded as a non-blocking
+  process deviation, cross-referenced to E03.
+- **Record:** `PHASE-0O-READINESS.md` §50.
+- **Full-regression checkpoint:** `ea3d43d` (counter 0/5).
 
 **Phase Zero scope closure (2026-09-29, docs-only, ADR 0061).** Phase 0H
 and Phase 0M are closed for Phase Zero, with their remaining scope deferred

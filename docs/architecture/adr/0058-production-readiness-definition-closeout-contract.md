@@ -581,7 +581,7 @@ with secrets.
 | E13 | Authorized OCI registry + permissions | ADR 0052 §5 | Deployment (provider) | Mandatory | PROVIDER_REQUIRED | Registry selected and authorized; permissions applied | Operator record | Owner + Operator | Yes |
 | E14 | Production signing identity/key custody | ADR 0052 §3, §5 | Governance | Mandatory | GOVERNANCE_REQUIRED | Custody configured; `artifact-policy.json` signing identity set by a reviewed change | `artifact-policy.json` | Owner + Security | Yes |
 | E15 | Signed, stored, verified, explicitly promoted digest; first promotion evidence retained; promoted-only deployment; rollback retention | ADR 0052 §3.14, §3.17, §3.19 | Deployment | Mandatory | DEPLOYMENT_REQUIRED | Same VERIFIED digest in registry; promotion event; `retained-releases.json` entry | `retained-releases.json`; `RELEASE-QUALIFICATION.md` | Operator | Yes |
-| E16 | Vulnerability exceptions valid at qualification/promotion | ADR 0052; `OWNER-0O6E-2026-09-26` (superseded 2026-09-29 by `OWNER-0O-E16-2026-09-29`) | Governance | Mandatory | DECISION_REQUIRED | Valid on the date, or fixed, or a new explicit decision. **Current (2026-09-29):** `OWNER-0O-E16-2026-09-29`, fresh scan, 97 records valid **through 2026-10-28** (expire 2026-10-29). A fix, or a further fresh decision, is still needed for the E02/E15 dates. **2026-10-11:** a fresh scan was blocked by Critical and fixable High findings; E16-R1 remediated them (0 Critical, 0 fixable High). 4 new no-fix advisories (18 matches) are unexcepted, so a **fresh owner decision is required** (Note — E16-R1) | `vulnerability-exceptions.json`; `0O-E16-2026-09-29-owner-security-decision.md`; `E16-R1-SUPPLY-CHAIN-REMEDIATION-2026-10-11.md` | Owner + Security | Yes |
+| E16 | Vulnerability exceptions valid at qualification/promotion | ADR 0052; `OWNER-0O6E-2026-09-26` (superseded 2026-09-29 by `OWNER-0O-E16-2026-09-29`, itself superseded 2026-10-11 by `OWNER-0O-E16-2026-10-11`) | Governance | Mandatory | DECISION_REQUIRED | Valid on the date, or fixed, or a new explicit decision. **Current (2026-09-29):** `OWNER-0O-E16-2026-09-29`, fresh scan, 97 records valid **through 2026-10-28** (expire 2026-10-29). A fix, or a further fresh decision, is still needed for the E02/E15 dates. **2026-10-11:** a fresh scan was blocked by Critical and fixable High findings; E16-R1 remediated them (0 Critical, 0 fixable High). 4 new no-fix advisories (18 matches) are unexcepted, so a **fresh owner decision is required** (Note — E16-R1). **Current (2026-10-11, E16-D1):** `OWNER-0O-E16-2026-10-11`, fresh scan of `29785e1`, 115 records (97 renewed + 18 new) valid **through 2026-11-09** (expire 2026-11-10); `ea3d43d` both images VERIFIED. Still needed for the E02/E15 dates (Note — E16-D1) | `vulnerability-exceptions.json`; `0O-E16-2026-10-11-owner-security-decision.md` (history: `0O-E16-2026-09-29-owner-security-decision.md`, `E16-R1-SUPPLY-CHAIN-REMEDIATION-2026-10-11.md`) | Owner + Security | Yes |
 | E17 | Email provider selected + legal/processor review | ADR 0055 §23; §4.11 | Provider / Legal | Mandatory | LEGAL_REVIEW_REQUIRED | Selection decision (made: Twilio SendGrid, ADR 0060); processor review recorded | ADR 0060 (§20 legal amendment, future) | Owner + Legal | Yes |
 | E18 | Email provider code tail (event auth/normalization; HTTPS sending only if needed) | §4.11 | Provider tail (repository) | Mandatory | LEGAL_REVIEW_REQUIRED | Adapter per ADR 0060 §22, focused tests, sandbox gates (§21), full regression, O16 requalification | Future Phase 0O.13A | Engineering | Yes |
 | E19 | Sending domain, SPF, aligned DKIM, DMARC ≥ quarantine after ≥ 14 d aligned | ADR 0055 §17 | Deployment | Mandatory | DEPLOYMENT_REQUIRED | DNS evidence; aggregate-report summary; `MAIL_SENDING_VERIFIED` attestation | `EMAIL-DELIVERABILITY.md` checklist | Operator | Yes |
@@ -1491,6 +1491,34 @@ corrected in SR.1. E16 is unchanged and separate.
   a fresh scan and decision before 2026-10-28.
 - Actor-level separation-of-duties choices remain owner decisions (ADR 0071
   §27).
+
+## Note — E16-D1: fresh decision `OWNER-0O-E16-2026-10-11`; supply-chain gate current (2026-10-11)
+
+**Register status unchanged: DECISION_REQUIRED.** E16 must be valid again
+on the final E02/E15 dates.
+- **Decision.** After E16-R1, owner/security approved
+  `OWNER-0O-E16-2026-10-11` on a fresh scan of `29785e1`:
+  - 0 Critical, 0 High with a fix;
+  - 16 no-fix advisories;
+  - the 97 previous records re-verified and renewed, plus 18 new records
+    for krb5, Cyrus SASL and libstdc++, classified per package;
+  - 115 records, valid through **2026-11-09** (expire 2026-11-10).
+- **Qualification.** `ea3d43d`: both images VERIFIED, with same-run
+  regression of 8,144 tests (PHASE-0O-READINESS §50).
+- **The E16 supply-chain gate is current through 2026-11-09.** This
+  resolves nothing else.
+- **E16-R1 publication order.** E16-R1's two commits reached `origin/main`
+  before its gates finished.
+  - The cause was not established; an editor auto-sync is possible but
+    unconfirmed.
+  - The exact published tree later passed every gate.
+  - It is recorded as a non-blocking process deviation. It bears on **E03**
+    (protected `main`), which stays GOVERNANCE_REQUIRED and is not
+    addressed by E16.
+- **Owner follow-up (non-blocking).** ADR 0052 permits a time-bounded
+  Critical exception (§3.8, §3.17) while the policy says "CRITICAL blocks".
+  The evaluator honours such a record. The live file has none, and this is
+  pinned by a test.
 
 ## Note — E16-R1: supply-chain remediation; a fresh decision is required (2026-10-11)
 
