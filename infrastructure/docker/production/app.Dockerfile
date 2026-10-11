@@ -37,7 +37,7 @@
 # Tests\Feature\Configuration\CustomPhpRuntimeGuardTest guards this file.
 
 ARG PHP_IMAGE=php:8.3.35-fpm-trixie@sha256:e0623b713dba09e154cd513c9d175ba0967b82dae101f0c817a7e812b4b1c5d4
-ARG RUNTIME_IMAGE=debian:13.7-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a
+ARG RUNTIME_IMAGE=debian:13.7-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
 ARG NODE_IMAGE=node:22.23.3-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c
 ARG COMPOSER_IMAGE=composer:2.10.2@sha256:4d71c3c2109c61d5415544264b59ad4087e4c5b7244481723664138fd36d5040
 
