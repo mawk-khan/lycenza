@@ -1,0 +1,2 @@
+# Bytecode (the entry point and CI run with -B / dont_write_bytecode; this is the backstop).
+__pycache__/

@@ -1,0 +1,4 @@
+{
+  "_comment": "ADR 0072 section 19 (E03.1). The expected state of the remote main-protection ruleset. E03.2 changes this to \"active\" in the same change that records the live read-back; until then drift detection reports and passes.",
+  "expected_state": "awaiting-activation"
+}

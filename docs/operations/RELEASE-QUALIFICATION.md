@@ -23,6 +23,10 @@ Tooling reference: `infrastructure/release/README.md`.
 > that exact SHA is fast-forwarded to `main`. Candidate-branch CI runs are
 > publication checks, never release artifacts. Not active yet: **E03 —
 > CONTRACT PUBLISHED / CI REPAIR REQUIRED.**
+> *(E03.1, 2026-10-11: the `CI gate` exists and is green on exact candidate
+> SHAs; publication goes through `infrastructure/ci/lycenza-ci
+> publication-check --push`. The ruleset is still not active: **E03 — CI
+> GATE GREEN / REMOTE PROTECTION AWAITS ACTIVATION**.)*
 >
 > A VERIFIED digest from before protection (such as `c4b1b6c` or the
 > current latest, `be69b55`, `PHASE-0O-READINESS.md` §48) is progress

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Configuration;
 
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -14,6 +15,7 @@ use Tests\TestCase;
  * the documentation and verify-images.sh claim. The built image itself is
  * proven by infrastructure/docker/production/verify-images.sh.
  */
+#[Group('repository-documents')]
 class CustomPhpRuntimeGuardTest extends TestCase
 {
     private const PHP_VERSION = '8.3.35';

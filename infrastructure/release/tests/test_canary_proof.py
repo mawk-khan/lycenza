@@ -1,7 +1,8 @@
 """Canary PROOF against real tools (Docker required; reported as skipped, never as
 passed, without it): a real image built with planted secrets is caught by the
 history/env/label scan, and the pinned gitleaks with the repository's exact-match
-allowlist still finds a real-looking secret planted in an allowlisted file."""
+allowlist still finds a real-looking secret planted in an allowlisted file, and its
+history-only entries (E03.1) exempt one commit, never a value or a file."""
 
 from __future__ import annotations
 
@@ -68,6 +69,33 @@ class CanaryProofTest(unittest.TestCase):
         findings = json.loads((report / "r.json").read_text())
         self.assertEqual([f["RuleID"] for f in findings], ["aws-access-token"], "the planted key is found; the allowlisted trait name is not")
         self.assertNotIn(fake, json.dumps(findings), "the report is redacted")
+
+    def test_history_only_entries_exempt_one_commit_never_a_value_or_a_file(self) -> None:
+        """E03.1 (ADR 0072 section 10): the 2c92af358 entries are scoped to that commit.
+        The same fixture value committed again, and a new value in the same file, are
+        both still findings in a full-history (git mode) scan."""
+        repo = self.tmp / "history"
+        target = repo / "apps/platform/tests/Unit/Domains/DnsVerificationTest.php"
+        target.parent.mkdir(parents=True)
+        git = ["git", "-C", str(repo), "-c", "user.name=canary", "-c", "user.email=canary@invalid"]
+        subprocess.run([*git, "init", "-q"], check=True)
+        historical = "k7Qm0bY4n2XcV9sLp1aZr8tWd3eF" + "h6gJu5iOy0PqRsT"  # assembled so this file is not itself a finding
+        fresh = "".join(secrets.choice("abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789") for _ in range(43))
+        commits = []
+        for value in (historical, fresh):
+            target.write_text(f"<?php\nclass DnsVerificationTest\n{{\n    private const TOKEN = '{value}';\n}}\n")
+            subprocess.run([*git, "add", "-A"], check=True)
+            subprocess.run([*git, "commit", "-q", "-m", "canary"], check=True)
+            commits.append(subprocess.run([*git, "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip())
+        report = self.tmp / "report"
+        report.mkdir()
+        docker_run(self.policy["tools"]["gitleaks"], ["git", "/repo", "--config", "/cfg/.gitleaks.toml", "--no-banner", "--redact",
+                                                      "--exit-code", "0", "--report-format", "json", "--report-path", "/out/r.json"],
+                   mounts=[(repo, "/repo", "ro"), (REPO_ROOT / ".gitleaks.toml", "/cfg/.gitleaks.toml", "ro"), (report, "/out", "rw")],
+                   env={"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "safe.directory", "GIT_CONFIG_VALUE_0": "*"}, network="none")
+        findings = json.loads((report / "r.json").read_text())
+        self.assertEqual(sorted(commits), sorted(f["Commit"] for f in findings), "both commits are findings")
+        self.assertEqual({"generic-api-key"}, {f["RuleID"] for f in findings})
 
 
 if __name__ == "__main__":

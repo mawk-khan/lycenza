@@ -38,6 +38,7 @@
 #   bin/safe-test --reset-db                       # reset test DB, then exit
 #   bin/safe-test --diagnostic                     # print resolved config, then exit
 #   SAFE_TEST_ISOLATED=1 bin/safe-test              # isolated Compose project for this worktree
+#   SAFE_TEST_COMPOSE_OVERRIDE=<file> bin/safe-test  # one extra Compose file (CI: the versitygw S3 server)
 #
 # Everything not recognized above (--filter, a path, --testsuite, ...)
 # is forwarded verbatim to `php artisan test`.
@@ -93,6 +94,20 @@ SAFE_ENV=(
 isolated="${SAFE_TEST_ISOLATED:-0}"
 compose_files=(-f "${REPO_ROOT}/docker-compose.yml")
 project_name="school-os"
+
+# E03.1 (ADR 0072 section 11): one optional, explicitly named extra Compose
+# file -- CI's backend lane passes infrastructure/ci/compose.s3-versitygw.yml
+# because MinIO's public images are gone. It may change WHICH server answers
+# a service name, never the safety overrides below (those are passed on every
+# docker exec regardless of what Compose configures).
+if [ -n "${SAFE_TEST_COMPOSE_OVERRIDE:-}" ]; then
+  if [ ! -f "${SAFE_TEST_COMPOSE_OVERRIDE}" ]; then
+    echo "[safe-test] SAFE_TEST_COMPOSE_OVERRIDE does not exist: ${SAFE_TEST_COMPOSE_OVERRIDE}" >&2
+    exit 1
+  fi
+  compose_files+=(-f "${SAFE_TEST_COMPOSE_OVERRIDE}")
+  echo "[safe-test] extra Compose file: ${SAFE_TEST_COMPOSE_OVERRIDE}" >&2
+fi
 
 if [ "${isolated}" = "1" ]; then
   # Deterministic per-worktree project name: same worktree path always

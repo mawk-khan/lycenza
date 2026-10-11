@@ -40,7 +40,7 @@ class SupplyChainGuardTest extends TestCase
     private function workflows(): array
     {
         $files = [];
-        foreach (['ci.yml', 'release-qualification.yml', 'sbom-rescan.yml'] as $name) {
+        foreach (['ci.yml', 'release-qualification.yml', 'sbom-rescan.yml', 'protection-drift.yml'] as $name) {
             $files[$name] = $this->repo('.github/workflows/'.$name);
         }
 

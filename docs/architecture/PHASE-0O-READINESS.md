@@ -2710,3 +2710,32 @@ read-back, then E03.3 closure proofs (§25). Required checks are not
 activated before CI is green. Nothing starts automatically.
 
 **Status: E03 — CONTRACT PUBLISHED / CI REPAIR REQUIRED.**
+
+## 53. Phase 0O / E03.1 — CI repair & exact-SHA gate (2026-10-11)
+
+ADR 0072 §28 is the full record. **No GitHub ruleset or setting was
+changed; `main` is still unprotected until E03.2.**
+
+**Remote proof** (`integration/e03-1-ci-gate`):
+- **First candidate (`2ac015a`):** `CI gate` red, naming gitleaks and
+  Laravel.
+- **From `125d603` on:** the Laravel job runs the full canonical suite in CI
+  for the first time (8,144 tests, 1 known skip, 0 failures, about 40–48
+  min).
+- **Always green:** Flutter, Gateway, shared types, images, supply chain
+  (now blocking on policy) and integrity.
+- **Source:** `CI gate` comes from GitHub Actions (app 15368).
+
+**Parity** (JUnit digests on one tree):
+- remote CI, local versitygw and local MinIO have the same selection hash
+  (`f0477023…`) and the same outcomes (8,143 passed, 1 skipped);
+- per-class assertions are identical except the timing-dependent
+  `*ConcurrencyTest` races;
+- the S3 server is irrelevant; the residual differences are patch versions
+  only.
+
+**Canonical regression:** from 2026-10-11, a code-lane candidate's remote
+exact-SHA full suite is canonical publication evidence (CLAUDE.md rules 82,
+96).
+
+**Status: E03 — CI GATE GREEN / REMOTE PROTECTION AWAITS ACTIVATION.**

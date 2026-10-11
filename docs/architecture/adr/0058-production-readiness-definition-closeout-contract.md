@@ -568,7 +568,7 @@ with secrets.
 |---|---|---|---|---|---|---|---|---|---|
 | E01 | Phase 0O repository foundations (0O.1–0O.11A) | ADRs 0049–0057 | Repository | Mandatory | REPOSITORY_COMPLETE | Implemented, tested, qualified | Readiness §13–§40 | Engineering | No |
 | E02 | Final regression + O16 qualification of the closeout commit | ADR 0052 §3.15; §5 item 1 | Repository | Mandatory | GOVERNANCE_REQUIRED | Fresh qualification of the closeout commit on protected `main`, after: E03 (protection active in reality); E18 (the selected provider's code merged); every other mandatory executable repository change; and E16 (every vulnerability exception valid on the qualification date, or replaced by fixes or a fresh decision). Both images VERIFIED. (Corrected 2026-09-29; read "after E03, E17, E24".) | Future readiness section; `RELEASE-QUALIFICATION.md` | Engineering + Operator | Yes |
-| E03 | `main` protected (branch rule or ruleset) | ADR 0052 §3.15; §4.6; ADR 0072 | Governance | Mandatory | GOVERNANCE_REQUIRED | GitHub API/settings show protection; force-push and deletion refused. (Amended 2026-10-11, E03.0: the live `main-protection` ruleset of ADR 0072 §5 — required `CI gate` from GitHub Actions, no bypass actors — read back in E03.2, and the ADR 0072 §25 closure proofs passed in E03.3. Status: E03 — CONTRACT PUBLISHED / CI REPAIR REQUIRED.) | GitHub settings (not in repo); ADR 0072; dated note in readiness (§52) | Owner | Yes |
+| E03 | `main` protected (branch rule or ruleset) | ADR 0052 §3.15; §4.6; ADR 0072 | Governance | Mandatory | GOVERNANCE_REQUIRED | GitHub API/settings show protection; force-push and deletion refused. (Amended 2026-10-11, E03.0: the live `main-protection` ruleset of ADR 0072 §5 — required `CI gate` from GitHub Actions, no bypass actors — read back in E03.2, and the ADR 0072 §25 closure proofs passed in E03.3. Status: E03 — CONTRACT PUBLISHED / CI REPAIR REQUIRED.) (2026-10-11, E03.1: CI repaired, exact-SHA `CI gate` green on `integration/**`; status E03 — CI GATE GREEN / REMOTE PROTECTION AWAITS ACTIVATION; ADR 0072 §28.) | GitHub settings (not in repo); ADR 0072; dated note in readiness (§52) | Owner | Yes |
 | E04 | S1 repository hardening, V1–V5 frozen | ADR 0049 §20 + amendment | Repository | Mandatory | REPOSITORY_COMPLETE | Guard tests; throttled `/api/v1`; empty partner catalog | Readiness §16 | Engineering | No |
 | E05 | S1 edge: `TRUSTED_PROXIES`, HTTPS detection, HSTS, client-IP limiting | ADR 0049 §12; ADR 0050 §2 | Deployment | Mandatory | DEPLOYMENT_REQUIRED | Real edge addresses configured; the three behaviours demonstrated | Operator evidence record | Operator | Yes |
 | E06 | S2 repository instrumentation and alerts | ADR 0051 §20 items 1–9 | Repository | Mandatory | REPOSITORY_COMPLETE | Metrics, logs, OBS rules, runbooks | Readiness §20 | Engineering | No |
@@ -1491,6 +1491,25 @@ corrected in SR.1. E16 is unchanged and separate.
   a fresh scan and decision before 2026-10-28.
 - Actor-level separation-of-duties choices remain owner decisions (ADR 0071
   §27).
+
+## Note — E03.1: CI repaired; exact-SHA `CI gate` green (2026-10-11)
+
+**Register status unchanged: GOVERNANCE_REQUIRED.** No ruleset exists and
+`main` is still unprotected; E03.2 activates. ADR 0072 §28 records:
+- **Laravel:** env files first, Composer without scripts, then explicit
+  discovery. CI now runs the canonical `bin/safe-test`, so the full suite
+  runs remotely for the first time.
+- **Flutter:** an unused import fixed, SDK pinned.
+- **gitleaks:** 7 historical fixture findings, commit-scoped allowlist (§28).
+- **Gate:** the central classifier and the aggregate `CI gate` (GitHub
+  Actions, app 15368).
+- **Parity:** proven (identical selection hash and outcomes; versitygw
+  replaces MinIO, whose images are gone). The remote exact-SHA full suite is
+  now canonical publication evidence.
+- **E16 freshness:** enforced at publication by `lycenza-ci
+  publication-check`, and the supply-chain audit now blocks on policy.
+- **Drift:** a drift check is staged in `awaiting-activation`.
+- **E02** still needs E03 active in reality.
 
 ## Note — E03.0: main protection contract published; CI repair required (2026-10-11)
 

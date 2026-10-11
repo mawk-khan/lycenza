@@ -11,6 +11,7 @@ use App\Support\Observability\Alerts\Severity;
 use App\Support\Observability\Metrics\MetricCatalog;
 use App\Support\Observability\Metrics\Series;
 use Illuminate\Support\Facades\Artisan;
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -18,6 +19,7 @@ use Tests\TestCase;
  * Phase 0O.5A (ADR 0051 §14): the 26 alerts as deterministic conditions,
  * evaluated here against fixture metric values -- no monitoring backend.
  */
+#[Group('repository-documents')]
 class AlertCatalogTest extends TestCase
 {
     private const NOW = 1_800_000_000;

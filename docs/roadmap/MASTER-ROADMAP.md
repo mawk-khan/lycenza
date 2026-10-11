@@ -3474,6 +3474,23 @@ merged commit is in `PHASE-0O-READINESS.md` §47 and after.
   E03.3 (closure proofs). None starts automatically.
 - **Record:** `PHASE-0O-READINESS.md` §52.
 
+**E03 — CI GATE GREEN / REMOTE PROTECTION AWAITS ACTIVATION (E03.1, 2026-10-11).**
+- **Record:** ADR 0072 §28; `PHASE-0O-READINESS.md` §53. No ruleset exists
+  yet.
+- **CI repaired:**
+  - Laravel bootstrap ordering, with the canonical `bin/safe-test` in CI
+    (full suite remote for the first time);
+  - Flutter (an unused import; SDK pinned);
+  - gitleaks (7 historical fixture findings, commit-scoped allowlist).
+- **Gate:** a central classifier plus an aggregate `CI gate` from GitHub
+  Actions, validated on `integration/**`.
+- **Parity proven:** the remote exact-SHA full suite is canonical
+  publication evidence from 2026-10-11 (CLAUDE.md rules 82/96).
+- **Publication:** `lycenza-ci publication-check --push` checks the exact
+  SHA, freshness, E16 validity and fast-forward.
+- **Next:** E03.2 (activate `main-protection` and read it back), then
+  E03.3. Neither starts automatically.
+
 **Phase Zero scope closure (2026-09-29, docs-only, ADR 0061).** Phase 0H
 and Phase 0M are closed for Phase Zero, with their remaining scope deferred
 post-v1. **Phase 0O is the only active Phase Zero closeout area.** See

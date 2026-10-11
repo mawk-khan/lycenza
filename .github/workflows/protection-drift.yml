@@ -1,0 +1,31 @@
+# E03.1 (ADR 0072 section 19): scheduled, read-only comparison of GitHub's
+# live `main` protection with the `main-protection` contract (ADR 0072
+# section 5). Until E03.2 activates the ruleset, the expected state
+# (infrastructure/ci/main-protection-state.json) is `awaiting-activation` and
+# this only reports. Detection is never protection: it notices a removed or
+# weakened ruleset after the fact. It holds no credential beyond the run's
+# own read-only token and changes nothing.
+name: Protection drift
+
+on:
+  schedule:
+    - cron: "41 4 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    name: Main protection drift
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Compare live protection with the contract
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: infrastructure/ci/lycenza-ci drift --repo "$REPOSITORY"

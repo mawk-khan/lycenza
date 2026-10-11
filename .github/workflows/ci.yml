@@ -1,8 +1,12 @@
 name: CI
 
+# E03.1 (ADR 0072): a candidate is pushed to integration/** and validated on
+# its exact SHA; only that SHA is then fast-forwarded to main. The required
+# context for main (E03.2) is the aggregate `CI gate` job at the end of this
+# file -- individual jobs are never branch-rule requirements.
 on:
   push:
-    branches: [main]
+    branches: [main, "integration/**"]
   pull_request:
 
 # Least-privilege by default; individual jobs can widen only what they need.
@@ -14,9 +18,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The ONE central path classifier (infrastructure/ci/lycenza_ci/classify.py):
+  # it alone decides which lanes this candidate requires. Unknown paths, the
+  # CI definition and this tooling require every lane (fail closed).
+  classify:
+    name: Classify changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      lanes: ${{ steps.classify.outputs.lanes }}
+      base: ${{ steps.classify.outputs.base }}
+      strict: ${{ steps.classify.outputs.strict }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: classify
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        run: >-
+          infrastructure/ci/lycenza-ci classify --event "$EVENT" --ref "$REF"
+          --before "$BEFORE" --pr-base "$PR_BASE" --main-ref origin/main
+
   secrets-scan:
     name: Secrets scan (gitleaks, full history)
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -34,14 +65,20 @@ jobs:
           git /repo --config /repo/.gitleaks.toml --no-banner --redact --exit-code 1
 
   # Phase 0O.6A (ADR 0052 section 3.15, "PR CI subset"): lockfile integrity,
-  # language audits (reported, never auto-fixed), the release tooling's own
-  # tests -- no release or registry credential exists anywhere in CI.
+  # language audits (never auto-fixed), the release tooling's own tests -- no
+  # release or registry credential exists anywhere in CI. E03.1 (ADR 0072
+  # section 13): the audits are decided by the release policy evaluator, so a
+  # Critical, a High with a fix, or an invalid/expired exception decision
+  # fails this job and therefore the `CI gate`.
   supply-chain:
     name: Supply chain (lockfiles, audits, release tooling)
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
+      # Full history: the gitleaks history-allowlist guard reads commit 2c92af358.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          fetch-depth: 0
           persist-credentials: false
       - name: Release tooling tests (policy, exceptions, evaluator, scans, provenance, verify-artifact)
         working-directory: infrastructure/release
@@ -50,158 +87,197 @@ jobs:
         run: |
           infrastructure/release/qualify init --out "$RUNNER_TEMP/supply-chain"
           infrastructure/release/qualify inputs --out "$RUNNER_TEMP/supply-chain"
-      - name: Language audits (composer audit, npm audit, pip-audit; report only)
-        run: infrastructure/release/qualify audit --out "$RUNNER_TEMP/supply-chain"
+      - name: Language audits (composer audit, npm audit, pip-audit; blocking findings fail)
+        run: infrastructure/release/qualify audit --fail-on-blocking --out "$RUNNER_TEMP/supply-chain"
+
+  integrity:
+    name: Repository integrity (whitespace, CI tooling tests)
+    needs: classify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: CI tooling tests (classifier, gate, publication check, drift check)
+        run: python3 -B -m unittest discover -s infrastructure/ci/tests -v
+      # The candidate's own changes, as /publish-gate checks them; with no
+      # usable base, the newest commit.
+      - name: Whitespace (git diff --check)
+        env:
+          BASE: ${{ needs.classify.outputs.base }}
+        run: git diff --check "${BASE:-HEAD^}" HEAD
 
   production-images:
     name: Production images (build + verify-images.sh; never pushed)
+    needs: classify
+    if: contains(fromJSON(needs.classify.outputs.lanes), 'images')
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
       - run: infrastructure/docker/production/verify-images.sh --build
 
+  # E03.1 (ADR 0072 sections 9, 11): the canonical runner itself. The suite
+  # runs exactly as a developer's `bin/safe-test` runs it -- the same Compose
+  # stack (docker-compose.yml), the same platform image
+  # (infrastructure/docker/platform.Dockerfile), the same fail-closed
+  # environment overrides, `platform:test-db-reset` with the full seed set,
+  # and the full PHPUnit configuration -- with one declared difference: the
+  # S3-compatible server is versitygw, because MinIO's public images are gone
+  # (infrastructure/ci/compose.s3-versitygw.yml).
   platform:
     name: Laravel (apps/platform)
+    needs: classify
+    if: contains(fromJSON(needs.classify.outputs.lanes), 'platform')
     runs-on: ubuntu-24.04
-    services:
-      # Bootstrap superuser only -- the school_os_app runtime role
-      # (ADR 0021) is created by the "Provision database roles" step
-      # below, mirroring infrastructure/docker/postgres/init/*.sql
-      # exactly, so CI re-verifies the same role separation local dev
-      # runs under, not a weaker CI-only shortcut.
-      # Same bootstrap database as docker-compose (school_os); the test
-      # database is created by 02-create-test-database.sh below, in the
-      # same order the local init scripts run (Phase 0O.1: 01-roles.sql
-      # grants on school_os, which previously did not exist here).
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: school_os
-          POSTGRES_USER: school_os
-          POSTGRES_PASSWORD: school_os
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U school_os -d school_os"
-          --health-interval 5s --health-timeout 5s --health-retries 10
-      redis:
-        image: valkey/valkey:8-alpine
-        ports: ["6379:6379"]
-        options: >-
-          --health-cmd "valkey-cli ping"
-          --health-interval 5s --health-timeout 5s --health-retries 10
-    defaults:
-      run:
-        working-directory: apps/platform
+    timeout-minutes: 150
+    env:
+      SAFE_TEST_COMPOSE_OVERRIDE: ${{ github.workspace }}/infrastructure/ci/compose.s3-versitygw.yml
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-
-      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
         with:
-          php-version: "8.3"
-          extensions: pdo_pgsql, pgsql, bcmath, zip, gd
-          coverage: none
+          persist-credentials: false
+
+      # The environment files exist BEFORE anything can boot Laravel (Compose
+      # also requires every env_file docker-compose.yml names). Composer
+      # used to run `artisan package:discover` before .env existed, so the
+      # application booted with no APP_ENV, treated itself as production, and
+      # ProductionConfigurationGuard (correctly) refused to start.
+      - name: Environment files first (the inert committed examples; ADR 0016)
+        run: |
+          cp apps/platform/.env.example apps/platform/.env
+          cp services/ai/.env.example services/ai/.env
 
       - name: Cache Composer dependencies
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: apps/platform/vendor
-          key: composer-${{ hashFiles('apps/platform/composer.lock') }}
+          key: platform-vendor-${{ hashFiles('apps/platform/composer.lock') }}
 
-      # From composer.lock only; no Composer plugin runs (ADR 0052 section 3.5).
-      - run: composer install --no-interaction --prefer-dist --no-plugins
+      - name: Build the canonical platform image
+        run: docker compose -p school-os -f docker-compose.yml -f "$SAFE_TEST_COMPOSE_OVERRIDE" build platform
 
-      - run: cp .env.example .env
-      - run: php artisan key:generate
-
-      - name: Provision database roles and the test database (ADR 0021, ADR 0024)
-        env:
-          PGHOST: 127.0.0.1
-          PGPASSWORD: school_os
-          POSTGRES_USER: school_os
-          POSTGRES_DB: school_os
+      # From composer.lock only, no plugin and no script (ADR 0052 section
+      # 3.5, rule 87); package discovery then runs explicitly, as the
+      # production image does.
+      - name: Composer install, package discovery, application key
         run: |
-          psql -U school_os -d school_os -v ON_ERROR_STOP=1 \
-            -f ../../infrastructure/docker/postgres/init/01-roles.sql
-          bash ../../infrastructure/docker/postgres/init/02-create-test-database.sh
-          psql -U school_os -d school_os -v ON_ERROR_STOP=1 \
-            -f ../../infrastructure/docker/postgres/init/03-test-database-roles.sql
-
-      - name: Migrate test database via the admin connection
-        env:
-          DB_HOST: 127.0.0.1
-          DB_DATABASE: school_os_test
-          DB_USERNAME: school_os_app
-          DB_PASSWORD: school_os_app_local_only_password
-          DB_ADMIN_USERNAME: school_os
-          DB_ADMIN_PASSWORD: school_os
-        run: php artisan migrate --database=pgsql_admin --force
-
-      - name: Seed capability/role catalog
-        env:
-          DB_HOST: 127.0.0.1
-          DB_DATABASE: school_os_test
-          DB_USERNAME: school_os_app
-          DB_PASSWORD: school_os_app_local_only_password
-          # SR.1 (ADR 0071 §11): the catalogue is written through pgsql_admin.
-          DB_ADMIN_USERNAME: school_os
-          DB_ADMIN_PASSWORD: school_os
-        run: php artisan db:seed --class=CapabilityAndRoleSeeder --force
-
-      - name: Pint (formatting)
-        run: vendor/bin/pint --test
-
-      - name: Larastan (static analysis)
-        run: vendor/bin/phpstan analyse --memory-limit=512M
+          compose_run() { docker compose -p school-os -f docker-compose.yml -f "$SAFE_TEST_COMPOSE_OVERRIDE" run --rm --no-deps -T platform "$@"; }
+          compose_run composer install --no-interaction --prefer-dist --no-progress --no-scripts --no-plugins
+          compose_run php artisan package:discover --ansi
+          compose_run php artisan key:generate --ansi
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: apps/platform/package-lock.json
+      - name: Frontend (npm ci, type-check, ESLint, Prettier, build -> Vite manifest)
+        working-directory: apps/platform
+        run: |
+          npm ci
+          npm run type-check
+          npm run lint
+          npm run format:check
+          npm run build
 
-      - run: npm ci
-      - name: TypeScript type-check
-        run: npm run type-check
-      - name: ESLint
-        run: npm run lint
-      - name: Prettier (formatting)
-        run: npm run format:check
-      - name: Frontend build (produces Vite manifest for Inertia tests)
-        run: npm run build
+      - name: Pint (formatting)
+        run: docker compose -p school-os -f docker-compose.yml -f "$SAFE_TEST_COMPOSE_OVERRIDE" run --rm --no-deps -T platform vendor/bin/pint --test
 
-      - name: PHPUnit
-        env:
-          # Runtime connection deliberately uses school_os_app (ADR
-          # 0021), never the school_os superuser -- see ADR 0024.
-          DB_CONNECTION: pgsql
-          DB_HOST: 127.0.0.1
-          DB_PORT: 5432
-          DB_DATABASE: school_os_test
-          DB_USERNAME: school_os_app
-          DB_PASSWORD: school_os_app_local_only_password
-          DB_ADMIN_USERNAME: school_os
-          DB_ADMIN_PASSWORD: school_os
-          # E21-RH.2 (ADR 0066): the dedicated retention identity, created by
-          # 01-roles.sql above (phpunit.xml forces the same local-only values).
-          DB_RETENTION_USERNAME: school_os_retention
-          DB_RETENTION_PASSWORD: school_os_retention_local_only_password
-          REDIS_HOST: 127.0.0.1
-          # phpunit.xml force="true"s DB_HOST to the docker-compose
-          # service alias; CI's service container is on 127.0.0.1, so it
-          # redirects the connection target explicitly (tests/bootstrap.php).
-          PHPUNIT_DB_HOST: 127.0.0.1
-        run: php artisan test
+      - name: Larastan (static analysis)
+        run: docker compose -p school-os -f docker-compose.yml -f "$SAFE_TEST_COMPOSE_OVERRIDE" run --rm --no-deps -T platform vendor/bin/phpstan analyse --memory-limit=512M --no-progress
+
+      - name: Reset the test database (platform:test-db-reset, full seed set)
+        run: apps/platform/bin/safe-test --reset-db
+
+      # Parity evidence (ADR 0072 section 11), readable through the public
+      # check-run annotations API.
+      - name: Runtime identity
+        run: |
+          dc() { docker compose -p school-os -f docker-compose.yml -f "$SAFE_TEST_COMPOSE_OVERRIDE" "$@"; }
+          php="$(dc exec -T platform php -r 'echo PHP_VERSION, " ", implode(",", get_loaded_extensions()), " tz=", date_default_timezone_get(), " locale=", setlocale(LC_ALL, 0);')"
+          pg="$(dc exec -T postgres postgres --version)"
+          kv="$(dc exec -T redis valkey-server --version | cut -d' ' -f1-3)"
+          s3="$(docker inspect --format '{{.Config.Image}}' "$(dc ps -q minio)")"
+          echo "::notice title=Runtime identity::php ${php} | ${pg} | ${kv} | s3 ${s3}"
+
+      - name: PHPUnit -- the canonical full suite (bin/safe-test)
+        run: |
+          set -o pipefail
+          apps/platform/bin/safe-test --log-junit storage/logs/phpunit-junit.xml 2>&1 | tee "$RUNNER_TEMP/phpunit.log"
+
+      # The counts, readable through the public check-run annotations API; the
+      # digest (selection hash + per-class assertions) is the parity evidence
+      # compared with a local canonical run of the same tree.
+      - name: PHPUnit summary
+        if: always()
+        run: |
+          summary="$(sed 's/\x1b\[[0-9;]*m//g' "$RUNNER_TEMP/phpunit.log" 2>/dev/null | grep -E '^(OK \(|Tests: |FAILURES!|ERRORS!)' | tr '\n' ' ' || true)"
+          echo "::notice title=PHPUnit summary::${summary:-no PHPUnit summary (the suite did not finish)}"
+          failed="$(sed 's/\x1b\[[0-9;]*m//g' "$RUNNER_TEMP/phpunit.log" 2>/dev/null | grep -E '^[0-9]+\) Tests\\' | head -40 | tr '\n' ' ' || true)"
+          if [ -n "$failed" ]; then echo "::error title=PHPUnit failed tests::${failed}"; fi
+          infrastructure/ci/lycenza-ci junit-digest apps/platform/storage/logs/phpunit-junit.xml
+
+  # E03.1 (ADR 0072 section 12): the docs lane is never "run nothing". It
+  # runs the PHPUnit tests that read docs/** (group `repository-documents`;
+  # infrastructure/ci/tests keeps the group exhaustive) on the same canonical
+  # stack. gitleaks, whitespace and the release tooling tests (whose decision
+  # records live in docs/security) run for every candidate anyway.
+  docs-guards:
+    name: Documentation guards (PHPUnit repository-documents)
+    needs: classify
+    if: contains(fromJSON(needs.classify.outputs.lanes), 'docs')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      SAFE_TEST_COMPOSE_OVERRIDE: ${{ github.workspace }}/infrastructure/ci/compose.s3-versitygw.yml
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Environment files first (the inert committed examples; ADR 0016)
+        run: |
+          cp apps/platform/.env.example apps/platform/.env
+          cp services/ai/.env.example services/ai/.env
+      - name: Cache Composer dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: apps/platform/vendor
+          key: platform-vendor-${{ hashFiles('apps/platform/composer.lock') }}
+      - name: Build the canonical platform image
+        run: docker compose -p school-os -f docker-compose.yml -f "$SAFE_TEST_COMPOSE_OVERRIDE" build platform
+      - name: Composer install, package discovery, application key
+        run: |
+          compose_run() { docker compose -p school-os -f docker-compose.yml -f "$SAFE_TEST_COMPOSE_OVERRIDE" run --rm --no-deps -T platform "$@"; }
+          compose_run composer install --no-interaction --prefer-dist --no-progress --no-scripts --no-plugins
+          compose_run php artisan package:discover --ansi
+          compose_run php artisan key:generate --ansi
+      - name: Reset the test database (platform:test-db-reset, full seed set)
+        run: apps/platform/bin/safe-test --reset-db
+      - name: PHPUnit -- documentation guards
+        run: |
+          set -o pipefail
+          apps/platform/bin/safe-test --group repository-documents 2>&1 | tee "$RUNNER_TEMP/phpunit.log"
+          summary="$(sed 's/\x1b\[[0-9;]*m//g' "$RUNNER_TEMP/phpunit.log" | grep -E '^(OK \(|Tests: )' | tr '\n' ' ' || true)"
+          echo "::notice title=PHPUnit summary (repository-documents)::${summary}"
 
   ai-service:
     name: AI Gateway (services/ai)
+    needs: classify
+    if: contains(fromJSON(needs.classify.outputs.lanes), 'gateway')
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: services/ai
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
@@ -220,32 +296,45 @@ jobs:
       - name: pytest
         run: pytest -q
 
+  # E03.1 (ADR 0072 section 8): verified with Flutter 3.44.0 (analyze: no
+  # issues; the widget test passes). The mobile lane runs for apps/mobile/**
+  # changes and strict candidates; it is skipped, by the classifier only, for
+  # unrelated changes. The SDK version is pinned so a new stable release
+  # cannot silently change the analyzer under an unchanged candidate.
   mobile:
     name: Flutter (apps/mobile)
+    needs: classify
+    if: contains(fromJSON(needs.classify.outputs.lanes), 'mobile')
     runs-on: ubuntu-24.04
-    # NOTE: this job's correctness has NOT been verified locally — the
-    # Flutter SDK was unavailable in the environment this repo was
-    # scaffolded in. Verify on first real change to apps/mobile.
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: apps/mobile
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
+          flutter-version: 3.44.0
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
 
   shared-types:
     name: Contracts -> shared TypeScript types
+    needs: classify
+    if: contains(fromJSON(needs.classify.outputs.lanes), 'shared_types')
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: packages/shared-types
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -259,3 +348,34 @@ jobs:
           npm run generate
           git diff --exit-code -- src/generated
       - run: npm run type-check
+
+  # E03.1 (ADR 0072 sections 4-6): the ONE required context for main (E03.2).
+  # It always runs, depends on every job above, and passes only when every
+  # lane the classifier requires succeeded and every other lane was skipped --
+  # nothing else (gate.py). A cancelled, failed or unexpectedly skipped job,
+  # or a classifier failure, fails it.
+  gate:
+    name: CI gate
+    if: always()
+    needs:
+      - classify
+      - secrets-scan
+      - supply-chain
+      - integrity
+      - production-images
+      - platform
+      - docs-guards
+      - ai-service
+      - shared-types
+      - mobile
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          sparse-checkout: infrastructure/ci
+      - name: Every required lane succeeded; only classifier-sanctioned skips
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: infrastructure/ci/lycenza-ci gate

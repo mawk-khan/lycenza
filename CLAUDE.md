@@ -17,6 +17,7 @@ packages/shared-types Generated TypeScript bindings from packages/contracts
 infrastructure/docker Local dev Dockerfiles + docker-compose.yml (repo root)
 infrastructure/terraform  Empty by design — no cloud resources yet
 infrastructure/release    Release qualification + artifact verification (ADR 0052) — never pushes or promotes
+infrastructure/ci         CI path classifier, `CI gate`, exact-SHA publication check, drift check (ADR 0072)
 docs/architecture     ARCHITECTURE.md, DOMAIN-MAP.md, TENANCY.md, API.md, EVENTS.md, adr/
 docs/ai                AI-PLATFORM.md, AI-SECURITY.md
 docs/security           DATA-CLASSIFICATION.md, AUTHORIZATION.md
@@ -760,7 +761,9 @@ docs/roadmap             MASTER-ROADMAP.md
     merge/publish through the normal `integration/*` gate. After every
     4-5 completed units -- or sooner after any major cross-domain
     integration -- run the COMPLETE suite (`ddev test --reset-db` or
-    `bin/safe-test`), investigate every failure, fix repository defects,
+    `bin/safe-test`; since 2026-10-11 a code-lane candidate's green
+    `CI gate` carries it on the exact SHA, ADR 0072 §28.8, rule 96),
+    investigate every failure, fix repository defects,
     re-run the affected tests and then the full suite again, and publish
     those corrections before continuing. Environment-specific tests
     (e.g. the real-MinIO Documents tests,
@@ -1147,15 +1150,18 @@ once several modules copy it.
 96. **`main` moves only to an exact SHA that already passed remote checks,
     by fast-forward (ADR 0072, E03).** Develop on a detached candidate or an
     `integration/*` branch -- never commit ordinary work onto local `main`.
-    Run the gates, push the candidate to `integration/*`, and fast-forward
-    `main` to that same SHA only after its `CI gate` (GitHub Actions) is
-    green; if `main` moved, rebase and re-check the new SHA -- never reuse
-    another SHA's checks. Never force-push or delete `main`, never add a
+    Run the local gates, push the candidate to `integration/<slice>`, wait
+    for its `CI gate` (GitHub Actions, app 15368) to be green on that exact
+    SHA, then publish ONLY with
+    `infrastructure/ci/lycenza-ci publication-check --candidate <sha> --push`
+    (it refuses another SHA's checks, a stale or foreign result, an expired
+    E16 decision and a non-fast-forward). If `main` moved, rebase and
+    re-check the new SHA. Never force-push or delete `main`, never add a
     ruleset bypass actor, and never treat a local hook, a documented ruleset
-    or a push-triggered workflow as protection. Until E03.2 activates
-    `main-protection` this is discipline, not enforcement (status: E03 --
-    CONTRACT PUBLISHED / CI REPAIR REQUIRED; CI is not green yet, so until
-    E03.1 the local gates and push-only-after-gates remain the publication
-    control). The local canonical regression stays authoritative until
-    remote parity is proven and recorded (ADR 0072 §11). Never change a
-    contributor's IDE settings to enforce this.
+    or a push-triggered workflow as protection; until E03.2 activates
+    `main-protection` this is discipline, not enforcement. Path lanes come
+    only from the central classifier (`infrastructure/ci`); never give a job
+    `continue-on-error` or its own skip logic. Since 2026-10-11 (ADR 0072
+    §28.8) the remote exact-SHA full suite of a code-lane candidate is the
+    canonical regression for that publication. Never change a contributor's
+    IDE settings to enforce this.

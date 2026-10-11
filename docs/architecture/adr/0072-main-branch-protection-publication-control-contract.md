@@ -1,9 +1,9 @@
 # ADR 0072: Main Branch Protection & Publication Control Contract (E03.0)
 
-- Status: **Accepted — E03.0 contract (2026-10-11). E03 — CONTRACT
-  PUBLISHED / CI REPAIR REQUIRED.** Nothing on GitHub is configured by this
-  ADR: no ruleset, branch rule, workflow, hook or repository setting is
-  created or changed.
+- Status: **Accepted — E03.0 contract (2026-10-11). E03.1 CI REPAIR &
+  EXACT-SHA GATE IMPLEMENTED (2026-10-11, §28): E03 — CI GATE GREEN / REMOTE
+  PROTECTION AWAITS ACTIVATION.** No ruleset, branch rule or repository
+  setting is created by this ADR; E03.2 activates `main-protection`.
 - Date: 2026-10-11
 - Programme: **E03 — Main Branch Protection & Publication Control** (ADR 0058
   register row E03; `MASTER-ROADMAP.md`, Phase 0O parked rows).
@@ -597,3 +597,310 @@ protection is only documented and not enabled.**
 | **C** — merge queue | Serialized merges | Not available to a user-owned repository (§15). |
 | **D (local only)** — restricted direct push via hooks/tooling | Client-side | Bypassable, does not cover every clone or the IDE; cannot close E03. Kept only as defence in depth (§20). |
 | **E** — local workflow discipline only | Status quo | Demonstrated insufficient by E16-R1 (§1.2). |
+
+## 28. E03.1 — CI repair & exact-SHA gate (implemented 2026-10-11)
+
+Repository and CI side only. **No ruleset was created; `main` stays
+unprotected until E03.2.** Baseline `9e9c12f`; candidates were validated on
+`integration/e03-1-ci-gate`.
+
+### 28.1 Laravel bootstrap (§9)
+- **Cause (confirmed remotely):** `composer install` ran before `.env`
+  existed, so `package:discover` booted production-like and
+  `ProductionConfigurationGuard` refused.
+- **Fix:**
+  1. Both env files `docker-compose.yml` names (`apps/platform/.env`,
+     `services/ai/.env`) are copied from their inert committed examples
+     first.
+  2. Composer installs from the lock with `--no-scripts --no-plugins` (rule
+     87), inside the canonical platform image.
+  3. `artisan package:discover` and `key:generate` then run explicitly, as
+     the production image does.
+- **Unchanged:** the guard.
+- **A second CI-only defect** was found on the way. On a fresh runner,
+  Compose refused to start because `services/ai/.env` was missing; it is now
+  created too.
+
+### 28.2 The backend lane runs the canonical runner itself (§11, §18)
+The Laravel job no longer re-creates the test environment by hand
+(setup-php on the host, `migrate` + `CapabilityAndRoleSeeder` only). It
+runs:
+- the same Compose stack and platform image (`platform.Dockerfile`);
+- `bin/safe-test --reset-db` (`platform:test-db-reset`, full seed set);
+- `bin/safe-test`, the full `phpunit.xml` selection under the same
+  fail-closed overrides;
+- Pint, Larastan and the frontend checks (type-check, ESLint, Prettier,
+  build) in the same job.
+
+**The one declared substitution: the S3 server.** MinIO's public images were
+withdrawn in 2026-09, so CI uses versitygw v1.8.0 (digest-pinned) through
+`infrastructure/ci/compose.s3-versitygw.yml`, which `bin/safe-test` takes via
+`SAFE_TEST_COMPOSE_OVERRIDE`. The service names are unchanged. Its region
+must match the app's (`ap-south-1`); a mismatch fails every S3 request with
+HTTP 400 (found and fixed in E03.1).
+
+### 28.3 Flutter (§8)
+- **Root cause, reproduced with Flutter 3.44.0:** one `unused_import`
+  warning in `test/widget_test.dart`. `flutter analyze` treats any issue as
+  fatal.
+- **Classification:** a narrow repository defect.
+- **Fix:** the import is removed and CI pins `flutter-version: 3.44.0`.
+- **Result:** analyze reports no issues and the widget test passes,
+  remotely green on every E03.1 candidate.
+- **Lane:** the mobile lane runs for `apps/mobile/**` and strict
+  candidates. Unrelated changes skip it by classification only.
+- **Readiness unchanged:** this proves the skeleton analyzes and its one
+  widget test passes. The mobile product remains unimplemented.
+
+### 28.4 Triggers, classifier and lanes (§6–§7, §12, §22)
+- **Triggers:** `push` to `main` and `integration/**`, and `pull_request`.
+  The candidate SHA is the SHA that receives the checks.
+- **The one classifier:** `infrastructure/ci/lycenza_ci/classify.py`, used
+  by the `Classify changes` job, with an ordered path-class table.
+  - Both sides of a rename are classified, and deletions too.
+  - The base is the merge base with `origin/main` for a candidate branch,
+    the previous tip for a `main` push, and the PR base for a PR.
+- **Strict** (every lane except the docs lane that the full suite
+  subsumes):
+  - `.github/**`, `infrastructure/ci/**`, `docker-compose.yml`,
+    `.gitleaks.toml` and other `infrastructure/**`;
+  - any unknown path;
+  - an empty diff, or no usable base.
+
+  A workflow change can never classify itself as docs-only.
+- **Tests:** a test requires every tracked path to have a deliberate class.
+
+| Lane (job) | Required when |
+|---|---|
+| `secrets` (gitleaks, full history) | always |
+| `supply_chain` | always |
+| `integrity` (whitespace, CI tooling tests) | always |
+| `images` | platform, Gateway, image/release inputs, strict |
+| `platform` (full suite, Pint, Larastan, frontend) | platform, Gateway, contracts, image/release inputs, strict |
+| `docs` (PHPUnit `repository-documents`) | docs or root Markdown, when `platform` is not required |
+| `gateway` | `services/ai/**`, strict |
+| `shared_types` | `packages/**`, strict |
+| `mobile` | `apps/mobile/**`, strict |
+
+### 28.5 The aggregate `CI gate` (§4–§6, §16)
+- **What it is:** the job named exactly `CI gate`.
+- **How it runs:** it is `if: always()` and needs all ten jobs. It passes
+  only when:
+  - the classifier succeeded;
+  - every lane the classifier requires ended `success`;
+  - every other lane ended `skipped`.
+- **Fail-closed cases:** a cancelled, failed, missing or unexpectedly run
+  job fails it, and so does a classifier error.
+- **No self-excusing jobs:** no job sets `continue-on-error`, and the CI
+  tooling tests reject a swallowed failure.
+- **Source, observed** on `2ac015a`: check run `114518523578`, `app.id`
+  **15368**, `app.slug` `github-actions`. Its annotation names the failing
+  lanes.
+- **Mutation tests** (`infrastructure/ci/tests/test_gate.py`):
+  - every lane's `failure`, `cancelled`, `skipped` or missing result fails
+    the gate;
+  - a mobile skip passes only when mobile is not required;
+  - unknown paths require the strict lanes;
+  - a classifier failure or malformed output fails the gate;
+  - an always-lane can be neither dropped nor invented.
+
+### 28.6 Docs lane (§12)
+- **Members, enumerated by inventory:** the PHPUnit tests that read
+  `docs/**` are exactly `Feature/Observability/AlertCatalogTest` and
+  `Feature/Configuration/CustomPhpRuntimeGuardTest`, now
+  `#[Group('repository-documents')]`. A CI tooling test keeps the group equal
+  to the set of documentation readers.
+- **What else runs:** gitleaks, whitespace and the release tooling tests
+  (which read the decision records) run for every candidate.
+
+### 28.7 Canonical regression parity (§11)
+
+| Dimension | Local canonical (`bin/safe-test`) | Remote candidate (CI) |
+|---|---|---|
+| Runner | `bin/safe-test` | `bin/safe-test` (same script) |
+| PHP | 8.3.33 (`platform.Dockerfile`) | 8.3.35 (same Dockerfile, built fresh) |
+| Extensions | identical list (incl. `pdo_pgsql`, `pgsql`, `bcmath`, `gd`, `zip`, OPcache; no `intl`) | identical |
+| PostgreSQL | 16.14 (`postgres:16-alpine`) | 16.15 (same tag) |
+| Valkey | 8.1.9 (`valkey/valkey:8-alpine`) | 8.1.10 (same tag) |
+| S3 | MinIO (cached image) or versitygw | versitygw v1.8.0, digest-pinned |
+| Timezone / locale | UTC / C.UTF-8 + C | UTC / C.UTF-8 + C |
+| Env | developer `.env` + forced `phpunit.xml` + `safe-test` overrides | `.env.example` + the same forced values and overrides |
+| Database reset | `platform:test-db-reset --force` (full seed set) | same |
+| Parallelism | none (one PHPUnit process) | none |
+| Selection | full `phpunit.xml` (Unit + Feature) | same; no filter, group or shard |
+| Exclusions / skips | 1 (ESI-12, PAY-L1) | 1 (the same) |
+| Storage | `FILESYSTEM_DISK=s3` → `minio:9000`, bucket `school-os-local`, `ap-south-1`, path style | same |
+
+**Evidence on one tree** (JUnit digests: the sorted `class::method` selection
+hash plus per-class assertions):
+
+| Run | Tests | Passed / skipped | Selection SHA-256 | Assertions |
+|---|---|---|---|---|
+| Local, versitygw (tree `c94331b`) | 8,144 | 8,143 / 1 | `f0477023…a601` | 282,644 |
+| Local, MinIO (tree `a9f5378`) | 8,144 | 8,143 / 1 | `f0477023…a601` | 282,943 |
+| Remote CI, versitygw (`5ad5288`) | 8,144 | 8,143 / 1 | `f0477023…a601` | 285,756 |
+
+The three trees differ only in CI tooling, which no PHPUnit test reads.
+
+**Identical selection, identical outcomes.** Every class's assertion count is
+identical across all three runs **except** the real two-process
+`*ConcurrencyTest` races. Their polling loops assert per iteration, so the
+count follows timing (for example `CrossHostHandoffConcurrencyTest`
+1,539 / 1,809).
+- **The S3 server is irrelevant:** no S3-dependent class differs between
+  MinIO and versitygw.
+- **Residual drift is patch-level only:** PHP 8.3.33 vs 8.3.35, PostgreSQL
+  16.14 vs 16.15, Valkey 8.1.9 vs 8.1.10, all from the same floating tags. A
+  developer gets the same by rebuilding.
+
+**Parity: PROVEN (2026-10-11).**
+
+### 28.8 Canonical-regression authority — dated switchover (§11, §12)
+**From 2026-10-11, the GitHub Actions full backend regression on the exact
+integration candidate SHA is canonical publication evidence.**
+- A code-lane candidate (the `platform` lane required) obtains it from its
+  own `CI gate` run. No duplicate local full run is required by default.
+- The local `/full-regression` remains useful fast or pre-publication
+  feedback.
+- **Cadence (rule 82), how a candidate proves checkpoint eligibility:**
+  - A code-lane candidate carries its own exact-SHA full regression. It is
+    a checkpoint, and the counter resets to 0/5.
+  - A candidate whose classification needs no `platform` lane (docs or
+    developer tooling only) changes nothing the suite executes. It relies on
+    the checkpoint of its parent `main` commit, which by induction carries
+    an exact-SHA full regression or is itself such a candidate. It still
+    runs the always lanes and, for docs, the documentation guards.
+  - A strict candidate always runs the full suite.
+- **Fail closed:** the evidence is tied to the SHA, and the classifier
+  decides from the diff, never from a commit message.
+
+### 28.9 E16 freshness (§13)
+- **The supply-chain job:** it now runs `qualify audit --fail-on-blocking`.
+  It fails on a Critical, a High with a fix, or an invalid or expired
+  exception decision. The policy itself and E16 are unchanged.
+- **Stale green:** a green check never expires, so
+  `infrastructure/ci/lycenza-ci publication-check` decides immediately
+  before `main` is advanced. It refuses unless all of the following hold:
+  - the newest `CI gate` check run for **exactly** the SHA, from app
+    **15368**, is `success`;
+  - that run is at most 72 h old;
+  - the exception decision at the candidate (its earliest `expires`) is
+    still valid today (UTC) and was valid when the gate ran;
+  - remote `main` is a strict ancestor of the candidate.
+- **Pushing:** `--push` then fast-forwards `main`, never forcing it.
+- **Release qualification** keeps its own date checks.
+- **Residual:** a raw `git push` can skip the check until E03.2, and the
+  ruleset cannot express check age.
+
+### 28.10 Drift check (§19)
+- **Workflow:** `.github/workflows/protection-drift.yml` runs daily and on
+  dispatch, read-only, with only the run's own token.
+- **Command:** `lycenza-ci drift` compares `rules/branches/main`,
+  `rulesets` and `rulesets/{id}` with the §5 contract. It checks:
+  - the ruleset exists and is active;
+  - its target and branch condition;
+  - deletion, non-fast-forward and linear history are enforced;
+  - `CI gate` is required from integration 15368;
+  - the bypass actors.
+- **State gating:** `infrastructure/ci/main-protection-state.json` says
+  `awaiting-activation`, so the check reports and passes. E03.2 sets it to
+  `active`.
+- **Limit:** bypass actors that the caller cannot see are reported
+  **UNVERIFIED**, never as passing. An admin-scoped read (E03.2 read-back)
+  is needed for them.
+
+### 28.11 Workflow permissions
+- **Every workflow:** `contents: read` (`sbom-rescan` adds `actions: read`).
+- **Never present:** write permissions, `pull_request_target`,
+  `workflow_run`, secrets, and any token that could bypass a ruleset.
+- **Enforcement:** `SupplyChainGuardTest` now also covers
+  `protection-drift.yml`.
+
+### 28.12 Remote proof on `integration/e03-1-ci-gate`
+- **Every candidate:** classifier, supply chain, integrity, Gateway, shared
+  types, Flutter and production images green.
+- **`2ac015a`:** Laravel and gitleaks red, so `CI gate` **red** (red
+  candidate proof: "FAIL: secrets-scan …; platform …").
+- **`125d603` and later:** Laravel green, with the full suite remotely for
+  the first time (8,144 tests, 1 skip). gitleaks was the only red lane, so
+  `CI gate` was red.
+- **The publication candidate:** this change, with the §28.14 correction.
+  Every required lane is green, so its `CI gate` is green on its exact SHA.
+  Only then was `main` fast-forwarded to that SHA, with
+  `lycenza-ci publication-check --push`. The SHA and run are recorded in the
+  E03.1 completion report.
+
+### 28.13 Residual risks
+- **Workflow self-modification (§22):** accepted for development, not for
+  production promotion.
+- **Local checks:** the publication check and any pre-push hook are
+  bypassable until E03.2.
+- **Floating tags:** the CI service images and the dev platform base use
+  floating tags. That is patch drift, recorded in the parity table.
+- **Concurrency races:** their assertion counts vary by design. Parity is
+  judged on selection and outcomes, plus exact counts for every other class.
+
+### 28.14 gitleaks — cause confirmed and corrected (§10, §1.4.1)
+
+**Confirmed from authenticated CI logs** (owner `gh` login, 2026-10-11). The
+CI job runs gitleaks without `--verbose`, so its log carries the summary
+only:
+
+| Run | Commit | Commits scanned | Result |
+|---|---|---|---|
+| `36323758622` (last before `2c92af358`) | `980ecae` | 296 | no leaks found |
+| `36335458288` (first containing it) | `929571e` | 300 | **leaks found: 7**, exit 1 |
+| E03.1 candidate `5ad5288` | — | 443 | **leaks found: 7**, exit 1 |
+
+No other error appears in the log. The identical image, configuration and
+command at `929571e`, over a superset of those commits, finds exactly 7
+findings:
+- rule `generic-api-key`;
+- all in `2c92af358`;
+- `DnsVerificationTest.php:23`, `NetDns2DomainResolverTest.php:20` and
+  `SchoolDomainDatabaseInvariantsTest.php:25,169,170,172,174`.
+
+Every finding CI could report lies in a commit the local scan covered, and
+both report 7, so the sets are identical.
+
+**Cause:** these 7 historical fixture literals. There is no environmental
+defect.
+
+**The values are inert:**
+- **The token:** one hand-written 43-character DNS-verification test token,
+  used with the fake domain `erp.northfield.org`. Production challenge
+  tokens are `random_bytes(32)` per domain, generated at runtime
+  (`SchoolDomainService::newToken`). They are never committed, and DNS
+  verification involves no external provider credential.
+- **The other three:** base64 of fake JSON (`{"iv":"test","value":"test"}`,
+  `{"new":"token"}`, `{"after":"verify"}`).
+- **Where they exist:** only in `2c92af358` and in its removal by
+  `15b123c0`. They are in no production configuration, and no production
+  environment exists.
+
+**Correction** (`.gitleaks.toml`): three history-only entries. Each is:
+- scoped to the one commit `2c92af358`, one anchored path, and the exact
+  value(s);
+- under the one `generic-api-key` rule, with `condition = "AND"`.
+
+There is no rule change, no path exemption, no narrowing of the
+full-history scan and no history rewrite.
+
+**Guards:**
+- `infrastructure/release/tests/test_gitleaks_history_allowlist.py` pins:
+  - the commit-scoped entries are exactly those three files;
+  - each names exactly that commit;
+  - every value exists in that commit and nowhere in the current tree.
+- `test_canary_proof.py` proves, with the real gitleaks in git mode, that
+  the same value committed again and a new value in the same file are both
+  still findings.
+
+**Mutation:** deleting the `commits` scopes fails both tests (it would hide
+the same value in any other commit). The file was restored byte-for-byte.
+
+**Result:** the full-history scan with the repository configuration reports
+"no leaks found" (exit 0).
+
+**Observation, unchanged:** the pre-existing `docs/operations/README.md`
+entry's value is no longer in that file. It is left as it was, presumably
+for history.

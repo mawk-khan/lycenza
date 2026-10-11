@@ -100,3 +100,38 @@ condition = "AND"
 paths = ['''^(?:/repo/)?services/ai/tests/test_structured_logging\.py$''']
 regexTarget = "secret"
 regexes = ['''^QUJDREVGR0hJSktMTU5PUA==$''', '''^QUJDREVGR0hJSktMTU5PUA$''']
+
+# E03.1 (ADR 0072 section 10): HISTORY-ONLY entries. Commit 2c92af358
+# (Phase 0O.8A, 2026-09-27) committed hand-written DNS-verification fixture
+# tokens in three test files; 15b123c0 replaced them with values computed at
+# run time 45 minutes later, so they exist only in history, where CI's
+# full-history scan still finds them (7 findings, generic-api-key). Each entry
+# is scoped to that ONE commit, ONE path and the exact value(s): the same
+# value in any other commit, any other file, or any new value in these files,
+# is still a finding. Real DNS challenge tokens are random_bytes(32) per
+# domain, generated at runtime (SchoolDomainService::newToken) and never
+# committed.
+
+[[rules.allowlists]]
+description = "HISTORY ONLY, commit 2c92af358: apps/platform/tests/Unit/Domains/DnsVerificationTest.php, a hand-written DNS-verification test token"
+condition = "AND"
+commits = ['''2c92af3583c7420584f0cdf677f46f6ed5dc7288''']
+paths = ['''^(?:/repo/)?apps/platform/tests/Unit/Domains/DnsVerificationTest\.php$''']
+regexTarget = "secret"
+regexes = ['''^k7Qm0bY4n2XcV9sLp1aZr8tWd3eFh6gJu5iOy0PqRsT$''']
+
+[[rules.allowlists]]
+description = "HISTORY ONLY, commit 2c92af358: apps/platform/tests/Unit/Domains/NetDns2DomainResolverTest.php, the same hand-written DNS-verification test token"
+condition = "AND"
+commits = ['''2c92af3583c7420584f0cdf677f46f6ed5dc7288''']
+paths = ['''^(?:/repo/)?apps/platform/tests/Unit/Domains/NetDns2DomainResolverTest\.php$''']
+regexTarget = "secret"
+regexes = ['''^k7Qm0bY4n2XcV9sLp1aZr8tWd3eFh6gJu5iOy0PqRsT$''']
+
+[[rules.allowlists]]
+description = "HISTORY ONLY, commit 2c92af358: apps/platform/tests/Feature/Postgres/SchoolDomainDatabaseInvariantsTest.php, base64 of fake JSON ({\"iv\":\"test\",\"value\":\"test\"}, {\"new\":\"token\"}, {\"after\":\"verify\"})"
+condition = "AND"
+commits = ['''2c92af3583c7420584f0cdf677f46f6ed5dc7288''']
+paths = ['''^(?:/repo/)?apps/platform/tests/Feature/Postgres/SchoolDomainDatabaseInvariantsTest\.php$''']
+regexTarget = "secret"
+regexes = ['''^eyJpdiI6InRlc3QiLCJ2YWx1ZSI6InRlc3QifQ==$''', '''^eyJuZXciOiJ0b2tlbiJ9$''', '''^eyJhZnRlciI6InZlcmlmeSJ9$''']

@@ -185,6 +185,7 @@ apps/platform/bin/safe-test tests/Feature/Foo/BarTest.php   # forwarded to phpun
 apps/platform/bin/safe-test --reset-db                      # reset test DB, then exit
 apps/platform/bin/safe-test --diagnostic                    # print resolved config, then exit
 SAFE_TEST_ISOLATED=1 apps/platform/bin/safe-test              # isolated Compose project (see section 12)
+SAFE_TEST_COMPOSE_OVERRIDE=infrastructure/ci/compose.s3-versitygw.yml apps/platform/bin/safe-test  # versitygw as the S3 server (CI; see "S3 server substitution")
 ```
 
 Also reachable as `composer test:safe` from a host with Composer
@@ -554,6 +555,38 @@ Two real-process race tests (`PayrollPeriodConcurrencyTest`,
 processes and hoped they overlapped; they now use
 `Tests\Concerns\ForcesConcurrentOverlap`, like the other converted
 races.
+
+## S3 server substitution: versitygw (E03.1, 2026-10-11)
+
+**Why.** MinIO's public images were withdrawn in 2026-09: `minio/minio`
+(Docker Hub) answers "access denied" and the pinned `quay.io` release answers
+"no such manifest". A machine with a cached `minio/minio:latest` still runs
+the canonical stack; a fresh one (every CI runner) cannot.
+`verify-images.sh` had already moved its S3 helper to versitygw for the same
+reason.
+
+**What.** `infrastructure/ci/compose.s3-versitygw.yml` keeps the service
+names `minio` and `minio-init` and swaps only the server:
+- versitygw v1.8.0, digest-pinned, POSIX backend, on port 9000;
+- the inert `.env.example` credentials **and region** (`ap-south-1`);
+- `minio-init` creates the `school-os-local` bucket directory.
+
+`bin/safe-test` takes it through `SAFE_TEST_COMPOSE_OVERRIDE`, which is one
+extra Compose file. It can change which server answers a service name, never
+the safety overrides that `safe-test` passes on every `docker exec`.
+
+**Region trap (found during E03.1).** versitygw defaults to `us-east-1`.
+With the app signing for `ap-south-1`, every S3 request failed with HTTP 400
+in about 80 µs, and 7 Documents/retention tests failed. The override pins the
+region.
+
+**Proof.** Every S3-dependent test (Documents MinIO integration, retention
+purges of document bytes, storage-orphan retention) passes against versitygw.
+The full suite on one tree was run against versitygw locally and in CI, and
+against MinIO locally; the results are in ADR 0072 §28.
+
+The local canonical stack still defaults to MinIO. The override is opt-in
+locally and used by CI.
 
 ## Committed test data and the outbox (fixed)
 
