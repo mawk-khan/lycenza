@@ -88,6 +88,22 @@ class DriftTest(unittest.TestCase):
         self.assertFalse(assess("active", self.contract, effective, rulesets).ok, "rule beyond the contract")
 
         effective, rulesets = live(self.contract)
+        effective.append({"type": "creation", "ruleset_id": 7})
+        self.assertFalse(assess("active", self.contract, effective, rulesets).ok, "another extra rule type")
+
+        def with_checks(**changes):
+            effective, rulesets = live(self.contract)
+            for rule in effective:
+                if rule["type"] == "required_status_checks":
+                    rule["parameters"] = dict(rule["parameters"], **changes)
+            return assess("active", self.contract, effective, rulesets)
+
+        self.assertFalse(with_checks(required_status_checks=[{"context": "CI gate", "integration_id": 999}]).ok, "wrong source app")
+        self.assertFalse(with_checks(required_status_checks=[{"context": "CI", "integration_id": 15368}]).ok, "CI gate not required")
+        self.assertFalse(with_checks(required_status_checks=[]).ok, "no required check")
+        self.assertFalse(with_checks(strict_required_status_checks_policy=True).ok, "strict policy changed")
+
+        effective, rulesets = live(self.contract)
         self.assertTrue(assess("active", self.contract, effective, rulesets, pinned_id=7).ok)
         self.assertFalse(assess("active", self.contract, effective, rulesets, pinned_id=8).ok, "recreated ruleset")
 

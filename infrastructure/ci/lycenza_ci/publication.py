@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 from .contract import GATE_CONTEXT, GITHUB_ACTIONS_APP_ID
 
@@ -56,7 +56,8 @@ class PublicationVerdict:
     gate: dict | None = None
     foreign_gate_runs: list[dict] = field(default_factory=list)
     age_hours: float | None = None
-    e16_earliest_expiry: str | None = None
+    e16_earliest_expiry: str | None = None  # the first day the decision is NOT valid
+    e16_last_valid_day: str | None = None   # the day before: the last day publication may pass
     problems: list[str] = field(default_factory=list)
 
     def to_json(self) -> str:
@@ -121,6 +122,7 @@ def decide(
             verdict.problems.append(f"the candidate's vulnerability-exceptions file is unreadable: {error}")
         else:
             verdict.e16_earliest_expiry = expiry.isoformat() if expiry else None
+            verdict.e16_last_valid_day = (expiry - timedelta(days=1)).isoformat() if expiry else None
             if expiry is not None:
                 if now.date() >= expiry:
                     verdict.problems.append(f"E16: the exception decision at the candidate expired on {expiry} -- a fresh decision and a new CI run are required")

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from datetime import UTC, datetime, timedelta
@@ -9,7 +10,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from lycenza_ci.contract import REPO_ROOT  # noqa: E402
 from lycenza_ci.publication import decide, earliest_expiry  # noqa: E402
+
+EXCEPTIONS_FILE = REPO_ROOT / "infrastructure/release/vulnerability-exceptions.json"
 
 CANDIDATE = "c" * 40
 MAIN = "a" * 40
@@ -40,6 +44,7 @@ class PublicationTest(unittest.TestCase):
         self.assertTrue(result.fast_forward)
         self.assertEqual(15368, result.gate["app_id"])
         self.assertEqual("2026-11-10", result.e16_earliest_expiry)
+        self.assertEqual("2026-11-09", result.e16_last_valid_day)
 
     def test_another_shas_checks_never_count(self) -> None:
         self.assertFalse(verdict(check_runs=[run(sha="d" * 40)]).publishable)
@@ -75,6 +80,26 @@ class PublicationTest(unittest.TestCase):
         # The last valid day is still publishable.
         last_day = datetime(2026, 11, 9, 23, 30, tzinfo=UTC)
         self.assertTrue(verdict(now=last_day, check_runs=[run(completed=datetime(2026, 11, 9, 23, 0, tzinfo=UTC))]).publishable)
+
+    def test_the_repository_decision_boundary_is_exclusive(self) -> None:
+        """E03.3: the real decision file at this tree. Its last valid day passes;
+        its expiry day refuses, even with a green gate from the day before."""
+        document = json.loads(EXCEPTIONS_FILE.read_text(encoding="utf-8"))
+        expiry = earliest_expiry(document)
+        self.assertIsNotNone(expiry, "the decision has records, so it has an expiry")
+        last_day = expiry - timedelta(days=1)
+        gate_at = datetime(last_day.year, last_day.month, last_day.day, 0, 30, tzinfo=UTC)
+        on_last_day = verdict(exceptions_document=document, now=gate_at + timedelta(hours=23), check_runs=[run(completed=gate_at)])
+        self.assertTrue(on_last_day.publishable, on_last_day.problems)
+        self.assertEqual(last_day.isoformat(), on_last_day.e16_last_valid_day)
+        on_expiry = verdict(exceptions_document=document, now=gate_at + timedelta(hours=24), check_runs=[run(completed=gate_at)])
+        self.assertFalse(on_expiry.publishable)
+        self.assertTrue(any("E16" in problem for problem in on_expiry.problems))
+        # OWNER-0O-E16-2026-10-11 specifically: valid through 2026-11-09, refused from
+        # 2026-11-10. A successor decision changes the dates; the rule above still holds.
+        if {record.get("approved_by") for record in document["exceptions"]} == {"OWNER-0O-E16-2026-10-11"}:
+            self.assertEqual("2026-11-10", expiry.isoformat())
+            self.assertEqual("2026-11-09", on_last_day.e16_last_valid_day)
 
     def test_the_earliest_record_expiry_governs(self) -> None:
         self.assertEqual("2026-10-20", earliest_expiry({"exceptions": [{"expires": "2026-11-10"}, {"expires": "2026-10-20"}]}).isoformat())
