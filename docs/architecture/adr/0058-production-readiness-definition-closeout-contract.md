@@ -568,7 +568,7 @@ with secrets.
 |---|---|---|---|---|---|---|---|---|---|
 | E01 | Phase 0O repository foundations (0O.1–0O.11A) | ADRs 0049–0057 | Repository | Mandatory | REPOSITORY_COMPLETE | Implemented, tested, qualified | Readiness §13–§40 | Engineering | No |
 | E02 | Final regression + O16 qualification of the closeout commit | ADR 0052 §3.15; §5 item 1 | Repository | Mandatory | GOVERNANCE_REQUIRED | Fresh qualification of the closeout commit on protected `main`, after: E03 (protection active in reality); E18 (the selected provider's code merged); every other mandatory executable repository change; and E16 (every vulnerability exception valid on the qualification date, or replaced by fixes or a fresh decision). Both images VERIFIED. (Corrected 2026-09-29; read "after E03, E17, E24".) | Future readiness section; `RELEASE-QUALIFICATION.md` | Engineering + Operator | Yes |
-| E03 | `main` protected (branch rule or ruleset) | ADR 0052 §3.15; §4.6; ADR 0072 | Governance | Mandatory | GOVERNANCE_REQUIRED | GitHub API/settings show protection; force-push and deletion refused. (Amended 2026-10-11, E03.0: the live `main-protection` ruleset of ADR 0072 §5 — required `CI gate` from GitHub Actions, no bypass actors — read back in E03.2, and the ADR 0072 §25 closure proofs passed in E03.3. Status: E03 — CONTRACT PUBLISHED / CI REPAIR REQUIRED.) (2026-10-11, E03.1: CI repaired, exact-SHA `CI gate` green on `integration/**`; status E03 — CI GATE GREEN / REMOTE PROTECTION AWAITS ACTIVATION; ADR 0072 §28.) (2026-10-12, E03.2: ruleset `main-protection` 24909660 active and read back — `CI gate` required from GitHub Actions 15368, deletion/non-fast-forward blocked, linear history, 0 bypass actors, no PR rule; unchecked SHA refused (GH013); status E03 — MAIN PROTECTION ACTIVE / CLOSURE PROOF REQUIRED; ADR 0072 §29. Register status stays GOVERNANCE_REQUIRED until E03.3.) | GitHub settings (not in repo); ADR 0072; dated note in readiness (§52) | Owner | Yes |
+| E03 | `main` protected (branch rule or ruleset) | ADR 0052 §3.15; §4.6; ADR 0072 | Governance | Mandatory | EVIDENCE_COMPLETE | GitHub API/settings show protection; force-push and deletion refused. (Amended 2026-10-11, E03.0: the live `main-protection` ruleset of ADR 0072 §5 — required `CI gate` from GitHub Actions, no bypass actors — read back in E03.2, and the ADR 0072 §25 closure proofs passed in E03.3. Status: E03 — CONTRACT PUBLISHED / CI REPAIR REQUIRED.) (2026-10-11, E03.1: CI repaired, exact-SHA `CI gate` green on `integration/**`; status E03 — CI GATE GREEN / REMOTE PROTECTION AWAITS ACTIVATION; ADR 0072 §28.) (2026-10-12, E03.2: ruleset `main-protection` 24909660 active and read back — `CI gate` required from GitHub Actions 15368, deletion/non-fast-forward blocked, linear history, 0 bypass actors, no PR rule; unchecked SHA refused (GH013); status E03 — MAIN PROTECTION ACTIVE / CLOSURE PROOF REQUIRED; ADR 0072 §29. Register status stays GOVERNANCE_REQUIRED until E03.3.) (2026-10-12, E03.3: every ADR 0072 §25 closure proof passed live — unchecked, red and fabricated-status SHAs refused (GH013), force push refused, deletion refused, owner without bypass, stale candidate refused and the rebased SHA re-checked, drift passing; status **E03 — MAIN PUBLICATION CONTROL PUBLISHED / CLOSED**, register EVIDENCE_COMPLETE; ADR 0072 §30. Production-stage PR + independent approval + CODEOWNERS remain planned before E02, not active.) | GitHub settings (not in repo); ADR 0072; dated note in readiness (§52) | Owner | Yes |
 | E04 | S1 repository hardening, V1–V5 frozen | ADR 0049 §20 + amendment | Repository | Mandatory | REPOSITORY_COMPLETE | Guard tests; throttled `/api/v1`; empty partner catalog | Readiness §16 | Engineering | No |
 | E05 | S1 edge: `TRUSTED_PROXIES`, HTTPS detection, HSTS, client-IP limiting | ADR 0049 §12; ADR 0050 §2 | Deployment | Mandatory | DEPLOYMENT_REQUIRED | Real edge addresses configured; the three behaviours demonstrated | Operator evidence record | Operator | Yes |
 | E06 | S2 repository instrumentation and alerts | ADR 0051 §20 items 1–9 | Repository | Mandatory | REPOSITORY_COMPLETE | Metrics, logs, OBS rules, runbooks | Readiness §20 | Engineering | No |
@@ -1491,6 +1491,30 @@ corrected in SR.1. E16 is unchanged and separate.
   a fresh scan and decision before 2026-10-28.
 - Actor-level separation-of-duties choices remain owner decisions (ADR 0071
   §27).
+
+## Note — E03.3: E03 closed (2026-10-12)
+
+**Register status: E03 → EVIDENCE_COMPLETE.** `main` protection is active in
+reality, and every ADR 0072 §25 closure proof passed against the live
+remote (ADR 0072 §30).
+- **Refused with GH013** (owner pushes; GitHub's rule-suite log records the
+  failing rule for each):
+  - an unchecked SHA;
+  - a SHA with a red `CI gate`;
+  - a SHA carrying a forged owner-token `CI gate` success status: "was not
+    set by the expected GitHub app";
+  - a force push. That rule was isolated: it failed while the required
+    check passed.
+- **Deletion:** `main` cannot be deleted. The platform's default-branch
+  guard refused it before the ruleset evaluated.
+- **Concurrency:** a stale validated candidate was refused after `main`
+  moved. Its rebased SHA needed, and got, its own `CI gate` before
+  publication.
+- **Final state:** the ruleset was read back unchanged, and drift passes.
+- **Still open:** PR + at least 1 independent approval + CODEOWNERS remain
+  production-stage hardening before E02, not active.
+- **Mandatory blockers now:** E02, E05, E07–E23 and E29 (20 rows).
+- **E02:** its E03 prerequisite (protection active in reality) is met.
 
 ## Note — E03.2: `main-protection` active and read back (2026-10-12)
 

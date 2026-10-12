@@ -2784,3 +2784,39 @@ change; counter stays 0/5).
 automatically.
 
 **Status: E03 — MAIN PROTECTION ACTIVE / CLOSURE PROOF REQUIRED.**
+
+## 55. Phase 0O / E03.3 — Closure proofs; E03 closed (2026-10-12)
+
+ADR 0072 §30 is the full record. These ran against the live ruleset
+24909660, all as ordinary owner pushes. No bypass was used, and the
+ruleset's `updated_at` never changed.
+
+| Proof | Result |
+|---|---|
+| Unchecked SHA (`92613a0`) | GH013 "CI gate is expected" |
+| Red `CI gate` (`96919f4`, run `38220632209`, integrity failed) | GH013 "CI gate is failing" |
+| Forged `CI gate` success status (`90087a9`, owner token) | GH013 "not set by the expected GitHub app" |
+| Force push (rewind to the green `25b08bfc`) | GH013 "Cannot force-push"; only `non_fast_forward` failed |
+| Delete `main` | refused by the default-branch guard before the ruleset |
+| Stale validated candidate after `main` moved | refused; the rebased SHA needed its own `CI gate` |
+| Green exact SHA | accepted; `main` equals the candidate SHA |
+
+**Also in E03.3:**
+- `/publish-gate` now describes the protected flow, with the gitleaks
+  wording corrected; both are pinned by a test.
+- `publication-check` prints `e16_last_valid_day`. A boundary test against
+  the real decision proves 2026-11-09 passes and 2026-11-10 refuses.
+- The drift mutation tests were extended.
+- The final read-back and drift pass.
+
+**What closure does not claim:** that the owner cannot administratively
+change the ruleset, that a malicious owner cannot change CI during active
+development, or that independent review exists. PR + at least 1 independent
+approval + CODEOWNERS stay planned for production-stage hardening, before
+E02.
+
+**Regression counter:** E03.3 changed CI tooling and documentation only, so
+the counter stays 0/5. The strict candidate's remote full suite is extra
+evidence.
+
+**Status: E03 — MAIN PUBLICATION CONTROL PUBLISHED / CLOSED.**

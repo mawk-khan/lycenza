@@ -32,6 +32,9 @@ Tooling reference: `infrastructure/release/README.md`.
 > non-fast-forward pushes, requires linear history and has no bypass actors
 > (ADR 0072 §29). Status: **E03 — MAIN PROTECTION ACTIVE / CLOSURE PROOF
 > REQUIRED**; E03.3 closes it.)*
+> *(E03.3, 2026-10-12: closure proofs passed (ADR 0072 §30). **E03 — MAIN
+> PUBLICATION CONTROL PUBLISHED / CLOSED.** A releasable source is a commit
+> reachable from protected `main`.)*
 >
 > A VERIFIED digest from before protection (such as `c4b1b6c` or the
 > current latest, `be69b55`, `PHASE-0O-READINESS.md` §48) is progress

@@ -2,8 +2,10 @@
 
 - Status: **Accepted — E03.0 contract (2026-10-11). E03.1 CI REPAIR &
   EXACT-SHA GATE IMPLEMENTED (2026-10-11, §28). E03.2 ACTIVATED
-  `main-protection` (ruleset 24909660, 2026-10-12, §29): E03 — MAIN
-  PROTECTION ACTIVE / CLOSURE PROOF REQUIRED.** E03.3 (§25) closes E03.
+  `main-protection` (ruleset 24909660, 2026-10-12, §29). E03.3 CLOSURE
+  PROOFS PASSED (2026-10-12, §30): E03 — MAIN PUBLICATION CONTROL PUBLISHED /
+  CLOSED.** Production-stage PR + independent approval + CODEOWNERS remain
+  planned (§16, §17), not active.
 - Date: 2026-10-11
 - Programme: **E03 — Main Branch Protection & Publication Control** (ADR 0058
   register row E03; `MASTER-ROADMAP.md`, Phase 0O parked rows).
@@ -1023,3 +1025,170 @@ block and read back. No other GitHub setting was changed. Baseline
 - **Check age:** the ruleset cannot express it. Freshness and E16 validity at
   publication remain `publication-check`'s job, and a raw push of a green but
   stale SHA is not refused by GitHub.
+
+## 30. E03.3 — Closure proofs (2026-10-12)
+
+**E03 is CLOSED.** Every §25 proof ran against the real remote, with no
+change to the ruleset and no bypass. Baseline: `origin/main = a159a96b`, and
+ruleset 24909660 was read back unchanged (`updated_at`
+2026-10-12T05:30:53Z). Every push was an ordinary `git push` by the owner
+(`mawk-khan`, repository admin).
+
+GitHub's rule-suite log (`GET /repos/{repo}/rulesets/rule-suites`) records
+each push the ruleset evaluated, rule by rule. Each suite also contains a
+platform `secret_scanning` (push protection) evaluation, which passed every
+time.
+
+### 30.1 Proof matrix (§25)
+
+| # | Proof | Candidate | GitHub result | Rule suite (failing rule) |
+|---|---|---|---|---|
+| 1 | Unchecked SHA refused | `92613a0` (E03.2, empty, no checks) | GH013 `Required status check "CI gate" is expected.` | `4475254022` (`required_status_checks`) |
+| 2 | Red `CI gate` refused | `96919f4` on `integration/e03-3-red-proof`: run `38220632209`; integrity lane failed; `CI gate` check run `114716259270` `failure` | GH013 `Required status check "CI gate" is failing.`; `publication-check` refuses | `4476946959` (`required_status_checks`) |
+| 3 | Green exact SHA accepted | `a159a96b` (E03.2); E03.3 candidate A `2b8c4408` and the closure commit (§30.4) | fast-forward accepted | `4475666821`, `4477687747` (all pass) |
+| 4 | Resulting `main` equals the tested SHA | §30.4 | `ls-remote` equals the candidate | — |
+| 5 | Force push refused | rewind of `main` to `25b08bfc` (`--force-with-lease`) | GH013 `Cannot force-push to this branch` | `4476902352` (`non_fast_forward` only) |
+| 6 | Deletion of `main` refused | `git push origin --delete main` | `refusing to delete the current branch: refs/heads/main` | none (see §30.2) |
+| 7 | Owner receives the same protection | all of the above, pushed by the owner | refused | `bypass_actors: []`, `current_user_can_bypass: "never"` |
+| 8 | A fabricated status cannot satisfy `CI gate` | `90087a9` (§30.3) | GH013 `Required status check "CI gate" was not set by the expected GitHub app.` | `4476896954` (`required_status_checks`) |
+| 9 | Concurrent `main` movement forces a new SHA and new checks | §30.4 | stale candidate refused; rebased SHA needed its own `CI gate` | §30.4 |
+
+**Proof 5 is isolated.** `25b08bfc` has a genuine green Actions `CI gate`
+(check run `114603272869`). In its suite, `required_status_checks`
+**passed** and only `non_fast_forward` failed.
+
+### 30.2 Deletion — precise result
+- **What refused it:** GitHub's built-in default-branch guard. It answered
+  before the ruleset was evaluated: no rule suite was recorded for that
+  push.
+- **The second layer:** the ruleset's own `deletion` rule is active and was
+  read back (§29.3, §30.5), but it could not be exercised on `main` in
+  isolation. That would mean changing the default branch, which E03.3
+  forbids.
+- **Conclusion:** `main` cannot be deleted by an ordinary Git push. This is
+  shown live, by the platform layer. The ruleset rule is the configured
+  second layer.
+- **Afterwards:** `main` still existed at `a159a96b`, the default branch was
+  still `main`, and the ruleset's `updated_at` was unchanged.
+
+### 30.3 Fabricated status
+- **The commit:** `90087a9`, an empty commit pushed to
+  `proof/e03-3-fake-status`. No workflow triggers on that ref, so no Actions
+  `CI gate` could exist (`check-runs` total 0).
+- **The forged status:** the owner token created commit status
+  `56122346325`:
+  - `context: CI gate`, `state: success`;
+  - an ordinary status, not a check run, and not from app 15368.
+  The combined commit status became `success`.
+- **The push to `main` was refused:** `CI gate` "was not set by the expected
+  GitHub app" (the `integration_id` 15368 pin, §5).
+- **`publication-check` also refused:** "no `CI gate` check run from GitHub
+  Actions exists for exactly 90087a9…".
+
+### 30.4 Concurrency, rebase and the exact-SHA invariant (§14)
+<!-- e03-3-race:begin -->
+Candidates **A** and **B** were both based on `main = a159a96b`, and each
+was validated on its own `integration/**` branch:
+
+| Step | SHA | Evidence | Result |
+|---|---|---|---|
+| A validated | `2b8c4408` (`integration/e03-3-candidate-a`; CI tooling, instructions, E16 boundary) | run `38220992035`, strict lanes, full suite 8,144 tests (1 known skip, selection `f0477023…`); `CI gate` `114734399705` success, app 15368 | green |
+| B validated | `dfcb28f2` (`integration/e03-3-candidate-b`; this closure record, docs lane) | run `38221245366`; `CI gate` `114718272491` success, app 15368 | green |
+| A published | `2b8c4408` | `publication-check --push`; rule suite `4477687747` pass | `main` = `2b8c4408` |
+| B, as validated | `dfcb28f2` | `publication-check`: "not a fast-forward"; plain push: rejected (non-fast-forward); `--force-with-lease`: GH013 "Cannot force-push", suite `4477694008` (`required_status_checks` **passed**, `non_fast_forward` failed) | refused; `main` unchanged |
+| B rebased, unchanged | `aba9993d` (same patch id as B, parent `2b8c4408`) | 0 check runs; `publication-check`: no `CI gate` for exactly this SHA; push: GH013 "CI gate is expected", suite `4477703281` (`non_fast_forward` passed, `required_status_checks` failed) | refused: B's green result never transfers |
+| B recreated | this commit (B rebased, plus this table) | its own `CI gate` on `integration/e03-3-closure` | published by fast-forward (completion report) |
+
+**Exact-SHA invariant.** For every E03.3 advancement of `main`, the
+integration candidate SHA, the `CI gate` head SHA and the resulting `main`
+SHA are the same commit. There is no merge commit, squash SHA or
+post-CI rebase, and no other SHA's result is reused.
+<!-- e03-3-race:end -->
+
+### 30.5 Final read-back and drift
+- **Ruleset read-back:** 24909660 was read again after every adversarial
+  test. Every contract field is identical to the pre-test read-back:
+  - same id, name, `target: branch` and `~DEFAULT_BRANCH`;
+  - `enforcement: active`;
+  - `bypass_actors: []`, `current_user_can_bypass: "never"`;
+  - exactly `deletion`, `non_fast_forward`, `required_linear_history` and
+    `required_status_checks` (`CI gate`, `integration_id` 15368,
+    `strict_required_status_checks_policy: false`,
+    `do_not_enforce_on_create: false`);
+  - no pull-request or other rule;
+  - `updated_at` unchanged since activation.
+- **`lycenza-ci drift` with the owner token:** `ok`, no findings, nothing
+  UNVERIFIED.
+- **The `Protection drift` workflow** (its own read-only token; dispatched
+  run `38211704682`, the first scheduled run is 2026-10-13 04:41 UTC): `ok`,
+  with bypass actors reported UNVERIFIED, never as passing. A removed or
+  weakened public rule fails it.
+- **Bypass verification:** the owner's admin read-back remains the
+  authoritative bypass check. Actions is deliberately not given admin
+  access.
+- **Mutation tests** (`infrastructure/ci/tests/test_drift.py`): each of
+  these fails drift:
+  - a wrong ruleset id or inactive enforcement;
+  - a missing deletion, non-fast-forward, linear-history or
+    status-check rule;
+  - `CI gate` not required, or required from a wrong `integration_id`;
+  - any bypass actor;
+  - a `pull_request` rule or another extra rule type;
+  - changed strict or create settings.
+
+### 30.6 Publication instructions and E16 boundary
+- **`/publish-gate`** now describes the protected exact-SHA flow:
+  `integration/<slice>` → `CI gate` → `publication-check` → `--push`.
+  - It also says the full-history gitleaks scan is expected to pass: the 7
+    `2c92af358` fixtures are allowlisted narrowly (§28.14), and any new
+    equivalent finding still fails.
+  - `test_publication_instructions.py` pins this and CLAUDE.md rule 96.
+- **E16 date semantics:** the records' `expires` is the first invalid day.
+  `OWNER-0O-E16-2026-10-11` is valid through **2026-11-09** and refused
+  from **2026-11-10**.
+  - `publication-check` refuses when today ≥ `expires`, the same rule as
+    `exceptions.py`.
+  - It now also prints `e16_last_valid_day`.
+  - A test against the real decision file proves the last valid day passes
+    and the expiry day refuses. Changing `>=` to `>` fails that test.
+- **Unchanged:** the decision and its 115 records.
+
+### 30.7 Linear history and permissions
+- **Linear history:** every E03 publication was a fast-forward with no merge
+  commit (`git log --merges` over the E03 range is empty).
+- **Merge settings:** the repository still allows merge commits in its
+  general settings, but the ruleset keeps them off `main`.
+- **Permissions:**
+  - every workflow is `contents: read` (`sbom-rescan` adds
+    `actions: read`);
+  - the repository default token is `read`, and Actions cannot approve pull
+    requests;
+  - there is no `pull_request_target`, `workflow_run` or secret.
+- **Who moves `main`:** only an explicit, authenticated user push.
+
+### 30.8 What closure means
+**E03 proves:**
+- No ordinary push can advance `main` past the required check, whether
+  accidental, manual or by an agent, and including the owner's pushes.
+- Unchecked or red SHAs cannot enter `main`.
+- Force pushes and deletion are refused.
+- History stays linear.
+- The check is exact-SHA and pinned to its GitHub Actions source.
+- A stale candidate needs a new SHA and a new check after `main` moves.
+- Protection drift is monitored.
+
+**E03 does not prove, and does not claim:**
+- that the owner cannot administratively edit or delete the ruleset. That is
+  a platform fact; drift detection notices it afterwards;
+- that a malicious owner cannot change CI and publish their own changed
+  workflow during active development (§22);
+- that independent review exists.
+
+**Deferred to production-stage hardening**, before E02 final qualification
+or the first production promotion, and **not active now**:
+- a pull-request rule;
+- at least one independent approving reviewer;
+- CODEOWNERS on security, release and workflow paths (§16, §17).
+
+The development-stage model is closed as **`integration/**` → exact-SHA
+`CI gate` → protected fast-forward of `main`**.

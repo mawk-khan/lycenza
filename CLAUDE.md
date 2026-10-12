@@ -1162,7 +1162,10 @@ once several modules copy it.
     ADR 0072 §29) the `main-protection` ruleset (24909660) enforces the
     required `CI gate`, no deletion, no non-fast-forward and linear history
     on `main`, with no bypass actor; check age and E16 validity are still
-    enforced only by `publication-check`. Path lanes come
+    enforced only by `publication-check`. E03 is CLOSED (2026-10-12, ADR
+    0072 §30); a pull-request rule, independent approval and CODEOWNERS
+    are production-stage hardening before E02, not active -- never claim
+    them. Path lanes come
     only from the central classifier (`infrastructure/ci`); never give a job
     `continue-on-error` or its own skip logic. Since 2026-10-11 (ADR 0072
     §28.8) the remote exact-SHA full suite of a code-lane candidate is the

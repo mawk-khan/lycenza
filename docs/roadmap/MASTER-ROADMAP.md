@@ -87,6 +87,9 @@ waived or complete.
   *(2026-10-12, E03.2: ruleset `main-protection` (24909660) is active on
   `main`; **E03 — MAIN PROTECTION ACTIVE / CLOSURE PROOF REQUIRED**. E03.3
   closes it.)*
+  *(2026-10-12, E03.3: every closure proof passed (ADR 0072 §30): **E03 —
+  MAIN PUBLICATION CONTROL PUBLISHED / CLOSED**. The production-stage
+  pull-request path above is still planned before E02, not active.)*
 - **Legal and security gates still bind** product work:
   - the Phase 0M reopening gate;
   - E17 before any production SendGrid use;
@@ -3511,6 +3514,20 @@ merged commit is in `PHASE-0O-READINESS.md` §47 and after.
 - **Drift:** active and passing.
 - **Next:** E03.3 (ADR 0072 §25 closure proofs). It does not start
   automatically.
+
+**E03 — MAIN PUBLICATION CONTROL PUBLISHED / CLOSED (E03.3, 2026-10-12).**
+- **Record:** ADR 0072 §30; `PHASE-0O-READINESS.md` §55. ADR 0058 E03 is now
+  EVIDENCE_COMPLETE.
+- **Proven live:**
+  - unchecked, red and forged-status SHAs are refused;
+  - force push and deletion are refused;
+  - the owner has no bypass;
+  - a stale candidate needs a new SHA and a new `CI gate`;
+  - `main` always equals the validated candidate SHA.
+- **Development model:** `integration/**` → exact-SHA `CI gate` →
+  protected fast-forward of `main`.
+- **Deferred:** PR + at least 1 independent approval + CODEOWNERS stay
+  production-stage hardening, before E02, and are not active.
 
 **Phase Zero scope closure (2026-09-29, docs-only, ADR 0061).** Phase 0H
 and Phase 0M are closed for Phase Zero, with their remaining scope deferred
