@@ -197,7 +197,9 @@ def cmd_publication_check(args: argparse.Namespace) -> int:
 
 def cmd_drift(args: argparse.Namespace) -> int:
     repo = args.repo or repo_slug(args.remote)
-    state = args.state or json.loads(STATE_FILE.read_text(encoding="utf-8"))["expected_state"]
+    pinned = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+    state = args.state or pinned["expected_state"]
+    pinned_id = (pinned.get("ruleset") or {}).get("id") if state == "active" else None
     contract = load_ruleset()
     status, rules = api_get(f"/repos/{repo}/rules/branches/main")
     if status != 200 or not isinstance(rules, list):
@@ -211,7 +213,7 @@ def cmd_drift(args: argparse.Namespace) -> int:
     for summary in listing:
         detail_status, detail = api_get(f"/repos/{repo}/rulesets/{summary['id']}")
         detailed.append(detail if detail_status == 200 and isinstance(detail, dict) else summary)
-    report = drift_mod.assess(state, contract, rules, detailed)
+    report = drift_mod.assess(state, contract, rules, detailed, pinned_id)
     print(json.dumps({"repo": repo, "state": report.state, "ok": report.ok, "findings": report.findings,
                       "unverified": report.unverified, "observed": report.observed}, indent=2, sort_keys=True))
     level = "notice" if report.ok else "error"

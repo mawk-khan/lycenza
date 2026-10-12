@@ -2739,3 +2739,48 @@ exact-SHA full suite is canonical publication evidence (CLAUDE.md rules 82,
 96).
 
 **Status: E03 — CI GATE GREEN / REMOTE PROTECTION AWAITS ACTIVATION.**
+
+## 54. Phase 0O / E03.2 — `main-protection` activated (2026-10-12)
+
+ADR 0072 §29 is the full record. **`main` is protected.**
+
+**Ruleset:** `main-protection`, id **24909660**, created 2026-10-12T05:30:52Z
+from the ADR 0072 §5 JSON unchanged, accepted on the first attempt.
+
+**Owner read-back:**
+- active on the default branch;
+- rules: `deletion`, `non_fast_forward`, `required_linear_history`, and
+  `required_status_checks` with `CI gate` from GitHub Actions
+  (`integration_id` 15368, strict policy off);
+- **0 bypass actors**;
+- no pull-request, review or CODEOWNERS rule.
+
+**Effective rules:**
+- `main`: exactly those four rules (`protected: true`);
+- `integration/**`: none (disposable integration branches were deleted).
+
+**Visibility:** the public API shows the ruleset and every rule parameter.
+Bypass actors need an admin read, and drift reports them UNVERIFIED without
+one.
+
+**Drift:** `main-protection-state.json` is now `active` with the pinned
+ruleset id. `lycenza-ci drift` passes with the owner token (nothing
+unverified). It now also fails on:
+- a recreated ruleset;
+- changed check parameters;
+- extra rule types.
+
+**Sanity proofs:**
+- an unchecked SHA (`92613a0`), pushed to `main` by the owner, was refused:
+  GH013, `Required status check "CI gate" is expected`;
+- this change was the first exact-SHA publication through the protected
+  flow (SHA and ids in the E03.2 completion report).
+
+**Unchanged:** CI lanes, workflow permissions (read-only), the E16 decision
+(current through 2026-11-09) and the regression checkpoint (docs/governance
+change; counter stays 0/5).
+
+**Next:** E03.3, the ADR 0072 §25 closure proofs. It does not start
+automatically.
+
+**Status: E03 — MAIN PROTECTION ACTIVE / CLOSURE PROOF REQUIRED.**

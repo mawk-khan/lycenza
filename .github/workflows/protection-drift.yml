@@ -1,8 +1,10 @@
 # E03.1 (ADR 0072 section 19): scheduled, read-only comparison of GitHub's
 # live `main` protection with the `main-protection` contract (ADR 0072
-# section 5). Until E03.2 activates the ruleset, the expected state
-# (infrastructure/ci/main-protection-state.json) is `awaiting-activation` and
-# this only reports. Detection is never protection: it notices a removed or
+# section 5). Since E03.2 (ADR 0072 section 29) the expected state
+# (infrastructure/ci/main-protection-state.json) is `active`: any missing,
+# weakened, recreated or extended rule fails this job. Bypass actors need an
+# admin-scoped read; with this token they are reported UNVERIFIED, never
+# passed. Detection is never protection: it notices a removed or
 # weakened ruleset after the fact. It holds no credential beyond the run's
 # own read-only token and changes nothing.
 name: Protection drift

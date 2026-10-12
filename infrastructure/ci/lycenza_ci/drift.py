@@ -7,7 +7,10 @@ infrastructure/ci/main-protection-state.json:
 - `awaiting-activation` (E03.1, before E03.2): report what is observed and
   pass -- protection is not active yet by design, so its absence is not drift;
 - `active` (set by E03.2 once the ruleset is live): every contracted property
-  must be observed, or the check fails.
+  must be observed, or the check fails. That includes the pinned ruleset id
+  (a deleted and recreated ruleset is drift: it was absent in between), the
+  status-check parameters, and no rule type beyond the contract (an added
+  `pull_request` rule is drift too, until the contract itself changes).
 
 Detection is never protection: it notices a removed or weakened ruleset
 after the fact (section 18).
@@ -39,7 +42,14 @@ def _status_checks(rule: dict) -> list[dict]:
     return list(((rule.get("parameters") or {}).get("required_status_checks")) or [])
 
 
-def assess(state: str, contract: dict, effective_rules: list[dict], rulesets: list[dict]) -> DriftReport:
+def _check_parameters(rule: dict) -> dict:
+    parameters = dict(rule.get("parameters") or {})
+    parameters.pop("required_status_checks", None)
+    return parameters
+
+
+def assess(state: str, contract: dict, effective_rules: list[dict], rulesets: list[dict],
+           pinned_id: int | None = None) -> DriftReport:
     if state not in STATES:
         report = DriftReport(state=state, ok=False)
         report.findings.append(f"unknown expected state {state!r} (expected one of {', '.join(STATES)})")
@@ -59,6 +69,8 @@ def assess(state: str, contract: dict, effective_rules: list[dict], rulesets: li
         findings.append(f"expected exactly one ruleset named {contract['name']!r}, found {len(named)}")
     else:
         ruleset = named[0]
+        if pinned_id is not None and ruleset.get("id") != pinned_id:
+            findings.append(f"ruleset id is {ruleset.get('id')}, pinned {pinned_id} (deleted and recreated?)")
         if ruleset.get("enforcement") != contract["enforcement"]:
             findings.append(f"ruleset enforcement is {ruleset.get('enforcement')!r}, contract {contract['enforcement']!r}")
         if ruleset.get("target") not in (None, contract["target"]):
@@ -83,9 +95,13 @@ def assess(state: str, contract: dict, effective_rules: list[dict], rulesets: li
             for check in wanted:
                 if check not in present:
                     findings.append(f"required status check {check} is not enforced on main (observed {present})")
+            for live in by_type[kind]:
+                if _check_parameters(live) != _check_parameters(rule):
+                    findings.append(f"status-check parameters {_check_parameters(live)}, contract {_check_parameters(rule)}")
     extra = sorted(set(by_type) - {rule["type"] for rule in contract["rules"]})
     if extra:
         report.observed["rule_types_beyond_contract"] = extra
+        findings.append(f"rule type(s) beyond the contract on main: {', '.join(extra)}")
 
     if state == "awaiting-activation":
         report.observed["contract_findings_while_awaiting_activation"] = findings

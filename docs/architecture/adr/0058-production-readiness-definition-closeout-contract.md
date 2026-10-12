@@ -568,7 +568,7 @@ with secrets.
 |---|---|---|---|---|---|---|---|---|---|
 | E01 | Phase 0O repository foundations (0O.1–0O.11A) | ADRs 0049–0057 | Repository | Mandatory | REPOSITORY_COMPLETE | Implemented, tested, qualified | Readiness §13–§40 | Engineering | No |
 | E02 | Final regression + O16 qualification of the closeout commit | ADR 0052 §3.15; §5 item 1 | Repository | Mandatory | GOVERNANCE_REQUIRED | Fresh qualification of the closeout commit on protected `main`, after: E03 (protection active in reality); E18 (the selected provider's code merged); every other mandatory executable repository change; and E16 (every vulnerability exception valid on the qualification date, or replaced by fixes or a fresh decision). Both images VERIFIED. (Corrected 2026-09-29; read "after E03, E17, E24".) | Future readiness section; `RELEASE-QUALIFICATION.md` | Engineering + Operator | Yes |
-| E03 | `main` protected (branch rule or ruleset) | ADR 0052 §3.15; §4.6; ADR 0072 | Governance | Mandatory | GOVERNANCE_REQUIRED | GitHub API/settings show protection; force-push and deletion refused. (Amended 2026-10-11, E03.0: the live `main-protection` ruleset of ADR 0072 §5 — required `CI gate` from GitHub Actions, no bypass actors — read back in E03.2, and the ADR 0072 §25 closure proofs passed in E03.3. Status: E03 — CONTRACT PUBLISHED / CI REPAIR REQUIRED.) (2026-10-11, E03.1: CI repaired, exact-SHA `CI gate` green on `integration/**`; status E03 — CI GATE GREEN / REMOTE PROTECTION AWAITS ACTIVATION; ADR 0072 §28.) | GitHub settings (not in repo); ADR 0072; dated note in readiness (§52) | Owner | Yes |
+| E03 | `main` protected (branch rule or ruleset) | ADR 0052 §3.15; §4.6; ADR 0072 | Governance | Mandatory | GOVERNANCE_REQUIRED | GitHub API/settings show protection; force-push and deletion refused. (Amended 2026-10-11, E03.0: the live `main-protection` ruleset of ADR 0072 §5 — required `CI gate` from GitHub Actions, no bypass actors — read back in E03.2, and the ADR 0072 §25 closure proofs passed in E03.3. Status: E03 — CONTRACT PUBLISHED / CI REPAIR REQUIRED.) (2026-10-11, E03.1: CI repaired, exact-SHA `CI gate` green on `integration/**`; status E03 — CI GATE GREEN / REMOTE PROTECTION AWAITS ACTIVATION; ADR 0072 §28.) (2026-10-12, E03.2: ruleset `main-protection` 24909660 active and read back — `CI gate` required from GitHub Actions 15368, deletion/non-fast-forward blocked, linear history, 0 bypass actors, no PR rule; unchecked SHA refused (GH013); status E03 — MAIN PROTECTION ACTIVE / CLOSURE PROOF REQUIRED; ADR 0072 §29. Register status stays GOVERNANCE_REQUIRED until E03.3.) | GitHub settings (not in repo); ADR 0072; dated note in readiness (§52) | Owner | Yes |
 | E04 | S1 repository hardening, V1–V5 frozen | ADR 0049 §20 + amendment | Repository | Mandatory | REPOSITORY_COMPLETE | Guard tests; throttled `/api/v1`; empty partner catalog | Readiness §16 | Engineering | No |
 | E05 | S1 edge: `TRUSTED_PROXIES`, HTTPS detection, HSTS, client-IP limiting | ADR 0049 §12; ADR 0050 §2 | Deployment | Mandatory | DEPLOYMENT_REQUIRED | Real edge addresses configured; the three behaviours demonstrated | Operator evidence record | Operator | Yes |
 | E06 | S2 repository instrumentation and alerts | ADR 0051 §20 items 1–9 | Repository | Mandatory | REPOSITORY_COMPLETE | Metrics, logs, OBS rules, runbooks | Readiness §20 | Engineering | No |
@@ -1491,6 +1491,29 @@ corrected in SR.1. E16 is unchanged and separate.
   a fresh scan and decision before 2026-10-28.
 - Actor-level separation-of-duties choices remain owner decisions (ADR 0071
   §27).
+
+## Note — E03.2: `main-protection` active and read back (2026-10-12)
+
+**Register status unchanged: GOVERNANCE_REQUIRED** until E03.3's §25
+closure proofs pass. ADR 0072 §29 is the record.
+- **Ruleset:** `main-protection`, id 24909660. It was created unchanged from
+  the ADR 0072 §5 JSON and accepted on the first attempt.
+- **Owner read-back:**
+  - active on `~DEFAULT_BRANCH`;
+  - deletion, non-fast-forward and linear history;
+  - `CI gate` required from GitHub Actions (`integration_id` 15368), with
+    strict policy off;
+  - **0 bypass actors** (`current_user_can_bypass: never`);
+  - no pull-request, review or CODEOWNERS rule.
+- **`main`:** `protected: true`; `integration/**` has no rules.
+- **Visibility:** the public API shows everything except bypass actors,
+  which the admin read verifies.
+- **Drift:** active and passing; it now also pins the ruleset id.
+- **Sanity proofs:**
+  - an owner push of an unchecked SHA to `main` was refused (GH013,
+    `Required status check "CI gate" is expected`);
+  - the E03.2 change itself was published through the protected flow.
+- **E02** still requires E03 closed (E03.3).
 
 ## Note — E03.1: CI repaired; exact-SHA `CI gate` green (2026-10-11)
 

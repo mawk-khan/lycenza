@@ -27,6 +27,11 @@ Tooling reference: `infrastructure/release/README.md`.
 > SHAs; publication goes through `infrastructure/ci/lycenza-ci
 > publication-check --push`. The ruleset is still not active: **E03 — CI
 > GATE GREEN / REMOTE PROTECTION AWAITS ACTIVATION**.)*
+> *(E03.2, 2026-10-12: ruleset `main-protection` (24909660) is active on
+> `main`. It requires `CI gate` from GitHub Actions, blocks deletion and
+> non-fast-forward pushes, requires linear history and has no bypass actors
+> (ADR 0072 §29). Status: **E03 — MAIN PROTECTION ACTIVE / CLOSURE PROOF
+> REQUIRED**; E03.3 closes it.)*
 >
 > A VERIFIED digest from before protection (such as `c4b1b6c` or the
 > current latest, `be69b55`, `PHASE-0O-READINESS.md` §48) is progress

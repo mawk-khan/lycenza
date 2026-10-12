@@ -64,6 +64,10 @@ waived or complete.
   the exceptions) and then a new owner decision, rather than a cheap re-scan
   of retained SBOMs. PHPUnit and the release tooling tests are
   unaffected. Main is unprotected (E03), so merges are not blocked.)*
+  *(2026-10-12, E03.2: `main` is now protected. The supply-chain lane runs
+  `qualify audit --fail-on-blocking`, which fails on an expired decision.
+  So from 2026-11-10, no candidate's `CI gate` can be green, and nothing can
+  reach `main`, until a successor E16 decision is published.)*
 - **E03 is GOVERNANCE_REQUIRED — DEFERRED TO FINAL PROJECT / PRODUCTION
   HARDENING.** The temporary `main` ruleset created on 2026-09-29 was
   removed the same day for active development. The E03 evidence merged by
@@ -80,6 +84,9 @@ waived or complete.
   production-stage hardening, before E02 final qualification. **E03 —
   CONTRACT PUBLISHED / CI REPAIR REQUIRED**: CI on `main` has never been
   green, so nothing is activated until E03.1 repairs it.)*
+  *(2026-10-12, E03.2: ruleset `main-protection` (24909660) is active on
+  `main`; **E03 — MAIN PROTECTION ACTIVE / CLOSURE PROOF REQUIRED**. E03.3
+  closes it.)*
 - **Legal and security gates still bind** product work:
   - the Phase 0M reopening gate;
   - E17 before any production SendGrid use;
@@ -3490,6 +3497,20 @@ merged commit is in `PHASE-0O-READINESS.md` §47 and after.
   SHA, freshness, E16 validity and fast-forward.
 - **Next:** E03.2 (activate `main-protection` and read it back), then
   E03.3. Neither starts automatically.
+
+**E03 — MAIN PROTECTION ACTIVE / CLOSURE PROOF REQUIRED (E03.2, 2026-10-12).**
+- **Record:** ADR 0072 §29; `PHASE-0O-READINESS.md` §54.
+- **Ruleset `main-protection` (24909660) is active on `main`:**
+  - deletion and non-fast-forward blocked;
+  - linear history;
+  - `CI gate` required from GitHub Actions (app 15368);
+  - 0 bypass actors;
+  - no pull-request rule.
+- **Proofs:** an unchecked SHA was refused (GH013). This change was the
+  first exact-SHA publication through the protected flow.
+- **Drift:** active and passing.
+- **Next:** E03.3 (ADR 0072 §25 closure proofs). It does not start
+  automatically.
 
 **Phase Zero scope closure (2026-09-29, docs-only, ADR 0061).** Phase 0H
 and Phase 0M are closed for Phase Zero, with their remaining scope deferred

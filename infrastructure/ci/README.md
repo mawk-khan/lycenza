@@ -36,7 +36,7 @@ needs only the always lanes.
 The base is the merge base with `origin/main` for a candidate branch, the
 previous tip for a `main` push, and the PR base for a pull request.
 
-## Publishing (until E03.2 activates the ruleset this is discipline, not enforcement)
+## Publishing (enforced on `main` by ruleset `main-protection` since E03.2, 2026-10-12)
 
 ```bash
 git push origin <candidate-sha>:refs/heads/integration/<slice>   # CI runs on the exact SHA
@@ -53,4 +53,12 @@ candidate (a fast-forward). A `CI gate` from any other app is reported and
 never counted. Set `GH_TOKEN` for a higher API rate limit (read-only use).
 
 This check can be skipped by anyone with push access; the remote ruleset
-(E03.2) cannot. It is defence in depth, never E03's closure.
+cannot. Since E03.2 the ruleset refuses any SHA without a green `CI gate`
+from app 15368, any non-fast-forward and any deletion of `main` (ADR 0072
+§29). Check age and E16 validity remain this command's job only, because a
+ruleset cannot express them. It is defence in depth, never E03's closure.
+
+`lycenza-ci drift` reads `main-protection-state.json` (`active`, pinned
+ruleset id `24909660`). Run it with an admin token (`GH_TOKEN=$(gh auth
+token)`) to verify bypass actors. Without admin access that property is
+UNVERIFIED, never passed.

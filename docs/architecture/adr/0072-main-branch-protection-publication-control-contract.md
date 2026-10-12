@@ -1,9 +1,9 @@
 # ADR 0072: Main Branch Protection & Publication Control Contract (E03.0)
 
 - Status: **Accepted — E03.0 contract (2026-10-11). E03.1 CI REPAIR &
-  EXACT-SHA GATE IMPLEMENTED (2026-10-11, §28): E03 — CI GATE GREEN / REMOTE
-  PROTECTION AWAITS ACTIVATION.** No ruleset, branch rule or repository
-  setting is created by this ADR; E03.2 activates `main-protection`.
+  EXACT-SHA GATE IMPLEMENTED (2026-10-11, §28). E03.2 ACTIVATED
+  `main-protection` (ruleset 24909660, 2026-10-12, §29): E03 — MAIN
+  PROTECTION ACTIVE / CLOSURE PROOF REQUIRED.** E03.3 (§25) closes E03.
 - Date: 2026-10-11
 - Programme: **E03 — Main Branch Protection & Publication Control** (ADR 0058
   register row E03; `MASTER-ROADMAP.md`, Phase 0O parked rows).
@@ -904,3 +904,122 @@ the same value in any other commit). The file was restored byte-for-byte.
 **Observation, unchanged:** the pre-existing `docs/operations/README.md`
 entry's value is no longer in that file. It is left as it was, presumably
 for history.
+
+## 29. E03.2 — Activation & read-back (2026-10-12)
+
+**`main` is protected.** One repository ruleset, created exactly from the §5
+block and read back. No other GitHub setting was changed. Baseline
+`origin/main = 25b08bfc`, whose `main` push run `38181250610` had a green
+`CI gate` (check run `114603272869`, app 15368) before activation.
+
+### 29.1 Before activation
+- `GET rulesets` → `[]`; `GET rules/branches/main` → `[]`.
+- `branches/main`: `protected: false`; classic branch protection: 404.
+- Repository merge settings: merge commit, squash and rebase all allowed.
+
+### 29.2 Activation
+- **Request:** the §5 JSON, extracted by `lycenza_ci.contract.load_ruleset()`
+  and sent unchanged as `POST /repos/mawk-khan/lycenza/rulesets` by the owner
+  (`mawk-khan`, repository `admin`).
+- **Result:** ruleset **24909660** (`main-protection`), created
+  2026-10-12T05:30:52Z, accepted on the first attempt, with no correction.
+- **Response:** identical to the request, plus `source_type: Repository`,
+  `bypass_actors: []` and `current_user_can_bypass: "never"`.
+
+### 29.3 Live configuration (authenticated owner read-back)
+
+| Property | Live value |
+|---|---|
+| Ruleset | `24909660`, `main-protection`, `target: branch`, `enforcement: active` |
+| Condition | `ref_name.include: ["~DEFAULT_BRANCH"]`, `exclude: []` |
+| Bypass actors | `[]` (0); `current_user_can_bypass: "never"` for the owner |
+| Rules | `deletion`, `non_fast_forward`, `required_linear_history`, `required_status_checks` |
+| Required check | `{"context": "CI gate", "integration_id": 15368}` (GitHub Actions) |
+| Strict policy | `strict_required_status_checks_policy: false`; `do_not_enforce_on_create: false` |
+| Pull-request / review / CODEOWNERS / merge queue | absent |
+| Effective rules on `main` | exactly those four, each from ruleset `24909660` |
+| Effective rules on an `integration/**` branch | none |
+| `branches/main` | `protected: true` |
+
+**Platform notes:**
+- GitHub accepted the §5 JSON unchanged, including the `integration_id` pin.
+- **Linear history:** the repository still allows merge commits. That is
+  not a contradiction: the rule refuses merge commits on `main` itself, and
+  squash and rebase stay allowed, which GitHub's prerequisite needs.
+  Merge settings were left unchanged.
+- **Strict policy:** it applies to pull requests. A direct push is held to
+  the pushed SHA's own checks, and `non_fast_forward` forces descent from
+  the current `main`.
+
+### 29.4 Visibility
+- **Unauthenticated (public API):** these show the ruleset, its id,
+  enforcement, rule types and every rule parameter, including the check's
+  `integration_id`:
+  - `rulesets`;
+  - `rulesets/24909660`;
+  - `rules/branches/main`;
+  - `branches/main` (`protected: true`).
+- **Withheld from the public:** `bypass_actors` and
+  `current_user_can_bypass`.
+- **Admin-only:** bypass actors are visible only to an admin-scoped read.
+  The owner read (§29.3) is the bypass evidence.
+- **Drift without admin:** the check without a token reports the bypass
+  property as **UNVERIFIED**, never as passing.
+
+### 29.5 Drift
+- **State:** `infrastructure/ci/main-protection-state.json` is now `active`.
+  It pins:
+  - the ruleset id, name, target, condition and enforcement;
+  - the rule types, the required check and its app, and the bypass count.
+- **Consistency:** `test_drift.py` keeps the state file equal to the §5
+  contract.
+- **Hardening:** in `active`, `lycenza-ci drift` now also fails on:
+  - a different ruleset id (deleted and recreated);
+  - changed status-check parameters;
+  - any rule type beyond the contract (for example an added `pull_request`
+    rule).
+  Mutation-tested: removing each of these checks fails a test.
+- **Result:**
+  - with the owner token: `ok: true`, no findings, nothing unverified;
+  - without a token: `ok: true`, with bypass actors UNVERIFIED.
+
+### 29.6 Sanity proofs (the full §25 suite is E03.3)
+- **Unchecked SHA refused.**
+  - `92613a0` is an empty throwaway commit on `25b08bfc`. It was never pushed
+    anywhere else and has no checks.
+  - The owner's normal (non-force) push of it to `main` was refused:
+    `GH013: Repository rule violations found for refs/heads/main … Required
+    status check "CI gate" is expected.`
+  - `main` stayed `25b08bfc`. The owner was refused like anyone else
+    (no bypass actor).
+- **Integration branches stay deletable.** The disposable
+  `integration/e03-1-red-proof` and `integration/e03-1-ci-gate` were deleted.
+  Their runs and check runs stay readable by id.
+  `integration/e03-1-publication` is kept as the published candidate's
+  branch, following repository convention.
+- **Exact-SHA publication through protection.** This change is the first
+  candidate published under the ruleset:
+  - pushed to `integration/e03-2-activation`;
+  - given a green `CI gate` on its exact SHA;
+  - passed `lycenza-ci publication-check`;
+  - pushed unchanged to `main` as a fast-forward.
+
+  The candidate SHA, run and check-run ids, and the old and new `main` are
+  recorded in the E03.2 completion report.
+
+### 29.7 Unchanged
+- **CI:** CI architecture and lanes, and workflow permissions (all
+  `contents: read`; no workflow can push `main`).
+- **Policies:** the E16 decision `OWNER-0O-E16-2026-10-11` (current through
+  2026-11-09), its exception records and the Critical policy.
+  `publication-check` still enforces E16 validity immediately before the
+  fast-forward.
+
+### 29.8 Residual risks
+- **Owner access:** the owner can still edit or delete the ruleset in
+  repository administration. This is a platform fact, not a configured
+  bypass. Drift detection notices it afterwards; it does not prevent it.
+- **Workflow self-modification (§22):** still accepted for development only.
+- **Check age:** the ruleset cannot express it. Freshness and E16 validity at
+  publication remain `publication-check`'s job, and a raw push of a green but
+  stale SHA is not refused by GitHub.
