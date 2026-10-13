@@ -956,3 +956,60 @@ refusal is unchanged.
   defect was found, and no code changed.
 - **Status:** **E19 — CONTRACT FROZEN / CLOCK NOT STARTED.** The ADR 0058
   row stays `DEPLOYMENT_REQUIRED`.
+
+## 30. Note — OD-E19-T decided: T2 operator script; admission attempted, not admitted (2026-10-13)
+
+**E17 stays `LEGAL_REVIEW_REQUIRED`. E18's production refusal is unchanged.
+The E19 clock has not started.** This note is the dated note §29 required
+before T2 is used.
+
+### 30.1 Owner decision OD-E19-T = T2 (not a legal determination)
+On 2026-10-13 the product owner chose **T2**: an operator-controlled script
+that calls SendGrid Mail Send directly. It is authorised **solely** for E19
+synthetic deliverability qualification.
+- **Environment:** non-production only. No production traffic.
+- **Credential:** the restricted non-production key, Mail Send only (§8;
+  narrower if SendGrid ever offers it).
+- **Recipients:** only the operator-controlled synthetic test mailboxes,
+  allow-listed in operator-side configuration. No address is accepted from
+  the command line.
+- **Content:** one fixed synthetic subject and body. No application or
+  database input, no attachment and no link.
+- **Never:** Student, Guardian, employee, applicant, fee, mark, attendance,
+  announcement or any other real School data.
+- **Request shape:** no categories, no `custom_args`, no open or click
+  tracking, no other tracking identifier, and sandbox mode off (delivery
+  mode).
+- **Not added:** an application email purpose, an alternate application
+  email gateway, or any repository storage of a secret or a prohibited
+  hostname (E29).
+- **Scope:** qualification tooling only. It must never become
+  general-purpose email infrastructure.
+- **Unchanged:** OD-1 (§27.3) still governs the account; OD-E18-DEV (§28.1)
+  still governs E18.
+
+### 30.2 Where the script lives
+**Operator-side, uncommitted.** The E19 record already said the T2 script
+is "kept with the operator's evidence" (§6.2 there). Committing it would put
+a second SendGrid client in the product tree beside the E18 adapter, which
+rule 89 and §28.5 keep as the only application path. The repository holds
+instead:
+- the script's frozen contract (the E19 record §6.3);
+- the SHA-256 of the reviewed version;
+- the rule that the operator evidence entry records the SHA-256 of the
+  script actually run. A different hash needs a new review note before use.
+
+The reviewed version is stdlib-only Python and passed 12 offline tests with
+the HTTP layer replaced. No message was sent.
+
+### 30.3 Admission attempt (2026-10-13)
+- **Baseline:** `origin/main` `be19a797`; main CI run `38428081453` green
+  (`CI gate` check run `115403647815`).
+- **Result: not admitted.** The session had no SendGrid account, no
+  provider credential, no DNS provider access and no operator evidence
+  store. None of A1–A12 can be true. A13 and A14 hold, but only trivially,
+  because nothing was sent.
+- **Not invented:** no account, key, setting, DNS record, report or
+  timestamp is recorded.
+- **Status:** **E19 — OPERATOR ADMISSION INCOMPLETE / CLOCK NOT STARTED.**
+  The ADR 0058 row stays `DEPLOYMENT_REQUIRED`.

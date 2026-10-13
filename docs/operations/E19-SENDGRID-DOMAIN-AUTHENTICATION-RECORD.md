@@ -12,11 +12,15 @@ and its E29 rules. §5 and §8 cite those entries by id.
   is **not** legal approval and authorises **no production mail**.
 - **Opened:** 2026-10-13, on `origin/main` `9c0e147e` (E18 published; main
   `CI gate` green).
+- **Observation sender:** owner decision **OD-E19-T = T2** (ADR 0060 §30;
+  §6.2–§6.3 here).
 
-**Status: E19 — CONTRACT FROZEN / CLOCK NOT STARTED.** No SendGrid account,
-DNS record, credential or observation message exists as of 2026-10-13. Every
-operational step below is an operator action under rule 16. It is recorded
-here only when it has actually happened.
+**Status: E19 — OPERATOR ADMISSION INCOMPLETE / CLOCK NOT STARTED.** The
+contract was frozen on 2026-10-13 (ADR 0060 §29). OD-E19-T was decided the
+same day (ADR 0060 §30). No SendGrid account, DNS record, credential or
+observation message exists as of 2026-10-13. Every operational step below is
+an operator action under rule 16. It is recorded here only when it has
+actually happened.
 
 ## 1. Evidence hygiene (E29) — how this record names things
 
@@ -109,7 +113,7 @@ Fewer days is **CLOCK RUNNING / NOT YET COMPLETE**.
 | C1 | ADR 0055 §17 says "real traffic"; OD-1 forbids real or production traffic. | ADR 0060 §23 and §27.4, the later and more specific contract, define the clock over non-production observation traffic to operator-controlled recipients. Followed as written. Production traffic is never used to satisfy E19. |
 | C2 | The E19 instruction asks for hostnames and values to be recorded; E29 forbids hostnames in evidence. | Placeholders here (§1); real values in the operator store. |
 | C3 | ADR 0060 §23 step 5 says publish `_dmarc` at `p=none`; E19 must never weaken DMARC. If `<ORG_DOMAIN>`'s record already gives the subdomain `quarantine`/`reject` (through `sp=`, or `p=` with no `sp=`), a subdomain `p=none` record would weaken it. | **Audit first** (§4 step 6). If the effective subdomain policy is already ≥ `quarantine`, do **not** publish `p=none`. Publish `_dmarc.<MAIL_SENDING_DOMAIN>` at the **same** effective policy with `rua`, and observe there. Aggregate reports still show DKIM pass rates. The later `p=quarantine` step is then already met. Record that this happened. |
-| C4 | ADR 0060 §23 step 7 names two sending paths (the hardened `smtp` adapter via SendGrid's relay, or the E18 adapter). Neither has a way to send recurring synthetic mail: there is no test-send command, and the purpose catalogue is closed at five (ADR 0060 §28.5). | **Open owner decision OD-E19-T (§6).** No code or purpose is added in this record. |
+| C4 | ADR 0060 §23 step 7 names two sending paths (the hardened `smtp` adapter via SendGrid's relay, or the E18 adapter). Neither has a way to send recurring synthetic mail: there is no test-send command, and the purpose catalogue is closed at five (ADR 0060 §28.5). | **Owner decision OD-E19-T = T2 (2026-10-13, ADR 0060 §30; §6.2–§6.3).** No application code or purpose is added. |
 | C5 | ADR 0060 §9 says SendGrid rotates keys "when necessary" behind the CNAMEs, so a provider key change can happen without any Lycenza action. | It is not a restart by itself. It triggers a 2048-bit re-check that day, and any failure it causes is a failure (§7). |
 
 ## 4. Operator procedure (rule 16 — each step is an operator action)
@@ -205,6 +209,15 @@ times, and only when all rows hold **at the same time**.
 - **Admission timestamp:** — (not admitted)
 - **Day 1:** — (not started)
 
+**Admission attempt, 2026-10-13 (ADR 0060 §30.3): not admitted.**
+- **Baseline:** `origin/main` `be19a797`, main CI green.
+- **Why:** the session had no SendGrid account or credential, no DNS
+  provider access and no operator evidence store, so none of A1–A12 can be
+  true. A13 and A14 hold only because nothing was sent. They are not
+  entered above, because a row is entered only as part of an admission.
+- **What the operator must do next:** §4 steps 1–8, in order, recording
+  each as an `EVID-E19-2026-<n>` entry.
+
 ## 6. Observation traffic
 
 ### 6.1 Minimum design
@@ -232,7 +245,7 @@ times, and only when all rows hold **at the same time**.
   SendGrid message-id prefix and the `202`. Kept by the operator; §8
   records daily counts only.
 
-### 6.2 Open decision OD-E19-T — which sender (owner)
+### 6.2 Decision OD-E19-T — which sender (owner): **T2**, decided 2026-10-13
 Conflict C4: neither §23 path can send recurring synthetic mail today
 without either a staffed workflow or new code. The options:
 
@@ -246,7 +259,75 @@ without either a staffed workflow or new code. The options:
 environment to stay up, and its tracking and recipient constraints are
 fixed in one reviewed script kept with the operator's evidence. T1 is the
 fallback if the owner wants the Lycenza adapter in the evidence path.
-**Not decided in this record.**
+
+**Decided: T2** (owner, 2026-10-13; ADR 0060 §30.1). It is authorised solely
+for E19 synthetic deliverability qualification, under the conditions in
+§6.3.
+
+### 6.3 The T2 script contract (OD-E19-T)
+**Where it lives:** operator-side, with the operator's evidence. It is
+**never committed** to this repository (ADR 0060 §30.2).
+
+**Reviewed version:** `e19_observation.py`, SHA-256
+`7e4624dd15ea7d95583de4cb4cd2818245ed742cfe5df71f0637c1e8ad06ac9d`
+(stdlib-only Python; 12 offline tests, HTTP replaced, nothing sent).
+- Each `EVID-E19` entry that uses it records the SHA-256 of the copy run.
+- A different hash needs a dated review note here before use.
+
+**Fixed in the script, never taken from input:**
+- the subject, the plain-text body and the From local part;
+- the API host: SendGrid global or EU only, chosen by the configured
+  region; redirects never followed;
+- the request shape. Exactly `personalizations` (one recipient), `from`,
+  `subject`, `content`, `mail_settings` and `tracking_settings`. No
+  categories, `custom_args`, headers, attachments, Reply-To or send time;
+- sandbox mode **off** (delivery mode), and click, open, subscription and
+  Google Analytics tracking **off** on every message;
+- a cap of 4 accepted sends per mailbox per UTC day.
+
+**Operator-side configuration** (mode 0600, refused inside any git
+checkout):
+- `decision = OD-E19-T`, `environment = non-production`;
+- the region, matching A2;
+- the sending domain;
+- 2–4 recipients, by label (A–D), each with a provider name and address.
+  At least 2 distinct providers;
+- the send log, in the operator evidence store.
+
+**Secrets:** only from the environment, never from the command line or the
+configuration.
+- `E19_SENDGRID_MAIL_SEND_KEY` sends.
+- `E19_SENDGRID_OPERATOR_KEY` is used only by the read-only checks.
+
+**Refusals:** a production-like `APP_ENV`, `LYCENZA_ENV`, `ENVIRONMENT` or
+`DEPLOY_ENV`; any configuration outside the rules above; an unlisted label;
+a malformed key; the daily cap.
+
+**Commands:**
+
+| Command | What it does | Evidence for |
+|---|---|---|
+| `dry-run` | Validates the configuration and prints the request with recipients redacted; no network | A5 |
+| `verify-key` | `GET /v3/api_keys/{id}` with the operator credential; PASS only if the scopes are exactly `mail.send` | A3 |
+| `verify-tracking` | `GET /v3/tracking_settings/{click,open,subscription,google_analytics}`; PASS only if all `enabled = false` | A4 |
+| `send --label X` / `--all` | One fixed message per allow-listed mailbox; appends to the send log | A12, §8 counts |
+| `summary --utc-day D` | Counts accepted (`202`) sends per mailbox for one UTC day | §8 |
+
+**Output:** labels, provider names, UTC times, HTTP status and a 10-character
+message-id prefix only. Never a key, an address or the sending domain.
+
+**Not verified:** whether SendGrid adds an implicit scope to a restricted
+Mail Send key. If `verify-key` reports `REVIEW`, the operator records the
+scope list and the owner decides before A3 is entered.
+
+**Schedule:** at least 2 runs per UTC day, about 12 h apart (for example
+06:00 and 18:00 UTC), each `send --all`.
+
+**Retirement:** when E19 is satisfied, stopped or superseded:
+- remove the schedule;
+- revoke the Mail Send key in SendGrid;
+- keep only the send log and the script's SHA-256 in the operator evidence
+  store.
 
 ## 7. Restart, pause and no-effect conditions
 

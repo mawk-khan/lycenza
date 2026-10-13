@@ -2970,3 +2970,30 @@ IMPLEMENTED / PRODUCTION ENABLEMENT BLOCKED.
   CNAMEs and to refuse RSA keys below 2048 bits.
 - **Regression:** docs-only. The docs lane's `repository-documents` guards
   apply. The regression counter is unchanged.
+
+## 59. Phase 0O / E19 — OD-E19-T decided (T2); operator admission incomplete (2026-10-13)
+
+**Status: E19 — OPERATOR ADMISSION INCOMPLETE / CLOCK NOT STARTED.** No row
+changes status. E17 stays `LEGAL_REVIEW_REQUIRED`, and E18 stays DEVELOPMENT
+IMPLEMENTED / PRODUCTION ENABLEMENT BLOCKED.
+
+- **Baseline:** `origin/main` `be19a797`, equal to local `main` and `HEAD`;
+  clean tree, one worktree, the historical stash untouched. Main CI run
+  `38428081453` is green (`CI gate` check run `115403647815`). The red gate
+  of run `38428077419` belongs to a concurrency-cancelled duplicate.
+- **Decision:** owner decision **OD-E19-T = T2** (ADR 0060 §30.1). An
+  operator script calls Mail Send directly, for E19 synthetic qualification
+  only: non-production, a Mail-Send-only key, allow-listed test mailboxes,
+  fixed content, no categories, no `custom_args` and no tracking.
+- **Script:** operator-side and uncommitted (ADR 0060 §30.2). The
+  repository records its contract and the reviewed SHA-256 (E19 record
+  §6.3). 12 offline tests passed with the HTTP layer replaced; nothing was
+  sent.
+- **Admission:** attempted, and stopped at the evidence boundary. The
+  session had no SendGrid account, credential, DNS access or operator
+  evidence store, so none of A1–A12 can be true. No operator result is
+  recorded.
+- **Next (operator, rule 16):** the E19 record §4 steps 1–8, in order, each
+  as an `EVID-E19-2026-<n>` entry.
+- **Code:** none. **Regression:** docs-only, so the regression counter is
+  unchanged.

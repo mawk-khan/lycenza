@@ -1492,6 +1492,18 @@ corrected in SR.1. E16 is unchanged and separate.
 - Actor-level separation-of-duties choices remain owner decisions (ADR 0071
   §27).
 
+## Note — E19: OD-E19-T decided; operator admission incomplete (2026-10-13)
+
+**No row changes status.** E19 stays `DEPLOYMENT_REQUIRED`, and E17 and
+E18 are unchanged.
+- **Decision:** OD-E19-T = **T2**, an operator-side Mail Send script for
+  synthetic qualification only (ADR 0060 §30). It is never committed; the
+  E19 record §6.3 holds its contract and reviewed SHA-256.
+- **Admission:** not admitted. No account, credential, DNS record or
+  message exists yet. Each is a rule-16 operator action under OD-1.
+- **Status:** E19 — OPERATOR ADMISSION INCOMPLETE / CLOCK NOT STARTED.
+- **Register:** the 25 mandatory rows are unchanged.
+
 ## Note — E19: contract frozen, clock not started (2026-10-13)
 
 **No row changes status.** E19 stays `DEPLOYMENT_REQUIRED`, and E17 and
