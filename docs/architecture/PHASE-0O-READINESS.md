@@ -2820,3 +2820,52 @@ the counter stays 0/5. The strict candidate's remote full suite is extra
 evidence.
 
 **Status: E03 — MAIN PUBLICATION CONTROL PUBLISHED / CLOSED.**
+
+## 56. Phase 0O / E17 — SendGrid processor/legal review request published (2026-10-13)
+
+**Documentation only. No legal determination; no code, configuration,
+account, credential or DNS change.**
+
+- **Request:** `docs/security/E17-SENDGRID-PROCESSOR-REVIEW-REQUEST.md`, to
+  the Lead Privacy Counsel & DPO — India Operations. It covers:
+  - ADR 0060 §20's four questions;
+  - Q0 (governing law), Q-E (content categories) and Q-F (re-review
+    triggers);
+  - the repository's data inventory: five email purposes, the only
+    free-text route being staff-authored announcements; no ids,
+    `custom_args` or recipient names sent; no raw events stored locally;
+  - the minimisation review;
+  - provider evidence reviewed on 2026-10-13;
+  - possible outcomes;
+  - a determination template.
+- **Status:** **published, NOT SENT, NOT ANSWERED.**
+- **Provider facts** (ADR 0060 §27.2):
+  - DPA 2026-04-09, with no signature block;
+  - Twilio is an independent controller of usage data;
+  - the BCRs exclude SendGrid;
+  - only an EU residency option exists, with no India region;
+  - ISO certifications are not scoped to SendGrid; SOC 2 covers all
+    services;
+  - pseudonymised event data is kept for up to a year (support page).
+- **OD-1 (owner decision, not legal approval):** a strictly non-production
+  SendGrid account may be opened before the E17 outcome, for the ADR 0060
+  §21 sandbox gates and the E19 clock only (ADR 0060 §27.3). **No account
+  exists; the E19 clock has not started** (§27.4). If Q-C requires the EU
+  region, a global-region clock may have to restart.
+- **E18:** still blocked. ADR 0060 §27.5 records one engineering
+  observation for it: asynchronous bounces carry no `sg_message_id`.
+- **ADR 0058 register:**
+  - E17 is annotated and stays `LEGAL_REVIEW_REQUIRED`;
+  - the mandatory-blocker count is corrected to **E02, E05, E07–E23, E29
+    and E30–E34 (25 rows)**. The E30–E34 rows already said *Blocks O1 =
+    Yes*; the summaries were stale;
+  - whether any of E30–E34 may instead be met by keeping its feature out of
+    production is an **open owner-decision item**.
+- **ADR 0072 §30.5:** the first scheduled `Protection drift` run is
+  corrected to 2026-10-12 12:26 UTC (run `38249014396`). Wording only.
+- **E16:** valid through 2026-11-09; publication fails from 2026-11-10. Begin
+  the successor cycle around 2026-10-30. Not started here.
+- **Regression counter:** a docs-lane slice. The counter stays **0/5**; the
+  remote `CI gate` on the exact candidate SHA is the canonical evidence.
+
+**Status: E17 — REVIEW REQUEST PUBLISHED / EXTERNAL DETERMINATION REQUIRED.**

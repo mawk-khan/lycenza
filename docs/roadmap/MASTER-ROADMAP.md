@@ -44,6 +44,10 @@ waived or complete.
 - **Parked rows.** ADR 0058 rows E02, E03, E05, E07–E23 and E29 stay open
   as final-hardening obligations. O16 qualification is not repeated during
   product development.
+  *(2026-10-13, E17: count corrected. E03 is now closed. Rows E30–E34,
+  added from 2026-09-30, also say Blocks O1 = Yes, so the open mandatory
+  rows are E02, E05, E07–E23, E29 and E30–E34 — 25. ADR 0058 note "E17:
+  SendGrid review request published".)*
 - **E16.** The decision `OWNER-0O-E16-2026-09-29` is historical evidence. It
   may lapse (2026-10-29); final qualification needs a fresh scan and
   decision on its own date.
@@ -92,7 +96,11 @@ waived or complete.
   pull-request path above is still planned before E02, not active.)*
 - **Legal and security gates still bind** product work:
   - the Phase 0M reopening gate;
-  - E17 before any production SendGrid use;
+  - E17 before any production SendGrid use. *(2026-10-13: review request
+    published, not sent, not answered —
+    `docs/security/E17-SENDGRID-PROCESSOR-REVIEW-REQUEST.md`; a strictly
+    non-production account is authorised by owner decision OD-1, ADR 0060
+    §27.)*;
   - E21 before any retention period. E21.1 (2026-10-01, docs only) issued
     the decision request `docs/security/E21-RETENTION-DECISION-REQUEST.md`
     (decisions E21-D0–D13). E21 is still OPEN. *(2026-10-08: the three
@@ -3528,6 +3536,25 @@ merged commit is in `PHASE-0O-READINESS.md` §47 and after.
   protected fast-forward of `main`.
 - **Deferred:** PR + at least 1 independent approval + CODEOWNERS stay
   production-stage hardening, before E02, and are not active.
+
+**E17 — REVIEW REQUEST PUBLISHED / EXTERNAL DETERMINATION REQUIRED (2026-10-13).**
+- **Record:** `PHASE-0O-READINESS.md` §56; ADR 0060 §27; ADR 0058 note
+  "E17: SendGrid review request published".
+- **Request:** `docs/security/E17-SENDGRID-PROCESSOR-REVIEW-REQUEST.md`
+  covers processor/DPA, sub-processors, transfer/residency, provider-side
+  retention, governing law and content categories, with the data
+  inventory, provider evidence and a determination template. **Not sent,
+  not answered.**
+- **OD-1:** a strictly non-production SendGrid account is authorised before
+  the outcome, for the sandbox gates and the E19 clock only. This is not
+  legal approval. No account exists, and the clock has not started.
+- **E18 (0O.13A):** blocked until a dated ADR 0060 amendment records an
+  approval.
+- **Register:** the mandatory-blocker count is corrected to E02, E05,
+  E07–E23, E29 and E30–E34 (25 rows). Whether E30–E34 may instead be met by
+  keeping their features out of production is an open owner decision.
+- **E16:** begin the successor cycle around 2026-10-30. Publication fails
+  from 2026-11-10.
 
 **Phase Zero scope closure (2026-09-29, docs-only, ADR 0061).** Phase 0H
 and Phase 0M are closed for Phase Zero, with their remaining scope deferred

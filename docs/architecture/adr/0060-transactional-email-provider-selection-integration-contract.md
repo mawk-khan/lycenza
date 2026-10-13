@@ -689,3 +689,108 @@ contract is met.**
 was true on its date. The current status is **CLOSED FOR PHASE ZERO — REAL
 PROVIDERS / REAL AGENTS DEFERRED POST-v1**. Nothing else in this ADR
 changes.
+
+## 27. Note — E17 review request issued; non-production account decision (2026-10-13)
+
+**E17 stays `LEGAL_REVIEW_REQUIRED`. E18 stays blocked.** This note records
+no legal determination.
+
+### 27.1 The review request
+- **Document:** `docs/security/E17-SENDGRID-PROCESSOR-REVIEW-REQUEST.md`,
+  addressed to the Lead Privacy Counsel & Data Protection Officer — India
+  Operations.
+- **What it asks:** §20's four questions:
+  - A: processor and DPA;
+  - B: sub-processors;
+  - C: transfer and residency;
+  - D: provider-side retention against E21.
+
+  It adds Q0 (governing law), Q-E (content categories, including
+  staff-authored announcements and authentication links) and Q-F
+  (re-review triggers).
+- **What it contains:**
+  - the repository's actual data inventory and minimisation review;
+  - provider evidence reviewed on 2026-10-13;
+  - a determination template.
+- **Status:** **published in the repository, NOT SENT, NOT ANSWERED.**
+
+### 27.2 Provider facts that update §3, §4 and §20 (reviewed 2026-10-13)
+These are facts only; their legal weight is for the review.
+- **DPA:** updated 2026-04-09, with no signature block. The SendGrid
+  back-up deletion is one year after termination, as §20 said.
+- **Independent controllership:** Twilio is an **independent controller**
+  of Communications Usage Data, Customer Account Data and some Customer
+  Content (DPA §3).
+- **Transfers:** the Twilio BCRs **do not** cover SendGrid (DPA Schedule 3
+  §2.3), so SendGrid transfers rest on the DPF and/or the SCCs. The DPA's
+  applicable-law list does not name India.
+- **Residency:** only the EU has a residency option; there is **no India
+  region**. The global region is the United States.
+- **ISO certifications:** ISO/IEC 27001/27017/27018 list "Twilio Services,
+  Segment Services", **not SendGrid**. SOC 2 Type 2 covers "All Services".
+  This resolves §20's "NOT VERIFIED" scoping point.
+- **Retention:** a SendGrid support page says event data is kept "in
+  pseudonymized form for up to a year" and random content samples up to 7
+  days. That qualifies §4's "does not retain the contents of emails". It
+  is put to counsel as Q-D.
+
+### 27.3 OD-1 — non-production SendGrid account before the E17 outcome: AUTHORISED (owner decision)
+This answers §23's open question ("The owner decides whether that waits for
+§20"). The owner decided on 2026-10-13, in the E17 slice instruction, that
+it does **not** wait. **This is a product/provider decision, not legal
+approval.**
+- **Scope:** strictly non-production. The only purposes are the §21 sandbox
+  gates and starting the E19 aligned-DKIM observation clock.
+- **Data:** no production School data, and no real Student, Guardian or
+  staff personal data. Recipients are synthetic or operator-controlled test
+  mailboxes only (§23 step 7).
+- **Traffic:** no production or customer traffic. Domain authentication of
+  `MAIL_SENDING_DOMAIN` and §23's non-production observation traffic are in
+  scope, because they are what the E19 clock measures.
+- **Credentials:** no production secrets. Non-production credentials are
+  isolated, and are deleted or rotated if the provider decision changes.
+- **Labelling:** the account or subuser is clearly labelled non-production.
+- **Not implied:** no E18 start, no legal clearance and no production
+  enablement.
+- **Execution:** opening the account accepts SendGrid's terms, a
+  commercial act the owner accepts. It is performed by an authorized
+  operator as a separate rule-16 action. **No account exists as of this
+  note.**
+
+### 27.4 E19 clock effect
+The clock is defined by ADR 0055 §17 and §23 above: at least 14
+consecutive days of 100 % aligned-DKIM pass in DMARC aggregate reports
+(`p=none`), before `p=quarantine`.
+- **When it starts:** only when §23 steps 1–7 have actually been performed
+  (account, restricted key, tracking off, domain authentication with a new
+  2048-bit selector, CNAMEs and `_dmarc`, verification, observation
+  traffic) **and** aggregate reports are arriving.
+- **Status:** **it has not started.** Nothing was configured in this slice.
+- **Transport before E18:** §23 already permits the existing hardened `smtp`
+  adapter against SendGrid's relay from a non-production deployment of the
+  VERIFIED image. That needs a non-production environment, which is
+  operator work.
+- **Region risk:** if the E17 answer requires the EU region (Q-C), domain
+  authentication must be redone on an EU subuser with its own selector.
+  The clock then counts only from that configuration. Starting in the
+  global region before E17 can still be lost.
+
+### 27.5 E18 — unchanged and blocked; one engineering observation
+- **Boundary:** E18 does not start until a dated amendment to this ADR
+  records an APPROVED or APPROVED WITH CONDITIONS outcome under §20.
+  OD-1 does not authorize E18.
+- **Observation for E18 (not legal):** SendGrid's Event Webhook reference
+  says asynchronous `bounce` events carry no `sg_message_id`. Under §12/§15,
+  such an element would normalize as `Ignored` and could not link to its
+  message, so a late hard bounce would never suppress the address.
+  - E18 must decide this explicitly, as a **sandbox gate and design
+    point**, not silently.
+  - §22's frozen scope is otherwise unchanged.
+
+### 27.6 Dependencies
+- **E08:** the production secret store is an independent owner/provider
+  decision. E17 does not wait for it, but production SendGrid credentials
+  must use the E08 mechanism (§8).
+- **E21:** stays independently open. The E17 answer on provider-side
+  retention (Q-D) may inform E21's qualified ratification, but it reopens
+  no E21 engineering.

@@ -582,7 +582,7 @@ with secrets.
 | E14 | Production signing identity/key custody | ADR 0052 §3, §5 | Governance | Mandatory | GOVERNANCE_REQUIRED | Custody configured; `artifact-policy.json` signing identity set by a reviewed change | `artifact-policy.json` | Owner + Security | Yes |
 | E15 | Signed, stored, verified, explicitly promoted digest; first promotion evidence retained; promoted-only deployment; rollback retention | ADR 0052 §3.14, §3.17, §3.19 | Deployment | Mandatory | DEPLOYMENT_REQUIRED | Same VERIFIED digest in registry; promotion event; `retained-releases.json` entry | `retained-releases.json`; `RELEASE-QUALIFICATION.md` | Operator | Yes |
 | E16 | Vulnerability exceptions valid at qualification/promotion | ADR 0052; `OWNER-0O6E-2026-09-26` (superseded 2026-09-29 by `OWNER-0O-E16-2026-09-29`, itself superseded 2026-10-11 by `OWNER-0O-E16-2026-10-11`) | Governance | Mandatory | DECISION_REQUIRED | Valid on the date, or fixed, or a new explicit decision. **Current (2026-09-29):** `OWNER-0O-E16-2026-09-29`, fresh scan, 97 records valid **through 2026-10-28** (expire 2026-10-29). A fix, or a further fresh decision, is still needed for the E02/E15 dates. **2026-10-11:** a fresh scan was blocked by Critical and fixable High findings; E16-R1 remediated them (0 Critical, 0 fixable High). 4 new no-fix advisories (18 matches) are unexcepted, so a **fresh owner decision is required** (Note — E16-R1). **Current (2026-10-11, E16-D1):** `OWNER-0O-E16-2026-10-11`, fresh scan of `29785e1`, 115 records (97 renewed + 18 new) valid **through 2026-11-09** (expire 2026-11-10); `ea3d43d` both images VERIFIED. Still needed for the E02/E15 dates (Note — E16-D1) | `vulnerability-exceptions.json`; `0O-E16-2026-10-11-owner-security-decision.md` (history: `0O-E16-2026-09-29-owner-security-decision.md`, `E16-R1-SUPPLY-CHAIN-REMEDIATION-2026-10-11.md`) | Owner + Security | Yes |
-| E17 | Email provider selected + legal/processor review | ADR 0055 §23; §4.11 | Provider / Legal | Mandatory | LEGAL_REVIEW_REQUIRED | Selection decision (made: Twilio SendGrid, ADR 0060); processor review recorded | ADR 0060 (§20 legal amendment, future) | Owner + Legal | Yes |
+| E17 | Email provider selected + legal/processor review | ADR 0055 §23; §4.11 | Provider / Legal | Mandatory | LEGAL_REVIEW_REQUIRED (2026-10-13: review request published in the repository, **not sent, not answered** — `docs/security/E17-SENDGRID-PROCESSOR-REVIEW-REQUEST.md`; owner decision OD-1 authorises a strictly non-production SendGrid account before the outcome, not legal approval; ADR 0060 §27) | Selection decision (made: Twilio SendGrid, ADR 0060); processor review recorded | ADR 0060 (§20 legal amendment, future) | Owner + Legal | Yes |
 | E18 | Email provider code tail (event auth/normalization; HTTPS sending only if needed) | §4.11 | Provider tail (repository) | Mandatory | LEGAL_REVIEW_REQUIRED | Adapter per ADR 0060 §22, focused tests, sandbox gates (§21), full regression, O16 requalification | Future Phase 0O.13A | Engineering | Yes |
 | E19 | Sending domain, SPF, aligned DKIM, DMARC ≥ quarantine after ≥ 14 d aligned | ADR 0055 §17 | Deployment | Mandatory | DEPLOYMENT_REQUIRED | DNS evidence; aggregate-report summary; `MAIL_SENDING_VERIFIED` attestation | `EMAIL-DELIVERABILITY.md` checklist | Operator | Yes |
 | E20 | Email drills: delivery, hard bounce, complaint, suppression, rotation, monitoring, authenticated events | ADR 0055 §18, §23 | Deployment | Mandatory | DEPLOYMENT_REQUIRED | Drill record per checklist | `EMAIL-DELIVERABILITY.md` | Operator | Yes |
@@ -1491,6 +1491,66 @@ corrected in SR.1. E16 is unchanged and separate.
   a fresh scan and decision before 2026-10-28.
 - Actor-level separation-of-duties choices remain owner decisions (ADR 0071
   §27).
+
+## Note — E17: SendGrid review request published; blocker count corrected (2026-10-13)
+
+**No legal determination.** E17 stays **LEGAL_REVIEW_REQUIRED**, and E18
+stays blocked.
+
+**The request.** `docs/security/E17-SENDGRID-PROCESSOR-REVIEW-REQUEST.md`
+asks ADR 0060 §20's four questions (processor/DPA, sub-processors,
+transfer/residency, provider-side retention), plus governing law, content
+categories and re-review triggers. It is **published in the repository, not
+sent, not answered**.
+
+**Provider facts that matter to the review** (ADR 0060 §27.2):
+- Twilio is an independent controller of usage data;
+- its BCRs exclude SendGrid;
+- there is no India region, and the DPA's law list does not name India;
+- the ISO certifications are not scoped to SendGrid;
+- a support page says pseudonymised event data is kept for up to a year.
+
+**Owner decision OD-1** (ADR 0060 §27.3). A strictly non-production SendGrid
+account may be opened before the E17 outcome, for the sandbox gates and
+the E19 clock only:
+- no real data, and no production traffic;
+- isolated credentials;
+- no E18 start, legal clearance or production enablement implied.
+
+No account exists, and the **E19 clock has not started** (ADR 0060 §27.4).
+
+**What authorizes E18:** a dated ADR 0060 amendment recording an APPROVED or
+APPROVED WITH CONDITIONS outcome, with its development conditions met. A
+refusal needs a fresh owner decision on the SES fallback; it never swaps
+providers automatically.
+
+**Blocker-count correction (documentation drift).**
+- **The drift:** §9 and the 2026-09-29 notes predate these rows and were
+  right on their dates. But summaries written or carried forward after
+  FEE.4 (2026-09-30) still listed only E02, E05, E07–E23 and E29. Examples
+  are the E03.3 note ("20 rows") and the roadmap's "Parked rows" line. Yet rows **E30, E31, E32, E33 and E34** each say
+  *Blocks O1 = Yes*, and the FEE.4, TCH, OPF.0 and OPF.5 notes call each
+  one a mandatory production blocker.
+- **What wins:** the rows and those notes are authoritative; the summaries
+  were stale arithmetic.
+- **The current list:** **E02, E05, E07–E23, E29 and E30–E34 — 25
+  rows.** Historical notes are not rewritten; each is superseded by this
+  one.
+- **Owner-decision item (open, not decided here):** whether any of E30–E34
+  may be satisfied for O1 by keeping its feature out of production
+  instead of obtaining the legal answer:
+  - E30: receipts;
+  - E31: late fees;
+  - E32: RTE fee treatment;
+  - E33: production `teacher` grants;
+  - E34: Library fines.
+
+  No row records that option today.
+
+**E16 reminder.** `OWNER-0O-E16-2026-10-11` is valid through 2026-11-09,
+and the supply-chain gate fails from 2026-11-10. The successor cycle (fresh
+`qualify all`, remediation, a new owner decision) should begin around
+**2026-10-30**. No E16 action was taken here.
 
 ## Note — E03.3: E03 closed (2026-10-12)
 

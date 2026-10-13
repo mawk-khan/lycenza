@@ -1120,9 +1120,12 @@ post-CI rebase, and no other SHA's result is reused.
 - **`lycenza-ci drift` with the owner token:** `ok`, no findings, nothing
   UNVERIFIED.
 - **The `Protection drift` workflow** (its own read-only token; dispatched
-  run `38211704682`, the first scheduled run is 2026-10-13 04:41 UTC): `ok`,
-  with bypass actors reported UNVERIFIED, never as passing. A removed or
-  weakened public rule fails it.
+  run `38211704682`): `ok`, with bypass actors reported UNVERIFIED, never as
+  passing. A removed or weakened public rule fails it. *(Corrected
+  2026-10-13, E17 slice: this line originally gave the first scheduled run
+  as 2026-10-13 04:41 UTC. The first scheduled run actually ran earlier,
+  on 2026-10-12 at 12:26 UTC, on `b42cbbc6` (run `38249014396`, `success`).
+  Wording only; no E03 control changes.)*
 - **Bypass verification:** the owner's admin read-back remains the
   authoritative bypass check. Actions is deliberately not given admin
   access.
