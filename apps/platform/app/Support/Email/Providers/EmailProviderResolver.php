@@ -13,15 +13,22 @@ use Illuminate\Contracts\Container\Container;
  * email-disabled mode: nothing is submitted and nothing claims to be sent.
  * The fake is never resolved outside local/testing, whatever the config
  * says (production also refuses it at boot).
+ *
+ * `sendgrid` (ADR 0060 E18, section 28) is development / non-production
+ * only: never resolved in production (`provider_not_authorised`), and
+ * never resolved with an invalid configuration (`provider_misconfigured`).
+ * Either way every message WAITS -- nothing falls back to another
+ * transport.
  */
 final class EmailProviderResolver
 {
-    public const PROVIDERS = ['none', 'fake', 'smtp'];
+    public const PROVIDERS = ['none', 'fake', 'smtp', 'sendgrid'];
 
     public function __construct(
         private readonly Container $app,
         private readonly Repository $config,
         private readonly SenderIdentity $sender,
+        private readonly SendGridConfiguration $sendgrid,
     ) {}
 
     public function mode(): string
@@ -41,6 +48,7 @@ final class EmailProviderResolver
         return match ($this->mode()) {
             'fake' => $this->app->environment(['local', 'testing']) ? $this->app->make(FakeEmailProvider::class) : null,
             'smtp' => $this->app->make(SmtpEmailProvider::class),
+            'sendgrid' => $this->sendgrid->valid() ? $this->app->make(SendGridEmailProvider::class) : null,
             default => null,
         };
     }
@@ -51,6 +59,10 @@ final class EmailProviderResolver
      */
     public function blockedReason(): ?string
     {
+        if ($this->mode() === 'sendgrid' && ($violation = $this->sendgrid->violation()) !== null) {
+            return $violation === 'production_not_authorised' ? 'provider_not_authorised' : 'provider_misconfigured';
+        }
+
         if (! $this->enabled() || $this->adapter() === null) {
             return 'email_disabled';
         }

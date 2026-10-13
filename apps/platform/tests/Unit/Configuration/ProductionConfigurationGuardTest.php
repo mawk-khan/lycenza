@@ -309,6 +309,10 @@ class ProductionConfigurationGuardTest extends TestCase
             'log default while enabled' => [['mail.default' => 'log'], 'mail_laravel_default_is_sink'],
             'array default while enabled' => [['mail.default' => 'array'], 'mail_laravel_default_is_sink'],
             'fake event adapter' => [['email.events' => ['adapter' => 'fake', 'secrets' => [self::emailCanary('event-secret')]]], 'mail_events_adapter_fake'],
+            // ADR 0060 section 28 (E18): development / non-production only,
+            // whatever else is configured, until the E17 outcome is recorded.
+            'sendgrid provider' => [['email.provider' => 'sendgrid', 'email.sendgrid' => ['api_key' => 'SG.'.str_repeat('a', 22).'.'.str_repeat('b', 43), 'region' => 'global', 'mode' => 'delivery', 'test_recipient_domains' => ['example.test']]], 'mail_provider_sendgrid_not_authorised'],
+            'sendgrid event adapter' => [['email.events' => ['adapter' => 'sendgrid', 'secrets' => [self::emailCanary('event-secret')]]], 'mail_events_sendgrid_not_authorised'],
             'provider debug' => [['email.debug' => true], 'mail_provider_debug_enabled'],
             'open tracking' => [['email.tracking' => ['opens' => true, 'clicks' => false]], 'mail_tracking_enabled'],
             'click tracking' => [['email.tracking' => ['opens' => false, 'clicks' => true]], 'mail_tracking_enabled'],

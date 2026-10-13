@@ -13,8 +13,10 @@
 #     commands this script also runs, e.g. platform:test-db-reset,
 #     which never parses phpunit.xml at all and so cannot benefit from
 #     force="true")
-#   - raises the PHP CLI memory_limit for the phpunit subprocess (the
-#     default 128M reliably exhausts on this repo's full test suite;
+#   - raises the PHP CLI memory_limit for the phpunit subprocess to 2G
+#     (the default 128M reliably exhausts on this repo's full test suite;
+#     1G was raised 2026-10-13 after the E18 candidate exhausted it at
+#     test ~8,022 -- the last 1G-green run had peaked at 1020.82 MB;
 #     `php artisan test` spawns phpunit as a real child process, so a
 #     memory_limit override on the parent invocation does not reach it)
 #   - runs `platform:env-diagnostic` first and refuses to proceed at
@@ -218,6 +220,6 @@ case "${action}" in
     : # already printed above
     ;;
   test)
-    docker_exec php -d memory_limit=1G vendor/bin/phpunit "${forward_args[@]}"
+    docker_exec php -d memory_limit=2G vendor/bin/phpunit "${forward_args[@]}"
     ;;
 esac

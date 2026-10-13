@@ -199,9 +199,11 @@ inside the container (see section 7); runs
 resolved configuration fails the fail-closed contract; then runs the
 requested action with the full `SAFE_ENV` override set explicitly
 passed on `docker exec`, and (for the `test` action)
-`php -d memory_limit=1G vendor/bin/phpunit` (the default 128M CLI
+`php -d memory_limit=2G vendor/bin/phpunit` (the default 128M CLI
 `memory_limit` reliably exhausts on this repository's full suite; see
-section 16).
+section 16). *(Raised from 1G on 2026-10-13: the last 1G-green full suite
+had peaked at 1020.82 MB of 1024, and the E18 candidate's suite exhausted it
+at test ~8,022 of 8,198, CI run `38395687379`.)*
 
 ## 6. DB fail-closed contract
 

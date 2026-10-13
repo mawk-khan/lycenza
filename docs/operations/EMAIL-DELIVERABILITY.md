@@ -217,3 +217,91 @@ is true.
 
 A release here does not clear the provider's own suppression list. Clear
 that in the provider console as a separate, deliberate step.
+
+## SendGrid (E18, ADR 0060 §28) — development / non-production only
+
+**Not production.** `MAIL_PROVIDER=sendgrid` and `MAIL_PROVIDER_EVENTS=sendgrid`
+are refused in production by the boot guard
+(`mail_provider_sendgrid_not_authorised`,
+`mail_events_sendgrid_not_authorised`), by the resolvers and by the adapter,
+until a dated ADR 0060 amendment records the E17 legal outcome. No real
+School, Student, Guardian or staff data is ever sent (OD-1).
+
+### Two separate testing paths
+
+| Path | When | What happens |
+|---|---|---|
+| **DDEV Mailpit** (default) | Ordinary local development | `MAIL_PROVIDER=smtp` to Mailpit (127.0.0.1:1025, plaintext allowed in local only). Nothing leaves the machine, and no SendGrid value exists in `.ddev/config.yaml`. Read mail at `ddev mailpit` |
+| **SendGrid non-production** | Provider-contract testing only | `MAIL_PROVIDER=sendgrid` with a **restricted Mail-Send-only non-production key** from the environment. Mailpit does **not** sit in front of it |
+
+### Settings (all required; any missing or invalid value blocks sending)
+
+| Setting | Values |
+|---|---|
+| `MAIL_SENDGRID_API_KEY` | A restricted, non-production key. Never committed |
+| `MAIL_SENDGRID_REGION` | `global` (`api.sendgrid.com`) or `eu` (`api.eu.sendgrid.com`) |
+| `MAIL_SENDGRID_MODE` | `sandbox` or `delivery` (no default) |
+| `MAIL_SENDGRID_TEST_RECIPIENT_DOMAINS` | Comma-separated synthetic or operator-controlled test domains. Every recipient must be in one |
+
+- **Sandbox mode:** SendGrid validates the request and answers `200 OK`. It
+  **never delivers** and emits **no** Event Webhook events. The message is
+  recorded `submitted` with no provider id.
+- **Delivery mode:** sends to test mailboxes only, with `202` + `X-Message-Id`.
+  Use it for the ADR 0060 §21 sandbox gates.
+- **When blocked:** `platform:mail-status` / Operations Status show
+  `provider_misconfigured`, `provider_not_authorised` or the active
+  `sendgrid_mode`. Messages wait; nothing falls back to Mailpit or SMTP.
+
+### Event webhook (non-production)
+- **Settings:** `MAIL_PROVIDER_EVENTS=sendgrid`. `MAIL_PROVIDER_EVENT_SECRET`
+  / `_PREVIOUS_SECRET` hold SendGrid's **public** verification key(s), base64
+  DER as the console shows them.
+- **Requests:** signed with ECDSA over timestamp + raw body, ±300 s. Bounds
+  are 1 MiB / 5,000 events.
+- **What is stored:** only the normalized type, time, bounce class,
+  `sg:`+SHA-256 of `sg_event_id` and the message-id prefix. The recipient,
+  IP, SMTP text and raw payload are never stored.
+- **Local and automated testing** uses synthetic signed fixtures; no
+  public tunnel is needed.
+
+### Rotation
+- **API key (overlap):**
+  1. create a new restricted key;
+  2. store it in the environment;
+  3. deploy and observe accepted submissions;
+  4. delete the old key;
+  5. prove the old key fails.
+
+  **Emergency:** delete the key at SendGrid first (ADR 0060 §8).
+- **Webhook key:** prefer two webhooks to the same URL. Install the new
+  public key as current and the old as previous, deploy, then delete the
+  old webhook and drop the previous key. Otherwise regenerate in place: 401s
+  are retried for 24 h, so deploy promptly (ADR 0060 §18).
+
+### Suppression release needs both sides
+1. `platform:mail-suppression-release`.
+2. Remove the address from the matching SendGrid list with the **operator**
+   credential. Otherwise the next send is `dropped` and suppressed again
+   (ADR 0060 §17).
+
+### Account-wide settings (operator, before any send)
+- **Tracking off:** click, open, subscription and Google Analytics tracking
+  off (`/v3/tracking_settings/*`). An open or click event raises
+  `lycenza_email_provider_event_signals_total{outcome="tracking_event_received"}`.
+- **No Marketing Campaigns.**
+- **Domain authentication, links and the E19 clock:** domain authentication
+  (a new 2048-bit selector, custom return path) is **E19 work**. Its 14-day
+  clock starts only as ADR 0060 §23 / §27.4 define. Sandbox testing does not
+  start it.
+
+### Asynchronous bounces (ADR 0060 §28.4)
+- **Why they cannot link:** SendGrid's delayed/asynchronous bounces carry no
+  `sg_message_id`, so they cannot be linked to a message.
+- **What happens:** they are stored as `ignored`, suppress nothing, and raise
+  `lycenza_email_provider_event_signals_total{outcome="async_bounce_unlinked"}`
+  plus the log code `email.provider.async_bounce_unlinked` (no address).
+- **How suppression still happens:** SendGrid keeps the address on its own
+  bounce list. The next message to it is `dropped` ("Bounced Address"), and
+  that event **is** linked, so Lycenza then suppresses the address for all
+  mail. That SendGrid adds asynchronous bounces to its bounce list is a §21
+  sandbox gate, not yet proven.

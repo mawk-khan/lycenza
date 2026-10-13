@@ -537,6 +537,10 @@ it is never coded around.
    informational only.
 9. **Attachments.** The provider message-size limit is at least the
    `email_max_total_size_mb` cap (ADR 0055 §13).
+10. **Asynchronous bounces** *(added 2026-10-13 by §28.4)*. An
+    asynchronously bounced address is added to SendGrid's bounce list, and
+    the next send to it produces a `dropped` "Bounced Address" event
+    carrying `sg_message_id`.
 
 ## 22. E18 — exact implementation scope
 
@@ -794,3 +798,119 @@ consecutive days of 100 % aligned-DKIM pass in DMARC aggregate reports
 - **E21:** stays independently open. The E17 answer on provider-side
   retention (Q-D) may inform E21's qualified ratification, but it reopens
   no E21 engineering.
+
+## 28. Amendment — E18 implemented for development / non-production only (2026-10-13)
+
+**E17 stays `LEGAL_REVIEW_REQUIRED`. No legal determination is recorded.
+Production use of SendGrid stays refused, in code.**
+
+### 28.1 Owner decision OD-E18-DEV (not a legal determination)
+- **What changed:** on 2026-10-13 the product owner authorised engineering to
+  implement and test the SendGrid integration in **local and controlled
+  non-production environments**.
+- **What it overrides:** only the internal *development* hold of §20, §22
+  and §27.5 ("E18 does not start until …"). This follows the RES.4
+  precedent (ADR 0068 §25.1). It does **not** replace the E17
+  determination, and it authorizes **no production processing**.
+- **Development model:**
+  - DDEV Mailpit stays the default local path;
+  - SendGrid-specific testing uses a restricted, non-production key and
+    synthetic or operator-controlled test data only;
+  - tracking, categories and `custom_args` stay off;
+  - nothing is committed, and no production mail is sent.
+- **Unchanged:** OD-1 (§27.3) still governs the account itself.
+- **E19 is separate.** Nothing here configures DNS, and the 14-day clock
+  has not started (§27.4).
+
+### 28.2 What is built (§22)
+| §22 item | State |
+|---|---|
+| 1. `SendGridEmailProvider` (HTTPS Mail Send, closed host set, 5 s / 15 s, no redirects, classified, tracking disabled per message) | **Built** |
+| 2. `EmailProviderResolver` knows `sendgrid` | **Built** |
+| 3. `SendGridEmailEventAdapter` (ECDSA over timestamp + raw body, ±300 s, ring of 2; §13 map; §14 key; §15 prefix) | **Built** |
+| 4. `EmailEventAdapterResolver` knows `sendgrid` | **Built** |
+| 5. Per-adapter event bounds (§12): `DeclaresEventBounds`; SendGrid 1 MiB / 5,000 | **Built** |
+| 6. Configuration guard | **Built, stricter than frozen:** production refuses `sendgrid` outright (boot guard, both resolvers, the adapter). Outside production `SendGridConfiguration` requires a key-shaped key, `global`/`eu`, an explicit `sandbox`/`delivery` mode, a test-recipient-domain allow-list and tracking off; any missing or malformed value blocks submission (`provider_misconfigured`), with no fallback. The pairing and EC-key checks of §22.6 apply when production is enabled by a later amendment |
+| 7–9. Signature, replay, fixture, duplicate, out-of-order and batch tests | **Built** (synthetic fixtures, a fresh P-256 key per run) |
+| 10. Secret redaction | **Verified:** `LogSanitizer` already redacts `api_key`, `signature`, `payload` and `body`. The adapters log only closed codes and ids, and a test proves no key, body, subject, recipient or provider text is logged |
+| 11. Linkage tests (stored `school_id` only) | **Built** |
+| 12. Runbook | **Built:** `EMAIL-DELIVERABILITY.md`, "SendGrid (E18)" |
+| 13. Full canonical regression | Remote exact-SHA `CI gate` (ADR 0072 §28.8) |
+| 14. Full O16 qualification of both images | **Not done here.** Release-time evidence (E02); the CI image lane builds and verifies the images |
+| 15. §21 sandbox gates | **Not run.** They need the OD-1 non-production account; none exists |
+
+**Additions beyond the frozen scope:** all three are fail-closed controls,
+and none adds a data class.
+- **Recipient allow-list.** The `MAIL_SENDGRID_TEST_RECIPIENT_DOMAINS`
+  allow-list is enforced before any request, with closed code
+  `recipient_not_permitted`. It makes OD-1's "test mailboxes only" a code
+  control.
+- **Explicit mode.** An explicit `MAIL_SENDGRID_MODE` with no default.
+- **Visible mode.** `sendgrid_mode` in Operations Status and
+  `platform:mail-status`, so sandbox can never be mistaken for delivery.
+
+### 28.3 Provider facts used (primary documentation, reviewed 2026-10-13)
+- **Sandbox mode:** "The email will never be delivered", the answer is
+  `200 OK`, and sandbox requests "will not generate events in either Event
+  Webhook or Email Activity". So sandbox can prove the request contract
+  only; §21's event gates need delivery mode to test mailboxes.
+- **Bounces:** `bounce` with `type` `blocked` is SendGrid's soft bounce, and
+  the §13 mapping (Rejected, no suppression) stands. `bounce_classification`
+  values are "Invalid Address, Technical, Content, Reputation,
+  Frequency/Volume, Mailbox Unavailable, or Unclassified".
+- **Drops:** the `dropped` reasons include "Bounced Address", "Unsubscribed
+  Address", "Spam Reporting Address" and "Invalid Address". Dropped events
+  carry `sg_message_id`.
+
+### 28.4 Decision — asynchronous bounces
+- **The fact:** SendGrid: "In the case of a delayed or asynchronous bounce,
+  Twilio doesn't return the message ID." Under §12/§15 such an event cannot
+  be linked to a message.
+- **Decision (contract-preserving):**
+  - an asynchronous bounce is stored as `Ignored` (hashed event id, no
+    message id) and changes no message state;
+  - it is **signalled**, never hidden:
+    `lycenza_email_provider_event_signals_total{outcome="async_bounce_unlinked"}`
+    and the log code `email.provider.async_bounce_unlinked` (no address);
+  - **no correlation is invented.** No recipient address from the payload
+    (not even transiently, to compute a suppression fingerprint), no
+    `custom_args`, categories or other identifier, and no new stored field.
+- **Why suppression still happens:** SendGrid keeps the address on its own
+  bounce list. The next message to it is `dropped` with "Bounced Address",
+  an event that **does** carry its message id, and the existing linked path
+  suppresses the address for **all** mail (`provider_suppressed`). Tests
+  prove both halves.
+- **Residuals:**
+  - the async-bounced message itself stays `submitted`, never `bounced`;
+  - one further message to that address is attempted and dropped by
+    SendGrid, never delivered;
+  - that SendGrid adds asynchronous bounces to its bounce list is **NOT
+    VERIFIED**, and becomes a new §21 sandbox gate (10).
+- **Open decision (owner + DPO; not taken here):** whether Lycenza may use
+  the authenticated payload's recipient address **transiently** to
+  fingerprint and suppress an unlinked asynchronous bounce. Fingerprints
+  are already the suppression contract, but this would be new processing
+  of payload personal data, so it is an E17-scope question. Until then the
+  behaviour above stands.
+
+### 28.5 Unchanged
+- **The data contract:** no recipient name, `custom_args`, categories,
+  Reply-To, Cc, Bcc or ids is sent, and no payload, address or IP is
+  stored.
+- **The purpose catalogue:** exactly five purposes, each pinned to its
+  producers by `EmailArchitectureTest`. No fee, admissions, payslip, marks
+  or attendance producer is added.
+- **E21-D2 retention.**
+- **The SES fallback** (a fresh owner decision if ever needed).
+
+### 28.6 Status
+- **E18 — DEVELOPMENT IMPLEMENTED / PRODUCTION ENABLEMENT BLOCKED BY
+  OUTSTANDING GOVERNANCE GATES:**
+  - E17 (the legal determination);
+  - the §21 sandbox gates (an OD-1 account);
+  - E08 (secret store);
+  - E19 / E20;
+  - E02 qualification;
+  - a dated amendment here that lifts the production refusal in code.
+- **Register status:** ADR 0058 row E18 stays `LEGAL_REVIEW_REQUIRED`
+  until then.

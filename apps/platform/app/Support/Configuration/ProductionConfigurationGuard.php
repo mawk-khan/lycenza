@@ -49,7 +49,9 @@ use Illuminate\Encryption\Encrypter;
  * a valid Lycenza sending domain, the catalog From address, a valid
  * suppression HMAC key ring, no log/array framework default, and for SMTP
  * a non-local host, required TLS, credentials and a bounded timeout; an
- * event adapter needs a valid 1-2 entry secret ring.
+ * event adapter needs a valid 1-2 entry secret ring. ADR 0060 section 28
+ * (E18): the `sendgrid` provider and event adapter are refused outright
+ * until the E17 legal outcome is recorded by an ADR 0060 amendment.
  *
  * Phase 0O.10A (ADR 0056): enabled account recovery needs critical email
  * configured (`account_recovery_email_disabled`).
@@ -414,6 +416,11 @@ final class ProductionConfigurationGuard
             $violations[] = 'mail_provider_invalid';
         } elseif ($mode === 'fake') {
             $violations[] = 'mail_provider_fake';
+        } elseif ($mode === 'sendgrid') {
+            // ADR 0060 section 28: SendGrid is development / non-production
+            // only until a dated ADR 0060 amendment records the E17 legal
+            // outcome. Owner development authorization is not that outcome.
+            $violations[] = 'mail_provider_sendgrid_not_authorised';
         }
 
         // Laravel merges its own default mailer definitions (failover,
@@ -431,6 +438,8 @@ final class ProductionConfigurationGuard
             $violations[] = 'mail_events_adapter_invalid';
         } elseif ($events === 'fake') {
             $violations[] = 'mail_events_adapter_fake';
+        } elseif ($events === 'sendgrid') {
+            $violations[] = 'mail_events_sendgrid_not_authorised';
         }
 
         if ((bool) $this->config->get('email.debug')) {

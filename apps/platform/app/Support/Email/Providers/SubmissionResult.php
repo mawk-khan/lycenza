@@ -13,6 +13,9 @@ final class SubmissionResult
         'timeout', 'network_error', 'tls_unavailable', 'provider_throttled', 'provider_unavailable',
         'recipient_rejected', 'sender_rejected', 'content_rejected', 'message_too_large',
         'authentication_failed', 'provider_error',
+        // ADR 0060 section 27.3 (OD-1): a non-production SendGrid recipient
+        // outside the configured test domains, refused before any network call.
+        'recipient_not_permitted',
     ];
 
     private function __construct(

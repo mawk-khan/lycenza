@@ -3537,6 +3537,20 @@ merged commit is in `PHASE-0O-READINESS.md` §47 and after.
 - **Deferred:** PR + at least 1 independent approval + CODEOWNERS stay
   production-stage hardening, before E02, and are not active.
 
+**E18 — DEVELOPMENT IMPLEMENTED / PRODUCTION ENABLEMENT BLOCKED BY OUTSTANDING GOVERNANCE GATES (2026-10-13).**
+- **Record:** `PHASE-0O-READINESS.md` §57; ADR 0060 §28; ADR 0058 note "E18:
+  SendGrid implemented for development only".
+- **Authority:** owner decision OD-E18-DEV covers local and non-production
+  only. It is not the E17 determination.
+- **Built:** the SendGrid sending and event adapters behind the existing
+  email gateway, with an explicit sandbox/delivery mode, a test-recipient
+  allow-list and Operations visibility.
+- **Production:** refused in code (boot guard, resolvers, adapter).
+- **DDEV:** stays on Mailpit.
+- **Asynchronous bounces:** signalled and not linked; no new identifier.
+- **Before production:** E17, the §21 sandbox gates, E08, E19/E20, E02 and a
+  dated ADR 0060 amendment.
+
 **E17 — REVIEW REQUEST PUBLISHED / EXTERNAL DETERMINATION REQUIRED (2026-10-13).**
 - **Record:** `PHASE-0O-READINESS.md` §56; ADR 0060 §27; ADR 0058 note
   "E17: SendGrid review request published".

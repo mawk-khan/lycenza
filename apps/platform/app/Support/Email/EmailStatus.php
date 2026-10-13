@@ -52,6 +52,11 @@ final class EmailStatus
 
         return new ComponentStatus('email', $reason === null ? OperationalStatus::Healthy : OperationalStatus::Degraded, $reason, [
             'provider' => $this->providers->mode(),
+            // ADR 0060 section 28: SendGrid sandbox (validated, never delivered)
+            // vs non-production delivery is always shown, never inferred.
+            'sendgrid_mode' => $this->providers->mode() === 'sendgrid'
+                ? (in_array($this->config->get('email.sendgrid.mode'), ['sandbox', 'delivery'], true) ? $this->config->get('email.sendgrid.mode') : 'invalid')
+                : null,
             'sending_verified' => (bool) $this->config->get('email.sending_verified'),
             'provider_events' => $eventsActive ? 'configured' : 'none',
             'backlog' => $backlog,

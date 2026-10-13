@@ -47,6 +47,10 @@ class ShowMailStatus extends Command
 
         $this->line("email: {$report['status']}".($report['reason'] !== null ? " ({$report['reason']})" : ''));
         $this->line('provider: '.$component->detail['provider'].'; events: '.$component->detail['provider_events'].'; sending verified: '.($component->detail['sending_verified'] ? 'yes' : 'no'));
+        if (($component->detail['sendgrid_mode'] ?? null) !== null) {
+            // ADR 0060 section 28: never leave sandbox vs delivery to inference.
+            $this->line('sendgrid mode: '.$component->detail['sendgrid_mode'].' (development / non-production only)');
+        }
         foreach ($component->detail['backlog'] as $purpose => $backlog) {
             $this->line(sprintf('  %-22s pending=%d submitting=%d oldest=%ds', $purpose, $backlog['pending'], $backlog['submitting'], $backlog['oldest_age_seconds']));
         }

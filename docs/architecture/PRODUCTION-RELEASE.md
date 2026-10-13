@@ -578,6 +578,10 @@ explicit mode: messages wait and nothing claims to be sent.
 **Always refused in production:**
 - `mail_provider_fake` / `mail_provider_invalid`;
 - `mail_events_adapter_fake` / `mail_events_adapter_invalid`;
+- `mail_provider_sendgrid_not_authorised` /
+  `mail_events_sendgrid_not_authorised`: E18 (ADR 0060 §28) is development
+  and non-production only until a dated ADR 0060 amendment records the E17
+  legal outcome;
 - `mail_unsafe_mailer_default` (a failover/roundrobin/sendmail default
   mailer);
 - `mail_provider_debug_enabled`;

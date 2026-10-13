@@ -2869,3 +2869,64 @@ account, credential or DNS change.**
   remote `CI gate` on the exact candidate SHA is the canonical evidence.
 
 **Status: E17 — REVIEW REQUEST PUBLISHED / EXTERNAL DETERMINATION REQUIRED.**
+
+## 57. Phase 0O / E18 — SendGrid implemented for development / non-production only (2026-10-13)
+
+**Code change. No legal determination; production refuses SendGrid in code.**
+ADR 0060 §28 is the full record.
+
+- **Authority:** owner decision **OD-E18-DEV**: local and non-production
+  implementation and testing only. It is not the E17 determination, which
+  stays outstanding.
+- **Built:**
+  - `SendGridConfiguration`, `SendGridEmailProvider` (HTTPS Mail Send) and
+    `SendGridEmailEventAdapter` (Signed Event Webhook);
+  - per-adapter event bounds (`DeclaresEventBounds`);
+  - `lycenza_email_provider_event_signals_total`;
+  - `sendgrid_mode` in Operations Status and `platform:mail-status`.
+- **Fail-closed boundaries:**
+  - **production:** the boot guard, both resolvers and the adapter refuse
+    `sendgrid`;
+  - **outside production:** every SendGrid value must be explicit (key
+    shape, `global`/`eu`, `sandbox`/`delivery`, a test-recipient-domain
+    allow-list, tracking off). Otherwise messages wait as
+    `provider_misconfigured`, with no fallback to Mailpit/SMTP or to live
+    delivery.
+- **DDEV:** unchanged on Mailpit. Proved live on 2026-10-13: a synthetic
+  security notice went gateway → SMTP adapter → Mailpit, `submitted`, with
+  nothing external. A release-tooling hygiene test pins `.ddev/config.yaml`
+  and the empty example values, and allows no committed SendGrid key except
+  the synthetic test constant.
+- **Data contract unchanged:**
+  - one recipient, address only;
+  - no `custom_args`, categories, Reply-To, Cc, Bcc, ids or tracking;
+  - events keep only the type, time, bounce class, hashed event id and
+    message-id prefix.
+- **Asynchronous bounces:** signalled and not linked. Suppression comes
+  through SendGrid's own list and the linked `dropped` event on the next
+  send. This adds §21 gate 10; the payload-address option is an open
+  owner + DPO decision.
+- **Not done:**
+  - §21 sandbox gates (no account exists);
+  - O16 image qualification (E02);
+  - E19 (the clock has not started).
+- **Regression:** a code-lane change, so the remote exact-SHA full suite in
+  `CI gate` is the canonical regression (ADR 0072 §28.8).
+  - **The first candidate (`9e1a8848`) failed it**, and not on an
+    assertion: PHPUnit exhausted the canonical runner's 1G `memory_limit`
+    at test ~8,022 of 8,198, in an unrelated Timetable test (run
+    `38395687379`).
+  - **Cause:** the last green 1G run had peaked at 1020.82 MB, about 3 MB of
+    headroom, so any suite growth would tip it over.
+  - **Fix (a repository defect, rule 82):** `bin/safe-test` now runs
+    PHPUnit at 2G (`TEST-ENVIRONMENT-AND-WORKTREE-SAFETY.md` §5).
+  - **The second candidate (`324d14c7`) completed the suite** at 2G (peak
+    1.02 GB): 8,198 tests, 1 failure (run `38400582980`).
+    `ProductionProcessManifestTest` requires every secret-shaped setting to
+    be in a secret group, and `MAIL_SENDGRID_API_KEY` was not.
+  - **Fix:** it joins `app_runtime` in `deploy/processes.json`, as ADR 0060
+    §8 classifies it, and is documented in `PRODUCTION-IMAGES-AND-PROCESSES.md`.
+    The final candidate re-runs the full suite.
+
+**Status: E18 — DEVELOPMENT IMPLEMENTED / PRODUCTION ENABLEMENT BLOCKED BY
+OUTSTANDING GOVERNANCE GATES.**

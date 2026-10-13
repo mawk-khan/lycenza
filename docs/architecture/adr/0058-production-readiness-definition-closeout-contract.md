@@ -583,7 +583,7 @@ with secrets.
 | E15 | Signed, stored, verified, explicitly promoted digest; first promotion evidence retained; promoted-only deployment; rollback retention | ADR 0052 §3.14, §3.17, §3.19 | Deployment | Mandatory | DEPLOYMENT_REQUIRED | Same VERIFIED digest in registry; promotion event; `retained-releases.json` entry | `retained-releases.json`; `RELEASE-QUALIFICATION.md` | Operator | Yes |
 | E16 | Vulnerability exceptions valid at qualification/promotion | ADR 0052; `OWNER-0O6E-2026-09-26` (superseded 2026-09-29 by `OWNER-0O-E16-2026-09-29`, itself superseded 2026-10-11 by `OWNER-0O-E16-2026-10-11`) | Governance | Mandatory | DECISION_REQUIRED | Valid on the date, or fixed, or a new explicit decision. **Current (2026-09-29):** `OWNER-0O-E16-2026-09-29`, fresh scan, 97 records valid **through 2026-10-28** (expire 2026-10-29). A fix, or a further fresh decision, is still needed for the E02/E15 dates. **2026-10-11:** a fresh scan was blocked by Critical and fixable High findings; E16-R1 remediated them (0 Critical, 0 fixable High). 4 new no-fix advisories (18 matches) are unexcepted, so a **fresh owner decision is required** (Note — E16-R1). **Current (2026-10-11, E16-D1):** `OWNER-0O-E16-2026-10-11`, fresh scan of `29785e1`, 115 records (97 renewed + 18 new) valid **through 2026-11-09** (expire 2026-11-10); `ea3d43d` both images VERIFIED. Still needed for the E02/E15 dates (Note — E16-D1) | `vulnerability-exceptions.json`; `0O-E16-2026-10-11-owner-security-decision.md` (history: `0O-E16-2026-09-29-owner-security-decision.md`, `E16-R1-SUPPLY-CHAIN-REMEDIATION-2026-10-11.md`) | Owner + Security | Yes |
 | E17 | Email provider selected + legal/processor review | ADR 0055 §23; §4.11 | Provider / Legal | Mandatory | LEGAL_REVIEW_REQUIRED (2026-10-13: review request published in the repository, **not sent, not answered** — `docs/security/E17-SENDGRID-PROCESSOR-REVIEW-REQUEST.md`; owner decision OD-1 authorises a strictly non-production SendGrid account before the outcome, not legal approval; ADR 0060 §27) | Selection decision (made: Twilio SendGrid, ADR 0060); processor review recorded | ADR 0060 (§20 legal amendment, future) | Owner + Legal | Yes |
-| E18 | Email provider code tail (event auth/normalization; HTTPS sending only if needed) | §4.11 | Provider tail (repository) | Mandatory | LEGAL_REVIEW_REQUIRED | Adapter per ADR 0060 §22, focused tests, sandbox gates (§21), full regression, O16 requalification | Future Phase 0O.13A | Engineering | Yes |
+| E18 | Email provider code tail (event auth/normalization; HTTPS sending only if needed) | §4.11 | Provider tail (repository) | Mandatory | LEGAL_REVIEW_REQUIRED (2026-10-13: **DEVELOPMENT IMPLEMENTED / PRODUCTION ENABLEMENT BLOCKED** — owner decision OD-E18-DEV authorised development and non-production testing only; the adapters are built and production refuses `sendgrid` in code; the §21 sandbox gates, E17, E08, E19/E20 and E02 remain; ADR 0060 §28) | Adapter per ADR 0060 §22, focused tests, sandbox gates (§21), full regression, O16 requalification | Future Phase 0O.13A | Engineering | Yes |
 | E19 | Sending domain, SPF, aligned DKIM, DMARC ≥ quarantine after ≥ 14 d aligned | ADR 0055 §17 | Deployment | Mandatory | DEPLOYMENT_REQUIRED | DNS evidence; aggregate-report summary; `MAIL_SENDING_VERIFIED` attestation | `EMAIL-DELIVERABILITY.md` checklist | Operator | Yes |
 | E20 | Email drills: delivery, hard bounce, complaint, suppression, rotation, monitoring, authenticated events | ADR 0055 §18, §23 | Deployment | Mandatory | DEPLOYMENT_REQUIRED | Drill record per checklist | `EMAIL-DELIVERABILITY.md` | Operator | Yes |
 | E21 | Retention decisions for v1 categories (mail, webhook deliveries, Documents, audit, others used in v1) | §4.12; ADR 0042; `DATA-CLASSIFICATION.md` | Legal | Mandatory | LEGAL_REVIEW_REQUIRED | Qualified decision recorded; settings implemented where they exist | Future legal record + ADR amendment | Legal + Owner | Yes |
@@ -1491,6 +1491,38 @@ corrected in SR.1. E16 is unchanged and separate.
   a fresh scan and decision before 2026-10-28.
 - Actor-level separation-of-duties choices remain owner decisions (ADR 0071
   §27).
+
+## Note — E18: SendGrid implemented for development only (2026-10-13)
+
+**No legal determination; no production enablement.** E17 stays
+`LEGAL_REVIEW_REQUIRED`. E18 also stays `LEGAL_REVIEW_REQUIRED` in this
+register: its repository code exists, but its contracted production
+evidence does not.
+
+- **Authority.** Owner decision **OD-E18-DEV** (ADR 0060 §28.1) authorised
+  local and non-production implementation and testing only, on the RES.4
+  pattern. It is not the DPO determination.
+- **Built** (ADR 0060 §28.2):
+  - the SendGrid Mail Send adapter and the Signed Event Webhook adapter;
+  - per-adapter event bounds;
+  - an explicit `sandbox`/`delivery` mode with no default;
+  - a test-recipient allow-list;
+  - Operations Status visibility.
+- **Production refusal, in code:** the boot guard
+  (`mail_provider_sendgrid_not_authorised`,
+  `mail_events_sendgrid_not_authorised`), both resolvers and the adapter.
+- **DDEV** stays on Mailpit.
+- **Asynchronous bounces** (ADR 0060 §28.4): they cannot be linked, so they
+  are signalled and suppress nothing directly. The next send is dropped by
+  SendGrid and that linked event suppresses the address. No new identifier
+  or stored field was introduced. Transient use of the payload address is
+  left as an open owner + DPO decision.
+- **Still required before production:**
+  - E17's determination and a dated ADR 0060 amendment lifting the code
+    refusal;
+  - the §21 sandbox gates (an OD-1 account);
+  - E08, E19, E20 and E02.
+- **Register:** the 25 mandatory rows are unchanged.
 
 ## Note — E17: SendGrid review request published; blocker count corrected (2026-10-13)
 

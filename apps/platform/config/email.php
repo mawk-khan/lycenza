@@ -83,6 +83,36 @@ return [
     ],
 
     /*
+     * ADR 0060 (E18, Phase 0O.13A; section 28: development / non-production
+     * only). `MAIL_PROVIDER=sendgrid` is REFUSED in production -- by the boot
+     * guard, by the resolver and by the adapter -- until a dated ADR 0060
+     * amendment records the E17 legal outcome. Outside production every
+     * value below must be explicit; a missing or malformed one blocks
+     * submission (`provider_misconfigured`), it never falls back to another
+     * transport or to live delivery.
+     *
+     * - api_key: a RESTRICTED, Mail-Send-only, NON-production key. Never
+     *   committed; injected by the environment (E08 decides the production
+     *   store).
+     * - region: `global` (api.sendgrid.com) or `eu` (api.eu.sendgrid.com).
+     * - mode: `sandbox` (SendGrid validates, NEVER delivers, emits no
+     *   events) or `delivery` (non-production delivery to test mailboxes,
+     *   e.g. the ADR 0060 section 21 gates). No default.
+     * - test_recipient_domains: comma-separated domains; every recipient
+     *   must belong to one (synthetic / operator-controlled test mailboxes
+     *   only, OD-1). Empty blocks submission.
+     */
+    'sendgrid' => [
+        'api_key' => env('MAIL_SENDGRID_API_KEY'),
+        'region' => env('MAIL_SENDGRID_REGION'),
+        'mode' => env('MAIL_SENDGRID_MODE'),
+        'test_recipient_domains' => array_values(array_filter(array_map(
+            fn (string $domain) => strtolower(trim($domain)),
+            explode(',', (string) env('MAIL_SENDGRID_TEST_RECIPIENT_DOMAINS', '')),
+        ), fn (string $domain) => $domain !== '')),
+    ],
+
+    /*
      * ADR 0055 section 11: provider-event ingestion. The verifier and
      * normalizer belong to the provider adapter; `none` answers 404. Only the
      * `fake` adapter exists (local/testing, refused in production) until a

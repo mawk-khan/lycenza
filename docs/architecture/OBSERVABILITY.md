@@ -359,6 +359,7 @@ template):
 | `lycenza_email_messages_total` | counter | `message_class`, `outcome` (queued, submitted, delivered, deferred, bounced, complained, suppressed, failed, cancelled) |
 | `lycenza_email_submission_attempts_total` | counter | `message_class`, `outcome` (accepted, transient_failure, permanent_failure, auth_failure) |
 | `lycenza_email_webhook_requests_total` | counter | `outcome` (accepted, unauthenticated, too_large, malformed, duplicate, disabled) |
+| `lycenza_email_provider_event_signals_total` | counter | `outcome` (async_bounce_unlinked, tracking_event_received); ADR 0060 §28 |
 | `lycenza_email_pending_messages` | gauge (scrape) | `message_class` |
 | `lycenza_email_oldest_pending_age_seconds` | gauge (scrape) | `message_class` |
 | `lycenza_email_last_event_timestamp_seconds` | gauge (scrape; only with an event adapter) | — |

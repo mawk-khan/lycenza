@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Integrations;
 
 use App\Http\Controllers\Controller;
 use App\Support\Email\EmailTelemetry;
+use App\Support\Email\Events\DeclaresEventBounds;
 use App\Support\Email\Events\EmailEventAdapterResolver;
 use App\Support\Email\Events\EmailEventIngestion;
 use App\Support\Email\Events\InvalidEmailEventPayload;
@@ -35,7 +36,9 @@ class EmailProviderEventController extends Controller
             return response('', 404);
         }
 
-        $max = (int) config('email.events.max_body_bytes');
+        // ADR 0060 section 12: an adapter may declare its own bounds.
+        $max = $adapter instanceof DeclaresEventBounds ? $adapter->maxBodyBytes() : (int) config('email.events.max_body_bytes');
+        $maxEvents = $adapter instanceof DeclaresEventBounds ? $adapter->maxEvents() : (int) config('email.events.max_events');
         $declared = $request->header('Content-Length');
 
         if ((is_numeric($declared) && (int) $declared > $max) || strlen($request->getContent()) > $max) {
@@ -72,7 +75,7 @@ class EmailProviderEventController extends Controller
             return response('', 400);
         }
 
-        if (count($events) > (int) config('email.events.max_events')) {
+        if (count($events) > $maxEvents) {
             $telemetry->webhook('too_large');
 
             return response('', 413);

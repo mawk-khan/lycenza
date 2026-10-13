@@ -120,6 +120,52 @@ class EmailArchitectureTest extends TestCase
     }
 
     #[Test]
+    public function every_purpose_has_exactly_its_known_producers_and_sendgrid_opens_no_new_path(): void
+    {
+        // ADR 0060 section 28 (E18): adding a provider adds no business
+        // purpose. The catalog stays these five, each named only where it
+        // is produced (EmailStatus reads the standard class for its backlog).
+        // A new producer -- fees, admissions, payslips, marks, attendance --
+        // is a new data class needing its own decision (E17 request section 7).
+        $this->assertSame(['account_invitation', 'school_communication', 'account_recovery', 'security_notice', 'staff_account_invitation'], EmailPurpose::values());
+
+        $expected = [
+            'AccountInvitation' => ['app/Domain/Identity/Application/AccountInvitationService.php'],
+            'SchoolCommunication' => ['app/Domain/Communications/Application/Channels/EmailChannelDriver.php', 'app/Support/Email/EmailStatus.php'],
+            'AccountRecovery' => ['app/Domain/Identity/Application/AccountRecovery/AccountRecoveryIssuer.php'],
+            'SecurityNotice' => ['app/Domain/Identity/Application/AccountRecovery/SecurityNoticeService.php'],
+            'StaffAccountInvitation' => ['app/Domain/Identity/Application/Staff/StaffInvitationService.php'],
+        ];
+
+        $found = array_fill_keys(array_keys($expected), []);
+        $vendorHosts = [];
+        foreach ($this->appSources() as $path => $source) {
+            foreach (array_keys($expected) as $case) {
+                if (preg_match('/EmailPurpose::'.$case.'\b/', $source) === 1) {
+                    $found[$case][] = $path;
+                }
+            }
+            if (str_contains($source, 'sendgrid.com')) {
+                $vendorHosts[] = $path;
+            }
+        }
+
+        foreach ($expected as $case => $paths) {
+            sort($paths);
+            sort($found[$case]);
+            $this->assertSame($paths, $found[$case], "EmailPurpose::{$case}");
+        }
+
+        // Only the SendGrid configuration knows the vendor's (closed) hosts;
+        // the SendGrid adapters never choose behaviour by purpose (only the
+        // critical/standard kind, through OutboundEmail::additionalHeaders()).
+        $this->assertSame(['app/Support/Email/Providers/SendGridConfiguration.php'], $vendorHosts);
+        foreach (['Providers/SendGridEmailProvider.php', 'Providers/SendGridConfiguration.php', 'Events/SendGridEmailEventAdapter.php'] as $file) {
+            $this->assertStringNotContainsString('EmailPurpose::', (string) file_get_contents(app_path('Support/Email/'.$file)), $file);
+        }
+    }
+
+    #[Test]
     public function the_email_jobs_own_their_retries_and_stay_under_the_queue_timeout(): void
     {
         foreach ([SubmitEmailMessageJob::class, ApplyEmailEventJob::class] as $job) {

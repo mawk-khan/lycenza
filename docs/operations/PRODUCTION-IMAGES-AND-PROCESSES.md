@@ -91,7 +91,7 @@ health endpoints and the **secret groups** it receives. Guarded by
 
 | Secret group | Contents | Given to |
 |---|---|---|
-| `app_runtime` | `APP_KEY`, `APP_PREVIOUS_KEYS`, `MAIL_PASSWORD`, `DB_PASSWORD`, `REDIS_PASSWORD`, `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` (or none: the platform's credential chain), `AI_GATEWAY_CONTEXT_SIGNING_KEY`, `AI_GATEWAY_SERVICE_SIGNING_KEY` (Laravel's `platform` Ed25519 key, ADR 0053; only where the Gateway is deployed), both lookup HMAC keys | web, workers, scheduler, release, operator console |
+| `app_runtime` | `APP_KEY`, `APP_PREVIOUS_KEYS`, `MAIL_PASSWORD`, `DB_PASSWORD`, `REDIS_PASSWORD`, `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` (or none: the platform's credential chain), `AI_GATEWAY_CONTEXT_SIGNING_KEY`, `AI_GATEWAY_SERVICE_SIGNING_KEY` (Laravel's `platform` Ed25519 key, ADR 0053; only where the Gateway is deployed), both lookup HMAC keys, `MAIL_SENDGRID_API_KEY` (ADR 0060 §8; non-production only until ADR 0060 §28's production refusal is lifted, and then from the E08 store, ideally to the `notifications` worker alone) | web, workers, scheduler, release, operator console |
 | `database_admin` | `DB_ADMIN_USERNAME`, `DB_ADMIN_PASSWORD` | release, operator console only |
 | `database_retention` | `DB_RETENTION_USERNAME`, `DB_RETENTION_PASSWORD` (the dedicated `school_os_retention` login, E21-RH.2) | scheduler, operator console only |
 | `gateway` | `SERVICE_SIGNING_KEY` (the Gateway's `ai-gateway` Ed25519 key, ADR 0053) | AI Gateway only |
