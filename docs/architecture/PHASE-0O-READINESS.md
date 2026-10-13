@@ -2930,3 +2930,43 @@ ADR 0060 §28 is the full record.
 
 **Status: E18 — DEVELOPMENT IMPLEMENTED / PRODUCTION ENABLEMENT BLOCKED BY
 OUTSTANDING GOVERNANCE GATES.**
+
+## 58. Phase 0O / E19 — SendGrid domain authentication: contract frozen, clock not started (2026-10-13)
+
+**Status: E19 — CONTRACT FROZEN / CLOCK NOT STARTED.** No row changes
+status. E17 stays `LEGAL_REVIEW_REQUIRED`, and E18 stays DEVELOPMENT
+IMPLEMENTED / PRODUCTION ENABLEMENT BLOCKED.
+
+- **Baseline:** `origin/main` `9c0e147e`. E18's integration and main
+  `CI gate` runs are green (runs `38405856011`, `38410995811`);
+  `publication-check` reports the candidate is the main tip; main
+  protection shows no drift.
+- **Record:** `docs/operations/E19-SENDGRID-DOMAIN-AUTHENTICATION-RECORD.md`
+  (ADR 0060 §29). It freezes:
+  - the clock contract: UTC days, a non-counting Day 0, the in-stream
+    rows, the qualifying-day test, and the rule that a missing day breaks
+    the run;
+  - the admission record A1–A14;
+  - the restart, pause and no-effect conditions;
+  - the observation design: at least 2 operator-controlled mailboxes at 2
+    providers, at least 2 messages per mailbox per day, fixed synthetic
+    content, delivery mode. Sandbox mode cannot feed the clock;
+  - the EU-region residual risk;
+  - the DPO's asynchronous-bounce question.
+- **Conflicts recorded:** C1–C5 (ADR 0060 §29). The most important is C3:
+  E19 never publishes `p=none` beneath a stronger organizational policy.
+- **Open owner decision:** OD-E19-T, the observation sender. T2 is
+  recommended.
+- **Not done (operator, rule 16):**
+  - the account;
+  - the region choice;
+  - the credentials;
+  - tracking off;
+  - domain authentication and DNS;
+  - the DMARC audit and record;
+  - the `rua` mailbox;
+  - the observation traffic.
+- **Code:** none. `platform:mail-verify-domain` was confirmed to follow
+  CNAMEs and to refuse RSA keys below 2048 bits.
+- **Regression:** docs-only. The docs lane's `repository-documents` guards
+  apply. The regression counter is unchanged.

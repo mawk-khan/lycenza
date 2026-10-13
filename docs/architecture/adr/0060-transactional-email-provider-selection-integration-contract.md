@@ -914,3 +914,45 @@ and none adds a data class.
   - a dated amendment here that lifts the production refusal in code.
 - **Register status:** ADR 0058 row E18 stays `LEGAL_REVIEW_REQUIRED`
   until then.
+
+## 29. Note — E19 contract frozen; clock not started (2026-10-13)
+
+**No account, DNS record, credential or message exists. The E19 clock has
+not started.** E17 stays `LEGAL_REVIEW_REQUIRED`, and E18's production
+refusal is unchanged.
+
+- **Record:** `docs/operations/E19-SENDGRID-DOMAIN-AUTHENTICATION-RECORD.md`.
+  It freezes, before any operator action:
+  - the clock contract: UTC days; a non-counting Day 0; the in-stream
+    definition; the qualifying-day test; and the rule that a day without
+    evidence breaks the run;
+  - the clock-admission record (A1–A14). The clock starts only at the
+    timestamp of the last prerequisite, never backdated;
+  - the restart, pause and no-effect table;
+  - the minimum observation-traffic design;
+  - the EU-region residual risk. A region migration is a re-admission
+    restart, and a global-region clock is not declared reusable;
+  - the DPO question on asynchronous bounces (§28.4), carried forward
+    unchanged.
+- **Contract conflicts, and the interpretation used:**
+  - **C1:** ADR 0055 §17's "real traffic" versus OD-1. §23 governs:
+    non-production observation traffic only.
+  - **C2:** hostnames versus E29. The record uses placeholders; real
+    values stay in the operator store.
+  - **C3:** §23 step 5's `p=none` could weaken an organizational `sp=`/`p=`
+    that is already ≥ `quarantine`. E19 never weakens DMARC: audit first,
+    and observe at the existing effective policy if it is stronger.
+  - **C5:** SendGrid's own key rotation behind unchanged CNAMEs is not a
+    restart by itself; it triggers a same-day 2048-bit re-check.
+- **Open owner decision OD-E19-T (C4).** No §23 path can send recurring
+  synthetic mail without staffing or new code. The options are T1 (the
+  E18 adapter on a non-production deployment), T2 (an operator script
+  calling Mail Send directly) and T3 (a new purpose; needs an ADR).
+  Engineering recommends T2; using it needs a dated note here first. **Not
+  decided.**
+- **Repository verification of the DNS check:** `platform:mail-verify-domain`
+  follows CNAME chains (bounded at depth 8), as SendGrid's automated security
+  requires, and returns `weak_key` below RSA 2048. No E18 or verification
+  defect was found, and no code changed.
+- **Status:** **E19 — CONTRACT FROZEN / CLOCK NOT STARTED.** The ADR 0058
+  row stays `DEPLOYMENT_REQUIRED`.

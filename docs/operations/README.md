@@ -21,6 +21,7 @@ CLAUDE.md rule 16): a human with explicit authorization runs it.
 | [SUPPLY-CHAIN-INCIDENTS.md](SUPPLY-CHAIN-INCIDENTS.md) | Compromised dependency, compromised CI action, leaked signing key/identity, malicious artifact, Critical CVE after deployment |
 | [STAFF-ACCOUNTS.md](STAFF-ACCOUNTS.md) | The first School administrator (operator console, one-time activation link), School staff invitations, off-boarding and reactivation, role grants (Phase 0O.12B, ADR 0059) |
 | [MANUAL-PAYMENT-RECORDING.md](MANUAL-PAYMENT-RECORDING.md) | Recording an offline (cash/bank transfer/cheque) payment already received: who can, the flow, immutability, duplicates, diagnostics (Phase 0O.11A) |
+| [E19-SENDGRID-DOMAIN-AUTHENTICATION-RECORD.md](E19-SENDGRID-DOMAIN-AUTHENTICATION-RECORD.md) | E19: SendGrid domain authentication, the clock-admission record, restart conditions and the 14-day aligned-DKIM daily log (ADR 0060 §29; clock not started) |
 
 Observability and alerting are contracted by ADR 0051
 (`docs/architecture/adr/0051-production-observability-alerting-contract.md`):

@@ -293,6 +293,9 @@ School, Student, Guardian or staff data is ever sent (OD-1).
   (a new 2048-bit selector, custom return path) is **E19 work**. Its 14-day
   clock starts only as ADR 0060 §23 / §27.4 define. Sandbox testing does not
   start it.
+  The frozen procedure, admission record, restart rules and daily log are in
+  [E19-SENDGRID-DOMAIN-AUTHENTICATION-RECORD](E19-SENDGRID-DOMAIN-AUTHENTICATION-RECORD.md)
+  (ADR 0060 §29).
 
 ### Asynchronous bounces (ADR 0060 §28.4)
 - **Why they cannot link:** SendGrid's delayed/asynchronous bounces carry no

@@ -3537,6 +3537,16 @@ merged commit is in `PHASE-0O-READINESS.md` §47 and after.
 - **Deferred:** PR + at least 1 independent approval + CODEOWNERS stay
   production-stage hardening, before E02, and are not active.
 
+**E19 — CONTRACT FROZEN / CLOCK NOT STARTED (2026-10-13).**
+- **Record:** `PHASE-0O-READINESS.md` §58; ADR 0060 §29;
+  `docs/operations/E19-SENDGRID-DOMAIN-AUTHENTICATION-RECORD.md`.
+- **What exists:** nothing operational. There is no SendGrid account, DNS
+  record, credential or observation message.
+- **Next:** operator steps under OD-1 (rule 16), then the admission record.
+  The 14 days count only from admission.
+- **Open decision:** OD-E19-T, the observation sender.
+- **Region risk:** a later EU requirement means re-admission.
+
 **E18 — DEVELOPMENT IMPLEMENTED / PRODUCTION ENABLEMENT BLOCKED BY OUTSTANDING GOVERNANCE GATES (2026-10-13).**
 - **Record:** `PHASE-0O-READINESS.md` §57; ADR 0060 §28; ADR 0058 note "E18:
   SendGrid implemented for development only".
