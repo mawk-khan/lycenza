@@ -14,6 +14,6 @@ class MembershipAlreadyLinkedException extends AccountLinkException
 {
     public function __construct()
     {
-        parent::__construct('This School OS account is already linked to a different Student or Guardian.');
+        parent::__construct('This Lycenza account is already linked to a different Student or Guardian.');
     }
 }

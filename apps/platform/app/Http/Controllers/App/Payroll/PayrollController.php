@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\App\Payroll;
 
 use App\Http\Controllers\Controller;
+use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Navigation\StaffNavigation;
 use App\Support\Tenancy\TenantContext;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -19,9 +21,14 @@ use Inertia\Response;
  */
 class PayrollController extends Controller
 {
+    use AuthorizesCapability;
+
     public function index(TenantContext $context, CapabilityResolver $capabilities): Response
     {
         $school = $context->requireSchool();
+        // SWC.5 (ADR 0073 section 20.3, F-1): the hub opens only for an actor
+        // it has at least one link for -- its navigation entry's requirement.
+        $this->authorizeAnyCapability(StaffNavigation::hubRequirement('payroll'), $school);
         $user = $context->actor();
 
         return Inertia::render('App/Payroll/Index', [

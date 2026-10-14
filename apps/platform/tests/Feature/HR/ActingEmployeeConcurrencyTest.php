@@ -44,14 +44,6 @@ class ActingEmployeeConcurrencyTest extends TestCase
 
     private const string AS_OF = '2026-09-15';
 
-    private ?string $startedAt = null;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->startedAt = now()->subSecond()->toDateTimeString();
-    }
-
     protected function tearDown(): void
     {
         foreach ($this->schoolIds as $schoolId) {
@@ -61,7 +53,7 @@ class ActingEmployeeConcurrencyTest extends TestCase
         $admin = DB::connection('pgsql_admin');
         // Committed fixture actors' `test.capability_grant.*` roles outlive
         // the School (the FeeConcessionConcurrencyTest precedent).
-        $admin->table('roles')->where('key', 'like', 'test.capability_grant.%')->where('created_at', '>=', $this->startedAt)->delete();
+        $admin->table('roles')->where('key', 'like', 'test.capability_grant.%')->whereIn('id', $this->ownedRoleIds())->delete();
         $admin->table('platform_audit_events')->whereIn('actor_user_id', $this->userIds)->orWhereIn('subject_id', $this->userIds)->delete();
         $admin->table('users')->whereIn('id', $this->userIds)->delete();
 

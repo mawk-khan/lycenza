@@ -70,7 +70,7 @@ function goToRunExports(): void {
 
         <h1 class="mt-2 text-xl font-semibold">Statutory Payroll</h1>
         <p class="mt-1 text-sm text-slate-500">
-            PF, ESI, Professional Tax, Labour Welfare Fund, and TDS -- Checkpoint 9.6.
+            PF, ESI, Professional Tax, Labour Welfare Fund and TDS.
         </p>
 
         <p v-if="!can.view" class="mt-6 text-sm text-slate-500">

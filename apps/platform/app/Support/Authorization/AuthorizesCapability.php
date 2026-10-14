@@ -5,6 +5,7 @@ namespace App\Support\Authorization;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -25,6 +26,29 @@ trait AuthorizesCapability
         $school ??= $platform ? null : app(TenantContext::class)->school();
 
         Gate::authorize('capability', [$capability, $school]);
+    }
+
+    /**
+     * SWC.5 (ADR 0073 section 20.3): passes when the actor holds AT LEAST
+     * ONE of the given existing capabilities in the School -- each checked
+     * through the same `capability` gate as authorizeCapability(), so this
+     * is a disjunction of existing checks, never a new rule. Used only by
+     * pages that merely group links to sub-pages that each check their own
+     * capability (the Finance, HR and Payroll hubs).
+     *
+     * @param  list<string>  $capabilities
+     */
+    protected function authorizeAnyCapability(array $capabilities, ?School $school = null): void
+    {
+        $school ??= app(TenantContext::class)->school();
+
+        foreach ($capabilities as $capability) {
+            if (Gate::allows('capability', [$capability, $school])) {
+                return;
+            }
+        }
+
+        throw new AuthorizationException;
     }
 
     /**

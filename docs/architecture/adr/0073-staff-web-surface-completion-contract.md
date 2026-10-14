@@ -4,7 +4,9 @@
   Owner decisions X1–X5 frozen (2026-10-14, §16). SWC.1 NAVIGATION SHELL &
   PRODUCT LANDING SURFACES — COMPLETE (2026-10-14, §17). SWC.2 ACADEMIC
   STRUCTURE WEB SURFACES — COMPLETE (2026-10-14, §18). SWC.3 OPERATIONAL FEE
-  WEB SURFACES — COMPLETE (2026-10-14, §19). SWC.5 NEXT.**
+  WEB SURFACES — COMPLETE (2026-10-14, §19). SWC.5 CLOSURE AUDIT — COMPLETE
+  (2026-10-14, §20). SWC — CLOSED / DEVELOPMENT COMPLETE. Next programme:
+  Pre-Production / Staging Readiness — NOT STARTED.**
 - Date: 2026-10-14
 - Programme: **SWC — Staff Web Surface Completion** (`MASTER-ROADMAP.md`,
   post-foundation programme 8).
@@ -1556,3 +1558,426 @@ deterministic shard boundaries, and the first `CI gate` run failed shard 2.
 fine is reachable from the check-in redirect and the loan URL, but no list
 shows returned loans. That would be a loan list, not a fine register; the
 decision is left to SWC.5.
+
+## 20. SWC.5 — Closure Audit & DDEV Demo Review — COMPLETE (2026-10-14)
+
+**Baseline.**
+- `origin/main` = local `main` = `HEAD` = `5741ba31` (SWC.3).
+- The tree was clean, with one worktree and the historical stash untouched.
+- Ruleset 24909660 was active with no bypass actor, and the drift check was
+  `ok`.
+- The exact-SHA `CI gate` (app 15368) and the post-publication `main` CI
+  run 38591749782 were green.
+
+**Scope.** A closure audit. Fixes were limited to SWC-contract corrections:
+no migration, no capability, no new domain behaviour, no new read model.
+
+**Outcome: A — SWC — CLOSED / DEVELOPMENT COMPLETE (§20.12).**
+
+### 20.1 Browser-operability matrix (§13.1 criterion 1)
+
+The question: can a School administrator operate the approved v1 product
+without a personal API token?
+
+**Answer: yes.**
+
+**Evidence:**
+- **Navigation smoke:** `ddev demo-reset --build`, then 19 personas at the
+  HTTP/Inertia level. Every navigation destination each persona is offered
+  renders. The only exceptions are MFA-assured pages for demo accounts with
+  no enrolled factor (the SWC.1 §17.11 persona limitation).
+- **Workflow scripts:** the SWC.2 and SWC.3 DDEV workflow scripts, re-run
+  over web routes only.
+- **Feature tests:** the page and mutation tests.
+
+No row is called PASS because an API exists.
+
+| Workflow | Result |
+|---|---|
+| School structure (Campus, Years, Terms, Grade levels, Departments, Rooms, Subjects) — create, edit, deactivate | PASS — browser-operable (SWC.2) |
+| Create / manage Section | PASS — browser-operable |
+| Create / manage Subject Offering (classification lock enforced) | PASS — browser-operable |
+| Create / manage Elective Group (inactive Offering refused) | PASS — browser-operable |
+| Admissions workflow (applicants, applications, conversion) | PASS — browser-operable (pre-SWC) |
+| School admission fee head; converted-application fee intent | PASS — browser-operable; production E21/E32 (intentionally gated) |
+| Transport route mapping, fee intent, carry-forward | PASS — browser-operable; production E21/E30 |
+| Hostel / room mapping, fee intent, carry-forward | PASS — browser-operable; production E21/E31 |
+| Library fine policy (history, publish) | PASS — browser-operable; production E34 |
+| Per-loan fine view and void, including returned loans | PASS — browser-operable (§20.2); production E34 |
+| Students, Guardians, Enrollments, Rollovers | PASS — browser-operable |
+| Timetable, Teaching assignments, Attendance, Syllabus, Curriculum delivery | PASS — browser-operable |
+| Teacher-owned My-* surfaces | PASS — browser-operable; teacher Attendance production grants withheld (E33), intentionally gated |
+| HR, Leave, Staff attendance | PASS — browser-operable |
+| Finance: fee setup, assessment, concessions, late fees, statements, charges, offline payments, ledger, periods | PASS — browser-operable; payment gateway post-v1 (ADR 0057) |
+| Payroll (structures, compensation, periods, runs, payslips) | PASS — browser-operable |
+| Statutory payroll | PASS — intentionally gated (E45; no role holds `payroll.statutory.view`) |
+| Examinations definitions, papers, grade scales | PASS — browser-operable |
+| Marks, results, report cards | OUT OF SCOPE / gated (E35–E37, RES-L4–L7; refused in code) |
+| LMS administration (Learning content, Assignments) | PASS — browser-operable |
+| Transport, Hostel, Library, Inventory, Canteen, Visitors entry pages | PASS — discoverable, entry page renders |
+| Communications Hub | PASS — browser-operable (Mailpit in development) |
+| Reports: Curriculum coverage, Audit log | PASS — browser-operable |
+| Staff accounts (invite, grant/revoke, off-board) | PASS — browser-operable (fresh MFA) |
+| Account security; capability-driven navigation; School switching | PASS — browser-operable |
+| API tokens | PASS — available on the platform host; never needed for a staff workflow |
+| Guardian portal | PASS — intentionally gated (E46, refused in code) |
+| School Groups / Platform | PASS — platform host only (rule 83/84) |
+| Documents UI, webhook administration UI | OUT OF SCOPE (OD-SWC-2, OD-SWC-3) |
+| Student/Guardian import, opening balances | OUT OF SCOPE / onboarding decision (OD-SWC-4, OD-SWC-5) |
+
+**FAIL — SWC gap: none.**
+
+### 20.2 Returned-loan lookup (SWC.3 §19.7 observation)
+
+**Finding.**
+- The Circulation page listed active loans only.
+- A returned loan's page, and with it its assessed or voided fine, was
+  reachable only through the check-in redirect or a typed URL.
+- A Librarian (`library.fines.view`) or a fine voider who must inspect or
+  void a fine after the check-in moment had no browser path.
+
+**Existing contract.** `GET /api/v1/.../library-loans` already accepts
+`status=active|returned` (and `student_id`) under the same
+`library.circulation.view`. A web filter is therefore parity with an
+existing read, not a new read model.
+
+**Decision: IN, as the smallest surface.**
+- **Tabs:** Circulation gains **Active loans / Returned loans** tabs
+  (`?status=returned`, most recently returned first). Each returned row
+  shows its return date and links to the loan page.
+- **Validation:** an unknown status is a validation error.
+- **Not a fine register:** the rows carry no fine data. A fine is seen only
+  on its loan's page (X2 unchanged), and a test pins that.
+
+**Tests:** `LibraryFineUiTest` covers listing, the link to the fine,
+cross-School isolation, a no-capability 403, and a constant query count.
+
+### 20.3 F-1: Finance, HR and Payroll hubs
+
+**Finding.** The three hubs rendered for any active School member.
+
+**What the hubs did and did not expose:**
+- **Data:** none, no counts.
+- **Actions:** each link is gated by its own capability flag, and every
+  sub-page checks its own capability.
+- **Route information:** only links the actor already holds.
+- **What leaked:** only that the module exists, plus an empty "nothing
+  available" page.
+- **Navigation already hid them** behind an any-of requirement. Page and
+  menu therefore disagreed, contrary to rule 6 ("every controller action …
+  needs an explicit capability check").
+
+**Decision.** Each hub page now authorizes its navigation entry's any-of
+requirement: `StaffNavigation::hubRequirement()` through
+`AuthorizesCapability::authorizeAnyCapability()`.
+- `authorizeAnyCapability()` is a disjunction of the existing `capability`
+  gate. It adds no rule.
+- No capability was added.
+- One source drives both the menu and the page.
+
+**Requirement aligned.** The any-of now equals exactly the capabilities the
+hub renders a link for:
+- **Finance** also covers `finance.payments.record`,
+  `finance.fee_structures.view` and `finance.fee_concessions.view`. Before,
+  a holder of only those had a working hub but no menu entry.
+- **HR** also covers `hr.employees.manage` and `hr.categories.view`.
+- **Payroll** gains `payroll.periods.manage`.
+
+**Documented exceptions in Payroll:**
+- **`payroll.runs.view`** keeps its Phase 9 contract (it alone offers
+  Payroll; `PayrollUiTest`). Run pages are reached from Periods
+  (`payroll.periods.manage`). No seeded role holds `runs.view` without it.
+  A runs-only holder sees the hub's existing empty state, recorded as a
+  post-v1 role/UX note.
+- **`payroll.statutory.view`** is never a navigation requirement (E45;
+  `StaffNavigationCatalogueTest`). Its only holder, the guarded demo role,
+  also holds no Payroll hub key, so it is refused the hub. The statutory
+  pages themselves are unchanged. No production role holds the key.
+
+**No seeded role lost a hub.** Checked against the 17-role catalogue:
+`accountant`, `cashier`, `school_admin`, `hr_officer`, `principal` and
+`payroll_officer` all keep exactly the hubs they used.
+
+**Tests:**
+- `HubAuthorizationTest` (6): the requirement equals the link set; no
+  capability → 403 and no entry; each capability alone opens the hub with a
+  link and the entry; active-School scoping; the two exceptions.
+- **DDEV:** the hub's status matched the menu for 5 personas.
+
+### 20.4 User-facing stale strings
+
+**Corrected (user-facing):**
+- every remaining "School OS" in rendered copy → **Lycenza**:
+  - Student and Guardian account-link panels, invitation copy;
+  - Conversations and Channels; Automation; API tokens;
+  - the invitation acceptance page;
+  - the Guardian invitation email (subject, text and HTML);
+  - four exception messages and two validation messages;
+- Communications Analytics "(not implemented)" → a factual "not shown on
+  this page";
+- the Statutory Payroll pages' "Checkpoint 9.6" / "9.6F" labels.
+
+**Retained (technical identifiers):**
+- `.env.example` `APP_NAME="School OS"`: it derives the session cookie and
+  the cache/Redis prefixes (§17.7);
+- class, namespace and environment names.
+
+**Retained (historical / documentation):**
+- code comments and migration docblocks;
+- historical ADRs.
+
+**Guard.** `ProductIdentityTest::no_user_facing_surface_carries_the_old_name_or_development_phase_framing`
+scans:
+- rendered Vue template text;
+- rendered Blade (comments stripped);
+- PHP string literals (token-level).
+
+A planted string was confirmed to fail it.
+
+### 20.5 Navigation closure audit (§13.1 criterion 2)
+
+**Catalogue:** 77 entries. No entry added or removed in SWC.5; only the
+three hub requirements changed.
+
+**Pinned by existing tests:**
+- route names resolve;
+- no duplicate key;
+- no role-name reference;
+- empty groups are never sent;
+- the elevated, custom-host and School-switch contexts;
+- every destination renders for an exact-requirement holder
+  (`NavigationDestinationsRenderTest`).
+
+**Inventory comparison.** All 197 parameterless `/app` GET routes were
+compared with the catalogue. Every unlisted route is one of:
+- a create form or JSON search endpoint reached from its module page;
+- a module sub-page linked from its hub or module page;
+- dynamically linked attendance take/roster pages;
+- the development-only, JSON-only `my-examination-papers` (StudentMark,
+  E35–E37, never navigated).
+
+No orphan page.
+
+**Persona review.** In DDEV, 19 personas' offered destinations all render,
+except the documented MFA-assured pages.
+
+### 20.6 Visual review (strongest available)
+
+**Tooling.** No repository browser framework was added (§8.2):
+- `playwright-core` 1.56.1 was installed in a scratch directory outside the
+  repository;
+- it drove the host's snap Chromium against DDEV.
+
+**Run:**
+- 15 representative pages at 1280×900 and 390×844, with full-page
+  screenshots: shell, Dashboard, School setup, Sections, Subject Offering,
+  Elective Groups (list and detail), Transport route and Fees, Hostel room
+  and Fees, Admission fee head, Library policy, Library returned list and
+  loan, and the Finance hub;
+- per page it checked status, horizontal overflow, `<h1>` count,
+  unlabelled form controls, unnamed buttons/links, table captions and
+  console errors.
+
+**Defects found and fixed:**
+1. **Account bar.** At phone width it overflowed by 5 px on every page. Its
+   right-hand cluster could not shrink; it now can (`min-w-0`), and the
+   email truncates.
+2. **SWC tables at phone width.** Sections columns ran together and its
+   actions spilled off-screen, and the fee-intent tables overflowed their
+   cards. Every SWC table now sits in a positioned `overflow-x-auto`
+   wrapper (13 files), with column padding. The wrapper has to be
+   positioned: absolutely positioned `sr-only` labels inside the action
+   buttons otherwise escaped it and widened the page by 104 px.
+
+**After the fixes:** 30 of 30 page views are clean.
+
+**Keyboard checks (scripted):**
+- **Menu disclosure:** Enter opens it (`aria-expanded`), and Escape closes
+  it and returns focus to the button.
+- **Confirmation dialog:** it opens as a native modal `<dialog>` holding
+  focus, and Escape closes it and returns focus to its trigger.
+
+**Recorded, not fixed (outside SWC content):** the existing stops and beds
+tables on the Transport route and Hostel room pages have no caption. These
+are pre-SWC module tables; SWC added only a panel to those pages.
+
+**Not verified:**
+- screen-reader output;
+- zoom/reflow beyond 390 px;
+- colour contrast measurement;
+- browsers other than Chromium.
+
+### 20.7 Errors and query budgets
+
+**Errors.** Expected business refusals surface as field errors, never 500s:
+- duplicate codes;
+- Academic Year overlap and stale transitions;
+- the Offering classification lock;
+- Elective Group eligibility and inactive Offering;
+- an inactive or foreign fee head (stale mapping);
+- carry-forward repeat ("already linked");
+- fine-policy stale publish;
+- fine repeat void.
+
+Each is pinned by the SWC.2/SWC.3 tests and re-proved in DDEV where data
+allowed. No new error system.
+
+**Query budgets.** Constant query count as rows grow:
+- the Academic Structure lists (SWC.2);
+- the Transport and Hostel fee pages (SWC.3);
+- now the Returned loans list and the fine-policy history (§20.2 test).
+
+The loan page is constant by construction. Navigation reads one
+School-keyed capability set per request. No formal performance
+qualification was started.
+
+### 20.8 Security closure (SWC-specific)
+
+**Re-verified by the existing and new tests:**
+- the School comes from `TenantContext` only, and client School ids are
+  ignored;
+- cross-School rows and fee heads are 404 / form errors;
+- navigation is not authorization, and the hubs now also check (§20.3);
+- no role-name authorization;
+- custom hosts emit no platform, Group or API-token entry;
+- elevated sessions emit no School entry and are refused by School routes;
+- fee heads are School-scoped through the Fees seam;
+- money is stored `NUMERIC` strings, never computed in Vue;
+- the classification lock and the inactive-Offering refusal are
+  server-side;
+- a stale fine-policy publish is refused;
+- a carry-forward repeat creates no second link or selection;
+- the returned-loan filter is School-scoped.
+
+**New findings:** none beyond F-1 (resolved).
+
+### 20.9 Test isolation (SWC.3 §19.7 follow-up)
+
+**Finding.** The `StaffRoleGrantorRaceTest` pattern was systemic. Twenty
+committing tests deleted `users` or `test.capability_grant.%` roles by a
+`created_at >= start` window. Any of them could sweep another test's
+deliberate residue whenever the deterministic shards rebalance.
+`GroupReportConcurrencyTest` also set its window only inside `world()`.
+
+**Fix (test infrastructure only):**
+- `TestCase` records the Users and Roles each test creates in-process,
+  from the Eloquent `created` event, as `ownedUserIds()` / `ownedRoleIds()`.
+  No subprocess script creates either.
+- All 29 window deletes now delete by those ids, and the dead `startedAt`
+  scaffolding was removed.
+- `TestCase`'s outbox purge is the one reviewed exception:
+  `domain_event_outbox` has no foreign key, so it cannot fail on residue.
+
+**Guard.** `CommittingTestCleanupGuardTest` fails on any
+`created_at`-window delete statement and proves the id recording.
+
+### 20.10 Documentation drift (§12.2 closure, criterion 6)
+
+| Item | Disposition |
+|---|---|
+| `Domain/README`, seeder payroll comments, elevation test comment | Closed in SWC.1 (§17.10) |
+| `SchoolSetupController` "no dedicated screen" | Closed in SWC.2 |
+| `DDEV-DEMO-REVIEW.md` §13–§15 | **Rewritten** (implemented / demo-operable / production-gated / pre-production / post-v1); §10's "no student- or guardian-facing capability" annotated |
+| `MASTER-ROADMAP.md` 2026-09-25 "Only 0O.1 … ready to start" and 2026-09-29 "only mandatory code tail … can start now: E03" | Dated SWC.5 notes |
+| `PHASE-0O-READINESS.md` §8 O1 row (E01–E29, protected `main`) and O16 row (superseded decision id) | Dated SWC.5 notes |
+| `STUDENT-ENROLLMENT.md` title | Now lists 1B.7C–1B.7F |
+| `LIBRARY.md` returned-loan gap | Resolved note |
+
+### 20.11 Accessibility (OD-SWC-1)
+
+**SWC baseline satisfied.**
+- **Lint:** the scoped `eslint-plugin-vuejs-accessibility` rules report no
+  findings on the SWC files, now including `Library/Circulation/Index.vue`.
+  The 3 repository ESLint warnings are pre-existing and in non-SWC files.
+- **Static coverage:** labels/error association, `aria-current`, the skip
+  link and landmarks are pinned by `NavigationAccessibilityBaselineTest`
+  and the UI tests.
+- **Measured visual review (§20.6):** no unlabelled control, no nameless
+  button or link, one `<h1>` per page, and SWC tables captioned.
+- **Keyboard:** checked for the menu and dialogs.
+
+No WCAG conformance is claimed. A qualified target is a Pre-Production
+decision.
+
+### 20.12 Closure decision and handoff
+
+**Decision: Outcome A — SWC — CLOSED / DEVELOPMENT COMPLETE.**
+
+Every approved v1 staff workflow is browser-operable or intentionally gated.
+§13.1's six criteria are met:
+1. browser-only operation (§20.1);
+2. navigation completeness (§20.5);
+3. no stale framing (§20.4);
+4. tests and protected publication per slice;
+5. this audit, with the DDEV walkthrough;
+6. drift closed (§20.10).
+
+**Remaining items: non-blocking, post-v1 or gated:**
+- **Library:** a fine-inclusive register stays out (X2; revisit only on a
+  new owner decision).
+- **Payroll:** `payroll.runs.view`-only holders have no run-page path (no
+  seeded holder).
+- **Captions:** the pre-SWC stops and beds tables lack captions.
+- **Documents and webhook UIs:** optional post-v1 (OD-SWC-2/3).
+- **Import and opening balances:** an onboarding decision (OD-SWC-4/5).
+- **Accessibility:** repository-wide lint findings outside SWC (about 800
+  pre-SWC findings, §17.5), and an accessibility qualification target.
+
+**Next programme: Pre-Production / Staging Readiness — NOT STARTED.** It
+begins with its own contract audit. Handoff inventory, not solved here:
+
+*Environment and process:*
+- staging/environment contract and `APP_ENV` semantics;
+- staging data policy;
+- Mailpit / external-delivery policy, with PPE email (E17–E20, ADR 0060
+  §31);
+- the production refusal question for E30–E34 (X3).
+
+*ADR 0058 register rows:*
+- E05, E07, E08, E09, E10;
+- E11 restore drill;
+- E12, E13–E15;
+- E16 successor;
+- E21–E23, E29, E30–E34;
+- E33 production re-verification;
+- E45–E47 as applicable;
+- E02 / O16 final qualification.
+
+*Readiness risks to register:*
+- performance/scale envelope and load qualification;
+- latency and 5xx alerting;
+- incident and personal-data-breach response;
+- tenant-support runbook;
+- `APP_KEY` and AI signing-key rotation;
+- DSAR / tenant export;
+- accessibility qualification;
+- onboarding: import and opening balances.
+
+**E16 calendar (prominent).**
+- `OWNER-0O-E16-2026-10-11` is valid through **2026-11-09**.
+- From **2026-11-10** every publication is blocked.
+- The successor cycle should begin **around 2026-10-30**.
+- It is not started early because SWC closed.
+
+**Unchanged:**
+- The ERP is not production-ready.
+- Phase 0O stays open: O1 is NOT SATISFIED.
+- Phase 0M stays BLOCKED.
+
+### 20.13 Verification
+
+**Targeted tests:**
+- `HubAuthorizationTest`;
+- `LibraryFineUiTest` (returned list, query budgets);
+- `ProductIdentityTest` (guard);
+- `CommittingTestCleanupGuardTest`;
+- the 20 rewritten committing tests and `StaffRoleGrantorRaceTest`;
+- the Navigation, Payroll, Finance and HR UI suites.
+
+**Gates:** Pint, Larastan, gitleaks, `vue-tsc`, ESLint (scoped
+accessibility), Prettier and the production build.
+
+**Canonical regression:** the candidate's sharded exact-SHA `CI gate`
+(ADR 0072 §28.8, §31).
+
+**Counts:** recorded in the SWC.5 commit.

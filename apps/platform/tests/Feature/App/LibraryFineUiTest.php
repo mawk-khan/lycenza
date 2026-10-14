@@ -12,6 +12,7 @@ use App\Domain\Library\Infrastructure\LibraryLoan;
 use App\Models\SchoolAuditEvent;
 use App\Models\User;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Feature\Fees\Concerns\CreatesFeeConcessionFixtures;
@@ -187,5 +188,71 @@ class LibraryFineUiTest extends TestCase
                 ], "unexpected fine read route {$route->uri()}");
             }
         }
+    }
+
+    #[Test]
+    public function a_returned_loan_stays_findable_through_the_returned_filter_and_leads_to_its_fine(): void
+    {
+        // SWC.5 (ADR 0073 section 20.2): the API's existing `status` filter, on the web -- loans, never a fine list.
+        $w = $this->world();
+        app(LibraryFinePolicyService::class)->publish($w['school'], $this->policy($w), $w['officer']);
+        $returned = $this->overdueReturnedLoan($w);
+        $this->as($w, $w['librarian'])->post("/app/library/circulation/{$returned->id}/check-in");
+        $active = $this->inSchool($w['school'], fn () => app(LibraryLoanService::class)->checkout($this->createLibraryCopy($w['title']), $w['student'], Carbon::parse('2026-08-01 10:00:00', 'UTC'), $w['librarian']));
+
+        $this->as($w, $w['librarian'])->get('/app/library/circulation')->assertOk()->assertInertia(fn ($page) => $page
+            ->where('status', 'active')
+            ->where('loans.data', fn ($rows) => collect($rows)->pluck('id')->all() === [$active->id]));
+        $this->as($w, $w['librarian'])->get('/app/library/circulation?status=returned')->assertOk()->assertInertia(fn ($page) => $page
+            ->where('status', 'returned')
+            ->where('loans.data', fn ($rows) => collect($rows)->pluck('id')->all() === [$returned->id])
+            ->where('loans.data.0.returnedAt', '2026-07-20')
+            // A loan row carries no fine data: the fine is seen on the loan page only (X2).
+            ->where('loans.data.0', fn ($row) => ! collect($row)->keys()->contains(fn ($k) => str_contains(strtolower($k), 'fine') || str_contains(strtolower($k), 'amount'))));
+        $this->as($w, $w['librarian'])->get("/app/library/circulation/{$returned->id}")->assertInertia(fn ($page) => $page->where('fine.status', 'assessed'));
+
+        // An unknown status is a validation error, never a different listing; another School never sees the row.
+        $this->as($w, $w['librarian'])->get('/app/library/circulation?status=everything')->assertSessionHasErrors('status');
+        $other = $this->concessionWorld();
+        $foreign = $this->createUserWithCapabilities($other['school'], ['library.circulation.view']);
+        $this->actingAs($foreign)->post("/app/schools/{$other['school']->id}/activate");
+        $this->actingAs($foreign)->get('/app/library/circulation?status=returned')->assertOk()->assertInertia(fn ($page) => $page->has('loans.data', 0));
+        $nobody = $this->createUserWithCapabilities($w['school'], []);
+        $this->as($w, $nobody)->get('/app/library/circulation?status=returned')->assertForbidden();
+    }
+
+    #[Test]
+    public function the_returned_list_and_the_policy_history_cost_no_query_per_row(): void
+    {
+        // SWC.5 (ADR 0073 section 20.7): query budgets for the Library pages SWC added.
+        $w = $this->world();
+        $return = function () use ($w): void {
+            $loan = $this->inSchool($w['school'], fn () => app(LibraryLoanService::class)->checkout($this->createLibraryCopy($w['title']), $w['student'], now()->addDays(7), $w['librarian']));
+            $this->inSchool($w['school'], fn () => app(LibraryLoanService::class)->checkIn($loan, $w['librarian']));
+        };
+        $return();
+        app(LibraryFinePolicyService::class)->publish($w['school'], $this->policy($w), $w['officer']);
+
+        $queries = 0;
+        DB::listen(function () use (&$queries): void {
+            $queries++;
+        });
+        $count = function (User $user, string $url) use (&$queries, $w): int {
+            $this->as($w, $user);
+            $queries = 0;
+            $this->actingAs($user)->get($url)->assertOk();
+
+            return $queries;
+        };
+        // Warm each actor's School activation and capability cache once.
+        $count($w['librarian'], '/app/library/circulation?status=returned');
+        $count($w['officer'], '/app/library/fine-policy');
+        $before = [$count($w['librarian'], '/app/library/circulation?status=returned'), $count($w['officer'], '/app/library/fine-policy')];
+        foreach (range(1, 3) as $i) {
+            $return();
+            app(LibraryFinePolicyService::class)->publish($w['school'], ['status' => 'disabled'], $w['officer']);
+        }
+
+        $this->assertSame($before, [$count($w['librarian'], '/app/library/circulation?status=returned'), $count($w['officer'], '/app/library/fine-policy')]);
     }
 }

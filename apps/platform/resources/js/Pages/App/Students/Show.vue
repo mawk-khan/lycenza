@@ -81,7 +81,7 @@ const props = defineProps<Props>();
 
 const canLinkGuardians = props.canManageStudents && props.canManageGuardians;
 
-// --- Phase 5B.2: School OS account link ---------------------------------
+// --- Phase 5B.2: Lycenza account link ---------------------------------
 
 const showLinkPicker = ref(false);
 const linkQuery = ref('');
@@ -122,7 +122,7 @@ function linkAccount(candidate: MembershipCandidate): void {
 
 function unlinkAccount(): void {
     const confirmed = window.confirm(
-        'Unlink this School OS account? The Student record and any past communications are kept -- only future in-app reachability changes.',
+        'Unlink this Lycenza account? The Student record and any past communications are kept -- only future in-app reachability changes.',
     );
     if (!confirmed) return;
     unlinking.value = true;
@@ -564,11 +564,11 @@ function unlink(r: Relationship): void {
             </ul>
         </section>
 
-        <!-- School OS account link -->
+        <!-- Lycenza account link -->
         <section class="mt-8">
-            <h2 class="text-sm font-medium text-slate-500">School OS account</h2>
+            <h2 class="text-sm font-medium text-slate-500">Lycenza account</h2>
             <p class="mt-1 text-xs text-slate-400">
-                Optional. Linking an existing School OS account lets this Student receive in-app
+                Optional. Linking an existing Lycenza account lets this Student receive in-app
                 communications when they sign in. It does not create a new account.
             </p>
             <p class="mt-1 text-xs text-slate-400">
@@ -607,7 +607,7 @@ function unlink(r: Relationship): void {
                     <input
                         v-model="linkQuery"
                         type="text"
-                        placeholder="Search School OS accounts by name…"
+                        placeholder="Search Lycenza accounts by name…"
                         class="w-full rounded border border-slate-300 px-3 py-2 text-sm"
                         @input="searchLinkCandidates"
                     />
@@ -642,11 +642,11 @@ function unlink(r: Relationship): void {
             <div class="mt-3 rounded border border-slate-200 p-4 text-sm text-slate-600">
                 <p>
                     <span class="font-medium">In-app:</span> managed through this Student's linked
-                    School OS account preference above, once linked -- no separate setting here.
+                    Lycenza account preference above, once linked -- no separate setting here.
                 </p>
                 <p class="mt-2">
                     <span class="font-medium">Email:</span> not available -- Students have no
-                    canonical email endpoint in School OS today.
+                    canonical email endpoint in Lycenza today.
                 </p>
             </div>
         </section>

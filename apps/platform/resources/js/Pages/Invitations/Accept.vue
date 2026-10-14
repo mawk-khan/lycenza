@@ -46,7 +46,7 @@ function confirm(): void {
         </template>
 
         <template v-else>
-            <h1 class="text-xl font-semibold">Join {{ schoolName }} on School OS</h1>
+            <h1 class="text-xl font-semibold">Join {{ schoolName }} on Lycenza</h1>
             <p class="mt-2 text-sm text-slate-600">Invitation for {{ email }}</p>
 
             <!-- Existing account: must already be authenticated as this exact user. -->

@@ -91,54 +91,58 @@ function setStatus(grade: GradeLevel, status: 'active' | 'inactive') {
         <p v-if="props.gradeLevels.length === 0" class="mt-4 text-sm text-slate-600">
             No Grade level exists yet.
         </p>
-        <table v-else class="mt-4 w-full text-left text-sm">
-            <caption class="sr-only">
-                Grade levels in teaching order
-            </caption>
-            <thead class="border-b border-slate-300 text-slate-600">
-                <tr>
-                    <th scope="col" class="py-2">Order</th>
-                    <th scope="col" class="py-2">Name</th>
-                    <th scope="col" class="py-2">Code</th>
-                    <th scope="col" class="py-2">Stage</th>
-                    <th scope="col" class="py-2">Status</th>
-                    <th v-if="props.canManage" scope="col" class="py-2">
-                        <span class="sr-only">Actions</span>
-                    </th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-200">
-                <tr v-for="grade in props.gradeLevels" :key="grade.id">
-                    <td class="py-2">{{ grade.sequence }}</td>
-                    <td class="py-2 font-medium">{{ grade.name }}</td>
-                    <td class="py-2">{{ grade.code }}</td>
-                    <td class="py-2">{{ grade.educationStage ?? '—' }}</td>
-                    <td class="py-2">{{ grade.status === 'active' ? 'Active' : 'Inactive' }}</td>
-                    <td v-if="props.canManage" class="space-x-3 py-2 text-right">
-                        <button type="button" class="underline" @click="startEdit(grade)">
-                            Edit<span class="sr-only"> {{ grade.name }}</span>
-                        </button>
-                        <button
-                            v-if="grade.status === 'active'"
-                            type="button"
-                            class="text-red-700 underline"
-                            @click="askDeactivate(grade)"
-                        >
-                            Deactivate<span class="sr-only"> {{ grade.name }}</span>
-                        </button>
-                        <button
-                            v-else
-                            type="button"
-                            class="underline"
-                            :disabled="statusForm.processing"
-                            @click="setStatus(grade, 'active')"
-                        >
-                            Reactivate<span class="sr-only"> {{ grade.name }}</span>
-                        </button>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+        <div v-else class="relative overflow-x-auto mt-4">
+            <table class="w-full text-left text-sm">
+                <caption class="sr-only">
+                    Grade levels in teaching order
+                </caption>
+                <thead class="border-b border-slate-300 text-slate-600">
+                    <tr>
+                        <th scope="col" class="pr-3 py-2">Order</th>
+                        <th scope="col" class="pr-3 py-2">Name</th>
+                        <th scope="col" class="pr-3 py-2">Code</th>
+                        <th scope="col" class="pr-3 py-2">Stage</th>
+                        <th scope="col" class="pr-3 py-2">Status</th>
+                        <th v-if="props.canManage" scope="col" class="pr-3 py-2">
+                            <span class="sr-only">Actions</span>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    <tr v-for="grade in props.gradeLevels" :key="grade.id">
+                        <td class="pr-3 py-2">{{ grade.sequence }}</td>
+                        <td class="pr-3 py-2 font-medium">{{ grade.name }}</td>
+                        <td class="pr-3 py-2">{{ grade.code }}</td>
+                        <td class="pr-3 py-2">{{ grade.educationStage ?? '—' }}</td>
+                        <td class="pr-3 py-2">
+                            {{ grade.status === 'active' ? 'Active' : 'Inactive' }}
+                        </td>
+                        <td v-if="props.canManage" class="pr-3 space-x-3 py-2 text-right">
+                            <button type="button" class="underline" @click="startEdit(grade)">
+                                Edit<span class="sr-only"> {{ grade.name }}</span>
+                            </button>
+                            <button
+                                v-if="grade.status === 'active'"
+                                type="button"
+                                class="text-red-700 underline"
+                                @click="askDeactivate(grade)"
+                            >
+                                Deactivate<span class="sr-only"> {{ grade.name }}</span>
+                            </button>
+                            <button
+                                v-else
+                                type="button"
+                                class="underline"
+                                :disabled="statusForm.processing"
+                                @click="setStatus(grade, 'active')"
+                            >
+                                Reactivate<span class="sr-only"> {{ grade.name }}</span>
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
 
         <section
             v-if="editing"

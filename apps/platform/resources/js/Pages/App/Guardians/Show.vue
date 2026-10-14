@@ -74,7 +74,7 @@ interface Props {
 
 const props = defineProps<Props>();
 
-// --- Phase 5B.2: School OS account link ---------------------------------
+// --- Phase 5B.2: Lycenza account link ---------------------------------
 
 const showLinkPicker = ref(false);
 const linkQuery = ref('');
@@ -141,7 +141,7 @@ function offboardGuardian(): void {
 
 function unlinkAccount(): void {
     const confirmed = window.confirm(
-        'Unlink this School OS account? The Guardian record and any past communications are kept -- only future in-app reachability changes.',
+        'Unlink this Lycenza account? The Guardian record and any past communications are kept -- only future in-app reachability changes.',
     );
     if (!confirmed) return;
     unlinking.value = true;
@@ -470,11 +470,11 @@ function submitContact(): void {
             </ul>
         </section>
 
-        <!-- School OS account link -->
+        <!-- Lycenza account link -->
         <section class="mt-8">
-            <h2 class="text-sm font-medium text-slate-500">School OS account</h2>
+            <h2 class="text-sm font-medium text-slate-500">Lycenza account</h2>
             <p class="mt-1 text-xs text-slate-400">
-                Optional. Linking an existing School OS account lets this Guardian receive in-app
+                Optional. Linking an existing Lycenza account lets this Guardian receive in-app
                 communications when they sign in. It does not create a new account and does not
                 affect their email/mobile contact information used for email delivery.
             </p>
@@ -544,7 +544,7 @@ function submitContact(): void {
                     <input
                         v-model="linkQuery"
                         type="text"
-                        placeholder="Search School OS accounts by name…"
+                        placeholder="Search Lycenza accounts by name…"
                         class="w-full rounded border border-slate-300 px-3 py-2 text-sm"
                         @input="searchLinkCandidates"
                     />
@@ -575,10 +575,10 @@ function submitContact(): void {
 
         <!-- Guardian account invitation (Phase 5D.3) -->
         <section v-if="!accountLink" class="mt-8">
-            <h2 class="text-sm font-medium text-slate-500">Invite a new School OS account</h2>
+            <h2 class="text-sm font-medium text-slate-500">Invite a new Lycenza account</h2>
             <p class="mt-1 text-xs text-slate-400">
                 Sends this Guardian a one-time link at their email contact to create their own
-                School OS account. Different from linking above, which attaches an account that
+                Lycenza account. Different from linking above, which attaches an account that
                 already exists.
             </p>
 
@@ -641,7 +641,7 @@ function submitContact(): void {
             <h2 class="text-sm font-medium text-slate-500">Communication preferences</h2>
             <p class="mt-1 text-xs text-slate-400">
                 Governs optional Email communications sent directly to this Guardian's contact
-                information, independent of any School OS account link above. Required/Emergency
+                information, independent of any Lycenza account link above. Required/Emergency
                 school communications are not affected by these settings.
             </p>
 

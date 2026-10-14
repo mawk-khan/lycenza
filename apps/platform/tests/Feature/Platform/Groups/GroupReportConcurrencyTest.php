@@ -36,8 +36,6 @@ class GroupReportConcurrencyTest extends TestCase
 
     private ?string $groupId = null;
 
-    private ?\DateTimeInterface $startedAt = null;
-
     protected function tearDown(): void
     {
         $admin = DB::connection('pgsql_admin');
@@ -51,7 +49,7 @@ class GroupReportConcurrencyTest extends TestCase
         $admin->table('school_memberships')->whereIn('user_id', $this->userIds)->delete();
         $admin->table('users')->whereIn('id', $this->userIds)->delete();
         // createUserWithCapabilities() (the delivery fixtures) adds ad hoc roles.
-        $admin->table('roles')->where('key', 'like', 'test.capability_grant.%')->where('created_at', '>=', $this->startedAt)->delete();
+        $admin->table('roles')->where('key', 'like', 'test.capability_grant.%')->whereIn('id', $this->ownedRoleIds())->delete();
 
         parent::tearDown();
     }
@@ -59,7 +57,6 @@ class GroupReportConcurrencyTest extends TestCase
     /** @return array{0: School, 1: School, 2: SchoolGroup, 3: User, 4: GroupRoleAssignment, 5: User} */
     private function world(): array
     {
-        $this->startedAt = now()->subSecond();
         $first = $this->deliveryWorld();
         $second = $this->deliveryWorld();
         [$a, $b] = [$first['school'], $second['school']];

@@ -66,52 +66,54 @@ function setStatus(department: Department, status: 'active' | 'inactive') {
         <p v-if="props.departments.length === 0" class="mt-4 text-sm text-slate-600">
             No Academic department exists yet.
         </p>
-        <table v-else class="mt-4 w-full text-left text-sm">
-            <caption class="sr-only">
-                Academic departments
-            </caption>
-            <thead class="border-b border-slate-300 text-slate-600">
-                <tr>
-                    <th scope="col" class="py-2">Name</th>
-                    <th scope="col" class="py-2">Code</th>
-                    <th scope="col" class="py-2">Status</th>
-                    <th v-if="props.canManage" scope="col" class="py-2">
-                        <span class="sr-only">Actions</span>
-                    </th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-200">
-                <tr v-for="department in props.departments" :key="department.id">
-                    <td class="py-2 font-medium">{{ department.name }}</td>
-                    <td class="py-2">{{ department.code }}</td>
-                    <td class="py-2">
-                        {{ department.status === 'active' ? 'Active' : 'Inactive' }}
-                    </td>
-                    <td v-if="props.canManage" class="space-x-3 py-2 text-right">
-                        <button type="button" class="underline" @click="startEdit(department)">
-                            Edit<span class="sr-only"> {{ department.name }}</span>
-                        </button>
-                        <button
-                            v-if="department.status === 'active'"
-                            type="button"
-                            class="text-red-700 underline"
-                            @click="askDeactivate(department)"
-                        >
-                            Deactivate<span class="sr-only"> {{ department.name }}</span>
-                        </button>
-                        <button
-                            v-else
-                            type="button"
-                            class="underline"
-                            :disabled="statusForm.processing"
-                            @click="setStatus(department, 'active')"
-                        >
-                            Reactivate<span class="sr-only"> {{ department.name }}</span>
-                        </button>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+        <div v-else class="relative overflow-x-auto mt-4">
+            <table class="w-full text-left text-sm">
+                <caption class="sr-only">
+                    Academic departments
+                </caption>
+                <thead class="border-b border-slate-300 text-slate-600">
+                    <tr>
+                        <th scope="col" class="pr-3 py-2">Name</th>
+                        <th scope="col" class="pr-3 py-2">Code</th>
+                        <th scope="col" class="pr-3 py-2">Status</th>
+                        <th v-if="props.canManage" scope="col" class="pr-3 py-2">
+                            <span class="sr-only">Actions</span>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    <tr v-for="department in props.departments" :key="department.id">
+                        <td class="pr-3 py-2 font-medium">{{ department.name }}</td>
+                        <td class="pr-3 py-2">{{ department.code }}</td>
+                        <td class="pr-3 py-2">
+                            {{ department.status === 'active' ? 'Active' : 'Inactive' }}
+                        </td>
+                        <td v-if="props.canManage" class="pr-3 space-x-3 py-2 text-right">
+                            <button type="button" class="underline" @click="startEdit(department)">
+                                Edit<span class="sr-only"> {{ department.name }}</span>
+                            </button>
+                            <button
+                                v-if="department.status === 'active'"
+                                type="button"
+                                class="text-red-700 underline"
+                                @click="askDeactivate(department)"
+                            >
+                                Deactivate<span class="sr-only"> {{ department.name }}</span>
+                            </button>
+                            <button
+                                v-else
+                                type="button"
+                                class="underline"
+                                :disabled="statusForm.processing"
+                                @click="setStatus(department, 'active')"
+                            >
+                                Reactivate<span class="sr-only"> {{ department.name }}</span>
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
 
         <section
             v-if="editing"

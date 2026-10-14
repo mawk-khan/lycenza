@@ -1,4 +1,4 @@
-# Student Enrollment (Phase 1B.1 / 1B.2 / 1B.3 / 1B.4 / 1B.4A / 1B.5 / 1B.6 / 1B.7 / 1B.7A / 1B.7B)
+# Student Enrollment (Phase 1B.1 / 1B.2 / 1B.3 / 1B.4 / 1B.4A / 1B.5 / 1B.6 / 1B.7 / 1B.7A / 1B.7B / 1B.7C–1B.7F)
 
 Status: **schema + sanctioned write path + lifecycle transitions +
 authorization + read foundation + administrative HTTP/API + administrative

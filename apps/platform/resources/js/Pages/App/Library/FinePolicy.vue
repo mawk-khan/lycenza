@@ -184,29 +184,31 @@ const describe = (p: Policy) =>
             <p v-if="props.versions.length === 0" class="mt-2 text-sm text-slate-600">
                 No version yet.
             </p>
-            <table v-else class="mt-2 w-full text-left text-sm">
-                <caption class="sr-only">
-                    Every published fine-policy version, newest first
-                </caption>
-                <thead class="border-b border-slate-300 text-slate-600">
-                    <tr>
-                        <th scope="col" class="py-2">Version</th>
-                        <th scope="col" class="py-2">Rule</th>
-                        <th scope="col" class="py-2">Fee head</th>
-                        <th scope="col" class="py-2">Published</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-200">
-                    <tr v-for="policy in props.versions" :key="policy.id">
-                        <td class="py-2">{{ policy.version }}</td>
-                        <td class="py-2">{{ describe(policy) }}</td>
-                        <td class="py-2">
-                            {{ policy.feeHead ? feeHeadText(policy.feeHead) : '—' }}
-                        </td>
-                        <td class="py-2">{{ policy.publishedAt?.slice(0, 10) }}</td>
-                    </tr>
-                </tbody>
-            </table>
+            <div v-else class="relative overflow-x-auto mt-2">
+                <table class="w-full text-left text-sm">
+                    <caption class="sr-only">
+                        Every published fine-policy version, newest first
+                    </caption>
+                    <thead class="border-b border-slate-300 text-slate-600">
+                        <tr>
+                            <th scope="col" class="pr-3 py-2">Version</th>
+                            <th scope="col" class="pr-3 py-2">Rule</th>
+                            <th scope="col" class="pr-3 py-2">Fee head</th>
+                            <th scope="col" class="pr-3 py-2">Published</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200">
+                        <tr v-for="policy in props.versions" :key="policy.id">
+                            <td class="pr-3 py-2">{{ policy.version }}</td>
+                            <td class="pr-3 py-2">{{ describe(policy) }}</td>
+                            <td class="pr-3 py-2">
+                                {{ policy.feeHead ? feeHeadText(policy.feeHead) : '—' }}
+                            </td>
+                            <td class="pr-3 py-2">{{ policy.publishedAt?.slice(0, 10) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </section>
     </main>
 </template>

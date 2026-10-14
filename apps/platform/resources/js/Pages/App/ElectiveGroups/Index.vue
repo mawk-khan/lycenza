@@ -93,36 +93,38 @@ function submit() {
             <p v-if="props.groups.length === 0" class="mt-4 text-sm text-slate-600">
                 {{ yearName }} has no Elective group yet.
             </p>
-            <table v-else class="mt-4 w-full text-left text-sm">
-                <caption class="sr-only">
-                    Elective groups of
-                    {{
-                        yearName
-                    }}
-                </caption>
-                <thead class="border-b border-slate-300 text-slate-600">
-                    <tr>
-                        <th scope="col" class="py-2">Name</th>
-                        <th scope="col" class="py-2">Code</th>
-                        <th scope="col" class="py-2">Grade level</th>
-                        <th scope="col" class="py-2">Campus</th>
-                        <th scope="col" class="py-2">Offerings</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-200">
-                    <tr v-for="group in props.groups" :key="group.id">
-                        <td class="py-2 font-medium">
-                            <a class="underline" :href="`/app/elective-groups/${group.id}`">{{
-                                group.name
-                            }}</a>
-                        </td>
-                        <td class="py-2">{{ group.code }}</td>
-                        <td class="py-2">{{ group.gradeLevel }}</td>
-                        <td class="py-2">{{ group.campus }}</td>
-                        <td class="py-2">{{ group.offeringCount }}</td>
-                    </tr>
-                </tbody>
-            </table>
+            <div v-else class="relative overflow-x-auto mt-4">
+                <table class="w-full text-left text-sm">
+                    <caption class="sr-only">
+                        Elective groups of
+                        {{
+                            yearName
+                        }}
+                    </caption>
+                    <thead class="border-b border-slate-300 text-slate-600">
+                        <tr>
+                            <th scope="col" class="pr-3 py-2">Name</th>
+                            <th scope="col" class="pr-3 py-2">Code</th>
+                            <th scope="col" class="pr-3 py-2">Grade level</th>
+                            <th scope="col" class="pr-3 py-2">Campus</th>
+                            <th scope="col" class="pr-3 py-2">Offerings</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200">
+                        <tr v-for="group in props.groups" :key="group.id">
+                            <td class="pr-3 py-2 font-medium">
+                                <a class="underline" :href="`/app/elective-groups/${group.id}`">{{
+                                    group.name
+                                }}</a>
+                            </td>
+                            <td class="pr-3 py-2">{{ group.code }}</td>
+                            <td class="pr-3 py-2">{{ group.gradeLevel }}</td>
+                            <td class="pr-3 py-2">{{ group.campus }}</td>
+                            <td class="pr-3 py-2">{{ group.offeringCount }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
 
             <section
                 v-if="props.canManage && props.selectedYearId"

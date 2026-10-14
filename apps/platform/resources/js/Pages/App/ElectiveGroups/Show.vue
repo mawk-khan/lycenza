@@ -76,45 +76,49 @@ function runRemove() {
             <p v-if="props.assigned.length === 0" class="mt-2 text-sm text-slate-600">
                 No Offering is in this group yet.
             </p>
-            <table v-else class="mt-2 w-full text-left text-sm">
-                <caption class="sr-only">
-                    Offerings in
-                    {{
-                        props.group.name
-                    }}
-                </caption>
-                <thead class="border-b border-slate-300 text-slate-600">
-                    <tr>
-                        <th scope="col" class="py-2">Subject</th>
-                        <th scope="col" class="py-2">Status</th>
-                        <th v-if="props.canManage" scope="col" class="py-2">
-                            <span class="sr-only">Actions</span>
-                        </th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-200">
-                    <tr v-for="offering in props.assigned" :key="offering.id">
-                        <td class="py-2">
-                            <a class="underline" :href="`/app/subject-offerings/${offering.id}`">{{
-                                label(offering)
-                            }}</a>
-                        </td>
-                        <td class="py-2">
-                            {{ offering.status === 'active' ? 'Active' : 'Inactive' }}
-                        </td>
-                        <td v-if="props.canManage" class="py-2 text-right">
-                            <button
-                                type="button"
-                                class="text-red-700 underline"
-                                :disabled="remove.processing"
-                                @click="askRemove(offering)"
-                            >
-                                Remove<span class="sr-only"> {{ label(offering) }}</span>
-                            </button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+            <div v-else class="relative overflow-x-auto mt-2">
+                <table class="w-full text-left text-sm">
+                    <caption class="sr-only">
+                        Offerings in
+                        {{
+                            props.group.name
+                        }}
+                    </caption>
+                    <thead class="border-b border-slate-300 text-slate-600">
+                        <tr>
+                            <th scope="col" class="pr-3 py-2">Subject</th>
+                            <th scope="col" class="pr-3 py-2">Status</th>
+                            <th v-if="props.canManage" scope="col" class="pr-3 py-2">
+                                <span class="sr-only">Actions</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200">
+                        <tr v-for="offering in props.assigned" :key="offering.id">
+                            <td class="pr-3 py-2">
+                                <a
+                                    class="underline"
+                                    :href="`/app/subject-offerings/${offering.id}`"
+                                    >{{ label(offering) }}</a
+                                >
+                            </td>
+                            <td class="pr-3 py-2">
+                                {{ offering.status === 'active' ? 'Active' : 'Inactive' }}
+                            </td>
+                            <td v-if="props.canManage" class="pr-3 py-2 text-right">
+                                <button
+                                    type="button"
+                                    class="text-red-700 underline"
+                                    :disabled="remove.processing"
+                                    @click="askRemove(offering)"
+                                >
+                                    Remove<span class="sr-only"> {{ label(offering) }}</span>
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </section>
 
         <section v-if="props.canManage" class="mt-8" aria-labelledby="assign-heading">

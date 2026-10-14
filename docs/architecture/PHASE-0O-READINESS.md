@@ -303,7 +303,7 @@ Other findings:
 
 | # | Decision | Existing decision? | Owner | Blocks |
 |---|---|---|---|---|
-| O1 | Phase 0O definition of done per scope item | **RESOLVED AS DEFINITION OF DONE — NOT SATISFIED — ADR 0058 (Phase 0O.12, §41)**: one authoritative definition and evidence register (E01–E29) supersedes §9; closure needs repository, provider, deployment, legal and governance evidence, including a real restore drill, protected `main` and a staff/School-admin provisioning path (E24 REPOSITORY_COMPLETE, §44) | Product | Phase closure |
+| O1 | Phase 0O definition of done per scope item | **RESOLVED AS DEFINITION OF DONE — NOT SATISFIED — ADR 0058 (Phase 0O.12, §41)**: one authoritative definition and evidence register (E01–E29) supersedes §9; closure needs repository, provider, deployment, legal and governance evidence, including a real restore drill, protected `main` and a staff/School-admin provisioning path (E24 REPOSITORY_COMPLETE, §44). *(2026-10-14, SWC.5: the register now runs E01–E47 (ADR 0058 §6); protected `main` (E03) is CLOSED (ADR 0072 §30); O1 remains NOT SATISFIED.)* | Product | Phase closure |
 | O2 | Is the first real payment gateway Phase 0O scope (roadmap premise is false)? | **RESOLVED — ADR 0057 (Phase 0O.11)**: the first real payment gateway is **DEFERRED** from Phase 0 / production v1 (no processor, checkout, callback, credential, refund or PCI-bearing UI; its own future ADR). Manual/offline payment recording is a **required v1 Finance correction**, **implemented in Phase 0O.11A (COMPLETE — repository, §39)** | Product | S4 |
 | O3 | Hosting / deployment model (and therefore process manager, container runtime, Terraform target) | **RESOLVED — ADR 0050 (Phase 0O.4)** | Product + operations | S3 infrastructure, images, runbook |
 | O4 | Secrets manager or host secret injection | **RESOLVED — ADR 0050 (Phase 0O.4)** | Security + operations | S3 |
@@ -318,7 +318,7 @@ Other findings:
 | O13 | Email provider, from-domain and domain authentication; invitation send outside the transaction? | **RESOLVED — ADR 0055 (Phase 0O.9)**: Lycenza-controlled, deployment-configured sending domain (never a School web domain); closed From mailbox catalog, sanitized School display name, no School Reply-To in v1; one provider-neutral adapter at a time; one durable email layer (message/attempt/event/suppression) beneath invitations (outbox, outside the transaction) and Communications; authenticated, deduplicated provider events; global suppression; SPF/DKIM alignment and DMARC ≥ `p=quarantine` at readiness. **Repository implementation COMPLETE (Phase 0O.9A, §33)**; deployment evidence outstanding | Product + operations | Real email |
 | O14 | Password reset for production accounts | **RESOLVED — ADR 0056 (Phase 0O.10)**: identity-level self-service password recovery on the canonical platform host only; eligible = active, non-root human Users with a local password (root stays console/operator-only); enumeration-resistant generic response with asynchronous issuance; 256-bit selector+secret credential (SHA-256 stored, secret in the URL fragment), 30 min, single-use, ≤ 3 active, never consumed by GET; ADR 0055 critical `account_recovery` email only when critical email is available; the reset bumps `users.credential_version` (every session on every host ends), revokes human personal access tokens and elevations, preserves MFA, never auto-logs in. **Implemented in the repository by Phase 0O.10A** (§36); deployment evidence (ADR 0056 §20) outstanding | Product + security | Production operations |
 | O15 | Which "broader third-party integrations" (ADR 0018 list) are in 0O | **RESOLVED — ADR 0057 (Phase 0O.11)**: covers the ADR 0018 categories **and** production partner API scopes. Email in v1 (O13); SMS, WhatsApp, push, government/board, Tally/accounting and other school software DEFERRED; SSO not in v1; LMS interoperability CANCELLED; **no production partner scope** (catalog stays empty) | Product | S4 |
-| O16 | Dependency/vulnerability audit and image pinning policy | **RESOLVED — ADR 0052 (Phase 0O.6)**; digest-pinned bases, SHA-pinned actions, hash-verified locks, SPDX SBOM, SLSA-style provenance, cosign-compatible signing, fail-closed verification, build-once/promote-digest; repository controls COMPLETE (0O.6F: runtime security contract, approved exceptions `OWNER-0O6E-2026-09-26`), deployment evidence outstanding | Security | Supply chain |
+| O16 | Dependency/vulnerability audit and image pinning policy | **RESOLVED — ADR 0052 (Phase 0O.6)**; digest-pinned bases, SHA-pinned actions, hash-verified locks, SPDX SBOM, SLSA-style provenance, cosign-compatible signing, fail-closed verification, build-once/promote-digest; repository controls COMPLETE (0O.6F: runtime security contract, approved exceptions `OWNER-0O6E-2026-09-26`), deployment evidence outstanding. *(2026-10-14, SWC.5: that exception decision is superseded; the current E16 decision is `OWNER-0O-E16-2026-10-11`, valid through 2026-11-09.)* | Security | Supply chain |
 
 No vendor or provider is chosen by this audit.
 
@@ -3096,3 +3096,31 @@ ADR 0058 row changes status, and none stops blocking O1.
     SWC.
 - **Code:** none. **Regression:** docs-only, so the regression counter is
   unchanged.
+
+## 62. Phase 0O / SWC.5 — Staff Web Surface Completion CLOSED; Pre-Production handoff (2026-10-14)
+
+**SWC — CLOSED / DEVELOPMENT COMPLETE** (ADR 0073 §20).
+- Every approved v1 staff workflow is browser-operable, with no personal
+  API token, or intentionally gated.
+- Closure corrections are recorded in ADR 0073 §20.2–§20.9.
+
+**Phase 0O is NOT closed by this.** O1 stays NOT SATISFIED, and no ADR 0058
+row changes status.
+
+**Next programme: Pre-Production / Staging Readiness — NOT STARTED.** It
+needs owner authorisation and begins with a contract audit. Its handoff
+inventory (ADR 0073 §20.12) covers:
+- the staging/environment contract and `APP_ENV` semantics; staging data
+  policy;
+- Mailpit/external delivery and PPE email (E17–E20);
+- E05, E07–E15 (E11 restore drill), the E16 successor, E21–E23, E29,
+  E30–E34 (and the X3 refusal question), E33 production re-verification,
+  E45–E47, E02/O16;
+- performance/load qualification; latency and 5xx alerting;
+- incident and breach response; a tenant-support runbook;
+- `APP_KEY` and AI signing-key rotation; DSAR / tenant export;
+- an accessibility qualification target;
+- the onboarding import and opening-balance decision.
+
+**E16.** Valid through **2026-11-09**; publication blocks from
+**2026-11-10**; the successor cycle should begin around **2026-10-30**.

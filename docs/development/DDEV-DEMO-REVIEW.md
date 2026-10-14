@@ -344,7 +344,7 @@ production role carries `payroll.statutory.*`. `cashier` and
 (School Admin can grant them to any staff member to review them).
 
 Considered and not created: a "canteen student" or any student/guardian
-self-service desk (no student- or guardian-facing capability exists), an
+self-service desk (no student- or guardian-facing capability exists *(at that time; since POR.1–POR.4 a development-only Guardian portal exists, §13)*), an
 examinations/timetable/attendance desk (deferred: academic coordinator and
 exams officer, ADR 0071 §5), and a platform-operations account beyond the
 Platform Admin.
@@ -562,111 +562,128 @@ Platform Admin.
 
 ## 13. Interactive review map
 
-*(2026-10-14, SWC.1, ADR 0073 §17: every signed-in page now has a side
-navigation (a "Menu" button below the `md` breakpoint) built from the
-actor's capabilities in the active School. The nine "(no nav)" modules
-below are reachable from it. The product name is Lycenza, and `/` is a
-neutral sign-in entry. Reviewing it: sign in as each persona and compare
-the navigation with the table; switch School and see it change; on an
-elevated session no School entry appears.)*
+*(Rewritten 2026-10-14 at SWC.5, ADR 0073 §20. The earlier map, which listed
+"(no nav)" modules and API-only Academic Structure and OPF surfaces, is
+superseded. Git history keeps it.)*
 
-*(2026-10-14, SWC.0, ADR 0073: the "(no nav)" and API-only rows below
-are scheduled. SWC.1 adds capability-driven navigation; SWC.2 covers the
-Academic Structure screens; SWC.3 covers the OPF configuration screens.
-Sections 13–15 are rewritten at SWC.5. Known drift until then:*
-- *Payments are no longer read-only. Offline payment recording has a page
-  (Finance, 0O.11A).*
-- *Staff accounts (Settings → Staff accounts) grants the 17 School roles.*
-- *A development-only Guardian portal (POR.1–POR.4) and HRX.4 staff
-  self-service exist.*
-- *Account security is linked from the account bar.*
-- *Rows are missing for Leave, Staff attendance, the My-* pages, Teaching
-  assignments, Domains, API clients and the Guardian portal.)*
+**How to review.**
+- **Sign in** as any persona from the login panel. For the School Admin,
+  choose a School.
+- **Navigation.** Every signed-in page has a side navigation built on the
+  server from your capabilities in the active School. Below the `md`
+  breakpoint it sits behind a **Menu** button: Escape closes it and returns
+  focus to the button. A group appears only when one of its entries is
+  allowed. An entry is never authorization, so every page re-checks its own
+  capability.
+- **Account bar.** It holds Account security and Log out. API tokens appear
+  only on the platform host.
+- **What changes it.** Switching School rebuilds the navigation for that
+  School. An elevated platform session shows no School entry. A School custom
+  host shows no platform, Group or API-token entry.
+- **Product name and `/`.** The product name is **Lycenza**, and `/` is a
+  neutral sign-in page.
 
-| Module | URL / navigation | Persona | Reviewable? | Notes |
+**State labels.**
+- **Demo-operable:** works end to end in this demo.
+- **Production-gated:** built, but held back from production by a register
+  row (ADR 0058) or a refusal in code.
+- **Pre-production:** the readiness work that follows SWC.
+
+The table names the navigation group → entry for each surface.
+
+| Area | Where (navigation) | Persona | State | Notes |
 |---|---|---|---|---|
-| School settings / setup | Dashboard -> School settings, School setup | School Admin | Yes | *(Since SWC.2: Terms, Sections, Rooms and Academic departments have pages, and Campuses, Grade levels and Subjects can be edited and deactivated; School setup in the navigation.)* |
-| Students / Guardians | Dashboard -> Students, Guardians | Admin, Principal | Yes | Account link + guardian invitation actions on detail pages |
-| Enrollments / Rollovers | Dashboard -> Enrollments, Enrollment Rollovers | Admin (Principal view-only rollovers) | Yes | |
-| Admissions | Dashboard -> Admissions | Admin, Principal | Yes | |
-| Subject offerings / electives | Dashboard -> Subject Offerings | Admin, Principal | Yes (read) | *(Since SWC.2: create on the index, settings/deactivate on the detail page; Elective groups at `/app/elective-groups`.)* |
-| Communications | Dashboard -> Communication Hub | Admin, Principal | Yes | Student conversations need `communications.conversations.students` (no role has it) |
-| Finance / Fees / Payments | Dashboard -> Finance | School Admin | Yes | Payments are read-only (recorded via provider-settlement service) |
-| Operational fees (SWC.3) | Route/Hostel/room pages (fee-head panel); Operations → Transport → Fees, Hostel → Fees; Admissions index → Admission fee head; Operations → Library → Fine policy; Circulation row → loan page | School Admin (Librarian: fine view only) | Yes | The demo seeds no fee heads mapped to these sources and no fine policy. Map a head first, then carry forward. A fine needs an overdue check-in, so the demo shows the policy and loan pages without one. Fee intent is not a charge. |
-| HR | Dashboard -> HR | Admin, Principal, HR & Payroll | Partly | Org structure + sensitive sections need the demo HR & Payroll role |
-| Payroll | Dashboard -> Payroll | Admin, HR & Payroll | Yes | Payslips/statutory need the demo role; statutory configuration is not seeded |
-| Timetable | Dashboard -> Timetable Periods / Schedule | Admin, Principal | Yes | |
-| Attendance | `/app/attendance` (no nav link) | Admin, Principal | Yes | |
-| Syllabus / Curriculum delivery | `/app/syllabus`, `/app/syllabus-delivery` (no nav) | Admin, Principal | Yes | |
-| Examinations / Grade scales | `/app/examinations`, `/app/examinations/grade-scales` (no nav) | Admin, Principal | Yes | No marks UI (StudentMark is session JSON only, development; ADR 0068 §20–§26); no results |
-| Library | `/app/library/titles`, `/app/library/circulation` (no nav) | Admin, Principal | Yes | |
-| Transport | `/app/transport/routes`, `/vehicles`, `/assignments`, `/operations` (no nav) | Admin, Principal | Yes | |
-| Visitor | `/app/visitor/directory`, `/app/visitor/visits` (no nav) | Admin, Principal | Yes | |
-| Hostel | `/app/hostels`, `/app/hostel-residency` (no nav) | Admin, Principal | Yes | |
-| Inventory | `/app/inventory-items`, `/-locations`, `/-stock` (no nav) | Admin, Principal | Yes | |
-| Canteen | Dashboard -> Canteen Outlets / Items / Orders / Settings | Admin (Principal: no settings) | Yes | |
-| LMS: Learning Content, Assignments | `/app/learning-content`, `/app/assignments` (no nav link) | Admin, Principal | Yes (empty -- not seeded) | Submission is cancelled and has no screen |
-| Analytics: Curriculum Coverage | Dashboard -> Analytics: Curriculum Coverage (`/app/analytics/curriculum-coverage`) | Admin, Principal | Yes | Counts syllabus units only; no person Analytics, no export (Phase 0L.2-1) |
-| Compliance: Audit log | Dashboard -> Compliance: Audit log (`/app/compliance/audit-log`) | Admin, Principal | Yes | Envelope fields only, no metadata; each visit is itself audited (Phase 0L.4) |
-| Automation | Dashboard -> Automation (`/app/automation`) | Admin (manage), Principal (view) | Yes | One rule (academic year set-up review), tier 0 review items only; Demo School on, Annexe off (Phase 0L.6) |
-| Account security (MFA) | `/app/account/security` (no nav) | Any | Yes | MFA is opt-in; nothing requires it by default |
-| Guardian activation | Mailpit invitation link | (invitee) | Yes | |
+| Home / Dashboard | Home | everyone | Demo-operable | Product name, School switcher, the same navigation as a grouped overview |
+| School setup | School setup → School setup, Campuses, Academic years, Terms, Grade levels, Sections, Academic departments, Rooms, Subjects | School Admin (Principal: no Campus manage) | Demo-operable | Create, edit, deactivate/reactivate. Year activate/close and deactivation sit behind a confirmation dialog. Duplicate codes and year overlaps are form errors (SWC.2). |
+| Subject offerings & elective groups | School setup → Subject offerings, Elective groups | School Admin, Principal | Demo-operable | Create an Offering. Its classification is locked once results exist (ADR 0069). Groups: create, assign or remove an Offering. An inactive Offering is never newly assigned (SWC.3 §19.1). |
+| Timetable, Teaching assignments | Academics → Timetable, Timetable periods, Teaching assignments | School Admin, Principal | Demo-operable | |
+| Attendance | Academics → Attendance | School Admin, Principal | Demo-operable | Teachers: My work → My class attendance (`mfa-page`; E33 conditions, production grants withheld) |
+| Syllabus, Curriculum delivery | Academics → Syllabus, Curriculum delivery | School Admin, Principal | Demo-operable | |
+| Examinations, Grade scales | Academics → Examinations (Grade scales inside) | School Admin, Principal | Demo-operable (definitions, papers, scales) | No marks page. StudentMark is development-only session JSON and refused in production in code (E35–E37). No results or report cards. |
+| LMS | Academics → Learning content, Assignments | School Admin, Principal; teachers via My work | Demo-operable (empty: not seeded) | Submission is cancelled |
+| Admissions | People → Admissions | School Admin, Principal, Admissions officer | Demo-operable | **Admission fee head** is linked from the Admissions index. A converted application shows its recorded fee intent. Production: E21/E32. |
+| Students, Guardians | People → Students, Guardians | School Admin, Principal | Demo-operable | Account link and Guardian invitation (Mailpit) |
+| Enrollments, Rollovers | People → Enrollments, Enrollment rollovers | School Admin (Principal: view rollovers) | Demo-operable | |
+| HR | People → HR (hub) | School Admin, Principal, HR officer | Demo-operable | The hub opens only for a holder of one of its link capabilities (SWC.5 §20.3). Sensitive sections need the HR roles, and MFA for Highly Sensitive reads (SR.4). |
+| Leave, Staff attendance | People → Leave, Leave approvals, Staff attendance; My work → My leave, My staff attendance | per capability | Demo-operable | |
+| Finance | Finance → Finance (hub) | School Admin, Accountant, Cashier | Demo-operable | Fee setup, assessment runs, concessions, late fees, statements, charges, payments, **offline payment recording** (0O.11A), ledger, periods. No payment gateway (ADR 0057). |
+| Payroll | Finance → Payroll (hub); My work → My payslips | School Admin, Payroll officer | Demo-operable | Statutory payroll is a hub sub-link under `payroll.statutory.view`, which no production role holds (E45). Only the guarded demo-only role `demo.payroll_statutory` holds it. |
+| Transport | Operations → Transport: Routes, Vehicles, Daily operations, Student assignments, **Fees** | School Admin, Principal, Transport coordinator | Demo-operable | **Route fee head** panel on the route page. Fees page: fee intent per assignment, and carry-forward to an open year (a repeat links nothing new). Fee intent is not a charge. Production: E21/E30. |
+| Hostel | Operations → Hostel: Hostels, Residency, **Fees** | School Admin, Principal, Hostel warden | Demo-operable | **Hostel default / room override** fee-head panels show which head governs. Fees page with carry-forward. Production: E21/E31. |
+| Library | Operations → Library: Catalogue, Circulation, **Fine policy** | School Admin, Principal, Librarian | Demo-operable | Circulation has **Active / Returned** tabs (SWC.5 §20.2). Each loan has a page showing its fine and, for fine voiders, a reasoned void. Policy publish carries the version shown (a stale or repeat form is refused). No School-wide fine list (X2). Production: E34. |
+| Inventory, Canteen, Visitors | Operations → Inventory, Canteen, Visitors | School Admin, Principal, the module's operational role | Demo-operable | Canteen settings: School Admin |
+| Communications | Communications → Communication Hub | School Admin, Principal, Communications officer | Demo-operable (Mailpit only) | Student conversations need `communications.conversations.students` (no role holds it) |
+| Reports | Reports → Curriculum coverage, Audit log | School Admin, Principal | Demo-operable | No person-level Analytics and no export. Each audit-log view is itself audited. |
+| Administration | Administration → School settings, Staff accounts, Automation, Custom domains, API clients | School Admin | Demo-operable | Staff accounts: invite, grant or revoke the 17 School roles, off-board (fresh MFA; SR). Custom domains use the fake DNS/TLS fakes in DDEV. |
+| Account security | Account bar | everyone | Demo-operable | MFA enrolment |
+| API tokens | Account bar (platform host only) | everyone | Demo-operable | Personal tokens are for integrations and are never needed to operate the web application |
+| Guardian portal | Guardian portal → Messages, Conversations, Attendance, Fees | Guardian | Demo-operable; **production-gated** in code (`PortalAvailability`, E46) | Development only |
+| School Groups / Platform | School Groups; Platform → Schools, Roles, Audit log | Group admin, Platform admin/auditor | Demo-operable (platform host) | Elevation opens no School page (rule 83) |
 
-## 14. Implemented but not reviewable in the browser
+## 14. Implemented without a staff web page (by decision)
 
-- **Platform administration**: `platform.*` capabilities exist; the only
-  platform pages are platform elevation (step 13 in section 12), which
-  opens no School page yet, School Group governance (step 13a), and the
-  platform audit log and Platform Auditor grants (step 13b).
-  Operations status is `GET /api/internal/operations/status` (API only).
-- **API-only surfaces** (`/api/v1/schools/{school}/...`): academic terms,
-  sections, academic departments, rooms, campus CRUD, subject-offering
-  creation *(2026-10-14, SWC.2: all of these now have staff web screens --
-  ADR 0073 §18)*, **Documents** (incl. employee/sensitive documents), **webhooks**
-  (endpoints/deliveries), education boards. The API is not reachable from
-  a browser session (no session-authenticated API; no token-issuing UI) --
-  a Sanctum token must be minted in `ddev artisan tinker`.
-- **Guardian / student self-service**: account links, guardian
-  invitation/activation and communication audiences are implemented, but
-  there are no guardian or student portals -- linked users land on an empty
-  dashboard. Teachers have the four owned "My ..." surfaces (TCH, ADR 0063)
-  and no other self-service (no HRX leave/payslip).
-- **Role and member management**: no UI; roles/assignments are DB-only.
-  *(2026-10-14: superseded — Settings → Staff accounts, 0O.12B + SR; the
-  Guardian portal (POR, development only) and HRX.4 self-service also
-  exist, correcting the bullet above. Full rewrite at SWC.5.)*
-- **Feature flags**: tables and resolver exist; no flags seeded or used.
-- **Statutory payroll** (Phase 9.6): screens exist; no statutory
-  configuration/identifiers are seeded, so they render empty.
-- **Domain-event outbox / webhooks fan-out**: runs in the background
-  (scheduler + queue); no UI beyond webhook API.
-- **Student Processing Authorization registry** (Phase 0H.4D-P2, registry
-  and its lock correction both published): JSON-only routes under
-  `/app/students/{student}/processing-authorizations`, gated by
-  `students.processing_authorizations.*` (School Admin, Principal) **and**
-  the `mfa` middleware; its catalog feature flag
-  (`students.processing_authorizations`) is seeded default-off. There is no
-  Vue page. To exercise it: enrol MFA for the School Admin at
-  `/app/account/security`, then call the JSON endpoints. No demo
-  authorization records are seeded.
+- **Documents.** The 0E Documents API is used only through other surfaces.
+  HR document records have pages. There is no Documents UI (OD-SWC-2,
+  post-v1 option).
+- **Webhook administration.** Operator/integration functionality,
+  API-only (OD-SWC-3).
+- **Education boards.** A platform reference catalogue (API).
+- **Operations status.** `GET /api/internal/operations/status` and the
+  `platform:operations-status` command (operator only, rule 63).
+- **Student Processing Authorization registry.** JSON routes under
+  `mfa`, behind a default-off catalog flag. No Vue page, and no demo
+  records.
+- **Feature flags.** The resolver exists; no flags are used.
+- **Domain-event outbox and fan-out.** These run in the background.
 
-## 15. Not implemented / deferred / unpublished
+**The verdict.** None of these is needed to operate the approved v1 staff
+workflows. SWC.5 found no v1 staff workflow that needs a personal API token
+(ADR 0073 §20.1).
 
-Everything that was unpublished when this environment was first created
-has since been published to `main` (2026-09-23 consolidation): the
-Phase 0H.4D-P2 lock correction, Phase 0I LMS (ADR 0039: Learning Content
-and Assignments; Submission **cancelled / out of scope**), and the Phase
-0L.1 Analytics domain contract (ADR 0040). Phase 0L.2-1 has since added
-the first Analytics report (Curriculum Coverage, section 12 step 14). The demo dataset does not seed any LMS
-records; the LMS screens (section 13) start empty.
+## 15. Not built, production-gated, or pre-production
 
-Documented but not implemented on main: StudentMark / marks, results,
-report cards and transcripts (legally gated); Lesson Planning (deferred);
-Health and Safety (deferred, legally/security blocked); person-counting
-Analytics (blocked on the unapproved minimum cohort size), Analytics
-export, cross-School Analytics, Compliance beyond the School audit log (0L.4), Automation beyond the one academic-year review rule (0L.6); real AI agents (0M); cross-School / Group
-reporting (0N, D15), School archive/delete and break-glass administrative
-recovery; external surface / production readiness (0O); portal logins.
+**Not built (post-v1 or deferred):**
+- marks entry UI, results, report cards and transcripts (E35–E37,
+  RES-L4–L7);
+- Lesson Planning;
+- Health and Safety;
+- person-level, exported or cross-School Analytics, beyond the one
+  registered Group-safe report (ADR 0048);
+- Student accounts and the Student portal;
+- Student/Guardian import and opening fee balances (onboarding decision,
+  OD-SWC-4/5);
+- tenant-custom roles;
+- a payment gateway; SMS, WhatsApp and push; SSO; real AI providers.
+
+**Production-gated (built and demo-operable here):**
+- the Guardian portal (E46, refused in code);
+- StudentMark (refused in code);
+- statutory payroll (E45, no role holds it);
+- teacher Attendance production grants (E33 re-verification);
+- OPF fee intent and Library fines (E21, E30–E32, E34).
+- Whether E30–E34 get a refusal in code is a Pre-Production decision (X3).
+
+**Email:**
+- **Development:** Mailpit is canonical. The SendGrid adapter is
+  implemented (E18) but dormant (OD-EMAIL-DEV, ADR 0060 §31). Nothing
+  leaves the machine.
+- **Production email qualification** (E17, E19, E20) is Pre-Production
+  work.
+
+**Pre-production (next programme, not started):**
+- the staging/environment contract and data policy;
+- the ADR 0058 open rows;
+- E16 successor cycle;
+- performance and load qualification;
+- alerting and incident response;
+- key rotation;
+- DSAR and tenant export;
+- an accessibility qualification target (ADR 0073 §20.12).
+
+**This environment is a local demo.** Nothing here is production-ready
+evidence.
+
+The walkthroughs below remain current.
 
 ### Custom School domains (Phase 0O.8A, ADR 0054)
 

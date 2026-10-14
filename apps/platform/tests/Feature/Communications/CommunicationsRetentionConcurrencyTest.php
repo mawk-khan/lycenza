@@ -31,14 +31,11 @@ class CommunicationsRetentionConcurrencyTest extends TestCase
     /** @var list<string> */
     private array $schoolIds = [];
 
-    private ?string $startedAt = null;
-
     private string $anchorsFrom = '';
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->startedAt = now()->subSecond()->toDateTimeString();
         $this->anchorsFrom = $this->retentionAnchorCheckpoint();
     }
 
@@ -57,7 +54,7 @@ class CommunicationsRetentionConcurrencyTest extends TestCase
             $this->deleteSchoolAsAdmin($schoolId);
         }
 
-        $admin->table('users')->where('created_at', '>=', $this->startedAt)->whereNotIn('id', $admin->table('platform_role_assignments')->select('user_id'))->delete();
+        $admin->table('users')->whereIn('id', $this->ownedUserIds())->whereNotIn('id', $admin->table('platform_role_assignments')->select('user_id'))->delete();
 
         parent::tearDown();
     }

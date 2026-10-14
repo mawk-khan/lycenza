@@ -91,10 +91,9 @@ function ruleLabel(key: string | null): string {
 
         <h1 class="mt-2 text-xl font-semibold">Automation</h1>
         <p class="mt-1 text-sm text-slate-500">
-            Rules that react to events in this School. Each rule is defined by School OS, not
-            written here, and runs as its accountable owner — never with more access than that
-            person has at the time. Rules here only add review items; they change nothing and send
-            nothing.
+            Rules that react to events in this School. Each rule is defined by Lycenza, not written
+            here, and runs as its accountable owner — never with more access than that person has at
+            the time. Rules here only add review items; they change nothing and send nothing.
         </p>
 
         <p

@@ -123,57 +123,61 @@ function setStatus(room: Room, status: 'active' | 'inactive') {
             <p v-if="props.rooms.length === 0" class="mt-4 text-sm text-slate-600">
                 {{ campusName }} has no Room yet.
             </p>
-            <table v-else class="mt-4 w-full text-left text-sm">
-                <caption class="sr-only">
-                    Rooms of
-                    {{
-                        campusName
-                    }}
-                </caption>
-                <thead class="border-b border-slate-300 text-slate-600">
-                    <tr>
-                        <th scope="col" class="py-2">Name</th>
-                        <th scope="col" class="py-2">Code</th>
-                        <th scope="col" class="py-2">Type</th>
-                        <th scope="col" class="py-2">Capacity</th>
-                        <th scope="col" class="py-2">Status</th>
-                        <th v-if="props.canManage" scope="col" class="py-2">
-                            <span class="sr-only">Actions</span>
-                        </th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-200">
-                    <tr v-for="room in props.rooms" :key="room.id">
-                        <td class="py-2 font-medium">{{ room.name }}</td>
-                        <td class="py-2">{{ room.code }}</td>
-                        <td class="py-2">{{ typeLabel(room.roomType) }}</td>
-                        <td class="py-2">{{ room.capacity ?? '—' }}</td>
-                        <td class="py-2">{{ room.status === 'active' ? 'Active' : 'Inactive' }}</td>
-                        <td v-if="props.canManage" class="space-x-3 py-2 text-right">
-                            <button type="button" class="underline" @click="startEdit(room)">
-                                Edit<span class="sr-only"> {{ room.name }}</span>
-                            </button>
-                            <button
-                                v-if="room.status === 'active'"
-                                type="button"
-                                class="text-red-700 underline"
-                                @click="askDeactivate(room)"
-                            >
-                                Deactivate<span class="sr-only"> {{ room.name }}</span>
-                            </button>
-                            <button
-                                v-else
-                                type="button"
-                                class="underline"
-                                :disabled="statusForm.processing"
-                                @click="setStatus(room, 'active')"
-                            >
-                                Reactivate<span class="sr-only"> {{ room.name }}</span>
-                            </button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+            <div v-else class="relative overflow-x-auto mt-4">
+                <table class="w-full text-left text-sm">
+                    <caption class="sr-only">
+                        Rooms of
+                        {{
+                            campusName
+                        }}
+                    </caption>
+                    <thead class="border-b border-slate-300 text-slate-600">
+                        <tr>
+                            <th scope="col" class="pr-3 py-2">Name</th>
+                            <th scope="col" class="pr-3 py-2">Code</th>
+                            <th scope="col" class="pr-3 py-2">Type</th>
+                            <th scope="col" class="pr-3 py-2">Capacity</th>
+                            <th scope="col" class="pr-3 py-2">Status</th>
+                            <th v-if="props.canManage" scope="col" class="pr-3 py-2">
+                                <span class="sr-only">Actions</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200">
+                        <tr v-for="room in props.rooms" :key="room.id">
+                            <td class="pr-3 py-2 font-medium">{{ room.name }}</td>
+                            <td class="pr-3 py-2">{{ room.code }}</td>
+                            <td class="pr-3 py-2">{{ typeLabel(room.roomType) }}</td>
+                            <td class="pr-3 py-2">{{ room.capacity ?? '—' }}</td>
+                            <td class="pr-3 py-2">
+                                {{ room.status === 'active' ? 'Active' : 'Inactive' }}
+                            </td>
+                            <td v-if="props.canManage" class="pr-3 space-x-3 py-2 text-right">
+                                <button type="button" class="underline" @click="startEdit(room)">
+                                    Edit<span class="sr-only"> {{ room.name }}</span>
+                                </button>
+                                <button
+                                    v-if="room.status === 'active'"
+                                    type="button"
+                                    class="text-red-700 underline"
+                                    @click="askDeactivate(room)"
+                                >
+                                    Deactivate<span class="sr-only"> {{ room.name }}</span>
+                                </button>
+                                <button
+                                    v-else
+                                    type="button"
+                                    class="underline"
+                                    :disabled="statusForm.processing"
+                                    @click="setStatus(room, 'active')"
+                                >
+                                    Reactivate<span class="sr-only"> {{ room.name }}</span>
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
 
             <section
                 v-if="editing"

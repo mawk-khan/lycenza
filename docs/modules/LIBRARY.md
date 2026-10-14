@@ -446,4 +446,8 @@ A check-in that assessed a fine lands on that page.
 
 **Gaps and gates:**
 - Older returned loans are reachable only by URL; recorded for SWC.5.
+  *(2026-10-14, SWC.5: resolved. Circulation now has Active / Returned
+  tabs, the `status` filter `/api/v1` already offered under
+  `library.circulation.view`; ADR 0073 §20.2. It lists loans only, never
+  fines (X2).)*
 - Production stays gated by E34 (ADR 0058).

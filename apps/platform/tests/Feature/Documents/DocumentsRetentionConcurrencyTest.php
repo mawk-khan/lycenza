@@ -28,12 +28,9 @@ class DocumentsRetentionConcurrencyTest extends TestCase
 
     private ?string $schoolId = null;
 
-    private ?string $startedAt = null;
-
     protected function setUp(): void
     {
         parent::setUp();
-        $this->startedAt = now()->subSecond()->toDateTimeString();
         config(['documents.disk' => 'local', 'communications.attachments.disk' => 'local', 'retention.orphan_object_days' => 30, 'retention.hold_school_ids' => []]);
     }
 
@@ -44,7 +41,7 @@ class DocumentsRetentionConcurrencyTest extends TestCase
             DB::connection('pgsql_admin')->table('documents')->where('school_id', $this->schoolId)->delete();
             $this->deleteSchoolAsAdmin($this->schoolId);
         }
-        DB::connection('pgsql_admin')->table('users')->where('created_at', '>=', $this->startedAt)->whereNotIn('id', DB::connection('pgsql_admin')->table('platform_role_assignments')->select('user_id'))->delete();
+        DB::connection('pgsql_admin')->table('users')->whereIn('id', $this->ownedUserIds())->whereNotIn('id', DB::connection('pgsql_admin')->table('platform_role_assignments')->select('user_id'))->delete();
 
         parent::tearDown();
     }

@@ -37,14 +37,6 @@ class FeeStructureConcurrencyTest extends TestCase
 
     private string $activate = __DIR__.'/../../Support/activate-fee-structure.php';
 
-    private ?string $startedAt = null;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->startedAt = now()->subSecond()->toDateTimeString();
-    }
-
     protected function tearDown(): void
     {
         $this->deleteSchoolAsAdmin($this->school);
@@ -55,7 +47,7 @@ class FeeStructureConcurrencyTest extends TestCase
         // (the GroupReportConcurrencyTest precedent).
         DB::connection('pgsql_admin')->table('roles')
             ->where('key', 'like', 'test.capability_grant.%')
-            ->where('created_at', '>=', $this->startedAt)
+            ->whereIn('id', $this->ownedRoleIds())
             ->delete();
 
         parent::tearDown();

@@ -67,7 +67,7 @@ class StatutoryPfStatusMutationConcurrencyTest extends TestCase
         // scan would otherwise see it forever after).
         if ($this->startedAt !== null) {
             // SR.1: the runtime role cannot write the catalogue; the admin role removes the fixture role.
-            Role::on('pgsql_admin')->where('key', 'like', 'test.capability_grant.%')->where('created_at', '>=', $this->startedAt)->delete();
+            Role::on('pgsql_admin')->where('key', 'like', 'test.capability_grant.%')->whereIn('id', $this->ownedRoleIds())->delete();
         }
 
         parent::tearDown();

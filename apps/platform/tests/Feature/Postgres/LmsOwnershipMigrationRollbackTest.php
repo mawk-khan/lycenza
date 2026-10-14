@@ -36,14 +36,6 @@ class LmsOwnershipMigrationRollbackTest extends TestCase
     /** @var list<string> */
     private array $schoolIds = [];
 
-    private ?string $startedAt = null;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->startedAt = now()->subSecond()->toDateTimeString();
-    }
-
     protected function tearDown(): void
     {
         foreach ($this->schoolIds as $schoolId) {
@@ -51,8 +43,8 @@ class LmsOwnershipMigrationRollbackTest extends TestCase
         }
 
         $admin = DB::connection('pgsql_admin');
-        $admin->table('roles')->where('key', 'like', 'test.capability_grant.%')->where('created_at', '>=', $this->startedAt)->delete();
-        $admin->table('users')->where('created_at', '>=', $this->startedAt)->whereNotIn('id', $admin->table('platform_role_assignments')->select('user_id'))->delete();
+        $admin->table('roles')->where('key', 'like', 'test.capability_grant.%')->whereIn('id', $this->ownedRoleIds())->delete();
+        $admin->table('users')->whereIn('id', $this->ownedUserIds())->whereNotIn('id', $admin->table('platform_role_assignments')->select('user_id'))->delete();
 
         parent::tearDown();
     }

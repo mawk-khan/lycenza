@@ -510,7 +510,7 @@ function submitSearch() {
                                             <span
                                                 v-if="!result.accountLinked"
                                                 class="text-xs text-amber-600"
-                                                >No School OS account linked</span
+                                                >No Lycenza account linked</span
                                             >
                                         </button>
                                     </li>
@@ -524,7 +524,7 @@ function submitSearch() {
                                 class="mt-1 text-xs text-slate-400"
                             >
                                 Student conversations are limited to Students with a linked, active
-                                School OS account and are subject to your school's communication
+                                Lycenza account and are subject to your school's communication
                                 policy.
                             </p>
                         </template>

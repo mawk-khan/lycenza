@@ -208,8 +208,8 @@ function readRate(bucket: ChannelBucket): string | null {
 
                 <p class="mt-6 text-xs text-slate-400">
                     "Sent to transport" means the configured application mail transport accepted the
-                    send -- not that it reached a mailbox. No delivered/bounced/opened/clicked data
-                    is available without a provider webhook integration (not implemented).
+                    send -- not that it reached a mailbox. Delivered, bounced, opened and clicked
+                    figures are not shown on this page.
                 </p>
             </div>
         </div>

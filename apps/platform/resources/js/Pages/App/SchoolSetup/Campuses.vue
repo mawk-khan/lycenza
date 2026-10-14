@@ -73,54 +73,58 @@ function setStatus(campus: Campus, status: 'active' | 'inactive') {
         <p v-if="props.campuses.length === 0" class="mt-4 text-sm text-slate-600">
             No Campus exists yet.
         </p>
-        <table v-else class="mt-4 w-full text-left text-sm">
-            <caption class="sr-only">
-                Campuses
-            </caption>
-            <thead class="border-b border-slate-300 text-slate-600">
-                <tr>
-                    <th scope="col" class="py-2">Name</th>
-                    <th scope="col" class="py-2">Code</th>
-                    <th scope="col" class="py-2">Contact</th>
-                    <th scope="col" class="py-2">Status</th>
-                    <th v-if="props.canManage" scope="col" class="py-2">
-                        <span class="sr-only">Actions</span>
-                    </th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-200">
-                <tr v-for="campus in props.campuses" :key="campus.id">
-                    <td class="py-2 font-medium">{{ campus.name }}</td>
-                    <td class="py-2">{{ campus.code }}</td>
-                    <td class="py-2 text-slate-600">
-                        {{ [campus.phone, campus.email].filter(Boolean).join(' · ') || '—' }}
-                    </td>
-                    <td class="py-2">{{ campus.status === 'active' ? 'Active' : 'Inactive' }}</td>
-                    <td v-if="props.canManage" class="space-x-3 py-2 text-right">
-                        <button type="button" class="underline" @click="startEdit(campus)">
-                            Edit<span class="sr-only"> {{ campus.name }}</span>
-                        </button>
-                        <button
-                            v-if="campus.status === 'active'"
-                            type="button"
-                            class="text-red-700 underline"
-                            @click="askDeactivate(campus)"
-                        >
-                            Deactivate<span class="sr-only"> {{ campus.name }}</span>
-                        </button>
-                        <button
-                            v-else
-                            type="button"
-                            class="underline"
-                            :disabled="statusForm.processing"
-                            @click="setStatus(campus, 'active')"
-                        >
-                            Reactivate<span class="sr-only"> {{ campus.name }}</span>
-                        </button>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+        <div v-else class="relative overflow-x-auto mt-4">
+            <table class="w-full text-left text-sm">
+                <caption class="sr-only">
+                    Campuses
+                </caption>
+                <thead class="border-b border-slate-300 text-slate-600">
+                    <tr>
+                        <th scope="col" class="pr-3 py-2">Name</th>
+                        <th scope="col" class="pr-3 py-2">Code</th>
+                        <th scope="col" class="pr-3 py-2">Contact</th>
+                        <th scope="col" class="pr-3 py-2">Status</th>
+                        <th v-if="props.canManage" scope="col" class="pr-3 py-2">
+                            <span class="sr-only">Actions</span>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    <tr v-for="campus in props.campuses" :key="campus.id">
+                        <td class="pr-3 py-2 font-medium">{{ campus.name }}</td>
+                        <td class="pr-3 py-2">{{ campus.code }}</td>
+                        <td class="pr-3 py-2 text-slate-600">
+                            {{ [campus.phone, campus.email].filter(Boolean).join(' · ') || '—' }}
+                        </td>
+                        <td class="pr-3 py-2">
+                            {{ campus.status === 'active' ? 'Active' : 'Inactive' }}
+                        </td>
+                        <td v-if="props.canManage" class="pr-3 space-x-3 py-2 text-right">
+                            <button type="button" class="underline" @click="startEdit(campus)">
+                                Edit<span class="sr-only"> {{ campus.name }}</span>
+                            </button>
+                            <button
+                                v-if="campus.status === 'active'"
+                                type="button"
+                                class="text-red-700 underline"
+                                @click="askDeactivate(campus)"
+                            >
+                                Deactivate<span class="sr-only"> {{ campus.name }}</span>
+                            </button>
+                            <button
+                                v-else
+                                type="button"
+                                class="underline"
+                                :disabled="statusForm.processing"
+                                @click="setStatus(campus, 'active')"
+                            >
+                                Reactivate<span class="sr-only"> {{ campus.name }}</span>
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
 
         <section
             v-if="editing"

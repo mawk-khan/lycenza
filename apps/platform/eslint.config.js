@@ -66,6 +66,7 @@ const SWC_ACCESSIBILITY_FILES = [
     'resources/js/Pages/App/Admissions/FeeHead.vue',
     'resources/js/Pages/App/Library/FinePolicy.vue',
     'resources/js/Pages/App/Library/Circulation/Show.vue',
+    'resources/js/Pages/App/Library/Circulation/Index.vue',
 ];
 const swcAccessibility = pluginVueA11y.configs['flat/recommended'].map((config) => ({
     ...config,

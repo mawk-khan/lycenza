@@ -79,8 +79,8 @@ function submit(): void {
 
         <h1 class="mt-2 text-xl font-semibold">Statutory accounting configuration</h1>
         <p class="mt-1 text-sm text-slate-500">
-            Every liability/expense account the Checkpoint 9.6F statutory journal entry posts to. No
-            account-name lookup -- these must be real Finance ledger accounts for this School.
+            Every liability/expense account the statutory journal entry posts to. No account-name
+            lookup -- these must be real Finance ledger accounts for this School.
         </p>
 
         <form class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2" @submit.prevent="submit">

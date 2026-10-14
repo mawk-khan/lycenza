@@ -79,9 +79,9 @@ function day(value: string | null): string {
         <a class="text-sm underline" href="/app">← Dashboard</a>
         <h1 class="mt-2 text-xl font-semibold">API tokens</h1>
         <p class="mt-1 text-sm text-slate-600">
-            A token lets a program call the School OS API as you. It can never do more than you can
-            do yourself, it never carries platform or Group authority, and it always expires (at
-            most {{ maxDays }} days).
+            A token lets a program call the Lycenza API as you. It can never do more than you can do
+            yourself, it never carries platform or Group authority, and it always expires (at most
+            {{ maxDays }} days).
         </p>
 
         <div

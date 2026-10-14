@@ -147,61 +147,67 @@ function setStatus(section: Section, status: 'active' | 'inactive') {
                 {{ yearName }} has no Section yet.
             </p>
             <template v-else>
-                <table class="mt-4 w-full text-left text-sm">
-                    <caption class="sr-only">
-                        Sections of
-                        {{
-                            yearName
-                        }}
-                    </caption>
-                    <thead class="border-b border-slate-300 text-slate-600">
-                        <tr>
-                            <th scope="col" class="py-2">Name</th>
-                            <th scope="col" class="py-2">Code</th>
-                            <th scope="col" class="py-2">Grade level</th>
-                            <th scope="col" class="py-2">Campus</th>
-                            <th scope="col" class="py-2">Capacity</th>
-                            <th scope="col" class="py-2">Status</th>
-                            <th v-if="props.canManage" scope="col" class="py-2">
-                                <span class="sr-only">Actions</span>
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-200">
-                        <tr v-for="section in props.sections.data" :key="section.id">
-                            <td class="py-2 font-medium">{{ section.name }}</td>
-                            <td class="py-2">{{ section.code }}</td>
-                            <td class="py-2">{{ section.gradeLevel.name }}</td>
-                            <td class="py-2">{{ section.campus.name }}</td>
-                            <td class="py-2">{{ section.capacity ?? '—' }}</td>
-                            <td class="py-2">
-                                {{ section.status === 'active' ? 'Active' : 'Inactive' }}
-                            </td>
-                            <td v-if="props.canManage" class="space-x-3 py-2 text-right">
-                                <button type="button" class="underline" @click="startEdit(section)">
-                                    Edit<span class="sr-only"> {{ section.name }}</span>
-                                </button>
-                                <button
-                                    v-if="section.status === 'active'"
-                                    type="button"
-                                    class="text-red-700 underline"
-                                    @click="askDeactivate(section)"
-                                >
-                                    Deactivate<span class="sr-only"> {{ section.name }}</span>
-                                </button>
-                                <button
-                                    v-else
-                                    type="button"
-                                    class="underline"
-                                    :disabled="statusForm.processing"
-                                    @click="setStatus(section, 'active')"
-                                >
-                                    Reactivate<span class="sr-only"> {{ section.name }}</span>
-                                </button>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div class="relative overflow-x-auto mt-4">
+                    <table class="w-full text-left text-sm">
+                        <caption class="sr-only">
+                            Sections of
+                            {{
+                                yearName
+                            }}
+                        </caption>
+                        <thead class="border-b border-slate-300 text-slate-600">
+                            <tr>
+                                <th scope="col" class="pr-3 py-2">Name</th>
+                                <th scope="col" class="pr-3 py-2">Code</th>
+                                <th scope="col" class="pr-3 py-2">Grade level</th>
+                                <th scope="col" class="pr-3 py-2">Campus</th>
+                                <th scope="col" class="pr-3 py-2">Capacity</th>
+                                <th scope="col" class="pr-3 py-2">Status</th>
+                                <th v-if="props.canManage" scope="col" class="pr-3 py-2">
+                                    <span class="sr-only">Actions</span>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-200">
+                            <tr v-for="section in props.sections.data" :key="section.id">
+                                <td class="pr-3 py-2 font-medium">{{ section.name }}</td>
+                                <td class="pr-3 py-2">{{ section.code }}</td>
+                                <td class="pr-3 py-2">{{ section.gradeLevel.name }}</td>
+                                <td class="pr-3 py-2">{{ section.campus.name }}</td>
+                                <td class="pr-3 py-2">{{ section.capacity ?? '—' }}</td>
+                                <td class="pr-3 py-2">
+                                    {{ section.status === 'active' ? 'Active' : 'Inactive' }}
+                                </td>
+                                <td v-if="props.canManage" class="pr-3 space-x-3 py-2 text-right">
+                                    <button
+                                        type="button"
+                                        class="underline"
+                                        @click="startEdit(section)"
+                                    >
+                                        Edit<span class="sr-only"> {{ section.name }}</span>
+                                    </button>
+                                    <button
+                                        v-if="section.status === 'active'"
+                                        type="button"
+                                        class="text-red-700 underline"
+                                        @click="askDeactivate(section)"
+                                    >
+                                        Deactivate<span class="sr-only"> {{ section.name }}</span>
+                                    </button>
+                                    <button
+                                        v-else
+                                        type="button"
+                                        class="underline"
+                                        :disabled="statusForm.processing"
+                                        @click="setStatus(section, 'active')"
+                                    >
+                                        Reactivate<span class="sr-only"> {{ section.name }}</span>
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
                 <Pagination :links="props.sections.links" />
             </template>
 

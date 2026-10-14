@@ -346,7 +346,7 @@ function saveTiming() {
             <h2 class="text-sm font-semibold">Private conversations</h2>
             <p class="mt-1 text-xs text-slate-400">
                 Controls whether staff with the relevant permission may start a private conversation
-                directly with a Guardian or Student who has a linked School OS account. A linked
+                directly with a Guardian or Student who has a linked Lycenza account. A linked
                 account alone never grants this on its own -- the staff member must also hold the
                 matching permission, re-checked on every conversation started.
             </p>

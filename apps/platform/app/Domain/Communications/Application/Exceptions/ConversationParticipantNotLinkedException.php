@@ -14,6 +14,6 @@ class ConversationParticipantNotLinkedException extends CommunicationException
 {
     public function __construct()
     {
-        parent::__construct('This participant has no active School OS account link and cannot join a private conversation.');
+        parent::__construct('This participant has no active Lycenza account link and cannot join a private conversation.');
     }
 }

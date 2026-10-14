@@ -1,6 +1,6 @@
 Hello {{ $guardianFirstName }},
 
-You've been invited to create a School OS account for {{ $schoolName }}.
+You've been invited to create a Lycenza account for {{ $schoolName }}.
 
 Use the link below to set up your account:
 {{ $acceptanceUrl }}

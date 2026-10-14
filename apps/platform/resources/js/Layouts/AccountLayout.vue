@@ -122,8 +122,8 @@ const accountLinkClass =
                     data-testid="shell-school"
                     >{{ navigation.school.name }}</span
                 >
-                <div class="ml-auto flex flex-wrap items-center gap-x-4 gap-y-2">
-                    <span class="min-w-0 truncate">
+                <div class="ml-auto flex min-w-0 max-w-full flex-wrap items-center gap-x-4 gap-y-2">
+                    <span class="min-w-0 max-w-full truncate">
                         <span class="font-medium text-slate-900">{{ user.name }}</span>
                         <span class="ml-1 text-slate-500">{{ user.email }}</span>
                     </span>

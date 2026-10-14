@@ -19,6 +19,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -43,14 +44,25 @@ class LibraryCirculationController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability('library.circulation.view', $school);
 
+        // SWC.5 (ADR 0073 section 20.2): returned loans are listable too --
+        // the same `status` filter `/api/v1` already offers under this same
+        // capability -- so a returned loan (and, with `library.fines.view`, its
+        // fine) stays findable after its check-in. Loans only: never a fine
+        // list (owner decision X2).
+        $validated = $request->validate(['status' => ['sometimes', Rule::in(['active', 'returned'])]]);
+        $status = $validated['status'] ?? 'active';
+
         $loans = LibraryLoan::query()
             ->with(['copy.title', 'student'])
-            ->where('status', 'active')
-            ->orderBy('due_at')
-            ->paginate(20);
+            ->where('status', $status)
+            ->when($status === 'active', fn ($q) => $q->orderBy('due_at'), fn ($q) => $q->orderByDesc('checked_in_at'))
+            ->orderBy('id')
+            ->paginate(20)
+            ->withQueryString();
 
         return Inertia::render('App/Library/Circulation/Index', [
             'loans' => $loans->through(fn (LibraryLoan $l) => $this->presentLoan($l)),
+            'status' => $status,
             'canManage' => $capabilities->canInSchool($context->actor(), 'library.circulation.manage', $school),
         ]);
     }
@@ -180,6 +192,7 @@ class LibraryCirculationController extends Controller
             'checkedOutAt' => $loan->checked_out_at->toDateString(),
             'dueAt' => $loan->due_at->toDateString(),
             'isOverdue' => $loan->isOverdue(),
+            'returnedAt' => $loan->checked_in_at?->toDateString(),
         ];
     }
 }

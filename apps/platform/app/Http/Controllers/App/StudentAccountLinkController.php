@@ -85,7 +85,7 @@ class StudentAccountLinkController extends Controller
         $membership = SchoolMembership::query()->find($validated['school_membership_id']);
 
         if ($membership === null) {
-            throw ValidationException::withMessages(['school_membership_id' => ['That School OS account could not be found.']]);
+            throw ValidationException::withMessages(['school_membership_id' => ['That Lycenza account could not be found.']]);
         }
 
         try {

@@ -14,6 +14,6 @@ class CrossSchoolMembershipLinkException extends AccountLinkException
 {
     public function __construct()
     {
-        parent::__construct('That School OS account does not belong to this School.');
+        parent::__construct('That Lycenza account does not belong to this School.');
     }
 }

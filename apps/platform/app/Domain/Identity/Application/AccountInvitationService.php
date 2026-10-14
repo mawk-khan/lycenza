@@ -219,7 +219,7 @@ class AccountInvitationService
             purpose: EmailPurpose::AccountInvitation,
             sourceId: $invitation->id,
             recipient: $email,
-            subject: "You're invited to {$school->name} on School OS",
+            subject: "You're invited to {$school->name} on Lycenza",
             text: view('emails.identity.guardian-account-invitation', $view)->render(),
             html: view('emails.identity.guardian-account-invitation-html', $view)->render(),
             expiresAt: $invitation->expires_at,

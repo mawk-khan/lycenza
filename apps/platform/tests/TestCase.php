@@ -2,7 +2,9 @@
 
 namespace Tests;
 
+use App\Models\Role;
 use App\Models\School;
+use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\LocalCatalogueFixtures;
 use Carbon\CarbonImmutable;
@@ -64,6 +66,12 @@ abstract class TestCase extends BaseTestCase
     /** @var array<string, mixed>|null the two connections' configuration as the test began (verified by TestDatabaseGuard at boot) */
     private ?array $bootConnections = null;
 
+    /** @var list<string> Users this test created in-process (see ownedUserIds()) */
+    private array $ownedUserIds = [];
+
+    /** @var list<string> Roles this test created in-process (see ownedRoleIds()) */
+    private array $ownedRoleIds = [];
+
     /**
      * SR.1 (ADR 0071 §11): the local/testing catalogue fixture seam is
      * installed once per process, through the verified admin connection,
@@ -83,6 +91,13 @@ abstract class TestCase extends BaseTestCase
         $this->testStartedAt = CarbonImmutable::now()->subSecond();
         $this->bootConnections = config()->array('database.connections');
 
+        User::created(function (User $user): void {
+            $this->ownedUserIds[] = (string) $user->getKey();
+        });
+        Role::created(function (Role $role): void {
+            $this->ownedRoleIds[] = (string) $role->getKey();
+        });
+
         // Registered after DatabaseTransactions' own rollback callback, so
         // it runs once this test's uncommitted rows are gone.
         $this->beforeApplicationDestroyed(fn () => $this->purgeCommittedPlatformRoleFixtures());
@@ -96,6 +111,31 @@ abstract class TestCase extends BaseTestCase
         }
 
         parent::tearDown();
+    }
+
+    /**
+     * SWC.5 (ADR 0073 section 20.9): a committing test (`$connectionsToTransact
+     * = []`) cleans up the Users and Roles IT created -- never "every row
+     * created since this test started". Another committing test may leave
+     * residue on purpose (a posted payroll run, which freeze triggers keep,
+     * and its preparer User); when the deterministic CI shards rebalance,
+     * that test can run a second before this one, and a time-window delete
+     * then sweeps up its User and fails on the foreign key (the SWC.3
+     * StaffRoleGrantorRaceTest failure). Ids are recorded from the Eloquent
+     * `created` event in this process; no subprocess script creates a User
+     * or a Role.
+     *
+     * @return list<string>
+     */
+    protected function ownedUserIds(): array
+    {
+        return $this->ownedUserIds;
+    }
+
+    /** @return list<string> */
+    protected function ownedRoleIds(): array
+    {
+        return $this->ownedRoleIds;
     }
 
     /**

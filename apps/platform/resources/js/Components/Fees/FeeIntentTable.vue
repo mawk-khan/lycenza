@@ -16,31 +16,33 @@ defineProps<{ rows: FeeIntentRow[]; caption: string; showScope?: boolean }>();
 
 <template>
     <p v-if="rows.length === 0" class="text-sm text-slate-600">No fee intent recorded.</p>
-    <table v-else class="w-full text-left text-sm">
-        <caption class="sr-only">
-            {{
-                caption
-            }}
-        </caption>
-        <thead class="text-xs text-slate-600">
-            <tr>
-                <th scope="col" class="py-1">Academic year</th>
-                <th scope="col" class="py-1">Fee head</th>
-                <th v-if="showScope" scope="col" class="py-1">Mapped from</th>
-                <th scope="col" class="py-1">Recorded because</th>
-                <th scope="col" class="py-1">Result</th>
-                <th scope="col" class="py-1">Recorded on</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr v-for="(row, index) in rows" :key="index">
-                <td class="py-1">{{ row.academicYear ?? '—' }}</td>
-                <td class="py-1">{{ feeHeadText(row.feeHead) }}</td>
-                <td v-if="showScope" class="py-1">{{ scopeLabel(row.mappingScope) }}</td>
-                <td class="py-1">{{ reasonLabel(row.linkReason) }}</td>
-                <td class="py-1">{{ outcomeLabel(row.selectionOutcome) }}</td>
-                <td class="py-1">{{ row.recordedAt ?? '—' }}</td>
-            </tr>
-        </tbody>
-    </table>
+    <div v-else class="relative overflow-x-auto">
+        <table class="w-full text-left text-sm">
+            <caption class="sr-only">
+                {{
+                    caption
+                }}
+            </caption>
+            <thead class="text-xs text-slate-600">
+                <tr>
+                    <th scope="col" class="pr-3 py-1">Academic year</th>
+                    <th scope="col" class="pr-3 py-1">Fee head</th>
+                    <th v-if="showScope" scope="col" class="pr-3 py-1">Mapped from</th>
+                    <th scope="col" class="pr-3 py-1">Recorded because</th>
+                    <th scope="col" class="pr-3 py-1">Result</th>
+                    <th scope="col" class="pr-3 py-1">Recorded on</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="(row, index) in rows" :key="index">
+                    <td class="pr-3 py-1">{{ row.academicYear ?? '—' }}</td>
+                    <td class="pr-3 py-1">{{ feeHeadText(row.feeHead) }}</td>
+                    <td v-if="showScope" class="pr-3 py-1">{{ scopeLabel(row.mappingScope) }}</td>
+                    <td class="pr-3 py-1">{{ reasonLabel(row.linkReason) }}</td>
+                    <td class="pr-3 py-1">{{ outcomeLabel(row.selectionOutcome) }}</td>
+                    <td class="pr-3 py-1">{{ row.recordedAt ?? '—' }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
 </template>

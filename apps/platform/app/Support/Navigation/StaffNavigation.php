@@ -42,6 +42,32 @@ final class StaffNavigation
     /** Groups rendered by the account bar, never as a navigation group. */
     public const ACCOUNT_GROUP = 'account';
 
+    /** The hub entries whose page authorizes its own any-of requirement. */
+    public const HUBS = ['finance', 'hr', 'payroll'];
+
+    /**
+     * SWC.5 (ADR 0073 section 20.3, F-1): a hub page groups links only, so
+     * it opens exactly when its navigation entry would be offered -- at
+     * least one capability it renders a link for. One source for both, so
+     * the menu and the page can never disagree.
+     *
+     * @return list<string>
+     */
+    public static function hubRequirement(string $key): array
+    {
+        if (! in_array($key, self::HUBS, true)) {
+            throw new \InvalidArgumentException("{$key} is not a navigation hub.");
+        }
+
+        foreach (self::entries() as $entry) {
+            if ($entry->key === $key) {
+                return $entry->any;
+            }
+        }
+
+        throw new \LogicException("Hub entry {$key} is missing from the catalogue.");
+    }
+
     /** @return list<E> */
     public static function entries(): array
     {
@@ -97,15 +123,20 @@ final class StaffNavigation
             new E('enrollment-rollovers', 'people', 'Enrollment rollovers', 'app.enrollment-rollovers.index', all: ['enrollments.view', 'enrollments.rollovers.view']),
             // Hub pages: any one view capability shows the entry; the hub
             // hides the sub-areas the actor cannot see.
-            new E('hr', 'people', 'HR', 'app.hr.index', any: ['hr.employees.view', 'hr.departments.view', 'hr.positions.view']),
+            // The three hubs (SWC.5, ADR 0073 section 20.3): `any` is the set
+            // of capabilities the hub renders a link for, and the hub page
+            // authorizes the same entry (hubRequirement()). Payroll keeps
+            // `payroll.runs.view` (its Phase 9 contract) and never names
+            // `payroll.statutory.*` (E45: no primary entry).
+            new E('hr', 'people', 'HR', 'app.hr.index', any: ['hr.employees.view', 'hr.employees.manage', 'hr.departments.view', 'hr.positions.view', 'hr.categories.view']),
             new E('leave', 'people', 'Leave', 'app.leave.requests', all: ['hr.leave.view'], activeWhen: ['app.leave.*']),
             new E('leave-approvals', 'people', 'Leave approvals', 'app.leave.approvals', all: ['hr.leave.approve'], activeWhen: ['app.leave.approvals*']),
             new E('staff-attendance', 'people', 'Staff attendance', 'app.staff-attendance.register', all: ['hr.staff_attendance.view'], activeWhen: ['app.staff-attendance.*']),
 
-            new E('finance', 'finance', 'Finance', 'app.finance.index', any: ['finance.ledger.view', 'finance.charges.view', 'finance.payments.view']),
+            new E('finance', 'finance', 'Finance', 'app.finance.index', any: ['finance.ledger.view', 'finance.charges.view', 'finance.payments.view', 'finance.payments.record', 'finance.fee_structures.view', 'finance.fee_concessions.view']),
             // Statutory payroll stays a Payroll sub-link behind
             // payroll.statutory.view, which no role holds (E45).
-            new E('payroll', 'finance', 'Payroll', 'app.payroll.index', any: ['payroll.structures.view', 'payroll.compensation.view', 'payroll.runs.view', 'payroll.accounting.manage']),
+            new E('payroll', 'finance', 'Payroll', 'app.payroll.index', any: ['payroll.structures.view', 'payroll.compensation.view', 'payroll.runs.view', 'payroll.periods.manage', 'payroll.accounting.manage']),
 
             new E('transport-routes', 'operations', 'Routes', 'app.transport.routes.index', all: ['transport.routes.view'], section: 'Transport'),
             new E('transport-vehicles', 'operations', 'Vehicles', 'app.transport.vehicles.index', all: ['transport.vehicles.view'], section: 'Transport'),
