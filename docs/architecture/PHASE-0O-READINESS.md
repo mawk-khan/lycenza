@@ -3124,3 +3124,33 @@ inventory (ADR 0073 §20.12) covers:
 
 **E16.** Valid through **2026-11-09**; publication blocks from
 **2026-11-10**; the successor cycle should begin around **2026-10-30**.
+
+## 63. Phase 0O / PPR.0 — Pre-Production / Staging Readiness contract (2026-10-14)
+
+**PPR.0 CONTRACT PUBLISHED / IMPLEMENTATION NOT STARTED** (ADR 0074,
+documentation only).
+
+**No change of state:**
+- No register row changes status.
+- O1 stays **NOT SATISFIED**, and Phase 0O stays open.
+
+**What ADR 0074 records:**
+- **The exact remaining §5 conditions** (§2): 22 mandatory rows open. E11
+  is the hard blocker; E03 and E24 are complete.
+- **A per-row classification** (§3): what blocks staging, UAT,
+  qualification and launch, and which rows are post-v1.
+- **The staging contract** (§4–§7):
+  - recommended `staging` as a first-class `APP_ENV` with production
+    hardening on (finding F-2: today `APP_ENV=staging` disables the boot
+    guard, HSTS, forced HTTPS and the email refusals);
+  - synthetic data only;
+  - email captured, never delivered, until the email slice.
+- **The E16 successor process** (§8). Valid through **2026-11-09**;
+  publication blocks from **2026-11-10**; the successor cycle begins around
+  **2026-10-30**; it recurs until E02.
+- **The slice plan** PPR.1–PPR.11 plus PPR-E16, with a dependency graph
+  and critical path (§23). E17 is the external dependency and E19's ≥ 14
+  qualifying days the longest window.
+- **Decisions** OD-PPR-1–21 (§22).
+- **Findings** F-1–F-8 (§21), reported, not fixed. Notably F-1: statutory
+  payroll calculation and posting have no runtime trigger.

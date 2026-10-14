@@ -6,7 +6,8 @@
   STRUCTURE WEB SURFACES — COMPLETE (2026-10-14, §18). SWC.3 OPERATIONAL FEE
   WEB SURFACES — COMPLETE (2026-10-14, §19). SWC.5 CLOSURE AUDIT — COMPLETE
   (2026-10-14, §20). SWC — CLOSED / DEVELOPMENT COMPLETE. Next programme:
-  Pre-Production / Staging Readiness — NOT STARTED.**
+  Pre-Production / Staging Readiness — NOT STARTED.** *(2026-10-14: its
+  contract is published as ADR 0074, PPR.0; implementation not started.)*
 - Date: 2026-10-14
 - Programme: **SWC — Staff Web Surface Completion** (`MASTER-ROADMAP.md`,
   post-foundation programme 8).

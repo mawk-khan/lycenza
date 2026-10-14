@@ -711,6 +711,34 @@ E26–E28.
 - No code, configuration, workflow, GitHub setting or infrastructure is
   changed by this ADR.
 
+## Note — PPR.0: the Pre-Production / Staging Readiness programme contract (2026-10-14)
+
+**No row changes status.** ADR 0074 is the programme that produces this
+register's outstanding evidence.
+
+**It classifies every row** (ADR 0074 §3) by what it blocks: PPR start,
+environment, staging, UAT, qualification, launch, one feature, or post-v1.
+
+**It sequences the open rows into slices PPR.1–PPR.11 and the parallel
+PPR-E16 track:**
+- E05, E08, E09 → PPR.2;
+- E13–E15 → PPR.3;
+- E07 → PPR.4;
+- E10–E12 → PPR.5;
+- E17–E20 → PPR.6;
+- E22, E23 → PPR.7;
+- E21, E30–E34, E45, E47 → PPR.10;
+- E02 → PPR.11.
+
+**It records the open decision on E30–E34** (ADR 0074 §17). A row may
+close only by:
+- **(a)** a qualified answer; or
+- **(b)** a future amendment of this ADR making it CONDITIONAL, backed by a
+  code-level production refusal.
+
+"Feature unused" is never clearance. E30 (receipts are issued on every
+payment) and E32 (no RTE feature exists) cannot practically take (b).
+
 ## Note — Phase 0O.12A (ADR 0059, 2026-09-28)
 
 **E24's decision is made.** ADR 0059 contracts two flows:
