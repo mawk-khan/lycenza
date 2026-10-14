@@ -30,6 +30,16 @@ persistent dry-run/eligibility/conflict-detection engine
 Conflict Engine (Phase 1B.7B)" below) — still zero Enrollment mutation,
 no execution, no HTTP/API, and no UI for rollover (Phase 1B.7C onward).
 
+*(2026-10-14, SWC.0 drift correction, ADR 0073 §12. The status above
+predates Phase 1B.7C–1B.7F. Rollover execution, bulk execution, its API and
+its web UI are implemented (`EnrollmentRollover*Service`,
+`Pages/App/EnrollmentRollovers`). Execution is synchronous and bounded, at
+100 items per request. Only queue-backed execution remains deferred. The
+sections for those phases below are current. Admissions, Attendance, Fees,
+Examinations (RES.1), Transport/Hostel and the development-only Guardian
+portal now consume enrollments. That supersedes the closing "future
+modules" statements in this file.)*
+
 ## Identity vs enrollment boundary
 
 Phase 1A established `Student` as a **permanent, School-level identity**

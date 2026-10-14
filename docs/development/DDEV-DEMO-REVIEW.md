@@ -562,6 +562,19 @@ Platform Admin.
 
 ## 13. Interactive review map
 
+*(2026-10-14, SWC.0, ADR 0073: the "(no nav)" and API-only rows below
+are scheduled. SWC.1 adds capability-driven navigation; SWC.2 covers the
+Academic Structure screens; SWC.3 covers the OPF configuration screens.
+Sections 13–15 are rewritten at SWC.5. Known drift until then:*
+- *Payments are no longer read-only. Offline payment recording has a page
+  (Finance, 0O.11A).*
+- *Staff accounts (Settings → Staff accounts) grants the 17 School roles.*
+- *A development-only Guardian portal (POR.1–POR.4) and HRX.4 staff
+  self-service exist.*
+- *Account security is linked from the account bar.*
+- *Rows are missing for Leave, Staff attendance, the My-* pages, Teaching
+  assignments, Domains, API clients and the Guardian portal.)*
+
 | Module | URL / navigation | Persona | Reviewable? | Notes |
 |---|---|---|---|---|
 | School settings / setup | Dashboard -> School settings, School setup | School Admin | Yes | Terms, sections, rooms, departments are API-only (no pages) |
@@ -609,6 +622,9 @@ Platform Admin.
   dashboard. Teachers have the four owned "My ..." surfaces (TCH, ADR 0063)
   and no other self-service (no HRX leave/payslip).
 - **Role and member management**: no UI; roles/assignments are DB-only.
+  *(2026-10-14: superseded — Settings → Staff accounts, 0O.12B + SR; the
+  Guardian portal (POR, development only) and HRX.4 self-service also
+  exist, correcting the bullet above. Full rewrite at SWC.5.)*
 - **Feature flags**: tables and resolver exist; no flags seeded or used.
 - **Statutory payroll** (Phase 9.6): screens exist; no statutory
   configuration/identifiers are seeded, so they render empty.

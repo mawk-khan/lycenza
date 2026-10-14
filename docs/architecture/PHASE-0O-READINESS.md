@@ -34,6 +34,16 @@ No production partner route is enabled.
 resolved by ADR 0050 (Production Infrastructure, Secrets & Recovery
 Contract) — section 17. Phase 0O.4A implements its repository side.
 
+**Update 2026-10-14 — SWC.0 drift correction (ADR 0073 §12).** The status
+line and updates above stop at 0O.4 and are historical.
+- **Current status:** Phase 0O is ACTIVE — CLOSEOUT BLOCKED.
+- **Decisions:** O2–O16 are resolved; O1 is RESOLVED AS DEFINITION OF
+  DONE — NOT SATISFIED (§44).
+- **Register:** ADR 0058 §6, E01–E47, is the authoritative evidence
+  register. E03 is EVIDENCE_COMPLETE (§55).
+- **Latest sections:** §57–§60 (email) and §61 (SWC.0, Pre-Production /
+  Staging Readiness recorded).
+
 ## 1. Title and repository-defined scope
 
 `docs/roadmap/MASTER-ROADMAP.md`, "Phase 0O — External Surface and
@@ -329,6 +339,10 @@ No vendor or provider is chosen by this audit.
 | S4 Broader third-party integrations | Outbound webhooks production-grade; email implemented (O13); no other provider; no production partner scope | **SCOPE RESOLVED (ADR 0057)**: email in v1, every other category deferred / not in v1 / cancelled | none — 0O.11A manual/offline payment recording is **COMPLETE (repository, §39)**; it is a Finance correction, not an integration | none for the scope; legal for any future provider |
 
 ## 10. Proposed sequence (not started)
+
+*(2026-10-14, SWC.0 drift correction: historical. Every step below was
+completed or superseded; see §13–§60. The forward sequence is ADR 0073
+§13 and §61.)*
 
 1. **0O.1 — Production Bootstrap & Fail-Closed Configuration Foundation**
    (READY; repository-only, no provider, no deployment):
@@ -2277,7 +2291,9 @@ The gate's own status (BLOCKED) is unchanged.
 - **E16: DECISION_REQUIRED.** A fresh owner/security decision is needed
   first. Nothing is renewed.
 
-**Current Phase 0O statuses (carried forward):**
+**Current Phase 0O statuses (carried forward):** *(as of 2026-09-29; since
+superseded — E03 CLOSED (§55), E16 CURRENT through 2026-11-09 (§50), E18
+DEVELOPMENT IMPLEMENTED (§57, §60); SWC.0 drift note, 2026-10-14)*
 
 | Item | Status |
 |---|---|
@@ -3036,3 +3052,47 @@ register status, and none stops blocking O1.
 - **Superseded for development only:** the E18 "does not start" and
   "blocked on E17" statements, including §45 above.
 - **Regression:** docs-only, so the regression counter is unchanged.
+
+## 61. Phase 0O / SWC.0 — Staff Web Surface Completion contract; Pre-Production / Staging Readiness recorded (2026-10-14)
+
+**Status: SWC — CONTRACT PUBLISHED / IMPLEMENTATION NOT STARTED.** No
+ADR 0058 row changes status, and none stops blocking O1.
+
+- **Baseline:** `origin/main` `ce2fa22d`, equal to local `main` and `HEAD`.
+  - **Tree:** clean, one worktree, the historical stash untouched.
+  - **Ruleset:** `main-protection` (24909660) active, no bypass actor.
+  - **CI:** `Main protection drift` green. Integration and main `CI gate`
+    green on that exact SHA.
+- **Record:** ADR 0073 (SWC.0) and `MASTER-ROADMAP.md` programme 8.
+- **Why:** the Post-Development Roadmap & Pre-Production Readiness Audit
+  (2026-10-14) found the seven product programmes development-closed. It
+  also found a material staff browser-operability gap, revalidated in ADR
+  0073 §2:
+  - Academic Structure screens and edit/deactivate are missing;
+  - OPF configuration is API-only;
+  - nine implemented modules have no navigation;
+  - Phase 0A/0B framing remains on `/` and the Dashboard.
+- **Not readiness work:** SWC is UI over existing Application services. It
+  needs no provider, deployment, secret or legal determination (ADR 0073 §3).
+- **Next programme, recorded and not started: Pre-Production / Staging
+  Readiness** (ADR 0073 §13.2). It starts after SWC closure or an explicit
+  owner override. It will consolidate:
+  - E05 and E07–E15, with the E11 restore drill;
+  - the E16 successor;
+  - E21–E23, E29 and E30–E34;
+  - PPE email readiness (E17–E20);
+  - E02/O16;
+  - the staging/environment contract, `APP_ENV` semantics and staging data
+    policy;
+  - production secrets and observability;
+  - release/rollback evidence and the final qualification regression.
+
+  It will also register the untracked risks listed in ADR 0073 §13.2.
+- **E16:** `OWNER-0O-E16-2026-10-11` is valid through 2026-11-09.
+  - From 2026-11-10 no `CI gate` can be green, so every publication,
+    including SWC slices, is blocked until a successor decision is
+    published.
+  - The successor cycle should begin around 2026-10-30, in parallel with
+    SWC.
+- **Code:** none. **Regression:** docs-only, so the regression counter is
+  unchanged.

@@ -28,6 +28,27 @@ first module to actually use its `Domain/Application/Infrastructure/Http`
 layout), and ADR 0001 for why this is one modular monolith rather than
 separate services.
 
+*(2026-10-14, SWC.0 drift correction, ADR 0073 §12. The paragraph above
+is a historical record. Current facts:*
+- *Admissions is implemented (`app/Domain/Admissions`, including OPF.3).
+  Most Layer 2–6 modules below are implemented. Health and Safety remain
+  unimplemented behind their legal/security gates.*
+- *HR row: Payroll (Phase 9, 9.6) and Leave / staff attendance (HRX.1–HRX.6)
+  are implemented. HRX.5 loss-of-pay is a mechanism, legally inactive.*
+- *Attendance and Teaching Assignments rows: E33 / TCH-L1 was determined
+  APPROVED WITH CONDITIONS on 2026-10-07 (ADR 0063 §42–§44). Production
+  teacher grants still wait on re-verification, E21 and the O1 checklist.
+  A development-only Guardian attendance view exists (POR.2). There is
+  no Student portal.*
+- *Transport, Library and Hostel rows: Transport fees (OPF.1), Hostel fees
+  (OPF.2) and Library overdue fines (OPF.4) are implemented (ADR 0067).
+  Reservations, renewals and Hostel deposits stay deferred. Their browser
+  configuration surfaces are SWC.3 (ADR 0073).*
+- *Documents row: production owner activation covers the Employee,
+  `learning_content_id` and `assignment_id` arms, not Employee only.*
+- *AI Platform row: Phase 0M is CLOSED FOR PHASE ZERO, with real providers
+  deferred post-v1 (ADR 0061). The reopening gate stays blocked.)*
+
 ## How to read this document
 
 Modules are grouped into layers. **A module may depend on modules in a

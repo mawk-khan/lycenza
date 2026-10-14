@@ -1204,3 +1204,24 @@ database suites, the static and release gates, `platform:verify-database`,
 a rollback and reapply of the five OPF migrations to an identical schema
 snapshot, and the full canonical isolated regression on the closure tree.
 The counts are recorded in the OPF.5 commit.
+
+## Amendment note — browser surfaces assigned to SWC.3 (2026-10-14, SWC.0, ADR 0073)
+
+Documentation only. No OPF rule changes.
+
+- **Browser surfaces.** OPF.1–OPF.3 record "There is no Inertia page", and
+  OPF.4 is silent. The OPF *side effects* already run from existing pages
+  (Transport assignment, Hostel residency, admission conversion, Library
+  check-in) through the same Application services. But no page configures
+  or shows:
+  - the fee-head mappings;
+  - fee intent;
+  - the fine policy;
+  - fines or voids.
+
+  These browser surfaces are SWC.3 (ADR 0073 §2.2, §10). Production stays
+  gated by E21, E30–E32 and E34, exactly as in §22 and §31.8.
+- **§30.4 correction.** §30.4 says "`library.fines.*` … School Admin only".
+  Since ADR 0071 (SR.3), the `librarian` role also holds `library.fines.view`.
+  `library.fines.manage` and `.void` remain School Admin only
+  (`ProductionRoleWorkflowsTest`).
