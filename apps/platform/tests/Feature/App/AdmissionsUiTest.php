@@ -107,7 +107,7 @@ class AdmissionsUiTest extends TestCase
 
         $this->get('/app')->assertInertia(fn ($page) => $page
             ->component('App/Dashboard')
-            ->where('nav.canViewAdmissions', true)
+            ->where('navigation', self::nav(shown: ['admissions']))
         );
     }
 
@@ -119,7 +119,7 @@ class AdmissionsUiTest extends TestCase
         $this->createMembership($user, $school);
         $this->activate($user, $school);
 
-        $this->get('/app')->assertInertia(fn ($page) => $page->where('nav.canViewAdmissions', false));
+        $this->get('/app')->assertInertia(fn ($page) => $page->where('navigation', self::nav(hidden: ['admissions'])));
     }
 
     // ==================================================================

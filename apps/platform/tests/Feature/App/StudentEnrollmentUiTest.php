@@ -201,7 +201,7 @@ class StudentEnrollmentUiTest extends TestCase
 
         $this->get('/app')->assertInertia(fn ($page) => $page
             ->component('App/Dashboard')
-            ->where('nav.canViewEnrollments', true)
+            ->where('navigation', self::nav(shown: ['enrollments']))
         );
     }
 

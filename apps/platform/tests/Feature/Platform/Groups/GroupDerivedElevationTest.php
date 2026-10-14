@@ -56,8 +56,8 @@ class GroupDerivedElevationTest extends TestCase
         $admin = $this->groupAdmin($group);
 
         $this->actingAs($admin)->get('/app')->assertInertia(fn (AssertableInertia $p) => $p
-            ->where('groups.canViewOwn', true)
-            ->where('groups.canGovern', false)
+            ->where('navigation', self::nav(shown: ['school-groups']))
+            ->where('navigation', self::nav(hidden: ['platform-groups']))
             ->where('platformElevation.canStart', false)
         );
         $this->get('/app/groups')->assertOk()->assertInertia(fn (AssertableInertia $p) => $p
@@ -103,7 +103,7 @@ class GroupDerivedElevationTest extends TestCase
         $this->assertSame([], app(CapabilityResolver::class)->groupCapabilities($member, $group));
         $this->assertFalse(app(CapabilityResolver::class)->can($member, 'group.schools.view', $schoolA));
 
-        $this->actingAs($member)->get('/app')->assertInertia(fn (AssertableInertia $p) => $p->where('groups.canViewOwn', false));
+        $this->actingAs($member)->get('/app')->assertInertia(fn (AssertableInertia $p) => $p->where('navigation', self::nav(hidden: ['school-groups'])));
         $this->get('/app/groups')->assertInertia(fn (AssertableInertia $p) => $p->has('groups', 0));
         $this->get("/app/groups/{$group->id}")->assertNotFound();
         $this->post("/app/groups/{$group->id}/elevation", ['target' => $schoolA->id, 'reason_code' => 'operational_support', 'confirmed' => '1', 'code' => '000000'])

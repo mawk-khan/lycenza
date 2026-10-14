@@ -42,8 +42,9 @@ docs/roadmap             MASTER-ROADMAP.md
    calls an Application-layer service, and returns a response. Business
    logic belongs in `app/Domain/<Module>/Application/`, not in
    controllers, and not in Eloquent models beyond basic relationships/
-   casts. See `apps/platform/app/Http/Controllers/SystemStatusController.php`
-   for the shape a controller should stay close to, even as it grows.
+   casts. See `apps/platform/app/Http/Controllers/HomeController.php`
+   (which replaced the Phase 0A `SystemStatusController` in SWC.1, ADR
+   0073) for the shape a controller should stay close to, even as it grows.
 
 4. **Explicit module boundaries, no bidirectional coupling.** Follow
    `docs/architecture/DOMAIN-MAP.md`'s dependency directions. A module

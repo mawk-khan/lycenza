@@ -279,8 +279,8 @@ class StudentAdminUiTest extends TestCase
 
         $this->get('/app')->assertInertia(fn ($page) => $page
             ->component('App/Dashboard')
-            ->where('nav.canViewStudents', true)
-            ->where('nav.canViewGuardians', true)
+            ->where('navigation', self::nav(shown: ['students']))
+            ->where('navigation', self::nav(shown: ['guardians']))
         );
     }
 }

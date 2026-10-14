@@ -319,11 +319,11 @@ class GuardianPortalAuthorizationTest extends TestCase
         $school = $this->createSchool();
         $p = $this->portalGuardian($school);
         $this->signInTo($p['user'], $school)->get('/app')->assertOk()
-            ->assertInertia(fn ($page) => $page->where('nav.canViewGuardianPortal', true)->where('nav.canViewSchoolSetup', false)->where('nav.canViewCommunications', false));
+            ->assertInertia(fn ($page) => $page->where('navigation', self::nav(shown: ['portal-communications', 'portal-conversations']))->where('navigation', self::nav(hidden: ['school-setup']))->where('navigation', self::nav(hidden: ['communications'])));
 
         $staff = $this->createUserWithCapabilities($school, ['communications.view', 'school.profile.view']);
         $this->signInTo($staff, $school)->get('/app')->assertOk()
-            ->assertInertia(fn ($page) => $page->where('nav.canViewGuardianPortal', false)->where('nav.canViewSchoolSetup', true));
+            ->assertInertia(fn ($page) => $page->where('navigation', self::nav(hidden: ['portal-communications', 'portal-conversations']))->where('navigation', self::nav(shown: ['school-setup'])));
     }
 
     #[Test]

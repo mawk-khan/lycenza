@@ -87,8 +87,8 @@ class MyAssignmentsUiTest extends TestCase
         [$user] = $this->contentTeacher($w);
         [$noCapability] = $this->contentTeacher($w, roleKey: 'principal');
 
-        $this->actor($w, $user)->get('/app')->assertInertia(fn (AssertableInertia $page) => $page->where('nav.canUseMyAssignments', true));
-        $this->actor($w, $noCapability)->get('/app')->assertInertia(fn (AssertableInertia $page) => $page->where('nav.canUseMyAssignments', false));
+        $this->actor($w, $user)->get('/app')->assertInertia(fn (AssertableInertia $page) => $page->where('navigation', self::nav(shown: ['my-assignments'])));
+        $this->actor($w, $noCapability)->get('/app')->assertInertia(fn (AssertableInertia $page) => $page->where('navigation', self::nav(hidden: ['my-assignments'])));
 
         $this->actor($w, $noCapability)->get('/app/my-assignments')->assertForbidden();
         foreach (['/app/learning-content', '/app/assignments', '/app/teaching-assignments', '/app/students', '/app/timetable-schedule'] as $page) {

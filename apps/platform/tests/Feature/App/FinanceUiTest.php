@@ -490,12 +490,12 @@ class FinanceUiTest extends TestCase
         $viewer = $this->memberWith(['finance.payments.view'], $school);
 
         $this->actingAs($viewer)->get('/app')->assertInertia(fn ($page) => $page
-            ->where('nav.canViewFinance', true)
+            ->where('navigation', self::nav(shown: ['finance']))
         );
 
         $withoutFinance = $this->memberWith([], $school);
         $this->actingAs($withoutFinance)->get('/app')->assertInertia(fn ($page) => $page
-            ->where('nav.canViewFinance', false)
+            ->where('navigation', self::nav(hidden: ['finance']))
         );
     }
 

@@ -204,7 +204,7 @@ class GuardianCommunicationsInboxTest extends TestCase
             $this->getJson('/app/portal/communications')->assertForbidden()
                 ->assertExactJson(['error' => ['code' => 'PORTAL_UNAVAILABLE', 'message' => PortalUnavailableException::MESSAGE, 'status' => 403]]);
             $this->get("/app/portal/communications/announcements/{$notice->id}")->assertForbidden();
-            $this->get('/app')->assertOk()->assertInertia(fn ($page) => $page->where('nav.canViewGuardianPortal', false));
+            $this->get('/app')->assertOk()->assertInertia(fn ($page) => $page->where('navigation', self::nav(hidden: ['portal-communications', 'portal-conversations'])));
             $this->app['env'] = 'testing';
         }
         $this->assertNull($this->readAt($school, $notice, $p['user']), 'Nothing was marked read.');

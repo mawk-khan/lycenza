@@ -111,8 +111,8 @@ class TeachingAssignmentAdminUiTest extends TestCase
     {
         $w = $this->teachingWorld();
 
-        $this->actor($w)->get('/app')->assertInertia(fn (AssertableInertia $page) => $page->where('nav.canViewTeachingAssignments', true));
+        $this->actor($w)->get('/app')->assertInertia(fn (AssertableInertia $page) => $page->where('navigation', self::nav(shown: ['teaching-assignments'])));
         $this->actor($w, $this->createUserWithCapabilities($w['school'], ['timetable.schedule.view']))->get('/app')
-            ->assertInertia(fn (AssertableInertia $page) => $page->where('nav.canViewTeachingAssignments', false));
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('navigation', self::nav(hidden: ['teaching-assignments'])));
     }
 }

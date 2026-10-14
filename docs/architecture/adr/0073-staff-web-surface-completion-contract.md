@@ -1,8 +1,8 @@
 # ADR 0073: Staff Web Surface Completion Contract (SWC.0)
 
 - Status: **Accepted — SWC.0 contract (2026-10-14, documentation only).
-  SWC — CONTRACT PUBLISHED / IMPLEMENTATION NOT STARTED.** SWC.1 starts
-  only after the owner reviews this published contract.
+  Owner decisions X1–X5 frozen (2026-10-14, §16). SWC.1 NAVIGATION SHELL &
+  PRODUCT LANDING SURFACES — COMPLETE (2026-10-14, §17). SWC.2 NEXT.**
 - Date: 2026-10-14
 - Programme: **SWC — Staff Web Surface Completion** (`MASTER-ROADMAP.md`,
   post-foundation programme 8).
@@ -816,3 +816,277 @@ on these tables alone.
 
 None of X1–X5 prevents SWC.1 from starting. X1 must be answered before SWC.2
 freezes its scope. X2 and X5 must be answered before SWC.3.
+
+## 16. Owner decisions X1–X5 (frozen 2026-10-14, at SWC.1 authorisation)
+
+These answer §15. They change no ADR 0058 row.
+
+| # | Decision |
+|---|---|
+| X1 | **Elective Groups — IN for SWC.2.** They get a proper browser/HTTP configuration surface over `ElectiveGroupService`, under `academics.subjects.manage` (§4.3), because the existing elective-enrolment flows depend on them. Not in SWC.1. |
+| X2 | **School-wide Library fine list — OUT of SWC.3.** No new School-wide fine query is created for SWC. Fines stay visible in the Library/loan context unless separately authorised later. |
+| X3 | **Production refusal for E30–E34-gated fee/fine features — DEFERRED TO PRE-PRODUCTION.** SWC.1–SWC.3 neither add nor remove production-refusal logic to resolve E30–E34. The existing legal/readiness state is preserved. |
+| X4 | **User-facing product name: Lycenza.** Stale `School OS` / `Phase 0A` / `Phase 0B` presentation is replaced where SWC.1 owns the surface. No repository-wide rename of classes, environment keys, historical ADR wording or technical identifiers (§17.7). |
+| X5 | **Duplicate-submission protection is required before SWC.3 browser exposure.** SWC.3 audits the carry-forward and fine-policy publish mutations and reuses the existing idempotency/concurrency mechanisms, or adds the smallest compatible protection (§4.5). No SWC.3 form may expose a mutation known to be unsafe under duplicate submission. |
+
+§15's "open" column is superseded by this table.
+
+## 17. SWC.1 — Navigation Shell & Product Landing Surfaces — COMPLETE (2026-10-14)
+
+**Baseline.** `origin/main` = `28ec8bce` (the SWC.0 publication), green
+integration and `main` `CI gate`, ruleset 24909660 active with no bypass
+actor, drift check `ok`.
+
+### 17.1 Previous architecture (replaced)
+
+- **No shell.** `AccountLayout.vue` rendered only an account bar. All
+  navigation was one flat list in `Dashboard.vue`.
+- **Flags.** `DashboardController` sent about 39 `nav.*` booleans, plus
+  `platform.*` and `groups.*` maps, each a `canInSchool`/`canPlatform` check.
+- **Back-links.** 66 pages hard-coded a `← Dashboard` back-link.
+- **Unlinked.** The nine modules in §2.3 had working, capability-gated pages
+  and no link.
+
+### 17.2 The catalogue
+
+- **Entries.** `App\Support\Navigation\StaffNavigation` is the one
+  catalogue (§6.1). Each entry is a `NavigationEntry`: key, group, label,
+  route name, scope (`school`/`platform`/`group`/`account`), an exact /
+  any-of / all-of requirement on EXISTING capability keys, an optional
+  section, active-route patterns, an optional availability guard, and
+  `platformHostOnly`.
+- **Builder.** `NavigationBuilder::forRequest()` evaluates it:
+  - School entries use the active School from `TenantContext`, through one
+    `CapabilityResolver::schoolCapabilities()` read (its existing
+    School-keyed cache; no new cache key);
+  - platform entries use `platformCapabilities()`;
+  - the Group entry uses `groupsWith()` (uncached, rule 84);
+  - Guardian-portal entries also need `PortalAvailability::isAvailable()`
+    and a live ActingGuardian.
+- **Prop.** `HandleInertiaRequests` shares the result as `navigation`
+  through a closure. It is evaluated when the response is built, after the
+  School resolvers and `school-context` have run. It is `null` for guests.
+  The shared `product` prop carries the product name.
+- **Active state.** Decided on the server from the current route name. The
+  most specific matching pattern wins; an exact route name beats a
+  wildcard. Examples: Leave approvals rather than Leave; Grade scales keeps
+  Examinations active.
+- **Empty groups** are never sent.
+
+### 17.3 Groups and entries (65 entries)
+
+**Order:** Guardian portal · My work · School setup · Academics · People ·
+Finance · Operations (sections: Transport, Hostel, Library, Inventory,
+Canteen, Visitors) · Communications · Reports · Administration · School
+Groups · Platform. The two account entries (Account security; API tokens,
+platform host only) render in the account bar.
+
+Every requirement equals the capability the destination page itself checks:
+- **Exact keys:** e.g. `attendance.view`, `examinations.definitions.view`,
+  `hostel.directory.view`, `library.catalogue.view`, `transport.routes.view`,
+  `visitor.directory.view`, `syllabus.view`, `curriculum.delivery.view`,
+  `lms.content.view`, `lms.assignments.view` (the nine previously unlinked
+  modules).
+- **Any-of** for the three hubs: Finance, HR and Payroll.
+- **All-of** for Enrollment rollovers.
+
+`NavigationDestinationsRenderTest` proves the requirement against the page:
+an actor holding exactly that requirement, and nothing else, renders every
+School, platform and account destination. For My class attendance, API
+clients and the platform audit log, current MFA assurance is supplied
+(rule 95).
+
+### 17.4 Context behaviour (§6.2)
+
+- **No active School:** no School entry.
+- **Elevated session:** no School entry, even if a School were somehow in
+  `TenantContext` (the builder checks `ElevationContext` itself).
+- **School custom host:** no platform, Group or API-token entry. The
+  Dashboard's "Enter a School (elevated access)" offer is also hidden there,
+  because elevation is a platform-host flow (ADR 0054 §8.5).
+- **School switch:** recomputed on the next response for the new School
+  only. School A's entries never appear, and never authorise, in School B.
+
+### 17.5 Shell, responsive behaviour and accessibility
+
+**Shell.** `AccountLayout.vue` is the shared shell. For a signed-in request
+it renders:
+- a skip link to `#main-content`;
+- the account bar: product home link, active School name, account
+  `<nav aria-label="Account">`, Log out;
+- the elevation banner;
+- a side navigation with separate `<nav>` landmarks labelled Home, Guardian
+  portal, School and Platform.
+
+`Components/Navigation/NavigationGroupList.vue` renders groups:
+- group labels are text, not headings, so each page's `<h1>` stays first;
+- each list is named with `aria-labelledby`;
+- sections nest;
+- the active entry carries `aria-current="page"`.
+
+**Responsive.**
+- **From `md` up:** the navigation is persistent.
+- **Below `md`:** a "Menu" `<button>` controls it (`aria-controls`,
+  `aria-expanded`). Closed, it is `hidden`, so no link is focusable.
+- **Closing:** Escape (a document-level listener) closes it and returns
+  focus to the button; following a link closes it.
+
+**Lint decision (§8.2).** `eslint-plugin-vuejs-accessibility` 2.6.0 is
+adopted, with its `globals` peer 17.12.0. Both are pinned exactly and both
+releases are more than two weeks old (2.6.1/2.6.2 and globals 17.13.0 were
+newer).
+- **Fit:** it supports ESLint 10, installs with `ignore-scripts`, and adds no
+  `npm audit` finding. The one moderate advisory, `postcss-selector-parser`,
+  already exists on the baseline lock.
+- **Scope:** across the whole frontend it reported 800 existing findings in
+  162 files, so it is scoped to the SWC files (`SWC_ACCESSIBILITY_FILES` in
+  `eslint.config.js`; later slices add theirs). It runs in the existing
+  `npm run lint` CI step.
+- **Configuration:** `label-has-for` accepts a nested OR an id-associated
+  label. Inertia's link component is imported as `InertiaLink` in these
+  files, because the plugin reads a `<Link>` tag as HTML `<link>`.
+- **Static test:** `NavigationAccessibilityBaselineTest` pins the shell's
+  landmarks, disclosure state, skip link and lint scope.
+- **No claim:** no WCAG claim is made.
+
+### 17.6 Public `/` and Dashboard
+
+**`/`.**
+- `HomeController` (thin) replaces `SystemStatusController`, and
+  `Pages/Home.vue` replaces `SystemStatus.vue`. The web route is now named
+  `home`; it previously shared the name `system.status` with the API status
+  route.
+- **Guests** see the product name, one neutral sentence and "Sign in" on
+  every host. The page no longer exposes the environment, the request id,
+  phase or module-inventory text. The `X-Request-Id` header stays.
+- **Signed-in visitors** are redirected to `/app`.
+- CLAUDE.md rule 3 and ADR 0005 point to `HomeController`.
+
+**Dashboard.**
+- **Heading:** the product name, with the active School name beneath it.
+  "School OS — Phase 0B" and "Phase 0B primitive" are gone.
+- **Kept:** School selection, the notices and the elevation states (the
+  elevated copy no longer says "yet").
+- **Overview:** the shared navigation, rendered as a grouped overview.
+- **Empty state:** "No modules are available to your account in this
+  School."
+- **Removed:** the controller's `nav`, `platform` and `groups` props.
+
+### 17.7 Product name (X4)
+
+**Decision:** the name is `App\Support\ProductIdentity::NAME = 'Lycenza'`.
+It appears on:
+- the shared `product` prop;
+- the browser title (`resources/js/support/product.ts`, pinned equal by
+  `ProductIdentityTest`);
+- `app.blade.php`.
+
+**Why not the configuration value.** `config('app.name')` was deliberately
+not used. `APP_NAME` also derives the session cookie name and the cache and
+Redis prefixes, so a branding change there would sign everyone out and
+orphan cached state. Email keeps its own `email.from_name` (default
+"Lycenza"). No single existing setting serves both without changing email
+semantics, so configuration normalisation is deferred.
+
+**Deferred "School OS" strings** (outside SWC.1's surfaces):
+- the account-link copy on Students/Guardians pages;
+- Conversations and Channels copy;
+- Automation and API tokens copy;
+- the invitation acceptance page and the Guardian invitation email
+  (subject and body);
+- four exception messages and two validation messages.
+
+They are catalogued for SWC.5.
+
+### 17.8 Flag migration (no silent loss)
+
+Every former `nav.*` / `platform.*` / `groups.*` flag maps to a catalogue
+entry with the same capability rule:
+
+| Former flag | Entry key |
+|---|---|
+| `canViewSchoolSettings` | `school-settings` |
+| `canViewSchoolSetup` | `school-setup` |
+| `canViewStudents` / `canViewGuardians` | `students` / `guardians` |
+| `canViewEnrollments` / `canViewEnrollmentRollovers` | `enrollments` / `enrollment-rollovers` |
+| `canViewAdmissions`, `canViewFinance`, `canViewHr`, `canViewPayroll` | `admissions`, `finance`, `hr`, `payroll` |
+| `canViewSubjectOfferings` | `subject-offerings` |
+| `canViewCommunications` | `communications` |
+| `canViewCanteenDirectory` | `canteen-outlets` + `canteen-items` |
+| `canViewCanteenOrders` / `canViewCanteenSettings` | `canteen-orders` / `canteen-settings` |
+| `canViewTimetablePeriods` / `canViewTimetableSchedule` | `timetable-periods` / `timetable-schedule` |
+| `canViewTeachingAssignments` | `teaching-assignments` |
+| `canViewLeave` / `canUseLeaveApprovals` / `canViewStaffAttendance` | `leave` / `leave-approvals` / `staff-attendance` |
+| `canUseMy*` (7 flags) | `my-leave`, `my-staff-attendance`, `my-payslips`, `my-curriculum-delivery`, `my-attendance`, `my-learning-content`, `my-assignments` |
+| `canViewAnalytics` / `canViewAuditLog` / `canViewAutomation` | `analytics` / `audit-log` / `automation` |
+| `canViewApiClients` / `canViewDomains` / `canViewStaffAccounts` | `api-clients` / `domains` / `staff-accounts` |
+| `canViewGuardianPortal` | `portal-communications` + `portal-conversations` |
+| `canViewGuardianAttendance` / `canViewGuardianFees` | `portal-attendance` / `portal-fees` |
+| `canManagePlatformSchools`, `platform.canManageSchools` | `platform-schools` |
+| `platform.canViewAuditLog` / `platform.canGovernRoles` | `platform-audit-log` / `platform-roles` |
+| `groups.canViewOwn` / `groups.canGovern` | `school-groups` / `platform-groups` |
+| `canManageSchoolSettings` | **retired**: never rendered; the Settings page decides manage rights itself |
+
+**Test migration:**
+- 26 test files were migrated to `self::nav()` / `navOffers()` /
+  `navExactly()` (`Tests\Concerns\AssertsNavigation`).
+- `MyAttendanceUiTest`'s exact teacher set is now
+  `navExactly(['my-assignments', 'my-attendance', 'my-curriculum-delivery',
+  'my-learning-content'])`.
+- The navigation source is now the catalogue alone. No legacy booleans and
+  no role checks remain.
+
+### 17.9 Security review
+
+| # | Finding | Disposition |
+|---|---|---|
+| S-1 | Navigation reads one School's capabilities (the active one) and is rebuilt per request; it never serialises another School's entries. | Verified (School-switch test) |
+| S-2 | Unauthorised destinations are not serialised: entries are filtered server-side before the prop is built. | Verified |
+| S-3 | Elevated sessions receive no School entry; School hosts receive no platform/Group/API-token entry. | Verified (both tests) |
+| S-4 | Anonymous `/` no longer exposes `APP_ENV` or the request id in the page. | Fixed |
+| S-5 | No role name is consulted. A test scans the catalogue values and the navigation classes' source for every seeded role key. | Verified |
+| S-6 | No capability is added, granted or widened. Seeder changes are comments only. | Verified |
+| S-7 | Before SWC.1 the account bar offered "API tokens" on School custom hosts, where the route is never served (fixed 404). | Fixed (platform-host-only entry) |
+| F-1 | The Finance, HR and Payroll hub pages render for any active School member. They show no data, only links to the sub-areas the actor holds, and every sub-page checks its own capability. Navigation never offers them without the hub's any-of requirement. | Pre-existing; not changed in a navigation slice; recorded for the SWC.5 authorization review |
+
+### 17.10 Deferred drift corrected here (§12.2)
+
+- `app/Domain/README.md`: "no business modules" marked historical.
+- `CapabilityAndRoleSeeder` payroll comments, as dated comment notes: the
+  `payroll_officer` sensitive grants; 9.6 implemented with
+  `payroll.statutory.manage` still held by no role; payslips built.
+- `ElevatedSchoolRouteDenialTest.php:88` comment.
+
+### 17.11 Verification
+
+- **Targeted:**
+  - `tests/Feature/Navigation` (catalogue integrity, visibility/context,
+    destinations, accessibility);
+  - `HomePageTest`;
+  - `ProductIdentityTest`;
+  - `DashboardLandingTest`;
+  - the 26 migrated files.
+- **Broad set:** the App UI, Portal, Platform, Tenancy, Custom domains,
+  Auth, Compliance, Automation, Navigation and Identity suites.
+- **Gates:** Pint, Larastan, `vue-tsc`, ESLint (with the scoped
+  accessibility rules), Prettier and the production build.
+- **Canonical regression:** the candidate's sharded exact-SHA `CI gate`
+  (ADR 0072 §28.8, §31).
+- **DDEV smoke** (`ddev demo-reset --build`, HTTP-level; no browser
+  automation exists in the repository):
+  - **`/` (guest):** 200 `Home`; props `auth`, `elevation`, `errors`,
+    `navigation` (null), `product` only; no phase, module, environment or
+    request-id text.
+  - **Personas:** School Admin, Principal, Multi-school Admin, Teacher,
+    Librarian, Hostel Warden, Guardian and Platform Admin each received
+    exactly their capability-derived groups.
+  - **Destinations:** every advertised destination returned 200 with its own
+    entry marked active, except the MFA-assured pages. My class attendance,
+    API clients, the Guardian Attendance/Fees/Conversations pages and the
+    platform audit log render the existing `App/Platform/MfaRequired` page
+    (403) for demo accounts without an enrolled factor (rule 95; documented
+    persona limitation).
+- **Counts:** recorded in the SWC.1 commit.
+
+**Not in SWC.1:** none of SWC.2 (Academic Structure screens, Elective
+Groups) and none of SWC.3 (OPF screens). No new destination was invented.

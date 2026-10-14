@@ -258,11 +258,11 @@ minute.
 | Student | `student@example.test` | Current student experience | Member with no role, linked to Student LDS-0025 | **No student portal exists**: dashboard, preferences, account security only; modules (and, since POR.1, the School setup index) 403 |
 | Guardian | `guardian01@example.test` | Guardian portal (POR.1, ADR 0070) | Activated via the real invitation flow (linked to Guardian Priya Sharma, a legal guardian): the closed `guardian`-scope role, exactly `portal.communications.view`, `portal.attendance.view`, `portal.fees.view` and `portal.communications.reply` | Select the School first (one School per session). **Guardian portal → Messages from the School** (`/app/portal/communications`): read-only announcements addressed to her **as a Guardian** (empty in the demo: the seeded announcements are School-wide, which by design do not reach the Guardian inbox, ADR 0070 §28.7); **Attendance** (`/app/portal/attendance`, POR.2): her child's attendance for the active academic year; **Fees** (`/app/portal/fees`, POR.3): her child's statement and the amounts applied to that child; **Conversations** (`/app/portal/conversations`, POR.4): conversations the School started with her as a Guardian, with text replies (to see one, sign in as a School admin and start a conversation in the Communication Hub choosing Priya Sharma as the Guardian participant). Attendance, Fees and Conversations need an enrolled MFA factor and a current verification -- enrol under Account security first. Development only. Every staff module (including the staff Communication Hub and School setup) is 403 |
 | Accountant | `finance.officer@example.test` | Finance in isolation | Production `accountant` (12 `finance.*`): ledger posting, charges, fee setup and runs, payments, offline payment recording, concession requests | Ledger reversal, period closing and concession approval are School Admin's; everything else 403 |
-| Librarian | `library.operator@example.test` | Library in isolation | Production `librarian` (catalogue, circulation, `library.fines.view`) | Fine policy and voiding are School Admin's. No menu link: use `/app/library/titles`, `/app/library/circulation` |
-| Transport Coordinator | `transport.operator@example.test` | Transport in isolation | Production `transport_coordinator` (6 `transport.*`) | No menu link: use `/app/transport/routes` |
-| Front Office | `reception@example.test` | Visitors in isolation | Production `front_office` (4 `visitor.*`) | No menu link: use `/app/visitor/directory`, `/app/visitor/visits` |
-| Hostel Warden | `hostel.warden@example.test` | Hostel in isolation | Production `hostel_warden` (4 `hostel.*`) | No menu link: use `/app/hostels`, `/app/hostel-residency` |
-| Canteen & Stores | `canteen.operator@example.test` | Canteen + inventory | Two ADDITIVE production roles: `canteen_operator` (directory, orders) + `stores_officer` (4 `inventory.*`) -- never a merged role | Canteen settings are School Admin's. Inventory has no menu link: `/app/inventory-stock` |
+| Librarian | `library.operator@example.test` | Library in isolation | Production `librarian` (catalogue, circulation, `library.fines.view`) | Fine policy and voiding are School Admin's. *(Since SWC.1: Operations → Library in the navigation.)* |
+| Transport Coordinator | `transport.operator@example.test` | Transport in isolation | Production `transport_coordinator` (6 `transport.*`) | *(Since SWC.1: Operations → Transport in the navigation.)* |
+| Front Office | `reception@example.test` | Visitors in isolation | Production `front_office` (4 `visitor.*`) | *(Since SWC.1: Operations → Visitors in the navigation.)* |
+| Hostel Warden | `hostel.warden@example.test` | Hostel in isolation | Production `hostel_warden` (4 `hostel.*`) | *(Since SWC.1: Operations → Hostel in the navigation.)* |
+| Canteen & Stores | `canteen.operator@example.test` | Canteen + inventory | Two ADDITIVE production roles: `canteen_operator` (directory, orders) + `stores_officer` (4 `inventory.*`) -- never a merged role | Canteen settings are School Admin's. *(Since SWC.1: Operations → Inventory in the navigation.)* |
 | Communications Coordinator | `communications@example.test` | Communication Hub in isolation | Production `communications_coordinator` (6 `communications.*`: view, send, reply, announce, templates, Guardian conversations) | Approval and emergency messages stay with Principal/School Admin; analytics/failed/audit/channel settings 403 |
 | *(pending invitation)* | `guardian02@example.test` | Guardian activation flow | -- | Not an account until the Mailpit invitation is accepted; not in the login panel |
 
@@ -561,6 +561,14 @@ Platform Admin.
     switched off (no rule runs there) as the negative control.
 
 ## 13. Interactive review map
+
+*(2026-10-14, SWC.1, ADR 0073 §17: every signed-in page now has a side
+navigation (a "Menu" button below the `md` breakpoint) built from the
+actor's capabilities in the active School. The nine "(no nav)" modules
+below are reachable from it. The product name is Lycenza, and `/` is a
+neutral sign-in entry. Reviewing it: sign in as each persona and compare
+the navigation with the table; switch School and see it change; on an
+elevated session no School entry appears.)*
 
 *(2026-10-14, SWC.0, ADR 0073: the "(no nav)" and API-only rows below
 are scheduled. SWC.1 adds capability-driven navigation; SWC.2 covers the

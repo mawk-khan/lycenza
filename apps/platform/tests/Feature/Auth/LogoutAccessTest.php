@@ -185,10 +185,20 @@ class LogoutAccessTest extends TestCase
         $this->assertStringContainsString('method="post"', $layout);
         $this->assertStringContainsString('<slot />', $layout);
 
-        // Not gated by a School, role or capability.
+        // Not gated by a School, role or capability. SWC.1 (ADR 0073
+        // section 17): the shell renders the server-built `navigation`
+        // prop -- including the active School's NAME and a "School"
+        // landmark label -- but decides nothing from a School, role or
+        // capability itself. Those display-only tokens are the sole
+        // exceptions.
+        $code = preg_replace('/^\/\/.*$/m', '', $layout);
+        $code = str_replace(['navigation?.school', 'navigation.school.name', 'data-testid="shell-school"', 'aria-label="School"', 'schoolGroups'], '', $code);
         foreach (['activeSchool', 'capabilit', 'role', 'school'] as $forbidden) {
-            $this->assertStringNotContainsStringIgnoringCase($forbidden, preg_replace('/^\/\/.*$/m', '', $layout), "AccountLayout must not depend on [{$forbidden}]");
+            $this->assertStringNotContainsStringIgnoringCase($forbidden, $code, "AccountLayout must not depend on [{$forbidden}]");
         }
+        // The navigation is the server's: the layout never filters entries
+        // by anything but their group key.
+        $this->assertStringContainsString('page.props.navigation', $layout);
 
         // No page overrides the default layout.
         $pages = 0;

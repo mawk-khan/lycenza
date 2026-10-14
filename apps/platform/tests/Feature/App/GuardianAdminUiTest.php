@@ -74,10 +74,16 @@ class GuardianAdminUiTest extends TestCase
         $this->createStudentGuardianRelationship($studentA, $guardian);
         $this->createStudentGuardianRelationship($studentB, $guardian);
 
-        $queryCountBefore = 0;
-        DB::listen(function () use (&$queryCountBefore): void {
-            $queryCountBefore++;
+        $queries = 0;
+        DB::listen(function () use (&$queries): void {
+            $queries++;
         });
+        $count = function () use (&$queries): int {
+            $queries = 0;
+            $this->get('/app/guardians')->assertOk();
+
+            return $queries;
+        };
 
         $this->get('/app/guardians')->assertInertia(fn ($page) => $page
             ->where('guardians.data.0.linkedStudentCount', 2)
@@ -85,8 +91,16 @@ class GuardianAdminUiTest extends TestCase
 
         // withCount() adds exactly one extra aggregate query for the
         // whole page -- not one query per row (this checkpoint's
-        // brief, section 36).
-        $this->assertLessThan(15, $queryCountBefore, 'Guardian index must not perform one query per row.');
+        // brief, section 36). Measured as rows grow, so the constant
+        // per-request cost of the shared layout (SWC.1 navigation, ADR
+        // 0073 section 17) cannot mask -- or be mistaken for -- an N+1.
+        $withOneGuardian = $count();
+        foreach (range(1, 4) as $i) {
+            $more = $this->createGuardian($school);
+            $this->createStudentGuardianRelationship($this->createStudent($school, ['student_number' => "S-20{$i}"]), $more);
+        }
+        $this->assertSame($withOneGuardian, $count(), 'Guardian index must not perform one query per row.');
+        $this->assertLessThan(15, $withOneGuardian, 'Guardian index query budget.');
     }
 
     #[Test]

@@ -130,7 +130,7 @@ class PayrollUiTest extends TestCase
         $school = $this->createSchool();
         $user = $this->memberWith([], $school);
 
-        $this->actingAs($user)->get('/app')->assertInertia(fn ($page) => $page->where('nav.canViewPayroll', false));
+        $this->actingAs($user)->get('/app')->assertInertia(fn ($page) => $page->where('navigation', self::nav(hidden: ['payroll'])));
     }
 
     #[Test]
@@ -139,7 +139,7 @@ class PayrollUiTest extends TestCase
         $school = $this->createSchool();
         $user = $this->memberWith(['payroll.runs.view'], $school);
 
-        $this->actingAs($user)->get('/app')->assertInertia(fn ($page) => $page->where('nav.canViewPayroll', true));
+        $this->actingAs($user)->get('/app')->assertInertia(fn ($page) => $page->where('navigation', self::nav(shown: ['payroll'])));
     }
 
     // --- Structures: authorization + immutability -----------------------

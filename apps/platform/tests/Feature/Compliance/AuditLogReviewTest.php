@@ -305,7 +305,7 @@ class AuditLogReviewTest extends TestCase
 
         foreach (['school.admin@example.test' => true, 'principal@example.test' => true, 'teacher@example.test' => false, 'hr.payroll@example.test' => false, 'finance.officer@example.test' => false, 'student@example.test' => false, 'guardian01@example.test' => false] as $email => $visible) {
             $this->as($this->user($email), $result->school)->get('/app')
-                ->assertInertia(fn (AssertableInertia $page) => $page->where('nav.canViewAuditLog', $visible));
+                ->assertInertia(fn (AssertableInertia $page) => $page->where('navigation', self::navOffers('audit-log', $visible)));
         }
     }
 

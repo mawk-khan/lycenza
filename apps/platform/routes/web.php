@@ -143,14 +143,15 @@ use App\Http\Controllers\Auth\AccountRecoveryController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\MfaChallengeController;
 use App\Http\Controllers\Auth\SessionHandoffController;
+use App\Http\Controllers\HomeController;
 use App\Http\Controllers\Identity\InvitationAcceptanceController;
 use App\Http\Controllers\Identity\StaffInvitationAcceptanceController;
 use App\Http\Controllers\Internal\MfaDemoController;
-use App\Http\Controllers\SystemStatusController;
 use Illuminate\Support\Facades\Route;
 
-// Unauthenticated Phase 0A primitive -- unchanged.
-Route::get('/', [SystemStatusController::class, 'index'])->name('system.status');
+// SWC.1 (ADR 0073 section 7.1): the public product entry; a signed-in
+// visitor is sent to /app.
+Route::get('/', [HomeController::class, 'index'])->name('home');
 
 // `private-no-store` on the three guest pages that can turn into a
 // signed-in page without a full reload (Inertia sign-in on /login and

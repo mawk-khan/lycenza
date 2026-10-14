@@ -129,9 +129,9 @@ class MyCurriculumDeliveryUiTest extends TestCase
         [$noRole] = $this->teacher($w, roleKey: null);
 
         $this->actor($w, $teacher)->get('/app')->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('nav.canUseMyCurriculumDelivery', true)
-            ->where('nav.canViewTeachingAssignments', false));
-        $this->actor($w, $noRole)->get('/app')->assertInertia(fn (AssertableInertia $page) => $page->where('nav.canUseMyCurriculumDelivery', false));
+            ->where('navigation', self::nav(shown: ['my-curriculum-delivery']))
+            ->where('navigation', self::nav(hidden: ['teaching-assignments'])));
+        $this->actor($w, $noRole)->get('/app')->assertInertia(fn (AssertableInertia $page) => $page->where('navigation', self::nav(hidden: ['my-curriculum-delivery'])));
         $this->actor($w, $noRole)->get('/app/my-curriculum-delivery')->assertForbidden();
 
         // The Tier 1 page stays administrative.

@@ -386,8 +386,8 @@ class TimetableAdminUiTest extends TestCase
         $this->activate($periodsViewer, $school);
 
         $this->get('/app')->assertInertia(fn ($page) => $page
-            ->where('nav.canViewTimetablePeriods', true)
-            ->where('nav.canViewTimetableSchedule', false)
+            ->where('navigation', self::nav(shown: ['timetable-periods']))
+            ->where('navigation', self::nav(hidden: ['timetable-schedule']))
         );
 
         $noAccess = $this->createUser();
@@ -395,16 +395,16 @@ class TimetableAdminUiTest extends TestCase
         $this->activate($noAccess, $school);
 
         $this->get('/app')->assertInertia(fn ($page) => $page
-            ->where('nav.canViewTimetablePeriods', false)
-            ->where('nav.canViewTimetableSchedule', false)
+            ->where('navigation', self::nav(hidden: ['timetable-periods']))
+            ->where('navigation', self::nav(hidden: ['timetable-schedule']))
         );
 
         [$admin, $adminSchool] = $this->createSchoolAdmin('school_admin');
         $this->activate($admin, $adminSchool);
 
         $this->get('/app')->assertInertia(fn ($page) => $page
-            ->where('nav.canViewTimetablePeriods', true)
-            ->where('nav.canViewTimetableSchedule', true)
+            ->where('navigation', self::nav(shown: ['timetable-periods']))
+            ->where('navigation', self::nav(shown: ['timetable-schedule']))
         );
     }
 }

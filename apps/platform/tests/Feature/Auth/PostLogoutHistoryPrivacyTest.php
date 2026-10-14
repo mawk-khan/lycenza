@@ -133,7 +133,7 @@ class PostLogoutHistoryPrivacyTest extends TestCase
         foreach (['login', 'login.mfa', 'invitations.show'] as $name) {
             $this->assertContains('private-no-store', Route::getRoutes()->getByName($name)->gatherMiddleware(), $name);
         }
-        foreach (['login.store', 'login.mfa.store', 'invitations.store', 'system.status'] as $name) {
+        foreach (['login.store', 'login.mfa.store', 'invitations.store', 'home'] as $name) {
             $this->assertNotContains('private-no-store', Route::getRoutes()->getByName($name)->gatherMiddleware(), $name);
         }
     }

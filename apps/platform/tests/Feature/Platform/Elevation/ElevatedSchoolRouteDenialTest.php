@@ -85,7 +85,7 @@ class ElevatedSchoolRouteDenialTest extends TestCase
         $this->elevate($admin, $school);
 
         foreach ([
-            '/app/school-setup',                 // no capability check at all
+            '/app/school-setup',                 // school.profile.view since POR.1 (ADR 0070 §9.6)
             '/app/communications/preferences',   // membership-derived
             '/app/finance', '/app/hr', '/app/payroll', '/app/payroll/statutory',
             '/app/students', "/app/students/{$student->id}", '/app/guardians',
@@ -116,9 +116,9 @@ class ElevatedSchoolRouteDenialTest extends TestCase
         $this->assertFalse(app(CapabilityResolver::class)->can($admin, 'students.view', $school));
 
         $this->get('/app')->assertInertia(fn (AssertableInertia $p) => $p
-            ->where('nav.canViewStudents', false)
-            ->where('nav.canViewSchoolSettings', false)
-            ->where('nav.canViewFinance', false)
+            ->where('navigation', self::nav(hidden: ['students']))
+            ->where('navigation', self::nav(hidden: ['school-settings']))
+            ->where('navigation', self::nav(hidden: ['finance']))
             ->where('activeSchool', null)
         );
     }

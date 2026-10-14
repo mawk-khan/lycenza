@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\Navigation\NavigationBuilder;
+use App\Support\ProductIdentity;
 use App\Support\Tenancy\ElevationContext;
 use Closure;
 use Illuminate\Http\Request;
@@ -72,6 +74,15 @@ class HandleInertiaRequests extends Middleware
                 // Phase 0N.5: the authorizing Group for a Group-derived one.
                 'groupName' => $elevation->isGroupDerived() ? $elevation->schoolGroup?->name : null,
             ] : null,
+            // SWC.1 (ADR 0073 section 7): the user-facing product name.
+            'product' => ['name' => ProductIdentity::NAME],
+            // SWC.1 (ADR 0073 section 6): the capability-driven navigation.
+            // A closure, so it is evaluated when the response is built --
+            // after the School context is resolved -- never here in share(),
+            // where route middleware has not yet run (rule 61's lesson).
+            // Discoverability only: every destination re-checks its own
+            // capability (CLAUDE.md rule 6).
+            'navigation' => $user !== null ? fn () => app(NavigationBuilder::class)->forRequest($request) : null,
         ];
     }
 }

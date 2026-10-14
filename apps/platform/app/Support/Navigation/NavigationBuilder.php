@@ -1,0 +1,213 @@
+<?php
+
+namespace App\Support\Navigation;
+
+use App\Domain\Identity\Application\Portal\ActingGuardianResolver;
+use App\Models\School;
+use App\Models\User;
+use App\Support\Authorization\CapabilityResolver;
+use App\Support\Domains\HostClassification;
+use App\Support\Portal\PortalAvailability;
+use App\Support\Tenancy\ElevationContext;
+use App\Support\Tenancy\TenantContext;
+use Illuminate\Http\Request;
+use Illuminate\Support\Str;
+
+/**
+ * SWC.1 (ADR 0073 sections 6.1-6.2): evaluates StaffNavigation for ONE
+ * request and returns only what the actor may see -- the shared Inertia
+ * `navigation` prop. HandleInertiaRequests shares it as a closure, so it
+ * runs at response time, after ResolveSchoolContext/ResolvePlatformElevation/
+ * RequireSchoolContext have resolved (or refused) the School.
+ *
+ * Context rules:
+ *   - School entries need the active School from TenantContext -- never a
+ *     client-supplied id -- and are evaluated against the actor's
+ *     capabilities in THAT School only (CapabilityResolver's existing
+ *     School-keyed cache; no cache of its own).
+ *   - An elevated session gets no School entry (rule 83: elevation opens no
+ *     School page, so advertising one would be false).
+ *   - A School custom host gets no platform, Group or API-token entry
+ *     (ADR 0054 section 8.2).
+ *   - Nothing here reads a role; nothing here is authorization.
+ */
+final class NavigationBuilder
+{
+    /** POR: PortalAvailability AND a live ActingGuardian in the active School. */
+    public const AVAILABILITY_GUARDIAN_PORTAL = 'guardian-portal';
+
+    public function __construct(
+        private readonly CapabilityResolver $capabilities,
+        private readonly TenantContext $context,
+        private readonly ElevationContext $elevation,
+        private readonly ActingGuardianResolver $guardians,
+    ) {}
+
+    /**
+     * @return array{
+     *     home: array{href: string, active: bool},
+     *     school: array{name: string}|null,
+     *     groups: list<array{key: string, label: string, items: list<array{key: string, label: string, href: string, section: string|null, active: bool}>}>,
+     *     account: list<array{key: string, label: string, href: string, active: bool}>,
+     *     activeKey: string|null
+     * }|null
+     */
+    public function forRequest(Request $request): ?array
+    {
+        $user = $request->user();
+
+        if (! $user instanceof User) {
+            return null;
+        }
+
+        $schoolHost = HostClassification::schoolHostOf($request) !== null;
+        $school = $this->elevation->isElevated() ? null : $this->context->school();
+        $visible = $this->visibleEntries($user, $school, $schoolHost);
+
+        $route = $request->route()?->getName();
+        $activeKey = $this->activeKey($visible, is_string($route) ? $route : null);
+
+        $groups = [];
+        $account = [];
+
+        foreach ($visible as $entry) {
+            $item = [
+                'key' => $entry->key,
+                'label' => $entry->label,
+                'href' => route($entry->routeName, absolute: false),
+                'active' => $entry->key === $activeKey,
+            ];
+
+            if ($entry->group === StaffNavigation::ACCOUNT_GROUP) {
+                $account[] = $item;
+
+                continue;
+            }
+
+            $groups[$entry->group]['items'][] = [...$item, 'section' => $entry->section];
+        }
+
+        $ordered = [];
+        foreach (StaffNavigation::GROUPS as $key => $label) {
+            // An empty group is never sent (ADR 0073 section 6.3).
+            if (isset($groups[$key])) {
+                $ordered[] = ['key' => $key, 'label' => $label, 'items' => $groups[$key]['items']];
+            }
+        }
+
+        return [
+            'home' => ['href' => route('app.dashboard', absolute: false), 'active' => $route === 'app.dashboard'],
+            'school' => $school instanceof School ? ['name' => $school->name] : null,
+            'groups' => $ordered,
+            'account' => $account,
+            'activeKey' => $activeKey,
+        ];
+    }
+
+    /**
+     * The entry keys visible to this actor in this context -- the same
+     * evaluation forRequest() uses, without a request (tests, Dashboard).
+     *
+     * @return list<NavigationEntry>
+     */
+    public function visibleEntries(User $user, ?School $school, bool $schoolHost): array
+    {
+        $schoolCapabilities = $school !== null ? $this->capabilities->schoolCapabilities($user, $school) : [];
+        $platformCapabilities = $schoolHost ? [] : $this->capabilities->platformCapabilities($user);
+        $guardianAvailable = null;
+
+        $visible = [];
+
+        foreach (StaffNavigation::entries() as $entry) {
+            if ($schoolHost && $entry->platformHostOnly) {
+                continue;
+            }
+
+            $granted = match ($entry->scope) {
+                NavigationEntry::SCOPE_SCHOOL => $school !== null && $this->satisfies($entry, $schoolCapabilities),
+                NavigationEntry::SCOPE_PLATFORM => $this->satisfies($entry, $platformCapabilities),
+                NavigationEntry::SCOPE_GROUP => $this->groupSatisfies($user, $entry),
+                NavigationEntry::SCOPE_ACCOUNT => true,
+                default => false,
+            };
+
+            if (! $granted) {
+                continue;
+            }
+
+            if ($entry->availability === self::AVAILABILITY_GUARDIAN_PORTAL) {
+                $guardianAvailable ??= $school !== null
+                    && PortalAvailability::isAvailable()
+                    && $this->guardians->resolve($user, $school) !== null;
+
+                if (! $guardianAvailable) {
+                    continue;
+                }
+            }
+
+            $visible[] = $entry;
+        }
+
+        return $visible;
+    }
+
+    /** @param  list<string>  $held */
+    private function satisfies(NavigationEntry $entry, array $held): bool
+    {
+        foreach ($entry->all as $capability) {
+            if (! in_array($capability, $held, true)) {
+                return false;
+            }
+        }
+
+        if ($entry->any !== [] && array_intersect($entry->any, $held) === []) {
+            return false;
+        }
+
+        return $entry->all !== [] || $entry->any !== [];
+    }
+
+    private function groupSatisfies(User $user, NavigationEntry $entry): bool
+    {
+        foreach ($entry->all as $capability) {
+            if ($this->capabilities->groupsWith($user, $capability)->isEmpty()) {
+                return false;
+            }
+        }
+
+        return $entry->all !== [];
+    }
+
+    /**
+     * The most specific visible entry whose pattern matches the current
+     * route name (an exact route name beats any wildcard).
+     *
+     * @param  list<NavigationEntry>  $visible
+     */
+    private function activeKey(array $visible, ?string $route): ?string
+    {
+        if ($route === null) {
+            return null;
+        }
+
+        $best = null;
+        $bestScore = -1;
+
+        foreach ($visible as $entry) {
+            foreach ($entry->activePatterns() as $pattern) {
+                if (! Str::is($pattern, $route)) {
+                    continue;
+                }
+
+                $score = $pattern === $route ? PHP_INT_MAX : strlen(rtrim($pattern, '*'));
+
+                if ($score > $bestScore) {
+                    $best = $entry->key;
+                    $bestScore = $score;
+                }
+            }
+        }
+
+        return $best;
+    }
+}

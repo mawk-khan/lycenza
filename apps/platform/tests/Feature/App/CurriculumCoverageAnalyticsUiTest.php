@@ -142,10 +142,10 @@ class CurriculumCoverageAnalyticsUiTest extends TestCase
         $w = $this->world();
 
         $this->as($this->roleUser($w, 'principal'), $w['school']->id)->get('/app')
-            ->assertInertia(fn (AssertableInertia $page) => $page->where('nav.canViewAnalytics', true));
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('navigation', self::nav(shown: ['analytics'])));
 
         $this->app['auth']->forgetGuards();
         $this->as($w['actor'], $w['school']->id)->get('/app')
-            ->assertInertia(fn (AssertableInertia $page) => $page->where('nav.canViewAnalytics', false));
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('navigation', self::nav(hidden: ['analytics'])));
     }
 }

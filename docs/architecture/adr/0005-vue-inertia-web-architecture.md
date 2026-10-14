@@ -71,6 +71,8 @@ console usually doesn't need to).
   convention in `app/Domain/README.md` — controllers stay thin and pass
   typed props to Vue pages (see `app/Http/Controllers/SystemStatusController.php`
   for the Phase 0A shape this follows).
+  *(2026-10-14, SWC.1, ADR 0073: `SystemStatusController` was replaced by
+  the equally thin `HomeController`, the public `/` product entry.)*
 - The web console is tied to Laravel's deployment lifecycle — there is
   no independent "ship the frontend without the backend" path for the
   console (this is accepted; it matches ADR 0001's single-deployable

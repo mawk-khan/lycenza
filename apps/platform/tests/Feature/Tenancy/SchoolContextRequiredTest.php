@@ -64,7 +64,7 @@ class SchoolContextRequiredTest extends TestCase
                 ->has('memberships', 2)
                 ->where('memberships.0.isActive', false)
                 ->where('memberships.1.isActive', false)
-                ->where('nav.canViewStudents', false)
+                ->where('navigation', self::nav(hidden: ['students']))
             );
 
         // Rendering the landing never selects a School.
@@ -100,8 +100,8 @@ class SchoolContextRequiredTest extends TestCase
                 ->where('activeSchool', null)
                 ->where('platformAccount', true)
                 ->has('memberships', 0)
-                ->where('nav.canViewStudents', false)
-                ->where('nav.canViewSchoolSettings', false)
+                ->where('navigation', self::nav(hidden: ['students']))
+                ->where('navigation', self::nav(hidden: ['school-settings']))
             );
         $this->assertStringNotContainsString('Someone Else School', $response->getContent());
         $this->assertSame(0, SchoolMembership::query()->where('user_id', $admin->id)->count());

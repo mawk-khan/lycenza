@@ -54,8 +54,8 @@ class StaffAttendanceAdminUiTest extends TestCase
         $this->actor($w, $viewer)->post('/app/staff-attendance/records', ['employment_record_id' => $w['employment']->id, 'date' => '2026-09-28', 'first_half' => 'present', 'second_half' => 'present'])->assertForbidden();
         $this->assertSame(0, $this->inSchool($w['school'], fn () => DB::table('staff_attendance_records')->count()));
 
-        $this->actor($w)->get('/app')->assertInertia(fn (AssertableInertia $page) => $page->where('nav.canViewStaffAttendance', true));
-        $this->actor($w, $this->createUserWithCapabilities($w['school'], ['hr.leave.view']))->get('/app')->assertInertia(fn (AssertableInertia $page) => $page->where('nav.canViewStaffAttendance', false));
+        $this->actor($w)->get('/app')->assertInertia(fn (AssertableInertia $page) => $page->where('navigation', self::nav(shown: ['staff-attendance'])));
+        $this->actor($w, $this->createUserWithCapabilities($w['school'], ['hr.leave.view']))->get('/app')->assertInertia(fn (AssertableInertia $page) => $page->where('navigation', self::nav(hidden: ['staff-attendance'])));
     }
 
     #[Test]

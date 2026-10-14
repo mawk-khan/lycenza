@@ -402,7 +402,7 @@ class SchoolLifecycleTest extends TestCase
         $this->post("/app/platform/schools/{$school->id}/archive", ['confirmed' => '1'])->assertNotFound();
         $this->delete("/app/platform/schools/{$school->id}")->assertStatus(405);
 
-        $this->get('/app')->assertInertia(fn (AssertableInertia $p) => $p->where('platform.canManageSchools', true));
+        $this->get('/app')->assertInertia(fn (AssertableInertia $p) => $p->where('navigation', self::nav(shown: ['platform-schools'])));
     }
 
     #[Test]

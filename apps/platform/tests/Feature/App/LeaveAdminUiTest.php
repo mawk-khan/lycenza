@@ -64,7 +64,7 @@ class LeaveAdminUiTest extends TestCase
         $this->actor($w, $viewer)->post('/app/leave/types', ['code' => 'XL', 'name' => 'X', 'is_paid' => true, 'tracks_balance' => true, 'allows_half_day' => true])->assertForbidden();
         $this->assertSame(0, $this->inSchool($w['school'], fn () => DB::table('leave_requests')->count()));
 
-        $this->actor($w)->get('/app')->assertInertia(fn (AssertableInertia $page) => $page->where('nav.canViewLeave', true)->where('nav.canUseLeaveApprovals', false));
+        $this->actor($w)->get('/app')->assertInertia(fn (AssertableInertia $page) => $page->where('navigation', self::nav(shown: ['leave']))->where('navigation', self::nav(hidden: ['leave-approvals'])));
     }
 
     #[Test]
@@ -112,7 +112,7 @@ class LeaveAdminUiTest extends TestCase
 
         $this->actor($w, $manager['user'])->post("/app/leave/approvals/{$mine->id}/approve")->assertSessionHasNoErrors();
         $this->assertSame('manager', $this->inSchool($w['school'], fn () => DB::table('leave_decisions')->where('leave_request_id', $mine->id)->value('path')));
-        $this->actor($w, $manager['user'])->get('/app')->assertInertia(fn (AssertableInertia $page) => $page->where('nav.canUseLeaveApprovals', true));
+        $this->actor($w, $manager['user'])->get('/app')->assertInertia(fn (AssertableInertia $page) => $page->where('navigation', self::nav(shown: ['leave-approvals'])));
     }
 
     #[Test]

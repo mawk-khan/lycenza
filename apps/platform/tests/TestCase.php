@@ -10,6 +10,7 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\DB;
+use Tests\Concerns\AssertsNavigation;
 
 /**
  * DatabaseTransactions, not RefreshDatabase -- see
@@ -55,7 +56,7 @@ use Illuminate\Support\Facades\DB;
  */
 abstract class TestCase extends BaseTestCase
 {
-    use DatabaseTransactions;
+    use AssertsNavigation, DatabaseTransactions;
 
     /** Wall-clock start of this test, for committing-test cleanup below. */
     private ?CarbonImmutable $testStartedAt = null;

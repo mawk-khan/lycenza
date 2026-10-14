@@ -40,22 +40,37 @@ class ConversationIndexScaleTest extends TestCase
         DB::listen(function () use (&$queryCount): void {
             $queryCount++;
         });
+        $measure = function () use (&$queryCount, $creator): int {
+            $queryCount = 0;
+            $this->actingAs($creator)->get('/app/communications/conversations')->assertOk();
+
+            return $queryCount;
+        };
 
         // Phase 5A.8 §33: the conversation list relocated to
         // `/app/communications/conversations` -- see
         // CommunicationInboxScaleTest for the (now-separate) Inbox
         // page's own bounded-query proof.
         $this->actingAs($creator)->get('/app/communications/conversations')->assertOk();
+        $withFifteen = $measure();
 
         // A handful of fixed queries (thread page, participants eager
         // load, users eager load, summarize()'s 2 queries,
         // totalUnreadCount()'s 3 queries, Phase 5A.8's added
         // unreadAnnouncementCount() aggregate for the shared nav badge,
-        // capability checks, session/auth bookkeeping) -- NOT one query
-        // per thread. 15 threads comfortably fits well under this
-        // ceiling; growing the thread count must not grow the query
-        // count.
-        $this->assertLessThan(35, $queryCount, "Expected a bounded query count, got {$queryCount}.");
+        // capability checks, session/auth bookkeeping, and since SWC.1
+        // the shared layout navigation -- ADR 0073 section 17) -- NOT one
+        // query per thread: growing the thread count must not grow the
+        // query count.
+        for ($i = 15; $i < 25; $i++) {
+            $recipient = $this->createUser();
+            $this->createMembership($recipient, $school);
+            $thread = $threadService->createThread($school, $creator, 'direct', "Thread {$i}", [$recipient->id]);
+            $messageService->send($thread, $creator, "Hello {$i}");
+        }
+
+        $this->assertSame($withFifteen, $measure(), 'The conversation index must not issue one query per thread.');
+        $this->assertLessThan(35, $withFifteen, "Expected a bounded query count, got {$withFifteen}.");
     }
 
     private function activate($user, $school): void

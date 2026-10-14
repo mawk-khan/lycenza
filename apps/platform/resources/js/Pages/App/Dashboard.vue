@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { router } from '@inertiajs/vue3';
+import { Head, Link as InertiaLink, router, usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
+import type { Navigation } from '../../types/navigation';
+import { PLATFORM_GROUP_KEYS } from '../../types/navigation';
 
 // Phase 0N.3: why the last platform elevation ended (one-request flash).
 const elevationNotices: Record<string, string> = {
@@ -36,8 +39,6 @@ interface Props {
     // because no valid School was selected (RequireSchoolContext).
     schoolContextNotice: 'select' | 'not_saved' | null;
     platformAccount: boolean;
-    platform: { canViewAuditLog: boolean; canGovernRoles: boolean; canManageSchools: boolean };
-    groups: { canViewOwn: boolean; canGovern: boolean };
     platformElevation: {
         canStart: boolean;
         isElevated: boolean;
@@ -46,50 +47,18 @@ interface Props {
     };
     activeSchool: { id: string; name: string } | null;
     memberships: Membership[];
-    nav: {
-        canViewSchoolSettings: boolean;
-        canManageSchoolSettings: boolean;
-        canManagePlatformSchools: boolean;
-        canViewStudents: boolean;
-        canViewGuardians: boolean;
-        canViewCommunications: boolean;
-        canViewSchoolSetup: boolean;
-        canViewGuardianPortal: boolean;
-        canViewGuardianAttendance: boolean;
-        canViewGuardianFees: boolean;
-        canViewEnrollments: boolean;
-        canViewEnrollmentRollovers: boolean;
-        canViewAdmissions: boolean;
-        canViewFinance: boolean;
-        canViewSubjectOfferings: boolean;
-        canViewHr: boolean;
-        canViewCanteenDirectory: boolean;
-        canViewCanteenOrders: boolean;
-        canViewCanteenSettings: boolean;
-        canViewTimetablePeriods: boolean;
-        canViewTimetableSchedule: boolean;
-        canViewTeachingAssignments: boolean;
-        canViewLeave: boolean;
-        canUseLeaveApprovals: boolean;
-        canViewStaffAttendance: boolean;
-        canUseMyLeave: boolean;
-        canUseMyStaffAttendance: boolean;
-        canUseMyPayslips: boolean;
-        canUseMyCurriculumDelivery: boolean;
-        canUseMyAttendance: boolean;
-        canUseMyLearningContent: boolean;
-        canUseMyAssignments: boolean;
-        canViewPayroll: boolean;
-        canViewAnalytics: boolean;
-        canViewAuditLog: boolean;
-        canViewAutomation: boolean;
-        canViewApiClients: boolean;
-        canViewDomains: boolean;
-        canViewStaffAccounts: boolean;
-    };
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
+
+// SWC.1 (ADR 0073 section 6.3): the overview is the shared, server-built
+// navigation -- the same entries as the side navigation, nothing more.
+const page = usePage<{ product: { name: string }; navigation: Navigation | null }>();
+const productName = computed(() => page.props.product.name);
+const overview = computed(() => page.props.navigation?.groups ?? []);
+const hasSchoolModules = computed(() =>
+    overview.value.some((group) => !PLATFORM_GROUP_KEYS.includes(group.key)),
+);
 
 function activate(schoolId: string) {
     router.post(`/app/schools/${schoolId}/activate`);
@@ -97,8 +66,16 @@ function activate(schoolId: string) {
 </script>
 
 <template>
-    <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
-        <h1 class="text-xl font-semibold">School OS — Phase 0B</h1>
+    <Head title="Home" />
+    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+        <header>
+            <h1 class="text-2xl font-semibold" data-testid="dashboard-heading">
+                {{ productName }}
+            </h1>
+            <p class="mt-1 text-slate-600" data-testid="active-school">
+                {{ props.activeSchool ? props.activeSchool.name : 'No School selected' }}
+            </p>
+        </header>
 
         <p
             v-if="schoolContextNotice && !activeSchool"
@@ -126,7 +103,7 @@ function activate(schoolId: string) {
             <h2 class="text-sm font-medium text-slate-500">Elevated access</h2>
             <p class="mt-1 text-sm">
                 Elevated access is active (see the banner above). It grants no School permissions,
-                and no School page is available under elevated access yet. Exit elevated access
+                and School pages are not available under elevated access. Exit elevated access
                 before selecting one of your own Schools.
             </p>
         </section>
@@ -142,7 +119,9 @@ function activate(schoolId: string) {
                 another session until
                 {{ new Date(platformElevation.activeElsewhere.expiresAt).toLocaleTimeString() }}.
             </p>
-            <button class="mt-2 text-sm underline" @click="endElevation">End it now</button>
+            <button type="button" class="mt-2 text-sm underline" @click="endElevation">
+                End it now
+            </button>
         </section>
 
         <section v-else-if="platformElevation.canStart" class="mt-6" data-testid="enter-school">
@@ -150,44 +129,6 @@ function activate(schoolId: string) {
             <a class="mt-1 inline-block text-sm underline" href="/app/platform/elevation">
                 Enter a School (elevated access)
             </a>
-        </section>
-
-        <section
-            v-if="platform.canViewAuditLog || platform.canGovernRoles || platform.canManageSchools"
-            class="mt-6"
-            data-testid="platform-admin"
-        >
-            <h2 class="text-sm font-medium text-slate-500">Platform administration</h2>
-            <ul class="mt-1 space-y-1 text-sm">
-                <li v-if="platform.canManageSchools">
-                    <a class="underline" href="/app/platform/schools">Schools (platform)</a>
-                </li>
-                <li v-if="platform.canViewAuditLog">
-                    <a class="underline" href="/app/platform/audit-log">Platform audit log</a>
-                </li>
-                <li v-if="platform.canGovernRoles">
-                    <a class="underline" href="/app/platform/roles">Platform roles</a>
-                </li>
-            </ul>
-        </section>
-
-        <section v-if="groups.canViewOwn || groups.canGovern" class="mt-6" data-testid="groups">
-            <h2 class="text-sm font-medium text-slate-500">School Groups</h2>
-            <ul class="mt-1 space-y-1 text-sm">
-                <li v-if="groups.canViewOwn">
-                    <a class="underline" href="/app/groups">Your School Groups</a>
-                </li>
-                <li v-if="groups.canGovern">
-                    <a class="underline" href="/app/platform/groups">School Groups (platform)</a>
-                </li>
-            </ul>
-        </section>
-
-        <section class="mt-6">
-            <h2 class="text-sm font-medium text-slate-500">Active School</h2>
-            <p class="mt-1" data-testid="active-school">
-                {{ activeSchool ? activeSchool.name : 'None selected' }}
-            </p>
         </section>
 
         <section v-if="memberships.length === 0" class="mt-6" data-testid="no-school-state">
@@ -211,7 +152,8 @@ function activate(schoolId: string) {
             <ul class="mt-2 space-y-1">
                 <li v-for="m in memberships" :key="m.schoolId">
                     <button
-                        class="text-sm underline disabled:no-underline disabled:text-slate-400"
+                        type="button"
+                        class="text-sm underline disabled:text-slate-400 disabled:no-underline"
                         :disabled="m.isActive || !m.available"
                         @click="activate(m.schoolId)"
                     >
@@ -224,141 +166,44 @@ function activate(schoolId: string) {
             </ul>
         </section>
 
-        <nav v-if="nav.canViewGuardianPortal" class="mt-8" aria-label="Guardian portal">
-            <h2 class="text-sm font-medium text-slate-500">Guardian portal</h2>
-            <ul class="mt-2 space-y-1 text-sm">
-                <li>
-                    <a class="underline" href="/app/portal/communications"
-                        >Messages from the School</a
-                    >
-                </li>
-                <li>
-                    <a class="underline" href="/app/portal/conversations">Conversations</a>
-                </li>
-                <li v-if="nav.canViewGuardianAttendance">
-                    <a class="underline" href="/app/portal/attendance">Attendance</a>
-                </li>
-                <li v-if="nav.canViewGuardianFees">
-                    <a class="underline" href="/app/portal/fees">Fees</a>
-                </li>
-            </ul>
-        </nav>
+        <p
+            v-if="activeSchool && !platformElevation.isElevated && !hasSchoolModules"
+            class="mt-8 text-sm text-slate-600"
+            data-testid="no-modules"
+        >
+            No modules are available to your account in this School.
+        </p>
 
-        <nav class="mt-8">
-            <h2 class="text-sm font-medium text-slate-500">Navigation</h2>
-            <ul class="mt-2 space-y-1 text-sm">
-                <li v-if="nav.canViewSchoolSettings">
-                    <a class="underline" href="/app/settings">School settings</a>
-                </li>
-                <li v-if="nav.canViewSchoolSetup">
-                    <a class="underline" href="/app/school-setup">School setup</a>
-                </li>
-                <li v-if="nav.canViewStudents">
-                    <a class="underline" href="/app/students">Students</a>
-                </li>
-                <li v-if="nav.canViewGuardians">
-                    <a class="underline" href="/app/guardians">Guardians</a>
-                </li>
-                <li v-if="nav.canViewCommunications">
-                    <a class="underline" href="/app/communications">Communication Hub</a>
-                </li>
-                <li v-if="nav.canViewEnrollments">
-                    <a class="underline" href="/app/enrollments">Enrollments</a>
-                </li>
-                <li v-if="nav.canViewEnrollmentRollovers">
-                    <a class="underline" href="/app/enrollment-rollovers">Enrollment Rollovers</a>
-                </li>
-                <li v-if="nav.canViewAdmissions">
-                    <a class="underline" href="/app/admissions">Admissions</a>
-                </li>
-                <li v-if="nav.canViewFinance">
-                    <a class="underline" href="/app/finance">Finance</a>
-                </li>
-                <li v-if="nav.canViewSubjectOfferings">
-                    <a class="underline" href="/app/subject-offerings">Subject Offerings</a>
-                </li>
-                <li v-if="nav.canViewHr">
-                    <a class="underline" href="/app/hr">HR</a>
-                </li>
-                <li v-if="nav.canViewCanteenDirectory">
-                    <a class="underline" href="/app/canteen-outlets">Canteen Outlets</a>
-                </li>
-                <li v-if="nav.canViewCanteenDirectory">
-                    <a class="underline" href="/app/canteen-items">Canteen Items</a>
-                </li>
-                <li v-if="nav.canViewCanteenOrders">
-                    <a class="underline" href="/app/canteen-orders">Canteen Orders</a>
-                </li>
-                <li v-if="nav.canViewCanteenSettings">
-                    <a class="underline" href="/app/canteen-settings">Canteen Settings</a>
-                </li>
-                <li v-if="nav.canViewTimetablePeriods">
-                    <a class="underline" href="/app/timetable-periods">Timetable Periods</a>
-                </li>
-                <li v-if="nav.canViewTimetableSchedule">
-                    <a class="underline" href="/app/timetable-schedule">Timetable Schedule</a>
-                </li>
-                <li v-if="nav.canViewTeachingAssignments">
-                    <a class="underline" href="/app/teaching-assignments">Teaching Assignments</a>
-                </li>
-                <li v-if="nav.canViewLeave">
-                    <a class="underline" href="/app/leave/requests">Leave</a>
-                </li>
-                <li v-if="nav.canUseLeaveApprovals">
-                    <a class="underline" href="/app/leave/approvals">Leave Approvals</a>
-                </li>
-                <li v-if="nav.canViewStaffAttendance">
-                    <a class="underline" href="/app/staff-attendance">Staff Attendance</a>
-                </li>
-                <li v-if="nav.canUseMyLeave">
-                    <a class="underline" href="/app/my-leave">My Leave</a>
-                </li>
-                <li v-if="nav.canUseMyStaffAttendance">
-                    <a class="underline" href="/app/my-staff-attendance">My Staff Attendance</a>
-                </li>
-                <li v-if="nav.canUseMyPayslips">
-                    <a class="underline" href="/app/my-payslips">My Payslips</a>
-                </li>
-                <li v-if="nav.canUseMyCurriculumDelivery">
-                    <a class="underline" href="/app/my-curriculum-delivery"
-                        >My Curriculum Delivery</a
-                    >
-                </li>
-                <li v-if="nav.canUseMyAttendance">
-                    <a class="underline" href="/app/my-attendance">My Attendance</a>
-                </li>
-                <li v-if="nav.canUseMyLearningContent">
-                    <a class="underline" href="/app/my-learning-content">My Learning Content</a>
-                </li>
-                <li v-if="nav.canUseMyAssignments">
-                    <a class="underline" href="/app/my-assignments">My Assignments</a>
-                </li>
-                <li v-if="nav.canViewPayroll">
-                    <a class="underline" href="/app/payroll">Payroll</a>
-                </li>
-                <li v-if="nav.canViewAnalytics">
-                    <a class="underline" href="/app/analytics/curriculum-coverage"
-                        >Analytics: Curriculum Coverage</a
-                    >
-                </li>
-                <li v-if="nav.canViewAuditLog">
-                    <a class="underline" href="/app/compliance/audit-log">Compliance: Audit log</a>
-                </li>
-                <li v-if="nav.canViewAutomation">
-                    <a class="underline" href="/app/automation">Automation</a>
-                </li>
-                <li v-if="nav.canViewApiClients">
-                    <a class="underline" href="/app/integrations/api-clients"
-                        >Integrations: API clients</a
-                    >
-                </li>
-                <li v-if="nav.canViewDomains">
-                    <a class="underline" href="/app/settings/domains">Custom domains</a>
-                </li>
-                <li v-if="nav.canViewStaffAccounts">
-                    <a class="underline" href="/app/settings/staff">Staff accounts</a>
-                </li>
-            </ul>
-        </nav>
+        <section
+            v-if="overview.length"
+            class="mt-8"
+            aria-labelledby="overview-heading"
+            data-testid="overview"
+        >
+            <h2 id="overview-heading" class="text-lg font-semibold">Your areas</h2>
+            <div class="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <section
+                    v-for="group in overview"
+                    :key="group.key"
+                    class="rounded border border-slate-200 p-4"
+                    :aria-labelledby="`overview-${group.key}`"
+                >
+                    <h3 :id="`overview-${group.key}`" class="text-sm font-semibold">
+                        {{ group.label }}
+                    </h3>
+                    <ul class="mt-2 space-y-1 text-sm">
+                        <li v-for="item in group.items" :key="item.key">
+                            <InertiaLink
+                                :href="item.href"
+                                class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500"
+                                >{{
+                                    item.section ? `${item.section}: ${item.label}` : item.label
+                                }}</InertiaLink
+                            >
+                        </li>
+                    </ul>
+                </section>
+            </div>
+        </section>
     </main>
 </template>

@@ -123,7 +123,7 @@ class AutomationManagementTest extends TestCase
             $this->as($this->user($email), $w->school)->get(self::URL)->assertForbidden();
             $this->as($this->user($email), $w->school)->post($this->ruleUrl('disable'))->assertForbidden();
             $this->as($this->user($email), $w->school)->get('/app')
-                ->assertInertia(fn (AssertableInertia $page) => $page->where('nav.canViewAutomation', false));
+                ->assertInertia(fn (AssertableInertia $page) => $page->where('navigation', self::nav(hidden: ['automation'])));
         }
 
         // Platform Super Admin never has a School context: pages return to
@@ -138,7 +138,7 @@ class AutomationManagementTest extends TestCase
 
         foreach (['school.admin@example.test', 'principal@example.test'] as $email) {
             $this->as($this->user($email), $w->school)->get('/app')
-                ->assertInertia(fn (AssertableInertia $page) => $page->where('nav.canViewAutomation', true));
+                ->assertInertia(fn (AssertableInertia $page) => $page->where('navigation', self::nav(shown: ['automation'])));
         }
     }
 

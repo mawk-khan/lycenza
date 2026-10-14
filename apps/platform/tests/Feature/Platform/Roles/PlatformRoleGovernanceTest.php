@@ -213,8 +213,8 @@ class PlatformRoleGovernanceTest extends TestCase
         $this->assertSame(['platform.audit.view'], app(CapabilityResolver::class)->platformCapabilities($other));
 
         $this->get('/app')->assertInertia(fn (AssertableInertia $p) => $p
-            ->where('platform.canViewAuditLog', true)
-            ->where('platform.canGovernRoles', true)
+            ->where('navigation', self::nav(shown: ['platform-audit-log']))
+            ->where('navigation', self::nav(shown: ['platform-roles']))
         );
     }
 
@@ -236,11 +236,11 @@ class PlatformRoleGovernanceTest extends TestCase
         $this->enrollActiveMfaFactor($auditor);
         $this->actingAs($auditor)->get('/app')->assertOk()->assertInertia(fn (AssertableInertia $p) => $p
             ->where('activeSchool', null)
-            ->where('platform.canViewAuditLog', true)
-            ->where('platform.canGovernRoles', false)
+            ->where('navigation', self::nav(shown: ['platform-audit-log']))
+            ->where('navigation', self::nav(hidden: ['platform-roles']))
             ->where('platformElevation.canStart', false)
-            ->where('groups.canViewOwn', false)
-            ->where('groups.canGovern', false)
+            ->where('navigation', self::nav(hidden: ['school-groups']))
+            ->where('navigation', self::nav(hidden: ['platform-groups']))
         );
         $this->get('/app/platform/elevation')->assertForbidden();
         $this->post('/app/platform/elevation/confirm', ['target' => $school->id, 'reason_code' => 'operational_support'])->assertForbidden();

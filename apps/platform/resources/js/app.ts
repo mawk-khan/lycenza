@@ -1,15 +1,15 @@
 import { createApp, h, type DefineComponent } from 'vue';
 import { createInertiaApp } from '@inertiajs/vue3';
 import AccountLayout from './Layouts/AccountLayout.vue';
+import { PRODUCT_NAME } from './support/product';
 import { captureRecoveryFragment } from './support/recoveryFragment';
-
-const appName = import.meta.env.VITE_APP_NAME || 'School OS';
 
 // Before Inertia reads the URL (ADR 0056 section 8.1).
 captureRecoveryFragment();
 
 createInertiaApp({
-    title: (title) => `${title} - ${appName}`,
+    // SWC.1 (ADR 0073 section 7): the product name, never APP_NAME.
+    title: (title) => (title ? `${title} - ${PRODUCT_NAME}` : PRODUCT_NAME),
     resolve: (name) => {
         const pages = import.meta.glob<DefineComponent>('./Pages/**/*.vue', { eager: true });
         return pages[`./Pages/${name}.vue`];
@@ -19,8 +19,9 @@ createInertiaApp({
     // element; the same rules ship in the built stylesheet
     // (resources/css/app.css, "Inertia progress bar").
     progress: { includeCSS: false },
-    // Every page gets the account bar (Log out); it renders only for an
-    // authenticated request. No page declares its own layout.
+    // Every page gets the account bar and, since SWC.1, the navigation
+    // shell; both render only for an authenticated request. No page
+    // declares its own layout.
     layout: () => AccountLayout,
     setup({ el, App, props, plugin }) {
         createApp({ render: () => h(App, props) })

@@ -45,8 +45,8 @@ class StaffSelfServiceUiTest extends TestCase
         ] as [$capabilities, [$leave, $attendance, $payslips]]) {
             $user = $this->staffMember($w['school'], $capabilities)['user'];
             $this->actor($w, $user)->get('/app')->assertInertia(fn (AssertableInertia $page) => $page
-                ->where('nav.canUseMyLeave', $leave)->where('nav.canUseMyStaffAttendance', $attendance)->where('nav.canUseMyPayslips', $payslips)
-                ->where('nav.canViewLeave', false)->where('nav.canViewStaffAttendance', false));
+                ->where('navigation', self::navOffers('my-leave', $leave))->where('navigation', self::navOffers('my-staff-attendance', $attendance))->where('navigation', self::navOffers('my-payslips', $payslips))
+                ->where('navigation', self::nav(hidden: ['leave']))->where('navigation', self::nav(hidden: ['staff-attendance'])));
             $this->actor($w, $user)->get('/app/my-leave')->assertStatus($leave ? 200 : 403);
             $this->actor($w, $user)->get('/app/my-staff-attendance')->assertStatus($attendance ? 200 : 403);
             $this->actor($w, $user)->get('/app/my-payslips')->assertStatus($payslips ? 200 : 403);

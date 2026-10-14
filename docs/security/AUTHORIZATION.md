@@ -1104,6 +1104,28 @@ No new capability.
 
 **Recorded for SR.5 or owner decision:** ADR 0071 §26.13.
 
+## Staff navigation is discoverability, never authorization (SWC.1, ADR 0073 §6, §17)
+
+- **One catalogue.** `App\Support\Navigation\StaffNavigation` lists every
+  navigation destination with its EXISTING capability requirement (exact,
+  any-of or all-of). `NavigationBuilder` evaluates it per request and the
+  shared Inertia `navigation` prop carries only the entries the actor may
+  see. There are no role-specific menus and no navigation-only capabilities;
+  `StaffNavigationCatalogueTest` refuses a role key anywhere in it.
+- **Context.** School entries are evaluated against the actor's capabilities
+  in the active School from `TenantContext` only. An elevated session gets no
+  School entry (rule 83). A School custom host gets no platform, Group or
+  API-token entry (ADR 0054 §8.2).
+- **Gated surfaces.** StudentMark (E35–E37) and statutory payroll (E45) have
+  no entry; the Guardian portal (E46) appears only behind
+  `PortalAvailability` and a live ActingGuardian.
+- **Not authorization.** Every destination re-checks its own capability;
+  hiding an entry never replaces that check
+  (`NavigationVisibilityTest::a_hidden_entry_is_never_authorization...`).
+  The Finance, HR and Payroll hubs render for any active member and show
+  only the sub-areas the actor holds; they display no data themselves
+  (ADR 0073 §17.9, finding F-1).
+
 ## What is NOT yet implemented
 
 Tenant-custom roles (role *assignment* exists: Settings → Staff accounts

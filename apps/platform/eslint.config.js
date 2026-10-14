@@ -3,6 +3,7 @@ import pluginVue from 'eslint-plugin-vue';
 import tseslint from 'typescript-eslint';
 import vueParser from 'vue-eslint-parser';
 import eslintConfigPrettier from 'eslint-config-prettier';
+import pluginVueA11y from 'eslint-plugin-vuejs-accessibility';
 
 // E16-R1 (2026-10-11): the TypeScript + Vue setup that
 // `@vue/eslint-config-typescript`'s default `createConfig()` produced,
@@ -39,6 +40,25 @@ const vueTypeScript = [
     },
 ];
 
+// SWC.1 (ADR 0073 section 8.2): the SWC accessibility baseline, linted.
+// Scoped to the files SWC creates or materially changes -- enabling it
+// repository-wide reported 800 existing findings in 162 files (2026-10-14),
+// a remediation programme SWC is not (OD-SWC-1). Each SWC slice adds the
+// files it builds to SWC_ACCESSIBILITY_FILES. `label-has-for` accepts a
+// nested OR an id-associated label (the plugin default demands both).
+// Inertia's link component is imported as `InertiaLink` in these files:
+// the plugin reads a `<Link>` tag as HTML <link>, which takes no ARIA.
+const SWC_ACCESSIBILITY_FILES = [
+    'resources/js/Layouts/AccountLayout.vue',
+    'resources/js/Components/Navigation/**/*.vue',
+    'resources/js/Pages/Home.vue',
+    'resources/js/Pages/App/Dashboard.vue',
+];
+const swcAccessibility = pluginVueA11y.configs['flat/recommended'].map((config) => ({
+    ...config,
+    files: SWC_ACCESSIBILITY_FILES,
+}));
+
 // Section 42 (Phase 0B): added now that real authenticated Vue UI
 // exists. ESLint owns correctness/quality rules; Prettier owns
 // formatting; eslint-config-prettier disables the small set of ESLint
@@ -49,6 +69,16 @@ export default [
     ...pluginVue.configs['flat/recommended'],
     ...vueTypeScript,
     eslintConfigPrettier,
+    ...swcAccessibility,
+    {
+        files: SWC_ACCESSIBILITY_FILES,
+        rules: {
+            'vuejs-accessibility/label-has-for': [
+                'error',
+                { required: { some: ['nesting', 'id'] } },
+            ],
+        },
+    },
     {
         ignores: ['public/build/**', 'vendor/**', 'node_modules/**'],
     },

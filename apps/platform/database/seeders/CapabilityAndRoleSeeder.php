@@ -662,6 +662,11 @@ class CapabilityAndRoleSeeder extends Seeder
             // real gated action behind it would be dead configuration
             // (rule 2); add it in the SAME PR that actually builds
             // exports.
+            // (SWC.1 drift note, 2026-10-14: payslips have since been
+            // built -- `PayslipController`, and own payslips under
+            // `payroll.payslips.self`, HRX.4. The `.statutory.manage`
+            // paragraph above is likewise historical: 9.6 is implemented,
+            // and the key gates real actions while held by no role.)
             ['key' => 'payroll.structures.view', 'label' => 'View Payroll salary components and structures', 'namespace' => 'school'],
             ['key' => 'payroll.structures.manage', 'label' => 'Manage Payroll salary components and structures', 'namespace' => 'school'],
             ['key' => 'payroll.compensation.view', 'label' => 'View non-sensitive Payroll compensation assignment metadata (structure/dates, no amounts)', 'namespace' => 'school'],
@@ -1219,6 +1224,15 @@ class CapabilityAndRoleSeeder extends Seeder
                     // implementation while Checkpoint 9.6 remains
                     // `[LEGAL REVIEW REQUIRED]`; granting it to anyone
                     // now would be premature regardless of sensitivity.
+                    // (SWC.1 drift note, 2026-10-14, ADR 0073 §12.2: the
+                    // two statements above are historical. Since SR.3
+                    // (ADR 0071 §4.3) the `payroll_officer` role below holds
+                    // `payroll.compensation.sensitive.view`/`.manage`;
+                    // School Admin still does not. Checkpoint 9.6 is
+                    // implemented and `payroll.statutory.manage` gates real
+                    // statutory actions, but it is still granted to NO
+                    // role, and the ESI disability threshold stays a legal
+                    // deferral (E45). Nothing here changes a grant.)
                     // Phase 0H: same day-to-day operational parity
                     // reasoning as Hostel/Inventory/Canteen/Visitor/
                     // Transport/Library above -- curating the Period

@@ -477,9 +477,9 @@ class CanteenAdminUiTest extends TestCase
         $this->activate($directoryViewer, $school);
 
         $this->get('/app')->assertInertia(fn ($page) => $page
-            ->where('nav.canViewCanteenDirectory', true)
-            ->where('nav.canViewCanteenOrders', false)
-            ->where('nav.canViewCanteenSettings', false)
+            ->where('navigation', self::nav(shown: ['canteen-outlets', 'canteen-items']))
+            ->where('navigation', self::nav(hidden: ['canteen-orders']))
+            ->where('navigation', self::nav(hidden: ['canteen-settings']))
         );
 
         $noAccess = $this->createUser();
@@ -487,18 +487,18 @@ class CanteenAdminUiTest extends TestCase
         $this->activate($noAccess, $school);
 
         $this->get('/app')->assertInertia(fn ($page) => $page
-            ->where('nav.canViewCanteenDirectory', false)
-            ->where('nav.canViewCanteenOrders', false)
-            ->where('nav.canViewCanteenSettings', false)
+            ->where('navigation', self::nav(hidden: ['canteen-outlets', 'canteen-items']))
+            ->where('navigation', self::nav(hidden: ['canteen-orders']))
+            ->where('navigation', self::nav(hidden: ['canteen-settings']))
         );
 
         [$admin, $adminSchool] = $this->createSchoolAdmin('school_admin');
         $this->activate($admin, $adminSchool);
 
         $this->get('/app')->assertInertia(fn ($page) => $page
-            ->where('nav.canViewCanteenDirectory', true)
-            ->where('nav.canViewCanteenOrders', true)
-            ->where('nav.canViewCanteenSettings', true)
+            ->where('navigation', self::nav(shown: ['canteen-outlets', 'canteen-items']))
+            ->where('navigation', self::nav(shown: ['canteen-orders']))
+            ->where('navigation', self::nav(shown: ['canteen-settings']))
         );
     }
 }

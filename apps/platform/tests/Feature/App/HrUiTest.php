@@ -45,12 +45,12 @@ class HrUiTest extends TestCase
         $viewer = $this->memberWith(['hr.employees.view'], $school);
 
         $this->actingAs($viewer)->get('/app')->assertInertia(fn ($page) => $page
-            ->where('nav.canViewHr', true)
+            ->where('navigation', self::nav(shown: ['hr']))
         );
 
         $withoutHr = $this->memberWith([], $school);
         $this->actingAs($withoutHr)->get('/app')->assertInertia(fn ($page) => $page
-            ->where('nav.canViewHr', false)
+            ->where('navigation', self::nav(hidden: ['hr']))
         );
     }
 
