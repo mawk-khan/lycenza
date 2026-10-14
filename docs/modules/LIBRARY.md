@@ -424,3 +424,26 @@ The contract:
 - **Legal.** New register item **E34** (Library fine / penalty regulation),
   separate from E31. Development is permitted; production use waits for a
   qualified answer.
+
+### Browser surface (SWC.3, 2026-10-14, ADR 0073 §19)
+
+**Fine policy page.** `/app/library/fine-policy` (Operations → Library →
+Fine policy, `library.fines.view`) shows the current version and the
+immutable history. Publishing (`library.fines.manage`) carries the version
+the form showed. A repeat or stale publish is refused
+(`LIBRARY_FINE_POLICY_CHANGED`, 409, checked under the advisory lock;
+§19.4). The `/api/v1` publish is unchanged.
+
+**Loan page.** `/app/library/circulation/{loan}` is linked from each
+Circulation row (`library.circulation.view`):
+- with `library.fines.view`, it shows the loan's fine: the stored amount,
+  days, policy version, and the void status and reason;
+- with `library.fines.void`, it adds a reasoned void behind a confirmation.
+
+A check-in that assessed a fine lands on that page.
+
+**No School-wide fine list (owner decision X2).**
+
+**Gaps and gates:**
+- Older returned loans are reachable only by URL; recorded for SWC.5.
+- Production stays gated by E34 (ADR 0058).

@@ -598,3 +598,20 @@ The contract:
   evidence (D8), registered with the retention anchors and the catalog.
   While they exist, the linked assignment stays `dependency_blocked`.
 - **Fees never reads Transport.**
+
+### Browser surface (SWC.3, 2026-10-14, ADR 0073 §19)
+
+**Route fee head.** The route page has a "Transport fee head" panel to set,
+show and clear the route's head (`transport.routes.manage`; view
+`transport.routes.view`).
+
+**Fees page.** `/app/transport/fees` (Operations → Transport → Fees,
+`transport.assignments.view`) lists recorded fee intent per active
+assignment and per year. Carry-forward to an open year
+(`transport.assignments.manage`) needs a confirmation. A repeat reports
+"already linked" and records no second link or selection (§19.3).
+
+Both pages use the same `TransportFeeSelectionService` as `/api/v1`.
+
+**Fee intent is not a charge.** Finance creates charges when it assesses
+fees. Production stays gated by E21/E30 (ADR 0058).

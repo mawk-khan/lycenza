@@ -705,3 +705,17 @@ counts with the same rule.
 
 Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md`
 §5.7).
+
+## Admission fee head on the web (SWC.3, 2026-10-14, ADR 0073 §19)
+
+**Fee head page.** `/app/admissions/fee-head`, linked from the Admissions
+index, shows the School's admission fee head (`admissions.view`) and sets or
+clears it (`admissions.manage`) through `AdmissionFeeSelectionService`.
+
+**Application page.** It shows the School head and, once converted, the fee
+intent the conversion recorded.
+
+**Conversion form.** It has no fee field: the head is never chosen per
+conversion (ADR 0067 D7), and a test pins that.
+
+Production stays gated by E21/E32 (ADR 0058).

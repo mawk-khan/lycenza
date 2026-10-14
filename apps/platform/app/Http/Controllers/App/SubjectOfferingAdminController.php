@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\App;
 
 use App\Domain\AcademicStructure\Application\SubjectOfferingService;
-use App\Http\Controllers\App\Concerns\MapsAcademicStructureErrors;
+use App\Http\Controllers\App\Concerns\MapsDomainRefusals;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
@@ -23,7 +23,7 @@ use Illuminate\Http\Request;
  */
 class SubjectOfferingAdminController extends Controller
 {
-    use AuthorizesCapability, MapsAcademicStructureErrors;
+    use AuthorizesCapability, MapsDomainRefusals;
 
     public function store(Request $request, TenantContext $context, SubjectOfferingService $offerings): RedirectResponse
     {

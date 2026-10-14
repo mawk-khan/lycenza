@@ -8,6 +8,7 @@ use App\Domain\Library\Application\Exceptions\LoanAlreadyReturnedException;
 use App\Domain\Library\Application\Exceptions\StudentNotEligibleException;
 use App\Domain\Library\Application\LibraryLoanService;
 use App\Domain\Library\Infrastructure\LibraryCopy;
+use App\Domain\Library\Infrastructure\LibraryFine;
 use App\Domain\Library\Infrastructure\LibraryLoan;
 use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
@@ -156,6 +157,11 @@ class LibraryCirculationController extends Controller
             $service->checkIn($loan, $context->actor());
         } catch (LoanAlreadyReturnedException $e) {
             throw ValidationException::withMessages(['library_loan' => [$e->getMessage()]]);
+        }
+
+        // SWC.3 (ADR 0073 section 19.5): when check-in assessed a fine, show it in its loan's context.
+        if (LibraryFine::query()->where('library_loan_id', $loan->id)->exists()) {
+            return redirect()->route('app.library.circulation.show', $loan->id);
         }
 
         return redirect('/app/library/circulation')->with('flash', 'Item checked in.');

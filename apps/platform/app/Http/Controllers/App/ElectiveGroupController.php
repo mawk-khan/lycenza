@@ -7,7 +7,7 @@ use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\ElectiveGroup;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
-use App\Http\Controllers\App\Concerns\MapsAcademicStructureErrors;
+use App\Http\Controllers\App\Concerns\MapsDomainRefusals;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Support\Authorization\AuthorizesCapability;
@@ -39,7 +39,7 @@ use Inertia\Response;
  */
 class ElectiveGroupController extends Controller
 {
-    use AuthorizesCapability, MapsAcademicStructureErrors;
+    use AuthorizesCapability, MapsDomainRefusals;
 
     public function index(Request $request, TenantContext $context): Response
     {

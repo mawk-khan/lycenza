@@ -4,6 +4,7 @@ namespace App\Domain\Library\Application;
 
 use App\Domain\Fees\Application\Sources\FeeSourceChargeService;
 use App\Domain\Library\Application\Exceptions\InvalidLibraryFinePolicyException;
+use App\Domain\Library\Application\Exceptions\LibraryFinePolicyChangedException;
 use App\Domain\Library\Infrastructure\LibraryFinePolicy;
 use App\Models\School;
 use App\Models\User;
@@ -33,13 +34,21 @@ class LibraryFinePolicyService
     /**
      * @param  array{status: string, fee_head_id?: ?string, daily_rate?: ?string, grace_days?: ?int, max_amount?: ?string}  $data
      */
-    public function publish(School $school, array $data, ?User $actor): LibraryFinePolicy
+    public function publish(School $school, array $data, ?User $actor, ?int $expectedCurrentVersion = null): LibraryFinePolicy
     {
         $columns = $this->validated($school, $data);
 
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $columns, $actor) {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $columns, $actor, $expectedCurrentVersion) {
             DB::select('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', ['library.fine_policy:'.$school->id]);
             $previous = $this->current($school);
+
+            // SWC.3 (ADR 0073 section 19.4, X5): when the caller states the
+            // version its form was based on (0 = none yet), a different
+            // current version -- a duplicate submission, or a newer publish
+            // by someone else -- is refused under the same per-School lock.
+            if ($expectedCurrentVersion !== null && ($previous->version ?? 0) !== $expectedCurrentVersion) {
+                throw new LibraryFinePolicyChangedException;
+            }
 
             $policy = LibraryFinePolicy::query()->create([
                 ...$columns,

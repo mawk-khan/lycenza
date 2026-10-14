@@ -278,7 +278,7 @@ controllers:
   - Subjects, Offerings and Elective Groups: `academics.subjects.*`.
 - **Domain refusals on the web:** overlap, out-of-range, stale transition,
   concurrent activation, classification lock and the elective rules are
-  field errors (`MapsAcademicStructureErrors`), never a 500.
+  field errors (`MapsDomainRefusals`), never a 500.
 
 **API corrections, the only API-observable changes:**
 - a duplicate Section code on `PATCH` is a 422;

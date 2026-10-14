@@ -110,6 +110,9 @@ const hasFilters =
                     Admission Applications across your School.
                 </p>
             </div>
+            <a href="/app/admissions/fee-head" class="text-sm font-medium underline"
+                >Admission fee</a
+            >
             <a href="/app/admissions/applicants" class="text-sm font-medium underline"
                 >Applicants</a
             >

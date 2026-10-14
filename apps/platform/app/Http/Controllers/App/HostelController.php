@@ -4,6 +4,7 @@ namespace App\Http\Controllers\App;
 
 use App\Domain\Hostel\Infrastructure\Hostel;
 use App\Domain\Hostel\Infrastructure\HostelRoom;
+use App\Http\Controllers\App\Fees\OperationalFeePanels;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Support\Audit\AuditRecorder;
@@ -117,6 +118,8 @@ class HostelController extends Controller
                 'bedCount' => $r->beds_count,
             ]),
             'canManage' => $capabilities->canInSchool($context->actor(), 'hostel.directory.manage', $school),
+            // SWC.3 (ADR 0073 section 19): the Hostel's default OPF fee head (OPF.2).
+            'feePanel' => app(OperationalFeePanels::class)->hostel($school, $model, $capabilities->canInSchool($context->actor(), 'hostel.directory.manage', $school)),
         ]);
     }
 

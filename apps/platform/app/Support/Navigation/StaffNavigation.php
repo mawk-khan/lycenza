@@ -111,10 +111,15 @@ final class StaffNavigation
             new E('transport-vehicles', 'operations', 'Vehicles', 'app.transport.vehicles.index', all: ['transport.vehicles.view'], section: 'Transport'),
             new E('transport-operations', 'operations', 'Daily operations', 'app.transport.operations.index', all: ['transport.vehicles.view'], section: 'Transport'),
             new E('transport-assignments', 'operations', 'Student assignments', 'app.transport.assignments.index', all: ['transport.assignments.view'], section: 'Transport'),
+            // SWC.3 (ADR 0073 section 19): OPF fee intent and carry-forward.
+            new E('transport-fees', 'operations', 'Fees', 'app.transport.fees', all: ['transport.assignments.view'], section: 'Transport'),
             new E('hostels', 'operations', 'Hostels', 'app.hostels.index', all: ['hostel.directory.view'], section: 'Hostel', activeWhen: ['app.hostels.*', 'app.hostel-rooms.*']),
             new E('hostel-residency', 'operations', 'Residency', 'app.hostel-residency.index', all: ['hostel.residency.view'], section: 'Hostel'),
+            new E('hostel-fees', 'operations', 'Fees', 'app.hostel-residency.fees', all: ['hostel.residency.view'], section: 'Hostel'),
             new E('library-catalogue', 'operations', 'Catalogue', 'app.library.titles.index', all: ['library.catalogue.view'], section: 'Library', activeWhen: ['app.library.titles.*']),
             new E('library-circulation', 'operations', 'Circulation', 'app.library.circulation.index', all: ['library.circulation.view'], section: 'Library'),
+            // Production use of Library fines stays gated by E34 (ADR 0058); navigation changes no gate.
+            new E('library-fine-policy', 'operations', 'Fine policy', 'app.library.fine-policy', all: ['library.fines.view'], section: 'Library'),
             new E('inventory-items', 'operations', 'Items', 'app.inventory-items.index', all: ['inventory.directory.view'], section: 'Inventory'),
             new E('inventory-locations', 'operations', 'Locations', 'app.inventory-locations.index', all: ['inventory.directory.view'], section: 'Inventory'),
             new E('inventory-stock', 'operations', 'Stock', 'app.inventory-stock.index', all: ['inventory.stock.view'], section: 'Inventory'),

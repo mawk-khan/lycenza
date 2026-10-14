@@ -2,6 +2,7 @@
 import { router, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import StatusBadge from '../../../../Components/StatusBadge.vue';
+import FeeHeadPanel from '../../../../Components/Fees/FeeHeadPanel.vue';
 
 interface StopRow {
     id: string;
@@ -21,6 +22,12 @@ interface Props {
     };
     stops: StopRow[];
     canManage: boolean;
+    // SWC.3: the route's OPF fee head.
+    feePanel: {
+        feeHead: { id: string; code: string; name: string; active?: boolean } | null;
+        options: Array<{ id: string; code: string; name: string }>;
+        canManage: boolean;
+    };
 }
 
 const props = defineProps<Props>();
@@ -166,5 +173,12 @@ function toggleRouteStatus(): void {
                 </tr>
             </tbody>
         </table>
+        <FeeHeadPanel
+            id="route-fee-head"
+            title="Transport fee head"
+            :action="`/app/transport/routes/${props.route.id}/fee-head`"
+            :panel="props.feePanel"
+            hint="Students assigned to this route from now on record fee intent for this fee head."
+        />
     </main>
 </template>

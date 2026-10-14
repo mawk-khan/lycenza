@@ -592,6 +592,7 @@ Sections 13–15 are rewritten at SWC.5. Known drift until then:*
 | Subject offerings / electives | Dashboard -> Subject Offerings | Admin, Principal | Yes (read) | *(Since SWC.2: create on the index, settings/deactivate on the detail page; Elective groups at `/app/elective-groups`.)* |
 | Communications | Dashboard -> Communication Hub | Admin, Principal | Yes | Student conversations need `communications.conversations.students` (no role has it) |
 | Finance / Fees / Payments | Dashboard -> Finance | School Admin | Yes | Payments are read-only (recorded via provider-settlement service) |
+| Operational fees (SWC.3) | Route/Hostel/room pages (fee-head panel); Operations → Transport → Fees, Hostel → Fees; Admissions index → Admission fee head; Operations → Library → Fine policy; Circulation row → loan page | School Admin (Librarian: fine view only) | Yes | The demo seeds no fee heads mapped to these sources and no fine policy. Map a head first, then carry forward. A fine needs an overdue check-in, so the demo shows the policy and loan pages without one. Fee intent is not a charge. |
 | HR | Dashboard -> HR | Admin, Principal, HR & Payroll | Partly | Org structure + sensitive sections need the demo HR & Payroll role |
 | Payroll | Dashboard -> Payroll | Admin, HR & Payroll | Yes | Payslips/statutory need the demo role; statutory configuration is not seeded |
 | Timetable | Dashboard -> Timetable Periods / Schedule | Admin, Principal | Yes | |

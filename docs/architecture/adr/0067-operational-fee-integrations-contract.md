@@ -1225,3 +1225,20 @@ Documentation only. No OPF rule changes.
   Since ADR 0071 (SR.3), the `librarian` role also holds `library.fines.view`.
   `library.fines.manage` and `.void` remain School Admin only
   (`ProductionRoleWorkflowsTest`).
+
+## Amendment note — SWC.3 browser surfaces built (2026-10-14, ADR 0073 §19)
+
+The browser surfaces assigned above are built over the unchanged OPF
+Application services: mappings, fee intent, carry-forward, admission fee
+head, fine policy and per-loan fine with void.
+
+**One service change** (X5, ADR 0073 §19.4):
+- `LibraryFinePolicyService::publish()` accepts an optional expected
+  current version, checked under its advisory lock.
+- A mismatch is `LIBRARY_FINE_POLICY_CHANGED` (409).
+- The `/api/v1` publish does not send one, so its behaviour is unchanged.
+
+**What did not change:**
+- No migration, capability or fee semantics.
+- Production stays gated by E21, E30–E32 and E34 (X3: refusal is decided at
+  Pre-Production).

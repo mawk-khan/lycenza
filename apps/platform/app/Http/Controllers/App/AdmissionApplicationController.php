@@ -30,6 +30,7 @@ use App\Domain\Students\Application\Exceptions\DuplicateEnrollmentRollNumberExce
 use App\Domain\Students\Application\Exceptions\DuplicateStudentNumberException;
 use App\Domain\Students\Application\Exceptions\InvalidEnrollmentDateRangeException;
 use App\Domain\Students\Application\Exceptions\InvalidEnrollmentRollNumberException;
+use App\Http\Controllers\App\Fees\OperationalFeePanels;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Support\Authorization\AuthorizesCapability;
@@ -185,6 +186,9 @@ class AdmissionApplicationController extends Controller
             // StudentEnrollmentController::sectionOptions()'s
             // `onlyEligible` convenience-filtering precedent.
             'compatibleSections' => ($canManage && $model->status === 'accepted') ? $this->compatibleSectionOptions($model) : [],
+            // SWC.3 (ADR 0073 section 19): the School's admission fee head and,
+            // once converted, the fee intent the conversion recorded (OPF.3).
+            'feePanel' => app(OperationalFeePanels::class)->admissionApplication($school, $model),
         ]);
     }
 

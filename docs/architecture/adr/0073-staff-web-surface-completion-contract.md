@@ -3,7 +3,8 @@
 - Status: **Accepted — SWC.0 contract (2026-10-14, documentation only).
   Owner decisions X1–X5 frozen (2026-10-14, §16). SWC.1 NAVIGATION SHELL &
   PRODUCT LANDING SURFACES — COMPLETE (2026-10-14, §17). SWC.2 ACADEMIC
-  STRUCTURE WEB SURFACES — COMPLETE (2026-10-14, §18). SWC.3 NEXT.**
+  STRUCTURE WEB SURFACES — COMPLETE (2026-10-14, §18). SWC.3 OPERATIONAL FEE
+  WEB SURFACES — COMPLETE (2026-10-14, §19). SWC.5 NEXT.**
 - Date: 2026-10-14
 - Programme: **SWC — Staff Web Surface Completion** (`MASTER-ROADMAP.md`,
   post-foundation programme 8).
@@ -1193,7 +1194,7 @@ controllers call the same service:
   but `bootstrap/app.php` renders that envelope for `api/*` only. On a web
   request the overlap, stale-transition and concurrent-activation refusals
   became 500s.
-- **Fix:** `MapsAcademicStructureErrors` (the house pattern of
+- **Fix:** `MapsDomainRefusals` (the house pattern of
   `StudentSubjectEnrollmentController`, generalized) turns them into field
   errors: `starts_on` for create, `academic_year` for activate/close.
 - **Unchanged:** the refusal itself and its no-write guarantee.
@@ -1249,7 +1250,8 @@ the picker.
 
 **Contract note (reported, not changed).** The brief said "do not allow an
 inactive Offering". `ElectiveGroupService` has no such rule, and adding one
-would be new elective semantics (§4.1).
+would be new elective semantics (§4.1). *(2026-10-14: superseded by the
+owner decision recorded in §19.1 -- the server now refuses it.)*
 - **Web:** the picker offers active Offerings only.
 - **Server:** the service accepts an inactive one exactly as before.
 - **Next step:** a server-side refusal needs an owner decision.
@@ -1330,3 +1332,216 @@ the repository, so the rendered layout was not visually reviewed.
 
 **Not in SWC.2:** none of SWC.3 (OPF screens); no portal, marks or results
 work; no Documents or webhook UI.
+
+## 19. SWC.3 — Operational Fee Web Surfaces — COMPLETE (2026-10-14)
+
+**Baseline.** `origin/main` = `2c8e902c` (SWC.2), with green integration and
+`main` `CI gate`, ruleset 24909660 active with no bypass actor, and the
+drift check `ok`.
+
+**Owner decisions (frozen at SWC.3 authorisation):**
+- **X2, a School-wide Library fine list:** OUT. No fine query was added; a
+  fine is seen on its loan.
+- **X3, production refusal for E30–E34:** DEFERRED TO PRE-PRODUCTION. No
+  refusal logic was added or removed.
+- **X5, duplicate-submission protection:** REQUIRED before browser exposure
+  (§19.3, §19.4).
+- **Elective Group inactive Offering:** the server refuses a NEW assignment
+  (§19.1).
+
+**Unchanged:** no migration, no capability, no email or provider work, and
+no fee, formula, proration, deposit, refund, tax, waiver or payment
+semantics.
+
+### 19.1 Elective Group: an inactive Offering is never newly assigned
+
+**The rule.** `ElectiveGroupService::assignOffering()` refuses an Offering
+whose locked row is not `active`, with
+`InactiveSubjectOfferingGroupAssignmentException` (422,
+`INACTIVE_SUBJECT_OFFERING_GROUP_ASSIGNMENT`). It is checked after the
+existing no-op (already in this group) and before the participation-history
+rule.
+
+**Unchanged behaviour:**
+- an Offering already in a group stays in it when later deactivated, and
+  stays listed with its status;
+- re-submitting that existing membership is still a no-op;
+- removal follows the unchanged participation-history rule.
+
+**Tests:** `ElectiveGroupUiTest` covers the refusal on a direct request and
+through the service.
+
+### 19.2 Contract audit (verified before coding)
+
+| Operation | Authority (existing) | API | Capability | Protection |
+|---|---|---|---|---|
+| Route fee head set/clear | `TransportFeeSelectionService::setRouteFeeHead` | `PUT …/transport-routes/{r}/fee-head` | `transport.routes.manage` (view `.routes.view`) | route row lock; one mapping per route; audit only on change |
+| Transport fee intent | `TransportFeeSelection` rows (read) | `GET …/transport-student-assignments/{a}/fee-selections` | `transport.assignments.view` | read |
+| Transport carry-forward | `TransportFeeSelectionService::carryForward` | `POST …/transport-fee-selections/carry-forward` (`idempotent`) | `transport.assignments.manage` | per-assignment row lock + existing-link check; `transport_fee_selections_one_per_year`; `fee_optional_selections_one_active` |
+| Hostel / room fee head | `HostelFeeSelectionService::setHostelFeeHead/setRoomFeeHead` | `PUT …/hostels/{h}/fee-head`, `…/hostel-rooms/{r}/fee-head` | `hostel.directory.manage` | row lock; room override, else Hostel default (OPF.2 precedence) |
+| Hostel carry-forward | `HostelFeeSelectionService::carryForward` | `POST …/hostel-fee-selections/carry-forward` (`idempotent`) | `hostel.residency.manage` | as Transport; `hostel_fee_selections_one_per_year` |
+| Admission fee head | `AdmissionFeeSelectionService::setFeeHead` | `PUT …/admission-fee-head` | `admissions.manage` (view `admissions.view`) | one School mapping; no per-conversion choice (D7) |
+| Conversion fee intent | `AdmissionFeeSelection` row (read) | `GET …/admission-applications/{a}/fee-selection` | `admissions.view` | read |
+| Fine policy current / versions | `LibraryFinePolicyService::current/versions` | `GET …/library-fine-policy[/versions]` | `library.fines.view` | read; versions immutable |
+| Fine policy publish | `LibraryFinePolicyService::publish` | `POST …/library-fine-policy/versions` (`idempotent`) | `library.fines.manage` | per-School advisory lock; `library_fine_policies_one_version` |
+| Loan fine | `LibraryFine` row (read) | `GET …/library-loans/{l}/fine` | `library.fines.view` | read |
+| Fine void | `LibraryFineService::void` | `POST …/library-fines/{f}/void` (`idempotent`) | `library.fines.void` | loan row lock; `library_fine_voids_one_per_fine`; already-voided refusal; cancels the charge (refused if paid or under concession) |
+
+**Findings:**
+- **No extraction was needed:** the OPF API controllers are already thin over
+  these services.
+- **New read seam:** one small Fees read class,
+  `App\Domain\Fees\Application\Sources\FeeHeadDirectory::forSchool()`,
+  returning id, code, name and active. It lets other modules label and offer
+  fee heads without reading a Fees table (rule 4). It is deliberately not a
+  method of `FeeSourceSelectionService`: that seam's caller allow-list (ADR
+  0067 §8, `OperationalFeeSourceArchitectureGuardTest`) stays exactly the
+  three OPF services. A label read is not a selection.
+- **Exceptions:** each module's domain exception carries a status and code.
+  The SWC.2 trait is generalized to `MapsDomainRefusals` (renamed from
+  `MapsAcademicStructureErrors`): 4xx → field error, 404 → 404.
+
+### 19.3 X5: carry-forward needed no change
+
+**Already safe by construction.**
+- **Concurrency:** each assignment or residency is row-locked in its own
+  transaction, and an existing link for that year is skipped.
+- **Unique indexes:** `*_fee_selections_one_per_year` refuses a second link,
+  and `fee_optional_selections_one_active` refuses a second selection. A lost
+  race is caught and reported as `already_linked`.
+- **Effect of a repeat:** a repeated or concurrent run records no second
+  link, selection or charge. It only appends one more summary audit row
+  (`*.fee_selection.carried_forward`), which is not a financial effect.
+
+**Proof (`OperationalFeeUiTest`):** a double submit gives linked 1, then
+already-linked 1. Exactly one link and one selection exist per student-year,
+and no charge.
+
+**Limitation:** a two-process race was not re-run. The OPF.1/OPF.2
+`*ConcurrencyTest` suites already prove it with real processes.
+
+### 19.4 X5: fine-policy publish needed the smallest guard
+
+**Finding.** Every publish appended version n+1 under a per-School advisory
+lock. Concurrency was already safe: `UNIQUE (school_id, version)` means one
+current policy. But a double-clicked form added a duplicate version, and a
+stale form silently superseded a newer one.
+
+**Fix.** `publish()` takes an optional `expectedCurrentVersion` (0 = none
+yet), checked under the same advisory lock. A mismatch throws
+`LibraryFinePolicyChangedException` (409, `LIBRARY_FINE_POLICY_CHANGED`).
+- **Web:** the form always sends the version it showed, as
+  `expected_version`.
+- **API:** it does not send one, so its behaviour is unchanged. It keeps its
+  `idempotent` replay protection.
+
+**Proof (`LibraryFineUiTest`):** a repeated publish is a form error with no
+new version; a stale one (after an API publish) is refused; a correctly
+based one succeeds. Versions run 3, 2, 1, with one audit row each.
+
+**Unchanged:** no migration.
+
+### 19.5 Screens
+
+**Transport:**
+- **Route page:** a "Transport fee head" panel to set, show and clear it
+  (`PUT /app/transport/routes/{id}/fee-head`).
+- **Fees page:** `GET /app/transport/fees` (navigation Operations → Transport
+  → Fees) shows fee intent per active assignment and per year (head, reason,
+  result, date). Carry-forward is offered for OPEN years only, with a
+  confirmation and a result summary.
+
+**Hostel:**
+- **Hostel page:** the Hostel's default fee head.
+- **Room page:** the room override, the Hostel default, and which governs
+  ("New residencies record: …").
+- **Fees page:** `GET /app/hostel-residency/fees` shows fee intent with its
+  mapping scope, plus carry-forward.
+
+**Admissions:**
+- **Fee head page:** `GET|PUT /app/admissions/fee-head`, linked from the
+  Admissions index.
+- **Application page:** shows the School head and, once converted, the
+  intent the conversion recorded. There is no fee field in the conversion
+  form, and a test pins that.
+
+**Library:**
+- **Fine policy page:** `GET|POST /app/library/fine-policy` (navigation
+  Operations → Library → Fine policy) shows the current version, the full
+  history and the publish form.
+- **Loan page:** `GET /app/library/circulation/{loan}`, linked from each
+  Circulation row. It shows the loan and, with `library.fines.view`, its
+  fine: the stored amount, days, policy version, status and void reason.
+  With `library.fines.void`, a reasoned void sits behind a confirmation.
+- **Check-in:** a check-in that assessed a fine now lands on that loan's
+  page. Without a fine it returns to the list as before.
+
+**Copy everywhere:** fee intent is "not a charge or a payment — Finance
+creates charges when it assesses fees". Waivers stay on Finance →
+Concessions.
+
+**Implementation:**
+- **Components:** `Components/Fees/{FeeHeadPanel, RoomFeeHeadPanel,
+  AdmissionFeePanel, FeeIntentTable, CarryForwardForm}` and
+  `support/feeIntent.ts` (labels only).
+- **Existing pages:** each gained one component or one link.
+- **Read side:** one panel presenter, `OperationalFeePanels`.
+- **Write side:** one web controller, `OperationalFeeController`, plus
+  `LibraryFineWebController`.
+
+### 19.6 Money, tenancy, capabilities, gates
+
+**Money.** Amounts are the stored `NUMERIC` strings, never cast or computed
+in PHP or Vue. A test pins a fine's displayed amount to the stored value and
+to its charge amount. The rate and cap are entered as strings and validated
+by the service.
+
+**Tenancy.** Every page and mutation uses TenantContext:
+- another School's route, hostel, room, application, loan or fine is a 404;
+- another School's fee head is the service's "not selectable" field error;
+- a client-supplied School id is never read.
+
+**Capabilities:** existing keys only (§19.2); new capabilities: 0.
+**Navigation:** 77 catalogue entries.
+
+**E30–E34:** browser availability is not production approval.
+- Transport, Hostel and Admission fee intent stay gated by E21 and E30–E32,
+  and Library fines by E34, exactly as in ADR 0058 and ADR 0067 §22.
+- No production refusal was added or removed (X3); Pre-Production decides.
+
+### 19.7 Tests and verification
+
+**New tests:**
+- `OperationalFeeUiTest` (7): mappings, precedence, intent, idempotent
+  carry-forward with no charge, refusals, capabilities, cross-School, no
+  conversion fee choice, and no query per row on the fee pages.
+- `LibraryFineUiTest` (4): policy, the X5 publish guard, the check-in →
+  loan page, stored amounts, void, repeat-void and capabilities;
+  cross-School 404s; and no School-wide fine route.
+- An `ElectiveGroupUiTest` addition (§19.1).
+
+**Verification:** the counts are recorded in the SWC.3 commit.
+
+**DDEV proof (`ddev demo-reset --build`, web routes only, School Admin):**
+- **Setup:** the demo seeds no fee heads or fee structures. Two heads, and
+  per-grade 2026-27 structures with an optional Transport line, were created
+  through the existing Finance → Fee setup pages.
+- **Admission fee head:** set; an unknown head is a form error.
+- **Transport:** route fee head set. Carry-forward into the open draft year
+  2027-28 reports "not applicable" ×8 (no structure there). Into 2026-27 it
+  links 8; the repeat links 0 and reports 8 already linked. The Fees page
+  then shows 8 intent rows (`carry_forward`, `created`).
+- **Hostel:** default → room override → cleared, with precedence shown each
+  time. Repeat carry-forward links nothing.
+- **Fine policy:** v1 published (rate 5.00, cap 100.00 INR). The
+  double-submitted form is refused, leaving one version. A Librarian sees it
+  read-only and gets 403 on publish.
+- **Loan page:** renders.
+- **Limitation:** an overdue fine cannot be produced in the demo without
+  moving the clock (a checkout's due date is never before its checkout), so
+  fine display and void are proven by `LibraryFineUiTest`, not by DDEV.
+
+**Deferred to SWC.5:** a returned-loan lookup. An older returned loan's
+fine is reachable from the check-in redirect and the loan URL, but no list
+shows returned loans. That would be a loan list, not a fine register; the
+decision is left to SWC.5.

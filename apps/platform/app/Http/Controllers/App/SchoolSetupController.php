@@ -11,7 +11,7 @@ use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Subject;
 use App\Domain\Campuses\Application\CampusAdministrationService;
 use App\Domain\Schools\Events\SchoolProfileUpdated;
-use App\Http\Controllers\App\Concerns\MapsAcademicStructureErrors;
+use App\Http\Controllers\App\Concerns\MapsDomainRefusals;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Models\EducationBoard;
@@ -44,7 +44,7 @@ use Inertia\Response;
  */
 class SchoolSetupController extends Controller
 {
-    use AuthorizesCapability, MapsAcademicStructureErrors;
+    use AuthorizesCapability, MapsDomainRefusals;
 
     public function index(TenantContext $context): Response
     {

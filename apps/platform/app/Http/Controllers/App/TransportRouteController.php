@@ -4,6 +4,7 @@ namespace App\Http\Controllers\App;
 
 use App\Domain\Transport\Infrastructure\TransportRoute;
 use App\Domain\Transport\Infrastructure\TransportStop;
+use App\Http\Controllers\App\Fees\OperationalFeePanels;
 use App\Http\Controllers\Controller;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
@@ -115,6 +116,8 @@ class TransportRouteController extends Controller
                 'status' => $s->status,
             ])->all(),
             'canManage' => $capabilities->canInSchool($context->actor(), 'transport.routes.manage', $school),
+            // SWC.3 (ADR 0073 section 19): the route's OPF fee head (ADR 0067 D7).
+            'feePanel' => app(OperationalFeePanels::class)->transportRoute($school, $route, $capabilities->canInSchool($context->actor(), 'transport.routes.manage', $school)),
         ]);
     }
 

@@ -43,6 +43,8 @@ use App\Http\Controllers\App\Examinations\GradeScaleController;
 use App\Http\Controllers\App\Examinations\StudentMarkController;
 use App\Http\Controllers\App\Examinations\StudentMarkCorrectionController;
 use App\Http\Controllers\App\Examinations\TeacherStudentMarkController;
+use App\Http\Controllers\App\Fees\LibraryFineWebController;
+use App\Http\Controllers\App\Fees\OperationalFeeController;
 use App\Http\Controllers\App\Finance\ChargeController as FinanceChargeController;
 use App\Http\Controllers\App\Finance\FeeAssessmentRunController as FinanceFeeAssessmentRunController;
 use App\Http\Controllers\App\Finance\FeeConcessionController as FinanceFeeConcessionController;
@@ -998,6 +1000,10 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
     // 'templates' literal-segment routes.
     Route::prefix('app/admissions')->name('app.admissions.')->group(function (): void {
         Route::get('/', [AdmissionApplicationController::class, 'index'])->name('index');
+        // SWC.3 (ADR 0073 section 19): the School's admission fee head (OPF.3).
+        // Registered before `/{admissionApplication}` so it is never captured.
+        Route::get('/fee-head', [OperationalFeeController::class, 'admissionFeeHead'])->name('fee-head');
+        Route::put('/fee-head', [OperationalFeeController::class, 'updateAdmissionFeeHead'])->name('fee-head.update');
 
         Route::prefix('applicants')->name('applicants.')->group(function (): void {
             Route::get('/', [ApplicantController::class, 'index'])->name('index');
@@ -1043,7 +1049,15 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         Route::get('/search/students', [LibraryCirculationController::class, 'searchStudents'])->name('search-students');
         Route::post('/', [LibraryCirculationController::class, 'store'])->name('store');
         Route::post('/{libraryLoan}/check-in', [LibraryCirculationController::class, 'checkIn'])->name('check-in');
+        // SWC.3 (ADR 0073 section 19.5): one loan, with its fine (no School-wide fine list, X2).
+        Route::get('/{libraryLoan}', [LibraryFineWebController::class, 'loan'])->whereUuid('libraryLoan')->name('show');
     });
+
+    // SWC.3 (ADR 0073 section 19.4-19.5): the Library fine policy and the fine
+    // void, over the OPF.4 services. Capability checks in LibraryFineWebController.
+    Route::get('app/library/fine-policy', [LibraryFineWebController::class, 'policy'])->name('app.library.fine-policy');
+    Route::post('app/library/fine-policy', [LibraryFineWebController::class, 'publish'])->name('app.library.fine-policy.publish');
+    Route::post('app/library/fines/{libraryFine}/void', [LibraryFineWebController::class, 'void'])->name('app.library.fines.void');
 
     // Phase 10B: Transport (Routes/Stops, Vehicles, Route operational
     // Vehicle/Driver assignment, Student Transport assignment)
@@ -1057,7 +1071,13 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         Route::get('/{transportRoute}', [TransportRouteController::class, 'show'])->name('show');
         Route::patch('/{transportRoute}', [TransportRouteController::class, 'update'])->name('update');
         Route::post('/{transportRoute}/stops', [TransportRouteController::class, 'storeStop'])->name('stops.store');
+        // SWC.3 (ADR 0073 section 19.2): the route's OPF fee head (OPF.1).
+        Route::put('/{transportRoute}/fee-head', [OperationalFeeController::class, 'updateTransportRouteFeeHead'])->name('fee-head.update');
     });
+
+    // SWC.3 (ADR 0073 section 19.2): Transport fee intent and next-year carry-forward (OPF.1).
+    Route::get('app/transport/fees', [OperationalFeeController::class, 'transportFees'])->name('app.transport.fees');
+    Route::post('app/transport/fees/carry-forward', [OperationalFeeController::class, 'transportCarryForward'])->name('app.transport.fees.carry-forward');
 
     Route::patch('app/transport/stops/{transportStop}', [TransportRouteController::class, 'updateStop'])
         ->name('app.transport.stops.update');
@@ -1344,12 +1364,16 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         Route::get('/{hostel}', [HostelController::class, 'show'])->name('show');
         Route::patch('/{hostel}', [HostelController::class, 'update'])->name('update');
         Route::post('/{hostel}/rooms', [HostelController::class, 'storeRoom'])->name('rooms.store');
+        // SWC.3 (ADR 0073 section 19.3): the Hostel's default OPF fee head (OPF.2).
+        Route::put('/{hostel}/fee-head', [OperationalFeeController::class, 'updateHostelFeeHead'])->name('fee-head.update');
     });
 
     Route::prefix('app/hostel-rooms')->name('app.hostel-rooms.')->group(function (): void {
         Route::get('/{hostelRoom}', [HostelRoomController::class, 'show'])->name('show');
         Route::patch('/{hostelRoom}', [HostelRoomController::class, 'update'])->name('update');
         Route::post('/{hostelRoom}/beds', [HostelRoomController::class, 'storeBed'])->name('beds.store');
+        // SWC.3: the room's override OPF fee head (OPF.2).
+        Route::put('/{hostelRoom}/fee-head', [OperationalFeeController::class, 'updateRoomFeeHead'])->name('fee-head.update');
     });
 
     Route::patch('app/hostel-beds/{hostelBed}', [HostelRoomController::class, 'updateBed'])
@@ -1360,6 +1384,9 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         Route::get('/create', [HostelResidencyController::class, 'create'])->name('create');
         Route::get('/search/students', [HostelResidencyController::class, 'searchStudents'])->name('search-students');
         Route::get('/search/beds', [HostelResidencyController::class, 'searchBeds'])->name('search-beds');
+        // SWC.3 (ADR 0073 section 19.3): Hostel fee intent and next-year carry-forward (OPF.2).
+        Route::get('/fees', [OperationalFeeController::class, 'hostelFees'])->name('fees');
+        Route::post('/fees/carry-forward', [OperationalFeeController::class, 'hostelCarryForward'])->name('fees.carry-forward');
         Route::post('/', [HostelResidencyController::class, 'store'])->name('store');
         Route::post('/{hostelResidencyAssignment}/end', [HostelResidencyController::class, 'end'])->name('end');
     });

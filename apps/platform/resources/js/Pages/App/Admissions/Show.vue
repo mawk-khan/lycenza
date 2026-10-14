@@ -2,6 +2,7 @@
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import StatusBadge from '../../../Components/StatusBadge.vue';
+import AdmissionFeePanel from '../../../Components/Fees/AdmissionFeePanel.vue';
 import { RELATIONSHIP_TYPES } from '../../../relationshipTypes';
 
 interface Ref {
@@ -46,6 +47,16 @@ interface Props {
         updatedAt: string;
     };
     canManage: boolean;
+    // SWC.3: the School's admission fee head and this application's fee intent.
+    feePanel: {
+        configured: { id: string; code: string; name: string; active?: boolean } | null;
+        intent: {
+            feeHead: { id: string; code: string; name: string; active?: boolean } | null;
+            academicYearId: string;
+            selectionOutcome: string;
+            recordedAt: string | null;
+        } | null;
+    };
     canViewStudents: boolean;
     compatibleSections: SectionOption[];
 }
@@ -701,5 +712,9 @@ function switchToLinkExisting(g: GuardianCandidate): void {
                 </button>
             </form>
         </section>
+        <AdmissionFeePanel
+            :panel="props.feePanel"
+            :converted="props.application.status === 'converted'"
+        />
     </main>
 </template>

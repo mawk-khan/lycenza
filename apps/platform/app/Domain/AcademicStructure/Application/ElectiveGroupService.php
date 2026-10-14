@@ -5,6 +5,7 @@ namespace App\Domain\AcademicStructure\Application;
 use App\Domain\AcademicStructure\Application\Exceptions\DuplicateElectiveGroupCodeException;
 use App\Domain\AcademicStructure\Application\Exceptions\ElectiveGroupAssignmentLockedException;
 use App\Domain\AcademicStructure\Application\Exceptions\ElectiveGroupContextMismatchException;
+use App\Domain\AcademicStructure\Application\Exceptions\InactiveSubjectOfferingGroupAssignmentException;
 use App\Domain\AcademicStructure\Application\Exceptions\RequiredSubjectOfferingGroupAssignmentException;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\ElectiveGroup;
@@ -141,6 +142,13 @@ class ElectiveGroupService
 
                 if ($lockedOffering->elective_group_id === $freshGroup->id) {
                     return $lockedOffering;
+                }
+
+                // SWC.3 (ADR 0073 section 19.1): never a NEW assignment of an
+                // inactive Offering (checked on the locked row, so a concurrent
+                // deactivation is seen). An existing membership is untouched.
+                if ($lockedOffering->status !== 'active') {
+                    throw new InactiveSubjectOfferingGroupAssignmentException;
                 }
 
                 $this->assertNoParticipationHistory($lockedOffering);

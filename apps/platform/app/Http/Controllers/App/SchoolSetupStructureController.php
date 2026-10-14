@@ -12,7 +12,7 @@ use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Room;
 use App\Domain\AcademicStructure\Infrastructure\Section;
-use App\Http\Controllers\App\Concerns\MapsAcademicStructureErrors;
+use App\Http\Controllers\App\Concerns\MapsDomainRefusals;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Support\Authorization\AuthorizesCapability;
@@ -39,7 +39,7 @@ use Inertia\Response;
  */
 class SchoolSetupStructureController extends Controller
 {
-    use AuthorizesCapability, MapsAcademicStructureErrors;
+    use AuthorizesCapability, MapsDomainRefusals;
 
     public function terms(Request $request, TenantContext $context): Response
     {

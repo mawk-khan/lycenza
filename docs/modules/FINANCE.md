@@ -5326,3 +5326,18 @@ spends no code), and before any change.
 
 **Roles:** `accountant` posts but never reverses, closes or approves; the
 cashier finds Students only through the payment seam (ADR 0071 §26.3).
+
+### OPF browser surfaces (SWC.3, 2026-10-14, ADR 0073 §19)
+
+**New read seam.** `Sources\FeeHeadDirectory::forSchool()` returns id,
+code, name and active for the School's fee heads. It is separate from
+`FeeSourceSelectionService`, whose caller allow-list (ADR 0067 §8) is
+unchanged. Transport, Hostel,
+Admissions and Library pages use it to label and offer heads without
+reading a Fees table (rule 4). Only active heads are offered, and the seam's
+existing `selectableFeeHead()` still decides.
+
+**What did not change:**
+- Charges, concessions and payments.
+- The pages describe fee intent as "not a charge or a payment".
+- A voided fine still cancels its charge through the unchanged OPF.4 path.

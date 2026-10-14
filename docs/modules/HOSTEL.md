@@ -607,3 +607,18 @@ The contract:
 - **No financial columns** are added to Hostel's own tables; the link rows
   are separate, Hostel-owned Finance evidence (D8), registered for
   retention.
+
+### Browser surface (SWC.3, 2026-10-14, ADR 0073 §19)
+
+**Fee heads** (`hostel.directory.manage`):
+- **Hostel page:** the Hostel's default fee head.
+- **Room page:** the room override and the Hostel default, and states which
+  governs new residencies (OPF.2 precedence).
+
+**Fees page.** `/app/hostel-residency/fees` (Operations → Hostel → Fees,
+`hostel.residency.view`) shows fee intent with its mapping scope.
+Carry-forward to an open year (`hostel.residency.manage`) needs a
+confirmation and is idempotent (§19.3).
+
+These pages use the same `HostelFeeSelectionService` as `/api/v1`.
+Production stays gated by E21/E31 (ADR 0058).

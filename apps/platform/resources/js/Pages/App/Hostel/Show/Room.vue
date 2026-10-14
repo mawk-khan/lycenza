@@ -2,6 +2,7 @@
 import { router, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import StatusBadge from '../../../../Components/StatusBadge.vue';
+import RoomFeeHeadPanel from '../../../../Components/Fees/RoomFeeHeadPanel.vue';
 
 interface BedRow {
     id: string;
@@ -24,6 +25,14 @@ interface Props {
     };
     beds: BedRow[];
     canManage: boolean;
+    // SWC.3: the room override, the Hostel default and which governs.
+    feePanel: {
+        feeHead: { id: string; code: string; name: string; active?: boolean } | null;
+        hostelDefault: { id: string; code: string; name: string; active?: boolean } | null;
+        governing: 'room' | 'hostel' | null;
+        options: Array<{ id: string; code: string; name: string }>;
+        canManage: boolean;
+    };
 }
 
 const props = defineProps<Props>();
@@ -142,5 +151,6 @@ function toggleBedStatus(bed: BedRow): void {
                 </tr>
             </tbody>
         </table>
+        <RoomFeeHeadPanel :room-id="props.room.id" :panel="props.feePanel" />
     </main>
 </template>

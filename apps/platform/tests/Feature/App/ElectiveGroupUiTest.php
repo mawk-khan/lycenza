@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\App;
 
+use App\Domain\AcademicStructure\Application\ElectiveGroupService;
+use App\Domain\AcademicStructure\Application\Exceptions\InactiveSubjectOfferingGroupAssignmentException;
 use App\Domain\AcademicStructure\Infrastructure\ElectiveGroup;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Models\School;
@@ -142,5 +144,40 @@ class ElectiveGroupUiTest extends TestCase
         $this->assertSame(404, $this->post('/app/elective-groups', [
             'academic_year_id' => $w['year']->id, 'campus_id' => $this->createCampus($other)->id, 'grade_level_id' => $w['grade']->id, 'name' => 'X', 'code' => 'X',
         ])->getStatusCode());
+    }
+
+    #[Test]
+    public function an_inactive_offering_is_never_newly_assigned_but_an_existing_membership_survives_deactivation(): void
+    {
+        $w = $this->marksWorld();
+        $user = $this->manager($w['school']);
+        $group = $this->createGroup($w, $user);
+        $url = "/app/elective-groups/{$group->id}/offerings";
+        $inactive = $this->createSubjectOffering($w['year'], $w['campus'], $w['grade'], $this->createSubject($w['school']), ['is_required' => false, 'status' => 'inactive']);
+        $member = $this->createSubjectOffering($w['year'], $w['campus'], $w['grade'], $this->createSubject($w['school']), ['is_required' => false, 'status' => 'active']);
+
+        // SWC.3 owner decision: the server refuses it -- not merely the picker.
+        $this->actingAs($user)->get("/app/elective-groups/{$group->id}")->assertInertia(fn ($page) => $page
+            ->where('candidates', fn ($c) => ! collect($c)->pluck('id')->contains($inactive->id)));
+        $this->actingAs($user)->post($url, ['subject_offering_id' => $inactive->id])
+            ->assertSessionHasErrors(['subject_offering_id' => 'An inactive Subject Offering cannot be assigned to an Elective Group. Reactivate it first.']);
+        $this->assertThrows(
+            fn () => app(ElectiveGroupService::class)->assignOffering($group, $inactive, $user),
+            InactiveSubjectOfferingGroupAssignmentException::class,
+        );
+        $this->assertNull($this->inSchool($w['school'], fn () => SubjectOffering::query()->findOrFail($inactive->id)->elective_group_id));
+
+        // An Offering already in the group stays there when it is later deactivated, and stays readable.
+        $this->actingAs($user)->post($url, ['subject_offering_id' => $member->id])->assertSessionHasNoErrors();
+        $this->actingAs($user)->put("/app/subject-offerings/{$member->id}", ['status' => 'inactive'])->assertSessionHasNoErrors();
+        $this->assertSame($group->id, $this->inSchool($w['school'], fn () => SubjectOffering::query()->findOrFail($member->id)->elective_group_id));
+        $this->actingAs($user)->get("/app/elective-groups/{$group->id}")->assertInertia(fn ($page) => $page
+            ->where('assigned.0.id', $member->id)->where('assigned.0.status', 'inactive'));
+        // Re-submitting its existing membership is still a no-op, not a refusal.
+        $this->actingAs($user)->post($url, ['subject_offering_id' => $member->id])->assertSessionHasNoErrors();
+
+        // Removing it follows the existing rule (no participation history: allowed).
+        $this->actingAs($user)->delete("{$url}/{$member->id}")->assertSessionHasNoErrors();
+        $this->assertNull($this->inSchool($w['school'], fn () => SubjectOffering::query()->findOrFail($member->id)->elective_group_id));
     }
 }

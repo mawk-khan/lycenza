@@ -4,6 +4,7 @@ namespace App\Http\Controllers\App;
 
 use App\Domain\Hostel\Infrastructure\HostelBed;
 use App\Domain\Hostel\Infrastructure\HostelRoom;
+use App\Http\Controllers\App\Fees\OperationalFeePanels;
 use App\Http\Controllers\Controller;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
@@ -47,6 +48,8 @@ class HostelRoomController extends Controller
                     : null,
             ]),
             'canManage' => $capabilities->canInSchool($context->actor(), 'hostel.directory.manage', $school),
+            // SWC.3 (ADR 0073 section 19): the room override, the Hostel default and which governs (OPF.2).
+            'feePanel' => app(OperationalFeePanels::class)->room($school, $model, $capabilities->canInSchool($context->actor(), 'hostel.directory.manage', $school)),
         ]);
     }
 

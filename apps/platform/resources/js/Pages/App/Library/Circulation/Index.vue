@@ -84,7 +84,11 @@ function checkIn(loanId: string): void {
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     <tr v-for="loan in loans.data" :key="loan.id">
-                        <td class="py-3 font-medium">{{ loan.titleName }}</td>
+                        <td class="py-3 font-medium">
+                            <a class="underline" :href="`/app/library/circulation/${loan.id}`">{{
+                                loan.titleName
+                            }}</a>
+                        </td>
                         <td class="py-3 text-slate-600">{{ loan.copyCode }}</td>
                         <td class="py-3 text-slate-600">{{ loan.studentName }}</td>
                         <td

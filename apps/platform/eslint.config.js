@@ -59,6 +59,13 @@ const SWC_ACCESSIBILITY_FILES = [
     'resources/js/Components/SubjectOfferings/**/*.vue',
     'resources/js/Pages/App/SchoolSetup/**/*.vue',
     'resources/js/Pages/App/ElectiveGroups/**/*.vue',
+    // SWC.3 (ADR 0073 section 19): OPF fee surfaces and their components.
+    'resources/js/Components/Fees/**/*.vue',
+    'resources/js/Pages/App/Transport/Fees.vue',
+    'resources/js/Pages/App/Hostel/Fees.vue',
+    'resources/js/Pages/App/Admissions/FeeHead.vue',
+    'resources/js/Pages/App/Library/FinePolicy.vue',
+    'resources/js/Pages/App/Library/Circulation/Show.vue',
 ];
 const swcAccessibility = pluginVueA11y.configs['flat/recommended'].map((config) => ({
     ...config,

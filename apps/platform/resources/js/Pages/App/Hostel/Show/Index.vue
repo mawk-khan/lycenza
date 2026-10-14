@@ -2,6 +2,7 @@
 import { router, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import StatusBadge from '../../../../Components/StatusBadge.vue';
+import FeeHeadPanel from '../../../../Components/Fees/FeeHeadPanel.vue';
 
 interface RoomRow {
     id: string;
@@ -20,6 +21,12 @@ interface Props {
     };
     rooms: RoomRow[];
     canManage: boolean;
+    // SWC.3: the Hostel's default OPF fee head.
+    feePanel: {
+        feeHead: { id: string; code: string; name: string; active?: boolean } | null;
+        options: Array<{ id: string; code: string; name: string }>;
+        canManage: boolean;
+    };
 }
 
 const props = defineProps<Props>();
@@ -134,5 +141,12 @@ function toggleHostelStatus(): void {
                 </tr>
             </tbody>
         </table>
+        <FeeHeadPanel
+            id="hostel-fee-head"
+            title="Hostel fee head"
+            :action="`/app/hostels/${props.hostel.id}/fee-head`"
+            :panel="props.feePanel"
+            hint="Applies to every room without its own fee head, for residencies started from now on."
+        />
     </main>
 </template>
