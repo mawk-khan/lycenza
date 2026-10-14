@@ -1362,3 +1362,58 @@ SAFE_TEST_ISOLATED=1 apps/platform/bin/safe-test --filter 'Class::method'
 - **What does not change:** the ruleset.
 - **Evidence for the change:** record the new per-shard timings and the
   union `selection_sha256` against the previous run's.
+
+### 31.12 Evidence (2026-10-14)
+**Candidate A `0f6d9728`** on `integration/ci-sharding-option-a`, run
+`38531287810`: `CI gate` **success** (check run `115747333901`, app 15368).
+
+| Shard | Files / cases | Result | PHPUnit time | Job time | Peak memory | Assertions |
+|---|---|---|---|---|---|---|
+| 1/4 | 241 / 2,050 | OK | 4:45 | 6:10 | 359.5 MB | 71,278 |
+| 2/4 | 242 / 2,050 | OK | 8:03 | 10:04 | 345.5 MB | 77,931 |
+| 3/4 | 242 / 2,049 | OK, 1 skip (ESI-12) | 8:07 | 9:54 | 347.5 MB | 57,077 |
+| 4/4 | 242 / 2,049 | OK | 7:15 | 8:57 | 351.5 MB | 79,128 |
+
+- **The plan:** every shard planned from inventory `e9362507…` (967 files,
+  8,198 cases), with plan `9848445b…`.
+- **Coverage** (`platform-coverage`, check run `115747293101`): 4 shards cover
+  the inventory exactly once.
+  - 8,198 cases: 8,197 passed and 1 skipped (ESI-12);
+  - 285,414 assertions;
+  - **union `selection_sha256` `b1ebd531…8182`, identical to the last
+    unsharded canonical run** (`9c0e147e`, runs `38405856011` and
+    `38410995811`), whose tree runs the same tests.
+  - The assertion totals differ (unsharded 285,401 / 286,380) only through
+    the timing-dependent `*ConcurrencyTest` polling loops (§28.7).
+- **Memory:** the highest per-shard peak is 359.5 MB of the unchanged 2 GiB
+  allowance. The last unsharded process exceeded 1 GiB.
+- **Static checks:** `platform-static` took 3:29.
+
+**Before and after (wall clock):**
+
+| | Unsharded (`9c0e147e`) | Sharded (`0f6d9728`) |
+|---|---|---|
+| Integration run, push to `CI gate` | 35:47 | 10:31 |
+| Laravel job(s) | 35:25 (PHPUnit 30:56) | slowest shard 10:04 (PHPUnit 8:07); fastest 6:10 (4:45) |
+| `main` push of the same SHA | 47:35, everything re-run | always lanes only (§31.9) |
+
+The balance is by test count, not time: shard 1 finished about 3.5 minutes
+before the slowest. A deterministic weight (for example a committed
+per-file cost table) is a possible later refinement under §31.11, never a
+timing-based reshuffle per run.
+
+**Red proof** (throwaway `9d45e36c` on `integration/ci-sharding-red-proof`,
+run `38531314875`; never published; branch deleted):
+- **Assertion failure:** shard 2/4 failed. Its annotation named the test and
+  `apps/platform/bin/safe-test --shard 2/4`.
+- **`exit(0)` mid-test:** shard 3/4 failed. PHPUnit reported "Premature end
+  of PHP process" with exit code 2; `shard verify` would also have refused
+  the missing report.
+- **Downstream:** shards 1/4 and 4/4 were green; `platform-coverage` was
+  skipped; `CI gate` **failure** ("platform … failure; platform-coverage …
+  skipped").
+
+**Local reproduction:** `SAFE_TEST_ISOLATED=1 bin/safe-test --shard 1/4`
+reproduced shard 1 exactly: the same plan `9848445b…`, 2,050 cases OK, and
+`shard verify` passed (PHP 8.3.33, 7:19, 361.5 MB). `--shard 32/32` ran
+256 cases OK.
