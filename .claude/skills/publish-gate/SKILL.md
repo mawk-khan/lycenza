@@ -36,7 +36,9 @@ Before you start:
 - `--require-regression` is needed only when the slice's own instructions
   ask for a local full run. Since 2026-10-11 the remote exact-SHA full suite
   in `CI gate` is the canonical regression for a code-lane candidate (ADR
-  0072 §28.8).
+  0072 §28.8). Since 2026-10-14 it runs in four shards whose union is
+  proven by `platform-coverage` (ADR 0072 §31); a red shard reproduces with
+  `apps/platform/bin/safe-test --shard N/4`.
 
 Steps:
 1. **Prepare the candidate away from `main`:** commit on a detached HEAD or

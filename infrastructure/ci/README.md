@@ -11,6 +11,8 @@ nothing here pushes on its own, configures GitHub or holds a credential.
 | `lycenza-ci gate` | The aggregate `CI gate` decision from the workflow's `needs` (env `NEEDS_JSON`). |
 | `lycenza-ci publication-check [--candidate SHA] [--push]` | May this exact SHA become `main` now? Prints a JSON verdict; `--push` then fast-forwards `origin/main` to it (never forced). |
 | `lycenza-ci drift [--state active]` | Compares GitHub's live `main` protection with the contract (scheduled by `.github/workflows/protection-drift.yml`). |
+| `lycenza-ci junit-digest REPORT` | PHPUnit selection digest + per-class assertions (canonical-regression parity evidence). |
+| `lycenza-ci shard plan\|verify\|coverage` | Deterministic PHPUnit sharding (ADR 0072 §31): a shard's membership from the canonical inventory, the proof that a shard ran exactly its plan, and the proof that one run's shards cover the inventory exactly once. |
 
 ## Lanes
 
@@ -20,7 +22,7 @@ nothing here pushes on its own, configures GitHub or holds a credential.
 | `supply_chain` | Supply chain (lockfiles, audits, release tooling) | always |
 | `integrity` | Repository integrity (whitespace, CI tooling tests) | always |
 | `images` | Production images | platform, Gateway, image/release inputs, strict |
-| `platform` | Laravel (apps/platform): Pint, Larastan, frontend, **full suite via `bin/safe-test`** | platform, Gateway, contracts, image/release inputs, strict |
+| `platform` | Three jobs: `platform-static` (frontend, Pint, Larastan); `platform`, the **full suite via `bin/safe-test --shard N/4`** on four runners; `platform-coverage` (union of the shards = the canonical inventory) | platform, Gateway, contracts, image/release inputs, strict |
 | `docs` | Documentation guards (PHPUnit `repository-documents`) | `docs/**` or root Markdown, when `platform` is not required |
 | `gateway` | AI Gateway | `services/ai/**`, strict |
 | `shared_types` | Contracts -> shared TypeScript types | `packages/**`, strict |
@@ -35,6 +37,26 @@ needs only the always lanes.
 
 The base is the merge base with `origin/main` for a candidate branch, the
 previous tip for a `main` push, and the PR base for a pull request.
+
+**A `main` push re-runs only the always lanes** when the newest completed
+GitHub Actions `CI gate` run for exactly that SHA from an `integration/**`
+check suite succeeded (CI sharding Option A, ADR 0072 §31). The lookup is
+read-only and unauthenticated (the repository is public). Any lookup problem
+falls back to the ordinary classification, so it can cost time but never skip
+a lane. The ruleset already refuses a `main` SHA without a green `CI gate`.
+
+## Sharded suite (Option A, ADR 0072 §31)
+
+- **Shard count:** the matrix list in `ci.yml` (`shard: [1, 2, 3, 4]`), and
+  nothing else. The tooling tests require it to be exactly `1..TOTAL`.
+- **Membership:** deterministic, by test file, longest-processing-time first
+  by test-case count (`lycenza_ci/shard.py`).
+- **Proof:** each shard checks its JUnit report against its plan;
+  `platform-coverage` checks all shards planned from one inventory and ran it
+  exactly once. Its `PHPUnit digest` annotation (the union) is comparable with
+  an unsharded run's.
+- **Reproduce a red shard:** `apps/platform/bin/safe-test --shard N/4`; see
+  `docs/architecture/TEST-ENVIRONMENT-AND-WORKTREE-SAFETY.md` ("CI sharding").
 
 ## Publishing (enforced on `main` by ruleset `main-protection` since E03.2, 2026-10-12)
 

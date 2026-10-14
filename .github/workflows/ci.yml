@@ -121,6 +121,58 @@ jobs:
           persist-credentials: false
       - run: infrastructure/docker/production/verify-images.sh --build
 
+  # The `platform` lane is three jobs (CI sharding Option A, owner-selected
+  # 2026-10-13; ADR 0072 section 31): the static checks, the canonical suite in
+  # parallel shards, and the cross-shard coverage proof. The gate requires all
+  # three. Shard membership is deterministic (lycenza_ci/shard.py) and the
+  # shard count is the matrix below -- nothing else.
+  platform-static:
+    name: Laravel static checks (frontend, Pint, Larastan)
+    needs: classify
+    if: contains(fromJSON(needs.classify.outputs.lanes), 'platform')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      SAFE_TEST_COMPOSE_OVERRIDE: ${{ github.workspace }}/infrastructure/ci/compose.s3-versitygw.yml
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Environment files first (the inert committed examples; ADR 0016)
+        run: |
+          cp apps/platform/.env.example apps/platform/.env
+          cp services/ai/.env.example services/ai/.env
+      - name: Cache Composer dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: apps/platform/vendor
+          key: platform-vendor-${{ hashFiles('apps/platform/composer.lock') }}
+      - name: Build the canonical platform image
+        run: docker compose -p school-os -f docker-compose.yml -f "$SAFE_TEST_COMPOSE_OVERRIDE" build platform
+      - name: Composer install, package discovery, application key
+        run: |
+          compose_run() { docker compose -p school-os -f docker-compose.yml -f "$SAFE_TEST_COMPOSE_OVERRIDE" run --rm --no-deps -T platform "$@"; }
+          compose_run composer install --no-interaction --prefer-dist --no-progress --no-scripts --no-plugins
+          compose_run php artisan package:discover --ansi
+          compose_run php artisan key:generate --ansi
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/platform/package-lock.json
+      - name: Frontend (npm ci, type-check, ESLint, Prettier, build)
+        working-directory: apps/platform
+        run: |
+          npm ci
+          npm run type-check
+          npm run lint
+          npm run format:check
+          npm run build
+      - name: Pint (formatting)
+        run: docker compose -p school-os -f docker-compose.yml -f "$SAFE_TEST_COMPOSE_OVERRIDE" run --rm --no-deps -T platform vendor/bin/pint --test
+      - name: Larastan (static analysis)
+        run: docker compose -p school-os -f docker-compose.yml -f "$SAFE_TEST_COMPOSE_OVERRIDE" run --rm --no-deps -T platform vendor/bin/phpstan analyse --memory-limit=512M --no-progress
+
   # E03.1 (ADR 0072 sections 9, 11): the canonical runner itself. The suite
   # runs exactly as a developer's `bin/safe-test` runs it -- the same Compose
   # stack (docker-compose.yml), the same platform image
@@ -129,14 +181,27 @@ jobs:
   # and the full PHPUnit configuration -- with one declared difference: the
   # S3-compatible server is versitygw, because MinIO's public images are gone
   # (infrastructure/ci/compose.s3-versitygw.yml).
+  #
+  # Option A (ADR 0072 section 31): every shard runs on its OWN runner, with
+  # its own Compose stack, PostgreSQL volume (reset + full seed set), Valkey,
+  # S3 server and filesystem -- nothing mutable is shared between shards.
+  # `bin/safe-test --shard N/TOTAL` plans from the canonical inventory and the
+  # shard's JUnit report must equal its plan exactly. fail-fast is off so every
+  # shard reports; any red, cancelled or timed-out leg makes the matrix result
+  # (needs.platform.result) non-success, which fails the `CI gate`.
   platform:
-    name: Laravel (apps/platform)
+    name: Laravel (apps/platform) shard ${{ matrix.shard }}/${{ strategy.job-total }}
     needs: classify
     if: contains(fromJSON(needs.classify.outputs.lanes), 'platform')
     runs-on: ubuntu-24.04
-    timeout-minutes: 150
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     env:
       SAFE_TEST_COMPOSE_OVERRIDE: ${{ github.workspace }}/infrastructure/ci/compose.s3-versitygw.yml
+      SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -171,25 +236,18 @@ jobs:
           compose_run php artisan package:discover --ansi
           compose_run php artisan key:generate --ansi
 
+      # The suite reads the Vite manifest; the frontend checks themselves run
+      # once, in platform-static.
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: apps/platform/package-lock.json
-      - name: Frontend (npm ci, type-check, ESLint, Prettier, build -> Vite manifest)
+      - name: Frontend build (npm ci, build -> Vite manifest)
         working-directory: apps/platform
         run: |
           npm ci
-          npm run type-check
-          npm run lint
-          npm run format:check
           npm run build
-
-      - name: Pint (formatting)
-        run: docker compose -p school-os -f docker-compose.yml -f "$SAFE_TEST_COMPOSE_OVERRIDE" run --rm --no-deps -T platform vendor/bin/pint --test
-
-      - name: Larastan (static analysis)
-        run: docker compose -p school-os -f docker-compose.yml -f "$SAFE_TEST_COMPOSE_OVERRIDE" run --rm --no-deps -T platform vendor/bin/phpstan analyse --memory-limit=512M --no-progress
 
       - name: Reset the test database (platform:test-db-reset, full seed set)
         run: apps/platform/bin/safe-test --reset-db
@@ -205,22 +263,61 @@ jobs:
           s3="$(docker inspect --format '{{.Config.Image}}' "$(dc ps -q minio)")"
           echo "::notice title=Runtime identity::php ${php} | ${pg} | ${kv} | s3 ${s3}"
 
-      - name: PHPUnit -- the canonical full suite (bin/safe-test)
+      # Reproduce locally: apps/platform/bin/safe-test --shard <N>/<TOTAL>.
+      - name: PHPUnit -- the canonical suite, this shard (bin/safe-test --shard)
         run: |
           set -o pipefail
-          apps/platform/bin/safe-test --log-junit storage/logs/phpunit-junit.xml 2>&1 | tee "$RUNNER_TEMP/phpunit.log"
+          apps/platform/bin/safe-test --shard "$SHARD" --log-junit storage/logs/phpunit-junit.xml 2>&1 | tee "$RUNNER_TEMP/phpunit.log"
 
-      # The counts, readable through the public check-run annotations API; the
-      # digest (selection hash + per-class assertions) is the parity evidence
-      # compared with a local canonical run of the same tree.
+      # The counts and peak memory, readable through the public check-run
+      # annotations API.
       - name: PHPUnit summary
         if: always()
         run: |
-          summary="$(sed 's/\x1b\[[0-9;]*m//g' "$RUNNER_TEMP/phpunit.log" 2>/dev/null | grep -E '^(OK \(|Tests: |FAILURES!|ERRORS!)' | tr '\n' ' ' || true)"
-          echo "::notice title=PHPUnit summary::${summary:-no PHPUnit summary (the suite did not finish)}"
+          summary="$(sed 's/\x1b\[[0-9;]*m//g' "$RUNNER_TEMP/phpunit.log" 2>/dev/null | grep -E '^(OK \(|Tests: |FAILURES!|ERRORS!|Time: )' | tr '\n' ' ' || true)"
+          echo "::notice title=PHPUnit summary (shard ${SHARD})::${summary:-no PHPUnit summary (the shard did not finish)}"
           failed="$(sed 's/\x1b\[[0-9;]*m//g' "$RUNNER_TEMP/phpunit.log" 2>/dev/null | grep -E '^[0-9]+\) Tests\\' | head -40 | tr '\n' ' ' || true)"
-          if [ -n "$failed" ]; then echo "::error title=PHPUnit failed tests::${failed}"; fi
-          infrastructure/ci/lycenza-ci junit-digest apps/platform/storage/logs/phpunit-junit.xml
+          if [ -n "$failed" ]; then echo "::error title=PHPUnit failed tests (shard ${SHARD}; reproduce: apps/platform/bin/safe-test --shard ${SHARD})::${failed}"; fi
+
+      - name: Shard executed exactly its plan
+        run: |
+          out="$RUNNER_TEMP/shard-out"
+          mkdir -p "$out"
+          infrastructure/ci/lycenza-ci shard verify --plan apps/platform/storage/logs/phpunit-shard-plan.json \
+            --junit apps/platform/storage/logs/phpunit-junit.xml --report-out "$out/shard-report.json"
+          cp apps/platform/storage/logs/phpunit-list.xml apps/platform/storage/logs/phpunit-junit.xml "$out/"
+
+      - name: Upload the shard's plan, inventory and JUnit report (for platform-coverage)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: phpunit-shard-${{ matrix.shard }}
+          path: ${{ runner.temp }}/shard-out
+          if-no-files-found: error
+          retention-days: 7
+
+  # Option A (ADR 0072 section 31): the union of the shards is the canonical
+  # suite, proven per run -- every shard 1..TOTAL reported, all planned from
+  # one identical inventory, each ran exactly its deterministic membership,
+  # and together every inventory test case ran exactly once. Missing shard
+  # output fails it. Its union digest is comparable with an unsharded run's.
+  platform-coverage:
+    name: Laravel shard coverage (union = canonical suite)
+    needs: [classify, platform]
+    if: contains(fromJSON(needs.classify.outputs.lanes), 'platform')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          sparse-checkout: infrastructure/ci
+      - name: Download every shard's output
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: phpunit-shard-*
+          path: ${{ runner.temp }}/shards
+      - name: The shards cover the canonical inventory exactly once
+        run: infrastructure/ci/lycenza-ci shard coverage --dir "$RUNNER_TEMP/shards"
 
   # E03.1 (ADR 0072 section 12): the docs lane is never "run nothing". It
   # runs the PHPUnit tests that read docs/** (group `repository-documents`;
@@ -350,7 +447,8 @@ jobs:
       - run: npm run type-check
 
   # E03.1 (ADR 0072 sections 4-6): the ONE required context for main (E03.2).
-  # It always runs, depends on every job above, and passes only when every
+  # Its name is unchanged by sharding (ADR 0072 section 31): the shard legs are
+  # never required contexts. It always runs, depends on every job above, and passes only when every
   # lane the classifier requires succeeded and every other lane was skipped --
   # nothing else (gate.py). A cancelled, failed or unexpectedly skipped job,
   # or a classifier failure, fails it.
@@ -363,7 +461,9 @@ jobs:
       - supply-chain
       - integrity
       - production-images
+      - platform-static
       - platform
+      - platform-coverage
       - docs-guards
       - ai-service
       - shared-types

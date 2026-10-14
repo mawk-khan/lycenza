@@ -49,7 +49,8 @@ class WorkflowTest(unittest.TestCase):
                 self.assertEqual([], condition, f"{job} is an always lane: no condition")
             else:
                 self.assertEqual([f"contains(fromJSON(needs.classify.outputs.lanes), '{lane}')"], condition, job)
-                self.assertIn("    needs: classify\n", body, job)
+                expected = "    needs: [classify, platform]\n" if job == "platform-coverage" else "    needs: classify\n"
+                self.assertIn(expected, body, job)
 
     def test_no_job_decides_its_own_failure_is_optional(self) -> None:
         self.assertNotIn("continue-on-error", WORKFLOW)
@@ -64,10 +65,43 @@ class WorkflowTest(unittest.TestCase):
         self.assertRegex(platform, r"composer install [^\n]*--no-scripts[^\n]*--no-plugins")
         self.assertIn("php artisan package:discover", platform)
         self.assertIn("apps/platform/bin/safe-test --reset-db", platform)
-        self.assertRegex(platform, r"apps/platform/bin/safe-test --log-junit \S+ 2>&1 \| tee")
-        self.assertNotRegex(platform, r"safe-test [^\n]*--(group|testsuite|exclude-group)", "the full suite, never a subset")
         self.assertIn("SAFE_TEST_COMPOSE_OVERRIDE: ${{ github.workspace }}/infrastructure/ci/compose.s3-versitygw.yml", platform)
+        # Option A (ADR 0072 section 31): the canonical suite, sharded -- never a subset.
+        self.assertRegex(platform, r'apps/platform/bin/safe-test --shard "\$SHARD" --log-junit \S+ 2>&1 \| tee')
+        self.assertIn("SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}", platform)
+        self.assertNotRegex(platform, r"safe-test [^\n]*--(group|testsuite|exclude-group|configuration|filter)", "the full suite, never a subset")
         self.assertNotIn("--filter", platform, "the full suite, never a subset")
+        self.assertNotIn("continue-on-error", platform)
+
+    def test_the_shard_matrix(self) -> None:
+        platform = jobs()["platform"]
+        self.assertIn("    strategy:\n      fail-fast: false\n      matrix:\n", platform, "every shard reports; none is cancelled by another")
+        shards = re.findall(r"^        shard: \[([0-9, ]+)\]$", platform, flags=re.M)
+        self.assertEqual(1, len(shards))
+        numbers = [int(value) for value in shards[0].split(",")]
+        self.assertEqual(list(range(1, len(numbers) + 1)), numbers, "shard indices are exactly 1..TOTAL")
+        self.assertGreater(len(numbers), 1)
+        self.assertIn("lycenza-ci shard verify", platform)
+        self.assertIn("if-no-files-found: error", platform)
+        self.assertIn("name: phpunit-shard-${{ matrix.shard }}", platform)
+        self.assertIn("name: Laravel (apps/platform) shard ${{ matrix.shard }}/${{ strategy.job-total }}", platform)
+
+    def test_the_coverage_job_proves_the_union(self) -> None:
+        coverage = jobs()["platform-coverage"]
+        self.assertIn("pattern: phpunit-shard-*", coverage)
+        self.assertIn('infrastructure/ci/lycenza-ci shard coverage --dir "$RUNNER_TEMP/shards"', coverage)
+        self.assertNotIn("merge-multiple", coverage, "one directory per shard")
+
+    def test_the_static_checks_run_once_for_the_lane(self) -> None:
+        static = jobs()["platform-static"]
+        for check in ("npm run type-check", "npm run lint", "npm run format:check", "npm run build", "vendor/bin/pint --test", "vendor/bin/phpstan analyse"):
+            self.assertIn(check, static, check)
+        self.assertRegex(static, r"composer install [^\n]*--no-scripts[^\n]*--no-plugins")
+
+    def test_main_push_prior_validation_is_read_only(self) -> None:
+        classify_job = jobs()["classify"]
+        self.assertNotIn("permissions:", classify_job, "no workflow permission is added for the lookup")
+        self.assertNotIn("GITHUB_TOKEN", WORKFLOW)
 
     def test_supply_chain_audits_block_on_policy(self) -> None:
         self.assertIn("qualify audit --fail-on-blocking", jobs()["supply-chain"])

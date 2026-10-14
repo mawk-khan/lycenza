@@ -5,7 +5,9 @@
   `main-protection` (ruleset 24909660, 2026-10-12, §29). E03.3 CLOSURE
   PROOFS PASSED (2026-10-12, §30): E03 — MAIN PUBLICATION CONTROL PUBLISHED /
   CLOSED.** Production-stage PR + independent approval + CODEOWNERS remain
-  planned (§16, §17), not active.
+  planned (§16, §17), not active. **Amended 2026-10-14 (§31): CI sharding
+  Option A** — the canonical suite runs in deterministic shards; the
+  required context `CI gate` and the ruleset are unchanged.
 - Date: 2026-10-11
 - Programme: **E03 — Main Branch Protection & Publication Control** (ADR 0058
   register row E03; `MASTER-ROADMAP.md`, Phase 0O parked rows).
@@ -744,6 +746,12 @@ hash plus per-class assertions):
 
 The three trees differ only in CI tooling, which no PHPUnit test reads.
 
+> **Amended 2026-10-14 (§31).** The remote column's *Parallelism* and
+> *Selection* rows are superseded: the same full `phpunit.xml` selection now
+> runs in four deterministic shards on four runners, and the union of the
+> shards is proven equal to the canonical inventory on every run. The local
+> canonical column is unchanged. The evidence above stays as recorded.
+
 **Identical selection, identical outcomes.** Every class's assertion count is
 identical across all three runs **except** the real two-process
 `*ConcurrencyTest` races. Their polling loops assert per iteration, so the
@@ -1195,3 +1203,162 @@ or the first production promotion, and **not active now**:
 
 The development-stage model is closed as **`integration/**` → exact-SHA
 `CI gate` → protected fast-forward of `main`**.
+
+## 31. CI sharding — Option A (owner-selected 2026-10-13; implemented 2026-10-14)
+
+An execution change to the canonical regression, not a change of what it
+covers. No application, authorization, tenancy, database or runtime behaviour
+changes. The required context (`CI gate`, app 15368), the ruleset (24909660)
+and `publication-check` are unchanged.
+
+### 31.1 Decision record
+- **Problem:** at 8,198 tests the full suite was one 31-minute PHPUnit
+  process. With setup, a code-lane candidate waited about 35 minutes for its
+  `CI gate` (run `38405856011`), and the `main` push of the same SHA ran it
+  all again (48 minutes, run `38410995811`).
+- **Owner decision, 2026-10-13, before implementation: Option A.**
+  - Keep the full suite on every code-lane candidate, executed in about four
+    parallel shards (target 12–15 minutes).
+  - Stop re-running the heavy lanes on the `main` push of a SHA its
+    integration run already validated.
+- **Rejected: Option B,** the full suite only every fifth checkpoint. It would
+  weaken the exact-SHA canonical regression (§28.8).
+- **Record:** the design was kept in the owner's working notes (2026-10-13)
+  and was not committed before this section. This section is now its
+  repository record.
+
+### 31.2 Topology
+The `platform` lane became three jobs. Every one is a `CI gate` need, and
+`gate.JOB_LANES` maps all three to `platform`.
+
+| Job | Runs | Notes |
+|---|---|---|
+| `platform-static` | frontend type-check, ESLint, Prettier and build; Pint; Larastan | once per candidate |
+| `platform` (matrix `shard: [1, 2, 3, 4]`, `fail-fast: false`) | `bin/safe-test --reset-db`, then `bin/safe-test --shard N/4 --log-junit …`, then `lycenza-ci shard verify` | one runner per shard; check name `Laravel (apps/platform) shard N/4` |
+| `platform-coverage` (needs `platform`) | `lycenza-ci shard coverage` over every shard's uploaded plan, inventory and JUnit report | publishes the union `PHPUnit digest` |
+
+- **No other lane changed.** The docs lane, Gateway, images, shared types,
+  mobile and the always lanes are as in §28.
+- **Shards still build the Vite manifest,** because the suite reads it.
+  They do not repeat the frontend checks.
+
+### 31.3 Selection and partition
+- **The inventory is the canonical selection,** with no filter, group or
+  exclusion: `phpunit --list-tests-xml` under the canonical `phpunit.xml`.
+  The known ESI-12 skip (PAY-L1) stays a skip inside its shard.
+- **Unit:** a test file. There is one class per file; the planner refuses
+  any file that declares more than one, and a tooling test checks the tree.
+  A file is never split across shards.
+- **Algorithm:** longest-processing-time first by test-case count, data-set
+  cases included. Files are sorted by (count descending, path ascending), and
+  each goes to the shard with the smallest (load, index). Inside a shard the
+  inventory order is kept.
+- **Deterministic:** the same inventory always gives the same membership.
+  There is no timing data and no randomness.
+- **The plan identity** (`plan_sha256`) hashes the membership only.
+- **Shard count source:** the matrix list in `ci.yml`, and nothing else. The
+  tooling tests require it to be exactly `1..TOTAL`. `TOTAL` reaches the
+  runner as `strategy.job-total`.
+- **The configuration:** `apps/platform/phpunit.shard.xml` is generated and
+  git-ignored. It is `phpunit.xml` with only `<testsuites>` replaced; the
+  forced `<php>` block, the bootstrap and everything else are verbatim.
+
+### 31.4 Proof that the shards are the canonical suite
+1. **Plan:** `partition()` refuses a plan that is not complete and disjoint.
+2. **Each shard** (`shard verify`): its JUnit per-class test-case counts must
+   equal its plan exactly. A missing case (a dropped data set, a filter), a
+   foreign class, a duplicate id, a failure or error, or a missing or
+   truncated report (a PHP fatal error) fails the shard.
+3. **Every run** (`platform-coverage`):
+   - shard outputs `1..TOTAL` are all present, exactly once;
+   - all shards planned from one identical inventory (`inventory_sha256`),
+     and each one's membership is the recomputed deterministic plan;
+   - the union of the executed reports is the inventory, every test case
+     exactly once, with no failure or error.
+4. **Parity:** the union digest (`junit.digest` over all shards: sorted
+   `class::name` ids, summed per-class assertions) has the same form as an
+   unsharded run's, so `selection_sha256` is directly comparable (§28.7).
+
+### 31.5 Isolation
+- **CI:** each shard is a separate GitHub-hosted runner, so it has its own
+  Docker daemon, Compose stack, PostgreSQL volume, Valkey, S3 server,
+  filesystem, ports and generated `APP_KEY`.
+  - Each shard resets its own database with the full seed set
+    (`platform:test-db-reset`).
+  - `TestDatabaseGuard`, `platform:env-diagnostic`, the forced `<php>`
+    values and the `safe-test` overrides apply unchanged.
+  - Nothing mutable is shared, so no shard depends on another's order or
+    state.
+- **Locally:** one shard at a time per Compose project
+  (`SAFE_TEST_ISOLATED=1` gives each worktree its own project). The shards
+  of one project share its test database, exactly as two concurrent
+  unsharded runs always would.
+
+### 31.6 Memory
+The 2 GiB PHPUnit `memory_limit` (2026-10-13) is kept unchanged for every
+shard. Each shard's `Time: …, Memory: …` line is published in its `PHPUnit
+summary` annotation, so per-shard peaks are visible without log access.
+
+### 31.7 Failure semantics (fail closed)
+GitHub reports a matrix job's result as `success` only when every leg
+succeeded, and `gate.py` requires `success` for each of the three
+`platform` jobs.
+
+| Event | Effect |
+|---|---|
+| Assertion failure | PHPUnit exits non-zero; `pipefail` fails the step and the shard |
+| PHP fatal error | non-zero exit; the JUnit report is missing or truncated, so `shard verify` fails too |
+| Shard timeout (60 min) | the leg fails; the matrix result is not `success` |
+| Service or setup failure | `safe-test` (`set -e`) or Compose fails the step |
+| Shard cancellation | the matrix result is `cancelled` |
+| Missing shard output | `upload-artifact` uses `if-no-files-found: error`; `platform-coverage` refuses a missing index |
+| Coverage skipped (because a shard failed) | a required lane job is `skipped`, which the gate refuses |
+
+### 31.8 Required checks, publication and concurrency
+- **Required context:** `CI gate` is unchanged. Shard legs are never
+  required contexts, so there is no ruleset change and no aggregate
+  ambiguity: the one gate exists only after every shard and the coverage job
+  have finished.
+- **`publication-check` is unchanged.** It reads the newest Actions-owned
+  `CI gate` of exactly the candidate SHA.
+- **Concurrency is unchanged** (`ci-<workflow>-<ref>`, cancel in progress).
+  - A newer push to the same `integration/*` ref cancels the older run, and
+    that run's gate fails for the OLD SHA only.
+  - The active candidate's own run is a different run on a different SHA.
+  - A cancelled leg of the active candidate makes its gate red, never green.
+
+### 31.9 `main` push: no duplicate heavy lanes
+- **When:** on a push to `main`, the classifier asks the public API for the
+  `CI gate` check runs of exactly that SHA and their check suites.
+- **Rule:** if the newest completed run from GitHub Actions (app 15368) in an
+  `integration/**` check suite succeeded, the run requires only the always
+  lanes:
+  - gitleaks;
+  - supply chain, including E16 freshness;
+  - integrity.
+- **Anything else uses the ordinary path classification:** no run, a red,
+  cancelled or unfinished run, another app or SHA, or any API error.
+- **No new permission:** the lookup is anonymous and read-only; the
+  repository is public.
+- **Why this is safe:** the ruleset already refuses a `main` SHA without a
+  green `CI gate` (§29). The integration run of that exact SHA is the
+  canonical regression (§28.8), so re-running it on `main` added time and no
+  assurance.
+
+### 31.10 Reproduction
+```
+SAFE_TEST_ISOLATED=1 apps/platform/bin/safe-test --reset-db
+SAFE_TEST_ISOLATED=1 apps/platform/bin/safe-test --shard N/4         # the CI shard, same selection rules
+SAFE_TEST_ISOLATED=1 apps/platform/bin/safe-test --filter 'Class::method'
+```
+- **Input checks:** `--shard` refuses an invalid `INDEX/TOTAL` and any
+  `--configuration`, `--testsuite` or `--list-tests*` argument.
+- **The red shard's annotation** names its reproduction command.
+
+### 31.11 Changing the shard count
+- **What to edit:** only the matrix list, which must be exactly `1..TOTAL`
+  (at most 32).
+- **What follows automatically:** membership, verification and coverage.
+- **What does not change:** the ruleset.
+- **Evidence for the change:** record the new per-shard timings and the
+  union `selection_sha256` against the previous run's.

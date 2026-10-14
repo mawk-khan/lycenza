@@ -5,6 +5,7 @@
   publication-check   may this exact SHA become `main` now? (JSON verdict; --push to fast-forward)
   drift               compare GitHub's live `main` protection with the contract
   junit-digest        PHPUnit selection digest + per-class assertions (parity evidence)
+  shard               deterministic PHPUnit sharding: plan | verify | coverage (ADR 0072 section 31)
 """
 
 from __future__ import annotations
@@ -26,7 +27,8 @@ from . import drift as drift_mod
 from . import gate as gate_mod
 from . import junit
 from . import publication
-from .contract import GATE_CONTEXT, REPO_ROOT, load_ruleset
+from . import shard as shard_mod
+from .contract import GATE_CONTEXT, GITHUB_ACTIONS_APP_ID, REPO_ROOT, load_ruleset
 
 STATE_FILE = REPO_ROOT / "infrastructure/ci/main-protection-state.json"
 EXCEPTIONS = "infrastructure/release/vulnerability-exceptions.json"
@@ -84,6 +86,30 @@ def resolve_base(event: str, ref: str, before: str, pr_base: str, main_ref: str)
     return base if base and is_commit(base) else None
 
 
+def prior_validation(repo: str, head: str) -> str | None:
+    """Option A (ADR 0072 section 31): the integration run that already validated `head`.
+
+    Read-only, unauthenticated public API (no workflow permission is added).
+    Any API failure answers None, which means the ordinary classification:
+    a lookup problem can only cost time, never skip a lane.
+    """
+    if not repo:
+        return None
+    status, body = api_get(f"/repos/{repo}/commits/{head}/check-runs?check_name={urllib.parse.quote(GATE_CONTEXT)}&filter=all&per_page=100")
+    if status != 200 or not isinstance(body, dict):
+        print(f"prior-validation lookup: check-runs answered {status}; ordinary classification")
+        return None
+    runs = body.get("check_runs") or []
+    suites: dict[int, dict] = {}
+    for suite_id in {(run.get("check_suite") or {}).get("id") for run in runs} - {None}:
+        suite_status, suite = api_get(f"/repos/{repo}/check-suites/{suite_id}")
+        if suite_status != 200 or not isinstance(suite, dict):
+            print(f"prior-validation lookup: check-suite {suite_id} answered {suite_status}; ordinary classification")
+            return None
+        suites[suite_id] = suite
+    return classifier.prior_integration_validation(head, runs, suites, GITHUB_ACTIONS_APP_ID, GATE_CONTEXT)
+
+
 def cmd_classify(args: argparse.Namespace) -> int:
     head = git("rev-parse", "HEAD").stdout.strip()
     base = resolve_base(args.event, args.ref, args.before, args.pr_base, args.main_ref)
@@ -92,6 +118,10 @@ def cmd_classify(args: argparse.Namespace) -> int:
     else:
         paths = classifier.parse_name_status(git("diff", "--name-status", "-z", "-M", base, head).stdout)
     result = classifier.classify(paths)
+    if args.event == "push" and args.ref == "refs/heads/main":
+        validated = prior_validation(args.repo, head)
+        if validated:
+            result = classifier.already_validated(validated)
     lanes = result.ordered_lanes()
     print(f"head {head}; base {base or '(none)'}; {result.reason}")
     for path, klass in result.classes.items():
@@ -221,6 +251,91 @@ def cmd_drift(args: argparse.Namespace) -> int:
     return 0 if report.ok else 1
 
 
+def publish_digest(value: dict, title: str = "PHPUnit digest", chunk_title: str = "PHPUnit per-class") -> None:
+    # GitHub truncates an annotation message at 4,096 characters: the header
+    # (counts, outcomes, selection hash) and the compressed per-class table
+    # are published separately, the table in numbered chunks.
+    table = value["per_class_zlib_b64"]
+    header = {key: item for key, item in value.items() if key != "per_class_zlib_b64"}
+    chunks = [table[index:index + 3900] for index in range(0, len(table), 3900)] or [""]
+    header["per_class_chunks"] = len(chunks)
+    annotate("notice", title, junit.dumps(header))
+    for number, chunk in enumerate(chunks, start=1):
+        annotate("notice", f"{chunk_title} {number}/{len(chunks)}", chunk)
+
+
+# --- shard (ADR 0072 section 31, CI sharding Option A) ---------------------------------------
+
+def shard_fail(message: str) -> int:
+    print(f"shard: {message}", file=sys.stderr)
+    annotate("error", "PHPUnit shard", message)
+    return 1
+
+
+def cmd_shard_plan(args: argparse.Namespace) -> int:
+    try:
+        index, total = shard_mod.parse_shard(args.shard)
+        files = shard_mod.read_inventory(Path(args.inventory), args.container_root)
+        plan = shard_mod.plan(files, index, total)
+        if args.write_config:
+            base = Path(args.config).read_text(encoding="utf-8")
+            Path(args.write_config).write_text(shard_mod.render_config(base, plan["files"], index, total), encoding="utf-8")
+    except (shard_mod.ShardError, OSError) as error:
+        return shard_fail(str(error))
+    if args.plan_out:
+        Path(args.plan_out).write_text(json.dumps(plan, indent=1, sort_keys=True), encoding="utf-8")
+    line = (f"shard {index}/{total}: {len(plan['files'])} files, {plan['shard_tests'][index - 1]} test cases "
+            f"(inventory {plan['inventory_files']} files / {plan['inventory_tests']} cases, sha256 {plan['inventory_sha256'][:16]}; "
+            f"plan sha256 {plan['plan_sha256'][:16]}; cases per shard {plan['shard_tests']})")
+    print(line)
+    annotate("notice", f"PHPUnit shard {index}/{total} plan", line)
+    return 0
+
+
+def cmd_shard_verify(args: argparse.Namespace) -> int:
+    try:
+        plan = json.loads(Path(args.plan).read_text(encoding="utf-8"))
+        summary = shard_mod.verify(plan, Path(args.junit))
+    except (shard_mod.ShardError, OSError, ValueError, KeyError) as error:
+        return shard_fail(str(error))
+    report = dict(plan, summary={key: value for key, value in summary.items() if key != "per_class_zlib_b64"})
+    if args.report_out:
+        Path(args.report_out).write_text(json.dumps(report, indent=1, sort_keys=True), encoding="utf-8")
+    line = (f"shard {plan['shard']}/{plan['total']} executed exactly its plan: {summary['tests']} cases, "
+            f"{summary['assertions']} assertions, outcomes {summary['outcomes']}")
+    print(line)
+    annotate("notice", f"PHPUnit shard {plan['shard']}/{plan['total']} verified", line)
+    return 0
+
+
+def cmd_shard_coverage(args: argparse.Namespace) -> int:
+    root = Path(args.dir)
+    bundles = []
+    try:
+        directories = sorted(path for path in root.iterdir() if path.is_dir()) if root.is_dir() else []
+        for directory in directories:
+            missing = [name for name in ("shard-report.json", "phpunit-list.xml", "phpunit-junit.xml") if not (directory / name).is_file()]
+            if missing:
+                raise shard_mod.ShardError(f"{directory.name} lacks {missing} (missing shard output)")
+            bundles.append(shard_mod.ShardBundle(
+                report=json.loads((directory / "shard-report.json").read_text(encoding="utf-8")),
+                inventory=shard_mod.read_inventory(directory / "phpunit-list.xml", args.container_root),
+                junit_path=directory / "phpunit-junit.xml",
+            ))
+        result = shard_mod.coverage(bundles)
+    except (shard_mod.ShardError, OSError, ValueError, KeyError) as error:
+        return shard_fail(f"coverage: {error}")
+    union = result["union"]
+    line = (f"{result['total']} shards cover the canonical inventory exactly once: {result['inventory_files']} files, "
+            f"{union['tests']} cases (cases per shard {result['shard_tests']}), {union['assertions']} assertions, "
+            f"outcomes {union['outcomes']}, union selection sha256 {union['selection_sha256']}")
+    print(line)
+    write_summary("### PHPUnit shard coverage\n\n" + line)
+    annotate("notice", "PHPUnit shard coverage", line)
+    publish_digest(union)
+    return 0
+
+
 def cmd_junit_digest(args: argparse.Namespace) -> int:
     if args.compare:
         left, right = (json.loads(Path(path).read_text(encoding="utf-8")) for path in args.compare)
@@ -235,16 +350,10 @@ def cmd_junit_digest(args: argparse.Namespace) -> int:
     print(junit.dumps(value))
     if args.out:
         Path(args.out).write_text(junit.dumps(value), encoding="utf-8")
-    # GitHub truncates an annotation message at 4,096 characters: the header
-    # (counts, outcomes, selection hash) and the compressed per-class table
-    # are published separately, the table in numbered chunks.
-    table = value["per_class_zlib_b64"]
-    header = {key: item for key, item in value.items() if key != "per_class_zlib_b64"}
-    chunks = [table[index:index + 3900] for index in range(0, len(table), 3900)] or [""]
-    header["per_class_chunks"] = len(chunks)
-    annotate("notice", "PHPUnit digest", junit.dumps(header))
-    for number, chunk in enumerate(chunks, start=1):
-        annotate("notice", f"PHPUnit per-class {number}/{len(chunks)}", chunk)
+    if args.title:
+        publish_digest(value, f"{args.title} digest", f"{args.title} per-class")
+    else:
+        publish_digest(value)
     return 0
 
 
@@ -258,6 +367,7 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--before", default="")
     c.add_argument("--pr-base", default="")
     c.add_argument("--main-ref", default="origin/main")
+    c.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", ""), help="owner/name for the main-push prior-validation lookup")
     c.set_defaults(func=cmd_classify)
 
     g = sub.add_parser("gate")
@@ -281,7 +391,28 @@ def main(argv: list[str] | None = None) -> int:
     j.add_argument("report", nargs="?", default="")
     j.add_argument("--out", default="")
     j.add_argument("--compare", nargs=2, metavar=("LEFT_JSON", "RIGHT_JSON"))
+    j.add_argument("--title", default="", help="annotation title prefix (default: PHPUnit)")
     j.set_defaults(func=cmd_junit_digest)
+
+    s = sub.add_parser("shard", help="deterministic PHPUnit sharding (ADR 0072 section 31)")
+    shard_sub = s.add_subparsers(dest="shard_command", required=True)
+    sp = shard_sub.add_parser("plan", help="this shard's membership from the canonical inventory")
+    sp.add_argument("--inventory", required=True, help="phpunit --list-tests-xml output")
+    sp.add_argument("--shard", required=True, help="INDEX/TOTAL, e.g. 2/4")
+    sp.add_argument("--config", default=str(REPO_ROOT / "apps/platform/phpunit.xml"))
+    sp.add_argument("--write-config", default="", help=f"write the shard's PHPUnit configuration (apps/platform/{shard_mod.SHARD_CONFIG})")
+    sp.add_argument("--plan-out", default="")
+    sp.add_argument("--container-root", default=shard_mod.CONTAINER_ROOT)
+    sp.set_defaults(func=cmd_shard_plan)
+    sv = shard_sub.add_parser("verify", help="the shard's JUnit report equals its plan exactly")
+    sv.add_argument("--plan", required=True)
+    sv.add_argument("--junit", required=True)
+    sv.add_argument("--report-out", default="")
+    sv.set_defaults(func=cmd_shard_verify)
+    sc = shard_sub.add_parser("coverage", help="every shard of one run: union = canonical inventory, once each")
+    sc.add_argument("--dir", required=True, help="one sub-directory per shard (shard-report.json, phpunit-list.xml, phpunit-junit.xml)")
+    sc.add_argument("--container-root", default=shard_mod.CONTAINER_ROOT)
+    sc.set_defaults(func=cmd_shard_coverage)
 
     args = parser.parse_args(argv)
     return int(args.func(args))

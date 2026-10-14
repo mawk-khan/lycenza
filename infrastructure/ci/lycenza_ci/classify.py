@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import fnmatch
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 LANES: tuple[str, ...] = (
     "secrets",
@@ -140,3 +141,48 @@ def parse_name_status(output: str) -> list[str]:
             paths.append(fields[index + 1])
             index += 2
     return [path for path in paths if path]
+
+
+# --- CI sharding Option A (ADR 0072 section 31): no duplicate heavy lanes on main --------
+
+INTEGRATION_PREFIX = "integration/"
+
+
+def prior_integration_validation(sha: str, check_runs: list[dict], suites: dict[int, dict], app_id: int, gate: str) -> str | None:
+    """Was this exact SHA already validated by its integration candidate run?
+
+    `main` only ever moves by fast-forward to a SHA whose `CI gate` from
+    GitHub Actions is green (ruleset 24909660, ADR 0072 section 29), so a push
+    to `main` re-runs nothing heavy when the NEWEST completed Actions `CI gate`
+    run for exactly this SHA from an `integration/**` check suite succeeded.
+    Returns a description of that run, or None -- and None (anything missing,
+    foreign, unfinished or red) means the ordinary path classification.
+    """
+    def stamp(run: dict) -> datetime:
+        value = run.get("completed_at") or ""
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(UTC)
+        except ValueError:
+            return datetime.min.replace(tzinfo=UTC)
+
+    candidates = []
+    for run in check_runs:
+        suite = suites.get((run.get("check_suite") or {}).get("id"))
+        if (run.get("name") != gate or run.get("head_sha") != sha or (run.get("app") or {}).get("id") != app_id
+                or run.get("status") != "completed" or not suite):
+            continue
+        if (suite.get("app") or {}).get("id") != app_id or suite.get("head_sha") != sha:
+            continue
+        if not str(suite.get("head_branch") or "").startswith(INTEGRATION_PREFIX):
+            continue
+        candidates.append((stamp(run), run, suite))
+    if not candidates:
+        return None
+    _, run, suite = max(candidates, key=lambda item: item[0])
+    if run.get("conclusion") != "success":
+        return None
+    return f"check run {run.get('id')} on {suite.get('head_branch')} ({run.get('completed_at')})"
+
+
+def already_validated(description: str) -> Classification:
+    return Classification(ALWAYS, False, f"exact SHA already validated by its integration candidate ({description}): always lanes only", {})

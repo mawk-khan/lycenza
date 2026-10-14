@@ -103,5 +103,42 @@ class GateTest(unittest.TestCase):
         self.assertFalse(decide(needs).passed, "an unexpected job")
 
 
+class ShardedPlatformLaneTest(unittest.TestCase):
+    """ADR 0072 section 31 (CI sharding Option A): the `platform` lane is three
+    jobs. `platform` is the shard matrix; GitHub reports a matrix job's result
+    as `success` only when every leg succeeded (a failed, cancelled or
+    timed-out leg makes it `failure`/`cancelled`)."""
+
+    PLATFORM_JOBS = ("platform-static", "platform", "platform-coverage")
+
+    def test_the_platform_lane_is_exactly_the_three_jobs(self) -> None:
+        self.assertEqual(set(self.PLATFORM_JOBS), {job for job, lane in JOB_LANES.items() if lane == "platform"})
+
+    def test_any_platform_job_not_succeeding_fails_the_gate(self) -> None:
+        code = set(classify(["apps/platform/app/X.php"]).lanes)
+        self.assertTrue(decide(needs_for(code)).passed)
+        for job in self.PLATFORM_JOBS:
+            for bad in ("failure", "cancelled", "skipped", None):
+                needs = needs_for(code)
+                needs[job]["result"] = bad
+                self.assertFalse(decide(needs).passed, f"{job} {bad}")
+            needs = needs_for(code)
+            del needs[job]
+            self.assertFalse(decide(needs).passed, f"{job} missing from needs")
+
+    def test_shards_cannot_run_when_the_lane_is_not_required(self) -> None:
+        docs = set(classify(["docs/a.md"]).lanes)
+        for job in self.PLATFORM_JOBS:
+            needs = needs_for(docs)
+            needs[job]["result"] = "success"
+            self.assertFalse(decide(needs).passed, job)
+
+    def test_a_main_push_validated_on_integration_needs_only_the_always_lanes(self) -> None:
+        self.assertTrue(decide(needs_for(set(ALWAYS))).passed)
+        needs = needs_for(set(ALWAYS))
+        needs["supply-chain"]["result"] = "failure"
+        self.assertFalse(decide(needs).passed, "the always lanes still decide a validated main push")
+
+
 if __name__ == "__main__":
     unittest.main()

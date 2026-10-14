@@ -29,7 +29,12 @@ JOB_LANES: dict[str, str] = {
     "supply-chain": "supply_chain",
     "integrity": "integrity",
     "production-images": "images",
+    # CI sharding Option A (ADR 0072 section 31): the `platform` lane is three
+    # jobs; `platform` is the shard matrix, whose aggregate result is
+    # `success` only when every leg succeeded.
+    "platform-static": "platform",
     "platform": "platform",
+    "platform-coverage": "platform",
     "docs-guards": "docs",
     "ai-service": "gateway",
     "shared-types": "shared_types",

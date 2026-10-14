@@ -1169,5 +1169,8 @@ once several modules copy it.
     only from the central classifier (`infrastructure/ci`); never give a job
     `continue-on-error` or its own skip logic. Since 2026-10-11 (ADR 0072
     §28.8) the remote exact-SHA full suite of a code-lane candidate is the
-    canonical regression for that publication. Never change a contributor's
+    canonical regression for that publication. Since 2026-10-14 (ADR 0072
+    §31, Option A) it runs in deterministic shards whose union
+    `platform-coverage` proves equal to the canonical inventory; never shard
+    by hand-picked lists, never drop a test to balance a shard. Never change a contributor's
     IDE settings to enforce this.

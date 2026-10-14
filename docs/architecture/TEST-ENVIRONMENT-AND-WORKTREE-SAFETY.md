@@ -186,6 +186,7 @@ apps/platform/bin/safe-test --reset-db                      # reset test DB, the
 apps/platform/bin/safe-test --diagnostic                    # print resolved config, then exit
 SAFE_TEST_ISOLATED=1 apps/platform/bin/safe-test              # isolated Compose project (see section 12)
 SAFE_TEST_COMPOSE_OVERRIDE=infrastructure/ci/compose.s3-versitygw.yml apps/platform/bin/safe-test  # versitygw as the S3 server (CI; see "S3 server substitution")
+apps/platform/bin/safe-test --shard 2/4                      # one CI shard of the canonical suite (see "CI sharding")
 ```
 
 Also reachable as `composer test:safe` from a host with Composer
@@ -407,8 +408,10 @@ version of the identical values).
 
 ## 15. CI implications
 
-Not evaluated in this checkpoint (no CI configuration exists in this
-repository to update). If one is added later, it should invoke
+*(Superseded in practice: since E03.1 the CI `platform` lane runs this
+runner itself, and since 2026-10-14 in shards -- see "CI sharding (Option
+A)" below and ADR 0072 sections 28 and 31.)* Original text: not evaluated in
+this checkpoint (no CI configuration exists in this repository to update). If one is added later, it should invoke
 `apps/platform/bin/safe-test` (with `SAFE_TEST_ISOLATED=1` if CI ever
 runs multiple concurrent jobs against the same Docker host) rather
 than reconstructing the environment-override list independently, so
@@ -722,3 +725,59 @@ deploy or push):
 `bin/safe-test` remains the canonical runner. The skills only call it, and
 mirror its naming and inert test values in
 `.claude/skills/_shared/lycenza-dev.sh`.
+
+## CI sharding (Option A, 2026-10-14)
+
+**Why.** The canonical suite passed 8,000 tests and each code-lane candidate
+waited about 35-48 minutes for one PHPUnit process. On 2026-10-13 the owner
+selected **Option A**: keep the full suite on every code-lane candidate, run
+it in parallel shards, and stop re-running the heavy lanes on the `main` push
+of a SHA its integration run already validated. Option B (the full suite only
+every fifth checkpoint) was rejected. ADR 0072 section 31 is the contract.
+
+**What a shard is.**
+- The inventory is exactly what the canonical `phpunit.xml` would run
+  (`phpunit --list-tests-xml`). Nothing is filtered, grouped or excluded.
+- Every test file lands in exactly one shard. The partition is deterministic:
+  longest-processing-time first by test-case count, ties broken by path
+  (`infrastructure/ci/lycenza_ci/shard.py`). No timing data, no randomness.
+- A shard's PHPUnit configuration (`apps/platform/phpunit.shard.xml`,
+  generated, git-ignored) is `phpunit.xml` with only `<testsuites>` replaced.
+  The forced `<php>` block, the bootstrap and the 2G `memory_limit` are
+  unchanged.
+
+**Reproduce a CI shard locally.** The failing check is named `Laravel
+(apps/platform) shard N/TOTAL`, and its annotations repeat the command:
+
+```
+SAFE_TEST_ISOLATED=1 apps/platform/bin/safe-test --reset-db
+SAFE_TEST_ISOLATED=1 apps/platform/bin/safe-test --shard N/TOTAL
+SAFE_TEST_ISOLATED=1 apps/platform/bin/safe-test --filter 'Tests\\Feature\\X\\YTest::the_method'   # one test
+```
+
+- `--shard` needs `python3` on the host (the planner). It refuses an invalid
+  `INDEX/TOTAL` and refuses `--configuration`, `--testsuite` or
+  `--list-tests*`, because it selects those itself. It can be narrowed
+  further (`--shard 2/4 --filter X`); CI never narrows.
+- **Run one shard at a time per Compose project.** The shards of one project
+  share its test database. In CI every shard runs on its own runner with its
+  own stack.
+
+**Isolation in CI.** Each shard is its own GitHub-hosted runner, so it has its
+own Docker daemon, Compose stack, PostgreSQL volume, Valkey, S3 server,
+filesystem, ports and generated `APP_KEY`. Each runs `bin/safe-test
+--reset-db` (the full seed set) before its tests. Nothing mutable is shared
+between shards, so no shard depends on another's order or state.
+
+**Failure.** A shard is red when PHPUnit fails, when it times out (60
+minutes), or when its JUnit report is not exactly its plan
+(`lycenza-ci shard verify`). A PHP fatal error leaves no complete report, so
+verification fails too. The `platform-coverage` job then proves the union of
+all shards is the inventory, once each. The `CI gate` requires the static
+job, every shard and the coverage job.
+
+**Changing the shard count.** Edit only the matrix list in
+`.github/workflows/ci.yml` (`shard: [1, 2, 3, 4]`). It must be exactly
+`1..TOTAL`; the CI tooling tests enforce that. The membership follows
+automatically, and so does the coverage proof. No ruleset change is needed,
+because shard legs are never required contexts.

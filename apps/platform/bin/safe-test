@@ -41,9 +41,20 @@
 #   bin/safe-test --diagnostic                     # print resolved config, then exit
 #   SAFE_TEST_ISOLATED=1 bin/safe-test              # isolated Compose project for this worktree
 #   SAFE_TEST_COMPOSE_OVERRIDE=<file> bin/safe-test  # one extra Compose file (CI: the versitygw S3 server)
+#   bin/safe-test --shard 2/4                       # one shard of the canonical suite, exactly as CI runs it
+#   bin/safe-test --shard 2/4 --filter=FooTest      # ...narrowed further (CI never narrows)
 #
 # Everything not recognized above (--filter, a path, --testsuite, ...)
-# is forwarded verbatim to `php artisan test`.
+# is forwarded verbatim to `vendor/bin/phpunit`.
+#
+# --shard INDEX/TOTAL (ADR 0072 section 31, CI sharding Option A): lists the
+# canonical phpunit.xml inventory (`--list-tests-xml`), asks
+# `infrastructure/ci/lycenza-ci shard plan` (host python3) for this shard's
+# deterministic membership, writes it to phpunit.shard.xml (phpunit.xml with
+# only <testsuites> replaced -- the forced <php> block, bootstrap and every
+# other setting are unchanged) and runs PHPUnit with it. CI runs every shard on
+# its own runner; locally, run one shard at a time per Compose project (the
+# shards would otherwise share one test database).
 
 set -euo pipefail
 
@@ -164,14 +175,50 @@ compose() {
 }
 
 action="test"
+shard=""
 forward_args=()
-for arg in "$@"; do
-  case "${arg}" in
+while [ "$#" -gt 0 ]; do
+  case "$1" in
     --reset-db) action="reset-db" ;;
     --diagnostic) action="diagnostic" ;;
-    *) forward_args+=("${arg}") ;;
+    --shard)
+      if [ "$#" -lt 2 ]; then
+        echo "[safe-test] --shard needs INDEX/TOTAL (e.g. --shard 2/4)" >&2
+        exit 2
+      fi
+      shard="$2"
+      shift
+      ;;
+    --shard=*) shard="${1#--shard=}" ;;
+    *) forward_args+=("$1") ;;
   esac
+  shift
 done
+
+if [ -n "${shard}" ]; then
+  # Validated again by the planner; checked here first so a typo never
+  # starts the stack. INDEX/TOTAL, 1 <= INDEX <= TOTAL.
+  if ! [[ "${shard}" =~ ^([1-9][0-9]*)/([1-9][0-9]*)$ ]] || [ "${BASH_REMATCH[1]}" -gt "${BASH_REMATCH[2]}" ]; then
+    echo "[safe-test] invalid --shard '${shard}': expected INDEX/TOTAL with 1 <= INDEX <= TOTAL (e.g. 2/4)" >&2
+    exit 2
+  fi
+  if [ "${action}" != "test" ]; then
+    echo "[safe-test] --shard cannot be combined with --reset-db or --diagnostic" >&2
+    exit 2
+  fi
+  for arg in "${forward_args[@]}"; do
+    case "${arg}" in
+      -c|--configuration|--configuration=*|--testsuite|--testsuite=*|--list-tests*)
+        echo "[safe-test] --shard selects the configuration and test suite itself; refusing '${arg}'" >&2
+        exit 2
+        ;;
+    esac
+  done
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "[safe-test] --shard needs python3 on the host (infrastructure/ci/lycenza-ci)" >&2
+    exit 1
+  fi
+fi
 
 compose up -d postgres redis minio platform >&2
 
@@ -220,6 +267,19 @@ case "${action}" in
     : # already printed above
     ;;
   test)
-    docker_exec php -d memory_limit=2G vendor/bin/phpunit "${forward_args[@]}"
+    if [ -n "${shard}" ]; then
+      # The inventory is exactly what the canonical phpunit.xml would run.
+      inventory="storage/logs/phpunit-list.xml"
+      rm -f "${PLATFORM_DIR}/phpunit.shard.xml" "${PLATFORM_DIR}/storage/logs/phpunit-shard-plan.json"
+      docker_exec php -d memory_limit=2G vendor/bin/phpunit --list-tests-xml "${inventory}" >&2
+      python3 "${REPO_ROOT}/infrastructure/ci/lycenza-ci" shard plan \
+        --inventory "${PLATFORM_DIR}/${inventory}" --shard "${shard}" \
+        --config "${PLATFORM_DIR}/phpunit.xml" --write-config "${PLATFORM_DIR}/phpunit.shard.xml" \
+        --plan-out "${PLATFORM_DIR}/storage/logs/phpunit-shard-plan.json"
+      echo "[safe-test] running shard ${shard} (reproduce: apps/platform/bin/safe-test --shard ${shard}; one test: apps/platform/bin/safe-test --filter 'Class::method')" >&2
+      docker_exec php -d memory_limit=2G vendor/bin/phpunit --configuration phpunit.shard.xml "${forward_args[@]}"
+    else
+      docker_exec php -d memory_limit=2G vendor/bin/phpunit "${forward_args[@]}"
+    fi
     ;;
 esac

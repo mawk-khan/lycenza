@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from lycenza_ci.classify import ALL, ALWAYS, CLASS_LANES, LANES, STRICT, classify, parse_name_status, path_class  # noqa: E402
+from lycenza_ci.classify import ALL, ALWAYS, CLASS_LANES, LANES, STRICT, already_validated, classify, parse_name_status, path_class, prior_integration_validation  # noqa: E402
 from lycenza_ci.contract import REPO_ROOT  # noqa: E402
 
 
@@ -102,6 +102,52 @@ class ClassifierTest(unittest.TestCase):
         tracked = subprocess.run(["git", "-C", str(REPO_ROOT), "ls-files", "-z"], capture_output=True, check=True).stdout.decode()
         unknown = sorted(path for path in tracked.split("\0") if path and path_class(path) == "unknown")
         self.assertEqual([], unknown[:20], "a tracked path falls through to `unknown`; give it a deliberate class (or keep it strict on purpose)")
+
+
+class PriorIntegrationValidationTest(unittest.TestCase):
+    """ADR 0072 section 31 (Option A): a push to `main` skips the heavy lanes only
+    for an exact SHA whose newest Actions `CI gate` run from an integration/**
+    check suite succeeded; anything else is the ordinary classification."""
+
+    SHA = "a" * 40
+
+    def run_(self, run_id: int, conclusion: str = "success", completed: str = "2026-10-14T10:00:00Z", suite: int = 1,
+             app: int = 15368, sha: str | None = None, name: str = "CI gate", status: str = "completed") -> dict:
+        return {"id": run_id, "name": name, "head_sha": sha or self.SHA, "status": status, "conclusion": conclusion,
+                "completed_at": completed, "app": {"id": app}, "check_suite": {"id": suite}}
+
+    def suites(self, **branches: str) -> dict[int, dict]:
+        return {int(key[1:]): {"head_branch": branch, "head_sha": self.SHA, "app": {"id": 15368}} for key, branch in branches.items()}
+
+    def decide(self, runs: list[dict], suites: dict[int, dict]) -> str | None:
+        return prior_integration_validation(self.SHA, runs, suites, 15368, "CI gate")
+
+    def test_a_green_integration_run_validates_the_sha(self) -> None:
+        self.assertIsNotNone(self.decide([self.run_(1)], self.suites(s1="integration/x")))
+        self.assertEqual(ALWAYS, already_validated("run 1").lanes)
+
+    def test_anything_else_is_the_ordinary_classification(self) -> None:
+        integration = self.suites(s1="integration/x")
+        self.assertIsNone(self.decide([], integration), "no run")
+        self.assertIsNone(self.decide([self.run_(1, conclusion="failure")], integration), "red")
+        self.assertIsNone(self.decide([self.run_(1, conclusion="cancelled")], integration), "cancelled")
+        self.assertIsNone(self.decide([self.run_(1, status="in_progress", conclusion=None)], integration), "unfinished")
+        self.assertIsNone(self.decide([self.run_(1, app=999)], integration), "another app")
+        self.assertIsNone(self.decide([self.run_(1, sha="b" * 40)], integration), "another SHA")
+        self.assertIsNone(self.decide([self.run_(1, name="CI gate (fake)")], integration), "another check")
+        self.assertIsNone(self.decide([self.run_(1)], self.suites(s1="main")), "the main run itself")
+        self.assertIsNone(self.decide([self.run_(1)], self.suites(s1="feature/x")), "not an integration branch")
+        self.assertIsNone(self.decide([self.run_(1)], {}), "suite unknown")
+        foreign_suite = {1: {"head_branch": "integration/x", "head_sha": self.SHA, "app": {"id": 999}}}
+        self.assertIsNone(self.decide([self.run_(1)], foreign_suite), "suite from another app")
+
+    def test_the_newest_integration_run_decides(self) -> None:
+        suites = self.suites(s1="integration/x", s2="integration/x")
+        older_green = self.run_(1, completed="2026-10-14T09:00:00Z", suite=1)
+        newer_red = self.run_(2, conclusion="failure", completed="2026-10-14T10:00:00Z", suite=2)
+        self.assertIsNone(self.decide([older_green, newer_red], suites))
+        newer_green = self.run_(3, completed="2026-10-14T11:00:00Z", suite=2)
+        self.assertIsNotNone(self.decide([older_green, newer_red, newer_green], suites))
 
 
 if __name__ == "__main__":

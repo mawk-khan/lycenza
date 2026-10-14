@@ -17,12 +17,14 @@ from collections import Counter
 from pathlib import Path
 
 
-def digest(path: Path) -> dict:
-    root = ET.parse(path).getroot()
+def digest(*paths: Path) -> dict:
+    """One report, or several (the shards of one run, ADR 0072 section 31): the
+    union digest of several shards equals an unsharded run's digest of the same
+    selection, because ids are sorted and per-class assertions are summed."""
     cases = []
     per_class: Counter[str] = Counter()
     outcomes: Counter[str] = Counter()
-    for case in root.iter("testcase"):
+    for case in (case for path in paths for case in ET.parse(path).getroot().iter("testcase")):
         klass = case.get("class") or case.get("classname") or "?"
         name = case.get("name") or "?"
         cases.append(f"{klass}::{name}")
