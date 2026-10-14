@@ -64,7 +64,18 @@ final class StaffNavigation
             new E('my-assignments', 'my-work', 'My assignments', 'app.my-assignments.index', all: ['lms.assignments.teacher']),
 
             new E('school-setup', 'school-setup', 'School setup', 'app.school-setup.index', all: ['school.profile.view']),
+            // SWC.2 (ADR 0073 section 10): every Academic Structure screen,
+            // under the capability that page itself checks.
+            new E('campuses', 'school-setup', 'Campuses', 'app.school-setup.campuses', all: ['school.campuses.view']),
+            new E('academic-years', 'school-setup', 'Academic years', 'app.school-setup.academic-years', all: ['academics.years.view']),
+            new E('terms', 'school-setup', 'Terms', 'app.school-setup.terms', all: ['academics.years.view']),
+            new E('grade-levels', 'school-setup', 'Grade levels', 'app.school-setup.grade-levels', all: ['academics.structure.view']),
+            new E('sections', 'school-setup', 'Sections', 'app.school-setup.sections', all: ['academics.structure.view']),
+            new E('departments', 'school-setup', 'Academic departments', 'app.school-setup.departments', all: ['academics.structure.view']),
+            new E('rooms', 'school-setup', 'Rooms', 'app.school-setup.rooms', all: ['academics.structure.view']),
+            new E('subjects', 'school-setup', 'Subjects', 'app.school-setup.subjects', all: ['academics.subjects.view']),
             new E('subject-offerings', 'school-setup', 'Subject offerings', 'app.subject-offerings.index', all: ['academics.subjects.view']),
+            new E('elective-groups', 'school-setup', 'Elective groups', 'app.elective-groups.index', all: ['academics.subjects.view']),
 
             new E('timetable-schedule', 'academics', 'Timetable', 'app.timetable-schedule.index', all: ['timetable.schedule.view']),
             new E('timetable-periods', 'academics', 'Timetable periods', 'app.timetable-periods.index', all: ['timetable.periods.view']),

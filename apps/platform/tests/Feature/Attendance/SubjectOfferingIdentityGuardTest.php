@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Attendance;
 
+use App\Domain\AcademicStructure\Application\SubjectOfferingService;
 use App\Domain\AcademicStructure\Http\Controllers\SubjectOfferingController;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use PHPUnit\Framework\Attributes\Test;
@@ -105,10 +106,19 @@ class SubjectOfferingIdentityGuardTest extends TestCase
         // And the update path must still pass ONLY validated input --
         // never $request->all(). Since ADR 0069 the write is
         // SubjectOfferingService::update(), which applies exactly the
-        // validated attributes it is given.
-        $this->assertStringContainsString('->update($school, $subjectOffering, $validated, $request->user())', $source);
+        // validated attributes it is given. Since SWC.2 (ADR 0073 section
+        // 18.2) the API and the web controller both pass an explicit
+        // allow-list to updateFromInput(), which validates exactly those
+        // fields and hands only the validated ones to update().
+        $this->assertStringContainsString('->updateFromInput($school, $subjectOffering, $request->only(SubjectOfferingService::MUTABLE_FIELDS), $request->user())', $source);
         $this->assertStringNotContainsString('$request->all()', $source);
+        $this->assertSame(['is_required', 'sequence', 'weekly_periods_target', 'status'], SubjectOfferingService::MUTABLE_FIELDS);
         $service = (string) file_get_contents(app_path('Domain/AcademicStructure/Application/SubjectOfferingService.php'));
         $this->assertStringContainsString('$offering->update($attributes);', $service);
+        $this->assertStringContainsString('array_intersect_key($input, array_flip(self::MUTABLE_FIELDS))', $service);
+        $this->assertStringContainsString('return $this->update($school, $subjectOfferingId, $validated, $actor);', $service);
+        $web = (string) file_get_contents(app_path('Http/Controllers/App/SubjectOfferingAdminController.php'));
+        $this->assertStringContainsString('$request->only(SubjectOfferingService::MUTABLE_FIELDS)', $web);
+        $this->assertStringNotContainsString('$request->all()', $web);
     }
 }

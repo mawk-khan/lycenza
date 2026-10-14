@@ -53,6 +53,12 @@ const SWC_ACCESSIBILITY_FILES = [
     'resources/js/Components/Navigation/**/*.vue',
     'resources/js/Pages/Home.vue',
     'resources/js/Pages/App/Dashboard.vue',
+    // SWC.2 (ADR 0073 section 17.5): Academic Structure screens and their components.
+    'resources/js/Components/Form/**/*.vue',
+    'resources/js/Components/ConfirmDialog.vue',
+    'resources/js/Components/SubjectOfferings/**/*.vue',
+    'resources/js/Pages/App/SchoolSetup/**/*.vue',
+    'resources/js/Pages/App/ElectiveGroups/**/*.vue',
 ];
 const swcAccessibility = pluginVueA11y.configs['flat/recommended'].map((config) => ({
     ...config,

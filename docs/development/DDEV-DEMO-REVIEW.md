@@ -585,11 +585,11 @@ Sections 13–15 are rewritten at SWC.5. Known drift until then:*
 
 | Module | URL / navigation | Persona | Reviewable? | Notes |
 |---|---|---|---|---|
-| School settings / setup | Dashboard -> School settings, School setup | School Admin | Yes | Terms, sections, rooms, departments are API-only (no pages) |
+| School settings / setup | Dashboard -> School settings, School setup | School Admin | Yes | *(Since SWC.2: Terms, Sections, Rooms and Academic departments have pages, and Campuses, Grade levels and Subjects can be edited and deactivated; School setup in the navigation.)* |
 | Students / Guardians | Dashboard -> Students, Guardians | Admin, Principal | Yes | Account link + guardian invitation actions on detail pages |
 | Enrollments / Rollovers | Dashboard -> Enrollments, Enrollment Rollovers | Admin (Principal view-only rollovers) | Yes | |
 | Admissions | Dashboard -> Admissions | Admin, Principal | Yes | |
-| Subject offerings / electives | Dashboard -> Subject Offerings | Admin, Principal | Yes (read) | No create page for offerings |
+| Subject offerings / electives | Dashboard -> Subject Offerings | Admin, Principal | Yes (read) | *(Since SWC.2: create on the index, settings/deactivate on the detail page; Elective groups at `/app/elective-groups`.)* |
 | Communications | Dashboard -> Communication Hub | Admin, Principal | Yes | Student conversations need `communications.conversations.students` (no role has it) |
 | Finance / Fees / Payments | Dashboard -> Finance | School Admin | Yes | Payments are read-only (recorded via provider-settlement service) |
 | HR | Dashboard -> HR | Admin, Principal, HR & Payroll | Partly | Org structure + sensitive sections need the demo HR & Payroll role |
@@ -620,7 +620,8 @@ Sections 13–15 are rewritten at SWC.5. Known drift until then:*
   Operations status is `GET /api/internal/operations/status` (API only).
 - **API-only surfaces** (`/api/v1/schools/{school}/...`): academic terms,
   sections, academic departments, rooms, campus CRUD, subject-offering
-  creation, **Documents** (incl. employee/sensitive documents), **webhooks**
+  creation *(2026-10-14, SWC.2: all of these now have staff web screens --
+  ADR 0073 §18)*, **Documents** (incl. employee/sensitive documents), **webhooks**
   (endpoints/deliveries), education boards. The API is not reachable from
   a browser session (no session-authenticated API; no token-issuing UI) --
   a Sanctum token must be minted in `ddev artisan tinker`.

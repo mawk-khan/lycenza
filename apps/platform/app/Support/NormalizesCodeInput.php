@@ -17,7 +17,7 @@ trait NormalizesCodeInput
     private function normalizeCodeInput(Request $request, string $field = 'code'): void
     {
         if ($request->has($field)) {
-            $request->merge([$field => strtoupper(trim((string) $request->input($field)))]);
+            $request->merge([$field => CodeNormalizer::normalize((string) $request->input($field))]);
         }
     }
 }

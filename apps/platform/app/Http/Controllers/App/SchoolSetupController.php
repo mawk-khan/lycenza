@@ -3,13 +3,15 @@
 namespace App\Http\Controllers\App;
 
 use App\Domain\AcademicStructure\Application\AcademicYearService;
-use App\Domain\AcademicStructure\Events\GradeLevelCreated;
-use App\Domain\AcademicStructure\Events\SubjectCreated;
+use App\Domain\AcademicStructure\Application\GradeLevelAdministrationService;
+use App\Domain\AcademicStructure\Application\SubjectAdministrationService;
+use App\Domain\AcademicStructure\Infrastructure\AcademicDepartment;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Subject;
-use App\Domain\Campuses\Events\CampusCreated;
+use App\Domain\Campuses\Application\CampusAdministrationService;
 use App\Domain\Schools\Events\SchoolProfileUpdated;
+use App\Http\Controllers\App\Concerns\MapsAcademicStructureErrors;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Models\EducationBoard;
@@ -31,16 +33,18 @@ use Inertia\Response;
  * JSON API under /api/v1 (that surface exists for Flutter/external
  * consumers, ADR-documented separately).
  *
- * Deliberately covers School Profile, Campuses, Academic Years, Grade
- * Levels, and Subjects only -- Terms/Sections/Academic Departments/
- * Rooms/Subject Offerings are fully implemented and tested at the API
- * layer (this checkpoint's test suite) but do not yet have a
- * dedicated screen; see the Phase 0D final report's "Technical Debt"
- * section for why this was deliberately deferred rather than rushed.
+ * Covers School Profile, Campuses, Academic Years, Grade Levels and
+ * Subjects. *(SWC.2, ADR 0073 section 18: the Phase 0D deferral is closed.
+ * Terms, Sections, Academic Departments and Rooms have screens in
+ * SchoolSetupStructureController, Subject Offerings in
+ * SubjectOfferingAdminController and Elective Groups in
+ * ElectiveGroupController. Every write here now goes through the same
+ * Application service as the `/api/v1` endpoint -- one implementation,
+ * normalized case-insensitive codes, domain refusals shown as form errors.)*
  */
 class SchoolSetupController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCapability, MapsAcademicStructureErrors;
 
     public function index(TenantContext $context): Response
     {
@@ -57,6 +61,12 @@ class SchoolSetupController extends Controller
                 'academicYearActivated' => AcademicYear::query()->where('status', 'active')->exists(),
                 'gradeLevelsConfigured' => GradeLevel::query()->exists(),
                 'subjectsConfigured' => Subject::query()->exists(),
+            ],
+            // SWC.2: the remaining structure screens, shown by the capability each page itself checks.
+            'can' => [
+                'viewYears' => $this->can($context, 'academics.years.view'),
+                'viewStructure' => $this->can($context, 'academics.structure.view'),
+                'viewSubjects' => $this->can($context, 'academics.subjects.view'),
             ],
         ]);
     }
@@ -123,28 +133,31 @@ class SchoolSetupController extends Controller
         $this->authorizeCapability('school.campuses.view', $school);
 
         return Inertia::render('App/SchoolSetup/Campuses', [
-            'campuses' => Campus::query()->orderBy('name')->get(['id', 'name', 'code', 'status'])->all(),
-            'canManage' => app(CapabilityResolver::class)->canInSchool($context->actor(), 'school.campuses.manage', $school),
+            'campuses' => Campus::query()->orderBy('name')->get()->map(fn (Campus $c) => [
+                'id' => $c->id, 'name' => $c->name, 'code' => $c->code, 'status' => $c->status,
+                'phone' => $c->phone, 'email' => $c->email, 'address' => $c->address,
+            ])->all(),
+            'canManage' => $this->can($context, 'school.campuses.manage'),
         ]);
     }
 
-    public function storeCampus(Request $request, TenantContext $context): RedirectResponse
+    public function storeCampus(Request $request, TenantContext $context, CampusAdministrationService $campuses): RedirectResponse
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('school.campuses.manage', $school);
 
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'code' => ['required', 'string', 'max:32'],
-        ]);
-        $validated['code'] = strtoupper(trim($validated['code']));
+        $campuses->create($school, $request->only(['name', 'code', 'phone', 'email', 'address']), $context->actor());
 
-        DB::transaction(function () use ($school, $validated) {
-            $campus = Campus::query()->create([...$validated, 'school_id' => $school->id]);
+        return redirect('/app/school-setup/campuses');
+    }
 
-            app(AuditRecorder::class)->school($school, 'campus.created', subject: $campus, metadata: $validated);
-            event(new CampusCreated($school->id, $campus->id, $campus->name, $campus->code));
-        });
+    /** SWC.2: edit and deactivate/reactivate (`status`) -- reversible, never a delete (rule 73). */
+    public function updateCampus(Request $request, TenantContext $context, CampusAdministrationService $campuses, string $campus): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('school.campuses.manage', $school);
+
+        $campuses->update($school, $campus, $request->only(['name', 'code', 'phone', 'email', 'address', 'status']), $context->actor());
 
         return redirect('/app/school-setup/campuses');
     }
@@ -160,7 +173,7 @@ class SchoolSetupController extends Controller
                 'startsOn' => $y->starts_on->toDateString(), 'endsOn' => $y->ends_on->toDateString(),
                 'status' => $y->status,
             ])->all(),
-            'canManage' => app(CapabilityResolver::class)->canInSchool($context->actor(), 'academics.years.manage', $school),
+            'canManage' => $this->can($context, 'academics.years.manage'),
         ]);
     }
 
@@ -169,14 +182,19 @@ class SchoolSetupController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability('academics.years.manage', $school);
 
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'code' => ['required', 'string', 'max:32'],
-            'starts_on' => ['required', 'date'],
-            'ends_on' => ['required', 'date', 'after:starts_on'],
-        ]);
+        // SWC.2: the overlap refusal is a form error on the dates, not a 500.
+        $this->withFormErrors('starts_on', fn () => $service->createFromInput($school, $request->only(['name', 'code', 'starts_on', 'ends_on']), $context->actor()));
 
-        $service->create($school, $validated, $context->actor());
+        return redirect('/app/school-setup/academic-years');
+    }
+
+    /** SWC.2: the label/code edit the API already offered (dates and status have their own paths). */
+    public function renameAcademicYear(Request $request, TenantContext $context, AcademicYearService $service, string $academicYear): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('academics.years.manage', $school);
+
+        $service->rename($school, $academicYear, $request->only(['name', 'code']), $context->actor());
 
         return redirect('/app/school-setup/academic-years');
     }
@@ -187,7 +205,8 @@ class SchoolSetupController extends Controller
         $this->authorizeCapability('academics.years.manage', $school);
 
         $year = AcademicYear::query()->findOrFail($academicYear);
-        $service->activate($year, $context->actor());
+        // SWC.2: a stale transition or a concurrent activation is a visible refusal, not a 500.
+        $this->withFormErrors('academic_year', fn () => $service->activate($year, $context->actor()));
 
         return redirect('/app/school-setup/academic-years');
     }
@@ -198,7 +217,7 @@ class SchoolSetupController extends Controller
         $this->authorizeCapability('academics.years.manage', $school);
 
         $year = AcademicYear::query()->findOrFail($academicYear);
-        $service->close($year, $context->actor());
+        $this->withFormErrors('academic_year', fn () => $service->close($year, $context->actor()));
 
         return redirect('/app/school-setup/academic-years');
     }
@@ -209,29 +228,30 @@ class SchoolSetupController extends Controller
         $this->authorizeCapability('academics.structure.view', $school);
 
         return Inertia::render('App/SchoolSetup/GradeLevels', [
-            'gradeLevels' => GradeLevel::query()->orderBy('sequence')->get(['id', 'name', 'code', 'sequence', 'status'])->all(),
-            'canManage' => app(CapabilityResolver::class)->canInSchool($context->actor(), 'academics.structure.manage', $school),
+            'gradeLevels' => GradeLevel::query()->orderBy('sequence')->get()->map(fn (GradeLevel $g) => [
+                'id' => $g->id, 'name' => $g->name, 'code' => $g->code, 'sequence' => $g->sequence,
+                'educationStage' => $g->education_stage, 'status' => $g->status,
+            ])->all(),
+            'canManage' => $this->can($context, 'academics.structure.manage'),
         ]);
     }
 
-    public function storeGradeLevel(Request $request, TenantContext $context): RedirectResponse
+    public function storeGradeLevel(Request $request, TenantContext $context, GradeLevelAdministrationService $gradeLevels): RedirectResponse
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('academics.structure.manage', $school);
 
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'code' => ['required', 'string', 'max:32'],
-            'sequence' => ['required', 'integer', 'min:0'],
-        ]);
-        $validated['code'] = strtoupper(trim($validated['code']));
+        $gradeLevels->create($school, $request->only(['name', 'code', 'sequence', 'education_stage']), $context->actor());
 
-        DB::transaction(function () use ($school, $validated) {
-            $gradeLevel = GradeLevel::query()->create([...$validated, 'school_id' => $school->id]);
+        return redirect('/app/school-setup/grade-levels');
+    }
 
-            app(AuditRecorder::class)->school($school, 'grade_level.created', subject: $gradeLevel, metadata: $validated);
-            event(new GradeLevelCreated($school->id, $gradeLevel->id, $gradeLevel->name, $gradeLevel->code));
-        });
+    public function updateGradeLevel(Request $request, TenantContext $context, GradeLevelAdministrationService $gradeLevels, string $gradeLevel): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('academics.structure.manage', $school);
+
+        $gradeLevels->update($school, $gradeLevel, $request->only(['name', 'code', 'sequence', 'education_stage', 'status']), $context->actor());
 
         return redirect('/app/school-setup/grade-levels');
     }
@@ -242,29 +262,40 @@ class SchoolSetupController extends Controller
         $this->authorizeCapability('academics.subjects.view', $school);
 
         return Inertia::render('App/SchoolSetup/Subjects', [
-            'subjects' => Subject::query()->orderBy('name')->get(['id', 'name', 'code', 'subject_type', 'status'])->all(),
-            'canManage' => app(CapabilityResolver::class)->canInSchool($context->actor(), 'academics.subjects.manage', $school),
+            'subjects' => Subject::query()->with('academicDepartment')->orderBy('name')->get()->map(fn (Subject $s) => [
+                'id' => $s->id, 'name' => $s->name, 'code' => $s->code, 'shortName' => $s->short_name,
+                'subjectType' => $s->subject_type, 'academicDepartmentId' => $s->academic_department_id,
+                'academicDepartmentName' => $s->academicDepartment?->name, 'status' => $s->status,
+            ])->all(),
+            // A Subject's Department is a choice among this School's ACTIVE Departments.
+            'departments' => AcademicDepartment::query()->where('status', 'active')->orderBy('name')->get(['id', 'name', 'code'])->all(),
+            'subjectTypes' => SubjectAdministrationService::SUBJECT_TYPES,
+            'canManage' => $this->can($context, 'academics.subjects.manage'),
         ]);
     }
 
-    public function storeSubject(Request $request, TenantContext $context): RedirectResponse
+    public function storeSubject(Request $request, TenantContext $context, SubjectAdministrationService $subjects): RedirectResponse
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('academics.subjects.manage', $school);
 
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'code' => ['required', 'string', 'max:32'],
-        ]);
-        $validated['code'] = strtoupper(trim($validated['code']));
-
-        DB::transaction(function () use ($school, $validated) {
-            $subject = Subject::query()->create([...$validated, 'school_id' => $school->id]);
-
-            app(AuditRecorder::class)->school($school, 'subject.created', subject: $subject, metadata: $validated);
-            event(new SubjectCreated($school->id, $subject->id, $subject->name, $subject->code));
-        });
+        $subjects->create($school, $request->only(['name', 'code', 'short_name', 'subject_type', 'academic_department_id']), $context->actor());
 
         return redirect('/app/school-setup/subjects');
+    }
+
+    public function updateSubject(Request $request, TenantContext $context, SubjectAdministrationService $subjects, string $subject): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('academics.subjects.manage', $school);
+
+        $subjects->update($school, $subject, $request->only(['name', 'code', 'short_name', 'subject_type', 'academic_department_id', 'status']), $context->actor());
+
+        return redirect('/app/school-setup/subjects');
+    }
+
+    private function can(TenantContext $context, string $capability): bool
+    {
+        return app(CapabilityResolver::class)->canInSchool($context->actor(), $capability, $context->requireSchool());
     }
 }

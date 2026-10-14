@@ -14,6 +14,6 @@ trait NormalizesCode
 {
     public function setCodeAttribute(?string $value): void
     {
-        $this->attributes['code'] = $value !== null ? strtoupper(trim($value)) : null;
+        $this->attributes['code'] = CodeNormalizer::normalize($value);
     }
 }

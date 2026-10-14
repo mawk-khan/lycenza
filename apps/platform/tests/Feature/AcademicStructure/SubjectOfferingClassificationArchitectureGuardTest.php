@@ -43,12 +43,16 @@ class SubjectOfferingClassificationArchitectureGuardTest extends TestCase
                 $writers[] = substr($file, strlen(app_path()) + 1);
             }
         }
-        $this->assertSame(['Domain/AcademicStructure/Http/Controllers/SubjectOfferingController.php'], $writers, 'creation (store) is the only other place a classification is written');
+        // SWC.2 (ADR 0073 section 4.2): creation moved into the service too, so
+        // SubjectOfferingService is now the ONLY writer of a classification.
+        $this->assertSame(['Domain/AcademicStructure/Application/SubjectOfferingService.php'], $writers, 'the service is the only place a classification is written');
 
-        $controller = $this->code(app_path('Domain/AcademicStructure/Http/Controllers/SubjectOfferingController.php'));
-        preg_match('/public function update\(.*?\n    \}/s', $controller, $update);
-        $this->assertStringContainsString('app(SubjectOfferingService::class)->update(', $update[0] ?? '');
-        $this->assertStringNotContainsString('->update($validated)', $update[0] ?? '', 'the controller no longer writes the Offering itself');
+        foreach (['Domain/AcademicStructure/Http/Controllers/SubjectOfferingController.php', 'Http/Controllers/App/SubjectOfferingAdminController.php'] as $path) {
+            $controller = $this->code(app_path($path));
+            preg_match('/public function update\(.*?\n    \}/s', $controller, $update);
+            $this->assertStringContainsString('->updateFromInput(', $update[0] ?? '', $path);
+            $this->assertStringNotContainsString('->update($validated)', $update[0] ?? '', "{$path}: a controller never writes the Offering itself");
+        }
 
         $service = $this->code(app_path('Domain/AcademicStructure/Application/SubjectOfferingService.php'));
         $this->assertStringContainsString('->lockForUpdate()->findOrFail($subjectOfferingId)', $service);

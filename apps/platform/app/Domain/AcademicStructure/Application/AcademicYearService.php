@@ -2,6 +2,7 @@
 
 namespace App\Domain\AcademicStructure\Application;
 
+use App\Domain\AcademicStructure\Application\Concerns\AdministersReferenceData;
 use App\Domain\AcademicStructure\Application\Exceptions\AcademicYearOverlapException;
 use App\Domain\AcademicStructure\Application\Exceptions\ConcurrentActivationConflictException;
 use App\Domain\AcademicStructure\Application\Exceptions\InvalidAcademicYearTransitionException;
@@ -15,6 +16,7 @@ use App\Support\Audit\AuditRecorder;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 /**
  * The only sanctioned write path for Academic Year lifecycle (Phase 0D
@@ -25,6 +27,10 @@ use Illuminate\Support\Facades\DB;
  */
 class AcademicYearService
 {
+    use AdministersReferenceData;
+
+    public const string CAPABILITY_MANAGE = 'academics.years.manage';
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
@@ -68,6 +74,61 @@ class AcademicYearService
      * genuine race into a clean domain exception rather than a raw SQL
      * error.
      */
+    /**
+     * SWC.2 (ADR 0073 section 4.2): the validating entry point shared by the
+     * API and the web form -- the case-insensitive unique code (rule 74) is
+     * checked before create(), and a duplicate that races past it surfaces
+     * as the same field error, never a 500.
+     *
+     * @param  array<string, mixed>  $input
+     */
+    public function createFromInput(School $school, array $input, User $actor): AcademicYear
+    {
+        $this->authorizeFor($actor, self::CAPABILITY_MANAGE, $school);
+        $rules = [
+            'name' => ['required', 'string', 'max:255'],
+            'code' => ['required', 'string', 'max:32', Rule::unique('academic_years')->where('school_id', $school->id)],
+            'starts_on' => ['required', 'date'],
+            'ends_on' => ['required', 'date', 'after:starts_on'],
+        ];
+        $validated = $this->validateInput($input, $rules);
+
+        return $this->writeUnique(fn (): AcademicYear => $this->create($school, $validated, $actor), fn () => $this->validateInput($input, $rules));
+    }
+
+    /**
+     * SWC.2: the label/code edit moved from the API controller. Dates and
+     * status never change here -- they have their own invariant-checked
+     * paths (creation overlap check; activate()/close()).
+     *
+     * @param  array<string, mixed>  $input
+     */
+    public function rename(School $school, string $academicYearId, array $input, User $actor): AcademicYear
+    {
+        $this->authorizeFor($actor, self::CAPABILITY_MANAGE, $school);
+
+        return $this->context->withSchool($school, function () use ($school, $academicYearId, $input, $actor): AcademicYear {
+            $year = AcademicYear::query()->findOrFail($academicYearId);
+            $rules = [
+                'name' => ['sometimes', 'string', 'max:255'],
+                'code' => ['sometimes', 'string', 'max:32', Rule::unique('academic_years')->where('school_id', $school->id)->ignore($year->id)],
+            ];
+            $validated = $this->validateInput($input, $rules);
+            $before = $year->only(array_keys($validated));
+
+            $this->writeUnique(fn () => DB::transaction(function () use ($school, $year, $validated, $before, $actor): void {
+                $year->update($validated);
+
+                $this->audit->school($school, 'academic_year.updated', actor: $actor, subject: $year, metadata: [
+                    'before' => $before,
+                    'after' => $validated,
+                ]);
+            }), fn () => $this->validateInput($input, $rules));
+
+            return $year->refresh();
+        });
+    }
+
     public function activate(AcademicYear $year, ?User $actor = null): AcademicYear
     {
         if ($year->status !== 'draft') {

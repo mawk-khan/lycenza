@@ -2,7 +2,8 @@
 
 - Status: **Accepted — SWC.0 contract (2026-10-14, documentation only).
   Owner decisions X1–X5 frozen (2026-10-14, §16). SWC.1 NAVIGATION SHELL &
-  PRODUCT LANDING SURFACES — COMPLETE (2026-10-14, §17). SWC.2 NEXT.**
+  PRODUCT LANDING SURFACES — COMPLETE (2026-10-14, §17). SWC.2 ACADEMIC
+  STRUCTURE WEB SURFACES — COMPLETE (2026-10-14, §18). SWC.3 NEXT.**
 - Date: 2026-10-14
 - Programme: **SWC — Staff Web Surface Completion** (`MASTER-ROADMAP.md`,
   post-foundation programme 8).
@@ -1090,3 +1091,242 @@ entry with the same capability rule:
 
 **Not in SWC.1:** none of SWC.2 (Academic Structure screens, Elective
 Groups) and none of SWC.3 (OPF screens). No new destination was invented.
+
+## 18. SWC.2 — Academic Structure Web Surfaces — COMPLETE (2026-10-14)
+
+**Baseline.** `origin/main` = `beb56c29` (SWC.1), with green integration and
+`main` `CI gate`, ruleset 24909660 active with no bypass actor, and the
+drift check `ok`.
+
+**Scope delivered.** Browser-complete administration of every existing
+Academic Structure contract:
+- new screens: Terms, Sections, Academic departments, Rooms;
+- Campus, Grade Level and Subject gain edit and deactivate/reactivate;
+- Academic Years gain rename;
+- Subject Offerings gain create, settings and deactivate;
+- Elective Groups (X1) gain create, assign and remove.
+
+**Unchanged:** no migration, no capability, no email or provider behaviour.
+
+### 18.1 Contract audit (verified before coding)
+
+| Entity | Authority before SWC.2 | Capability (view / manage) | Deactivation | Idempotency (API) |
+|---|---|---|---|---|
+| Campus | inline in `Api\V1\CampusController` | `school.campuses.view` / `.manage` | `status`, reversible; no reference block | `idempotent` on store |
+| Academic Year | `AcademicYearService` create/activate/close; rename inline | `academics.years.view` / `.manage` | none: draft → active → closed, no reopen | `idempotent` on store, activate, close |
+| Academic Term | `AcademicTermService::create`; rename inline | `academics.years.*` | none (no status column) | none |
+| Grade Level | inline | `academics.structure.*` | `status`, reversible | none |
+| Section | inline | `academics.structure.*` | `status`, reversible | `idempotent` on store |
+| Academic Department | inline (no transaction) | `academics.structure.*` | `status`, reversible | none |
+| Room | inline (no transaction) | `academics.structure.*` | `status`, reversible | none |
+| Subject | inline | `academics.subjects.*` | `status`, reversible | none |
+| Subject Offering | create inline; update via `SubjectOfferingService` (ADR 0069 freeze) | `academics.subjects.*` | `status`, reversible | `idempotent` on store |
+| Elective Group | `ElectiveGroupService` (authorization-neutral) | prescribed `academics.subjects.manage` | none (no rename, delete or status in the contract) | — (no HTTP surface) |
+
+**Deactivation.** No database rule blocks deactivating a referenced row.
+Deactivation is a reversible `status` flag. Inactive rows stay listed and
+historical references are untouched.
+- **Web:** pickers for new Sections, Offerings and Elective Groups offer
+  active parents only.
+- **API:** the API, and the services, accept an inactive parent exactly as
+  before.
+- **No new rule:** SWC added no "inactive parent" refusal, because none
+  exists in the contract.
+
+### 18.2 Shared Application services (§4.2)
+
+**One implementation per write.** The `/api/v1` controllers and the web
+controllers call the same service:
+
+| Entity | Shared service |
+|---|---|
+| Campus | `Domain\Campuses\Application\CampusAdministrationService` |
+| Grade Level | `GradeLevelAdministrationService` |
+| Subject | `SubjectAdministrationService` |
+| Academic Department | `AcademicDepartmentAdministrationService` |
+| Room | `RoomAdministrationService` |
+| Section | `SectionAdministrationService` |
+| Academic Year | `AcademicYearService::createFromInput()` / `rename()` |
+| Academic Term | `AcademicTermService::createFromInput()` / `rename()` |
+| Subject Offering | `SubjectOfferingService::create()` / `updateFromInput()` |
+
+**Shared concern** (`Concerns\AdministersReferenceData`):
+- re-checks the capability for the acting User (both controllers check
+  first, so the API's authorize-before-validate order is unchanged);
+- validates raw input after normalizing `code` with the one
+  `App\Support\CodeNormalizer` (both existing traits now delegate to it);
+- `writeUnique()` translates a unique violation that raced past validation
+  into the same field error.
+
+**What is preserved:**
+- validation rules, messages, status codes, response bodies, audit actions
+  and metadata, and domain events;
+- the tenant-scoped lookups (another School's row or parent is the same 404).
+
+**What changed:**
+- **New transactions:** Room and Department creates, and every update, now
+  run inside a transaction with their audit row (atomic, not observable).
+- **API defects fixed** (each pinned by `AcademicStructureSharedServiceApiTest`):
+  - (a) a duplicate Section code on `PATCH` reached the constraint as a
+    500; it is now a 422 on `code`.
+  - (b) a duplicate Subject Offering on `POST` was a 500; it is now a 422
+    on `subject_id`.
+- **Architecture guard:** `SubjectOfferingClassificationArchitectureGuardTest`
+  now pins `SubjectOfferingService` as the ONLY writer of a classification,
+  stricter than before. Both the API and web update paths must call
+  `updateFromInput()`.
+
+### 18.3 Web defects fixed (§2.5)
+
+**Duplicate-code 500s.**
+- **Root cause:** Phase 0D's web `storeCampus`, `storeGradeLevel`,
+  `storeSubject` and `storeAcademicYear` uppercased the code by hand but ran
+  no `Rule::unique()`. A case-variant duplicate reached the stored-form
+  unique index as an unhandled `UniqueConstraintViolationException` (500).
+- **Fix:** they now go through the shared services and return a field error
+  on `code` (and `sequence` for Grade Levels), with no write.
+- **Tests:** `SchoolSetupStructureUiTest` reproduces the database failure
+  directly and then proves the form error.
+
+**Academic Year conflicts.**
+- **Root cause:** `AcademicStructureException` has a status and error code,
+  but `bootstrap/app.php` renders that envelope for `api/*` only. On a web
+  request the overlap, stale-transition and concurrent-activation refusals
+  became 500s.
+- **Fix:** `MapsAcademicStructureErrors` (the house pattern of
+  `StudentSubjectEnrollmentController`, generalized) turns them into field
+  errors: `starts_on` for create, `academic_year` for activate/close.
+- **Unchanged:** the refusal itself and its no-write guarantee.
+
+### 18.4 Screens
+
+**New pages:**
+- `SchoolSetup/{Terms, Sections, Departments, Rooms}`;
+- `ElectiveGroups/{Index, Show}`.
+
+**Rewritten pages:** `SchoolSetup/{Campuses, AcademicYears, GradeLevels, Subjects}`.
+
+**Patterns:**
+- tables with `<caption>` and `<th scope>`;
+- an edit panel that takes focus;
+- deactivate and Year activate/close behind `ConfirmDialog` (native modal
+  `<dialog>`), replacing `window.confirm`;
+- shared `Form/{TextField, SelectField, CheckboxField, ErrorSummary}`, with
+  errors associated through `aria-describedby`/`aria-invalid`.
+
+**Subject Offerings:** the large existing pages gained one component each
+(`SubjectOfferings/CreateOfferingForm`, `OfferingSettingsForm`). Their
+existing content was not rewritten.
+
+**Facts the screens follow:**
+- **Terms:** rename only after creation, because dates and order are
+  create-time invariants.
+- **Sections:** the Year, Campus and Grade are fixed.
+- **Classification lock:** the settings form says the lock exists. The
+  server returns it as an `is_required` error on a direct request too
+  (`SubjectOfferingAdminUiTest`).
+
+### 18.5 Elective Groups (X1)
+
+**Routes:** `GET|POST /app/elective-groups`, `GET /app/elective-groups/{id}`,
+`POST …/{id}/offerings`, `DELETE …/{id}/offerings/{offering}`.
+
+**Authorization:** view `academics.subjects.view`; manage
+`academics.subjects.manage`.
+
+**Rules come from the service:**
+- no required Offering;
+- no other (Year, Campus, Grade) context;
+- no change once Students participate;
+- duplicate code per context;
+- assigning an already-assigned Offering, or removing an unassigned one, is
+  a no-op.
+
+**Cross-School:** another School's group, Offering or parent is a 404.
+
+**Candidates:** the elective Offerings of the same context, active only in
+the picker.
+
+**Contract note (reported, not changed).** The brief said "do not allow an
+inactive Offering". `ElectiveGroupService` has no such rule, and adding one
+would be new elective semantics (§4.1).
+- **Web:** the picker offers active Offerings only.
+- **Server:** the service accepts an inactive one exactly as before.
+- **Next step:** a server-side refusal needs an owner decision.
+
+**Not in the contract:** rename, delete and deactivate, so none were added.
+
+### 18.6 Capabilities, navigation, idempotency
+
+**Capabilities:** existing keys only (§18.1); new capabilities: 0.
+
+**Navigation:** the School setup group gains Campuses, Academic years,
+Terms, Grade levels, Sections, Academic departments, Rooms, Subjects and
+Elective groups, each under the capability its page checks. That makes
+74 catalogue entries. `NavigationDestinationsRenderTest` proves each renders
+for an exact-requirement holder.
+
+**Duplicate submissions (rule 29; no `idempotent` web middleware, the Phase
+9.9 precedent):**
+- **Creates:** protected by School-scoped unique codes (Offering: unique per
+  Year/Campus/Grade/Subject); a repeat is a field error and writes no second
+  row.
+- **Updates and deactivations:** set values; a repeat converges.
+- **Year activate/close:** state transitions; a stale repeat is a field
+  error.
+- **Elective assign/remove:** idempotent in the service.
+
+### 18.7 Tests and verification
+
+**Tests:**
+- **`AcademicStructureSharedServiceApiTest`** (API compatibility and the two
+  API corrections): PATCH shapes and audit actions for all eight entities;
+  unchanged validation, status and authorization; the race-translation
+  mechanism against a real unique violation; a source guard that every
+  shared write uses `writeUnique()`; cross-School 404s.
+- **`SchoolSetupStructureUiTest`** (14): the four defect regressions, the
+  Year transitions, edit/deactivate/reactivate, the new screens, viewer
+  denial, missing School context, cross-School parents and rows,
+  client-supplied `school_id` ignored, and list pages with no query per row.
+- **`SubjectOfferingAdminUiTest`:** create, duplicate, the lock on a direct
+  request, deactivate, viewer and cross-School.
+- **`ElectiveGroupUiTest`:** create, list, show, assign and remove, the rules,
+  viewer and cross-School, and the elective workspace on the configured
+  group.
+
+**Race test limitation:** the two-process race was not run. A competing
+session cannot see the test transaction's School, so its insert would fail
+the foreign key first. The mechanism is proven against a real violation,
+and the source guard pins its use.
+
+**Attendance identity guard.** `SubjectOfferingIdentityGuardTest` is
+strengthened, not weakened. The Offering update path takes an explicit
+allow-list (`SubjectOfferingService::MUTABLE_FIELDS`) in both controllers,
+and the service validates and writes only those fields. An identity column
+(Year, Campus, Grade, Subject) can never be updated, which Attendance's
+subject provenance relies on.
+
+**DDEV workflow proof** (`ddev demo-reset --build`, School Admin, session web
+routes only, no personal API token). Every step passed:
+1. School setup reachable from navigation (11 entries);
+2. Academic department created, code normalized;
+3. a case-variant duplicate is a field error, with no second row;
+4. a new Academic year created;
+5. an overlapping year is refused as a form error (no 500, no row);
+6. a Term created;
+7. a Section created;
+8. a Room created;
+9. two elective Subject Offerings created;
+10. Offering settings saved;
+11. an Elective group created;
+12. both Offerings assigned;
+13. the elective-enrollment workspace shows the group;
+14. the navigation marks it active.
+
+**Proof limitation:** HTTP/Inertia level. No browser automation exists in
+the repository, so the rendered layout was not visually reviewed.
+
+**Verification:** the counts are recorded in the SWC.2 commit.
+
+**Not in SWC.2:** none of SWC.3 (OPF screens); no portal, marks or results
+work; no Documents or webhook UI.

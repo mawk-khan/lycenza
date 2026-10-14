@@ -32,6 +32,7 @@ use App\Http\Controllers\App\CurriculumDelivery\CurriculumDeliveryController;
 use App\Http\Controllers\App\CurriculumDelivery\MyCurriculumDeliveryController;
 use App\Http\Controllers\App\DashboardController;
 use App\Http\Controllers\App\Domains\SchoolDomainController;
+use App\Http\Controllers\App\ElectiveGroupController;
 use App\Http\Controllers\App\EnrollmentRolloverController;
 use App\Http\Controllers\App\EnrollmentRolloverItemController;
 use App\Http\Controllers\App\EnrollmentRolloverMappingController;
@@ -116,6 +117,7 @@ use App\Http\Controllers\App\Portal\GuardianConversationController;
 use App\Http\Controllers\App\Portal\GuardianFeeController;
 use App\Http\Controllers\App\SchoolSettingsController;
 use App\Http\Controllers\App\SchoolSetupController;
+use App\Http\Controllers\App\SchoolSetupStructureController;
 use App\Http\Controllers\App\SchoolSwitchController;
 use App\Http\Controllers\App\SelfService\StaffSelfServiceController;
 use App\Http\Controllers\App\Staff\StaffAccountController;
@@ -126,6 +128,7 @@ use App\Http\Controllers\App\StudentEnrollmentController;
 use App\Http\Controllers\App\StudentGuardianRelationshipController;
 use App\Http\Controllers\App\StudentProcessingAuthorizationController;
 use App\Http\Controllers\App\StudentSubjectEnrollmentController;
+use App\Http\Controllers\App\SubjectOfferingAdminController;
 use App\Http\Controllers\App\SubjectOfferingController;
 use App\Http\Controllers\App\Syllabus\SyllabusUnitController;
 use App\Http\Controllers\App\TeachingAssignments\ElectiveTeachingAssignmentController;
@@ -512,17 +515,52 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
 
         Route::get('/campuses', [SchoolSetupController::class, 'campuses'])->name('campuses');
         Route::post('/campuses', [SchoolSetupController::class, 'storeCampus'])->name('campuses.store');
+        Route::put('/campuses/{campus}', [SchoolSetupController::class, 'updateCampus'])->name('campuses.update');
 
         Route::get('/academic-years', [SchoolSetupController::class, 'academicYears'])->name('academic-years');
         Route::post('/academic-years', [SchoolSetupController::class, 'storeAcademicYear'])->name('academic-years.store');
+        Route::put('/academic-years/{academicYear}', [SchoolSetupController::class, 'renameAcademicYear'])->name('academic-years.update');
         Route::post('/academic-years/{academicYear}/activate', [SchoolSetupController::class, 'activateAcademicYear'])->name('academic-years.activate');
         Route::post('/academic-years/{academicYear}/close', [SchoolSetupController::class, 'closeAcademicYear'])->name('academic-years.close');
 
         Route::get('/grade-levels', [SchoolSetupController::class, 'gradeLevels'])->name('grade-levels');
         Route::post('/grade-levels', [SchoolSetupController::class, 'storeGradeLevel'])->name('grade-levels.store');
+        Route::put('/grade-levels/{gradeLevel}', [SchoolSetupController::class, 'updateGradeLevel'])->name('grade-levels.update');
 
         Route::get('/subjects', [SchoolSetupController::class, 'subjects'])->name('subjects');
         Route::post('/subjects', [SchoolSetupController::class, 'storeSubject'])->name('subjects.store');
+        Route::put('/subjects/{subject}', [SchoolSetupController::class, 'updateSubject'])->name('subjects.update');
+
+        // SWC.2 (ADR 0073 section 10): the screens Phase 0D deferred, over
+        // the same Application services as `/api/v1`. Capability checks live
+        // in SchoolSetupStructureController (AuthorizesCapability).
+        Route::get('/terms', [SchoolSetupStructureController::class, 'terms'])->name('terms');
+        Route::post('/academic-years/{academicYear}/terms', [SchoolSetupStructureController::class, 'storeTerm'])->name('terms.store');
+        Route::put('/terms/{academicTerm}', [SchoolSetupStructureController::class, 'renameTerm'])->name('terms.update');
+
+        Route::get('/sections', [SchoolSetupStructureController::class, 'sections'])->name('sections');
+        Route::post('/academic-years/{academicYear}/sections', [SchoolSetupStructureController::class, 'storeSection'])->name('sections.store');
+        Route::put('/sections/{section}', [SchoolSetupStructureController::class, 'updateSection'])->name('sections.update');
+
+        Route::get('/departments', [SchoolSetupStructureController::class, 'departments'])->name('departments');
+        Route::post('/departments', [SchoolSetupStructureController::class, 'storeDepartment'])->name('departments.store');
+        Route::put('/departments/{academicDepartment}', [SchoolSetupStructureController::class, 'updateDepartment'])->name('departments.update');
+
+        Route::get('/rooms', [SchoolSetupStructureController::class, 'rooms'])->name('rooms');
+        Route::post('/campuses/{campus}/rooms', [SchoolSetupStructureController::class, 'storeRoom'])->name('rooms.store');
+        Route::put('/rooms/{room}', [SchoolSetupStructureController::class, 'updateRoom'])->name('rooms.update');
+    });
+
+    // SWC.2 (ADR 0073 sections 4.3, 16 X1): Elective Groups -- create, and
+    // assign/remove an elective Subject Offering of the same context, over
+    // ElectiveGroupService. View `academics.subjects.view`; manage
+    // `academics.subjects.manage` (checked in ElectiveGroupController).
+    Route::prefix('app/elective-groups')->name('app.elective-groups.')->group(function (): void {
+        Route::get('/', [ElectiveGroupController::class, 'index'])->name('index');
+        Route::post('/', [ElectiveGroupController::class, 'store'])->name('store');
+        Route::get('/{electiveGroup}', [ElectiveGroupController::class, 'show'])->name('show');
+        Route::post('/{electiveGroup}/offerings', [ElectiveGroupController::class, 'assign'])->name('offerings.store');
+        Route::delete('/{electiveGroup}/offerings/{subjectOffering}', [ElectiveGroupController::class, 'remove'])->name('offerings.destroy');
     });
 
     // Phase 1A.6: Student & Guardian Identity administrative UI.
@@ -934,7 +972,10 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
     // domain-level split the Bearer-token JSON API already uses.
     Route::prefix('app/subject-offerings')->name('app.subject-offerings.')->group(function (): void {
         Route::get('/', [SubjectOfferingController::class, 'index'])->name('index');
+        // SWC.2: create/change an Offering through SubjectOfferingService (ADR 0069 freeze kept).
+        Route::post('/', [SubjectOfferingAdminController::class, 'store'])->name('store');
         Route::get('/{subjectOffering}', [SubjectOfferingController::class, 'show'])->name('show');
+        Route::put('/{subjectOffering}', [SubjectOfferingAdminController::class, 'update'])->name('update');
         Route::get('/{subjectOffering}/eligible-students', [StudentSubjectEnrollmentController::class, 'eligibleStudents'])->name('eligible-students');
         Route::post('/{subjectOffering}/enrollments', [StudentSubjectEnrollmentController::class, 'enroll'])->name('enrollments.store');
     });

@@ -4,6 +4,7 @@ import { reactive, ref } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
 import Pagination from '../../../Components/Pagination.vue';
 import StatusBadge from '../../../Components/StatusBadge.vue';
+import OfferingSettingsForm from '../../../Components/SubjectOfferings/OfferingSettingsForm.vue';
 
 interface Ref {
     id: string;
@@ -45,6 +46,9 @@ interface Props {
         gradeLevel: Ref | null;
         status: 'active' | 'inactive';
         isRequired: boolean;
+        // SWC.2: the editable settings.
+        sequence: number | null;
+        weeklyPeriodsTarget: number | null;
         electiveGroup: Ref | null;
     };
     roster: RosterRow[];
@@ -594,5 +598,6 @@ function closeAllPanels(): void {
                 </template>
             </section>
         </template>
+        <OfferingSettingsForm v-if="canManage" :offering="offering" />
     </main>
 </template>

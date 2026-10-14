@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\App;
 
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
+use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
+use App\Domain\AcademicStructure\Infrastructure\Subject;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Students\Application\StudentSubjectEnrollmentHistoryReadService;
 use App\Domain\Students\Application\SubjectOfferingRosterReadService;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentSubjectEnrollment;
 use App\Http\Controllers\Controller;
+use App\Models\Campus;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
@@ -24,7 +27,8 @@ use Inertia\Response;
  * -- Option C, a genuinely new top-level `/app/subject-offerings`
  * surface, matching the Phase 1G.4 Enrollment-Rollovers precedent
  * rather than extending School Setup or Students admin). Read-only
- * concerns only -- every mutation lives in
+ * concerns only (SWC.2: creating and changing an Offering is
+ * SubjectOfferingAdminController) -- every enrollment mutation lives in
  * `App\Http\Controllers\App\StudentSubjectEnrollmentController`,
  * mirroring the exact domain-level split already established by
  * `App\Domain\AcademicStructure\Http\Controllers\SubjectOfferingController`
@@ -65,7 +69,14 @@ class SubjectOfferingController extends Controller
             'filters' => ['academic_year_id' => $academicYearId ?? ''],
             'academicYears' => AcademicYear::query()->where('school_id', $school->id)->orderByDesc('starts_on')->get()
                 ->map(fn (AcademicYear $y) => ['id' => $y->id, 'name' => $y->name, 'code' => $y->code])->all(),
-            'canManage' => $capabilities->canInSchool($context->actor(), 'academics.subjects.manage', $school),
+            'canManage' => $canManage = $capabilities->canInSchool($context->actor(), 'academics.subjects.manage', $school),
+            // SWC.2 (ADR 0073 section 10): the create form's choices -- this
+            // School's ACTIVE Campuses, Grade levels and Subjects only.
+            'createOptions' => $canManage ? [
+                'campuses' => Campus::query()->where('status', 'active')->orderBy('name')->get(['id', 'name'])->all(),
+                'gradeLevels' => GradeLevel::query()->where('status', 'active')->orderBy('sequence')->get(['id', 'name'])->all(),
+                'subjects' => Subject::query()->where('status', 'active')->orderBy('name')->get(['id', 'name', 'code'])->all(),
+            ] : null,
         ]);
     }
 
@@ -143,6 +154,9 @@ class SubjectOfferingController extends Controller
             'gradeLevel' => $offering->gradeLevel === null ? null : ['id' => $offering->gradeLevel->id, 'name' => $offering->gradeLevel->name],
             'status' => $offering->status,
             'isRequired' => $offering->is_required,
+            // SWC.2: the editable settings.
+            'sequence' => $offering->sequence,
+            'weeklyPeriodsTarget' => $offering->weekly_periods_target,
             'electiveGroup' => $offering->electiveGroup === null ? null : ['id' => $offering->electiveGroup->id, 'name' => $offering->electiveGroup->name],
         ];
     }

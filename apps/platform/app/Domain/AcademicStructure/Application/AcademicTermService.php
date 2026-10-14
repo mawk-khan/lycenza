@@ -2,15 +2,18 @@
 
 namespace App\Domain\AcademicStructure\Application;
 
+use App\Domain\AcademicStructure\Application\Concerns\AdministersReferenceData;
 use App\Domain\AcademicStructure\Application\Exceptions\AcademicTermOutOfRangeException;
 use App\Domain\AcademicStructure\Application\Exceptions\AcademicTermOverlapException;
 use App\Domain\AcademicStructure\Events\AcademicTermCreated;
 use App\Domain\AcademicStructure\Infrastructure\AcademicTerm;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
+use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 /**
  * Phase 0D sections 19-21: the only sanctioned write path for Academic
@@ -21,6 +24,11 @@ use Illuminate\Support\Facades\DB;
  */
 class AcademicTermService
 {
+    use AdministersReferenceData;
+
+    /** Terms are part of the Academic Year calendar: the year capabilities govern them. */
+    public const string CAPABILITY_MANAGE = 'academics.years.manage';
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
@@ -54,6 +62,64 @@ class AcademicTermService
 
             return $term;
         }));
+    }
+
+    /**
+     * SWC.2 (ADR 0073 section 4.2): the validating entry point shared by the
+     * API and the web form. Range and overlap stay create()'s invariants.
+     *
+     * @param  array<string, mixed>  $input
+     */
+    public function createFromInput(School $school, string $academicYearId, array $input, User $actor): AcademicTerm
+    {
+        $this->authorizeFor($actor, self::CAPABILITY_MANAGE, $school);
+
+        return $this->context->withSchool($school, function () use ($school, $academicYearId, $input, $actor): AcademicTerm {
+            $year = AcademicYear::query()->findOrFail($academicYearId);
+            $rules = [
+                'name' => ['required', 'string', 'max:255'],
+                'code' => ['required', 'string', 'max:32', Rule::unique('academic_terms')->where('school_id', $school->id)->where('academic_year_id', $year->id)],
+                'starts_on' => ['required', 'date'],
+                'ends_on' => ['required', 'date', 'after:starts_on'],
+                'sequence' => ['required', 'integer', 'min:1'],
+            ];
+            $validated = $this->validateInput($input, $rules);
+
+            return $this->writeUnique(fn (): AcademicTerm => $this->create($year, $validated, $actor), fn () => $this->validateInput($input, $rules));
+        });
+    }
+
+    /**
+     * SWC.2: renaming only, moved from the API controller -- dates and
+     * sequence never change here (they would bypass the range/overlap
+     * invariants create() enforces).
+     *
+     * @param  array<string, mixed>  $input
+     */
+    public function rename(School $school, string $academicTermId, array $input, User $actor): AcademicTerm
+    {
+        $this->authorizeFor($actor, self::CAPABILITY_MANAGE, $school);
+
+        return $this->context->withSchool($school, function () use ($school, $academicTermId, $input, $actor): AcademicTerm {
+            $term = AcademicTerm::query()->findOrFail($academicTermId);
+            $rules = [
+                'name' => ['sometimes', 'string', 'max:255'],
+                'code' => ['sometimes', 'string', 'max:32', Rule::unique('academic_terms')->where('school_id', $school->id)->where('academic_year_id', $term->academic_year_id)->ignore($term->id)],
+            ];
+            $validated = $this->validateInput($input, $rules);
+            $before = $term->only(array_keys($validated));
+
+            $this->writeUnique(fn () => DB::transaction(function () use ($school, $term, $validated, $before, $actor): void {
+                $term->update($validated);
+
+                $this->audit->school($school, 'academic_term.updated', actor: $actor, subject: $term, metadata: [
+                    'before' => $before,
+                    'after' => $validated,
+                ]);
+            }), fn () => $this->validateInput($input, $rules));
+
+            return $term->refresh();
+        });
     }
 
     private function assertWithinYear(AcademicYear $year, string $startsOn, string $endsOn): void

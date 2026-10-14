@@ -4,6 +4,7 @@ import { ref } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
 import Pagination from '../../../Components/Pagination.vue';
 import StatusBadge from '../../../Components/StatusBadge.vue';
+import CreateOfferingForm from '../../../Components/SubjectOfferings/CreateOfferingForm.vue';
 
 interface Ref {
     id: string;
@@ -36,9 +37,17 @@ interface Props {
     filters: { academic_year_id: string };
     academicYears: Array<Ref & { code: string }>;
     canManage: boolean;
+    // SWC.2: the create form's choices (null without academics.subjects.manage).
+    createOptions: {
+        campuses: Array<{ id: string; name: string }>;
+        gradeLevels: Array<{ id: string; name: string }>;
+        subjects: Array<{ id: string; name: string; code: string }>;
+    } | null;
 }
 
 const props = defineProps<Props>();
+const selectedYearName = () =>
+    props.academicYears.find((y) => y.id === props.filters.academic_year_id)?.name ?? '';
 
 const academicYearId = ref(props.filters.academic_year_id);
 
@@ -135,5 +144,12 @@ function applyFilters(): void {
 
             <Pagination :links="offerings.links" />
         </template>
+        <CreateOfferingForm
+            v-if="props.createOptions && props.filters.academic_year_id"
+            :key="props.filters.academic_year_id"
+            :academic-year-id="props.filters.academic_year_id"
+            :academic-year-name="selectedYearName()"
+            :options="props.createOptions"
+        />
     </main>
 </template>

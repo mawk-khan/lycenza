@@ -241,6 +241,50 @@ does not add the PostgreSQL `citext` extension for this (section 65) —
 a shared mutator trait was judged sufficient given the low cardinality
 and write rate of this reference data.
 
+*(SWC.2, 2026-10-14, ADR 0073 §18: the one normalization now lives in
+`App\Support\CodeNormalizer`; both traits delegate to it. The Phase 0D web
+create actions for Campus, Grade Level, Subject and Academic Year skipped the
+`Rule::unique()` check, so a case-variant duplicate reached the database
+constraint as a 500. They now go through the shared services below and
+return a field error. A duplicate that races past validation is
+re-validated after the failed write (`AdministersReferenceData::writeUnique()`),
+so it is the same field error; the database constraint stays the final
+boundary.)*
+
+## Staff web surface and shared services (SWC.2, ADR 0073 §18)
+
+Every Academic Structure write has ONE implementation, an Application
+service called by both the `/api/v1` controllers and the staff web
+controllers:
+
+| Entity | Service | Web screen |
+|---|---|---|
+| Campus | `Domain\Campuses\Application\CampusAdministrationService` | School setup → Campuses (create, edit, deactivate/reactivate) |
+| Academic Year | `AcademicYearService::createFromInput()`, `rename()`, `activate()`, `close()` | School setup → Academic years |
+| Academic Term | `AcademicTermService::createFromInput()`, `rename()` | School setup → Terms (create, rename; dates fixed) |
+| Grade Level | `GradeLevelAdministrationService` | School setup → Grade levels |
+| Section | `SectionAdministrationService` | School setup → Sections (per Year; create, edit, deactivate/reactivate) |
+| Academic Department | `AcademicDepartmentAdministrationService` | School setup → Academic departments |
+| Room | `RoomAdministrationService` | School setup → Rooms (per Campus) |
+| Subject | `SubjectAdministrationService` | School setup → Subjects (type, short name, Department) |
+| Subject Offering | `SubjectOfferingService::create()`, `updateFromInput()` | Subject offerings (create on the index; settings and deactivate on the detail page) |
+| Elective Group | `ElectiveGroupService` (Phase 1F.3; authorization-neutral, the web controller checks `academics.subjects.manage`) | Elective groups (create; assign/remove an elective Offering of the same context) |
+
+**Behaviour:**
+- **Capabilities:** unchanged.
+  - Campus: `school.campuses.*`.
+  - Academic Years and Terms: `academics.years.*`.
+  - Grade Levels, Sections, Departments and Rooms: `academics.structure.*`.
+  - Subjects, Offerings and Elective Groups: `academics.subjects.*`.
+- **Domain refusals on the web:** overlap, out-of-range, stale transition,
+  concurrent activation, classification lock and the elective rules are
+  field errors (`MapsAcademicStructureErrors`), never a 500.
+
+**API corrections, the only API-observable changes:**
+- a duplicate Section code on `PATCH` is a 422;
+- a duplicate Subject Offering on `POST` is a 422;
+- both were 500s before.
+
 ## What Phase 0D deliberately does NOT implement
 
 Per the hard stop-gates: no Student/Guardian/Enrollment records, no
