@@ -51,3 +51,61 @@ A row moves to `EVIDENCE_COMPLETE` only by a dated, reviewed repository
 change that cites the entry (ADR 0058 §6). **E29** is satisfied once every
 cited entry has passed its hygiene check. Its final review is the last step
 before O1.
+
+## Evidence store and operator identity (PPR.1, OD-PPR-9, ADR 0074 §26.8)
+
+**Raw evidence lives outside Git, always.** It means: command transcripts,
+provider console exports, DMARC reports, CI artifacts copied before their
+90-day expiry, drill measurements and screenshots.
+
+**Location.** Under an operator-configured root, never a path written into
+application code:
+
+```text
+$LYCENZA_OPERATOR_EVIDENCE_ROOT/ppr/<EVID id>/
+```
+
+- The application never reads this root. It is an operator convention for
+  the machines and storage the operator controls.
+- **Permissions:** the root and every directory are operator-only (`0700`
+  or the platform equivalent). Files holding anything sensitive are `0600`
+  (or equivalent).
+- **Retention:** keep it at least until O1 is determined, then as the
+  owner's evidence-retention decision says (E21 does not cover operator
+  evidence). Delete it only by a recorded decision.
+
+**What reaches the repository** is only the E29-safe entry above:
+- the evidence id, UTC timestamps and the operator reference;
+- the operator **role**;
+- action and result codes;
+- safe command or tool names;
+- hashes of the raw evidence bundle;
+- a minimised outcome;
+- the repository SHA when relevant.
+
+**What never reaches the repository:**
+- credentials, API keys and passwords;
+- private keys;
+- raw secret-bearing provider responses;
+- real hostnames that the hygiene rules prohibit.
+
+**Operator identity:**
+- **An opaque, stable reference** such as `OP-001`, plus a **role** such as
+  `Release Operator`, `Infrastructure Operator`, `Security` or `Owner`.
+- **The mapping** from reference to person is kept by the owner outside
+  the repository.
+- **Never in an entry:** no personal email address or name.
+- **Authorization lines** name the authorizing role and date the same way.
+
+**Naming.** It stays exactly `EVID-<row>-<YYYY>-<n>`:
+- `<row>` is the ADR 0058 register row the action evidences, for example
+  `EVID-E09-2026-1`.
+- A PPR action that evidences no register row uses its slice id as the row
+  token, for example `EVID-PPR2-2026-1`.
+- An action evidencing several rows uses the primary row and lists the
+  others under "Register row(s)".
+- Sequence numbers are per row token and per year, and are never reused.
+
+**No fabricated entries.** An entry describes an action that actually
+happened. None exists as of PPR.1: no environment, provider account or drill
+has been created.

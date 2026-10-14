@@ -2,6 +2,7 @@
 
 namespace App\Support\Email\Providers;
 
+use App\Support\Configuration\EnvironmentPolicy;
 use App\Support\Domains\ReservedHosts;
 use App\Support\Email\SenderIdentity;
 use Illuminate\Contracts\Config\Repository;
@@ -71,7 +72,10 @@ final class EmailProviderResolver
             return 'sending_domain_missing';
         }
 
-        if ($this->app->environment('production')) {
+        // PPR.1 (ADR 0074 section 26): every hardened environment -- staging
+        // as well as production.
+        $environment = (string) $this->app->environment();
+        if (EnvironmentPolicy::isHardened($environment)) {
             // ADR 0055 section 8.4: the sending domain must be one no School
             // can ever claim as a web domain (the platform domain's subtree or
             // a DOMAIN_RESERVED_SUFFIXES entry).
@@ -81,7 +85,11 @@ final class EmailProviderResolver
 
             // The operator's evidence attestation (ADR 0055 section 18) gates
             // real sending; local/testing work against Mailpit and the fake.
-            if (! (bool) $this->config->get('email.sending_verified')) {
+            // The one staging difference (EnvironmentPolicy::STAGING_DIFFERENCES
+            // `mail_sending_verified_not_required_for_capture`): a declared
+            // capture sink delivers nothing, so no provider verification exists.
+            $capture = EnvironmentPolicy::isStaging($environment) && $this->config->get('email.staging_delivery') === 'capture';
+            if (! $capture && ! (bool) $this->config->get('email.sending_verified')) {
                 return 'sending_not_verified';
             }
         }

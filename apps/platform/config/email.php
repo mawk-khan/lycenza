@@ -46,6 +46,13 @@ return [
      * quarantine). It records evidence; it proves nothing by itself. In
      * production nothing is submitted while it is false.
      */
+    // PPR.1 (ADR 0074 section 26.4): staging-only declaration that the SMTP
+    // target is a non-delivering capture sink (the only accepted value is
+    // `capture`). The hardened boot guard refuses it in production and
+    // requires it for staging SMTP. External delivery from staging waits for
+    // PPR.6 (E17-E20).
+    'staging_delivery' => env('MAIL_STAGING_DELIVERY'),
+
     'sending_verified' => (bool) env('MAIL_SENDING_VERIFIED', false),
 
     /*

@@ -57,6 +57,12 @@ use Illuminate\Encryption\Encrypter;
  * configured (`account_recovery_email_disabled`).
  *
  * The exception names violation codes only, never a value.
+ *
+ * PPR.1 (ADR 0074 section 26): it runs in every hardened environment
+ * (EnvironmentPolicy::HARDENED -- staging as well as production) and is
+ * told which one. The only staging differences are the ones listed in
+ * EnvironmentPolicy::STAGING_DIFFERENCES (the declared email capture sink);
+ * everything else is identical.
  */
 final class ProductionConfigurationGuard
 {
@@ -84,7 +90,13 @@ final class ProductionConfigurationGuard
     /** Trust-all proxy values (TrustedProxyList already refuses them; checked again here). */
     public const TRUST_ALL_PROXIES = ['*', '**', '0.0.0.0/0', '::/0'];
 
-    public function __construct(private readonly Repository $config) {}
+    /** PPR.1: MAIL_STAGING_DELIVERY values staging may declare (production declares none). */
+    public const STAGING_DELIVERY_MODES = ['capture'];
+
+    public function __construct(
+        private readonly Repository $config,
+        private readonly string $environment = EnvironmentPolicy::PRODUCTION,
+    ) {}
 
     /**
      * @return list<string> violation codes; empty when the configuration is safe
@@ -446,6 +458,17 @@ final class ProductionConfigurationGuard
             $violations[] = 'mail_provider_debug_enabled';
         }
 
+        // PPR.1: MAIL_STAGING_DELIVERY is a staging-only declaration with a
+        // closed value set; production never carries it.
+        $declared = $this->config->get('email.staging_delivery');
+        if ($declared !== null && $declared !== '') {
+            if (EnvironmentPolicy::isProduction($this->environment)) {
+                $violations[] = 'mail_staging_delivery_outside_staging';
+            } elseif (! in_array($declared, self::STAGING_DELIVERY_MODES, true)) {
+                $violations[] = 'mail_staging_delivery_invalid';
+            }
+        }
+
         if ((bool) $this->config->get('email.tracking.opens') || (bool) $this->config->get('email.tracking.clicks')) {
             $violations[] = 'mail_tracking_enabled';
         }
@@ -477,11 +500,21 @@ final class ProductionConfigurationGuard
         }
 
         if ($mode === 'smtp') {
+            // PPR.1 (ADR 0074 section 26.4, STAGING_DIFFERENCES
+            // `mail_staging_capture`): staging's SMTP target must be DECLARED a
+            // non-delivering capture sink; only then may it be a Mailpit-style
+            // service. TLS, credentials and the timeout still apply, and a
+            // loopback host is still refused (the sink is its own service).
+            $capture = $this->stagingCaptureDeclared();
             $host = strtolower(trim((string) $this->config->get('email.smtp.host')));
             if ($host === '') {
                 $violations[] = 'mail_smtp_host_missing';
-            } elseif (self::isLocalHost($host) || in_array($host, ['mailpit', 'mailhog'], true)) {
+            } elseif (self::isLocalHost($host) || (! $capture && in_array($host, ['mailpit', 'mailhog'], true))) {
                 $violations[] = 'mail_smtp_host_local';
+            }
+
+            if (EnvironmentPolicy::isStaging($this->environment) && ! $capture) {
+                $violations[] = 'mail_staging_delivery_undeclared';
             }
 
             if (! in_array($this->config->get('email.smtp.tls'), ['required', 'implicit'], true)) {
@@ -530,6 +563,13 @@ final class ProductionConfigurationGuard
         $domain = SenderIdentity::validSendingDomain(trim((string) $this->config->get('email.sending_domain')));
 
         return in_array($mode, ['none', 'fake'], true) || $domain === null ? ['account_recovery_email_disabled'] : [];
+    }
+
+    /** Staging, with the closed `capture` declaration (ADR 0074 section 26.4). */
+    private function stagingCaptureDeclared(): bool
+    {
+        return EnvironmentPolicy::isStaging($this->environment)
+            && $this->config->get('email.staging_delivery') === 'capture';
     }
 
     private static function isLocalHost(string $host): bool

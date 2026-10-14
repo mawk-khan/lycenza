@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\Configuration\EnvironmentPolicy;
 use App\Support\Domains\DomainTelemetry;
 use App\Support\Domains\HostClassification;
 use App\Support\Domains\HostClassifier;
@@ -93,7 +94,8 @@ class ClassifyRequestHost
                     return self::notFound();
                 }
 
-                if (app()->isProduction()) {
+                // PPR.1 (ADR 0074 section 26): forced HTTPS in every hardened environment.
+                if (EnvironmentPolicy::isHardened()) {
                     URL::forceRootUrl('https://'.$classification->hostname);
                     URL::forceScheme('https');
                 }
@@ -105,7 +107,7 @@ class ClassifyRequestHost
                     return self::notFound();
                 }
 
-                if (app()->isProduction()) {
+                if (EnvironmentPolicy::isHardened()) {
                     URL::forceRootUrl(rtrim((string) config('app.url'), '/'));
                 }
 

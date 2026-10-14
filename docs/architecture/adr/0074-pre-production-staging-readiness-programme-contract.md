@@ -1,8 +1,10 @@
 # ADR 0074: Pre-Production / Staging Readiness Programme Contract (PPR.0)
 
-- Status: **Accepted — PPR.0 CONTRACT PUBLISHED / IMPLEMENTATION NOT
-  STARTED (2026-10-14, documentation only). Owner decisions OD-PPR-1 to
-  OD-PPR-21 are open (§22).**
+- Status: **Accepted — PPR.0 CONTRACT PUBLISHED (2026-10-14,
+  documentation only). PPR.1 STAGING / ENVIRONMENT CONTRACT — IMPLEMENTED
+  (2026-10-14, §26; OD-PPR-1, OD-PPR-2 and OD-PPR-9 decided). No staging
+  infrastructure exists. PPR.2 NEXT. OD-PPR-3 to OD-PPR-21 remain open
+  (§22).**
 - Date: 2026-10-14
 - Programme: **PPR — Pre-Production / Staging Readiness**
   (`MASTER-ROADMAP.md`, post-foundation programme 9).
@@ -855,6 +857,8 @@ No export code is written in PPR.0.
 
 ## 22. Owner and legal decisions (all open)
 
+*(2026-10-14, PPR.1: OD-PPR-1 (option B), OD-PPR-2 and OD-PPR-9 are decided -- §26.1. The rest stay open.)*
+
 | ID | Decision | Needed by |
 |---|---|---|
 | OD-PPR-1 | Environment model: `staging` first-class (B, recommended) vs `APP_ENV=production` (A) | PPR.1 |
@@ -1003,3 +1007,245 @@ authorisation.
 5. **Adopt industry defaults (pentest, WCAG AA, fixed SLOs) as
    requirements.** Rejected. They are registered as decisions, not
    invented as requirements.
+
+## 26. PPR.1 — Staging / Pre-Production Environment Contract — IMPLEMENTED (2026-10-14)
+
+**Baseline:**
+- `origin/main` = `9e202ed1` (PPR.0), with green exact-SHA and `main`
+  `CI gate`;
+- ruleset 24909660 active, no bypass actor, drift `ok`;
+- clean tree, one worktree, historical stash untouched.
+
+**Scope.** Application semantics, tests and documentation only. No
+infrastructure, provider account, DNS, credential, email or deployment.
+
+### 26.1 Owner decisions recorded (frozen at PPR.1 authorisation)
+
+| ID | Decision |
+|---|---|
+| **OD-PPR-1** | **Option B approved.** `staging` is an officially recognised environment. Allowed values: `production`, `staging`, `local`, `testing`; unknown values fail closed at startup. Staging is production-equivalent for security and hardening unless a difference is explicitly listed and test-pinned, and is never equivalent to local/development. |
+| **OD-PPR-2** | **Staging uses synthetic data only.** Prohibited: real School data, copies of production databases, pseudonymised production databases, anonymised production-derived datasets (unless a later explicit legal determination authorises them), real Student/Guardian/employee/statutory identifiers, real finance records, production documents or uploads. Synthetic data comes only from project-controlled fixtures or seeding, the application's bootstrap/setup workflows, or ordinary UI/API use with synthetic values. Manual SQL is never the standard method, and no legacy import is built for it. Staging is disposable and may be rebuilt. |
+| **OD-PPR-9** | **Raw operator evidence lives outside Git** under the operator-configured `$LYCENZA_OPERATOR_EVIDENCE_ROOT/ppr/`: directories `0700` and sensitive files `0600`, or the platform equivalent; never a path written into application code. **The repository holds only E29-safe entries:** id, timestamp, operator reference, role, action/result code, safe command reference, hashes, minimised outcome, repository SHA. **Never committed:** credentials, keys, passwords, prohibited hostnames, raw secret-bearing responses, private keys. **Operators** appear as an opaque reference (`OP-001`) plus a role, never a personal email. **Naming** stays exactly E29's `EVID-<row>-<YYYY>-<n>`; a PPR action with no register row uses its slice id (`EVID-PPR2-2026-1`). **No fabricated entries.** |
+
+### 26.2 The environment model (OD-PPR-1)
+
+**One classifier.** `App\Support\Configuration\EnvironmentPolicy` is the
+only classifier:
+
+| Constant / method | Members | Use |
+|---|---|---|
+| `SUPPORTED` | `production`, `staging`, `local`, `testing` | anything else refuses to boot |
+| `HARDENED` / `isHardened()` | `production`, `staging` | every security hardening |
+| `DEVELOPMENT` / `isDevelopment()` | `local`, `testing` | development conveniences (each still behind its own switch) |
+| `isProduction()` / `isStaging()` | one value each | **only** the listed `STAGING_DIFFERENCES` sites |
+
+**Unknown values.** `AppServiceProvider::register()` calls
+`EnvironmentPolicy::assertSupported()` first, before the test-database
+guard and anything else:
+- it refuses `stage`, `preprod`, `prod2`, `Production`, an empty value, and
+  so on;
+- `UnsupportedEnvironmentException` says the value is unsupported and lists
+  the supported set;
+- it **never echoes the value**: the message gives only "empty" or the
+  character count, and the call carries no argument, so no stack frame
+  prints it;
+- debug is forced off.
+
+**An unset `APP_ENV`** is still `production` (`config/app.php`), the
+strictest value.
+
+**Build step.** The production image's build-time `package:discover` used
+an ad-hoc `APP_ENV=build`; it now runs as `local` in that throwaway,
+secret-less build stage. Its output is environment-independent, and the
+runtime stage stays `APP_ENV=production`.
+
+### 26.3 Production-guard audit (finding F-2)
+
+**Every environment branch in `app/`, `config/`, `routes/` and
+`bootstrap/` was classified:**
+
+| Location | Before | Production | Staging before PPR.1 | Required in staging | Action |
+|---|---|---|---|---|---|
+| `AppServiceProvider` boot guard | `isProduction()` | ~60 checks refuse boot | **none ran** | all | `isHardened()`; guard told its environment |
+| `ApplySecurityHeaders` HSTS | `isProduction()` | HSTS on secure responses | **no HSTS** | HSTS | `isHardened()` |
+| `ClassifyRequestHost` forced HTTPS (School and platform hosts) | `isProduction()` | forced `https` root | **not forced** | forced | `isHardened()` |
+| `DatabaseRoleVerifier` TLS check | `isProduction() \|\| $ssl` | FAIL unencrypted | EVIDENCE only | FAIL | `isHardened()` |
+| `config/observability.php` log format | `APP_ENV === 'production'` | JSON default | `line` default | JSON | `HARDENED` |
+| `SendGridConfiguration` | `environment('production')` | refused | **allowed** | refused until PPR.6 | `isHardened()` |
+| `EmailEventAdapterResolver` sendgrid | `environment('production')` | refused | **allowed** | refused until PPR.6 | `isHardened()` |
+| `EmailProviderResolver` reserved domain + `MAIL_SENDING_VERIFIED` | `environment('production')` | both enforced | **neither** | reserved domain always; attestation unless declared capture | `isHardened()`; difference `mail_sending_verified_not_required_for_capture` |
+| `SmtpEmailProvider` `tls=none` | `local`/`testing` only | refused | refused | refused | unchanged (development-keyed) |
+| `ServiceAuthKeys` key age | not `local`/`testing` | enforced | enforced | enforced | unchanged |
+| `PortalAvailability`, StudentMark/teacher marks, `DevOnlySchoolHeaderResolver`, teacher bearer API, domain fakes and development hosts, fake email/event/notification providers, demo/internal routes, `LocalCatalogueFixtures`, SSRF loopback override, partner probe scope, metric-catalog strictness, `SendFakeEmailEvent`, `VerifyServiceAuth` dev keys, `DatabaseSeeder` dev branch | `local`/`testing` | off | off | off | unchanged (already fail closed) |
+| `DemoEnvironmentGuard` | `local` + DDEV | refused | refused | refused | unchanged |
+| `TestDatabaseGuard`, `platform:test-db-reset`, env diagnostic | `testing` | n/a | n/a | n/a | unchanged |
+| `ApplySecurityHeaders` Vite hot-reload CSP | `local` | n/a | n/a | n/a | unchanged |
+| `SystemStatusController` | returned `app.env` | disclosed | disclosed | not disclosed | field removed (§26.6) |
+| `StructuredJsonFormatter` `environment` log field | value | logged | logged | logged (internal logs only) | unchanged |
+
+**No intentional production-only hardening remains.** The only production
+vs staging distinctions are the two listed differences (§26.4).
+
+**Guard:** `EnvironmentArchitectureGuardTest`:
+- no code outside `EnvironmentPolicy` tests `production`/`staging`
+  literally;
+- every framework `environment(...)` check, and every environment-list
+  constant, names development values only;
+- `isProduction()`/`isStaging()` appear only at the two
+  `STAGING_DIFFERENCES` sites;
+- the F-2 controls ask the policy.
+
+**Proof.** A mutation check (restoring `isProduction()` in the HSTS
+middleware) fails the guard and the staging HSTS parity test.
+
+### 26.4 Staging vs production — the complete difference list
+
+`EnvironmentPolicy::STAGING_DIFFERENCES` is pinned by
+`EnvironmentPolicyTest`:
+
+| Key | Staging | Production |
+|---|---|---|
+| `mail_staging_capture` | `MAIL_STAGING_DELIVERY=capture` declares the SMTP target a non-delivering capture sink. Undeclared staging SMTP is refused (`mail_staging_delivery_undeclared`). Only with the declaration may the host be a Mailpit-style service. TLS (`required`/`implicit`), credentials, the bounded timeout and the loopback refusal still apply. Values outside `capture` are refused (`mail_staging_delivery_invalid`) | The declaration is refused (`mail_staging_delivery_outside_staging`) |
+| `mail_sending_verified_not_required_for_capture` | A declared capture sink needs no `MAIL_SENDING_VERIFIED`; the reserved-domain gate still applies | The attestation is required |
+
+**Contract-level differences** (not code): synthetic data only, a
+disposable environment, synthetic/test recipients, and qualification
+tooling only under explicit PPR operator actions.
+
+**Everything else is identical:** HTTPS/HSTS, database TLS, the
+configuration checks, authorization, tenancy, workers and scheduler,
+storage security, debug off, the secret architecture and migration
+behaviour. The operator view is `docs/operations/STAGING-ENVIRONMENT.md`.
+
+**Email** (ADR 0060 §31 preserved):
+- **Default:** capture. SendGrid stays dormant and refused in staging,
+  exactly as in production. A plaintext Mailpit is impossible outside
+  development, so the staging sink is a TLS-capable Mailpit-equivalent
+  service.
+- **External delivery from staging:** opens only in PPR.6, under the frozen
+  E17–E20 contract, by a reviewed change extending the `MAIL_STAGING_DELIVERY`
+  value set.
+- **Production:** the SendGrid refusal is unchanged.
+
+**Refusal wording.** It reads "unsafe production configuration" in staging
+too. Staging is production-equivalent, and the existing tests and runbooks
+match on that wording.
+
+### 26.5 Development features in staging
+
+All stay unavailable in staging, as in production:
+- `StagingParityTest`: the Guardian portal, StudentMark, teacher marks, the
+  partner probe and the fake email provider; service-key age is enforced;
+- `HardenedEnvironmentBootTest`: domain fakes and the teacher bearer API
+  refuse boot.
+
+**Also off in staging:**
+- **Dev dependencies:** none ship (`composer install --no-dev`); there is
+  no debugbar or Telescope at all.
+- **The demo seeder:** refuses non-DDEV environments.
+- **Demo/internal routes:** are not registered.
+- **Debug pages:** never render. `APP_DEBUG=true` refuses boot, and every
+  refusal forces debug off.
+
+**DDEV/local and PHPUnit are unchanged and proven to boot.**
+
+### 26.6 F-8 — the public status endpoint
+
+**Change.** `GET /api/v1/system/status` now answers `data.status` only. The
+development-era `phase` ("0A - Architectural Foundation") and `environment`
+fields are removed.
+
+**Compatibility:**
+- **Consumers:** none in the repository (mobile, Gateway, frontend: none
+  call it); the OpenAPI contract and `packages/shared-types` are updated.
+- **Envelope:** `meta.apiVersion` and `requestId` are unchanged.
+- **Health:** `/api/health/live` and `/api/health/ready` are unchanged.
+- **Operators:** environment identity stays available through the
+  platform-authorised `platform:operations-status` and
+  `GET /api/internal/operations/status`.
+
+**Test:** `SystemStatusTest` proves the anonymous body contains no
+`production`, `staging`, `local`, `testing`, `environment` or `phase`, in
+each environment.
+
+### 26.7 F-4 — one rollback contract
+
+`MAINTENANCE-WINDOW-RELEASE.md` and `PRODUCTION-RELEASE.md` now state one
+contract, for every hardened environment:
+
+1. **Application rollback** redeploys the previous promoted digest with the
+   database preserved, and **never runs a migration `down()`**. It is
+   allowed only when the earlier image is compatible with the current
+   schema; this is decided before migrating.
+2. **Database correction** uses a reviewed **forward corrective
+   migration**, or, for a true recovery event, an approved PITR restore to
+   the release checkpoint.
+3. **`down()`** stays required by rule 10 as a development/test guarantee,
+   never the routine staging/production path.
+
+**No tooling assumed automatic rollback** (none found). The contract is
+pinned by `ReleaseRollbackContractDocumentTest`.
+
+### 26.8 F-5 — alert count
+
+**The catalogue has 41 rules, OBS-01–OBS-41.** OBS-27–OBS-41 were added
+after 0O.5A's 26.
+
+**Corrected:**
+- `OBSERVABILITY.md`;
+- the `platform:alerts-export` description (text only);
+- the `AlertCatalogTest` docblock;
+- ADR 0051's implementation record, as a dated note.
+
+**No alert behaviour changed.** The latency and 5xx additions stay PPR.4
+(OD-PPR-7).
+
+### 26.9 Security review
+
+| Concern | Result |
+|---|---|
+| Environment spoofing | `APP_ENV` is deployment configuration, not request input. Nothing reads an environment from a request. |
+| Defaults / fallback | Unset → `production` (strictest); empty or unknown → refused |
+| Missing `APP_ENV` | Boots as `production` and runs the full guard (fail closed) |
+| Secret leakage in startup errors | The unsupported-environment refusal never echoes the value; the guard refusal names codes only; both force debug off. Proven in subprocesses, web probe included |
+| Debug mode | Refused in every hardened environment |
+| Staging provider escape | SendGrid and its events refused in staging; capture must be declared; TLS and credentials still required; the reserved sending domain still enforced |
+| HTTP/TLS hardening | HSTS, forced HTTPS and database-TLS verification now hold in staging |
+| Public environment disclosure | Removed (F-8) |
+| Production weakened? | **No.** Production adds one refusal (`mail_staging_delivery_outside_staging`); every existing production check is unchanged |
+
+### 26.10 Tests
+
+**New:**
+- `EnvironmentPolicyTest` (3, unit);
+- `HardenedEnvironmentBootTest` (5, subprocess);
+- `StagingParityTest` (7);
+- `EnvironmentArchitectureGuardTest` (4);
+- `ReleaseRollbackContractDocumentTest` (1, repository-documents);
+- a staging test in `ProductionConfigurationGuardTest`.
+
+**Changed:**
+- `SystemStatusTest` (F-8);
+- `ProductionBootSmokeTest`, whose baseline is now the shared
+  `BootsHardenedEnvironment` trait, identical values.
+
+**Counts and the canonical sharded regression:** recorded in the PPR.1
+commit.
+
+### 26.11 Status
+
+**PPR.1 COMPLETE / PPR.2 NEXT.** The environment semantics are implemented
+and tested. **No staging infrastructure exists.**
+
+**PPR.2 needs owner decisions:**
+- OD-PPR-3 (hosting/orchestration);
+- OD-PPR-4 (secret store);
+- OD-PPR-8 (non-production domains).
+
+It then needs operator authorisation (rule 16) for each provisioning action
+(§9).
+
+**E16 calendar (parallel track PPR-E16, unchanged):**
+- valid through **2026-11-09**;
+- publication blocked from **2026-11-10**;
+- successor cycle begins around **2026-10-30**.

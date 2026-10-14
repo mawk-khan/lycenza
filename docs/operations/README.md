@@ -15,7 +15,8 @@ CLAUDE.md rule 16): a human with explicit authorization runs it.
 | [REDIS-LOSS-RECOVERY.md](REDIS-LOSS-RECOVERY.md) | What a Redis loss costs and how queued work is rebuilt from PostgreSQL |
 | [BACKUP-AND-RESTORE.md](BACKUP-AND-RESTORE.md) | PostgreSQL and object-storage backup requirements, the restore procedure, restore validation |
 | [RESTORE-DRILL-RECORD.md](RESTORE-DRILL-RECORD.md) | The drill record template (no drill has been performed) |
-| [OPERATOR-EVIDENCE-RECORD.md](OPERATOR-EVIDENCE-RECORD.md) | The template for every other ADR 0058 operator evidence record, with the E29 hygiene rules |
+| [OPERATOR-EVIDENCE-RECORD.md](OPERATOR-EVIDENCE-RECORD.md) | The template for every other ADR 0058 operator evidence record, with the E29 hygiene rules; since PPR.1 the out-of-Git evidence store and operator references (OD-PPR-9) |
+| [STAGING-ENVIRONMENT.md](STAGING-ENVIRONMENT.md) | The staging contract (PPR.1, ADR 0074 §26): `APP_ENV` values, production-equivalent hardening, the difference list, synthetic data, TLS email capture. **No staging environment exists yet** (PPR.2) |
 | [RELEASE-QUALIFICATION.md](RELEASE-QUALIFICATION.md) | Release order, qualification to VERIFIED, exceptions, rollback re-verification, evidence retention, the scheduled re-scan (ADR 0052) |
 | [CUSTOM-PHP-RUNTIME.md](CUSTOM-PHP-RUNTIME.md) | The repository-built PHP runtime (curl/libxml2): pins, ownership, rebuild triggers, update procedure |
 | [SUPPLY-CHAIN-INCIDENTS.md](SUPPLY-CHAIN-INCIDENTS.md) | Compromised dependency, compromised CI action, leaked signing key/identity, malicious artifact, Critical CVE after deployment |

@@ -2,6 +2,7 @@
 
 namespace App\Support\Operations;
 
+use App\Support\Configuration\EnvironmentPolicy;
 use App\Support\Retention\RetentionAnchors;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -284,10 +285,11 @@ class DatabaseRoleVerifier
 
         // ADR 0050 section 7: TLS on the connection. Production refuses to
         // boot without sslmode >= require; this proves the server agreed.
+        // PPR.1 (ADR 0074 section 26): a FAIL in every hardened environment.
         $ssl = (bool) (DB::selectOne('select ssl from pg_stat_ssl where pid = pg_backend_pid()')->ssl ?? false);
-        $results[] = app()->isProduction() || $ssl
+        $results[] = EnvironmentPolicy::isHardened() || $ssl
             ? CheckResult::of('runtime_connection_encrypted', $ssl)
-            : new CheckResult('runtime_connection_encrypted', CheckResult::EVIDENCE, 'not encrypted outside production');
+            : new CheckResult('runtime_connection_encrypted', CheckResult::EVIDENCE, 'not encrypted outside a hardened environment');
 
         $attrs = DB::selectOne('select rolcanlogin, rolsuper, rolbypassrls, rolcreatedb, rolcreaterole, rolinherit, rolreplication from pg_roles where rolname = ?', [$role]);
         $results[] = CheckResult::of('runtime_role_exists', $attrs !== null);

@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\Configuration\EnvironmentPolicy;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Vite;
@@ -71,7 +72,8 @@ class ApplySecurityHeaders
             }
         }
 
-        if (app()->isProduction() && $request->isSecure() && ! $headers->has('Strict-Transport-Security')) {
+        // PPR.1 (ADR 0074 section 26): HSTS in every hardened environment.
+        if (EnvironmentPolicy::isHardened() && $request->isSecure() && ! $headers->has('Strict-Transport-Security')) {
             $headers->set('Strict-Transport-Security', self::HSTS);
         }
 

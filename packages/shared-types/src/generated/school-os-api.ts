@@ -11,7 +11,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Unauthenticated liveness/version probe (Phase 0A primitive). */
+        /** Unauthenticated API envelope probe. Since PPR.1 (ADR 0074 section 26.6) it discloses no deployment metadata: the former `phase` and `environment` fields are removed. Health checks use `/api/health/live` and `/api/health/ready`. */
         get: operations["getSystemStatus"];
         put?: never;
         post?: never;
@@ -10958,8 +10958,6 @@ export interface operations {
                         data: {
                             /** @example ok */
                             status: string;
-                            phase: string;
-                            environment: string;
                         };
                         meta: components["schemas"]["ResponseMeta"];
                     };

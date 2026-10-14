@@ -1,5 +1,7 @@
 <?php
 
+use App\Support\Configuration\EnvironmentPolicy;
+
 return [
 
     /*
@@ -107,7 +109,9 @@ return [
         // `json` (one object per line, fixed schema) is the production
         // format; `line` keeps local/DDEV logs readable. Production refuses
         // to boot with anything but `json` (ProductionConfigurationGuard).
-        'format' => env('LOG_FORMAT', env('APP_ENV') === 'production' ? 'json' : 'line'),
+        // PPR.1 (ADR 0074 section 26): structured JSON by default in every
+        // hardened environment (an unset APP_ENV is `production`).
+        'format' => env('LOG_FORMAT', in_array(env('APP_ENV', 'production'), EnvironmentPolicy::HARDENED, true) ? 'json' : 'line'),
     ],
 
     'metrics' => [

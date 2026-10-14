@@ -7,12 +7,16 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Phase 0A primitive: proves the versioned JSON API envelope
- * (data/meta, request id, error format) described in
- * docs/architecture/API.md. Unauthenticated by design — it carries no
- * tenant or business data. Every future authenticated endpoint must sit
- * behind Sanctum/token auth + policy-based authorization, neither of
- * which is implemented yet.
+ * The unauthenticated API status probe: proves the versioned JSON API
+ * envelope (data/meta, request id, error format) described in
+ * docs/architecture/API.md. Unauthenticated by design -- it carries no
+ * tenant or business data.
+ *
+ * PPR.1 (ADR 0074 section 26.6, finding F-8): it no longer discloses the
+ * deployment environment (`environment`) or the development-era `phase`
+ * label to anonymous callers. Health is `/api/health/live` and `/ready`;
+ * an operator's environment view is `platform:operations-status` /
+ * `GET /api/internal/operations/status` (platform-authorized).
  */
 class SystemStatusController extends Controller
 {
@@ -21,8 +25,6 @@ class SystemStatusController extends Controller
         return response()->json([
             'data' => [
                 'status' => 'ok',
-                'phase' => '0A - Architectural Foundation',
-                'environment' => config('app.env'),
             ],
             'meta' => [
                 'apiVersion' => 'v1',

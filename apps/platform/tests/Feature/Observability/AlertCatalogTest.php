@@ -16,7 +16,7 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Phase 0O.5A (ADR 0051 §14): the 26 alerts as deterministic conditions,
+ * Phase 0O.5A (ADR 0051 §14): the alerts (26 then, OBS-01..OBS-41 today) as deterministic conditions,
  * evaluated here against fixture metric values -- no monitoring backend.
  */
 #[Group('repository-documents')]

@@ -70,10 +70,28 @@ never worked on.
 
 ## Rollback
 
-Code-only rollback (no migration in the release): redeploy the previous
-**promoted digest** the same way, after re-verifying its retained evidence
-(`RELEASE-QUALIFICATION.md` → Rollback) — never a rebuild of an old commit,
-and never automatically. **With migrations:** there is no general `down()`
-rollback in production — restore to the step-5 checkpoint
-(`BACKUP-AND-RESTORE.md`) and redeploy the previous image. Decide before
-step 6 whether the release is reversible.
+**Rollback contract (ADR 0074 §26.7, PPR.1; one contract for every
+hardened environment, staging and production).** Application rollback
+never runs a migration `down()`.
+
+- **Application rollback.** Redeploy the previous **promoted digest**, with
+  the database state preserved, after re-verifying the digest's retained
+  evidence (`RELEASE-QUALIFICATION.md` → Rollback). Never rebuild an old
+  commit, and never roll back automatically. Allowed **only** when the
+  earlier image is compatible with the **current** schema. Decide before
+  step 6 whether the release is application-rollback-safe; a release whose
+  migrations the previous image cannot run against is not.
+- **Database correction.** A defect introduced by a migration is corrected
+  by:
+  - an explicitly reviewed **forward corrective migration** (preferred); or
+  - for a true recovery event, an approved restore to the step-5 PITR
+    checkpoint (`BACKUP-AND-RESTORE.md`, a rule-16 operator action), then a
+    redeploy of the previous image.
+
+  Financial and audit records are always corrected forward, never rolled
+  back (ARCHITECTURE.md §10).
+- **`down()`.** CLAUDE.md rule 10 still requires a working (or deliberately
+  refused) `down()`. It is a development and test guarantee, proven by the
+  migration rollback tests on disposable databases, and **never** the
+  routine rollback path in staging or production. Two retention-fence
+  migrations refuse `down()` by design (`DATABASE-BOOTSTRAP.md`).

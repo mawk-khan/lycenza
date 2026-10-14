@@ -17,8 +17,10 @@ use App\Support\Ai\AiContextTokenService;
 use App\Support\Api\ApiScope;
 use App\Support\ApiClients\PartnerCredentialAuthenticator;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Configuration\EnvironmentPolicy;
 use App\Support\Configuration\ProductionConfigurationException;
 use App\Support\Configuration\ProductionConfigurationGuard;
+use App\Support\Configuration\UnsupportedEnvironmentException;
 use App\Support\Observability\ErrorReporter;
 use App\Support\Observability\LogErrorReporter;
 use App\Support\Observability\Metrics\ArrayMetricStore;
@@ -45,6 +47,19 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        // PPR.1 (ADR 0074 section 26.2): only the four supported environments
+        // boot. A typo (`stage`, `preprod`, `prod2`) or an empty APP_ENV must
+        // never run as some weaker third state -- finding F-2 was exactly that.
+        // First, before anything else reads the environment; debug is forced
+        // off so the refusal can never render a debug page.
+        try {
+            EnvironmentPolicy::assertSupported();
+        } catch (UnsupportedEnvironmentException $e) {
+            $this->app->make('config')->set('app.debug', false);
+
+            throw $e;
+        }
+
         // Phase 0C.3A safety closure: runs on EVERY boot (web, artisan,
         // tinker), but only actually does anything when
         // app()->environment('testing') -- see TestDatabaseGuard's
@@ -61,9 +76,13 @@ class AppServiceProvider extends ServiceProvider
         // before anything can serve a request or run a command. The
         // refusal is rendered with debug OFF, so a misconfigured production
         // host never serves a debug error page (source, trace, request).
-        if ($this->app->isProduction()) {
+        // PPR.1 (ADR 0074 section 26): it runs in every HARDENED environment
+        // -- staging as well as production -- with only the listed
+        // EnvironmentPolicy::STAGING_DIFFERENCES.
+        $environment = (string) $this->app->environment();
+        if (EnvironmentPolicy::isHardened($environment)) {
             try {
-                (new ProductionConfigurationGuard($this->app->make('config')))->assertSafe();
+                (new ProductionConfigurationGuard($this->app->make('config'), $environment))->assertSafe();
             } catch (ProductionConfigurationException $e) {
                 $this->app->make('config')->set('app.debug', false);
 

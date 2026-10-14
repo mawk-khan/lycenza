@@ -321,8 +321,10 @@ reference:
   (private listener only).
 - `App\Support\Observability\Signals\OperationalSignals` — the shared
   readers behind operations status and the scrape.
-- `App\Support\Observability\Alerts\*` — the 26 alerts,
-  `platform:alerts-export`.
+- `App\Support\Observability\Alerts\*` — the 41 alert rules OBS-01–OBS-41
+  (26 at Phase 0O.5A; later phases added OBS-27–OBS-41 for service auth,
+  custom domains, email and account recovery), `platform:alerts-export`.
+  *(Corrected 2026-10-14, PPR.1, finding F-5.)*
 - `WorkerCanaryJob`, `platform:dispatch-worker-canaries`,
   `RecordScheduledTaskRun`, `RecordQueueHeartbeat` (registered once).
 

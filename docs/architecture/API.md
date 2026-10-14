@@ -5,7 +5,9 @@ reference for building against the `/api/v1` surface.
 
 Contract source of truth:
 `packages/contracts/openapi/school-os-api.yaml`. Phase 0A implemented
-`GET /api/v1/system/status`; Phase 0B adds
+`GET /api/v1/system/status` *(2026-10-14, PPR.1, finding F-8: its anonymous
+response is now `data.status` only -- the `phase` and `environment` fields
+are removed; health is `/api/health/live` and `/api/health/ready`)*; Phase 0B adds
 `GET /api/v1/schools/{schoolId}/context`
 (`apps/platform/app/Http/Controllers/Api/V1/SchoolContextController.php`),
 proving the full mobile/API chain end to end: Sanctum identity →

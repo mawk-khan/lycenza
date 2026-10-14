@@ -419,4 +419,48 @@ class ProductionConfigurationGuardTest extends TestCase
         $committed = $this->ring([['kty' => 'OKP', 'crv' => 'Ed25519', 'kid' => 'renamed-1', 'x' => ServiceAuthContract::DEVELOPMENT_PUBLIC_KEYS[1], 'created' => '2026-09-27']]);
         $this->assertSame(['ai_service_verification_keys_development'], (new ProductionConfigurationGuard($this->config($this->gatewayConfigured(['services.ai_gateway.inbound_verification_keys' => $committed]))))->violations());
     }
+
+    /**
+     * PPR.1 (ADR 0074 section 26.4): the guard runs for staging with exactly
+     * the listed differences -- a staging SMTP target must be declared a
+     * capture sink (and may then be a Mailpit-style service); nothing else
+     * relaxes. Production refuses the declaration; SendGrid stays refused.
+     */
+    #[Test]
+    public function staging_gets_the_production_guard_with_only_the_declared_capture_difference(): void
+    {
+        $staging = fn (array $overrides) => (new ProductionConfigurationGuard($this->config($overrides), 'staging'))->violations();
+        $production = fn (array $overrides) => (new ProductionConfigurationGuard($this->config($overrides), 'production'))->violations();
+        $capture = ['host' => 'mailpit', 'port' => 1025, 'username' => 'capture', 'password' => self::emailCanary('capture'), 'tls' => 'required', 'timeout_seconds' => 5];
+
+        // Every non-email baseline violation is identical in both.
+        foreach (self::unsafe() as $label => [$overrides, $code]) {
+            $this->assertContains($code, $staging($overrides), "staging: {$label}");
+        }
+
+        // Staging SMTP must be declared; the declared capture sink passes, even named `mailpit`.
+        $this->assertContains('mail_staging_delivery_undeclared', $staging($this->emailEnabled()));
+        $this->assertContains('mail_smtp_host_local', $staging($this->emailEnabled(['email.smtp' => $capture])));
+        $this->assertSame([], $staging($this->emailEnabled(['email.smtp' => $capture, 'email.staging_delivery' => 'capture'])));
+
+        // Nothing else relaxes for the capture sink.
+        $this->assertContains('mail_smtp_tls_not_required', $staging($this->emailEnabled(['email.smtp' => [...$capture, 'tls' => 'none'], 'email.staging_delivery' => 'capture'])));
+        $this->assertContains('mail_smtp_host_local', $staging($this->emailEnabled(['email.smtp' => [...$capture, 'host' => '127.0.0.1'], 'email.staging_delivery' => 'capture'])));
+        $this->assertContains('mail_smtp_credentials_missing', $staging($this->emailEnabled(['email.smtp' => [...$capture, 'username' => null], 'email.staging_delivery' => 'capture'])));
+        $this->assertContains('mail_staging_delivery_invalid', $staging($this->emailEnabled(['email.smtp' => $capture, 'email.staging_delivery' => 'deliver'])));
+
+        // SendGrid, fake providers and tracking stay refused in staging.
+        foreach (['sendgrid provider', 'sendgrid event adapter', 'fake provider', 'fake event adapter', 'open tracking'] as $label) {
+            [$overrides, $code] = self::unsafeEmail()[$label];
+            $this->assertContains($code, $staging($this->emailEnabled([...$overrides, 'email.staging_delivery' => 'capture'])), "staging: {$label}");
+        }
+
+        // Production never carries the declaration, and the capture host stays refused there.
+        $this->assertContains('mail_staging_delivery_outside_staging', $production($this->emailEnabled(['email.staging_delivery' => 'capture'])));
+        $this->assertContains('mail_smtp_host_local', $production($this->emailEnabled(['email.smtp' => $capture, 'email.staging_delivery' => 'capture'])));
+        $this->assertSame([], $production($this->emailEnabled()), 'a sound production SMTP setup is unchanged');
+
+        // The default constructor is production (existing callers keep their meaning).
+        $this->assertSame($production($this->emailEnabled(['email.staging_delivery' => 'capture'])), (new ProductionConfigurationGuard($this->config($this->emailEnabled(['email.staging_delivery' => 'capture']))))->violations());
+    }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Support\Email\Providers;
 
+use App\Support\Configuration\EnvironmentPolicy;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Foundation\Application;
 
@@ -31,7 +32,9 @@ final class SendGridConfiguration
     /** A closed code describing why SendGrid may not be used here, or null. */
     public function violation(): ?string
     {
-        if ($this->app->environment('production')) {
+        // PPR.1 (ADR 0074 section 26.4): refused in every hardened environment;
+        // staging's controlled qualification path is PPR.6's to add (E17-E20).
+        if (EnvironmentPolicy::isHardened((string) $this->app->environment())) {
             return 'production_not_authorised';
         }
 

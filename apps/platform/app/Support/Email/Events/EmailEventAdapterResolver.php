@@ -2,6 +2,7 @@
 
 namespace App\Support\Email\Events;
 
+use App\Support\Configuration\EnvironmentPolicy;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Contracts\Container\Container;
 
@@ -25,7 +26,8 @@ final class EmailEventAdapterResolver
     {
         return match ((string) $this->config->get('email.events.adapter')) {
             'fake' => $this->app->environment(['local', 'testing']) ? $this->app->make(FakeEmailEventAdapter::class) : null,
-            'sendgrid' => $this->app->environment('production') ? null : $this->app->make(SendGridEmailEventAdapter::class),
+            // PPR.1: refused in every hardened environment (staging too) until PPR.6.
+            'sendgrid' => EnvironmentPolicy::isHardened((string) $this->app->environment()) ? null : $this->app->make(SendGridEmailEventAdapter::class),
             default => null,
         };
     }

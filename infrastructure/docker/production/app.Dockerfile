@@ -170,7 +170,13 @@ RUN set -eux; \
 # --- Production PHP dependencies ------------------------------------------
 # From composer.lock only (`install`, never `update`); no Composer plugin and
 # no package script runs (ADR 0052 sections 3.5, 3.18). Laravel's own package
-# discovery is the one explicit step.
+# discovery is the one explicit step. It boots the framework in this
+# throwaway build stage with no secrets, so it runs as `local` (the hardened
+# boot guard would refuse a secret-less build); its output,
+# bootstrap/cache/packages.php, does not depend on the environment. PPR.1
+# (ADR 0074 section 26.2): only production/staging/local/testing boot -- the
+# former ad-hoc `build` value is refused now. The runtime stage below is
+# `APP_ENV=production`.
 FROM php-build AS vendor
 COPY --from=composer-bin /usr/bin/composer /usr/bin/composer
 WORKDIR /app
@@ -178,7 +184,7 @@ COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-scripts --no-plugins --no-autoloader --prefer-dist --no-interaction --no-progress
 COPY . .
 RUN composer dump-autoload --no-dev --optimize --no-scripts --no-plugins --no-interaction \
- && APP_ENV=build php artisan package:discover --ansi
+ && APP_ENV=local php artisan package:discover --ansi
 
 # --- Frontend assets --------------------------------------------------------
 # .npmrc is copied BEFORE `npm ci` so its ignore-scripts=true applies: no

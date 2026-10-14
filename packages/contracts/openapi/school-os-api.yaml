@@ -41,7 +41,11 @@ paths:
   /system/status:
     get:
       operationId: getSystemStatus
-      summary: Unauthenticated liveness/version probe (Phase 0A primitive).
+      summary: >
+        Unauthenticated API envelope probe. Since PPR.1 (ADR 0074 section
+        26.6) it discloses no deployment metadata: the former `phase` and
+        `environment` fields are removed. Health checks use
+        `/api/health/live` and `/api/health/ready`.
       security: []
       responses:
         "200":
@@ -54,15 +58,12 @@ paths:
                 properties:
                   data:
                     type: object
-                    required: [status, phase, environment]
+                    required: [status]
+                    additionalProperties: false
                     properties:
                       status:
                         type: string
                         example: ok
-                      phase:
-                        type: string
-                      environment:
-                        type: string
                   meta:
                     $ref: "#/components/schemas/ResponseMeta"
 

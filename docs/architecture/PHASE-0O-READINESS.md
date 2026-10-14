@@ -3154,3 +3154,39 @@ documentation only).
 - **Decisions** OD-PPR-1–21 (§22).
 - **Findings** F-1–F-8 (§21), reported, not fixed. Notably F-1: statutory
   payroll calculation and posting have no runtime trigger.
+
+## 64. Phase 0O / PPR.1 — staging / environment contract implemented (2026-10-14)
+
+**PPR.1 COMPLETE / PPR.2 NEXT** (ADR 0074 §26).
+
+**No change of state:**
+- no register row changes status;
+- O1 stays NOT SATISFIED;
+- **no staging environment exists.**
+
+**Decisions frozen:**
+- **OD-PPR-1 (B):** `staging` is a first-class, production-equivalent
+  environment.
+- **OD-PPR-2:** synthetic data only.
+- **OD-PPR-9:** an out-of-Git evidence store and opaque operator
+  references.
+
+**Finding F-2 closed in code.**
+- `App\Support\Configuration\EnvironmentPolicy` classifies the
+  environment.
+- Unknown `APP_ENV` values refuse to boot, never echoing the value.
+- For staging, the boot guard, HSTS, forced HTTPS, the database-TLS verifier
+  and the email gates all apply.
+- There are only two pinned differences, both about a declared TLS email
+  capture sink.
+
+**Also closed:**
+- **F-4:** one rollback contract (no `down()` on rollback).
+- **F-5:** the alert count is 41.
+- **F-8:** the public status endpoint no longer discloses environment or
+  phase.
+
+**Operator contract:** `docs/operations/STAGING-ENVIRONMENT.md`.
+
+**E16:** valid through **2026-11-09**; successor cycle around
+**2026-10-30**.
