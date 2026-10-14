@@ -1541,6 +1541,17 @@ by the service.
   moving the clock (a checkout's due date is never before its checkout), so
   fine display and void are proven by `LibraryFineUiTest`, not by DDEV.
 
+**CI-exposed test defect (fixed).** The new tests shifted the
+deterministic shard boundaries, and the first `CI gate` run failed shard 2.
+- **Cause:** `StaffRoleGrantorRaceTest` cleaned up by deleting every User
+  created since one second before it started. In the new layout it runs about
+  a second after `PayrollIdempotencyRealConcurrencyTest`, which deliberately
+  leaves a committed payroll run (and its preparer) behind. The sweep hit
+  that User's foreign key.
+- **Fix:** the race test now deletes only the Users it created. No product
+  code changed.
+- **Proof:** shard 2/4 re-run locally, 2068 cases green.
+
 **Deferred to SWC.5:** a returned-loan lookup. An older returned loan's
 fine is reachable from the check-in redirect and the loan URL, but no list
 shows returned loans. That would be a loan list, not a fine register; the

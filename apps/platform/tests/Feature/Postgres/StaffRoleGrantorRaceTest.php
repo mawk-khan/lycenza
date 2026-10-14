@@ -30,13 +30,14 @@ class StaffRoleGrantorRaceTest extends TestCase
     /** @var list<string> */
     private array $schoolIds = [];
 
-    private ?string $startedAt = null;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->startedAt = now()->subSecond()->toDateTimeString();
-    }
+    /**
+     * Only the Users this test created. A created_at window would also sweep
+     * up committed residue an earlier test in the same shard left behind
+     * (e.g. a payroll run's preparer) and fail on its foreign key.
+     *
+     * @var list<string>
+     */
+    private array $userIds = [];
 
     protected function tearDown(): void
     {
@@ -44,7 +45,9 @@ class StaffRoleGrantorRaceTest extends TestCase
             $this->deleteSchoolAsAdmin($schoolId);
         }
         $admin = DB::connection('pgsql_admin');
-        $admin->table('users')->where('created_at', '>=', $this->startedAt)->whereNotIn('id', $admin->table('platform_role_assignments')->select('user_id'))->delete();
+        if ($this->userIds !== []) {
+            $admin->table('users')->whereIn('id', $this->userIds)->delete();
+        }
 
         parent::tearDown();
     }
@@ -55,9 +58,11 @@ class StaffRoleGrantorRaceTest extends TestCase
         $school = $this->createSchool();
         $this->schoolIds[] = $school->id;
         $issuer = $this->createUser();
+        $targetUser = $this->createUser();
+        array_push($this->userIds, $issuer->id, $targetUser->id);
         $issuerMembership = $this->createMembership($issuer, $school);
         $this->assignSchoolRole($issuerMembership, 'school_admin');
-        $target = $this->createMembership($this->createUser(), $school);
+        $target = $this->createMembership($targetUser, $school);
 
         return [$school, $issuer, $issuerMembership, $target, Role::query()->where('key', 'teacher')->firstOrFail()];
     }
