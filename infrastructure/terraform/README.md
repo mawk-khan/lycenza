@@ -36,3 +36,24 @@ may contain their secret values:
 | Backup policy references | PITR (RPO ≤ 15 min, 35 days), object copy (RPO ≤ 24 h) — `docs/operations/BACKUP-AND-RESTORE.md` |
 | Process definitions | `apps/platform/deploy/processes.json` (one scheduler, three workers, web, private AI Gateway) |
 
+## Decided at PPR.2D (2026-10-14, ADR 0074 §28)
+
+**OD-PPR-25 = Terraform; OD-PPR-3 = AWS; OD-PPR-24 = `ap-south-1`.** Still
+no resource is defined here.
+
+**The first IaC change** is its own reviewed slice: the staging network for
+runbook R-01, under `environments/staging`.
+
+**Contract** (applies to every change in this directory):
+
+| Topic | Rule |
+|---|---|
+| Versions | HashiCorp Terraform CLI pinned exactly (`required_version`); the AWS provider pinned exactly; `.terraform.lock.hcl` (with hashes) committed; upgrades are reviewed changes to releases at least 14 days old. OpenTofu is a drop-in alternative if the owner prefers MPL over Terraform's BSL 1.1 |
+| State | remote S3 backend **per environment account** (staging state in the staging account): versioning, SSE-KMS, Block Public Access, TLS-only policy, S3 native locking, access for the Terraform role only. Classified **Highly Sensitive**. **Never committed**: `.gitignore` here refuses state, plans, `.terraform/` and `*.tfvars` |
+| Separation | staging and production never share state, account, key or role |
+| Secrets | Terraform creates secret **containers** and access policies only. Values are written out of band by an operator (runbook R-12), never in `.tf`, variables, plans, state outputs or logs. Sensitive outputs are not emitted |
+| Flow | 1 reviewed change on protected `main` → 2 `terraform plan -out` (operator) → 3 rule-16 approval of that plan's hash → 4 `apply` of exactly that plan → 5 verification → 6 `EVID-…` entry with the plan hash |
+| CI | never holds cloud credentials, never plans or applies (ADR 0052). Offline `fmt -check`/`validate` may be added later |
+| Credentials | operators through IAM Identity Center on short-lived credentials, a dedicated Terraform-apply permission set; no long-lived access keys; root user unused |
+
+**A committed `.tf` file or plan authorises nothing.**

@@ -4,8 +4,10 @@
   documentation only). PPR.1 STAGING / ENVIRONMENT CONTRACT — IMPLEMENTED
   (2026-10-14, §26; OD-PPR-1, OD-PPR-2 and OD-PPR-9 decided). PPR.2 —
   PROVISIONING PLAN COMPLETE / OPERATOR ACTION NOT STARTED (2026-10-14,
-  §27). No staging infrastructure exists. OD-PPR-3 to OD-PPR-8, OD-PPR-10 to
-  OD-PPR-21 and the new OD-PPR-22 to OD-PPR-25 remain open (§22, §27.6).**
+  §27). PPR.2D — PROVIDER, REGION AND IaC FROZEN (2026-10-14, §28:
+  OD-PPR-3 = AWS, OD-PPR-24 = ap-south-1 Mumbai, OD-PPR-25 = Terraform).
+  No staging infrastructure exists. OD-PPR-4 to OD-PPR-8, OD-PPR-10 to
+  OD-PPR-23 remain open (§22, §27.6, §28).**
 - Date: 2026-10-14
 - Programme: **PPR — Pre-Production / Staging Readiness**
   (`MASTER-ROADMAP.md`, post-foundation programme 9).
@@ -1380,3 +1382,293 @@ STARTED.**
 - valid through **2026-11-09**;
 - publication blocked from **2026-11-10**;
 - successor cycle around **2026-10-30**.
+
+## 28. PPR.2D — Hosting, Region & IaC Decision — FROZEN (2026-10-14)
+
+**Baseline:**
+- `origin/main` = `b22693ad` (PPR.2 plan), with green exact-SHA and `main`
+  `CI gate`;
+- ruleset 24909660 active, no bypass actor, drift `ok`;
+- clean tree, one worktree, historical stash untouched.
+
+**Scope.** A decision checkpoint only. Nothing was created: no cloud
+account, network, database, Redis, bucket, secret store, registry, DNS
+record, certificate, credential or process.
+
+**How the decisions were made.** The owner instructed this checkpoint to
+resolve OD-PPR-3, OD-PPR-24 and OD-PPR-25. They were selected by evaluation
+against the published contracts and current provider documentation.
+
+**What they bind:**
+- **They bind** the planning documents.
+- **They do not authorise** any resource.
+- **R-00a,** the first operator action (§28.10), needs its own rule-16
+  approval. That approval is the owner's natural point to confirm or
+  override these choices before anything is created.
+
+### 28.1 Requirements the provider must meet
+
+These are taken from the published contracts, not from industry habit:
+
+| # | Requirement | Source |
+|---|---|---|
+| H1 | A public TLS edge/load balancer with explicit proxy addresses | ADR 0050 §2; E05 |
+| H2 | Private networking with deny-by-default rules | STAGING-INFRASTRUCTURE-ARCHITECTURE §1 |
+| H3 | Managed **PostgreSQL 16**, private, TLS, encrypted at rest | ADR 0050 §7; E09 |
+| H4 | PITR with RPO ≤ 15 min and a **35-day** operational backup window; restore into a separate target | ADR 0050 §9, §11; E10, E11 |
+| H5 | An authenticated, private Redis-protocol service | ADR 0050 §6; E09 |
+| H6 | Object storage with the **S3 API**: the application uses Laravel's `s3` disk, and `platform:verify-storage` reads versioning, encryption and the public-access block through the S3 API. Private, versioned, encrypted, with an independent copy | ADR 0050 §8; ADR 0011 |
+| H7 | A managed secret store injecting per-process groups before boot | E08; architecture §7 |
+| H8 | Immutable OCI images run by digest; long-running web, three workers and **one** singleton scheduler; one-shot release/console tasks; the runtime security contract (non-root, cap-drop ALL, no-new-privileges) | ADR 0050 §3, §12; ADR 0052; `runtime-security.json` |
+| H9 | Monitoring hooks: private metrics scrape and stderr log collection | ADR 0051 |
+| H10 | A private TLS email-capture service whose certificate the **unchanged** image trusts (peer verification on, no custom CA option: `SmtpEmailProvider`) | PPR.1 §26.4 |
+| H11 | Environment separation; mature IaC support | ADR 0050 §13, §16 |
+
+### 28.2 Providers evaluated
+
+**Shortlist:** AWS, Google Cloud, Microsoft Azure, DigitalOcean.
+
+| | AWS | Google Cloud | Azure | DigitalOcean |
+|---|---|---|---|---|
+| PostgreSQL 16 (H3) | RDS for PostgreSQL 16 ✓ | Cloud SQL ✓ | Flexible Server ✓ | Managed PostgreSQL ✓ |
+| Backup window (H4) | automated backups **0–35 days**, PITR within the window ✓ (RDS user guide) | 1–365 retained backups ✓; PITR log retention not stated on the backups page | ✓ (not decisive) | **7 days** of daily backups/PITR ✗ against the 35-day window |
+| Redis (H5) | ElastiCache (Valkey/Redis OSS); AUTH/RBAC requires in-transit TLS (see F-D1) | Memorystore ✓ | Azure Cache/Managed Redis ✓ | Managed Caching ✓ |
+| Object storage, S3 API (H6) | **S3 native** ✓ | XML API "interoperable with **some** tools" (partial); S3 bucket-configuration reads not documented ⚠ | Blob Storage has **no native S3 API**; needs a gateway ✗ | Spaces (S3-compatible); versioning and public-access block parity unverified |
+| Secret store (H7) | Secrets Manager, per-container injection in ECS task definitions ✓ | Secret Manager ✓ | Key Vault ✓ | none managed (external store needed) ✗ |
+| Containers (H8) | **ECS with EC2 capacity** ✓: `dockerSecurityOptions: ["no-new-privileges"]`, `linuxParameters.capabilities.drop: ["ALL"]`, non-root `user`, never `privileged`; services, one-shot tasks, a single-replica service. **ECS on Fargate ✗**: AWS lists `dockerSecurityOptions` as not valid on Fargate, so no-new-privileges cannot be set (F-D4) | GKE ✓ (`allowPrivilegeEscalation: false`); Cloud Run cannot express it ⚠ | AKS ✓; Container Apps ⚠ | DOKS ✓; App Platform ⚠ |
+| Registry/signing (OD-PPR-5) | ECR (OCI artifacts, cosign-compatible) — compatible, not decided | Artifact Registry — compatible | ACR — compatible | DOCR |
+| Region in India | ap-south-1 Mumbai, ap-south-2 Hyderabad (ECS ✓, ElastiCache ✓, Secrets Manager endpoint ✓ — AWS docs) | asia-south1, asia-south2 | Central India, South India | BLR1 |
+| IaC (H11) | Terraform AWS provider: mature ✓ | ✓ | ✓ | ✓ |
+| Audit | CloudTrail ✓ | Cloud Audit Logs ✓ | Activity Log ✓ | limited |
+| Operational complexity | moderate | moderate | moderate | low |
+| Lock-in | moderate (IaC per provider; the application is portable: S3 API, PostgreSQL, Redis, OCI images) | moderate | higher (no S3 API) | low |
+| Staging cost profile (relative, no figures) | medium | medium | medium | lowest, but fails H4/H7 |
+
+### 28.3 OD-PPR-3 — hosting provider: **AWS**
+
+**Why AWS.** It is the only shortlisted provider meeting H1–H11 **natively,
+without weakening a contract or adding a component**:
+- **Object storage:** S3 itself (H6), so `platform:verify-storage` works
+  as designed.
+- **Backups:** RDS's 35-day backup window and PITR match ADR 0050 exactly
+  (H4).
+- **Secrets:** per-container secret injection from the secret store maps
+  onto `processes.json` groups (H7).
+- **Containers:** ECS with EC2 capacity expresses every field of the
+  runtime security contract (H8). Fargate does not (F-D4).
+
+**Why not the others:**
+- **Google Cloud:** close, but its S3-API storage is only partially
+  interoperable (H6).
+- **Azure:** no native S3 API (H6).
+- **DigitalOcean:** a 7-day backup window and no managed secret store (H4,
+  H7).
+
+None was rejected on price.
+
+**Tradeoffs:**
+- AWS-specific IaC and operations knowledge.
+- EC2 capacity to patch instead of Fargate (F-D4).
+- ElastiCache authentication requires TLS (F-D1).
+- Moderate cost even at small sizes.
+- The application itself stays portable.
+
+**Staging → production.**
+- **Intended model:** AWS is the **intended production provider** too
+  (same model: TLS behaviour, private networking, secret injection,
+  database engine and backups, artifacts), so staging evidence is
+  relevant to production.
+- **Separation:** separate AWS accounts per environment (§28.6).
+- **If production later moved elsewhere,** everything provider-specific
+  would need requalification:
+  - E05, E08, E09, E10, E11 and E12;
+  - the email-capture design;
+  - the IaC.
+
+### 28.4 OD-PPR-24 — region: **AWS ap-south-1 (Asia Pacific, Mumbai)**
+
+**Criteria:**
+- **Users:** the expected users are Indian Schools. The product implements
+  Indian statutory payroll, GST/RTE questions and DPDP-oriented reviews, so
+  latency is lowest in India.
+- **Services:** every needed service is available (ECS, ElastiCache and
+  Secrets Manager confirmed in AWS's regional documentation; RDS, EC2 and
+  S3 are core regional services).
+- **Recovery:** a second Indian region (ap-south-2 Hyderabad) exists for a
+  later cross-region copy if PPR.5 wants one. ADR 0050 §9 does not require
+  cross-region.
+- **Production:** compatible with an Indian production region.
+- **Email:** independent of the email provider (SendGrid has no India
+  region and is a separate E17 question).
+
+**Alternatives:**
+- **ap-south-2 (Hyderabad):** newer, and a reasonable secondary.
+- **ap-southeast-1 (Singapore):** outside India. It would create a
+  cross-border question while the localisation question is unresolved.
+
+**Placement.** One region holds everything:
+- runtime, PostgreSQL, Redis, storage and the secret store;
+- backups, in the same region with separate administrative control
+  (ADR 0050 §9).
+
+No service has to live elsewhere.
+
+**Legal caveat.** No repository decision mandates India residency:
+- data residency is recorded as an open organisation decision
+  (`PHASE-0O-READINESS.md` §3, category C);
+- India data-localisation is noted as an open exposure (ADR 0037).
+
+Choosing ap-south-1 is an **operational choice, not legal approval**. It
+avoids creating a cross-border transfer while that question is open, but
+a later legal or privacy determination may still require re-evaluating the
+production region or the processors.
+
+### 28.5 OD-PPR-25 — provisioning method: **Terraform**
+
+**Options:**
+- **(A) Terraform:** reproducible, reviewable plans, drift visibility,
+  deterministic teardown (D-steps), staging/production parity, and
+  evidence linked to a plan hash.
+- **(B) Recorded console actions:** less tooling up front, but weak
+  reproducibility, manual drift, error-prone rebuilds, and a staging →
+  production gap.
+
+**Chosen: Terraform (A).**
+- **It matches the repository:** ADR 0050 §13 already defines Terraform's
+  place (`infrastructure/terraform`, per-environment directories, remote
+  locked state, deploy-gated apply).
+- **It suits PPR's needs:** atomic, evidence-linked steps and repeatable
+  teardown.
+
+**State and security contract** (to be implemented in the first IaC
+change, not now):
+- **Versions:**
+  - HashiCorp Terraform CLI pinned to an exact version (`required_version`);
+  - the AWS provider pinned exactly, with the `.terraform.lock.hcl`
+    (hashes) committed;
+  - upgrades are reviewed changes, and only to releases at least 14 days
+    old (the ADR 0052 supply-chain posture).
+- **Licence.** Terraform is BSL 1.1. Internal use is permitted, and
+  OpenTofu is a drop-in alternative if the owner prefers MPL.
+- **State backend:**
+  - an S3 bucket per environment account: versioning, SSE-KMS, public
+    access blocked, TLS-only policy;
+  - S3 native state locking;
+  - access only for the Terraform operator role;
+  - classified **Highly Sensitive** (ADR 0050 §18).
+- **Never committed:** state, plans, `.terraform/` or `*.tfvars` with
+  values. A `.gitignore` in `infrastructure/terraform` enforces this from
+  now on.
+- **Separation:** staging and production state are separate (separate
+  accounts, buckets and keys).
+- **Secrets:**
+  - Terraform creates secret **containers** and access policies only;
+  - values are written out of band by an operator (runbook R-12), never in
+    `.tf`, variables, state outputs or plans;
+  - sensitive outputs are not emitted.
+- **Flow:**
+  1. a reviewed IaC change through the protected `main` path;
+  2. `terraform plan -out` by the operator;
+  3. owner/operator rule-16 approval of that plan (its hash);
+  4. `apply` of exactly that plan;
+  5. verification;
+  6. an `EVID-…` entry carrying the plan hash.
+
+  CI never holds cloud credentials (ADR 0052) and never plans or applies.
+  CI may later run offline `fmt -check`/`validate` only. **A committed
+  `.tf` file or plan authorises nothing.**
+
+### 28.6 Cloud-credential policy (no credential created now)
+
+- **Accounts:** an AWS Organization with separate accounts. The staging
+  account is created in R-00a; production, backup and restore accounts
+  come later, as decided in PPR.5.
+- **Root user:** MFA, unused for routine work.
+- **Operators:** sign in through IAM Identity Center as `OP-nnn` with
+  short-lived credentials. Permission sets are separate for:
+  - Terraform apply;
+  - read-only verification;
+  - secret writing.
+
+  No long-lived access keys.
+- **Audit:** CloudTrail is on from account creation.
+- **Application identity:** ECS **task roles** (least privilege per role).
+  `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` stay **unset**, so the
+  credential chain is used (the guard allows both-absent).
+- **Staging and production** never share an identity, role or key.
+
+### 28.7 Implications for the open decisions (not decided here)
+
+| Decision | Implication |
+|---|---|
+| **OD-PPR-4** (secret store) | AWS Secrets Manager is the natural fit: per-container injection in ECS, KMS encryption, CloudTrail audit and rotation support satisfy S1–S7. An external store remains possible. **Still open**; this selection narrows it. |
+| **OD-PPR-5** (registry/signing, PPR.3) | ECR (OCI artifacts, immutable tags, cosign-compatible signatures) and AWS KMS for signing custody are compatible. GHCR and keyless signing remain possible. **Still open.** |
+| **OD-PPR-6** (observability, PPR.4) | Options: CloudWatch Logs (stderr from ECS), Amazon Managed Service for Prometheus or a scraping collector for `:9102`, or an external backend. **Still open.** |
+| **PPR.5** (backups) | RDS automated backups (35 days) + PITR; snapshot copy or AWS Backup into a separate account/vault; S3 versioning + replication to a separate bucket/account; restore into a separate VPC/account (E11 isolated target). |
+| **OD-PPR-22** (narrower secrets) | **Stays OPEN.** ECS can inject per container, but the boot guard still requires several `app_runtime` secrets in every process (P2-F1). Narrowing needs the application change. |
+| **OD-PPR-23** (fixture generator) | **Stays OPEN / DEFERRED** (use the bootstrap and UI workflows first). |
+
+### 28.8 Findings from the decision
+
+| # | Finding | Disposition |
+|---|---|---|
+| F-D1 | ElastiCache enables AUTH/RBAC **only with in-transit TLS**. Authenticated Redis (required by the guard) on AWS therefore means TLS, and the application's `predis` TLS path is unproven (P2-F3). | **Prerequisite of R-08 (not R-01):** a small engineering verification proving `predis` with TLS + AUTH against a TLS Redis (and with ElastiCache's publicly trusted certificate) before R-08 is approved. If it fails, the fix is an application change in its own slice. |
+| F-D2 | The SMTP adapter verifies the peer with the image's system CA store and has no custom-CA option. A Mailpit with a private-CA certificate would fail. | **Email-capture design:** an **internal Network Load Balancer with a TLS listener and a public ACM certificate** for a name in the staging domain. The application uses `MAIL_SMTP_TLS=implicit` (supported). The NLB forwards to Mailpit in the private subnet; no relay; SMTP egress denied. No application change. |
+| F-D4 | **ECS on Fargate cannot set no-new-privileges.** AWS's "task definition differences for Fargate" page lists `dockerSecurityOptions` (and `privileged`) as not valid on Fargate. `runtime-security.json` requires `no_new_privileges: true` and says "an unsupported field blocks deployment"; five approved vulnerability exceptions are conditional on that contract. | **Compute is ECS with an EC2 capacity provider**: ECS-optimised Amazon Linux AMI, small instances, patched through AMI refresh. The task definitions set `dockerSecurityOptions: ["no-new-privileges"]`, drop ALL capabilities, a non-root user and never `privileged`. **E09-3 evidence must show `NoNewPrivs: 1` and zero capabilities from inside each running role** (the `verify-images.sh` checks, on the real platform). The API reference states the ECS agent must be registered as security-option capable (`ECS_SELINUX_CAPABLE`/`ECS_APPARMOR_CAPABLE`) before security options apply; the container-instance configuration sets this, and the measurement proves it. EKS was considered and is heavier to operate; it remains an alternative. |
+| F-D3 | Choosing Terraform and AWS adds two operator prerequisites before R-01: the staging account and operator identities (R-00a), and the Terraform state backend (R-00b). R-01 itself then needs a reviewed Terraform change for the network. | Runbook amended (R-00a, R-00b). The R-01 IaC is the first repository IaC change, made in its own reviewed slice. |
+
+### 28.9 Cost profile (relative; no bill promised)
+
+**Drivers, from the largest staging cost down:**
+- RDS PostgreSQL, the smallest burstable class plus storage and 35-day
+  backups;
+- ElastiCache, the smallest node;
+- EC2 capacity for the ECS tasks (web, three workers, scheduler, Mailpit): one or two small instances;
+- the public ALB and the internal NLB;
+- NAT/egress (minimised by VPC endpoints for S3, ECR and Secrets
+  Manager, the default-deny egress);
+- S3, including versions;
+- Secrets Manager, per secret;
+- ECR;
+- CloudWatch/monitoring;
+- backup storage.
+
+**Scale-down levers:**
+- single-AZ for staging;
+- the smallest classes;
+- one web task;
+- stopping the EC2 capacity between qualification runs.
+
+None of these changes the security semantics.
+
+### 28.10 Readiness
+
+**Decisions: YES.** OD-PPR-3, OD-PPR-24 and OD-PPR-25 are frozen. No other
+*decision* blocks R-01.
+
+**Before R-01's network can exist, three non-decision prerequisites remain**
+(F-D3):
+1. **R-00a:** create the staging AWS account in an AWS Organization, enable
+   CloudTrail, set up IAM Identity Center operator access. **Rule-16
+   approval.**
+2. **R-00b:** create the Terraform state backend in the staging account.
+   **Rule-16 approval.**
+3. **The R-01 Terraform change:** a reviewed repository slice. It creates
+   nothing until its plan is approved.
+
+**The first possible operator action is R-00a.** The prompt the owner may
+give, if and when they choose (it is not executed by this checkpoint):
+
+> "Rule-16 approval: PPR.2 runbook step **R-00a** — create the AWS
+> Organization (or use the owner's existing one) and a dedicated
+> **staging** member account in **ap-south-1**, enable an organisation
+> CloudTrail trail, enable IAM Identity Center with operator **OP-001**
+> (role: Infrastructure Operator) on short-lived credentials, root user
+> MFA-protected and unused. No VPC, no database, no other resource.
+> Evidence: `EVID-E09-2026-1` (E29-safe; account id never recorded)."
+
+**Status: PPR.2 — PLAN COMPLETE / PROVIDER-REGION-IaC FROZEN /
+PROVISIONING NOT STARTED.**
+- E05, E08 and E09 are not complete.
+- E16: valid through **2026-11-09**; successor cycle around
+  **2026-10-30**.

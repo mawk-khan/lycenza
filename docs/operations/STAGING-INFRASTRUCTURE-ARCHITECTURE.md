@@ -18,9 +18,15 @@ evidence id it will produce
   and `apps/platform/deploy/processes.json`, the **authoritative** process
   and secret-group manifest.
 
-**Vendor-neutral.** No cloud, orchestrator, secret store, registry or
-observability vendor is chosen (ADR 0074 §22). Each term below is a role a
-chosen provider must fill.
+**Vendor-neutral.** No secret store, registry or observability vendor is
+chosen (ADR 0074 §22). Each term below is a role a provider must fill.
+
+**Hosting, region and IaC are frozen** (PPR.2D, ADR 0074 §28):
+- **Provider:** AWS (OD-PPR-3).
+- **Region:** `ap-south-1` Mumbai (OD-PPR-24).
+- **IaC:** Terraform (OD-PPR-25).
+
+The AWS mapping is in §16.
 
 ## 1. Zones and exposure
 
@@ -378,3 +384,25 @@ PPR.2 and every staging step create staging-only values. **Never:**
 - real School data.
 
 Staging and production secrets live in separate namespaces (S2).
+
+## 16. AWS mapping (PPR.2D, ADR 0074 §28)
+
+Region `ap-south-1` (Mumbai) for everything below. Staging is a dedicated
+AWS member account. Single-AZ is acceptable for staging (§12).
+
+| Role in this plan | AWS service |
+|---|---|
+| Network and zones (§1) | VPC: public subnets (ALB only), private application subnets, private data subnets; security groups per §1; default-deny NACL posture. VPC endpoints (S3 gateway; ECR, Secrets Manager, CloudWatch Logs interface endpoints) instead of general internet egress |
+| Edge (§2) | Application Load Balancer, 443 with an ACM public certificate, 80 → 301; target group on 8080; health check `/api/health/ready` |
+| Operator management path | IAM Identity Center + SSM Session Manager (no bastion port open) |
+| PostgreSQL 16 (§3) | RDS for PostgreSQL 16, private, encrypted (KMS), `rds.force_ssl=1`, automated backups up to 35 days + PITR (configured in PPR.5) |
+| Redis (§5) | ElastiCache (Valkey/Redis OSS), private, in-transit TLS **required for AUTH/RBAC** (F-D1: `predis` TLS must be proven before R-08), `noeviction` |
+| Object storage (§6) | S3 bucket: Block Public Access, SSE (S3-managed or KMS), versioning, lifecycle per §6; access through the **ECS task role** (no static keys; `AWS_ACCESS_KEY_ID`/`SECRET` unset) |
+| Secret store (§7) | Natural fit: AWS Secrets Manager with per-container `secrets` injection. **OD-PPR-4 still open** |
+| Compute (§8) | **ECS with an EC2 capacity provider** (ECS-optimised Amazon Linux AMI). Each role is an ECS service (web, three workers, scheduler with desired count 1) or a one-shot task (release, console). Task definitions: `user` non-root, `linuxParameters.capabilities.drop: ["ALL"]`, `dockerSecurityOptions: ["no-new-privileges"]`, never `privileged` (F-D4: Fargate cannot set no-new-privileges, so Fargate is not used) |
+| Email capture (§9) | Mailpit as an ECS service in a private subnet behind an **internal Network Load Balancer with a TLS listener and a public ACM certificate** for a name in the staging domain; the application uses `MAIL_SMTP_TLS=implicit` (F-D2: the SMTP adapter verifies the peer against the image's public CA store). No relay; outbound SMTP denied |
+| Monitoring hooks (§13) | CloudWatch Logs from container stderr; `:9102` reachable only from the future collector's security group. **Backend: OD-PPR-6 open** |
+| Backups (§14) | RDS automated backups / AWS Backup with copy to a separate account or vault; S3 replication to a separate bucket or account (PPR.5) |
+| Registry (§11) | ECR is compatible (OCI, immutable tags, cosign signatures). **OD-PPR-5 open** (PPR.3) |
+| IaC | Terraform, state in a per-account S3 backend (`infrastructure/terraform/README.md`) |
+| Audit | CloudTrail (organisation trail) from account creation |

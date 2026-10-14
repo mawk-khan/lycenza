@@ -3221,3 +3221,37 @@ approved.
 
 **E16:** valid through **2026-11-09**; successor cycle around
 **2026-10-30**.
+
+## 66. Phase 0O / PPR.2D — hosting, region and IaC frozen (2026-10-14)
+
+**PPR.2 — PLAN COMPLETE / PROVIDER-REGION-IaC FROZEN / PROVISIONING NOT
+STARTED** (ADR 0074 §28). A decision checkpoint: nothing was created.
+
+**Decisions:**
+- **OD-PPR-3 = AWS.** It is the only shortlisted provider meeting every
+  contract natively:
+  - S3 API storage;
+  - a 35-day RDS backup window with PITR;
+  - Secrets Manager per-container injection;
+  - ECS on EC2 expressing the full runtime security contract (Fargate
+    cannot set no-new-privileges).
+- **OD-PPR-24 = `ap-south-1` (Mumbai),** an operational choice. No
+  repository decision mandates India residency, and the legal review may
+  later re-evaluate the production region.
+- **OD-PPR-25 = Terraform,** under the state/security contract in
+  `infrastructure/terraform/README.md`. `infrastructure/terraform/.gitignore`
+  keeps state, plans and variable values out of Git.
+
+**New findings:**
+- **F-D1:** ElastiCache AUTH requires TLS; the `predis` TLS path must be
+  proven before R-08.
+- **F-D2:** the email-capture certificate must be publicly trusted, so
+  capture uses an internal NLB with an ACM certificate and implicit TLS.
+- **F-D3:** R-00a and R-00b precede R-01.
+- **F-D4:** ECS on EC2, not Fargate.
+
+**No change of state:** no register row changes status, and O1 stays NOT
+SATISFIED.
+
+**E16:** valid through **2026-11-09**; successor cycle around
+**2026-10-30**.

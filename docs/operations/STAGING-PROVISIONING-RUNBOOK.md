@@ -20,15 +20,13 @@
 
 **Architecture:** [STAGING-INFRASTRUCTURE-ARCHITECTURE.md](STAGING-INFRASTRUCTURE-ARCHITECTURE.md).
 
-**Before the first step**, these owner decisions are needed (ADR 0074 §22,
-§27):
-- OD-PPR-3: hosting and orchestration;
-- OD-PPR-4: secret store;
-- OD-PPR-8: domains;
-- OD-PPR-24: region;
-- OD-PPR-25: IaC (whether the steps are expressed as Terraform in a
-  future `environments/staging` directory under `infrastructure/terraform`
-  (not created) or as recorded console actions).
+**Decisions:**
+- **Frozen at PPR.2D** (ADR 0074 §28): OD-PPR-3 = AWS, OD-PPR-24 =
+  `ap-south-1`, OD-PPR-25 = Terraform.
+- **Still needed before the steps that use them:**
+  - OD-PPR-4 (secret store) before R-11;
+  - OD-PPR-8 (domains) before R-03;
+  - OD-PPR-5 (registry/signing, PPR.3) before R-14.
 
 **Every step** uses staging-only values, synthetic data and no production
 credential. **Downtime:** none applies, because nothing exists yet. "Rollback"
@@ -38,7 +36,9 @@ means deleting what the step created (staging is disposable).
 
 | Step | Action | Needs | Evidence id (row token) | Blocked until |
 |---|---|---|---|---|
-| R-01 | Private network and zones, deny-by-default rules | OD-PPR-3, -24 | `EVID-E09-<YYYY>-n` | — |
+| R-00a | AWS Organization / staging member account in `ap-south-1`, organisation CloudTrail, IAM Identity Center operator access, root MFA | PPR.2D decisions | `EVID-E09-<YYYY>-n` | — |
+| R-00b | Terraform state backend in the staging account (S3 versioned + SSE-KMS + Block Public Access + TLS-only; S3 native locking; access for the Terraform role only) | R-00a | `EVID-E09-…` | — |
+| R-01 | Private network and zones, deny-by-default rules | OD-PPR-3, -24, R-00a, R-00b, a **reviewed R-01 Terraform change** | `EVID-E09-<YYYY>-n` | — |
 | R-02 | Operator management path (bastion/VPN/console access) | R-01 | `EVID-E09-…` | — |
 | R-03 | Edge / load balancer (443, 80→redirect), private target group | R-01, OD-PPR-8 | `EVID-E05-…` | — |
 | R-04 | Staging TLS certificate at the edge | R-03, R-05a DNS | `EVID-E05-…` | — |
@@ -65,6 +65,56 @@ R-05 and R-09 only choose services that support them.
 
 ## Steps
 
+**Frozen choices (PPR.2D, ADR 0074 §28):**
+- **Platform:** AWS, `ap-south-1`.
+- **IaC:** Terraform.
+- **The six-step flow for every Terraform step:**
+  1. reviewed IaC change on protected `main`;
+  2. `terraform plan -out`;
+  3. rule-16 approval of that plan's hash;
+  4. apply that plan;
+  5. verify;
+  6. an `EVID` entry with the plan hash.
+- **What authorises:** a committed `.tf` or plan authorises nothing, and
+  CI never plans or applies.
+
+### R-00a — Staging AWS account and operator access
+- **Pre:** PPR.2D.
+- **Approve:** this step only.
+- **Do:**
+  - use the owner's AWS Organization, or create one, and create a dedicated
+    **staging** member account;
+  - enable an organisation CloudTrail trail;
+  - enable IAM Identity Center with `OP-nnn` operator users and permission
+    sets (Terraform-apply, read-only verify, secret-writer) on short-lived
+    credentials;
+  - protect the root user with MFA and leave it unused.
+- **Not done here:** no VPC or any other resource.
+- **Verify:** CloudTrail logging is on; an operator sign-in is recorded;
+  no IAM access keys exist.
+- **Undo:** close the member account (D-00a).
+- **Secrets:** operator credentials (operator-only).
+- **Evidence:** `EVID-E09-…` (the account id is **never** recorded).
+
+### R-00b — Terraform state backend
+- **Pre:** R-00a.
+- **Approve:** this step only.
+- **Do:** create the staging state bucket:
+  - versioning;
+  - SSE-KMS with a dedicated key;
+  - Block Public Access;
+  - a TLS-only bucket policy;
+  - access for the Terraform role only;
+  - S3 native state locking.
+
+  The bucket is created once by the operator; Terraform cannot store its
+  own state before it exists.
+- **Verify:** policy read-back; a `terraform init` against it from an
+  empty configuration succeeds.
+- **Undo:** D-00b (only after everything else is destroyed).
+- **Secrets:** none.
+- **Evidence:** `EVID-E09-…`.
+
 **Format.** Each step lists:
 - **Pre:** prerequisites;
 - **Approve:** the approval it needs;
@@ -75,7 +125,8 @@ R-05 and R-09 only choose services that support them.
 - **Evidence:** the evidence id it produces.
 
 ### R-01 — Private network and zones
-- **Pre:** OD-PPR-3 (provider), OD-PPR-24 (region).
+- **Pre:** R-00a, R-00b, and a reviewed R-01 Terraform change on protected
+  `main` (the first IaC change).
 - **Approve:** create the staging network only.
 - **Do:** create the staging network with public, application and data
   zones (architecture §1). Default-deny ingress and egress, then add only
@@ -184,7 +235,7 @@ R-05 and R-09 only choose services that support them.
 - **Evidence:** `EVID-E09-…`.
 
 ### R-08 — Redis-compatible service
-- **Pre:** R-01.
+- **Pre:** R-01, **and finding F-D1 cleared**: an engineering verification that `predis` connects with TLS + AUTH (ElastiCache enables AUTH only with in-transit TLS).
 - **Approve:** create the cache/queue service only.
 - **Do:** create a private Redis-protocol service:
   - authentication required;
@@ -261,8 +312,10 @@ R-05 and R-09 only choose services that support them.
 - **Pre:** R-01, R-12 (its SMTP credential).
 - **Approve:** deploy the capture service.
 - **Do:**
-  - deploy a Mailpit-equivalent with STARTTLS, a certificate for its
-    private name and SMTP auth;
+  - deploy Mailpit as an ECS service in a private subnet behind an
+    **internal NLB TLS listener with a public ACM certificate** for a name
+    in the staging domain (F-D2); the application uses
+    `MAIL_SMTP_TLS=implicit` and the NLB's port, with SMTP auth;
   - **no relay or forwarding configuration**;
   - its UI only through the management path;
   - message retention ≤ 7 days.
@@ -400,4 +453,6 @@ production tenant erasure, which stays NOT AUTHORISED.
 | D-05a | the staging DNS record | separate DNS approval |
 | D-03 | the edge | |
 | D-02 | the management path and operator access | |
-| D-01 | the network | last |
+| D-01 | the network | |
+| D-00b | the Terraform state bucket | after every other resource is destroyed |
+| D-00a | the staging member account | last; closing it ends all billing for staging |

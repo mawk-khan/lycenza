@@ -1,0 +1,19 @@
+# PPR.2D (ADR 0074 section 28.5): Terraform state, plans, provider caches and
+# variable values never enter Git. State is Highly Sensitive (ADR 0050 section
+# 18) and lives only in the per-environment remote backend.
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfplan.*
+.terraform/
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
