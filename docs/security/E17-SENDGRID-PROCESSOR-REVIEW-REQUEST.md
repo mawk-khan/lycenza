@@ -1,5 +1,20 @@
 # E17 — Twilio SendGrid as the transactional email processor: legal / processor review request
 
+> **2026-10-14 — deferred to pre-production (owner decision OD-EMAIL-DEV,
+> ADR 0060 §31).** E17 is now **FINAL PROVIDER/PRIVACY REVIEW DEFERRED TO
+> PRE-PRODUCTION / DEVELOPMENT AUTHORISED**. This request is kept as
+> pre-production material. It is **not sent during development**, and no
+> determination is requested now.
+> - **Before it is sent:** refresh its provider evidence (reviewed
+>   2026-10-13) against then-current Twilio terms, and update its data
+>   inventory to the application's actual email flows at that time.
+> - **What still waits on the answer:** production external email, real
+>   School personal data reaching the processor, and an email
+>   production-ready claim.
+> - **What no longer waits:** application development, including E18,
+>   which OD-E18-DEV already authorised for development (ADR 0060 §28.1).
+>   The "What waits on the answer" list below is historical.
+
 **Status at drafting (2026-10-13): REVIEW REQUEST — PUBLISHED IN THE
 REPOSITORY, NOT SENT, NOT ANSWERED.** This document asks questions and
 supplies evidence. It records no determination, and nothing in it may be

@@ -15,9 +15,11 @@ and its E29 rules. §5 and §8 cite those entries by id.
 - **Observation sender:** owner decision **OD-E19-T = T2** (ADR 0060 §30;
   §6.2–§6.3 here).
 
-**Status: E19 — OPERATOR ADMISSION INCOMPLETE / CLOCK NOT STARTED.** The
-contract was frozen on 2026-10-13 (ADR 0060 §29). OD-E19-T was decided the
-same day (ADR 0060 §30). No SendGrid account, DNS record, credential or
+**Status (2026-10-14): E19 — PRE-PRODUCTION QUALIFICATION DEFERRED / CLOCK
+NOT STARTED** (owner decision OD-EMAIL-DEV, ADR 0060 §31; see §12). It was
+OPERATOR ADMISSION INCOMPLETE on 2026-10-13. The contract was frozen on
+2026-10-13 (ADR 0060 §29). OD-E19-T was decided the same day (ADR 0060
+§30). No SendGrid account, DNS record, credential or
 observation message exists as of 2026-10-13. Every operational step below is
 an operator action under rule 16. It is recorded here only when it has
 actually happened.
@@ -216,7 +218,8 @@ times, and only when all rows hold **at the same time**.
   true. A13 and A14 hold only because nothing was sent. They are not
   entered above, because a row is entered only as part of an admission.
 - **What the operator must do next:** §4 steps 1–8, in order, recording
-  each as an `EVID-E19-2026-<n>` entry.
+  each as an `EVID-E19-2026-<n>` entry. *(Superseded 2026-10-14: no operator
+  action is requested while E19 is deferred; see §12.)*
 
 ## 6. Observation traffic
 
@@ -431,3 +434,30 @@ question is carried forward verbatim:
 E19 neither answers nor depends on it. §21 gate 10, whether SendGrid lists
 asynchronously bounced addresses, can be observed with the same account,
 but it is E18/E20 evidence, not E19.
+
+## 12. Deferral to pre-production (2026-10-14)
+
+Owner decision **OD-EMAIL-DEV** (ADR 0060 §31) defers E19 to the
+pre-production email readiness checkpoint (PPE, ADR 0060 §31.7).
+- **Status:** E19 — PRE-PRODUCTION QUALIFICATION DEFERRED / CLOCK NOT
+  STARTED.
+- **Preserved and inactive:** everything in §1–§11, including the
+  14-day requirement, A1–A14, the restart table and OD-E19-T. Nothing in
+  them is relaxed.
+- **While deferred:**
+  - no account, DNS record, EVID entry, schedule or send;
+  - no request for operator evidence;
+  - no re-audit of the account's absence;
+  - no Day 0.
+- **The T2 script** stays archived with the operator evidence, at the §6.3
+  SHA-256. It is **not run** until E19 reopens. At reopening its provider
+  facts and hash are re-reviewed by a dated note before first use.
+- **Reopens** only when the ADR 0060 §31.4 triggers are substantially true:
+  - development is materially complete and qualification is being prepared;
+  - a provider is selected;
+  - the owner will run the account;
+  - the sending domain and DNS access exist;
+  - region/residency is mature;
+  - the schedule leaves room for the window.
+- **At reopening, re-check §9:** a region decided then may differ from the
+  `global` recommendation.

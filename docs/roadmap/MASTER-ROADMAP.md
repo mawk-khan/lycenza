@@ -100,7 +100,9 @@ waived or complete.
     published, not sent, not answered —
     `docs/security/E17-SENDGRID-PROCESSOR-REVIEW-REQUEST.md`; a strictly
     non-production account is authorised by owner decision OD-1, ADR 0060
-    §27.)*;
+    §27.)* *(2026-10-14: deferred to pre-production by OD-EMAIL-DEV, ADR
+    0060 §31. It binds production email and real personal data to the
+    processor, never development.)*;
   - E21 before any retention period. E21.1 (2026-10-01, docs only) issued
     the decision request `docs/security/E21-RETENTION-DECISION-REQUEST.md`
     (decisions E21-D0–D13). E21 is still OPEN. *(2026-10-08: the three
@@ -3405,7 +3407,9 @@ parallel, and the email provider tail) — not started.
 Next: the legal/processor review of SendGrid. Then **0O.13A — SendGrid
 Transactional Email Adapter** (E18), which is not started. In parallel,
 outside the repository: E03, the E16 plan, and the E19 DKIM clock once the
-owner authorizes the account.
+owner authorizes the account. *(Superseded: E18 was built for development
+on 2026-10-13 (OD-E18-DEV). The review and the E19 clock were deferred to
+pre-production on 2026-10-14 (OD-EMAIL-DEV, ADR 0060 §31).)*
 
 **E16 fresh-scan audit (2026-09-29, read-only).**
 - **Scan:** both images still PASS with 0 blocking findings. The 12
@@ -3537,6 +3541,43 @@ merged commit is in `PHASE-0O-READINESS.md` §47 and after.
 - **Deferred:** PR + at least 1 independent approval + CODEOWNERS stay
   production-stage hardening, before E02, and are not active.
 
+**EMAIL — DEVELOPMENT UNBLOCKED / MAILPIT ACTIVE / LIVE PROVIDER QUALIFICATION DEFERRED TO PRE-PRODUCTION (2026-10-14).**
+- **Record:** `PHASE-0O-READINESS.md` §60; ADR 0060 §31; ADR 0058 note
+  "Email development unblocked".
+- **Authority:** owner decision **OD-EMAIL-DEV**. Development authorisation
+  is not production authorisation.
+- **Development:** email features are built through the gateway and
+  checked in DDEV Mailpit. No provider account, key or DNS is needed.
+  SendGrid stays implemented but dormant, tested with fakes only.
+- **Statuses:**
+  - **E17:** FINAL PROVIDER/PRIVACY REVIEW DEFERRED TO PRE-PRODUCTION /
+    DEVELOPMENT AUTHORISED.
+  - **E18:** DEVELOPMENT IMPLEMENTED / DDEV MAILPIT ACTIVE / SENDGRID
+    DORMANT / PRODUCTION EXTERNAL DELIVERY DISABLED.
+  - **E19:** PRE-PRODUCTION QUALIFICATION DEFERRED / CLOCK NOT STARTED.
+  - **E20:** DEFERRED WITH E19 TO PRE-PRODUCTION.
+- **Still blocked:** production external email, real personal data to an
+  external email processor, and O1. The production SendGrid refusal stays
+  in code.
+
+**PPE — Pre-production Email Readiness (future checkpoint; not started).**
+- **Starts:** only on the ADR 0060 §31.4 triggers and owner authorisation,
+  never as a development gate.
+- **Scope (ADR 0060 §31.7):**
+  - E17: refresh the research, confirm the provider, the legal/privacy
+    determination, the DPA and sub-processors;
+  - the provider account and region/residency;
+  - E08 production secrets;
+  - domain authentication, DKIM, SPF and DMARC;
+  - the E19 ≥ 14-day observation;
+  - the §21 sandbox gates and live webhook qualification;
+  - E20;
+  - production credentials;
+  - the DPO's asynchronous-bounce answer;
+  - the dated amendment removing the production refusal;
+  - a final security review;
+  - the production-readiness regression and O16 (E02).
+
 **E19 — OPERATOR ADMISSION INCOMPLETE / CLOCK NOT STARTED (2026-10-13).**
 - **Record:** `PHASE-0O-READINESS.md` §58–§59; ADR 0060 §29–§30;
   `docs/operations/E19-SENDGRID-DOMAIN-AUTHENTICATION-RECORD.md`.
@@ -3574,7 +3615,8 @@ merged commit is in `PHASE-0O-READINESS.md` §47 and after.
   the outcome, for the sandbox gates and the E19 clock only. This is not
   legal approval. No account exists, and the clock has not started.
 - **E18 (0O.13A):** blocked until a dated ADR 0060 amendment records an
-  approval.
+  approval. *(Superseded for development by OD-E18-DEV, 2026-10-13, and
+  OD-EMAIL-DEV, 2026-10-14. Production is still blocked.)*
 - **Register:** the mandatory-blocker count is corrected to E02, E05,
   E07–E23, E29 and E30–E34 (25 rows). Whether E30–E34 may instead be met by
   keeping their features out of production is an open owner decision.

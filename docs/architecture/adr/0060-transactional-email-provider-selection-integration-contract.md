@@ -5,6 +5,8 @@
   E17 moves to `LEGAL_REVIEW_REQUIRED`, and E18 must not start until that
   review is recorded (§22).
 - Date: 2026-09-29
+- Amended: 2026-10-14 (§31) — email development unblocked; live provider
+  qualification (E17/E19/E20) deferred to pre-production.
 - Baseline: `origin/main` `4daa955` (executable checkpoint `e52c4c4`)
 - Resolves: the provider-selection half of ADR 0058 **E17**; freezes the
   **E18** implementation contract.
@@ -1013,3 +1015,191 @@ the HTTP layer replaced. No message was sent.
   timestamp is recorded.
 - **Status:** **E19 — OPERATOR ADMISSION INCOMPLETE / CLOCK NOT STARTED.**
   The ADR 0058 row stays `DEPLOYMENT_REQUIRED`.
+
+## 31. Amendment — email development unblocked; live provider qualification deferred to pre-production (2026-10-14)
+
+**Development authorisation is not production authorisation.** Nothing here
+lifts a production refusal, records a legal determination or authorises
+real School personal data to reach any external processor.
+
+### 31.1 Owner decision OD-EMAIL-DEV (2026-10-14)
+The product owner decided that full application development continues
+without waiting for the final provider, legal, privacy or operational
+review. The application has months of development left, and a provider
+account opened now would expire or go stale before it is useful.
+- **DDEV Mailpit is the canonical development transport.** Application
+  email goes through the existing gateway (`OutboundEmailGateway`, rule 89)
+  to Mailpit. Nothing leaves the machine.
+  - Ordinary development needs no SendGrid account, key, DNS
+    authentication or E19 qualification.
+  - Mailpit shows recipients, subjects, bodies, HTML and text, one-time
+    links, permitted attachments and headers. The gateway's queueing and
+    purposes behave exactly as in any other environment.
+  - The gateway is never bypassed.
+- **SendGrid is IMPLEMENTED BUT DORMANT.** The E18 code stays. There is no
+  live account, credential, domain authentication, live webhook, real
+  delivery or E19 clock. Provider tests use HTTP fakes, deterministic
+  response fixtures, synthetic webhook fixtures and a fresh P-256 key per
+  run. No credential-shaped value is added. (The one obviously fake PHPUnit
+  constant stays allow-listed by `test_email_provider_hygiene.py`.)
+- **Email engineering is authorised to continue.** The scope covers
+  email-producing features, templates, gateway integration, Mailpit
+  testing, SendGrid adapter maintenance, the provider abstraction, webhook
+  code, suppression, observability, configuration and tests, and any module
+  that depends on email.
+  - Features are built to their intended complete architecture, never left
+    unfinished because the provider review is pending.
+  - Every existing rule still applies: tenancy, authorisation, the closed
+    purpose catalogue (a new purpose still needs its own ADR, §28.5),
+    recipient selection, minimisation, attachments, lifecycle events and
+    audit.
+- **This supersedes, for development only:** every statement that makes
+  E17 or E19 a precondition of implementation:
+  - the Status header's "E18 must not start";
+  - §20 "E18 does not start";
+  - §26 "E18: blocked on E17";
+  - §27.5 "E18 does not start until …";
+  - the readiness and roadmap lines that repeat them.
+  OD-E18-DEV (§28.1) had already lifted these for E18. They remain binding
+  for production, launch and any external processing of real personal data.
+
+### 31.2 Revised statuses
+- **E17 — FINAL PROVIDER/PRIVACY REVIEW DEFERRED TO PRE-PRODUCTION /
+  DEVELOPMENT AUTHORISED.**
+  - `docs/security/E17-SENDGRID-PROCESSOR-REVIEW-REQUEST.md` stays as
+    pre-production material. It is not sent during development and no
+    determination is requested now.
+  - Its provider facts (§27.2) date from 2026-10-13 and must be revalidated
+    against then-current Twilio terms before use.
+  - At pre-production the review may approve, approve with conditions,
+    reject, or be replaced by a different provider decision.
+- **E18 — DEVELOPMENT IMPLEMENTED / DDEV MAILPIT ACTIVE / SENDGRID DORMANT /
+  PRODUCTION EXTERNAL DELIVERY DISABLED.**
+- **E19 — PRE-PRODUCTION QUALIFICATION DEFERRED / CLOCK NOT STARTED.**
+  - The record, its A1–A14 admission list, its restart table and OD-E19-T
+    (§30) stay frozen for future use.
+  - The T2 script stays archived in the operator evidence location. It is
+    **not run** until E19 is reopened (§31.4).
+  - No EVID entry, schedule, operator request or account-absence re-audit is
+    made while deferred.
+- **E20 — DEFERRED WITH E19 TO PRE-PRODUCTION** (§31.5).
+
+### 31.3 Verified at `3949879f` (no code changed)
+- **DDEV selects Mailpit explicitly.** `.ddev/config.yaml` sets
+  `MAIL_PROVIDER=smtp`, `127.0.0.1:1025`, `MAIL_SMTP_TLS=none` and
+  `MAIL_PROVIDER_EVENTS=fake`, with no `MAIL_SENDGRID*` value. This is
+  pinned by `the_ddev_mailpit_values_select_the_smtp_adapter_never_sendgrid`
+  and `test_email_provider_hygiene.py`.
+- **Absent configuration never selects SendGrid.**
+  - `config/email.php` defaults the provider and the event adapter to `none`.
+  - `.env.example` sets `fake` and leaves every SendGrid value empty.
+  - A partial SendGrid configuration blocks submission with no fallback
+    (`a_missing_or_malformed_value_blocks_submission_and_never_falls_back`).
+- **Production refuses SendGrid** at the boot guard
+  (`ProductionConfigurationGuardTest`), both resolvers and the adapter
+  (`production_can_never_use_sendgrid_even_when_fully_configured`,
+  `production_never_resolves_the_sendgrid_event_adapter`).
+- **Provider-independent coverage already exists:**
+  - **Sending** (`SendGridEmailProviderTest`, 20 tests): the exact minimised
+    request shape; one recipient; tracking off in both modes; no categories
+    or `custom_args`; `Auto-Submitted` on critical mail; attachments from
+    private storage; the EU host; the test-recipient allow-list; every
+    status classified, never thrown (401/403/400/413/404/429/408/500/503,
+    and 302 never followed); network timeouts; a `202` without
+    `X-Message-Id`; nothing sensitive logged.
+  - **Webhook** (`SendGridEmailEventWebhookTest`, 13 tests): ECDSA
+    verification, with missing, wrong, stale, future, tampered and foreign
+    signatures refused; ring rotation; non-EC key entries; body shape;
+    malformed elements; per-adapter bounds; minimised storage and single
+    queueing; the closed event vocabulary; linked suppression; asynchronous
+    bounces signalled and not linked, then suppressed through the linked
+    drop; open and click events signalled.
+  - **Application** (gateway, submission, suppression, concurrency,
+    throughput, operations signals, architecture, retention).
+- **The provider abstraction is intact.** Business producer → gateway →
+  `EmailProviderAdapter` (`smtp`/Mailpit, `sendgrid`, `none`, `fake`).
+  Producers name a purpose, never a provider. No other provider is added.
+  SES is not chosen merely because SendGrid qualification is deferred
+  (§28.5).
+
+### 31.4 Reopening triggers
+**E19 (and E20) reopen** only when all of these are substantially true:
+1. core application development is materially complete;
+2. the project is preparing staging, UAT or production-readiness
+   qualification;
+3. an external email provider is selected (re-confirmed at that time);
+4. the owner is prepared to create and maintain the provider account;
+5. the real sending domain is known;
+6. DNS operator access is available;
+7. the production region/residency decision is known or mature enough
+   (§9 of the E19 record: a region change re-admits);
+8. enough schedule remains for the ≥ 14-day window, plus Day 0 and
+   late-report margin, before production.
+
+No time-limited provider trial starts before then.
+
+**E17 reopens** before any of these:
+- production external email is enabled;
+- real School personal data reaches the selected external email processor;
+- email is declared production-ready.
+
+**Staging:** staging that delivers externally or uses real personal data
+needs the applicable review first. Staging that captures mail in Mailpit
+or an equivalent non-delivery sink does not.
+
+### 31.5 E20 — the exact contract
+ADR 0058 row E20 is the ADR 0055 §18 deliverability drill. It is
+`DEPLOYMENT_REQUIRED`, evidenced by an operator drill record
+(`EMAIL-DELIVERABILITY.md`, "Non-production drill").
+- **What it covers:** a delivery, a soft bounce, a hard bounce leading to
+  suppression, a complaint, a duplicated and a replayed webhook, a provider
+  retry, and a credential rotation.
+- **What it needs:** a deployed environment, the provider's live event
+  feed, a provider credential to rotate and a verified sending domain. It
+  is therefore **DEFERRED WITH E19 TO PRE-PRODUCTION**.
+- **Its engineering counterpart is already built and tested locally**
+  (§31.3: suppression, deduplication, replay, retry, rotation and
+  classification). DDEV rehearses the same flow with Mailpit and the fake
+  event feed. No separate development portion remains.
+
+### 31.6 The asynchronous-bounce question
+§28.4's behaviour stands. The DPO question (E19 record §11) moves to the
+pre-production review. Development does not wait for it, and no stored
+provider data is expanded meanwhile.
+
+### 31.7 Pre-production email readiness checkpoint (PPE)
+All deferred email work is grouped into one future checkpoint, so nothing
+is lost by deferral:
+1. Refresh the E17 provider and privacy research.
+2. Confirm the final provider selection.
+3. The legal/privacy determination (E17).
+4. The real provider account.
+5. Region and residency.
+6. The contract/DPA assessment.
+7. The sub-processor assessment.
+8. E08 production secret storage.
+9. Domain authentication.
+10. DKIM (new selector, RSA ≥ 2048).
+11. SPF (return path; organizational SPF unchanged).
+12. DMARC (conflict C3: never weaken).
+13. The E19 observation period (≥ 14 consecutive qualifying UTC days).
+14. The §21 sandbox gates.
+15. Live webhook qualification.
+16. E20.
+17. Production credentials.
+18. The DPO answer on asynchronous bounces (§31.6).
+19. A dated amendment here removing the production SendGrid refusal.
+20. A final security review.
+21. The production-readiness regression and O16 qualification (E02).
+
+PPE is a pre-production checkpoint, never a development gate. It starts
+only on the §31.4 triggers and owner authorisation.
+
+### 31.8 Unchanged
+- Every production refusal and fail-closed control.
+- Rule 16.
+- OD-1 (§27.3), which authorises an account but creates none.
+- The E19 record's frozen contract.
+- E08, E21, E02 and O16 stay independent.
+- ADR 0058's O1 rows E17–E20 keep their register statuses and still block
+  O1. Only their effect on **development** changes.

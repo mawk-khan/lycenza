@@ -2168,7 +2168,9 @@ executable checkpoint stays `e52c4c4`.
 - **E17:** PROVIDER_REQUIRED → **LEGAL_REVIEW_REQUIRED**.
 - **E18:** blocked on E17's review. Its scope is frozen as **Phase 0O.13A —
   SendGrid Transactional Email Adapter** (ADR 0060 §22), and it does not
-  start.
+  start. *(Superseded for development: by OD-E18-DEV on 2026-10-13, ADR 0060
+  §28.1, and generally by OD-EMAIL-DEV on 2026-10-14, ADR 0060 §31. It
+  still binds production.)*
 
 **ADR 0058 corrections:**
 - **E02** now requires E03, E18, every other mandatory executable change,
@@ -2997,3 +2999,40 @@ IMPLEMENTED / PRODUCTION ENABLEMENT BLOCKED.
   as an `EVID-E19-2026-<n>` entry.
 - **Code:** none. **Regression:** docs-only, so the regression counter is
   unchanged.
+
+## 60. Phase 0O / email — development unblocked; live provider qualification deferred to pre-production (2026-10-14)
+
+**Status: EMAIL DEVELOPMENT UNBLOCKED / MAILPIT ACTIVE / LIVE PROVIDER
+QUALIFICATION DEFERRED TO PRE-PRODUCTION.** No ADR 0058 row changes
+register status, and none stops blocking O1.
+
+- **Baseline:** `origin/main` `3949879f`, main CI run `38465457748` green.
+- **Owner decision OD-EMAIL-DEV** (ADR 0060 §31.1):
+  - **DDEV Mailpit is the canonical development transport**, through the
+    existing gateway.
+  - **SendGrid is implemented but dormant.**
+  - **Email engineering continues** to the intended complete architecture.
+  - **Development authorisation is not production authorisation.**
+- **Revised statuses:**
+  - **E17:** FINAL PROVIDER/PRIVACY REVIEW DEFERRED TO PRE-PRODUCTION /
+    DEVELOPMENT AUTHORISED.
+  - **E18:** DEVELOPMENT IMPLEMENTED / DDEV MAILPIT ACTIVE / SENDGRID
+    DORMANT / PRODUCTION EXTERNAL DELIVERY DISABLED.
+  - **E19:** PRE-PRODUCTION QUALIFICATION DEFERRED / CLOCK NOT STARTED.
+  - **E20:** DEFERRED WITH E19 TO PRE-PRODUCTION.
+- **E20's contract** is the ADR 0055 §18 deployed drill. Its engineering
+  counterpart is already built and tested locally, so no development
+  portion remains (ADR 0060 §31.5).
+- **Verified, no code changed** (ADR 0060 §31.3):
+  - DDEV pins Mailpit;
+  - absent configuration resolves `none`, and partial SendGrid configuration
+    blocks without fallback;
+  - production refuses SendGrid at the boot guard, both resolvers and the
+    adapter;
+  - 20 sending and 13 webhook fake-provider tests need no account.
+- **Reopening triggers:** ADR 0060 §31.4.
+- **Grouped deferred work:** the pre-production email readiness checkpoint
+  (PPE, ADR 0060 §31.7, 21 items).
+- **Superseded for development only:** the E18 "does not start" and
+  "blocked on E17" statements, including §45 above.
+- **Regression:** docs-only, so the regression counter is unchanged.

@@ -16,6 +16,13 @@
     configured.
   - ADR 0060 §23 is the E19 start sequence; the SendGrid runbook steps
     arrive with 0O.13A.
+- **2026-10-14 (ADR 0060 §31, owner decision OD-EMAIL-DEV):**
+  - **DDEV Mailpit is the canonical development transport.** Ordinary
+    development needs no provider account, key or DNS.
+  - **SendGrid (E18) is implemented but dormant.** It is tested with fakes
+    only, and production still refuses it in code.
+  - **Deferred to pre-production (PPE, ADR 0060 §31.7):** E17, E19, E20 and
+    the checklist below. Nothing below is run during development.
 
 Every business email goes through the durable email layer
 (`App\Support\Email\OutboundEmailGateway`):
