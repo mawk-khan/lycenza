@@ -106,6 +106,9 @@ $LYCENZA_OPERATOR_EVIDENCE_ROOT/ppr/<EVID id>/
   others under "Register row(s)".
 - Sequence numbers are per row token and per year, and are never reused.
 
+**Staging checks.** What the E05, E08 and E09 entries must show is defined
+in [STAGING-EVIDENCE-PLAN.md](STAGING-EVIDENCE-PLAN.md) (PPR.2).
+
 **No fabricated entries.** An entry describes an action that actually
 happened. None exists as of PPR.1: no environment, provider account or drill
 has been created.

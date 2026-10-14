@@ -1,8 +1,12 @@
 # Staging environment contract (PPR.1, ADR 0074 §26)
 
 **Status: CONTRACT IMPLEMENTED IN THE APPLICATION. NO STAGING ENVIRONMENT
-EXISTS.** It is built only in PPR.2, by an authorised operator under rule 16.
-Nothing here describes infrastructure that has been provisioned.
+EXISTS.** It is built only through the PPR.2 plan's separately approved
+operator steps (rule 16): the
+[architecture](STAGING-INFRASTRUCTURE-ARCHITECTURE.md),
+[runbook](STAGING-PROVISIONING-RUNBOOK.md) and
+[evidence plan](STAGING-EVIDENCE-PLAN.md). Nothing here describes
+infrastructure that has been provisioned.
 
 **What staging is.** The production-equivalent environment **without real
 School data** (ADR 0058 §3, "Deployment"). Staging, pre-production and the

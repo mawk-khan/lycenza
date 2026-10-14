@@ -3190,3 +3190,34 @@ documentation only).
 
 **E16:** valid through **2026-11-09**; successor cycle around
 **2026-10-30**.
+
+## 65. Phase 0O / PPR.2 — staging infrastructure & secrets provisioning plan (2026-10-14)
+
+**PPR.2 — PROVISIONING PLAN COMPLETE / OPERATOR ACTION NOT STARTED**
+(ADR 0074 §27). Documentation only.
+
+**No change of state:**
+- no register row changes status: E05, E08 and E09 are **not** complete;
+- O1 stays NOT SATISFIED;
+- nothing was provisioned.
+
+**The plan:**
+- `docs/operations/STAGING-INFRASTRUCTURE-ARCHITECTURE.md`;
+- `docs/operations/STAGING-PROVISIONING-RUNBOOK.md`: atomic steps, each
+  needing its own rule-16 approval;
+- `docs/operations/STAGING-EVIDENCE-PLAN.md`: E05/E08/E09 checks and the
+  configuration inventory.
+
+**Blocked until PPR.3:** the application roles, which need a VERIFIED
+digest. Infrastructure steps may proceed earlier, each separately
+approved.
+
+**Findings:**
+- **P2-F1:** finer per-role secret narrowing needs a code change.
+- **P2-F2:** the lookup HMAC keys are not boot-checked.
+- **P2-F3:** Redis TLS is unproven.
+
+**Decisions added:** OD-PPR-22 to OD-PPR-25.
+
+**E16:** valid through **2026-11-09**; successor cycle around
+**2026-10-30**.

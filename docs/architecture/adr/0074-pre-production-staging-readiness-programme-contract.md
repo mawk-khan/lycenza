@@ -2,9 +2,10 @@
 
 - Status: **Accepted — PPR.0 CONTRACT PUBLISHED (2026-10-14,
   documentation only). PPR.1 STAGING / ENVIRONMENT CONTRACT — IMPLEMENTED
-  (2026-10-14, §26; OD-PPR-1, OD-PPR-2 and OD-PPR-9 decided). No staging
-  infrastructure exists. PPR.2 NEXT. OD-PPR-3 to OD-PPR-21 remain open
-  (§22).**
+  (2026-10-14, §26; OD-PPR-1, OD-PPR-2 and OD-PPR-9 decided). PPR.2 —
+  PROVISIONING PLAN COMPLETE / OPERATOR ACTION NOT STARTED (2026-10-14,
+  §27). No staging infrastructure exists. OD-PPR-3 to OD-PPR-8, OD-PPR-10 to
+  OD-PPR-21 and the new OD-PPR-22 to OD-PPR-25 remain open (§22, §27.6).**
 - Date: 2026-10-14
 - Programme: **PPR — Pre-Production / Staging Readiness**
   (`MASTER-ROADMAP.md`, post-foundation programme 9).
@@ -857,7 +858,7 @@ No export code is written in PPR.0.
 
 ## 22. Owner and legal decisions (all open)
 
-*(2026-10-14, PPR.1: OD-PPR-1 (option B), OD-PPR-2 and OD-PPR-9 are decided -- §26.1. The rest stay open.)*
+*(2026-10-14, PPR.1: OD-PPR-1 (option B), OD-PPR-2 and OD-PPR-9 are decided -- §26.1. The rest stay open. PPR.2 adds OD-PPR-22 to OD-PPR-25 -- §27.6.)*
 
 | ID | Decision | Needed by |
 |---|---|---|
@@ -1249,3 +1250,133 @@ It then needs operator authorisation (rule 16) for each provisioning action
 - valid through **2026-11-09**;
 - publication blocked from **2026-11-10**;
 - successor cycle begins around **2026-10-30**.
+
+## 27. PPR.2 — Infrastructure & Secrets Provisioning Plan — PLAN COMPLETE / OPERATOR ACTION NOT STARTED (2026-10-14)
+
+**Baseline:**
+- `origin/main` = `37e0b319` (PPR.1), with green exact-SHA and `main`
+  `CI gate`;
+- ruleset 24909660 active, no bypass actor, drift `ok`;
+- clean tree, one worktree, historical stash untouched.
+
+### 27.1 Owner boundary
+
+> **PPR.2 planning is authorised. Infrastructure provisioning is not.**
+> No resource in this plan may be created or changed without a separate
+> rule-16 owner approval for that specific operator action.
+
+**Approvals are per action.** Each later instruction names:
+- the runbook step (`R-nn`/`D-nn`);
+- the target role "staging";
+- the operator reference;
+- the expected evidence id.
+
+No approval implies another. **None was given in PPR.2, and nothing was
+created:** no account, network, database, Redis, bucket, secret, DNS
+record, certificate, credential or process.
+
+### 27.2 Exact contracts planned (ADR 0058 §6, unchanged)
+
+| Row | Control (verbatim) | Required evidence (verbatim) | Status |
+|---|---|---|---|
+| E05 | "S1 edge: `TRUSTED_PROXIES`, HTTPS detection, HSTS, client-IP limiting" | "Real edge addresses configured; the three behaviours demonstrated" | DEPLOYMENT_REQUIRED |
+| E08 | "Managed external secret store and per-process injection" | "Store selected; per-process secret groups; `DB_ADMIN_*` only in release/console" | PROVIDER_REQUIRED |
+| E09 | "ADR 0050 production-equivalent environment (edge, web, 3 workers, 1 scheduler, PG 16 TLS, Redis auth, private S3, runtime role, env separation)" | "`platform:verify-database` and `platform:verify-storage` 0 failed; process manifest applied" | DEPLOYMENT_REQUIRED |
+
+**No row changes status.**
+
+### 27.3 What the plan contains
+
+**Three new operator documents**, vendor-neutral and authoritative for the
+future work:
+
+| Document | Contents |
+|---|---|
+| `docs/operations/STAGING-INFRASTRUCTURE-ARCHITECTURE.md` | zones and deny-by-default network rules; edge and HTTPS (TLS at the edge, application HSTS, trusted proxies); PostgreSQL 16 TLS and the three database roles; credential-to-process map; Redis (`noeviction`, auth, logical databases); private, versioned, encrypted bucket; secret-store requirements S1–S7 and the full secret inventory per role; the process topology from `processes.json` (web, `worker-default`/`-integrations`/`-notifications`, one scheduler, release and console one-shots; Gateway not deployed); TLS email capture; synthetic-data bootstrap; the PPR.3 artifact dependency; HA, scale and cost drivers; monitoring and backup hooks |
+| `docs/operations/STAGING-PROVISIONING-RUNBOOK.md` | atomic steps R-01 to R-20, each with prerequisites, approval, action, verification, undo, secrets and evidence id; deprovision steps D-01 to D-17 |
+| `docs/operations/STAGING-EVIDENCE-PLAN.md` | the E05, E08 and E09 checks and their PASS criteria (REQUIRED vs RECOMMENDED), and the complete staging configuration inventory (public/secret, environment-specific, same/different from production) |
+
+**Workers.** The three workers are exactly the manifest's: one per queue
+the code dispatches to.
+
+| Worker | Carries |
+|---|---|
+| `default` | outbox dispatch and reconciliation, automation |
+| `integrations` | webhooks |
+| `notifications` | email, Communications |
+
+There is **no conflict** with `processes.json`.
+
+**Scheduler.** It runs 30 tasks and is a single replica. Missed runs are
+detected by the heartbeat alerts OBS-05, OBS-06 and OBS-07.
+
+**HA is not required for staging.** Security, configuration and topology
+shape are identical to production. Capacity and HA are not, and PPR.5 and
+PPR.8 can still be meaningful at that size.
+
+### 27.4 What waits for PPR.3
+
+**Blocked until PPR.3:** the application roles (R-14 to R-20). Staging runs
+only a VERIFIED digest by digest (ADR 0052): no Git-checkout deployment, no
+host build. The registry (E13) and signing custody (E14) are PPR.3.
+
+**Not blocked** (each still needs its own approval):
+- network (R-01) and management path (R-02);
+- edge and DNS (R-03 to R-05a);
+- PostgreSQL (R-05 to R-07);
+- Redis (R-08);
+- bucket (R-09, R-10);
+- secret store (R-11, R-12);
+- email capture (R-13).
+
+### 27.5 Findings (reported, not changed — PPR.2 changes no code)
+
+| # | Finding | Disposition |
+|---|---|---|
+| P2-F1 | `processes.json` gives web, all three workers and the scheduler the same `app_runtime` group, and `ProductionConfigurationGuard` requires several of its secrets in every hardened process (`APP_KEY`, the metrics token, the AI context key, the mail secrets when email is on). Narrowing within `app_runtime` per role (e.g. a future SendGrid key only for `worker-notifications`) needs a code change: a process-role-aware guard and a split group. | E08's required "per-process secret groups" is met by the existing manifest. Finer narrowing is **OD-PPR-22** (RECOMMENDED before PPR.6 enables any provider key) |
+| P2-F2 | The contact and statutory-identifier lookup HMAC keys are not boot-checked. A missing key fails closed at first use (`ContactLookupKeyNotConfiguredException`), not at boot. | The staging configuration inventory requires them. A boot check is a candidate for a later engineering slice (no code in PPR.2) |
+| P2-F3 | Redis TLS is not required by the hardened contract (private network + authentication, ADR 0050). `predis` supports a `tls://` `REDIS_URL`, but this repository has never proven it. | RECOMMENDED where offered, but only after a verification step; not part of E09 |
+
+### 27.6 Decisions before real provisioning
+
+| ID | Decision | Blocks |
+|---|---|---|
+| OD-PPR-3 | Hosting/orchestration platform | R-01 onward |
+| OD-PPR-4 | Secret store (and that staging uses the same mechanism) | R-11, R-12 |
+| OD-PPR-5 | Registry and signing custody (PPR.3) | R-14 to R-20 |
+| OD-PPR-6 | Observability backend (PPR.4) | backend only; R-19 hooks need no vendor |
+| OD-PPR-8 | Domains: staging platform host, custom-domain test, sending domain | R-03 to R-05a |
+| **OD-PPR-22** (new) | Finer per-role secret narrowing (P2-F1): keep the manifest groups for staging, or schedule the guard/manifest change | before PPR.6 |
+| **OD-PPR-23** (new) | A synthetic fixture generator, if manual entry proves too slow (default: none) | none now |
+| **OD-PPR-24** (new) | Region / data location for staging (and later production) | R-01 |
+| **OD-PPR-25** (new) | IaC: Terraform in a future (not created) `environments/staging` directory under `infrastructure/terraform` (ADR 0050 §13: state remote/encrypted/locked, apply deploy-gated) vs recorded console actions | R-01 onward |
+| — | Backup destination (PPR.5) and email-capture implementation (a Mailpit-equivalent with STARTTLS is the plan; the product choice follows OD-PPR-3) | R-13; PPR.5 |
+
+**IaC.** No IaC exists beyond the provider-neutral input interface
+(`infrastructure/terraform/README.md`). None was added: provider-neutral
+modules would be decoration (ADR 0050 §13).
+
+### 27.7 Verification and status
+
+**Change.** Documentation only: three new operations documents, the
+evidence-record cross-links, the operations index, the roadmap, readiness
+§65 and this section. **Application code changed: zero.**
+
+**Verification:**
+- the repository-documents guards;
+- whitespace;
+- gitleaks;
+- the CI tooling tests;
+- the docs-lane exact-SHA `CI gate`.
+
+**Status: PPR.2 — PROVISIONING PLAN COMPLETE / OPERATOR ACTION NOT
+STARTED.**
+- E05, E08 and E09 are **not** complete.
+- The next possible action is the first separately approved operator step,
+  once OD-PPR-3, OD-PPR-24 and OD-PPR-25 are decided: **R-01, create the
+  staging private network.**
+
+**E16 calendar (PPR-E16, parallel):**
+- valid through **2026-11-09**;
+- publication blocked from **2026-11-10**;
+- successor cycle around **2026-10-30**.
