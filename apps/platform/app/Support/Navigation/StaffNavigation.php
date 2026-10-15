@@ -43,7 +43,7 @@ final class StaffNavigation
     public const ACCOUNT_GROUP = 'account';
 
     /** The hub entries whose page authorizes its own any-of requirement. */
-    public const HUBS = ['finance', 'hr', 'payroll'];
+    public const HUBS = ['finance', 'hr', 'payroll', 'data-health'];
 
     /**
      * SWC.5 (ADR 0073 section 20.3, F-1): a hub page groups links only, so
@@ -169,6 +169,8 @@ final class StaffNavigation
             new E('school-settings', 'administration', 'School settings', 'app.settings.show', all: ['school.settings.view']),
             new E('staff-accounts', 'administration', 'Staff accounts', 'app.settings.staff.index', all: ['school.members.view']),
             new E('automation', 'administration', 'Automation', 'app.automation', all: ['automation.view']),
+            // V11.5 (ADR 0075 section 10): a hub -- each capability opens at least one check.
+            new E('data-health', 'administration', 'Data health', 'app.data-health.index', any: ['enrollments.view', 'academics.years.view', 'academics.structure.view', 'timetable.schedule.view', 'teaching.assignments.view']),
             new E('domains', 'administration', 'Custom domains', 'app.settings.domains.index', all: ['school.domains.view']),
             new E('api-clients', 'administration', 'API clients', 'app.integrations.api-clients.index', all: ['integrations.api_clients.view']),
 

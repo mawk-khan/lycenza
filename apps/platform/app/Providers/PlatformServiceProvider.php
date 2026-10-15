@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Domain\AcademicStructure\Application\DataHealth\ActiveYearWithoutSectionsCheck;
+use App\Domain\AcademicStructure\Application\DataHealth\NoActiveAcademicYearCheck;
 use App\Domain\Automation\Application\AutomationTriggerConsumer;
 use App\Domain\Communications\Application\Audience\CommunicationAudienceResolverRegistry;
 use App\Domain\Communications\Application\Audience\GradeAudienceResolver;
@@ -15,6 +17,13 @@ use App\Domain\Communications\Application\Audience\SubjectOfferingAudienceResolv
 use App\Domain\Communications\Application\Channels\CommunicationChannelRegistry;
 use App\Domain\Communications\Application\Channels\EmailChannelDriver;
 use App\Domain\Communications\Application\Channels\InAppChannelDriver;
+use App\Domain\Students\Application\DataHealth\ActiveEnrollmentInClosedYearCheck;
+use App\Domain\Students\Application\DataHealth\ActiveEnrollmentInInactiveSectionCheck;
+use App\Domain\Students\Application\DataHealth\ActiveStudentWithoutCurrentPlacementCheck;
+use App\Domain\Students\Application\DataHealth\InactiveStudentWithActiveEnrollmentCheck;
+use App\Domain\TeachingAssignments\Application\DataHealth\AssignmentOnInactiveConfigurationCheck;
+use App\Domain\Timetable\Application\DataHealth\SectionWithoutScheduleCheck;
+use App\Support\DataHealth\DataHealthRegistry;
 use App\Support\Events\Consumers\NotifyActorOfSettingChangeConsumer;
 use App\Support\Events\Consumers\WebhookFanoutConsumer;
 use App\Support\Events\EventConsumerRegistry;
@@ -90,6 +99,22 @@ class PlatformServiceProvider extends ServiceProvider
             $registry->register($app->make(GradeAudienceResolver::class));
             $registry->register($app->make(SectionAudienceResolver::class));
             $registry->register($app->make(SubjectOfferingAudienceResolver::class));
+
+            return $registry;
+        });
+
+        // V11.5 (ADR 0075 section 10): the closed list of Data Health
+        // checks. Each lives in the module that owns its data.
+        $this->app->singleton(DataHealthRegistry::class, function ($app) {
+            $registry = new DataHealthRegistry;
+            $registry->register($app->make(NoActiveAcademicYearCheck::class));
+            $registry->register($app->make(ActiveYearWithoutSectionsCheck::class));
+            $registry->register($app->make(ActiveEnrollmentInClosedYearCheck::class));
+            $registry->register($app->make(ActiveEnrollmentInInactiveSectionCheck::class));
+            $registry->register($app->make(InactiveStudentWithActiveEnrollmentCheck::class));
+            $registry->register($app->make(ActiveStudentWithoutCurrentPlacementCheck::class));
+            $registry->register($app->make(SectionWithoutScheduleCheck::class));
+            $registry->register($app->make(AssignmentOnInactiveConfigurationCheck::class));
 
             return $registry;
         });

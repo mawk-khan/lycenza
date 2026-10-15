@@ -3,7 +3,9 @@
 - Status: **Accepted. V11.0 CONTRACT PUBLISHED (2026-10-15, documentation
   only). V11.1 Executive Dashboard & Enrollment Intelligence is BLOCKED (§4).
   V11.2 SIS Search, Reports & Operational Visibility — IMPLEMENTED
-  (2026-10-15, OD-V11-2, §9; no migration, no new capability, no export).**
+  (2026-10-15, OD-V11-2, §9; no migration, no new capability, no export).
+  V11.5 Data Health & Reconciliation Center — IMPLEMENTED, READ-ONLY
+  (2026-10-15, OD-V11-5, §10; eight checks, no migration, no stored findings).**
 - Date: 2026-10-15
 - Programme: **V11 — Benchmark-Driven Commercial Readiness**
   (`MASTER-ROADMAP.md`, post-foundation programme 10). It is a post-v1
@@ -324,3 +326,135 @@ Analytics guard was touched.
 | Teacher's own assignment / timetable view | ADR 0063 authorization decision |
 | Actor names in Student history | Audit evidence stays behind `school.audit.view` (ADR 0042) |
 | Audit-log filters (ADR 0042 §10) | Narrowed out of v1 by ADR 0042; unchanged |
+
+## 10. V11.5 — Data Health & Reconciliation Center (implemented, 2026-10-15)
+
+Authorised by the owner as OD-V11-5 (read-only first). Baseline
+`origin/main` = `80aa6bda`. **Read-only. No migration, no table, no stored
+finding, no new capability, no mutation route, no automatic repair.**
+V11.1 stays BLOCKED; X-01–X-04, SWC and PPR are unchanged.
+
+### 10.1 Audit matrix
+
+| Candidate | Authoritative source | Existing contract | Derive now? | Viewer | Repair path | Schema | Decision |
+|---|---|---|---|---|---|---|---|
+| Active placement in a **closed** year (rollover leftover) | `student_enrollments` + `academic_years.status` | Closing (or activating the next year, rule 65) never ends placements; rollover never ends the source (`EnrollmentRolloverItemExecutionService`) | yes | `enrollments.view` | `StudentEnrollmentService::complete()` exists, but the Student page offers Complete only for the current year: **no browser action** (R-1) | none | **Implemented** — Action required |
+| Active placement in a deactivated Section | `student_enrollments` + `sections.status` | "Deactivate, never delete" stops new placements, keeps existing ones (ACADEMIC-STRUCTURE.md) | yes | `enrollments.view` | Transfer on the Student page (current year); reactivate the Section | none | **Implemented** — Review |
+| Inactive Student with an active placement | `students.status` + `student_enrollments` | PHASE-1E-0 §13.1 names it a "data-quality smell, not a hard inconsistency" | yes | `students.view` + `enrollments.view` | Withdraw/complete or reactivate on the Student page | none | **Implemented** — Review (never an error) |
+| Active Student with no current placement | `students` + active-year `student_enrollments` (`currentFor()` rule) | Placement is not required for an active Student; registers, rosters and fee runs start from placements | yes | `students.view` + `enrollments.view` | Enroll (Student page) | none | **Implemented** — Review |
+| No active academic year | `academic_years` | `CurrentAcademicYearResolver` drives every current-year surface | yes | `academics.years.view` | Activate (School setup) | none | **Implemented** — Blocking |
+| Active year without active Sections | `academic_years` + `sections` | A placement needs a Section of its year (rule 66) | yes | `academics.structure.view` | Create Sections (School setup) | none | **Implemented** — Blocking |
+| Active-year Section with no active timetable class | `sections` + `timetable_entries` | A register is taken per TimetableEntry and date (ATTENDANCE.md) | yes | `timetable.schedule.view` | Schedule a class | none | **Implemented** — Review |
+| Current/upcoming teaching assignment on a deactivated Section or offering | `teaching_assignments` + `sections`/`subject_offerings` | Deactivation does not end assignments | yes | `teaching.assignments.view` | End the assignment (Teaching assignments) | none | **Implemented** — Review |
+| Duplicate/contradictory "current" placements | `student_enrollments_one_active_per_student_year` | Database-enforced | — | — | — | — | **Rejected**: cannot occur |
+| Placement in an inappropriate year (two active years) | — | A next-year placement while the current year is active is legitimate rollover planning | — | — | — | — | **Rejected**: not a defect (the closed-year check covers the real leftover) |
+| Malformed guardian email/phone | encrypted `guardian_contacts` | Validated on write (`EmailNormalizer`, `PhoneNormalizer`); ADR 0041 "never decrypt-and-scan" | — | — | — | — | **Rejected**: a scan would decrypt every contact (ADR 0041) |
+| Invalid/duplicate relationship rows | `student_guardian_relationships` | Composite FKs, primary-guardian partial unique index | — | — | — | — | **Rejected**: database-enforced |
+| Student without a guardian; only inactive guardians | relationships | Not required (admission conversion allows "none") | yes | — | — | none | **Owner decision** (register §10.2) |
+| Duplicate-guardian sweep (shared contact hash) | `guardian_contacts.lookup_hash` | Lookup sanctioned only while linking (ADMISSIONS.md §14) | yes | — | — | none | **Owner decision** |
+| Active Employee without current employment / primary assignment | HR records | Valid state: "a gap between Employments is not the same thing as archived" (HR.md) | — | — | — | — | **Rejected**: not a defect |
+| Assignment held after employment ended | — | Ended by the S7 cascade (ADR 0063 §47) | — | — | — | — | **Rejected**: cannot occur |
+| Required offering with no teaching assignment | `teaching_assignments` | Teacher ownership is not required | yes | — | — | none | **Deferred** (advisory; not in the first set) |
+| Elective assignments on a deactivated offering | `elective_teaching_assignments` | as above | yes | — | — | none | **Deferred** (second table) |
+| Import/migration reconciliation | HR import (create-only, result not retained) | No persisted provenance | — | — | — | — | **Rejected**: no provenance to report |
+| Retention/configuration warnings | platform CLIs (`platform:*`) | Platform-operator scope | — | — | — | — | **Rejected**: not School-operational |
+
+### 10.2 Required-field register (Student and Guardian)
+
+| Field / relationship | Required today? | Evidence | Operational value | Status |
+|---|---|---|---|---|
+| Student number, first name, date of birth | yes | `StudentService::create()` validation; `unique(school_id, student_number)` | identity | already enforced on write; no check needed |
+| Middle/last name | no | nullable | — | optional, never flagged |
+| Current class placement (active Student) | no | placement is a separate aggregate (PHASE-1E-0 §3) | registers, rosters, fee runs | **review** finding only (`student.active_without_current_placement`) |
+| At least one Guardian | no | admission conversion offers "no guardian" | contact, portal, consent | **owner decision** |
+| A legal guardian | no | `is_legal_guardian` is per link, optional | portal eligibility (POR, development-only) | **owner decision** + POR-L1 (E46) |
+| Guardian email / phone | no | contacts optional; email validated when given | communication reach | **owner decision**; any sweep needs an ADR 0041 decision |
+| Student contact, address, photo, identifiers | not modelled | ADMISSIONS.md §4 defers them | — | **legal/privacy review** before modelling |
+
+No validation rule was changed.
+
+### 10.3 Architecture
+
+- **Contract:** `App\Support\DataHealth`:
+  - `DataHealthCheck` is the interface: `definition()`, `hasFindings()`
+    (an EXISTS query) and `findings()` (paginated).
+  - `DataHealthCheckDefinition` holds the stable code, area, title,
+    condition, why it matters, severity, kind, view capabilities, repair
+    text and `automaticRepair`.
+  - `DataHealthFinding` and `DataHealthLink` describe one affected record
+    and its links.
+  - `DataHealthRegistry` is the closed list, wired in
+    `PlatformServiceProvider` like the audience and event-consumer
+    registries.
+  - `DataHealthService` authorizes and runs the checks.
+- **Domain-owned checks:** each check lives in the owning module's
+  `Application/DataHealth`:
+  - Students: four checks;
+  - AcademicStructure: two;
+  - Timetable: one;
+  - TeachingAssignments: one.
+
+  Each queries that module's own models, with an explicit `school_id`
+  predicate, inside `TenantContext::withSchool()`.
+- **No second source of truth:** findings are recomputed on every request
+  from authoritative tables. Nothing is cached, stored or projected.
+- **Severity** (consequence, not drama):
+  - Blocking: work cannot go ahead.
+  - Action required: records disagree and must be corrected.
+  - Review: probably unintended.
+  - Advisory: optional, unused by the first set.
+- **Kind:** invalid, inconsistent, incomplete, or review recommended.
+  Optional data is never "invalid".
+
+### 10.4 Authorization and privacy
+
+- **Hub:** `/app/data-health` is a navigation hub (`StaffNavigation::HUBS`)
+  in the Administration group. It opens for any of `enrollments.view`,
+  `academics.years.view`, `academics.structure.view`,
+  `timetable.schedule.view` or `teaching.assignments.view`, and each one
+  alone opens at least one check (`HubAuthorizationTest`).
+- **Per check:** a check is visible only to a viewer holding ALL of its
+  view capabilities, the same capabilities that show that data at its
+  source. Opening a check you cannot see is 403; an unknown code is 404.
+  Holding the hub never widens what a viewer can learn.
+- **Per link:** links are filtered to those whose capabilities the viewer
+  holds. Repair links point to existing pages only, which re-check their
+  own capability.
+- **Display-safe rows:** a name and Student number, Section, year, roll and
+  dates of placement. Never a date of birth, contact value, actor or audit
+  detail. The ADR 0042 audit boundary holds.
+- **No people counts on the overview:** each check reports only whether it
+  found anything. A finding list shows its own row total (ADR 0042 §11).
+  No Analytics guard was touched.
+
+### 10.5 Repair architecture
+
+| Check | Repair class (§18 of the brief) |
+|---|---|
+| Closed-year placement | 2: the service can repair (`complete()`/`withdraw()`), **but no browser action exists for a non-current placement** (R-1) |
+| Placement in a deactivated Section | 1: Transfer on the Student page when the year is the active year; otherwise 2 |
+| Inactive Student with an active placement | 1 (Student page) |
+| Active Student without placement | 1 (Enroll) |
+| No active year / no Sections | 1 (School setup) |
+| Section without schedule | 1 (Schedule a class) |
+| Assignment on a deactivated class | 1 (End assignment) |
+
+No automatic repair was added. None meets "exactly one valid resulting
+state": a placement's real end date, or the right replacement Section or
+teacher, needs a person.
+
+**R-1 (owner decision).** A browser action to complete or withdraw a
+placement outside the current academic year, or a bulk completion of the
+previous year's placements after activation. This is the remediation for
+the most important finding. It belongs to V11.3, the Student lifecycle
+and rollover checkpoint, through the existing `StudentEnrollmentService`.
+
+### 10.6 Performance
+
+- `hasFindings()` is one EXISTS query per visible check (at most eight per
+  overview).
+- Finding lists are paginated (25) and eager-load their display relations.
+  The query count is independent of the number of findings (tested).
+- Every predicate uses existing indexed columns (`school_id`, `status`, and
+  the year, Section and Offering foreign keys). No index was added; with
+  seed-scale data no plan warranted one.

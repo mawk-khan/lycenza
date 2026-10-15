@@ -49,6 +49,14 @@ class HubAuthorizationTest extends TestCase
             'payroll.periods.manage' => 'managePeriods',
             'payroll.accounting.manage' => 'manageAccounting',
         ]],
+        // V11.5 (ADR 0075 section 10): each capability opens at least one check.
+        'data-health' => ['/app/data-health', [
+            'enrollments.view' => 'viewPlacementChecks',
+            'academics.years.view' => 'viewYearChecks',
+            'academics.structure.view' => 'viewSectionChecks',
+            'timetable.schedule.view' => 'viewTimetableChecks',
+            'teaching.assignments.view' => 'viewTeachingChecks',
+        ]],
     ];
 
     /**

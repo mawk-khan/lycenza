@@ -32,6 +32,7 @@ use App\Http\Controllers\App\Compliance\AuditLogController;
 use App\Http\Controllers\App\CurriculumDelivery\CurriculumDeliveryController;
 use App\Http\Controllers\App\CurriculumDelivery\MyCurriculumDeliveryController;
 use App\Http\Controllers\App\DashboardController;
+use App\Http\Controllers\App\DataHealthController;
 use App\Http\Controllers\App\Domains\SchoolDomainController;
 use App\Http\Controllers\App\ElectiveGroupController;
 use App\Http\Controllers\App\EnrollmentRolloverController;
@@ -1633,6 +1634,13 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
     // opt-in, accountable owner. `automation.view`/`automation.manage` are
     // enforced in the Automation Application services. No manual run.
     Route::get('/app/automation', [AutomationController::class, 'index'])->name('app.automation');
+
+    // V11.5 (ADR 0075 section 10): the read-only Data Health hub. GET only;
+    // every correction happens in the owning module's existing page.
+    Route::get('/app/data-health', [DataHealthController::class, 'index'])->name('app.data-health.index');
+    // No route pattern on {check}: School-context middleware must run first
+    // (SchoolContextRouteGuardTest); an unknown code is a 404 in the controller.
+    Route::get('/app/data-health/{check}', [DataHealthController::class, 'show'])->name('app.data-health.show');
     Route::post('/app/automation/rules/{ruleType}/enable', [AutomationController::class, 'enable'])->name('app.automation.rules.enable');
     Route::post('/app/automation/rules/{ruleType}/disable', [AutomationController::class, 'disable'])->name('app.automation.rules.disable');
     Route::post('/app/automation/rules/{ruleType}/take-ownership', [AutomationController::class, 'takeOwnership'])->name('app.automation.rules.take-ownership');

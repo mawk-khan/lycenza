@@ -1706,6 +1706,10 @@ manual enrollment through the existing UI.
    — explicitly out of scope for rollover itself (see "Source
    completion semantics"), but a real open question for a later
    checkpoint that this gate deliberately does not answer.
+   *(2026-10-15, V11.5, ADR 0075 §10: still open. Data Health now
+   reports such placements (`enrollment.active_in_closed_year`), but there
+   is no browser action to complete a placement outside the current
+   year. That is owner decision R-1, proposed for V11.3.)*
 3. **Whether GradeLevel should eventually gain an explicit
    `next_grade_level_id`/similar canonical relationship** (which would
    let a future UI suggest mappings with more confidence than
