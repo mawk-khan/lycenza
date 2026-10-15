@@ -8,7 +8,8 @@
   (2026-10-15, OD-V11-5, §10; eight checks, no migration, no stored findings).
   V11.3 Historical Placement Closure (narrowed to R-1) — IMPLEMENTED
   (2026-10-15, OD-V11-3, §11; existing Complete/Withdraw exposed for
-  closed-year placements plus a preview-then-complete batch; R-1 resolved).**
+  closed-year placements plus a preview-then-complete batch; R-1 resolved).
+  OD-V11-7 corrections X-01–X-04 — RESOLVED (2026-10-15, §12).**
 - Date: 2026-10-15
 - Programme: **V11 — Benchmark-Driven Commercial Readiness**
   (`MASTER-ROADMAP.md`, post-foundation programme 10). It is a post-v1
@@ -562,3 +563,117 @@ at the end of a rollover run. It must stay a staff action, never an
 automatic side effect of `AcademicYearService::activate()`. This is the
 open question in docs/modules/STUDENT-ENROLLMENT.md ("Source completion
 semantics").
+
+## 12. OD-V11-7 — Cross-cutting corrections X-01 to X-04 (resolved, 2026-10-15)
+
+Authorised by the owner as OD-V11-7. Baseline `origin/main` = `8756b16a`.
+One correction candidate: all four fixes stayed small and independent.
+**No migration, no table, no constraint, no capability, no new business
+rule.** V11.1 stays BLOCKED; guardian/contact decisions, V11.4, V11.6 and
+rollover prevention are untouched.
+
+### 12.1 X-02 — School timezone validation (resolved; data integrity)
+
+- **Root cause.** `SchoolSettingsController@update`, the only runtime write
+  path, accepted any `string|max:64`. A typo was stored and then broke:
+  - Carbon/`DateTimeZone` consumers in Finance, Communications, Students
+    and Attendance;
+  - the PostgreSQL triggers that evaluate `now() AT TIME ZONE v_timezone`
+    (late-fee runs, payment receipts).
+
+  `SchoolTimezone::resolve()` already fell back to UTC and its docblock
+  asked for source validation.
+- **Write-path audit.**
+  - School creation sets no timezone (column default `Asia/Kolkata`).
+  - The `/api/v1` School profile does not write it.
+  - Factories and demo data use `Asia/Kolkata`.
+  - The settings registry's `timezone` type had the same loose check, but
+    no setting uses it today.
+  - Every stored value is `Asia/Kolkata`, so no data correction or
+    migration is needed.
+- **Fix.**
+  - `SchoolTimezone::isSupported()` requires a canonical PHP IANA
+    identifier (no deprecated aliases) that PostgreSQL's
+    `pg_timezone_names` also has, the actual consumer contract.
+  - `SupportedSchoolTimezone` is the validation rule on the settings write
+    path, and `SettingDefinition`'s `timezone` type uses the same check.
+  - The settings page offers `SchoolTimezone::identifiers()`, the
+    PHP ∩ PostgreSQL list (419 zones locally), as a select, with the error
+    shown.
+- **Database constraint: not added.** A CHECK cannot consult
+  `pg_timezone_names`, and a trigger would duplicate the application
+  validator on a single write path. `resolve()` keeps its UTC fallback.
+
+### 12.2 X-01 — Success messages (resolved)
+
+- **Root cause (single, architectural).** 64 controller redirects flash a
+  success message (`flash` ×46, `status` ×18), but
+  `HandleInertiaRequests::share()` shared neither and no page read them.
+  - Every `status` value is a success text; refusals use
+    `ValidationException`.
+  - `status_message`, `lifecycleNotice` and `account_recovery_status` are
+    already read explicitly by their own controllers and are unchanged.
+- **Fix.**
+  - One lazy shared prop, `flash.success` (`flash`, else `status`; strings
+    only), namespaced so it cannot collide with a page's own `status`
+    prop.
+  - One `Components/FlashMessage.vue`, mounted once in the signed-in
+    layout: `role="status"`, escaped text, dismissible, gone on the next
+    visit (single-request flash).
+- **No duplicates.** No page shows a local message for an action that also
+  flashes. The V11.3 Student-page confirmation posts to an endpoint that
+  does not flash, so it is kept.
+
+### 12.3 X-03 — MFA authenticator branding (resolved)
+
+- **Root cause.** `MfaEnrollmentService::begin()` used `config('app.name')`,
+  which is `APP_NAME`: "School OS", an internal cookie and cache namespace
+  that `ProductIdentity` deliberately does not change.
+- **Fix.** The issuer and label are `ProductIdentity::NAME` (Lycenza).
+  - Only the label changes: secret, SHA1, 6 digits and 30 s are unchanged.
+  - Existing factors keep verifying, and nobody re-enrols (tested).
+- **Same leak, fixed.** `.env.example` set `MAIL_FROM_NAME="${APP_NAME}"`,
+  so an environment copied from it sent "<School> via School OS".
+  `config/email.php` already defaults to "Lycenza", and DDEV overrides it.
+  The example is now `MAIL_FROM_NAME="Lycenza"`; `APP_NAME` is unchanged.
+- **Remaining "School OS" references are left alone:**
+  - code comments in seven classes;
+  - the `school_os` database, role and Compose names (internal
+    identifiers);
+  - `APP_NAME` itself;
+  - CLAUDE.md, ADRs and module history.
+
+### 12.4 X-04 — Timetable filters (resolved)
+
+- **Root cause.** `Timetable/Schedule/Index.vue` asked for "Section ID" and
+  "Teacher ID" as free text.
+- **Fix.**
+  - Two selects. Their options are the Sections and teachers on this
+    School's ACTIVE timetable classes, so nothing is offered beyond what
+    the list itself shows, never every Section or the HR directory.
+  - Section labels include the grade, because codes are unique only within
+    a grade (the demo has five "A" Sections). Teachers narrow to the chosen
+    Section, and there is "Clear filters".
+  - The request contract is unchanged: UUID `section_id` / `teacher_id`,
+    malformed ids get a validation error, foreign ids match nothing.
+  - The page's table now scrolls inside its own box at phone width (it
+    widened the page to 527 px before).
+
+### 12.5 Tests
+
+- `tests/Feature/Corrections/`: 18 tests, 96 assertions.
+  - `SchoolTimezoneValidationTest`: valid saved and evaluated by PostgreSQL;
+    misspelt, malformed, lower-case, deprecated, offset, injection and
+    empty values refused with nothing changed; other fields kept; manage
+    capability required; offered list = both-consumer list; settings type.
+  - `FlashMessageSharingTest`: the message reaches the next page exactly
+    once; validation errors have no success; both keys namespaced, strings
+    only; one escaped banner in the layout.
+  - `MfaAuthenticatorBrandingTest`: label `Lycenza:<email>`, issuer
+    Lycenza, no "School OS", SHA1/6/30, secret unchanged; confirm and
+    existing factors still verify.
+  - `TimetableFilterSelectorsUiTest`: active-only options, filtering and
+    narrowing, combined filters, no foreign options or matches, malformed
+    id refused, capability required, distinct labels for same-named
+    Sections.
+- Affected suites and guards: 1686 OK.

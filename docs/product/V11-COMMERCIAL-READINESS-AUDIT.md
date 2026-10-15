@@ -243,6 +243,10 @@ match a simpler workflow elsewhere.
 
 ## Incidental defects found during the audit (not V11 scope)
 
+*(2026-10-15: X-01, X-02, X-03 and X-04 are all RESOLVED by OD-V11-7,
+ADR 0075 §12. X-05 (a stray untracked directory) is not a repository
+change.)*
+
 Each fix stays within an existing contract and needs no new decision.
 
 | ID | Defect | Evidence | Category |

@@ -2,6 +2,7 @@
 
 namespace App\Support\Settings;
 
+use App\Support\Tenancy\SchoolTimezone;
 use InvalidArgumentException;
 
 /**
@@ -40,7 +41,9 @@ final class SettingDefinition
     public function validate(mixed $value): bool
     {
         $typeValid = match ($this->type) {
-            'string', 'locale', 'timezone' => is_string($value),
+            'string', 'locale' => is_string($value),
+            // X-02: the same contract as a School's own timezone.
+            'timezone' => is_string($value) && SchoolTimezone::isSupported($value),
             'bool' => is_bool($value),
             'int' => is_int($value),
             default => false,

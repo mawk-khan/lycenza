@@ -72,8 +72,42 @@ class TimetableEntryController extends Controller
                 'sectionId' => $validated['section_id'] ?? '',
                 'teacherId' => $validated['teacher_id'] ?? '',
             ],
+            'filterOptions' => $this->filterOptions($school->id, $validated['section_id'] ?? null),
             'canManage' => $capabilities->canInSchool($context->actor(), 'timetable.schedule.manage', $school),
         ]);
+    }
+
+    /**
+     * X-04 (OD-V11-7, ADR 0075 section 12): the filter choices, so nobody has
+     * to type an internal id. Only the Sections and teachers that appear on
+     * this School's ACTIVE timetable classes -- what the list itself can
+     * show, never every Section or the HR directory. Teachers narrow to the
+     * chosen Section. The request contract (UUID section_id / teacher_id,
+     * unknown or foreign ids match nothing) is unchanged.
+     *
+     * @return array{sections: list<array{id: string, label: string}>, teachers: list<array{id: string, label: string}>}
+     */
+    private function filterOptions(string $schoolId, ?string $sectionId): array
+    {
+        $scheduled = fn () => TimetableEntry::query()->where('school_id', $schoolId)->where('status', 'active');
+
+        return [
+            'sections' => Section::query()->where('school_id', $schoolId)
+                ->whereIn('id', $scheduled()->select('section_id'))
+                ->with(['academicYear', 'gradeLevel'])->orderByRaw('upper(code)')->get()
+                // Section codes are unique only within a grade, so the label names
+                // the grade too ("Grade 6 · A (A) · 2026-27").
+                ->map(fn (Section $s) => ['id' => $s->id, 'label' => implode(' · ', array_filter([
+                    $s->gradeLevel?->name, "{$s->name} ({$s->code})", $s->academicYear?->name,
+                ]))])
+                ->sortBy('label', SORT_NATURAL | SORT_FLAG_CASE)
+                ->values()->all(),
+            'teachers' => Employee::query()->where('school_id', $schoolId)
+                ->whereIn('id', $scheduled()->when($sectionId !== null, fn ($q) => $q->where('section_id', $sectionId))->select('teacher_id'))
+                ->orderBy('full_name')->get(['id', 'school_id', 'full_name', 'employee_number'])
+                ->map(fn (Employee $e) => ['id' => $e->id, 'label' => "{$e->full_name} ({$e->employee_number})"])
+                ->values()->all(),
+        ];
     }
 
     public function create(TenantContext $context): Response

@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Tenancy\SchoolTimezone;
+use App\Support\Tenancy\SupportedSchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -42,6 +44,7 @@ class SchoolSettingsController extends Controller
                 'defaultLocale' => $school->default_locale,
             ],
             'canManage' => $capabilities->canInSchool($context->actor(), 'school.settings.manage', $school),
+            'timezones' => SchoolTimezone::identifiers(),
         ]);
     }
 
@@ -53,7 +56,9 @@ class SchoolSettingsController extends Controller
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'timezone' => ['required', 'string', 'max:64'],
+            // X-02: only a zone both PHP and PostgreSQL accept (it feeds
+            // date logic and database triggers).
+            'timezone' => ['required', 'string', 'max:64', new SupportedSchoolTimezone],
             'default_locale' => ['required', 'string', 'max:8'],
         ]);
 

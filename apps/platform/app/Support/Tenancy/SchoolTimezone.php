@@ -4,6 +4,7 @@ namespace App\Support\Tenancy;
 
 use App\Models\School;
 use DateTimeZone;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Phase 5A.4 §18 -- `schools.timezone` (Phase 0B, default
@@ -14,18 +15,43 @@ use DateTimeZone;
  * comparison and every display back to the user go through this same
  * timezone consistently.
  *
- * `schools.timezone` is only validated as `required|string|max:64` at
- * write time (not restricted to `DateTimeZone::listIdentifiers()`) --
- * so a corrupted value is possible in principle. `resolve()` never
- * throws for that case: it falls back to `config('app.timezone')`
- * (UTC), the same safe default every other timestamp in this codebase
- * already assumes. This is a documented limitation, not a silently
- * invented behavior (brief §18) -- a future School profile checkpoint
- * should tighten `timezone` validation at the source instead of this
- * class growing more defensive logic.
+ * X-02 (OD-V11-7, ADR 0075 section 12): every write path now accepts
+ * only isSupported() identifiers (SupportedSchoolTimezone rule): a
+ * canonical PHP zone identifier that PostgreSQL also recognises, because
+ * the value is consumed by both Carbon/DateTimeZone and database triggers
+ * (`now() AT TIME ZONE v_timezone`, late-fee runs and payment receipts).
+ * `resolve()` keeps its UTC fallback as a backstop for any value written
+ * before this check; none exists (column default, factories and demo all
+ * use `Asia/Kolkata`).
  */
 final class SchoolTimezone
 {
+    /**
+     * The identifiers a School may choose: PHP's canonical IANA zone list
+     * (no deprecated aliases such as `Asia/Calcutta`) that PostgreSQL also
+     * knows -- so the settings list never offers a zone the database
+     * triggers would reject. One query.
+     *
+     * @return list<string>
+     */
+    public static function identifiers(): array
+    {
+        $php = DateTimeZone::listIdentifiers();
+        $postgres = DB::table('pg_timezone_names')->whereIn('name', $php)->pluck('name')->all();
+
+        return array_values(array_intersect($php, $postgres));
+    }
+
+    /** Whether both runtime consumers (PHP and PostgreSQL) accept `$timezone`. */
+    public static function isSupported(string $timezone): bool
+    {
+        if (! in_array($timezone, DateTimeZone::listIdentifiers(), true)) {
+            return false;
+        }
+
+        return DB::selectOne('SELECT 1 AS ok FROM pg_timezone_names WHERE name = ?', [$timezone]) !== null;
+    }
+
     public static function resolve(School $school): DateTimeZone
     {
         try {

@@ -8,6 +8,7 @@ use App\Support\Audit\AuditRecorder;
 use App\Support\Auth\Mfa\Exceptions\MfaAlreadyEnrolledException;
 use App\Support\Auth\Mfa\Exceptions\MfaEnrollmentNotPendingException;
 use App\Support\Auth\Mfa\Exceptions\MfaInvalidCodeException;
+use App\Support\ProductIdentity;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use PragmaRX\Google2FA\Google2FA;
@@ -60,7 +61,11 @@ class MfaEnrollmentService
         return [
             'factor' => $factor,
             'secret' => $secret,
-            'otpAuthUri' => $this->google2fa->getQRCodeUrl(config('app.name'), $user->email, $secret),
+            // X-03 (OD-V11-7): the issuer an authenticator app displays is the
+            // product name (ProductIdentity), never APP_NAME (which also names
+            // the session cookie and cache prefixes, so it is not branding).
+            // Label only: the secret, algorithm, digits and period are unchanged.
+            'otpAuthUri' => $this->google2fa->getQRCodeUrl(ProductIdentity::NAME, $user->email, $secret),
         ];
     }
 

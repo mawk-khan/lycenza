@@ -4,9 +4,16 @@ import { useForm } from '@inertiajs/vue3';
 interface Props {
     school: { id: string; name: string; timezone: string; defaultLocale: string };
     canManage: boolean;
+    // X-02: the supported identifiers; a timezone is chosen, never typed.
+    timezones: string[];
 }
 
 const props = defineProps<Props>();
+
+// Keep a (legacy) value visible even if it is not in the list.
+const timezoneOptions = props.timezones.includes(props.school.timezone)
+    ? props.timezones
+    : [props.school.timezone, ...props.timezones];
 
 const form = useForm({
     name: props.school.name,
@@ -35,12 +42,21 @@ function submit() {
             </div>
             <div>
                 <label class="block text-sm text-slate-600" for="timezone">Timezone</label>
-                <input
+                <select
                     id="timezone"
                     v-model="form.timezone"
                     :disabled="!canManage"
+                    :aria-invalid="!!form.errors.timezone"
+                    aria-describedby="timezone-error"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 disabled:bg-slate-100"
-                />
+                >
+                    <option v-for="zone in timezoneOptions" :key="zone" :value="zone">
+                        {{ zone }}
+                    </option>
+                </select>
+                <p id="timezone-error" class="mt-1 text-sm text-red-600">
+                    {{ form.errors.timezone }}
+                </p>
             </div>
             <button
                 v-if="canManage"

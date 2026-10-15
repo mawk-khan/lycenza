@@ -83,6 +83,25 @@ class HandleInertiaRequests extends Middleware
             // Discoverability only: every destination re-checks its own
             // capability (CLAUDE.md rule 6).
             'navigation' => $user !== null ? fn () => app(NavigationBuilder::class)->forRequest($request) : null,
+            // X-01 (OD-V11-7, ADR 0075 section 12): the success message a
+            // controller flashed on its redirect. 64 actions flash `flash` or
+            // `status`; nothing shared them, so none was ever shown. Namespaced
+            // so it can never collide with a page's own `status` prop. Strings
+            // only; errors stay with their forms (ValidationException).
+            'flash' => fn () => [
+                'success' => self::flashedString($request, 'flash') ?? self::flashedString($request, 'status'),
+            ],
         ];
+    }
+
+    private static function flashedString(Request $request, string $key): ?string
+    {
+        if (! $request->hasSession()) {
+            return null;
+        }
+
+        $value = $request->session()->get($key);
+
+        return is_string($value) && $value !== '' ? $value : null;
     }
 }
