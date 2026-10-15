@@ -338,7 +338,14 @@ class StudentController extends Controller
     {
         return [
             'id' => $enrollment->id,
-            'academicYear' => ['id' => $enrollment->academicYear->id, 'name' => $enrollment->academicYear->name],
+            // V11.3: status/endsOn let the page offer the existing Complete/
+            // Withdraw for a placement left open in a CLOSED year (R-1).
+            'academicYear' => [
+                'id' => $enrollment->academicYear->id,
+                'name' => $enrollment->academicYear->name,
+                'status' => $enrollment->academicYear->status,
+                'endsOn' => $enrollment->academicYear->ends_on->toDateString(),
+            ],
             'campus' => ['id' => $enrollment->campus->id, 'name' => $enrollment->campus->name],
             'gradeLevel' => ['id' => $enrollment->gradeLevel->id, 'name' => $enrollment->gradeLevel->name],
             'section' => ['id' => $enrollment->section->id, 'name' => $enrollment->section->name],

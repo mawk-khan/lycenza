@@ -33,7 +33,7 @@ class ActiveEnrollmentInClosedYearCheck implements DataHealthCheck
             severity: D::ACTION_REQUIRED,
             kind: D::INCONSISTENT,
             viewCapabilities: ['enrollments.view'],
-            repair: 'Complete (or withdraw) the placement with its real end date. The enrollment service supports it, but the Student page offers Complete only for the current year\'s placement, so there is no browser action for a past year yet (recorded as a V11.5 repair gap).',
+            repair: 'Complete the placement (it ran to the end of its year), or withdraw it if the Student left earlier. Do this from the Student\'s Enrollment history, or complete a whole closed year\'s open placements at once from "Open placements in closed years" (V11.3).',
         );
     }
 
@@ -56,6 +56,13 @@ class ActiveEnrollmentInClosedYearCheck implements DataHealthCheck
                 links: [
                     new DataHealthLink('View placement', self::enrollmentDirectoryUrl($e), ['enrollments.view']),
                     new DataHealthLink('Open Student', "/app/students/{$e->student_id}", ['students.view']),
+                    new DataHealthLink('Complete or withdraw', "/app/students/{$e->student_id}#enrollment-history", ['students.view', 'enrollments.manage'], isRepair: true),
+                    new DataHealthLink(
+                        'Complete this year\'s open placements',
+                        '/app/enrollments/closed-year-placements?academic_year_id='.$e->academic_year_id,
+                        ['enrollments.manage'],
+                        isRepair: true,
+                    ),
                 ],
             ));
     }

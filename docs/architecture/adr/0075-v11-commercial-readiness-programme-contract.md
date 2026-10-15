@@ -5,7 +5,10 @@
   V11.2 SIS Search, Reports & Operational Visibility — IMPLEMENTED
   (2026-10-15, OD-V11-2, §9; no migration, no new capability, no export).
   V11.5 Data Health & Reconciliation Center — IMPLEMENTED, READ-ONLY
-  (2026-10-15, OD-V11-5, §10; eight checks, no migration, no stored findings).**
+  (2026-10-15, OD-V11-5, §10; eight checks, no migration, no stored findings).
+  V11.3 Historical Placement Closure (narrowed to R-1) — IMPLEMENTED
+  (2026-10-15, OD-V11-3, §11; existing Complete/Withdraw exposed for
+  closed-year placements plus a preview-then-complete batch; R-1 resolved).**
 - Date: 2026-10-15
 - Programme: **V11 — Benchmark-Driven Commercial Readiness**
   (`MASTER-ROADMAP.md`, post-foundation programme 10). It is a post-v1
@@ -458,3 +461,104 @@ and rollover checkpoint, through the existing `StudentEnrollmentService`.
 - Every predicate uses existing indexed columns (`school_id`, `status`, and
   the year, Section and Offering foreign keys). No index was added; with
   seed-scale data no plan warranted one.
+
+## 11. V11.3 — Historical Placement Closure (narrowed to R-1, implemented, 2026-10-15)
+
+Authorised by the owner as OD-V11-3, limited to R-1. Baseline `origin/main`
+= `1d53f672`. **No new lifecycle semantics, no migration, no table, no
+capability, no new transition.** PHASE-1E-0 §13.2 (a reason, effective
+date or approval) is not reopened. V11.1 stays BLOCKED; X-01–X-04 are
+unchanged.
+
+### 11.1 Preflight
+
+| Question | Evidence | Determination |
+|---|---|---|
+| Which service completes a placement? | `StudentEnrollmentService::complete()` | "the academic year's teaching period genuinely ended for this Student in this placement" |
+| Which service withdraws it? | `withdraw()` | "the Student left this placement before it ran its normal course" |
+| Cancel? | `cancel()` | "should not continue as an operational placement"; it is a record kept for history and recasts the placement as never operational. **Not offered** for a past placement that really ran |
+| Can they operate on a closed year? | `transitionToTerminalStatus()` checks status `active` and `ends_on >= starts_on`, never the year's status | yes |
+| Authorization | `StudentEnrollmentController::transition()`: `enrollments.manage`; `findOrFail` under SchoolScope/RLS | reused unchanged |
+| Constraints | Section-then-Enrollment lock, compare-and-set `WHERE status='active'`, `student_enrollments_date_range_check` | unchanged |
+| Audit | `student_enrollment.completed` / `.withdrawn` (studentId, academicYearId, sectionId, endsOn) | unchanged, one per placement |
+| Repeatable? | a second call finds the row no longer `active`, so `InvalidEnrollmentTransitionException` (shown as a form error) | safe |
+| Another current placement? | Placements are per year; the transition touches only its own row | untouched (tested) |
+| Historical records | status and `ends_on` change; year, Section, roll, start date, attendance and audit are kept | preserved |
+| Why the browser lacked it | `Students/Show.vue` offered Complete/Withdraw/Cancel only for `currentEnrollment` (active year), although `POST /app/enrollments/{id}/complete` accepts any placement | UI-only gap |
+| Bulk infrastructure | rollover runs per item, resumable, 100 per request | the convention followed |
+
+### 11.2 Single placement (required)
+
+- **Where it appears:** in the Student page's Enrollment history, a
+  placement that is `active` while its academic year is **closed** shows
+  "Still open, but <year> has been closed". For holders of
+  `enrollments.manage` it offers **Complete** and **Withdraw**, each with
+  its existing meaning.
+- **The form:** an inline confirmation names the year, grade and Section,
+  and takes the end date. Complete defaults it to the year's end.
+- **The request:** the form posts to the existing
+  `/app/enrollments/{id}/complete|withdraw`. No new route and no
+  controller change.
+- **The presenter** adds only the year's `status` and `endsOn`.
+- **Feedback:** a local confirmation (Inertia `preserveState`). It does not
+  rely on flashed messages (X-01).
+- **Next-year placements:** an `active` placement in a draft year is
+  legitimate rollover planning and is not offered.
+
+### 11.3 Bulk prior-year completion (conditional; implemented)
+
+Every proof point held, so bulk was built as pure orchestration.
+
+**What was added:**
+- `App\Domain\Students\Application\ClosedYearPlacementClosureService`
+  (`enrollments.manage`).
+- `/app/enrollments/closed-year-placements`: GET preview; POST `/complete`.
+
+**How it works:**
+- **Eligible:** same School, `active`, its year `closed`. The set is
+  deterministic, and current-year, next-year and terminal placements are
+  impossible to include.
+- **One transition:** `complete()` with the year's own end date, called per
+  row. Each row has its own transaction, locks and audit event. There is
+  no outer transaction, so one refusal never undoes another row.
+- **Preview first:** at most 100 rows per request, the total shown, and an
+  explicit confirmation (`confirm` accepted) before anything changes.
+- **Re-checked at execution:** every submitted id is checked again against
+  the School, the year and `active`. Ids from another School or year,
+  tampered ids and already-ended rows are reported as `not_eligible` and
+  never changed.
+- **Truthful outcomes per row:**
+  - `completed`;
+  - `no_longer_open`: ended concurrently;
+  - `not_eligible`;
+  - `date_conflict`: the placement starts after its year's end, so the
+    existing date rule refuses it and a person decides.
+
+  The results page lists every row that did not complete.
+- **Retries:** a retry or double submit is safe by state (rule 29: the
+  Placement's own status is the idempotency key; no `Idempotency-Key`
+  needed).
+
+### 11.4 Data Health
+
+`enrollment.active_in_closed_year` now links to:
+- "Complete or withdraw" (Student page, Enrollment history; needs
+  `students.view` + `enrollments.manage`);
+- "Complete this year's open placements" (needs `enrollments.manage`).
+
+Its repair text is updated. After a transition, the recomputed check no
+longer returns the placement. No "resolved" record exists, and Data Health
+still writes nothing. **R-1 is resolved.**
+
+### 11.5 Rollover limitation (recommendation, not built)
+
+Rollover execution and year activation still leave last year's placements
+open, so the leftover recurs every year until staff complete it, now in
+two clicks per year.
+
+Recommendation (a future checkpoint; owner decision): offer this same
+preview-and-confirm completion as an explicit step at year activation, or
+at the end of a rollover run. It must stay a staff action, never an
+automatic side effect of `AcademicYearService::activate()`. This is the
+open question in docs/modules/STUDENT-ENROLLMENT.md ("Source completion
+semantics").

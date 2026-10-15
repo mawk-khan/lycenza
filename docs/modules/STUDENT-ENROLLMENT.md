@@ -1707,9 +1707,19 @@ manual enrollment through the existing UI.
    completion semantics"), but a real open question for a later
    checkpoint that this gate deliberately does not answer.
    *(2026-10-15, V11.5, ADR 0075 §10: still open. Data Health now
-   reports such placements (`enrollment.active_in_closed_year`), but there
-   is no browser action to complete a placement outside the current
-   year. That is owner decision R-1, proposed for V11.3.)*
+   reports such placements (`enrollment.active_in_closed_year`).)*
+   *(2026-10-15, V11.3, ADR 0075 §11: R-1 resolved without changing this
+   open question. Staff correct a placement left `active` in a closed
+   year in two ways:*
+   - *from the Student page's Enrollment history, with the existing
+     Complete or Withdraw (Cancel is not offered for a past placement);*
+   - *a whole closed year at once at `/app/enrollments/closed-year-placements`,
+     which previews the year, then completes each placement through
+     `StudentEnrollmentService::complete()` with the year's end date and
+     reports each row's outcome.*
+
+   *Nothing completes placements automatically on year close or
+   activation.)*
 3. **Whether GradeLevel should eventually gain an explicit
    `next_grade_level_id`/similar canonical relationship** (which would
    let a future UI suggest mappings with more confidence than

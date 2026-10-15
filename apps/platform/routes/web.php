@@ -28,6 +28,7 @@ use App\Http\Controllers\App\Canteen\CanteenBillingConfigurationController;
 use App\Http\Controllers\App\Canteen\CanteenItemController;
 use App\Http\Controllers\App\Canteen\CanteenOrderController;
 use App\Http\Controllers\App\Canteen\CanteenOutletController;
+use App\Http\Controllers\App\ClosedYearPlacementController;
 use App\Http\Controllers\App\Compliance\AuditLogController;
 use App\Http\Controllers\App\CurriculumDelivery\CurriculumDeliveryController;
 use App\Http\Controllers\App\CurriculumDelivery\MyCurriculumDeliveryController;
@@ -922,6 +923,10 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
     // TenantContext, never a client-supplied id.
     Route::prefix('app/enrollments')->name('app.enrollments.')->group(function (): void {
         Route::get('/', [StudentEnrollmentController::class, 'index'])->name('index');
+        // V11.3 (ADR 0075 section 11): placements left open in a closed year.
+        // Literal paths before /{enrollment}/... (enrollments.manage).
+        Route::get('/closed-year-placements', [ClosedYearPlacementController::class, 'index'])->name('closed-year-placements.index');
+        Route::post('/closed-year-placements/complete', [ClosedYearPlacementController::class, 'complete'])->name('closed-year-placements.complete');
         Route::post('/{enrollment}/complete', [StudentEnrollmentController::class, 'complete'])->name('complete');
         Route::post('/{enrollment}/withdraw', [StudentEnrollmentController::class, 'withdraw'])->name('withdraw');
         Route::post('/{enrollment}/cancel', [StudentEnrollmentController::class, 'cancel'])->name('cancel');

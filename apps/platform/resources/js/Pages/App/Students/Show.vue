@@ -41,7 +41,7 @@ interface EnrollmentRef {
 
 interface Enrollment {
     id: string;
-    academicYear: EnrollmentRef;
+    academicYear: EnrollmentRef & { status: 'draft' | 'active' | 'closed'; endsOn: string };
     campus: EnrollmentRef;
     gradeLevel: EnrollmentRef;
     section: EnrollmentRef;
@@ -156,6 +156,50 @@ function submitLifecycleAction(enrollmentId: string): void {
     lifecycleForm.post(`/app/enrollments/${enrollmentId}/${activeLifecycleAction.value}`, {
         onSuccess: () => {
             activeLifecycleAction.value = null;
+        },
+    });
+}
+
+// --- V11.3 (ADR 0075 section 11): a placement left open in a CLOSED year ---
+// The same Complete/Withdraw transitions and endpoints as the current
+// placement (no new lifecycle semantics). Cancel is not offered: it treats a
+// placement as one that should never have been operational, which a real
+// past placement was not.
+
+type HistoricalAction = 'complete' | 'withdraw';
+
+const historical = ref<{ id: string; action: HistoricalAction } | null>(null);
+const historicalForm = useForm({ ends_on: '' });
+const historicalDone = ref<string | null>(null);
+
+const HISTORICAL_HELP: Record<HistoricalAction, string> = {
+    complete:
+        'The placement ran to the end of its year (the usual case after moving to the next year).',
+    withdraw: 'The Student left this placement before its year ended.',
+};
+
+function isOpenInClosedYear(e: Enrollment): boolean {
+    return e.status === 'active' && e.academicYear.status === 'closed';
+}
+
+function startHistorical(e: Enrollment, action: HistoricalAction): void {
+    historicalForm.clearErrors();
+    historicalForm.ends_on = action === 'complete' ? e.academicYear.endsOn : '';
+    historicalDone.value = null;
+    historical.value = { id: e.id, action };
+}
+
+function submitHistorical(e: Enrollment): void {
+    if (!historical.value) return;
+    const action = historical.value.action;
+    historicalForm.post(`/app/enrollments/${e.id}/${action}`, {
+        preserveScroll: true,
+        // Keep this local confirmation across the redirect back to this page
+        // (it does not rely on flashed messages, X-01).
+        preserveState: true,
+        onSuccess: () => {
+            historical.value = null;
+            historicalDone.value = `${e.academicYear.name} placement ${action === 'complete' ? 'completed' : 'withdrawn'}.`;
         },
     });
 }
@@ -399,7 +443,12 @@ function unlink(r: Relationship): void {
                 </form>
             </div>
 
-            <h2 class="mt-6 text-sm font-medium text-slate-500">Enrollment history</h2>
+            <h2 id="enrollment-history" class="mt-6 text-sm font-medium text-slate-500">
+                Enrollment history
+            </h2>
+            <p v-if="historicalDone" class="mt-2 text-sm text-emerald-700" role="status">
+                {{ historicalDone }}
+            </p>
             <p
                 v-if="!enrollmentHistory || enrollmentHistory.length === 0"
                 class="mt-3 text-sm text-slate-500"
@@ -417,8 +466,73 @@ function unlink(r: Relationship): void {
                         <p class="mt-0.5 text-slate-500">
                             Roll {{ e.rollNumber }} · {{ e.startsOn }} – {{ e.endsOn ?? 'present' }}
                         </p>
+                        <p v-if="isOpenInClosedYear(e)" class="mt-1 text-amber-800">
+                            Still open, but {{ e.academicYear.name }} has been closed.
+                        </p>
                     </div>
-                    <StatusBadge :status="e.status" />
+                    <div class="flex flex-wrap items-center gap-3">
+                        <template v-if="isOpenInClosedYear(e) && canManageEnrollments">
+                            <button
+                                type="button"
+                                class="underline"
+                                @click="startHistorical(e, 'complete')"
+                            >
+                                Complete
+                            </button>
+                            <button
+                                type="button"
+                                class="underline"
+                                @click="startHistorical(e, 'withdraw')"
+                            >
+                                Withdraw
+                            </button>
+                        </template>
+                        <StatusBadge :status="e.status" />
+                    </div>
+                    <form
+                        v-if="historical && historical.id === e.id"
+                        class="w-full border-t border-slate-100 pt-3"
+                        @submit.prevent="submitHistorical(e)"
+                    >
+                        <p class="font-medium text-slate-700">
+                            {{ historical.action === 'complete' ? 'Complete' : 'Withdraw' }} the
+                            {{ e.academicYear.name }} placement in {{ e.gradeLevel.name }} · Section
+                            {{ e.section.name }}
+                        </p>
+                        <p class="mt-0.5 text-slate-500">
+                            {{ HISTORICAL_HELP[historical.action] }}
+                        </p>
+                        <div class="mt-2">
+                            <label class="block text-slate-600" :for="`historical-ends-on-${e.id}`"
+                                >End date</label
+                            >
+                            <input
+                                :id="`historical-ends-on-${e.id}`"
+                                v-model="historicalForm.ends_on"
+                                type="date"
+                                required
+                                :min="e.startsOn"
+                                :aria-invalid="!!historicalForm.errors.ends_on"
+                                :aria-describedby="`historical-ends-on-error-${e.id}`"
+                                class="mt-1 rounded border border-slate-300 px-3 py-2 sm:w-56"
+                            />
+                            <p :id="`historical-ends-on-error-${e.id}`" class="mt-1 text-red-600">
+                                {{ historicalForm.errors.ends_on }}
+                            </p>
+                        </div>
+                        <div class="mt-2 flex items-center gap-3">
+                            <button
+                                type="submit"
+                                :disabled="historicalForm.processing"
+                                class="rounded bg-slate-900 px-3 py-1.5 font-medium text-white disabled:opacity-50"
+                            >
+                                Confirm
+                            </button>
+                            <button type="button" class="underline" @click="historical = null">
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
                 </li>
             </ul>
         </section>

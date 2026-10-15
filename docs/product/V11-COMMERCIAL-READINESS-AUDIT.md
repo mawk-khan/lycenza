@@ -7,7 +7,8 @@
 - Contract: [ADR 0075](../architecture/adr/0075-v11-commercial-readiness-programme-contract.md).
 - *(2026-10-15: V11.2 implemented the justified Group B rows (B-02, B-04,
   B-09, B-11, B-12) and list row totals; B-10 was not built.
-  V11.5 implemented Group E as eight read-only checks (ADR 0075 §10). See ADR 0075 §9 for
+  V11.5 implemented Group E as eight read-only checks (ADR 0075 §10).
+  V11.3 implemented C-10 (narrowed: completion of closed-year placements, ADR 0075 §11). See ADR 0075 §9 for
   the implementation audit and what stays deferred. This record stays the
   V11.0 evidence as written.)*
 - Scope: the six candidate groups (A–F) in the owner's V11 brief. **No
