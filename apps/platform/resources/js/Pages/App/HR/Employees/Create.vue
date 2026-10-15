@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { useForm } from '@inertiajs/vue3';
+import { computed } from 'vue';
 
 const form = useForm({
     full_name: '',
     work_email: '',
     work_phone: '',
 });
+
+// UAT-HR-20b: a School-level refusal (not tied to one field), e.g. an employee
+// number that is already taken.
+const employeeError = computed(() => (form.errors as Record<string, string | undefined>).employee);
 
 function submit(): void {
     form.post('/app/hr/employees');
@@ -19,6 +24,14 @@ function submit(): void {
         <p class="mt-1 text-sm text-slate-500">
             Core identity only -- employment, assignment, and personal details are added from the
             Employee's own profile once created.
+        </p>
+
+        <p
+            v-if="employeeError"
+            role="alert"
+            class="mt-4 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800"
+        >
+            {{ employeeError }}
         </p>
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">

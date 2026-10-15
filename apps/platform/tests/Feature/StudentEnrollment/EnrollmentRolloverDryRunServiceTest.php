@@ -12,11 +12,13 @@ use App\Domain\Students\Application\EnrollmentRolloverPlanService;
 use App\Domain\Students\Application\Exceptions\CrossSchoolRolloverPlanException;
 use App\Domain\Students\Application\Exceptions\InvalidRollNumberStrategyException;
 use App\Domain\Students\Application\Exceptions\InvalidRolloverItemDecisionException;
+use App\Domain\Students\Application\Exceptions\InvalidRolloverMappingSectionException;
 use App\Domain\Students\Application\Exceptions\RolloverPlanNoLongerConfigurableException;
 use App\Domain\Students\Application\Exceptions\StaleRolloverConfigurationException;
 use App\Domain\Students\Application\StudentEnrollmentService;
 use App\Domain\Students\Application\StudentSubjectEnrollmentService;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
+use App\Domain\Students\Infrastructure\EnrollmentRolloverMapping;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
@@ -439,7 +441,18 @@ class EnrollmentRolloverDryRunServiceTest extends TestCase
         $wrongYearSection = $this->createSection($wrongYear, $campus, $targetGrade);
         $student = $this->createStudent($school, ['student_number' => 'S-1001']);
         $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
-        $this->planService()->upsertMapping($plan, $sourceGrade, null, $targetGrade, $wrongYearSection);
+        // Since UAT-C1 (UAT-YR-04) the service refuses this mapping when it is
+        // saved; dry-run still blocks such a row if one exists from before that
+        // rule, so the row is written directly here to keep that defence tested.
+        try {
+            $this->planService()->upsertMapping($plan, $sourceGrade, null, $targetGrade, $wrongYearSection);
+            $this->fail('A target Section outside the target year must be refused at mapping time.');
+        } catch (InvalidRolloverMappingSectionException) {
+        }
+        app(TenantContext::class)->withSchool($school, fn () => EnrollmentRolloverMapping::query()->create([
+            'school_id' => $school->id, 'plan_id' => $plan->id, 'source_grade_level_id' => $sourceGrade->id, 'source_section_id' => null,
+            'target_grade_level_id' => $targetGrade->id, 'target_section_id' => $wrongYearSection->id,
+        ]));
         $item = $this->itemFor($plan, $student);
         app(TenantContext::class)->withSchool($school, fn () => $item->update(['decision' => 'promote', 'roll_number_strategy' => 'preserve_source']));
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\App;
 
 use App\Domain\Library\Application\Exceptions\ConcurrentCheckoutConflictException;
 use App\Domain\Library\Application\Exceptions\CopyNotAvailableException;
+use App\Domain\Library\Application\Exceptions\DueDateBeforeCheckoutException;
 use App\Domain\Library\Application\Exceptions\LoanAlreadyReturnedException;
 use App\Domain\Library\Application\Exceptions\StudentNotEligibleException;
 use App\Domain\Library\Application\LibraryLoanService;
@@ -12,9 +13,13 @@ use App\Domain\Library\Infrastructure\LibraryFine;
 use App\Domain\Library\Infrastructure\LibraryLoan;
 use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
+use App\Models\School;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
+use DateTimeZone;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -61,7 +66,7 @@ class LibraryCirculationController extends Controller
             ->withQueryString();
 
         return Inertia::render('App/Library/Circulation/Index', [
-            'loans' => $loans->through(fn (LibraryLoan $l) => $this->presentLoan($l)),
+            'loans' => $loans->through(fn (LibraryLoan $l) => $this->presentLoan($l, SchoolTimezone::resolve($school))),
             'status' => $status,
             'canManage' => $capabilities->canInSchool($context->actor(), 'library.circulation.manage', $school),
         ]);
@@ -72,7 +77,10 @@ class LibraryCirculationController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability('library.circulation.manage', $school);
 
-        return Inertia::render('App/Library/Circulation/Create');
+        // UAT-LIB-01: the earliest due date the form offers is the School's today.
+        return Inertia::render('App/Library/Circulation/Create', [
+            'today' => CarbonImmutable::now(SchoolTimezone::resolve($school))->toDateString(),
+        ]);
     }
 
     /**
@@ -148,7 +156,9 @@ class LibraryCirculationController extends Controller
         $student = Student::query()->findOrFail($validated['student_id']);
 
         try {
-            $service->checkout($copy, $student, Carbon::parse($validated['due_at']), $context->actor());
+            $service->checkout($copy, $student, self::dueAt($validated['due_at'], $school), $context->actor());
+        } catch (DueDateBeforeCheckoutException $e) {
+            throw ValidationException::withMessages(['due_at' => [$e->getMessage()]]);
         } catch (StudentNotEligibleException $e) {
             throw ValidationException::withMessages(['student_id' => [$e->getMessage()]]);
         } catch (CopyNotAvailableException|ConcurrentCheckoutConflictException $e) {
@@ -180,19 +190,40 @@ class LibraryCirculationController extends Controller
     }
 
     /**
+     * UAT-C1 (UAT-LIB-01): the checkout form sends a calendar date, which
+     * means "due back by the end of that day" in the School's timezone --
+     * so a same-day loan is due tonight (never before its own checkout) and
+     * a return on the due date is not overdue. A full timestamp (the API's
+     * shape) is taken as given. Second precision: `due_at` stores whole
+     * seconds, so 23:59:59.999999 would round into the next day.
+     */
+    private static function dueAt(string $input, School $school): Carbon
+    {
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $input) === 1) {
+            return Carbon::createFromFormat('Y-m-d', $input, SchoolTimezone::resolve($school))
+                ->setTime(23, 59, 59)
+                ->utc();
+        }
+
+        return Carbon::parse($input);
+    }
+
+    /**
      * @return array<string, mixed>
      */
-    private function presentLoan(LibraryLoan $loan): array
+    private function presentLoan(LibraryLoan $loan, DateTimeZone $timezone): array
     {
         return [
             'id' => $loan->id,
             'copyCode' => $loan->copy->code,
             'titleName' => $loan->copy->title->title,
             'studentName' => trim($loan->student->first_name.' '.$loan->student->last_name),
-            'checkedOutAt' => $loan->checked_out_at->toDateString(),
-            'dueAt' => $loan->due_at->toDateString(),
+            // UAT-LIB-01: calendar dates in the School's timezone, the same
+            // calendar the due date was chosen in.
+            'checkedOutAt' => $loan->checked_out_at->copy()->setTimezone($timezone)->toDateString(),
+            'dueAt' => $loan->due_at->copy()->setTimezone($timezone)->toDateString(),
             'isOverdue' => $loan->isOverdue(),
-            'returnedAt' => $loan->checked_in_at?->toDateString(),
+            'returnedAt' => $loan->checked_in_at?->copy()->setTimezone($timezone)->toDateString(),
         ];
     }
 }

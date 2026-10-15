@@ -4,6 +4,7 @@ namespace App\Domain\Library\Application;
 
 use App\Domain\Library\Application\Exceptions\ConcurrentCheckoutConflictException;
 use App\Domain\Library\Application\Exceptions\CopyNotAvailableException;
+use App\Domain\Library\Application\Exceptions\DueDateBeforeCheckoutException;
 use App\Domain\Library\Application\Exceptions\LoanAlreadyReturnedException;
 use App\Domain\Library\Application\Exceptions\StudentNotEligibleException;
 use App\Domain\Library\Infrastructure\LibraryCopy;
@@ -74,6 +75,13 @@ class LibraryLoanService
                 }
 
                 $checkedOutAt = now();
+
+                // UAT-LIB-01: the same rule as the database's
+                // library_loans_due_after_checkout_check, checked before the
+                // INSERT so a past due time is a refusal, not a 500.
+                if ($dueAt->lessThan($checkedOutAt)) {
+                    throw new DueDateBeforeCheckoutException;
+                }
 
                 $loan = LibraryLoan::query()->create([
                     'school_id' => $copy->school_id,

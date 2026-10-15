@@ -1914,7 +1914,20 @@ identical allowed-status set for configuration AND dry-run):
 - **`upsertMapping(plan, sourceGradeLevel, ?sourceSection, targetGradeLevel, ?targetSection)`**
   -- creates or updates either granularity of mapping in one call
   (`?sourceSection === null` -> Grade-level default; given -> Section-
-  specific override), same-School checked before any write.
+  specific override), same-School checked before any write. Since
+  UAT-C1 (UAT-YR-04) each side's Section must also be a Section of that
+  side's Grade in that side's Academic Year (source Section: source
+  Grade, plan source year; target Section: target Grade, plan target
+  year), else `InvalidRolloverMappingSectionException`
+  (`INVALID_ROLLOVER_MAPPING_SECTION`, 422; a `source_section_id` /
+  `target_section_id` form error on the web page). Local UAT saved a
+  Grade 6 Section as the default for target Grade 7 and every promoted
+  Student was then blocked as "decision does not match the mapping".
+  The plan page offers only the selected Grade's Sections and clears a
+  stale choice when the Grade changes. Dry-run still blocks such a row
+  if one was saved before this rule (`target_wrong_academic_year`,
+  `target_grade_mismatch`). Item-level target Section overrides
+  (`setItemDecision()`) are unchanged (`EnrollmentRolloverMappingSectionTest`).
 - **`setItemDecision(plan, item, decision, ?targetSectionOverride, ?rollNumberStrategy, ?targetRollNumber)`**
   -- sets one Item's operator-controlled configuration. Rejects an
   unrecognized `decision` (`InvalidRolloverItemDecisionException`) or

@@ -106,7 +106,9 @@ class AutomationExecutionPipelineTest extends TestCase
     private function activateNewYear(School $school, User $actor, string $code): string
     {
         $years = app(AcademicYearService::class);
-        $year = $this->in($school, fn () => $years->create($school, ['name' => $code, 'code' => $code, 'starts_on' => '2030-04-01', 'ends_on' => '2031-03-31'], $actor));
+        // A Year that has already started (UAT-C1: activation is refused before
+        // the start date) and lies clear of the demo's 2025-26..2027-28 Years.
+        $year = $this->in($school, fn () => $years->create($school, ['name' => $code, 'code' => $code, 'starts_on' => '2023-04-01', 'ends_on' => '2024-03-31'], $actor));
         $this->in($school, fn () => $years->activate($year, $actor));
 
         return $year->id;

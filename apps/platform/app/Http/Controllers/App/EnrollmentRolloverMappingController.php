@@ -6,6 +6,7 @@ use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\Students\Application\EnrollmentRolloverPlanService;
 use App\Domain\Students\Application\Exceptions\CrossSchoolRolloverPlanException;
+use App\Domain\Students\Application\Exceptions\InvalidRolloverMappingSectionException;
 use App\Domain\Students\Application\Exceptions\RolloverPlanNoLongerConfigurableException;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverMapping;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
@@ -56,6 +57,8 @@ class EnrollmentRolloverMappingController extends Controller
             );
         } catch (RolloverPlanNoLongerConfigurableException|CrossSchoolRolloverPlanException $e) {
             throw ValidationException::withMessages(['source_grade_level_id' => [$e->getMessage()]]);
+        } catch (InvalidRolloverMappingSectionException $e) {
+            throw ValidationException::withMessages(["{$e->side}_section_id" => [$e->getMessage()]]);
         }
 
         return redirect("/app/enrollment-rollovers/{$plan->id}");
@@ -86,6 +89,9 @@ class EnrollmentRolloverMappingController extends Controller
             );
         } catch (RolloverPlanNoLongerConfigurableException|CrossSchoolRolloverPlanException $e) {
             throw ValidationException::withMessages(['target_grade_level_id' => [$e->getMessage()]]);
+        } catch (InvalidRolloverMappingSectionException $e) {
+            // The source side cannot change here; a stale source Section is reported on the target too.
+            throw ValidationException::withMessages(['target_section_id' => [$e->getMessage()]]);
         }
 
         return redirect("/app/enrollment-rollovers/{$plan->id}");

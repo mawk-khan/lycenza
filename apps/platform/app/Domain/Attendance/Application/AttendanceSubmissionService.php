@@ -24,6 +24,8 @@ use App\Domain\Timetable\Infrastructure\TimetablePeriod;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Tenancy\SchoolTimezone;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
@@ -127,7 +129,7 @@ class AttendanceSubmissionService
         User $actor,
         ?AttendanceWriteGuard $guard = null,
     ): AttendanceSession {
-        $this->assertNotInFuture($attendanceDate);
+        $this->assertNotInFuture($school, $attendanceDate);
         $this->assertNoDuplicateEnrollments($records);
 
         // 0. Tier 2 only: identity and ownership for the class the entry
@@ -409,16 +411,17 @@ class AttendanceSubmissionService
     }
 
     /**
-     * Evaluated against the platform's UTC application date -- the same
-     * clock (`now()`) every other module treats as authoritative. Today
-     * itself is always allowed: a register is normally taken on the day
-     * of the class.
+     * Evaluated against the School's own calendar date (UAT-C1, UAT-ATT-10),
+     * like Staff attendance -- never the UTC application date, which lags an
+     * Asia/Kolkata School's day by up to 5h30 and runs ahead of a School west
+     * of UTC. Today itself is always allowed: a register is normally taken on
+     * the day of the class.
      */
-    private function assertNotInFuture(string $attendanceDate): void
+    private function assertNotInFuture(School $school, string $attendanceDate): void
     {
         $date = Carbon::parse($attendanceDate)->toDateString();
 
-        if ($date > now()->toDateString()) {
+        if ($date > CarbonImmutable::now(SchoolTimezone::resolve($school))->toDateString()) {
             throw new AttendanceDateInFutureException($date);
         }
     }

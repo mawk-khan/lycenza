@@ -50,11 +50,13 @@ class AcademicYearActivationConcurrencyTest extends TestCase
         $this->school = $this->createSchool();
         $context = app(TenantContext::class);
 
+        // Both Years have already started: activation is refused before the
+        // start date (UAT-C1, UAT-YR-07), and this test is about the race.
         $yearA = $context->withSchool($this->school, fn () => AcademicYear::factory()->for($this->school, 'school')->create([
-            'code' => 'AY-A', 'name' => '2026-27',
+            'code' => 'AY-A', 'name' => '2024-25', 'starts_on' => '2024-06-01', 'ends_on' => '2025-05-31',
         ]));
         $yearB = $context->withSchool($this->school, fn () => AcademicYear::factory()->for($this->school, 'school')->create([
-            'code' => 'AY-B', 'name' => '2027-28', 'starts_on' => '2027-06-01', 'ends_on' => '2028-05-31',
+            'code' => 'AY-B', 'name' => '2025-26', 'starts_on' => '2025-06-01', 'ends_on' => '2026-05-31',
         ]));
 
         // Forced, verified overlap (Tests\Concerns\ForcesConcurrentOverlap):

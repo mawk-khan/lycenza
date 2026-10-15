@@ -8,6 +8,7 @@ use App\Domain\HR\Application\EmployeeDirectoryService;
 use App\Domain\HR\Application\EmployeeProfileWorkspaceService;
 use App\Domain\HR\Application\EmployeeService;
 use App\Domain\HR\Application\Exceptions\DuplicateWorkEmailException;
+use App\Domain\HR\Application\Exceptions\EmployeeNumberConflictException;
 use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeCategory;
@@ -140,6 +141,9 @@ class HrEmployeeController extends Controller
             throw ValidationException::withMessages([
                 'work_email' => ['This work email is already in use by another Employee in this School.'],
             ]);
+        } catch (EmployeeNumberConflictException $e) {
+            // UAT-HR-20b: a refusal on the form, never a 500.
+            throw ValidationException::withMessages(['employee' => [$e->getMessage()]]);
         }
 
         return redirect("/app/hr/employees/{$employee->id}");

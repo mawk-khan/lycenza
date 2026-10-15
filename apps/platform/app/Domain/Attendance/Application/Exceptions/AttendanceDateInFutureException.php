@@ -3,7 +3,9 @@
 namespace App\Domain\Attendance\Application\Exceptions;
 
 /**
- * A register cannot be taken for a class that has not happened yet. Evaluated against the platform's UTC application date (Carbon::now()), the same clock every other module treats as authoritative.
+ * A register cannot be taken for a class that has not happened yet. Evaluated
+ * against the School's own calendar date (UAT-C1, UAT-ATT-10), like Staff
+ * attendance -- never the UTC application date.
  */
 class AttendanceDateInFutureException extends AttendanceException
 {

@@ -745,3 +745,35 @@ From V11.7 on, open questions use only the D-xx register
 
 Begin structured local UAT. Run the E16 successor cycle as separate
 governance.
+
+## 14. UAT-C1 — Confirmed Correctness & Data-Safety Fixes (2026-10-15)
+
+Local UAT ([`LOCAL-UAT-2026-10-15.md`](../../product/LOCAL-UAT-2026-10-15.md),
+published at `de8f0117`) confirmed six bugs. The owner approved UAT-C1 to
+fix only those six. It adds no schema and no migration, and it leaves every
+permission as it was.
+
+### 14.1 Owner decision: Academic Year activation ("0 days early")
+
+A draft Academic Year may be activated only when the School's own
+calendar date (`schools.timezone`) is on or after its `starts_on`. There is
+no early-activation window. Future-year preparation stays in `draft`, and a
+closed year is still never reopened (no reopen is added).
+
+### 14.2 Fixes
+
+| Finding | Corrected contract | Where |
+|---|---|---|
+| UAT-YR-07 (S1) | `AcademicYearService::activate()` refuses before the start date with `ACADEMIC_YEAR_NOT_STARTED` (422), before any write. The page withholds Activate until then, and the confirmation names the year it will close | ACADEMIC-STRUCTURE.md "Activation date" |
+| UAT-HR-20 (S1, demo data) | The demo numbers Employees through `EmployeeNumberAllocator`, so the next Employee gets the next free number | HR.md "Employee identifier strategy" |
+| UAT-HR-20b | A number collision is `HR_EMPLOYEE_NUMBER_CONFLICT` (409 / form error) and is still reported. Other database errors are not swallowed | HR.md |
+| UAT-ATT-10 | "Not in the future" uses the School's date, as Staff attendance already did | ATTENDANCE.md §13 |
+| UAT-LIB-01 | A form due date means the end of that School day. A due time before the checkout is `LIBRARY_DUE_BEFORE_CHECKOUT` (422) on every path | LIBRARY.md §7 |
+| UAT-YR-04 | A rollover mapping's Section must belong to that side's Grade and year (`INVALID_ROLLOVER_MAPPING_SECTION`, 422). The page offers only the selected Grade's Sections | STUDENT-ENROLLMENT.md (`upsertMapping`) |
+
+### 14.3 Not in scope
+
+UAT-C2–C5, academic-year reopening, automatic activation or rollover,
+legal-gated work, PPR, and E16 are out of scope. The remaining S1s are
+workflow gaps for later slices: payment correction (FIN-05/24/27), the
+defaulter list (FIN-08) and rollover decisions at scale (YR-01b).

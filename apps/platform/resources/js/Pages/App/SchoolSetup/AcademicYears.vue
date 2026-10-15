@@ -4,9 +4,12 @@
 // draft Year closes the active one in the same transaction (rule 65); a
 // closed Year cannot be reopened. Since SWC.2 (ADR 0073 section 2.5) the
 // service's refusals -- an overlapping date range, a stale transition, a
-// concurrent activation -- come back as form errors, never a 500.
+// concurrent activation -- come back as form errors, never a 500. UAT-C1
+// (UAT-YR-07): a draft Year can be activated only from its start date in the
+// School's calendar (the service refuses earlier), so the action is withheld
+// until then and the confirmation names the Year it will close.
 import { Head, useForm } from '@inertiajs/vue3';
-import { nextTick, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import ConfirmDialog from '../../../Components/ConfirmDialog.vue';
 import ErrorSummary from '../../../Components/Form/ErrorSummary.vue';
 import TextField from '../../../Components/Form/TextField.vue';
@@ -18,6 +21,7 @@ interface AcademicYear {
     startsOn: string;
     endsOn: string;
     status: string;
+    hasStarted: boolean;
 }
 
 const props = defineProps<{ academicYears: AcademicYear[]; canManage: boolean }>();
@@ -62,6 +66,8 @@ function runTransition() {
     );
 }
 
+const activeYear = computed(() => props.academicYears.find((y) => y.status === 'active') ?? null);
+
 const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Active', closed: 'Closed' };
 </script>
 
@@ -103,7 +109,7 @@ const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Active', 
                                 Rename<span class="sr-only"> {{ year.name }}</span>
                             </button>
                             <button
-                                v-if="year.status === 'draft'"
+                                v-if="year.status === 'draft' && year.hasStarted"
                                 type="button"
                                 class="underline"
                                 :disabled="transition.processing"
@@ -111,6 +117,9 @@ const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Active', 
                             >
                                 Activate<span class="sr-only"> {{ year.name }}</span>
                             </button>
+                            <span v-else-if="year.status === 'draft'" class="text-slate-500">
+                                Can be activated from {{ year.startsOn }}
+                            </span>
                             <button
                                 v-if="year.status === 'active'"
                                 type="button"
@@ -230,7 +239,15 @@ const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Active', 
             @confirm="runTransition"
         >
             <template v-if="pending?.action === 'activate'">
-                Any currently active Academic Year is closed at the same time.
+                <template v-if="activeYear">
+                    Activating {{ pending.year.name }} (starts {{ pending.year.startsOn }}) will
+                    close {{ activeYear.name }} ({{ activeYear.startsOn }} –
+                    {{ activeYear.endsOn }}). A closed Academic Year cannot be reopened.
+                </template>
+                <template v-else>
+                    {{ pending.year.name }} (starts {{ pending.year.startsOn }}) becomes the active
+                    Academic Year.
+                </template>
             </template>
             <template v-else>It becomes historical and cannot be reopened.</template>
         </ConfirmDialog>

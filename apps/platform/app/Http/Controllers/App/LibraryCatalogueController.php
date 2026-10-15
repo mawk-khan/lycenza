@@ -10,6 +10,7 @@ use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\NormalizesCodeInput;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -119,7 +120,7 @@ class LibraryCatalogueController extends Controller
                 'activeLoan' => $c->activeLoan ? [
                     'id' => $c->activeLoan->id,
                     'studentName' => trim($c->activeLoan->student->first_name.' '.$c->activeLoan->student->last_name),
-                    'dueAt' => $c->activeLoan->due_at->toDateString(),
+                    'dueAt' => $c->activeLoan->due_at->copy()->setTimezone(SchoolTimezone::resolve($school))->toDateString(),
                 ] : null,
             ])->all(),
             'canManage' => $capabilities->canInSchool($context->actor(), 'library.catalogue.manage', $school),

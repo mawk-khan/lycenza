@@ -20,6 +20,8 @@ use App\Domain\Guardians\Infrastructure\ContactType;
 use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Domain\Guardians\Infrastructure\RelationshipType;
 use App\Domain\Guardians\Infrastructure\StudentGuardianRelationship;
+use App\Domain\HR\Application\EmployeeNumberAllocator;
+use App\Domain\HR\Application\EmployeeNumberFormatter;
 use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
@@ -603,12 +605,17 @@ final class DemoDataBuilder
                 'OFFICE' => ['Joseph Thomas', 'OFFICE', $admin, $nonTeaching],
             ];
 
-            $number = 1;
+            // UAT-C1 (UAT-HR-20): numbers come from the same allocator and
+            // formatter as EmployeeService::create(), so the School's counter
+            // ends past the last seeded number and the next Employee added in
+            // the browser gets the next free number instead of a collision.
+            $allocator = app(EmployeeNumberAllocator::class);
+            $formatter = app(EmployeeNumberFormatter::class);
             foreach ($staff as $key => [$name, $positionCode, $department, $category]) {
                 $employee = Employee::query()->create([
                     'school_id' => $this->school->id,
                     'user_id' => null,
-                    'employee_number' => 'EMP-'.str_pad((string) $number++, 6, '0', STR_PAD_LEFT),
+                    'employee_number' => $formatter->format($allocator->allocate($this->school)),
                     'full_name' => $name,
                     'record_status' => 'active',
                 ]);

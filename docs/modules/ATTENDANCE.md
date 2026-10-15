@@ -435,8 +435,12 @@ A new register requires all of:
 - the TimetableEntry exists in this School and is currently `active`;
 - `attendance_date`'s ISO weekday matches the **locked** entry's
   `day_of_week`;
-- `attendance_date` is not in the future (platform UTC application date;
-  today itself is allowed);
+- `attendance_date` is not in the future **in the School's own
+  calendar** (`schools.timezone`; today itself is allowed). Until UAT-C1
+  this used the UTC application date, which refused today's register
+  before 05:30 in an Asia/Kolkata School (UAT-ATT-10); Staff attendance
+  already used the School date. The Take page's default date is the
+  School's today too (`AttendanceSchoolDateTest`);
 - `attendance_date` falls inside the AcademicYear's inclusive
   `[starts_on, ends_on]`;
 - the AcademicYear is `active` — **no new register after closure**;

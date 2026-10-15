@@ -110,6 +110,21 @@ explicit scope limit.)
   `ACADEMIC_YEAR_ACTIVATION_CONFLICT` (409), translated from
   PostgreSQL's own `UniqueConstraintViolationException`, never a raw
   SQL error and never a silently-accepted second active row.
+- **Activation date (UAT-C1, owner decision 2026-10-15: "0 days
+  early")**: a draft year can be activated only when the School's own
+  calendar date (`schools.timezone`, through `SchoolTimezone`; never
+  UTC, server or browser time) has reached its `starts_on`. Earlier,
+  `activate()` refuses with `ACADEMIC_YEAR_NOT_STARTED` (422) before
+  any write: the active year stays active, the draft stays draft,
+  placements are untouched, and no audit row or event claims an
+  activation. Every path (School setup page, `/api/v1`, seeders) goes
+  through this one method. The page withholds Activate until the start
+  date ("Can be activated from …"), and its confirmation names the
+  year it will close. Future-year preparation stays in `draft`. Local
+  UAT (UAT-YR-07) showed why: activating 2027-28 on 2026-10-15 closed
+  the real 2026-27 five months early, and a closed year cannot be
+  reopened. Proven by
+  `Tests\Feature\AcademicStructure\AcademicYearActivationDateTest`.
 - **Closing** (`AcademicYearService::close()`) is a separate, explicit
   action — never an automatic side effect of anything except
   activating a *different* year. Reopening a closed year is **not

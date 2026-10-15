@@ -14,7 +14,9 @@ use App\Domain\Timetable\Infrastructure\TimetableEntry;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -88,7 +90,8 @@ class AttendanceController extends Controller
             'timetable_entry_id' => ['sometimes', 'uuid'],
         ]);
 
-        $date = $validated['attendance_date'] ?? now()->toDateString();
+        // UAT-ATT-10: "today" is the School's calendar day, as in My attendance.
+        $date = $validated['attendance_date'] ?? CarbonImmutable::now(SchoolTimezone::resolve($school))->toDateString();
         $submitted = AttendanceSession::query()
             ->whereDate('attendance_date', $date)
             ->pluck('timetable_entry_id')

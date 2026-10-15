@@ -10,6 +10,7 @@ use App\Domain\Students\Application\Exceptions\CrossSchoolRolloverPlanException;
 use App\Domain\Students\Application\Exceptions\CrossSchoolSubjectMappingException;
 use App\Domain\Students\Application\Exceptions\InvalidRollNumberStrategyException;
 use App\Domain\Students\Application\Exceptions\InvalidRolloverItemDecisionException;
+use App\Domain\Students\Application\Exceptions\InvalidRolloverMappingSectionException;
 use App\Domain\Students\Application\Exceptions\InvalidRolloverPlanYearsException;
 use App\Domain\Students\Application\Exceptions\InvalidSubjectMappingYearException;
 use App\Domain\Students\Application\Exceptions\OpenRolloverPlanConflictException;
@@ -125,6 +126,16 @@ class EnrollmentRolloverPlanService
             if ($section->school_id !== $plan->school_id) {
                 throw new CrossSchoolRolloverPlanException;
             }
+        }
+
+        // UAT-C1 (UAT-YR-04): each side's Section must match that side's Grade
+        // and Academic Year, refused here rather than surfacing later as a
+        // misleading per-Student dry-run block.
+        if ($sourceSection !== null && ($sourceSection->grade_level_id !== $sourceGradeLevel->id || $sourceSection->academic_year_id !== $plan->source_academic_year_id)) {
+            throw new InvalidRolloverMappingSectionException('source');
+        }
+        if ($targetSection !== null && ($targetSection->grade_level_id !== $targetGradeLevel->id || $targetSection->academic_year_id !== $plan->target_academic_year_id)) {
+            throw new InvalidRolloverMappingSectionException('target');
         }
 
         return $this->context->withSchool($plan->school, function () use ($plan, $sourceGradeLevel, $sourceSection, $targetGradeLevel, $targetSection, $actor) {

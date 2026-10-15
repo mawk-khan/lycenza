@@ -142,6 +142,25 @@ need require. `due_at` is **required**, supplied directly by the
 caller at checkout — no holiday-aware calendar, no grade-specific
 period, no configurable renewal policy (checkpoint brief §13).
 
+**Due date semantics (UAT-C1, UAT-LIB-01).** The only rule is the
+database's `library_loans_due_after_checkout_check` (`due_at >=
+checked_out_at`), so a loan due the same day is valid.
+
+- **Web checkout form:** sends a calendar date. The controller reads it
+  as "due back by the end of that day" in the School's timezone (23:59:59
+  local, stored in UTC). A same-day loan is therefore due tonight, and a
+  return on the due date is not overdue.
+- **API:** sends a full timestamp, which is taken as given.
+- **Validation:** `LibraryLoanService::checkout()` checks the rule itself
+  before the INSERT. A due time before the checkout is
+  `LIBRARY_DUE_BEFORE_CHECKOUT` (422; a `due_at` form error), never a 500.
+- **Display:** loan dates are shown in the School's calendar.
+
+Before UAT-C1 the form's date became 00:00 UTC. That is earlier than a
+same-day checkout, so it reached the constraint as a 500; west of UTC it
+would also have failed for "tomorrow". Proven by
+`Tests\Feature\Library\LibraryCheckoutDueDateTest`.
+
 **Copy availability is fully derived, never stored.** `LibraryCopy::isAvailable()`
 = `status === 'active'` AND no `library_loans` row with `status =
 'active'` referencing it. There is deliberately no `available`/

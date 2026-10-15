@@ -168,10 +168,12 @@ class SchoolSetupController extends Controller
         $this->authorizeCapability('academics.years.view', $school);
 
         return Inertia::render('App/SchoolSetup/AcademicYears', [
-            'academicYears' => AcademicYear::query()->orderByDesc('starts_on')->get()->map(fn (AcademicYear $y) => [
+            'academicYears' => AcademicYear::query()->orderByDesc('starts_on')->get()->each->setRelation('school', $school)->map(fn (AcademicYear $y) => [
                 'id' => $y->id, 'name' => $y->name, 'code' => $y->code,
                 'startsOn' => $y->starts_on->toDateString(), 'endsOn' => $y->ends_on->toDateString(),
                 'status' => $y->status,
+                // UAT-YR-07: a draft Year is activatable only from its start date (School calendar).
+                'hasStarted' => AcademicYearService::hasStarted($y),
             ])->all(),
             'canManage' => $this->can($context, 'academics.years.manage'),
         ]);

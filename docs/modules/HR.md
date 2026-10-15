@@ -228,6 +228,16 @@ need). Phase 8A.7 will be the first real consumer:
   `AcademicYear` activation is proven safe under genuine concurrency in
   `AcademicYearActivationConcurrencyTest` — 8A.1 needs an equivalent
   two-process proof for employee-number allocation).
+- **Counter out of step (UAT-C1, UAT-HR-20/20b)**: the allocator never
+  hands out a used number by itself, so a collision on
+  `employees_school_id_employee_number_unique` means numbers were
+  written without it. `EmployeeService::create()` then refuses with
+  `HR_EMPLOYEE_NUMBER_CONFLICT` (409; a form error on the web page,
+  never a 500) and still `report()`s the database error so operators
+  see it. The demo builder now numbers its Employees through the same
+  allocator and formatter (it used to write `EMP-000001..012` directly,
+  so every Employee added in the demo collided with `EMP-000001`).
+  Proven by `Tests\Feature\HR\EmployeeNumberingAfterDemoSeedTest`.
 - Rehire reuses the **same** `employee_number` — a second
   `EmploymentRecord` row under the same `Employee`, never a new
   Employee/new number.

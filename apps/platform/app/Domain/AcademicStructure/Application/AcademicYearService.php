@@ -3,6 +3,7 @@
 namespace App\Domain\AcademicStructure\Application;
 
 use App\Domain\AcademicStructure\Application\Concerns\AdministersReferenceData;
+use App\Domain\AcademicStructure\Application\Exceptions\AcademicYearNotStartedException;
 use App\Domain\AcademicStructure\Application\Exceptions\AcademicYearOverlapException;
 use App\Domain\AcademicStructure\Application\Exceptions\ConcurrentActivationConflictException;
 use App\Domain\AcademicStructure\Application\Exceptions\InvalidAcademicYearTransitionException;
@@ -13,7 +14,9 @@ use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -135,6 +138,13 @@ class AcademicYearService
             throw new InvalidAcademicYearTransitionException($year->status, 'active');
         }
 
+        // UAT-C1 (UAT-YR-07): 0 days early. Checked before any write, against
+        // the School's own calendar date (never UTC or server time), so a
+        // refused activation leaves both Years and every placement untouched.
+        if ($year->starts_on->toDateString() > self::schoolToday($year->school)) {
+            throw new AcademicYearNotStartedException($year->starts_on->toDateString());
+        }
+
         return $this->context->withSchool($year->school, function () use ($year, $actor) {
             try {
                 return DB::transaction(function () use ($year, $actor) {
@@ -192,6 +202,21 @@ class AcademicYearService
 
             return $year->refresh();
         }));
+    }
+
+    /**
+     * Whether a draft Year's start date has arrived in its School's own
+     * calendar, so activate() would accept it (UAT-YR-07). The page uses it
+     * to withhold the Activate action; activate() remains the authority.
+     */
+    public static function hasStarted(AcademicYear $year): bool
+    {
+        return $year->starts_on->toDateString() <= self::schoolToday($year->school);
+    }
+
+    private static function schoolToday(School $school): string
+    {
+        return CarbonImmutable::now(SchoolTimezone::resolve($school))->toDateString();
     }
 
     private function assertNoOverlap(School $school, string $startsOn, string $endsOn): void

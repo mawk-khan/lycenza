@@ -13,6 +13,7 @@ use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -105,9 +106,10 @@ class LibraryFineWebController extends Controller
                 'titleName' => $loan->copy->title->title,
                 'copyCode' => $loan->copy->code,
                 'studentName' => trim($loan->student->first_name.' '.$loan->student->last_name),
-                'checkedOutAt' => $loan->checked_out_at->toDateString(),
-                'dueAt' => $loan->due_at->toDateString(),
-                'returnedAt' => $loan->checked_in_at?->toDateString(),
+                // UAT-LIB-01: calendar dates in the School's timezone.
+                'checkedOutAt' => $loan->checked_out_at->copy()->setTimezone(SchoolTimezone::resolve($school))->toDateString(),
+                'dueAt' => $loan->due_at->copy()->setTimezone(SchoolTimezone::resolve($school))->toDateString(),
+                'returnedAt' => $loan->checked_in_at?->copy()->setTimezone(SchoolTimezone::resolve($school))->toDateString(),
                 'status' => $loan->status,
             ],
             'fine' => $fine === null ? null : $this->presentFine($school, $fine),

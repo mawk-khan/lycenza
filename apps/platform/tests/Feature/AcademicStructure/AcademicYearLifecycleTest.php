@@ -24,6 +24,9 @@ class AcademicYearLifecycleTest extends TestCase
 {
     use CreatesTenancyFixtures;
 
+    /** A Year that has already started, so activation is allowed (UAT-C1, UAT-YR-07). */
+    private const array STARTED = ['starts_on' => '2025-06-01', 'ends_on' => '2026-05-31'];
+
     #[Test]
     public function a_second_year_overlapping_an_existing_one_is_rejected(): void
     {
@@ -86,9 +89,9 @@ class AcademicYearLifecycleTest extends TestCase
         $school = $this->createSchool();
         $service = app(AcademicYearService::class);
 
-        $yearA = $this->createAcademicYear($school, ['code' => 'AY-A']);
+        $yearA = $this->createAcademicYear($school, ['code' => 'AY-A', 'starts_on' => '2024-06-01', 'ends_on' => '2025-05-31']);
         $yearB = $this->createAcademicYear($school, [
-            'code' => 'AY-B', 'starts_on' => '2027-06-01', 'ends_on' => '2028-05-31',
+            'code' => 'AY-B', 'starts_on' => '2025-06-01', 'ends_on' => '2026-05-31',
         ]);
 
         $service->activate($yearA);
@@ -104,7 +107,7 @@ class AcademicYearLifecycleTest extends TestCase
     {
         $school = $this->createSchool();
         $service = app(AcademicYearService::class);
-        $year = $this->createAcademicYear($school);
+        $year = $this->createAcademicYear($school, self::STARTED);
 
         $service->activate($year);
         $refreshed = app(TenantContext::class)->withSchool($school, fn () => $year->refresh());
@@ -118,7 +121,7 @@ class AcademicYearLifecycleTest extends TestCase
     {
         $school = $this->createSchool();
         $service = app(AcademicYearService::class);
-        $year = $this->createAcademicYear($school);
+        $year = $this->createAcademicYear($school, self::STARTED);
 
         $service->activate($year);
         $refreshed = app(TenantContext::class)->withSchool($school, fn () => $year->refresh());
@@ -142,7 +145,7 @@ class AcademicYearLifecycleTest extends TestCase
     public function activation_is_transactional_and_produces_a_durable_outbox_event(): void
     {
         $school = $this->createSchool();
-        $year = $this->createAcademicYear($school);
+        $year = $this->createAcademicYear($school, self::STARTED);
 
         app(AcademicYearService::class)->activate($year);
 
@@ -161,7 +164,7 @@ class AcademicYearLifecycleTest extends TestCase
     public function a_rolled_back_activation_leaves_neither_the_state_change_nor_the_event(): void
     {
         $school = $this->createSchool();
-        $year = $this->createAcademicYear($school);
+        $year = $this->createAcademicYear($school, self::STARTED);
 
         try {
             DB::transaction(function () use ($year): void {

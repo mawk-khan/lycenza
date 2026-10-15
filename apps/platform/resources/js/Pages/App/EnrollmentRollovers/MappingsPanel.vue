@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useForm } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 interface Ref {
     id: string;
@@ -77,19 +77,37 @@ function submitEdit(mappingId: string): void {
     });
 }
 
-// Convenience grouping only -- selection remains fully explicit, never
-// automatic (this checkpoint's brief, section 21): a Section option is
-// merely SORTED by whether its Grade matches the currently-selected
-// Grade, never pre-selected or filtered out.
-const sourceSectionsForSelectedGrade = computed(() =>
-    [...props.sourceSections].sort((a, b) =>
-        a.gradeLevelId === addForm.source_grade_level_id
-            ? -1
-            : b.gradeLevelId === addForm.source_grade_level_id
-              ? 1
-              : 0,
-    ),
+// UAT-C1 (UAT-YR-04): a mapping's Section must be a Section of that side's
+// Grade (the service refuses anything else), so each Section list offers only
+// the selected Grade's Sections, and changing the Grade clears a Section that
+// no longer belongs to it. Selection itself stays explicit, never automatic.
+function sectionsOfGrade(sections: SectionOption[], gradeLevelId: string): SectionOption[] {
+    return gradeLevelId === '' ? [] : sections.filter((s) => s.gradeLevelId === gradeLevelId);
+}
+
+const addSourceSections = computed(() =>
+    sectionsOfGrade(props.sourceSections, addForm.source_grade_level_id),
 );
+const addTargetSections = computed(() =>
+    sectionsOfGrade(props.targetSections, addForm.target_grade_level_id),
+);
+const editTargetSections = computed(() =>
+    sectionsOfGrade(props.targetSections, editForm.target_grade_level_id),
+);
+
+function clearIfStale(selected: string, options: SectionOption[]): string {
+    return options.some((s) => s.id === selected) ? selected : '';
+}
+
+watch(addSourceSections, (options) => {
+    addForm.source_section_id = clearIfStale(addForm.source_section_id, options);
+});
+watch(addTargetSections, (options) => {
+    addForm.target_section_id = clearIfStale(addForm.target_section_id, options);
+});
+watch(editTargetSections, (options) => {
+    editForm.target_section_id = clearIfStale(editForm.target_section_id, options);
+});
 </script>
 
 <template>
@@ -192,13 +210,16 @@ const sourceSectionsForSelectedGrade = computed(() =>
                             class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5"
                         >
                             <option value="">No default Section</option>
-                            <option v-for="s in targetSections" :key="s.id" :value="s.id">
+                            <option v-for="s in editTargetSections" :key="s.id" :value="s.id">
                                 {{ s.label }}
                             </option>
                         </select>
                     </div>
                     <p v-if="editForm.errors.target_grade_level_id" class="text-sm text-red-600">
                         {{ editForm.errors.target_grade_level_id }}
+                    </p>
+                    <p v-if="editForm.errors.target_section_id" class="text-sm text-red-600">
+                        {{ editForm.errors.target_section_id }}
                     </p>
                     <div class="flex items-center gap-3">
                         <button
@@ -252,11 +273,7 @@ const sourceSectionsForSelectedGrade = computed(() =>
                         class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5"
                     >
                         <option value="">Grade-level default</option>
-                        <option
-                            v-for="s in sourceSectionsForSelectedGrade"
-                            :key="s.id"
-                            :value="s.id"
-                        >
+                        <option v-for="s in addSourceSections" :key="s.id" :value="s.id">
                             {{ s.label }}
                         </option>
                     </select>
@@ -290,7 +307,7 @@ const sourceSectionsForSelectedGrade = computed(() =>
                         class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5"
                     >
                         <option value="">No default Section</option>
-                        <option v-for="s in targetSections" :key="s.id" :value="s.id">
+                        <option v-for="s in addTargetSections" :key="s.id" :value="s.id">
                             {{ s.label }}
                         </option>
                     </select>
@@ -298,6 +315,12 @@ const sourceSectionsForSelectedGrade = computed(() =>
             </div>
             <p v-if="addForm.errors.source_grade_level_id" class="text-sm text-red-600">
                 {{ addForm.errors.source_grade_level_id }}
+            </p>
+            <p v-if="addForm.errors.source_section_id" class="text-sm text-red-600">
+                {{ addForm.errors.source_section_id }}
+            </p>
+            <p v-if="addForm.errors.target_section_id" class="text-sm text-red-600">
+                {{ addForm.errors.target_section_id }}
             </p>
             <div class="flex items-center gap-3">
                 <button

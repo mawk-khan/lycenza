@@ -784,7 +784,8 @@ class EnrollmentRolloverApiTest extends TestCase
         $targetYear2 = $this->createAcademicYear($school, ['code' => 'TGT2', 'starts_on' => '2028-06-01', 'ends_on' => '2029-05-31']);
         $planB = $this->planId($school, $sourceYear2, $targetYear2);
         $planBModel = $this->freshPlan($school, $planB);
-        $mappingFromB = $this->planService()->upsertMapping($planBModel, $sourceGrade, null, $targetGrade, $targetSection);
+        // No target Section: plan A's Section is not in plan B's target year (UAT-C1, UAT-YR-04).
+        $mappingFromB = $this->planService()->upsertMapping($planBModel, $sourceGrade, null, $targetGrade, null);
 
         $user = $this->createUser();
         $this->grantCapabilities($user, $school, ['enrollments.manage', 'enrollments.rollovers.manage']);

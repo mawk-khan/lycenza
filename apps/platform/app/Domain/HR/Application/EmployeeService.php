@@ -6,6 +6,7 @@ use App\Domain\HR\Application\Exceptions\DuplicateWorkEmailException;
 use App\Domain\HR\Application\Exceptions\EmployeeAlreadyLinkedException;
 use App\Domain\HR\Application\Exceptions\EmployeeNotActiveException;
 use App\Domain\HR\Application\Exceptions\EmployeeNotLinkedException;
+use App\Domain\HR\Application\Exceptions\EmployeeNumberConflictException;
 use App\Domain\HR\Application\Exceptions\EmployeeUserLinkNotEditableException;
 use App\Domain\HR\Application\Exceptions\UnrelatedUserLinkageException;
 use App\Domain\HR\Application\Exceptions\UserAlreadyLinkedException;
@@ -70,12 +71,13 @@ class EmployeeService
         return $this->translatingUserLinkConflict($userId, fn () => $this->context->withSchool($school, function () use ($school, $attributes, $userId, $workEmail, $actor) {
             return DB::transaction(function () use ($school, $attributes, $userId, $workEmail, $actor) {
                 $sequenceValue = $this->allocator->allocate($school);
+                $employeeNumber = $this->formatter->format($sequenceValue);
 
                 try {
                     $employee = Employee::query()->create([
                         'school_id' => $school->id,
                         'user_id' => null,
-                        'employee_number' => $this->formatter->format($sequenceValue),
+                        'employee_number' => $employeeNumber,
                         'full_name' => $attributes['full_name'],
                         'work_email' => $workEmail,
                         'work_phone' => $attributes['work_phone'] ?? null,
@@ -84,6 +86,14 @@ class EmployeeService
                 } catch (QueryException $e) {
                     if ($workEmail !== null && $this->violatesConstraint($e, 'employees_work_email_unique')) {
                         throw new DuplicateWorkEmailException($workEmail);
+                    }
+
+                    // UAT-HR-20b: the counter is behind numbers written out of band.
+                    // Refuse cleanly, but keep the database error in the error log.
+                    if ($this->violatesConstraint($e, EmployeeNumberConflictException::CONSTRAINT)) {
+                        report($e);
+
+                        throw new EmployeeNumberConflictException($employeeNumber);
                     }
 
                     throw $e;
