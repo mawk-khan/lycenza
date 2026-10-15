@@ -10,3 +10,7 @@ historical. Business modules are implemented. Their specifications live in
 `docs/roadmap/MASTER-ROADMAP.md` "Post-foundation product programmes". The
 staff web-surface programme is SWC, `docs/architecture/adr/0073-staff-web-surface-completion-contract.md`.
 This directory still holds no separate product-requirements documents.)*
+
+*(2026-10-15, V11.0: `V11-COMMERCIAL-READINESS-AUDIT.md` is the evidence
+record for the post-v1 V11 programme, contract
+`docs/architecture/adr/0075-v11-commercial-readiness-programme-contract.md`.)*
