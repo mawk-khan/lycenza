@@ -9,7 +9,10 @@
   V11.3 Historical Placement Closure (narrowed to R-1) — IMPLEMENTED
   (2026-10-15, OD-V11-3, §11; existing Complete/Withdraw exposed for
   closed-year placements plus a preview-then-complete batch; R-1 resolved).
-  OD-V11-7 corrections X-01–X-04 — RESOLVED (2026-10-15, §12).**
+  OD-V11-7 corrections X-01–X-04 — RESOLVED (2026-10-15, §12).
+  V11.7 CLOSURE AUDIT — COMPLETE (2026-10-15, §13): V11 complete within
+  approved scope; V11.1 blocked; V11.4 and V11.6 decision-gated; open
+  questions in the D-xx register; next: local UAT.**
 - Date: 2026-10-15
 - Programme: **V11 — Benchmark-Driven Commercial Readiness**
   (`MASTER-ROADMAP.md`, post-foundation programme 10). It is a post-v1
@@ -677,3 +680,68 @@ rollover prevention are untouched.
     id refused, capability required, distinct labels for same-named
     Sections.
 - Affected suites and guards: 1686 OK.
+
+## 13. V11.7 — Commercial Readiness Closure (complete, 2026-10-15)
+
+Authorised by the owner as OD-V11-7C (audit, verification and documentation
+only). Baseline `origin/main` = `5f77ef62`. **No product code changed.** The
+full record is
+[`docs/product/V11-CLOSURE-AUDIT.md`](../../product/V11-CLOSURE-AUDIT.md):
+- journeys verified at runtime;
+- decision packs, the legal register, E16 and PPR separation;
+- the scorecard and stage gates;
+- the backlog, the do-not-build register and the UAT matrix.
+
+### 13.1 Closure statuses
+
+These supersede the §5 "Status" column, which is kept as written in V11.0.
+
+| Checkpoint | State |
+|---|---|
+| V11.0 | Complete |
+| V11.1 | **Blocked** (small-cohort gate 7.1–7.3 + counsel 7.4; D-01–D-04) |
+| V11.2 | Complete within approved scope (§9) |
+| V11.3 | Complete within approved scope, narrowed to R-1 (§11) |
+| V11.4 | Decision-gated (D-07, D-08) |
+| V11.5 | Complete within approved scope, read-only (§10) |
+| V11.6 | Decision-gated (D-09); recommended: none now |
+| X-01–X-04 | Complete (§12) |
+| V11.7 | Complete (this section) |
+
+### 13.2 Decision-ID reconciliation
+
+§8 defined OD-V11-1…7. The owner's later approvals reused some of those
+labels for different checkpoints:
+
+| Label as used in an approval | Approved scope | The §8 question with the same label | §8 question status |
+|---|---|---|---|
+| OD-V11-2 | V11.2 | Authorise V11.2 | **Decided** (approved) |
+| OD-V11-3 | V11.3 narrowed to R-1 | Reopen PHASE-1E-0 §13.2 (reason, effective date, approval) | **Still open**, now **D-13** |
+| OD-V11-5 | V11.5 Data Health | ADR 0043 §12 tier-1 staff notifications | **Still open**, now **D-08** |
+| OD-V11-7 | X-01–X-04 | Authorise the correction slice | **Decided** (approved) |
+| OD-V11-7C | V11.7 closure audit | — | — |
+| — | — | OD-V11-1 small-cohort gate | Open, now **D-01–D-04** |
+| — | — | OD-V11-4 SIS export | Open, now **D-11** |
+| — | — | OD-V11-6 ADR 0055 amendments | Open, now **D-07** |
+
+From V11.7 on, open questions use only the D-xx register
+(V11-CLOSURE-AUDIT.md §20) to avoid ambiguity.
+
+### 13.3 Determinations
+
+- **Local UAT: YES.**
+- **Staging: NO.** PPR infrastructure is not provisioned (R-00a blocked).
+- **Controlled pilot: NO.** Infrastructure, backups and restore drill, the
+  email channel, E21, E30–E34; in practice also payment correction and
+  import.
+- **Commercial production: NO.** O1 qualification and the legal register.
+- **Overall commercial readiness: 58 %.** Product capability is about 81 %;
+  go-live readiness is about 31 %.
+- **Governance:** the E16 successor is due before 2026-11-10 (last valid day
+  2026-11-09). After that, no candidate can be published.
+- **V11 does not modify PPR / Phase 0O.**
+
+### 13.4 Recommendation
+
+Begin structured local UAT. Run the E16 successor cycle as separate
+governance.

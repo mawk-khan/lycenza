@@ -14,3 +14,6 @@ This directory still holds no separate product-requirements documents.)*
 *(2026-10-15, V11.0: `V11-COMMERCIAL-READINESS-AUDIT.md` is the evidence
 record for the post-v1 V11 programme, contract
 `docs/architecture/adr/0075-v11-commercial-readiness-programme-contract.md`.)*
+
+*(2026-10-15, V11.7: `V11-CLOSURE-AUDIT.md` is the V11 closure record:
+decision register D-01–D-13, stage gates and the UAT matrix.)*
