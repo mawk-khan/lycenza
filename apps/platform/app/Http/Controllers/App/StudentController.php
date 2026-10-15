@@ -4,6 +4,7 @@ namespace App\Http\Controllers\App;
 
 use App\Domain\Identity\Application\AccountLinkService;
 use App\Domain\Students\Application\Exceptions\DuplicateStudentNumberException;
+use App\Domain\Students\Application\StudentActivityHistoryService;
 use App\Domain\Students\Application\StudentEnrollmentReadService;
 use App\Domain\Students\Application\StudentService;
 use App\Domain\Students\Infrastructure\Student;
@@ -11,6 +12,7 @@ use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -43,7 +45,7 @@ class StudentController extends Controller
 {
     use AuthorizesCapability;
 
-    public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities): Response
+    public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities, StudentEnrollmentReadService $enrollmentReads): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('students.view', $school);
@@ -72,8 +74,21 @@ class StudentController extends Controller
 
         $paginator = $query->paginate(20)->withQueryString();
 
+        // V11.2 (ADR 0075): each row's current class, so two Students with
+        // similar names can be told apart. Present ONLY for holders of
+        // enrollments.view -- the same independent-capability rule show()
+        // applies (Phase 1B.6) -- and loaded for the whole page in one
+        // query (StudentEnrollmentReadService::currentForMany()).
+        $canViewEnrollments = $capabilities->canInSchool($context->actor(), 'enrollments.view', $school);
+        $placements = $canViewEnrollments
+            ? $enrollmentReads->currentForMany($school, $paginator->getCollection()->pluck('id')->all())
+            : null;
+
         return Inertia::render('App/Students/Index', [
-            'students' => $paginator->through(fn (Student $s) => $this->presentSummary($s)),
+            'students' => $paginator->through(fn (Student $s) => $this->presentSummary($s) + (
+                $placements === null ? [] : ['currentPlacement' => $this->presentPlacement($placements->get($s->id))]
+            )),
+            'canViewEnrollments' => $canViewEnrollments,
             'filters' => [
                 'student_number' => $validated['student_number'] ?? '',
                 'name' => $validated['name'] ?? '',
@@ -113,6 +128,30 @@ class StudentController extends Controller
         }
 
         return redirect("/app/students/{$student->id}");
+    }
+
+    /**
+     * V11.2 (ADR 0075): the Student's operational history -- a read
+     * projection over the audit ledger (StudentActivityHistoryService),
+     * each category shown only to holders of its source capability.
+     */
+    public function history(TenantContext $context, StudentActivityHistoryService $histories, string $student): Response
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('students.view', $school);
+
+        $result = $histories->forStudent($school, $student, $context->actor());
+        abort_if($result === null, 404);
+
+        return Inertia::render('App/Students/History', [
+            'student' => $this->presentSummary($result['student']),
+            'entries' => $result['entries'],
+            'truncated' => $result['truncated'],
+            'categories' => $result['categories'],
+            'limit' => StudentActivityHistoryService::LIMIT,
+            // Recorded times are shown in the School's own timezone.
+            'timezone' => SchoolTimezone::resolve($school)->getName(),
+        ]);
     }
 
     public function show(TenantContext $context, CapabilityResolver $capabilities, AccountLinkService $accountLinks, StudentEnrollmentReadService $enrollmentReads, string $student): Response
@@ -240,6 +279,18 @@ class StudentController extends Controller
         $service->changeStatus($model, $validated['status'], $context->actor());
 
         return redirect("/app/students/{$model->id}");
+    }
+
+    /**
+     * @return array{gradeLevel: string|null, section: string|null, rollNumber: string|null}|null
+     */
+    private function presentPlacement(?StudentEnrollment $enrollment): ?array
+    {
+        return $enrollment === null ? null : [
+            'gradeLevel' => $enrollment->gradeLevel?->name,
+            'section' => $enrollment->section?->name,
+            'rollNumber' => $enrollment->roll_number,
+        ];
     }
 
     /**

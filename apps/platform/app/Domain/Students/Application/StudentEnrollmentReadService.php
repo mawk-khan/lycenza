@@ -6,6 +6,7 @@ use App\Domain\AcademicStructure\Application\CurrentAcademicYearResolver;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
+use App\Models\School;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 
@@ -65,6 +66,35 @@ class StudentEnrollmentReadService
             ->where('academic_year_id', $academicYear->id)
             ->where('status', 'active')
             ->first();
+    }
+
+    /**
+     * V11.2 (ADR 0075): currentFor() for a page of Students at once --
+     * the same rule (the `active` Enrollment in the given, else the
+     * School's currently active, AcademicYear; never a historical row
+     * substituted), in ONE query for the whole page instead of one per
+     * row. Keyed by Student id; a Student with no current placement is
+     * simply absent. An empty map when the School has no active
+     * AcademicYear. Authorization-neutral like every method here: the
+     * caller checks `enrollments.view` first.
+     *
+     * @param  list<string>  $studentIds
+     * @return Collection<string, StudentEnrollment>
+     */
+    public function currentForMany(School $school, array $studentIds, ?AcademicYear $academicYear = null): Collection
+    {
+        $academicYear ??= $this->academicYearResolver->tryResolve($school);
+        if ($academicYear === null || $studentIds === []) {
+            return new Collection;
+        }
+
+        return StudentEnrollment::query()
+            ->with(['gradeLevel', 'section', 'campus'])
+            ->whereIn('student_id', $studentIds)
+            ->where('academic_year_id', $academicYear->id)
+            ->where('status', 'active')
+            ->get()
+            ->keyBy('student_id');
     }
 
     /**

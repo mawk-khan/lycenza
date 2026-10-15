@@ -55,6 +55,40 @@ class TeachingAssignmentReadService
     }
 
     /**
+     * V11.2 (ADR 0075): the filter choices for one AcademicYear's
+     * assignment list -- the distinct Employees and Sections that already
+     * appear on that year's assignments, under the same
+     * `teaching.assignments.view` gate as list(). Derived from the rows
+     * themselves, so a filter never offers a person or class the list
+     * would not show anyway (never the HR directory, never every Section).
+     *
+     * @return array{employees: list<array{id: string, employeeNumber: string|null, fullName: string|null}>, sections: list<array{id: string, name: string|null, code: string|null}>}
+     */
+    public function filterOptions(School $school, string $academicYearId, User $actor): array
+    {
+        $this->authorizeCapabilityFor($actor, TeachingAssignmentService::CAPABILITY_VIEW, $school);
+
+        return $this->context->withSchool($school, function () use ($school, $academicYearId): array {
+            $rows = TeachingAssignment::query()
+                ->where('school_id', $school->id)
+                ->where('academic_year_id', $academicYearId)
+                ->with(['employee:id,school_id,employee_number,full_name', 'section:id,school_id,name,code'])
+                ->get(['id', 'school_id', 'employee_id', 'section_id']);
+
+            return [
+                'employees' => $rows->pluck('employee')->filter()->unique('id')
+                    ->sortBy(fn ($e) => mb_strtolower((string) $e->full_name))
+                    ->map(fn ($e) => ['id' => $e->id, 'employeeNumber' => $e->employee_number, 'fullName' => $e->full_name])
+                    ->values()->all(),
+                'sections' => $rows->pluck('section')->filter()->unique('id')
+                    ->sortBy(fn ($s) => mb_strtoupper((string) $s->code))
+                    ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name, 'code' => $s->code])
+                    ->values()->all(),
+            ];
+        });
+    }
+
+    /**
      * TCH-E (ADR 0063 section 45): an AcademicYear's elective teaching assignments, the same projection without a
      * Section (an elective is Offering-wide). Under `teaching.assignments.view`.
      *

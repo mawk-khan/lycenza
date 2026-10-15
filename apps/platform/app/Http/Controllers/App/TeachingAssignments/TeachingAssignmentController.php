@@ -46,9 +46,18 @@ class TeachingAssignmentController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability(TeachingAssignmentService::CAPABILITY_VIEW, $school);
 
+        // V11.2 (ADR 0075): the employee/section filters
+        // TeachingAssignmentReadService::list() and the /api/v1 index
+        // already support. A foreign-School id simply matches nothing.
         $validated = $request->validate([
             'academic_year_id' => ['sometimes', 'uuid'],
+            'employee_id' => ['sometimes', 'nullable', 'uuid'],
+            'section_id' => ['sometimes', 'nullable', 'uuid'],
             'page' => ['sometimes', 'integer', 'min:1'],
+        ]);
+        $filters = array_filter([
+            'employee_id' => $validated['employee_id'] ?? null,
+            'section_id' => $validated['section_id'] ?? null,
         ]);
 
         $academicYearId = $validated['academic_year_id']
@@ -58,7 +67,7 @@ class TeachingAssignmentController extends Controller
 
         $assignments = $academicYearId === null
             ? null
-            : $reads->list($school, ['academic_year_id' => $academicYearId], (int) ($validated['page'] ?? 1), 50, $context->actor())->withQueryString();
+            : $reads->list($school, ['academic_year_id' => $academicYearId] + $filters, (int) ($validated['page'] ?? 1), 50, $context->actor())->withQueryString();
 
         return Inertia::render('App/TeachingAssignments/Index', [
             'academicYears' => AcademicYear::query()->where('school_id', $school->id)->orderByDesc('starts_on')->get()
@@ -66,6 +75,11 @@ class TeachingAssignmentController extends Controller
                 ->values()->all(),
             'academicYearId' => $academicYearId ?? '',
             'assignments' => $assignments,
+            'filters' => [
+                'employeeId' => $filters['employee_id'] ?? '',
+                'sectionId' => $filters['section_id'] ?? '',
+            ],
+            'filterOptions' => $academicYearId === null ? null : $reads->filterOptions($school, $academicYearId, $context->actor()),
             'endReasons' => TeachingAssignment::END_REASONS,
             'canManage' => $canManage,
             'options' => $canManage && $academicYearId !== null ? $this->options($school->id, $academicYearId) : null,

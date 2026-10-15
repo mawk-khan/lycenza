@@ -554,6 +554,15 @@ submit the complete register → view it → correct a status. No draft
 save, no Guardian/Student view, no teacher self-service, no mobile
 surface, no analytics.
 
+*(2026-10-15, V11.2, ADR 0075 §9.5: `/app/attendance/exceptions` lists
+one School day's `absent`/`late`/`excused` records across submitted
+registers, under `attendance.view`, through
+`App\Domain\Attendance\Application\AttendanceExceptionReadService`. It
+is an operational list of the same individual records each register shows
+(name columns only), linked from the admin registers page and never from My
+Attendance. It has no rate, percentage or per-Student tally, so the "no
+analytics" rule above still holds.)*
+
 **Audit** (`AuditRecorder`, ADR 0017):
 
 - `attendance.session.submitted` — session id, provenance

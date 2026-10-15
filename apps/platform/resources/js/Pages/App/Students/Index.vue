@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
 import Pagination from '../../../Components/Pagination.vue';
 import StatusBadge from '../../../Components/StatusBadge.vue';
@@ -12,6 +12,13 @@ interface StudentRow {
     middleName: string | null;
     lastName: string | null;
     status: 'active' | 'inactive';
+    // Present only when the viewer holds enrollments.view (V11.2); null when
+    // the Student has no active placement in the School's active year.
+    currentPlacement?: {
+        gradeLevel: string | null;
+        section: string | null;
+        rollNumber: string | null;
+    } | null;
 }
 
 interface PageLink {
@@ -24,6 +31,8 @@ interface Props {
     students: {
         data: StudentRow[];
         links: PageLink[];
+        from: number | null;
+        to: number | null;
         total: number;
     };
     filters: {
@@ -32,6 +41,7 @@ interface Props {
         status: string;
     };
     canManage: boolean;
+    canViewEnrollments: boolean;
 }
 
 const props = defineProps<Props>();
@@ -65,7 +75,30 @@ function fullName(student: StudentRow): string {
     return [student.firstName, student.middleName, student.lastName].filter(Boolean).join(' ');
 }
 
-const hasFilters = studentNumber.value || name.value || status.value;
+// Reactive (it was computed once at setup and went stale after filtering).
+const hasFilters = computed(
+    () =>
+        props.filters.student_number !== '' ||
+        props.filters.name !== '' ||
+        props.filters.status !== '',
+);
+
+function resetFilters(): void {
+    studentNumber.value = '';
+    name.value = '';
+    status.value = '';
+    clearTimeout(debounceTimer);
+    applyFilters();
+}
+
+function placementLabel(student: StudentRow): string {
+    const p = student.currentPlacement;
+    if (!p) {
+        return 'No current class';
+    }
+    const cls = [p.gradeLevel, p.section].filter(Boolean).join(' · ');
+    return p.rollNumber ? `${cls} (roll ${p.rollNumber})` : cls;
+}
 </script>
 
 <template>
@@ -120,7 +153,19 @@ const hasFilters = studentNumber.value || name.value || status.value;
                     <option value="inactive">Inactive</option>
                 </select>
             </div>
+            <button
+                v-if="hasFilters"
+                type="button"
+                class="pb-2 text-sm underline"
+                @click="resetFilters"
+            >
+                Clear filters
+            </button>
         </form>
+        <p v-if="canViewEnrollments" class="mt-2 text-sm text-slate-500">
+            To find Students by academic year, campus, grade, Section or roll number, use the
+            <a class="underline" href="/app/enrollments">Enrollments directory</a>.
+        </p>
 
         <EmptyState
             v-if="students.data.length === 0"
@@ -149,6 +194,9 @@ const hasFilters = studentNumber.value || name.value || status.value;
                     <tr class="border-b border-slate-200 text-xs text-slate-500">
                         <th scope="col" class="py-2 font-medium">Student</th>
                         <th scope="col" class="py-2 font-medium">Student number</th>
+                        <th v-if="canViewEnrollments" scope="col" class="py-2 font-medium">
+                            Current class
+                        </th>
                         <th scope="col" class="py-2 font-medium">Status</th>
                         <th scope="col" class="py-2 font-medium">
                             <span class="sr-only">Actions</span>
@@ -165,6 +213,9 @@ const hasFilters = studentNumber.value || name.value || status.value;
                             >
                         </td>
                         <td class="py-3 text-slate-600">{{ student.studentNumber }}</td>
+                        <td v-if="canViewEnrollments" class="py-3 text-slate-600">
+                            {{ placementLabel(student) }}
+                        </td>
                         <td class="py-3"><StatusBadge :status="student.status" /></td>
                         <td class="py-3 text-right">
                             <a class="text-sm underline" :href="`/app/students/${student.id}`"
@@ -186,11 +237,19 @@ const hasFilters = studentNumber.value || name.value || status.value;
                         fullName(student)
                     }}</a>
                     <p class="mt-1 text-sm text-slate-500">{{ student.studentNumber }}</p>
+                    <p v-if="canViewEnrollments" class="mt-1 text-sm text-slate-500">
+                        {{ placementLabel(student) }}
+                    </p>
                     <div class="mt-2"><StatusBadge :status="student.status" /></div>
                 </li>
             </ul>
 
-            <Pagination :links="students.links" />
+            <Pagination
+                :links="students.links"
+                :from="students.from"
+                :to="students.to"
+                :total="students.total"
+            />
         </template>
     </main>
 </template>

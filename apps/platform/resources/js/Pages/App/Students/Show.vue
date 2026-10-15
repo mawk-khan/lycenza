@@ -235,6 +235,9 @@ function unlink(r: Relationship): void {
             <div>
                 <h1 class="text-xl font-semibold">{{ fullName() }}</h1>
                 <p class="mt-1 text-sm text-slate-500">{{ student.studentNumber }}</p>
+                <p class="mt-1 text-sm">
+                    <a class="underline" :href="`/app/students/${student.id}/history`">History</a>
+                </p>
             </div>
             <div v-if="canManageStudents" class="flex items-center gap-2">
                 <a

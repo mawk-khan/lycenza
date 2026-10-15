@@ -9,12 +9,27 @@ interface PageLink {
 
 interface Props {
     links: PageLink[];
+    // V11.2 (ADR 0075 section 6.1): the optional result summary. These are
+    // the paginator's own `from`/`to`/`total`, already in every list page's
+    // payload: the count of the rows the viewer is looking at (ADR 0042
+    // section 11), never a population figure. A page opts in by passing
+    // them; Analytics-style counts are out of scope (ADR 0040).
+    from?: number | null;
+    to?: number | null;
+    total?: number | null;
 }
 
 defineProps<Props>();
 </script>
 
 <template>
+    <p
+        v-if="total !== undefined && total !== null && total > 0 && from && to"
+        class="mt-4 text-sm text-slate-500"
+        aria-live="polite"
+    >
+        Showing {{ from }}–{{ to }} of {{ total }} {{ total === 1 ? 'result' : 'results' }}
+    </p>
     <!-- Laravel's paginator always includes a Previous/Next pair plus at
          least one page link; 3 is the floor for "more than one page". -->
     <nav

@@ -21,6 +21,7 @@ use App\Http\Controllers\App\AdmissionApplicationController;
 use App\Http\Controllers\App\Analytics\CurriculumCoverageController;
 use App\Http\Controllers\App\ApplicantController;
 use App\Http\Controllers\App\Attendance\AttendanceController;
+use App\Http\Controllers\App\Attendance\AttendanceExceptionController;
 use App\Http\Controllers\App\Attendance\MyAttendanceController;
 use App\Http\Controllers\App\Automation\AutomationController;
 use App\Http\Controllers\App\Canteen\CanteenBillingConfigurationController;
@@ -577,6 +578,7 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         Route::post('/', [StudentController::class, 'store'])->name('store');
         Route::get('/{student}', [StudentController::class, 'show'])->name('show');
         Route::get('/{student}/edit', [StudentController::class, 'edit'])->name('edit');
+        Route::get('/{student}/history', [StudentController::class, 'history'])->name('history');
         Route::put('/{student}', [StudentController::class, 'update'])->name('update');
         Route::post('/{student}/status', [StudentController::class, 'changeStatus'])->name('status');
 
@@ -1788,6 +1790,8 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         Route::get('/', [AttendanceController::class, 'index'])->name('index');
         Route::get('/take', [AttendanceController::class, 'take'])->name('take');
         Route::get('/roster', [AttendanceController::class, 'roster'])->name('roster');
+        // V11.2 (ADR 0075): before /{attendanceSession}, which would capture it.
+        Route::get('/exceptions', [AttendanceExceptionController::class, 'index'])->name('exceptions');
         Route::post('/', [AttendanceController::class, 'store'])->name('store');
         Route::get('/{attendanceSession}', [AttendanceController::class, 'show'])->name('show');
         Route::post('/records/{attendanceRecord}/correct', [AttendanceController::class, 'correct'])->name('correct');

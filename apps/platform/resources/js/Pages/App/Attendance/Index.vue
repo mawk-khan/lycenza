@@ -37,11 +37,15 @@ interface Props {
     // surface) under its own URL; the server decides what it contains.
     baseUrl?: string;
     heading?: string;
+    // V11.2: the administrative exceptions list; only the Tier 1
+    // AttendanceController passes it (never My Attendance).
+    exceptionsUrl?: string | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     baseUrl: '/app/attendance',
     heading: 'Attendance registers',
+    exceptionsUrl: null,
 });
 
 const attendanceDate = ref(props.filters.attendanceDate);
@@ -69,6 +73,11 @@ watch(attendanceDate, () => {
                 <p class="mt-1 text-sm text-slate-500">
                     Submitted class registers. A register is taken once, complete, and thereafter
                     only individual statuses are corrected.
+                </p>
+                <p v-if="exceptionsUrl" class="mt-1 text-sm">
+                    <a class="underline" :href="exceptionsUrl"
+                        >Absent, late and excused Students by day</a
+                    >
                 </p>
             </div>
             <a
@@ -106,37 +115,43 @@ watch(attendanceDate, () => {
             </template>
         </EmptyState>
 
-        <table v-else class="mt-6 w-full border-collapse text-sm">
-            <thead>
-                <tr class="border-b border-slate-200 text-left text-slate-500">
-                    <th class="py-2">Date</th>
-                    <th class="py-2">Section</th>
-                    <th class="py-2">Subject</th>
-                    <th class="py-2">Period</th>
-                    <th class="py-2">Teacher</th>
-                    <th class="py-2">Students</th>
-                    <th class="py-2"></th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr v-for="row in sessions.data" :key="row.id" class="border-b border-slate-100">
-                    <td class="py-2">{{ row.attendanceDate }}</td>
-                    <td class="py-2">{{ row.sectionCode }}</td>
-                    <td class="py-2">{{ row.subjectName }}</td>
-                    <td class="py-2">
-                        {{ row.periodName }}
-                        <span class="text-slate-500">
-                            ({{ row.periodStartTime }}–{{ row.periodEndTime }})
-                        </span>
-                    </td>
-                    <td class="py-2">{{ row.teacherName }}</td>
-                    <td class="py-2">{{ row.recordCount }}</td>
-                    <td class="py-2 text-right">
-                        <a class="underline" :href="`${baseUrl}/${row.id}`">View</a>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+        <div v-else class="relative mt-6 overflow-x-auto">
+            <table class="w-full border-collapse text-sm">
+                <thead>
+                    <tr class="border-b border-slate-200 text-left text-slate-500">
+                        <th class="py-2">Date</th>
+                        <th class="py-2">Section</th>
+                        <th class="py-2">Subject</th>
+                        <th class="py-2">Period</th>
+                        <th class="py-2">Teacher</th>
+                        <th class="py-2">Students</th>
+                        <th class="py-2"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr
+                        v-for="row in sessions.data"
+                        :key="row.id"
+                        class="border-b border-slate-100"
+                    >
+                        <td class="py-2">{{ row.attendanceDate }}</td>
+                        <td class="py-2">{{ row.sectionCode }}</td>
+                        <td class="py-2">{{ row.subjectName }}</td>
+                        <td class="py-2">
+                            {{ row.periodName }}
+                            <span class="text-slate-500">
+                                ({{ row.periodStartTime }}–{{ row.periodEndTime }})
+                            </span>
+                        </td>
+                        <td class="py-2">{{ row.teacherName }}</td>
+                        <td class="py-2">{{ row.recordCount }}</td>
+                        <td class="py-2 text-right">
+                            <a class="underline" :href="`${baseUrl}/${row.id}`">View</a>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
 
         <Pagination class="mt-6" :links="sessions.links" />
     </main>

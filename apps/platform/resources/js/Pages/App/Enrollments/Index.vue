@@ -40,6 +40,8 @@ interface Props {
     enrollments: {
         data: EnrollmentRow[];
         links: PageLink[];
+        from: number | null;
+        to: number | null;
         total: number;
     };
     filters: {
@@ -290,7 +292,12 @@ const hasFilters = Object.values(props.filters).some((v) => v !== '');
                 </li>
             </ul>
 
-            <Pagination :links="enrollments.links" />
+            <Pagination
+                :links="enrollments.links"
+                :from="enrollments.from"
+                :to="enrollments.to"
+                :total="enrollments.total"
+            />
         </template>
     </main>
 </template>

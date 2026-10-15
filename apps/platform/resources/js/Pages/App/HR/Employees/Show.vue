@@ -147,6 +147,7 @@ interface Props {
         manageQualifications: boolean;
         manageDocuments: boolean;
         manageNotes: boolean;
+        viewTeachingAssignments: boolean;
     };
     positions: RefOption[];
     departments: RefOption[];
@@ -453,6 +454,13 @@ function removeNote(id: string): void {
             <div>
                 <h1 class="text-xl font-semibold">{{ workspace.summary.display_name }}</h1>
                 <p class="mt-1 text-sm text-slate-500">{{ workspace.summary.employee_number }}</p>
+                <p v-if="can.viewTeachingAssignments" class="mt-1 text-sm">
+                    <a
+                        class="underline"
+                        :href="`/app/teaching-assignments?employee_id=${workspace.summary.employee_id}`"
+                        >Teaching assignments</a
+                    >
+                </p>
             </div>
             <div v-if="can.manageEmployees" class="flex items-center gap-2">
                 <a

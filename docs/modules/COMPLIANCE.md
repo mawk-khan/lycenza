@@ -251,3 +251,10 @@ retention or deletion controls.
 Negative controls: removing the capability check fails the refusal test;
 removing the access audit fails the exactly-one-event test.
 
+*(2026-10-15, V11.2, ADR 0075 §9.4: `App\Support\Audit\SchoolAuditSubjectHistoryReader`
+is a second, separate read contract on the School ledger. It reads one
+entity's history with a closed event-type allowlist and per-type metadata
+keys, the shape ADR 0042 §10 names, and never returns the actor. Its first
+caller is the Students module's history page, where each category is gated
+by its source capability. `SchoolAuditEventReader` (this module's
+audit-log review contract) is unchanged and still never loads metadata.)*

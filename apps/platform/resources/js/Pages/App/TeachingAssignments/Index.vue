@@ -78,6 +78,13 @@ interface Props {
         offerings: OfferingOption[];
         employees: EmployeeOption[];
     } | null;
+    // V11.2: list filters; the options are the teachers and Sections that
+    // already appear on this year's assignments.
+    filters: { employeeId: string; sectionId: string };
+    filterOptions: {
+        employees: { id: string; employeeNumber: string | null; fullName: string | null }[];
+        sections: { id: string; name: string | null; code: string | null }[];
+    } | null;
 }
 
 const props = defineProps<Props>();
@@ -91,6 +98,31 @@ watch(academicYearId, () => {
         { preserveState: false, replace: true },
     );
 });
+
+const filterEmployeeId = ref(props.filters.employeeId);
+const filterSectionId = ref(props.filters.sectionId);
+
+function applyListFilters(): void {
+    router.get(
+        '/app/teaching-assignments',
+        {
+            academic_year_id: academicYearId.value || undefined,
+            employee_id: filterEmployeeId.value || undefined,
+            section_id: filterSectionId.value || undefined,
+        },
+        { preserveState: true, preserveScroll: true, replace: true },
+    );
+}
+
+function clearListFilters(): void {
+    filterEmployeeId.value = '';
+    filterSectionId.value = '';
+    applyListFilters();
+}
+
+const hasListFilters = computed(
+    () => props.filters.employeeId !== '' || props.filters.sectionId !== '',
+);
 
 const stateLabels: Record<AssignmentRow['state'], string> = {
     upcoming: 'Upcoming',
@@ -193,6 +225,53 @@ function submitEnd(): void {
             </select>
         </div>
 
+        <div v-if="filterOptions !== null" class="mt-4 flex flex-wrap items-end gap-3">
+            <div>
+                <label class="block text-sm text-slate-600" for="filter-teacher">Teacher</label>
+                <select
+                    id="filter-teacher"
+                    v-model="filterEmployeeId"
+                    class="mt-1 w-72 rounded border border-slate-300 px-3 py-2 text-sm"
+                    @change="applyListFilters"
+                >
+                    <option value="">All teachers</option>
+                    <option
+                        v-for="employee in filterOptions.employees"
+                        :key="employee.id"
+                        :value="employee.id"
+                    >
+                        {{ employee.fullName }} ({{ employee.employeeNumber }})
+                    </option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm text-slate-600" for="filter-section">Section</label>
+                <select
+                    id="filter-section"
+                    v-model="filterSectionId"
+                    class="mt-1 w-56 rounded border border-slate-300 px-3 py-2 text-sm"
+                    @change="applyListFilters"
+                >
+                    <option value="">All Sections</option>
+                    <option
+                        v-for="section in filterOptions.sections"
+                        :key="section.id"
+                        :value="section.id"
+                    >
+                        {{ section.name }} ({{ section.code }})
+                    </option>
+                </select>
+            </div>
+            <button
+                v-if="hasListFilters"
+                type="button"
+                class="pb-2 text-sm underline"
+                @click="clearListFilters"
+            >
+                Clear filters
+            </button>
+        </div>
+
         <EmptyState
             v-if="assignments === null"
             class="mt-8"
@@ -204,59 +283,73 @@ function submitEnd(): void {
             <EmptyState
                 v-if="assignments.data.length === 0"
                 class="mt-8"
-                title="No Teaching Assignments yet"
-                description="Nobody has been assigned to teach a Section in this academic year."
+                :title="
+                    hasListFilters
+                        ? 'No Teaching Assignments match these filters'
+                        : 'No Teaching Assignments yet'
+                "
+                :description="
+                    hasListFilters
+                        ? 'Choose another teacher or Section, or clear the filters.'
+                        : 'Nobody has been assigned to teach a Section in this academic year.'
+                "
             />
 
-            <table v-else class="mt-6 w-full border-collapse text-sm">
-                <thead>
-                    <tr class="border-b border-slate-200 text-left text-slate-500">
-                        <th class="py-2">Employee</th>
-                        <th class="py-2">Section</th>
-                        <th class="py-2">Subject</th>
-                        <th class="py-2">From</th>
-                        <th class="py-2">To</th>
-                        <th class="py-2">State</th>
-                        <th class="py-2">Ended</th>
-                        <th v-if="canManage" class="py-2"></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr
-                        v-for="row in assignments.data"
-                        :key="row.id"
-                        class="border-b border-slate-100"
-                    >
-                        <td class="py-2">
-                            {{ row.employee.fullName }}
-                            <span class="text-slate-500">({{ row.employee.employeeNumber }})</span>
-                        </td>
-                        <td class="py-2">{{ row.section.name }} ({{ row.section.code }})</td>
-                        <td class="py-2">
-                            {{ row.subjectOffering.subjectCode }} ·
-                            {{ row.subjectOffering.subjectName }}
-                        </td>
-                        <td class="py-2">{{ row.startsOn }}</td>
-                        <td class="py-2">{{ row.endsOn ?? 'Open-ended' }}</td>
-                        <td class="py-2">{{ stateLabels[row.state] }}</td>
-                        <td class="py-2">
-                            {{
-                                row.endReason ? (reasonLabels[row.endReason] ?? row.endReason) : '—'
-                            }}
-                        </td>
-                        <td v-if="canManage" class="py-2 text-right">
-                            <button
-                                v-if="row.endedAt === null"
-                                type="button"
-                                class="underline"
-                                @click="beginEnd(row)"
-                            >
-                                End
-                            </button>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+            <div v-else class="relative mt-6 overflow-x-auto">
+                <table class="w-full border-collapse text-sm">
+                    <thead>
+                        <tr class="border-b border-slate-200 text-left text-slate-500">
+                            <th class="py-2">Employee</th>
+                            <th class="py-2">Section</th>
+                            <th class="py-2">Subject</th>
+                            <th class="py-2">From</th>
+                            <th class="py-2">To</th>
+                            <th class="py-2">State</th>
+                            <th class="py-2">Ended</th>
+                            <th v-if="canManage" class="py-2"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr
+                            v-for="row in assignments.data"
+                            :key="row.id"
+                            class="border-b border-slate-100"
+                        >
+                            <td class="py-2">
+                                {{ row.employee.fullName }}
+                                <span class="text-slate-500"
+                                    >({{ row.employee.employeeNumber }})</span
+                                >
+                            </td>
+                            <td class="py-2">{{ row.section.name }} ({{ row.section.code }})</td>
+                            <td class="py-2">
+                                {{ row.subjectOffering.subjectCode }} ·
+                                {{ row.subjectOffering.subjectName }}
+                            </td>
+                            <td class="py-2">{{ row.startsOn }}</td>
+                            <td class="py-2">{{ row.endsOn ?? 'Open-ended' }}</td>
+                            <td class="py-2">{{ stateLabels[row.state] }}</td>
+                            <td class="py-2">
+                                {{
+                                    row.endReason
+                                        ? (reasonLabels[row.endReason] ?? row.endReason)
+                                        : '—'
+                                }}
+                            </td>
+                            <td v-if="canManage" class="py-2 text-right">
+                                <button
+                                    v-if="row.endedAt === null"
+                                    type="button"
+                                    class="underline"
+                                    @click="beginEnd(row)"
+                                >
+                                    End
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
 
             <nav
                 v-if="assignments.last_page > 1"
@@ -270,6 +363,10 @@ function submitEnd(): void {
                     >Previous</a
                 >
                 <span>Page {{ assignments.current_page }} of {{ assignments.last_page }}</span>
+                <span class="text-slate-500"
+                    >{{ assignments.total }}
+                    {{ assignments.total === 1 ? 'assignment' : 'assignments' }}</span
+                >
                 <a
                     v-if="assignments.next_page_url"
                     class="underline"

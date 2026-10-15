@@ -13,6 +13,7 @@ use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeCategory;
 use App\Domain\HR\Infrastructure\Position;
 use App\Http\Controllers\Controller;
+use App\Models\Campus;
 use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
@@ -20,6 +21,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -48,27 +50,68 @@ class HrEmployeeController extends Controller
     {
         $school = $context->requireSchool();
 
+        // V11.2 (ADR 0075): the web directory now passes the filters
+        // EmployeeDirectoryService already supports (and the /api/v1
+        // directory already exposes) -- campus, department, position and
+        // the allow-listed sort. Format is checked here because the
+        // service compares UUID columns (a non-UUID would be a 500, see
+        // the API controller); EmployeeDirectoryQuery stays the sort
+        // allow-list authority.
         $validated = $request->validate([
             'search' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'campus_id' => ['sometimes', 'nullable', 'uuid'],
+            'department_id' => ['sometimes', 'nullable', 'uuid'],
+            'position_id' => ['sometimes', 'nullable', 'uuid'],
+            'sort' => ['sometimes', 'nullable', Rule::in(EmployeeDirectoryQuery::ALLOWED_SORTS)],
+            'direction' => ['sometimes', 'nullable', Rule::in(['asc', 'desc'])],
             'include_archived' => ['sometimes', 'boolean'],
             'page' => ['sometimes', 'integer', 'min:1'],
         ]);
 
         $query = new EmployeeDirectoryQuery(
             search: $validated['search'] ?? null,
+            campusId: $validated['campus_id'] ?? null,
+            departmentId: $validated['department_id'] ?? null,
+            positionId: $validated['position_id'] ?? null,
             includeArchived: $request->boolean('include_archived'),
+            sort: $validated['sort'] ?? null,
+            direction: $validated['direction'] ?? null,
             page: (int) ($validated['page'] ?? 1),
         );
 
         $paginator = $service->search($school, $query, $context->actor());
 
+        $capabilities = app(CapabilityResolver::class);
+        $actor = $context->actor();
+
         return Inertia::render('App/HR/Employees/Index', [
             'employees' => $paginator->through(fn (EmployeeDirectoryEntry $e) => $e->toArray())->withQueryString(),
             'filters' => [
                 'search' => $validated['search'] ?? '',
+                'campus_id' => $validated['campus_id'] ?? '',
+                'department_id' => $validated['department_id'] ?? '',
+                'position_id' => $validated['position_id'] ?? '',
+                'sort' => $query->sort,
+                'direction' => $query->direction,
                 'include_archived' => $request->boolean('include_archived'),
             ],
-            'canManage' => app(CapabilityResolver::class)->canInSchool($context->actor(), 'hr.employees.manage', $school),
+            // Filter options. Campuses are School setup reference data
+            // every directory reader already sees in the rows. Department
+            // and Position lists are offered only to holders of their
+            // own view capability (the HR organisation pages' gates), so
+            // the directory never becomes a wider route to the org
+            // structure than those pages.
+            'campusOptions' => Campus::query()->where('status', 'active')->orderBy('name')->get(['id', 'name'])
+                ->map(fn (Campus $c) => ['id' => $c->id, 'name' => $c->name])->values()->all(),
+            'departmentOptions' => $capabilities->canInSchool($actor, 'hr.departments.view', $school)
+                ? Department::query()->where('status', 'active')->orderBy('name')->get(['id', 'name'])
+                    ->map(fn (Department $d) => ['id' => $d->id, 'name' => $d->name])->values()->all()
+                : null,
+            'positionOptions' => $capabilities->canInSchool($actor, 'hr.positions.view', $school)
+                ? Position::query()->where('status', 'active')->orderBy('name')->get(['id', 'name'])
+                    ->map(fn (Position $p) => ['id' => $p->id, 'name' => $p->name])->values()->all()
+                : null,
+            'canManage' => $capabilities->canInSchool($actor, 'hr.employees.manage', $school),
         ]);
     }
 
@@ -122,6 +165,12 @@ class HrEmployeeController extends Controller
                 'manageQualifications' => $capabilities->canInSchool($actor, 'hr.employees.qualifications.manage', $school),
                 'manageDocuments' => $capabilities->canInSchool($actor, 'hr.employees.documents.manage', $school),
                 'manageNotes' => $capabilities->canInSchool($actor, 'hr.employees.notes.manage', $school),
+                // V11.2: the link to this Employee's Teaching Assignments
+                // (a filtered view of the TeachingAssignments list, which
+                // re-checks the same capability itself). The catalogue key,
+                // not a TeachingAssignments class: that module depends on
+                // HR, never the reverse (DOMAIN-MAP, CLAUDE.md rule 4).
+                'viewTeachingAssignments' => $capabilities->canInSchool($actor, 'teaching.assignments.view', $school),
             ],
             // Reference-data pickers for the inline Assignment form --
             // only fetched when the actor could actually use them,

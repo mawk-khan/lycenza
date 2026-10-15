@@ -66,6 +66,8 @@ class AttendanceController extends Controller
             'sessions' => $paginator->through(fn (AttendanceSession $s) => $this->presentSummary($s)),
             'filters' => ['attendanceDate' => $validated['attendance_date'] ?? ''],
             'canManage' => $capabilities->canInSchool($context->actor(), 'attendance.manage', $school),
+            // V11.2 (ADR 0075): same attendance.view gate as this page.
+            'exceptionsUrl' => '/app/attendance/exceptions',
         ]);
     }
 

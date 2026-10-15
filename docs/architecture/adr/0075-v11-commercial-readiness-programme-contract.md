@@ -2,7 +2,8 @@
 
 - Status: **Accepted. V11.0 CONTRACT PUBLISHED (2026-10-15, documentation
   only). V11.1 Executive Dashboard & Enrollment Intelligence is BLOCKED (§4).
-  No V11 implementation has started.**
+  V11.2 SIS Search, Reports & Operational Visibility — IMPLEMENTED
+  (2026-10-15, OD-V11-2, §9; no migration, no new capability, no export).**
 - Date: 2026-10-15
 - Programme: **V11 — Benchmark-Driven Commercial Readiness**
   (`MASTER-ROADMAP.md`, post-foundation programme 10). It is a post-v1
@@ -204,3 +205,122 @@ existing contracts, once the owner authorises it.
 | OD-V11-5 | ADR 0043 §12: whether tier-1 staff notifications are wanted | V11.4 event policies |
 | OD-V11-6 | Whether any ADR 0055 amendment (sender, Reply-To, test purpose) is wanted | V11.4 sender items |
 | OD-V11-7 | Authorise the X-01…X-04 correction slice | Defects |
+
+## 9. V11.2 — SIS Search, Reports & Operational Visibility (implemented, 2026-10-15)
+
+Authorised by the owner as OD-V11-2. Baseline `origin/main` = `bb3177e1`.
+**No migration, no new table, no new capability, no new route outside the
+School web surface, no export.** V11.1 stays BLOCKED (§4); SWC and PPR are
+unchanged.
+
+### 9.1 Implementation audit (before code)
+
+| Candidate | Backend support | API | Web before | Authorization | Schema | Decision |
+|---|---|---|---|---|---|---|
+| Staff filters (campus, department, position, sort) | `EmployeeDirectoryService` + `EmployeeDirectoryQuery` | yes (`EmployeeDirectoryController`) | search + archived only | `hr.employees.view`; option lists `hr.departments.view` / `hr.positions.view` | none | **Implemented** |
+| Student placement on the Student list | `StudentEnrollmentReadService::currentFor()` (per Student) | — | none on the list; full placement search on `/app/enrollments` | `students.view` + `enrollments.view` (independent, Phase 1B.6) | none | **Implemented** (batch read + link to the Enrollments directory) |
+| Teacher assignment visibility | `TeachingAssignmentReadService::list()` filters | yes | year filter only | `teaching.assignments.view` | none | **Implemented** (teacher and Section filters; Employee profile link) |
+| Student operational history | audit events with Student subject or `metadata.studentId` | — | enrollment history only | per category: `students.view`, `enrollments.view`, `guardians.view`, `admissions.view` | none | **Implemented** (read projection, §9.4) |
+| Absentee / attendance-exception list | `attendance_records` + sessions | — | per register only | `attendance.view` | none | **Implemented** (operational list, §9.5) |
+| Result totals | paginator `total` already in every list payload | — | not rendered | the list's own gate | none | **Implemented** as the row total only (ADR 0042 §11) |
+| Global Student/staff search | none (per-module searches only) | — | — | would need a per-result-type capability check | none | **Deferred** to a later V11.2 sub-checkpoint: new cross-module search architecture |
+| Guardian / contact lookup | `GuardianContactService` exact HMAC lookup | duplicate-check only | duplicate-check while linking | ADR 0041; ADMISSIONS.md §14: "never a staff-facing search feature" | none | **Rejected** (needs an ADR 0041 decision) |
+| Export | none for SIS; `analytics.export` granted to no role; no `compliance.export` | — | — | needs a capability decision | — | **Not authorised** (OD-V11-4 open); nothing added |
+
+### 9.2 Staff directory
+
+`HrEmployeeController@index` passes `campus_id`, `department_id`,
+`position_id` (UUID-validated) and the allow-listed `sort`/`direction`
+through the existing `EmployeeDirectoryQuery`. Campus options go to every
+directory reader (rows already show the campus). Department and Position
+options are sent only to holders of `hr.departments.view` /
+`hr.positions.view`, so the directory never becomes a wider route to the
+organisation structure. A foreign-School id matches nothing.
+
+### 9.3 Students and teaching assignments
+
+- `StudentEnrollmentReadService::currentForMany()` is `currentFor()` for a
+  page of Students in one query: the active Enrollment in the School's
+  active AcademicYear, never a historical row. The Student list shows it
+  only when the viewer also holds `enrollments.view`, and links to the
+  Enrollments directory for placement search.
+- `TeachingAssignmentReadService::filterOptions()` derives the teacher and
+  Section choices from that year's own assignments. The HR Employee profile
+  links to the filtered list for holders of `teaching.assignments.view`,
+  using the catalogue key, not a TeachingAssignments class (that module
+  depends on HR, never the reverse).
+- Not built: a teacher's own "my classes / my timetable" page. Which
+  capability gates a teacher's own assignment list is an authorization
+  decision under ADR 0063 (owner).
+
+### 9.4 Student history
+
+- **Read contract:** `App\Support\Audit\SchoolAuditSubjectHistoryReader` is
+  the shape ADR 0042 §10 names: one entity's events, a CLOSED event-type
+  allowlist with per-type metadata keys, and scalar values only. It returns
+  no actor, IP, user agent or request id. It is a separate class from
+  `SchoolAuditEventReader` (the audit-log review contract, which still
+  never loads metadata; `ComplianceArchitectureGuardTest` unchanged).
+- **Service and page:** `StudentActivityHistoryService` (Students module)
+  is the read projection, modelled on the HR Activity Timeline (8A.11).
+  `/app/students/{student}/history` requires `students.view`.
+- **Gating:** each category needs its source capability, so it is never
+  wider than the source (ADR 0042 §4):
+  - record: `students.view`
+  - placement: `enrollments.view`
+  - guardian links: `guardians.view`
+  - admission: `admissions.view`
+- **Known limits, shown on the page:**
+  - only what the ledger recorded appears;
+  - effective dates appear only where the event carried one (enrollment
+    endings); a status change has none (PHASE-1E-0 §11);
+  - who made a change is left to the School audit log (`school.audit.view`,
+    itself audited);
+  - the newest 200 entries, with a truncation notice;
+  - demo data written by seed factories has no audit events.
+- **Not access-audited**, like the HR timeline.
+
+### 9.5 Attendance exceptions
+
+`AttendanceExceptionReadService` and `/app/attendance/exceptions` (under
+`attendance.view`, linked from the admin registers page only, never from
+My Attendance) list one School-local day's `absent`/`late`/`excused`
+records across submitted registers. The filters are:
+- the date (required; today by default);
+- the Section (choices are that day's registers);
+- the status.
+
+It returns the same individual records the register page shows: name
+columns only, never date of birth. It has no rate, percentage or
+per-Student tally (ATTENDANCE.md §16 "no analytics" holds). The date is
+compared directly, so the `(school_id, attendance_date)` index applies.
+
+### 9.6 Result totals
+
+`Components/Pagination.vue` takes optional `from`/`to`/`total` and renders
+"Showing x–y of N results". These are the paginator's own values, already
+in each list payload. Opted in on Students, Enrollments, Employees and
+Attendance exceptions; the Teaching Assignment list shows its existing
+total. This is the ADR 0042 §11 row total of the visible list, never a
+population figure. No grouped or dashboard count was added, and no
+Analytics guard was touched.
+
+### 9.7 Also changed
+
+- Filter state is reactive (the Students and Employees empty-state
+  `hasFilters` was computed once and went stale).
+- Every filter page has a "Clear filters" action.
+- On pages this slice touched, wide tables scroll inside their own box at
+  phone width: Attendance registers, Teaching Assignments, and the new
+  exceptions list. Before, the page scrolled sideways.
+
+### 9.8 Deferred from V11.2
+
+| Item | Reason |
+|---|---|
+| Global cross-module search | New architecture (per-result-type authorization); a later V11.2 sub-checkpoint |
+| Guardian contact search | ADR 0041 / ADMISSIONS.md §14 decision |
+| SIS export | OD-V11-4 (capability decision) |
+| Teacher's own assignment / timetable view | ADR 0063 authorization decision |
+| Actor names in Student history | Audit evidence stays behind `school.audit.view` (ADR 0042) |
+| Audit-log filters (ADR 0042 §10) | Narrowed out of v1 by ADR 0042; unchanged |

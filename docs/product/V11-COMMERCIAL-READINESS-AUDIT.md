@@ -5,6 +5,10 @@
   `6e11bc143529106044f6657952fc7de2500f433b` (PPR.2D). Tree clean, one
   worktree, the historical stash `phase-5d3-preflight` untouched.
 - Contract: [ADR 0075](../architecture/adr/0075-v11-commercial-readiness-programme-contract.md).
+- *(2026-10-15: V11.2 implemented the justified Group B rows (B-02, B-04,
+  B-09, B-11, B-12) and list row totals; B-10 was not built. See ADR 0075 §9 for
+  the implementation audit and what stays deferred. This record stays the
+  V11.0 evidence as written.)*
 - Scope: the six candidate groups (A–F) in the owner's V11 brief. **No
   benchmark material exists in this repository.** No competitor screenshot,
   text, customer data or personal data was used or recorded. Every
