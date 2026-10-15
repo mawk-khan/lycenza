@@ -17,3 +17,7 @@ record for the post-v1 V11 programme, contract
 
 *(2026-10-15, V11.7: `V11-CLOSURE-AUDIT.md` is the V11 closure record:
 decision register D-01–D-13, stage gates and the UAT matrix.)*
+
+*(2026-10-15, Local UAT: `LOCAL-UAT-2026-10-15.md` is the structured local
+UAT evidence record (167 checks, defect register UAT-*, correction sequence
+UAT-C1–C5). It records and classifies; it fixes nothing.)*
