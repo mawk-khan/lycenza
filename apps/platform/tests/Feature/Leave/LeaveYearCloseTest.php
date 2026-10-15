@@ -97,7 +97,7 @@ class LeaveYearCloseTest extends TestCase
 
         $this->close($w);
         $this->assertSame([0, 10], [$this->balance($w, $w['year']), $this->balance($w, $w['next'])]);
-        $this->assertSame(['carry_forward_out' => 10, 'expiry' => 10], $this->inSchool($w['school'], fn () => DB::table('leave_ledger_entries')->where('leave_year_id', $w['year']->id)->whereNotNull('year_close_id')->pluck('units', 'kind')->all()));
+        $this->assertSame(['carry_forward_out' => 10, 'expiry' => 10], $this->inSchool($w['school'], fn () => DB::table('leave_ledger_entries')->where('leave_year_id', $w['year']->id)->whereNotNull('year_close_id')->orderBy('kind')->pluck('units', 'kind')->all()));
 
         $this->assertSame('LEAVE_YEAR_ALREADY_CLOSED', $this->code(fn () => $this->close($w)), 'a repeat never duplicates ledger rows');
         $this->assertSame(3, $this->inSchool($w['school'], fn () => DB::table('leave_ledger_entries')->whereNotNull('year_close_id')->count()));
