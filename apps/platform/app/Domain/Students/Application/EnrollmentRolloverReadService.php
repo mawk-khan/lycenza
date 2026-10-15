@@ -128,7 +128,7 @@ class EnrollmentRolloverReadService
     {
         $query = EnrollmentRolloverItem::query()
             ->where('plan_id', $plan->id)
-            ->with(['student:id,school_id,student_number,first_name,middle_name,last_name', 'sourceEnrollment.section', 'targetSection'])
+            ->with(['student:id,school_id,student_number,first_name,middle_name,last_name', 'sourceEnrollment.section.gradeLevel', 'targetSection.gradeLevel'])
             ->orderBy('id');
 
         if (isset($filters['validation_result'])) {

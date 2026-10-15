@@ -96,9 +96,13 @@ interface Item {
         middleName: string | null;
         lastName: string | null;
     };
-    sourceEnrollment: { id: string; section: Ref | null };
+    sourceEnrollment: {
+        id: string;
+        section: (Ref & { gradeLevelName?: string | null }) | null;
+        rollNumber?: string | null;
+    };
     decision: RolloverDecision;
-    targetSection: Ref | null;
+    targetSection: (Ref & { gradeLevelName?: string | null }) | null;
     rollNumberStrategy: RolloverRollNumberStrategy | null;
     targetRollNumber: string | null;
     validationResult: RolloverValidationResult | null;
@@ -116,7 +120,7 @@ interface PageLink {
 
 interface Props {
     plan: Plan;
-    items: { data: Item[]; links: PageLink[]; total: number };
+    items: { data: Item[]; links: PageLink[]; total: number; current_page?: number };
     itemFilters: { validation_result: string; execution_status: string; decision: string };
     canManage: boolean;
     gradeLevels: Ref[];
@@ -124,6 +128,10 @@ interface Props {
     targetSections: Array<Ref & { label: string; gradeLevelId: string }>;
     sourceSubjectOfferings: SubjectOfferingRef[];
     targetSubjectOfferings: SubjectOfferingRef[];
+    perPage: number;
+    bulkMax: number;
+    bulkResult: InstanceType<typeof ItemsPanel>['$props']['bulkResult'];
+    yearStatus: { source: string; target: string; targetStartsOn: string };
 }
 
 const props = defineProps<Props>();
@@ -346,6 +354,10 @@ function reload(): void {
             :configurable="configurable"
             :can-manage="canManage"
             :target-sections="targetSections"
+            :configuration-version="plan.configurationVersion"
+            :per-page="perPage"
+            :bulk-max="bulkMax"
+            :bulk-result="bulkResult"
         />
 
         <!-- Execution -->
@@ -386,6 +398,39 @@ function reload(): void {
                         <dd class="text-lg font-semibold">{{ plan.executionSummary.total }}</dd>
                     </div>
                 </dl>
+                <!-- UAT-C2: the steps that follow a finished rollover, linked to the
+                     existing pages (nothing here closes anything by itself). -->
+                <div
+                    v-if="plan.status !== 'cancelled'"
+                    class="mt-4 rounded border border-sky-200 bg-sky-50 p-3 text-sm"
+                >
+                    <p class="font-medium">Next steps</p>
+                    <ol class="mt-1 list-decimal space-y-1 pl-5">
+                        <li>
+                            <template v-if="yearStatus.target === 'draft'">
+                                Activate {{ plan.targetAcademicYear.name }} on or after
+                                {{ yearStatus.targetStartsOn }} in
+                                <a class="underline" href="/app/school-setup/academic-years"
+                                    >Academic years</a
+                                >. Activating it closes {{ plan.sourceAcademicYear.name }}.
+                            </template>
+                            <template v-else>
+                                {{ plan.targetAcademicYear.name }} is {{ yearStatus.target }}.
+                            </template>
+                        </li>
+                        <li>
+                            Once {{ plan.sourceAcademicYear.name }} is closed, complete the
+                            placements it left open on
+                            <a class="underline" href="/app/enrollments/closed-year-placements"
+                                >Open placements in closed years</a
+                            >
+                            (the rollover does not complete them).
+                            <span v-if="yearStatus.source === 'closed'" class="font-medium">
+                                {{ plan.sourceAcademicYear.name }} is closed now.</span
+                            >
+                        </li>
+                    </ol>
+                </div>
                 <p class="mt-3 text-xs text-slate-500">
                     Started
                     {{

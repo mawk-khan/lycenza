@@ -36,6 +36,7 @@ use App\Http\Controllers\App\DashboardController;
 use App\Http\Controllers\App\DataHealthController;
 use App\Http\Controllers\App\Domains\SchoolDomainController;
 use App\Http\Controllers\App\ElectiveGroupController;
+use App\Http\Controllers\App\EnrollmentRolloverBulkDecisionController;
 use App\Http\Controllers\App\EnrollmentRolloverController;
 use App\Http\Controllers\App\EnrollmentRolloverItemController;
 use App\Http\Controllers\App\EnrollmentRolloverMappingController;
@@ -965,6 +966,11 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         Route::delete('/{rollover}/subject-mappings/{subjectOffering}', [EnrollmentRolloverSubjectMappingController::class, 'destroy'])->name('subject-mappings.destroy');
 
         Route::patch('/{rollover}/items/{item}', [EnrollmentRolloverItemController::class, 'update'])->name('items.update');
+
+        // UAT-C2 (UAT-YR-01b): bulk Promote / Exclude -- preview writes
+        // nothing; apply is guarded by the plan's configuration version.
+        Route::post('/{rollover}/bulk-decisions/preview', [EnrollmentRolloverBulkDecisionController::class, 'preview'])->name('bulk-decisions.preview');
+        Route::post('/{rollover}/bulk-decisions', [EnrollmentRolloverBulkDecisionController::class, 'apply'])->name('bulk-decisions.apply');
     });
 
     // Phase 1H.1: SubjectOffering roster / elective administration

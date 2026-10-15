@@ -1934,6 +1934,73 @@ identical allowed-status set for configuration AND dry-run):
   `roll_number_strategy` (`InvalidRollNumberStrategyException`) before
   writing anything.
 
+**Bulk Promote / Exclude (UAT-C2, UAT-YR-01b, 2026-10-16).** Local UAT
+needed about four actions per Student, which is thousands for a real
+School. `EnrollmentRolloverBulkDecisionService` decides up to 100 Students
+of one plan at once, without changing what a decision means.
+
+- **Rules:**
+  - A decision is judged by `EnrollmentRolloverDryRunService::simulate()`.
+    This is the same evaluation `run()` performs, now shared through
+    `evaluateItems()`, with every selected Student given the decision in
+    memory together. Nothing is persisted.
+  - A Promote is written only when that Student's placement outcome is
+    clean: the mapping, target Section, Roll Number and any existing
+    target-year placement all resolve.
+  - Everything else stays exactly as it was and is reported per Student:
+    `no_mapping`, `invalid_mapping`, `missing_target_section`,
+    `roll_number_conflict`, `target_placement_conflict`,
+    `source_needs_review`, `already_decided`, `already_executed`,
+    `not_in_plan`.
+  - Elective-mapping blocks do not stop a Promote, because they are plan
+    configuration, not the decision.
+- **Roll Number:** Promote keeps the current number (`preserve_source`),
+  or an explicit number already set on that Student. A collision leaves
+  every colliding Student undecided: never "first one wins", and never a
+  new number. Collisions are checked against other selected Students,
+  anyone else in the plan, and existing target placements.
+- **Target Section:** Promote keeps a target Section already chosen for
+  that Student; otherwise the mapping supplies it, as before.
+- **What changes:** Exclude changes only the decision. A Promote with no
+  Roll Number rule yet is completed rather than counted as already
+  decided.
+- **Writes:** each Student goes through
+  `EnrollmentRolloverPlanService::writeItemDecision()`, the same write
+  `setItemDecision()` uses. That means the same columns, one
+  `configuration_version` bump and one
+  `enrollment_rollover_plan.configuration_changed` audit event per
+  Student (`bulk: true`); there is no opaque batch record.
+- **Concurrency:** the request names the configuration version the page
+  loaded. Under the plan row lock, any change since then refuses the whole
+  request (`STALE_ROLLOVER_DECISIONS`, 409 / form error) and nothing is
+  written. Repeats are refused the same way, so no `idempotent`
+  middleware is needed (rule 29). Eligibility is re-evaluated under that
+  lock. Ids outside the plan or the School are reported, never written.
+- **Web:**
+  - `POST /app/enrollment-rollovers/{id}/bulk-decisions/preview` returns
+    JSON and writes nothing.
+  - `POST /app/enrollment-rollovers/{id}/bulk-decisions` applies the
+    decision.
+  - Both need the same capabilities as a single decision
+    (`enrollments.manage` + `enrollments.rollovers.manage`). Another
+    School's plan is a 404.
+  - The plan page selects rows on the current page only (20, 50 or 100
+    per page). It shows a preview (moves such as
+    "Grade 6 · A → Grade 7 · Section A: 12", the number ready, and who
+    will be left unchanged), then the per-Student result.
+  - Rows show Grade and Section, plus the source Roll Number.
+  - Single and bulk saves return to the same page, page size and filters
+    (whitelisted `context`) with a confirmation.
+- **After a finished plan:** the page lists the next steps:
+  1. activate the target year on or after its start date (UAT-C1);
+  2. once the source year is closed, complete its open placements on
+     `/app/enrollments/closed-year-placements` (V11.3).
+
+  It only links to those pages; it automates neither step.
+- **Proof:** `Tests\Feature\App\EnrollmentRolloverBulkDecisionTest`,
+  including a 150-Student cohort decided in two requests with bounded
+  queries.
+
 Neither method is reachable from an HTTP endpoint yet (no controller
 exists) -- tests call them directly, exactly like `createDraft()`.
 

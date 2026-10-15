@@ -777,3 +777,39 @@ UAT-C2–C5, academic-year reopening, automatic activation or rollover,
 legal-gated work, PPR, and E16 are out of scope. The remaining S1s are
 workflow gaps for later slices: payment correction (FIN-05/24/27), the
 defaulter list (FIN-08) and rollover decisions at scale (YR-01b).
+
+## 15. UAT-C2 — School-Scale Year Rollover Usability (2026-10-16)
+
+Approved by the owner to close UAT-YR-01b (S1). Local UAT needed one full
+manual operation per Student to decide a rollover. There is no schema
+change, no new capability and no change to what a decision means.
+
+### 15.1 Contract
+
+- **Bulk Promote / Exclude:** up to 100 Students of one plan, chosen on the
+  current page (20, 50 or 100 rows), previewed first.
+- **Judged by the validation engine:** `EnrollmentRolloverDryRunService::simulate()`
+  evaluates the hypothetical decisions together without persisting.
+  A Promote is written only when the placement outcome is clean.
+  Everything else is unchanged and reported per Student.
+- **Roll Number:** the current number is kept. A collision leaves every
+  colliding Student undecided; there is no renumbering policy.
+- **Same write path:** `EnrollmentRolloverPlanService::writeItemDecision()`
+  is shared with the single decision: one version bump and one audit
+  event per Student.
+- **Concurrency:** guarded by the configuration version under the plan
+  lock. A stale or repeated request is refused whole
+  (`STALE_ROLLOVER_DECISIONS`). Ids outside the plan or School are never
+  written.
+- **Page:** rows show Grade · Section and the Roll Number. Saves return to
+  the same page and filters with a confirmation.
+- **After a finished plan:** the page links to target-year activation
+  (the UAT-C1 date rule is unchanged) and to the V11.3 page for open
+  placements. Nothing there runs automatically.
+
+### 15.2 Not in scope
+
+- UAT-C3: finance correction and the defaulter list.
+- UAT-C4: global UX, search, labels elsewhere, and accessibility outside
+  the rollover page.
+- Reopening a year, automatic activation, and automatic placement closure.

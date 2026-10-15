@@ -135,28 +135,7 @@ class EnrollmentRolloverDryRunService
             $this->populateItems($plan, $candidatesByStudent);
 
             $items = EnrollmentRolloverItem::query()->where('plan_id', $plan->id)->get();
-            $mappings = $plan->mappings()->get();
-            $mappingsBySection = $mappings->whereNotNull('source_section_id')->keyBy('source_section_id');
-            $mappingsByGrade = $mappings->whereNull('source_section_id')->keyBy('source_grade_level_id');
-
-            $freshSources = StudentEnrollment::query()
-                ->whereIn('id', $items->pluck('source_enrollment_id')->unique()->all())
-                ->get()->keyBy('id');
-
-            [$results, $readyCandidates] = $this->evaluateStructural($items, $candidatesByStudent, $freshSources, $mappingsBySection, $mappingsByGrade);
-
-            [$newResults, $readyCandidates] = $this->resolveTargetSections($plan, $readyCandidates);
-            $results += $newResults;
-
-            [$newResults, $readyCandidates] = $this->evaluateAlreadyEnrolled($plan, $readyCandidates);
-            $results += $newResults;
-
-            [$newResults, $readyCandidates] = $this->evaluateInPlanConflicts($readyCandidates);
-            $results += $newResults;
-
-            $results += $this->evaluatePersistedConflicts($plan, $readyCandidates);
-
-            $results = $this->evaluateSubjectParticipation($plan, $items, $results, $readyCandidates);
+            $results = $this->evaluateItems($plan, $items, $candidatesByStudent);
 
             if ($beforePersist !== null) {
                 $beforePersist();
@@ -204,6 +183,72 @@ class EnrollmentRolloverDryRunService
                 return $summary + ['validated' => $isFullyValidated, 'configurationVersion' => $capturedVersion];
             });
         });
+    }
+
+    /**
+     * UAT-C2 (UAT-YR-01b): the same evaluation as run(), for HYPOTHETICAL
+     * decisions, persisting nothing. Every existing Item is evaluated with
+     * `$decisions` applied in memory (itemId => decision, roll strategy,
+     * explicit roll number) -- so a bulk Promote/Exclude is judged by exactly
+     * the rules validation will later apply, including Roll Number conflicts
+     * among the Students being decided together and with everyone else in
+     * the plan. Items not yet populated by run() are not evaluated.
+     *
+     * @param  array<string, array{decision: string, roll_number_strategy: ?string, target_roll_number: ?string}>  $decisions
+     * @return array<string, array<string, mixed>> itemId => ['result' => ..., 'reason' => ...]
+     */
+    public function simulate(EnrollmentRolloverPlan $plan, array $decisions): array
+    {
+        return $this->context->withSchool($plan->school, function () use ($plan, $decisions) {
+            $candidatesByStudent = StudentEnrollment::query()
+                ->where('academic_year_id', $plan->source_academic_year_id)
+                ->whereIn('status', ['active', 'completed'])
+                ->get()
+                ->groupBy('student_id');
+
+            $items = EnrollmentRolloverItem::query()->where('plan_id', $plan->id)->get();
+            foreach ($items as $item) {
+                if (isset($decisions[$item->id])) {
+                    // In memory only: never saved by this method.
+                    $item->forceFill($decisions[$item->id]);
+                }
+            }
+
+            return $this->evaluateItems($plan, $items, $candidatesByStudent);
+        });
+    }
+
+    /**
+     * The validation passes, in their documented priority order, over a
+     * given set of Items -- shared by run() and simulate() so a hypothetical
+     * decision is judged by the one rule set. Reads only.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function evaluateItems(EnrollmentRolloverPlan $plan, Collection $items, Collection $candidatesByStudent): array
+    {
+        $mappings = $plan->mappings()->get();
+        $mappingsBySection = $mappings->whereNotNull('source_section_id')->keyBy('source_section_id');
+        $mappingsByGrade = $mappings->whereNull('source_section_id')->keyBy('source_grade_level_id');
+
+        $freshSources = StudentEnrollment::query()
+            ->whereIn('id', $items->pluck('source_enrollment_id')->unique()->all())
+            ->get()->keyBy('id');
+
+        [$results, $readyCandidates] = $this->evaluateStructural($items, $candidatesByStudent, $freshSources, $mappingsBySection, $mappingsByGrade);
+
+        [$newResults, $readyCandidates] = $this->resolveTargetSections($plan, $readyCandidates);
+        $results += $newResults;
+
+        [$newResults, $readyCandidates] = $this->evaluateAlreadyEnrolled($plan, $readyCandidates);
+        $results += $newResults;
+
+        [$newResults, $readyCandidates] = $this->evaluateInPlanConflicts($readyCandidates);
+        $results += $newResults;
+
+        $results += $this->evaluatePersistedConflicts($plan, $readyCandidates);
+
+        return $this->evaluateSubjectParticipation($plan, $items, $results, $readyCandidates);
     }
 
     /**

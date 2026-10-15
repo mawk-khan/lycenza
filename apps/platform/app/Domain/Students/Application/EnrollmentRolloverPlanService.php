@@ -211,23 +211,49 @@ class EnrollmentRolloverPlanService
             return DB::transaction(function () use ($plan, $item, $decision, $targetSectionOverride, $rollNumberStrategy, $targetRollNumber, $actor) {
                 $lockedPlan = EnrollmentRolloverPlan::query()->whereKey($plan->id)->lockForUpdate()->firstOrFail();
 
-                $item->update([
-                    'decision' => $decision,
-                    'target_section_id' => $targetSectionOverride?->id,
-                    'roll_number_strategy' => $rollNumberStrategy,
-                    'target_roll_number' => $targetRollNumber,
-                ]);
-
-                $lockedPlan->increment('configuration_version');
-
-                $this->audit->school($plan->school, 'enrollment_rollover_plan.configuration_changed', actor: $actor, subject: $lockedPlan, metadata: [
-                    'change' => 'item_decision',
-                    'itemId' => $item->id,
-                ]);
+                $this->writeItemDecision($lockedPlan, $item, $decision, $targetSectionOverride?->id, $rollNumberStrategy, $targetRollNumber, $actor);
 
                 return $item->refresh();
             });
         });
+    }
+
+    /**
+     * The one write of an Item's operator decision -- shared by
+     * setItemDecision() and the UAT-C2 bulk decisions
+     * (EnrollmentRolloverBulkDecisionService), so both change the same
+     * columns, bump `configuration_version` once per Item and record the
+     * same per-Item audit event. The caller must already hold the plan row
+     * lock inside a transaction and have checked the Item is configurable.
+     *
+     * @param  array<string, mixed>  $auditExtra
+     *
+     * @internal
+     */
+    public function writeItemDecision(
+        EnrollmentRolloverPlan $lockedPlan,
+        EnrollmentRolloverItem $item,
+        string $decision,
+        ?string $targetSectionId,
+        ?string $rollNumberStrategy,
+        ?string $targetRollNumber,
+        ?User $actor,
+        array $auditExtra = [],
+    ): void {
+        $item->update([
+            'decision' => $decision,
+            'target_section_id' => $targetSectionId,
+            'roll_number_strategy' => $rollNumberStrategy,
+            'target_roll_number' => $targetRollNumber,
+        ]);
+
+        $lockedPlan->increment('configuration_version');
+
+        $this->audit->school($lockedPlan->school, 'enrollment_rollover_plan.configuration_changed', actor: $actor, subject: $lockedPlan, metadata: [
+            'change' => 'item_decision',
+            'itemId' => $item->id,
+            ...$auditExtra,
+        ]);
     }
 
     /**

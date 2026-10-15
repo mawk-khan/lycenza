@@ -11,6 +11,7 @@ use App\Domain\Students\Application\Exceptions\RolloverItemAlreadyExecutedExcept
 use App\Domain\Students\Application\Exceptions\RolloverPlanNoLongerConfigurableException;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
+use App\Http\Controllers\App\Concerns\ReturnsToRolloverPlanContext;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
@@ -36,6 +37,7 @@ use Illuminate\Validation\ValidationException;
 class EnrollmentRolloverItemController extends Controller
 {
     use AuthorizesCapability;
+    use ReturnsToRolloverPlanContext;
 
     public function update(Request $request, TenantContext $context, string $rollover, string $item, EnrollmentRolloverPlanService $service): RedirectResponse
     {
@@ -69,6 +71,7 @@ class EnrollmentRolloverItemController extends Controller
             throw ValidationException::withMessages(['decision' => [$e->getMessage()]]);
         }
 
-        return redirect("/app/enrollment-rollovers/{$plan->id}");
+        // UAT-C2: back to the same page and filters, with a confirmation.
+        return redirect($this->rolloverPlanUrl($request, $plan->id))->with('flash', 'Decision saved. Run Validation when the plan is ready.');
     }
 }

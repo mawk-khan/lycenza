@@ -6,6 +6,7 @@ use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
+use App\Domain\Students\Application\EnrollmentRolloverBulkDecisionService;
 use App\Domain\Students\Application\EnrollmentRolloverDryRunService;
 use App\Domain\Students\Application\EnrollmentRolloverExecutionService;
 use App\Domain\Students\Application\EnrollmentRolloverPlanService;
@@ -148,10 +149,13 @@ class EnrollmentRolloverController extends Controller
             'execution_status' => ['sometimes', Rule::in(['succeeded', 'reconciled', 'skipped', 'failed'])],
             'decision' => ['sometimes', Rule::in(['undecided', 'promote', 'repeat', 'exclude', 'manual_review'])],
             'page' => ['sometimes', 'integer', 'min:1'],
+            // UAT-C2: up to 100 Students per page -- the most one bulk decision takes.
+            'per_page' => ['sometimes', Rule::in(['20', '50', '100'])],
         ]);
-        $itemFilters = collect($validated)->except('page')->all();
+        $itemFilters = collect($validated)->except(['page', 'per_page'])->all();
+        $perPage = (int) ($validated['per_page'] ?? 20);
         /** @var LengthAwarePaginator<int, EnrollmentRolloverItem> $itemsPaginator */
-        $itemsPaginator = $reads->items($plan, $itemFilters, 20)->withQueryString();
+        $itemsPaginator = $reads->items($plan, $itemFilters, $perPage)->withQueryString();
 
         return Inertia::render('App/EnrollmentRollovers/Show', [
             'plan' => $this->presentDetail($plan, $reads),
@@ -160,6 +164,18 @@ class EnrollmentRolloverController extends Controller
                 'validation_result' => $validated['validation_result'] ?? '',
                 'execution_status' => $validated['execution_status'] ?? '',
                 'decision' => $validated['decision'] ?? '',
+            ],
+            'perPage' => $perPage,
+            'bulkMax' => EnrollmentRolloverBulkDecisionService::MAX_ITEMS,
+            // UAT-C2: the outcome of the bulk decision just saved, if any.
+            'bulkResult' => $request->session()->get('rolloverBulkResult'),
+            // UAT-C2: what comes after execution -- activation is refused before
+            // the target year's start date (UAT-C1), and placements left open in
+            // a closed year are completed on the existing V11.3 page.
+            'yearStatus' => [
+                'source' => $plan->sourceAcademicYear->status,
+                'target' => $plan->targetAcademicYear->status,
+                'targetStartsOn' => $plan->targetAcademicYear->starts_on->toDateString(),
             ],
             'canManage' => $this->canManageRollovers($capabilities, $context->actor(), $school),
             'gradeLevels' => $this->gradeLevelOptions(),
@@ -424,10 +440,13 @@ class EnrollmentRolloverController extends Controller
                 'section' => $item->sourceEnrollment?->section === null ? null : [
                     'id' => $item->sourceEnrollment->section->id,
                     'name' => $item->sourceEnrollment->section->name,
+                    // UAT-C2: Grade 6 A, 7 A and 8 A are told apart.
+                    'gradeLevelName' => $item->sourceEnrollment->section->gradeLevel?->name,
                 ],
+                'rollNumber' => $item->sourceEnrollment?->roll_number,
             ],
             'decision' => $item->decision,
-            'targetSection' => $item->targetSection === null ? null : ['id' => $item->targetSection->id, 'name' => $item->targetSection->name],
+            'targetSection' => $item->targetSection === null ? null : ['id' => $item->targetSection->id, 'name' => $item->targetSection->name, 'gradeLevelName' => $item->targetSection->gradeLevel?->name],
             'rollNumberStrategy' => $item->roll_number_strategy,
             'targetRollNumber' => $item->target_roll_number,
             'validationResult' => $item->validation_result,
