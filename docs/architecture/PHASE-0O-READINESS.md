@@ -3255,3 +3255,29 @@ SATISFIED.
 
 **E16:** valid through **2026-11-09**; successor cycle around
 **2026-10-30**.
+
+## 67. Phase 0O / E16 — Successor review: decision required (2026-10-16)
+
+**Record:** [`E16-2026-10-16-SUCCESSOR-REVIEW.md`](../security/release-remediation/E16-2026-10-16-SUCCESSOR-REVIEW.md).
+
+**Fresh scan:** `78b68d6d`, run `local-20261016T095744Z-53be01e2`.
+
+**Existing exceptions:** all 16 advisories (115 records) are still present.
+None has a fix, and their evidence was re-verified on the fresh images.
+The proposal is to renew them unchanged for 28 days from the owner's
+decision date.
+
+**New findings:** Debian `nginx` 1.26.3-3+deb13u9 in the app image:
+- 3 Critical and 1 High, with no Debian fix;
+- fixed upstream in 1.30.6 / 1.31.7;
+- the Criticals are never exception-eligible (E16-P1).
+
+The app image cannot be VERIFIED until remediation slice **E16-R2**. Its
+route is an owner decision. Code publication is unaffected.
+
+**Unchanged:**
+- No exception was created or changed. `vulnerability-exceptions.json` is
+  untouched.
+- The hard stop is verified in code: the last valid day is
+  **2026-11-09**, and from **2026-11-10** the CI `Supply chain` job and
+  `publication-check` refuse.
