@@ -1122,3 +1122,55 @@ product-side staging handoff stays YES.
 moves to PPR (staging environment), E16-R2 (nginx release-image
 qualification) and legal-gate closure, then staging UAT. Each needs owner
 authorisation.
+
+## 21. Completed SIS Benchmark Delta Audit (record only, 2026-10-16)
+
+**Authority.** The owner authorised the completed external SIS benchmark as
+additional product-research evidence, for an audit-only checkpoint (inspect,
+map, classify, prioritise). It does not restart V11, does not reopen UAT-C1
+to UAT-C6, and authorises no implementation. Baseline: `main` = `d0fe3590`
+(UAT-C5, terminal). **No product code, schema, capability or configuration
+changed.**
+
+**Benchmark material.** None is in the repository and none was added. Only
+the business needs the owner's brief describes were extracted.
+
+**Record:** [`V11-SIS-BENCHMARK-DELTA-AUDIT.md`](../../product/V11-SIS-BENCHMARK-DELTA-AUDIT.md).
+It holds the full matrices for enrollment, admission finance, lifecycle,
+inactive-student checks, attendance, Student leave, groups, documents,
+staff, audit and daily operations, plus the "Completed SIS benchmark delta"
+table.
+
+**Delta findings.** Most observations repeat existing rows (A-xx to F-xx)
+or decisions (D-01 to D-13). Genuine delta:
+- **SB-01** (P2, V11.2): a list of class registers not yet taken for a
+  date. The Take page's `alreadySubmitted` flag is the only exposure today.
+- **SB-02** (P2, V11.5): attendance recorded after a back-dated placement
+  end. This is derivable, and no check exists.
+- **SB-03a** (P2, V11.5): an uncancelled charge for a billing period after
+  the placement ended.
+- **SB-03b** (P2, V11.2): a leaver filter and a campus filter on Outstanding
+  fees.
+- **SB-04 to SB-08** (decisions or P3): admission-cohort money aggregates,
+  Student gender / statutory demographics, Student leave, groups /
+  co-curricular, and a School Pulse page.
+
+**Decision register.** Proposed additions D-14 to D-17 are
+recommendations, not approvals:
+- D-14: are grouped money totals person-derived cells?
+- D-15: Student gender / statutory demographics.
+- D-16: Student leave.
+- D-17: groups.
+
+**Boundaries kept:**
+- the V11.1 gate and its recommendations are unchanged and unapproved;
+- PHASE-1E-0 / D-13 is not reopened;
+- Student history still withholds the actor;
+- no IP or device data is added.
+
+**Readiness.** No P0 or P1 was found. Local UAT, the product-side staging
+handoff (YES), pilot and production requirements are unchanged.
+
+**Recommendation.** No new V11 implementation should precede PPR /
+staging. A later read-only bundle, SB-01 to SB-03b (no migration), needs
+owner authorisation and is not started.

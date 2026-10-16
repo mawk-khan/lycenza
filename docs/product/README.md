@@ -32,3 +32,10 @@ operator-facing School Administrator Guide. It covers setup, staff
 onboarding, finance corrections, fee-run overlap decisions, rollover and
 Data Health, plus the gated areas and known limitations. Written against
 `main` after UAT-C6 and browser-checked on the local demo.)*
+
+*(2026-10-16, SIS benchmark delta: `V11-SIS-BENCHMARK-DELTA-AUDIT.md`
+classifies the completed external SIS benchmark's business observations
+against `main` `d0fe3590`. It holds the full gap matrix and the "Completed
+SIS benchmark delta" table, which has four P2 findings and four decisions.
+It contains no benchmark material. It records and classifies; it builds
+nothing.)*
