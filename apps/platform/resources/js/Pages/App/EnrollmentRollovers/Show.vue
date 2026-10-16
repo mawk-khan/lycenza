@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../datetime';
 import { router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import StatusBadge from '../../../Components/StatusBadge.vue';
@@ -433,13 +434,9 @@ function reload(): void {
                 </div>
                 <p class="mt-3 text-xs text-slate-500">
                     Started
-                    {{
-                        plan.executionStartedAt
-                            ? new Date(plan.executionStartedAt).toLocaleString()
-                            : '—'
-                    }}
+                    {{ plan.executionStartedAt ? formatDateTime(plan.executionStartedAt) : '—' }}
                     · Completed
-                    {{ plan.completedAt ? new Date(plan.completedAt).toLocaleString() : '—' }}
+                    {{ plan.completedAt ? formatDateTime(plan.completedAt) : '—' }}
                 </p>
             </template>
 

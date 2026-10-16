@@ -10,6 +10,7 @@ use App\Domain\Hostel\Application\Exceptions\StudentNotEligibleException;
 use App\Domain\Hostel\Application\HostelResidencyService;
 use App\Domain\Hostel\Infrastructure\HostelBed;
 use App\Domain\Hostel\Infrastructure\HostelResidencyAssignment;
+use App\Domain\Students\Application\StudentSearch;
 use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\AuthorizesCapability;
@@ -76,9 +77,7 @@ class HostelResidencyController extends Controller
 
         $students = Student::query()
             ->where('status', 'active')
-            ->when($term !== '', fn ($q) => $q->where(fn ($w) => $w->where('student_number', 'ilike', "%{$term}%")
-                ->orWhere('first_name', 'ilike', "%{$term}%")
-                ->orWhere('last_name', 'ilike', "%{$term}%")))
+            ->when(trim($term) !== '', fn ($q) => StudentSearch::anyField($q, $term))
             ->limit(10)
             ->get();
 

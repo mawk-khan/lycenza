@@ -185,14 +185,12 @@ class StudentEnrollmentReadService
         if (isset($filters['roll_number'])) {
             $query->where('roll_number', $filters['roll_number']);
         }
+        // UAT-C4 (UAT-SRCH-01): the same matching as the Students directory.
         if (isset($filters['student_number'])) {
-            $query->whereHas('student', fn ($q) => $q->where('student_number', $filters['student_number']));
+            $query->whereHas('student', fn ($q) => StudentSearch::number($q, $filters['student_number']));
         }
         if (isset($filters['student_name'])) {
-            $term = '%'.$filters['student_name'].'%';
-            $query->whereHas('student', fn ($q) => $q->where(
-                fn ($q2) => $q2->where('first_name', 'ilike', $term)->orWhere('last_name', 'ilike', $term),
-            ));
+            $query->whereHas('student', fn ($q) => StudentSearch::name($q, $filters['student_name']));
         }
 
         return $query->paginate($perPage);

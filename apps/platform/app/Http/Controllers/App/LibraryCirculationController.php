@@ -11,6 +11,7 @@ use App\Domain\Library\Application\LibraryLoanService;
 use App\Domain\Library\Infrastructure\LibraryCopy;
 use App\Domain\Library\Infrastructure\LibraryFine;
 use App\Domain\Library\Infrastructure\LibraryLoan;
+use App\Domain\Students\Application\StudentSearch;
 use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Models\School;
@@ -128,9 +129,7 @@ class LibraryCirculationController extends Controller
 
         $students = Student::query()
             ->where('status', 'active')
-            ->when($term !== '', fn ($q) => $q->where(fn ($w) => $w->where('student_number', 'ilike', "%{$term}%")
-                ->orWhere('first_name', 'ilike', "%{$term}%")
-                ->orWhere('last_name', 'ilike', "%{$term}%")))
+            ->when(trim($term) !== '', fn ($q) => StudentSearch::anyField($q, $term))
             ->limit(10)
             ->get();
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../datetime';
 import { router, useForm } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 import {
@@ -222,7 +223,7 @@ const leaveError = useLeaveError();
                     {{ ledgerKindLabels[e.kind] }}{{ e.direction ? ` (${e.direction})` : '' }} ·
                     {{ e.units }} units
                     <template v-if="e.reasonCode">· {{ reasonLabels[e.reasonCode] }}</template> ·
-                    {{ e.createdAt }}
+                    {{ formatDateTime(e.createdAt) }}
                 </li>
                 <li v-if="ledger.length === 0" class="text-slate-500">None.</li>
             </ul>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SearchCombobox from '../../../../Components/Form/SearchCombobox.vue';
 import { router, useForm } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 
@@ -55,7 +56,8 @@ watch(vehicleQuery, (value) => {
         const response = await fetch(
             `/app/transport/operations/search/vehicles?q=${encodeURIComponent(value)}`,
         );
-        const body = await response.json();
+        // UAT-C4: a refused or non-JSON answer is simply no results.
+        const body = response.ok ? await response.json().catch(() => ({ data: [] })) : { data: [] };
         vehicleResults.value = body.data;
     }, 250);
 });
@@ -66,7 +68,8 @@ watch(driverQuery, (value) => {
         const response = await fetch(
             `/app/transport/operations/search/drivers?q=${encodeURIComponent(value)}`,
         );
-        const body = await response.json();
+        // UAT-C4: a refused or non-JSON answer is simply no results.
+        const body = response.ok ? await response.json().catch(() => ({ data: [] })) : { data: [] };
         driverResults.value = body.data;
     }, 250);
 });
@@ -134,56 +137,38 @@ function endAssignment(assignmentId: string): void {
             <form class="mt-3 space-y-4" @submit.prevent="submit">
                 <div class="relative">
                     <label class="block text-sm text-slate-600" for="vehicle-search">Vehicle</label>
-                    <input
+                    <SearchCombobox
                         id="vehicle-search"
                         v-model="vehicleQuery"
-                        type="text"
                         placeholder="Search by code or registration number"
                         class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                    />
-                    <ul
-                        v-if="vehicleResults.length > 0"
-                        class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                        :options="vehicleResults"
+                        :option-key="(o) => o.id"
+                        :error="form.errors.vehicle_id"
+                        @select="pickVehicle"
                     >
-                        <li
-                            v-for="vehicle in vehicleResults"
-                            :key="vehicle.id"
-                            class="cursor-pointer px-3 py-2 hover:bg-slate-50"
-                            @click="pickVehicle(vehicle)"
-                        >
+                        <template #option="{ option: vehicle }">
                             {{ vehicle.code }} ({{ vehicle.registrationNumber }})
-                        </li>
-                    </ul>
-                    <p v-if="form.errors.vehicle_id" class="mt-1 text-sm text-red-600">
-                        {{ form.errors.vehicle_id }}
-                    </p>
+                        </template>
+                    </SearchCombobox>
                 </div>
 
                 <div class="relative">
                     <label class="block text-sm text-slate-600" for="driver-search">Driver</label>
-                    <input
+                    <SearchCombobox
                         id="driver-search"
                         v-model="driverQuery"
-                        type="text"
                         placeholder="Search by name or employee number"
                         class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                    />
-                    <ul
-                        v-if="driverResults.length > 0"
-                        class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                        :options="driverResults"
+                        :option-key="(o) => o.id"
+                        :error="form.errors.driver_employee_id"
+                        @select="pickDriver"
                     >
-                        <li
-                            v-for="driver in driverResults"
-                            :key="driver.id"
-                            class="cursor-pointer px-3 py-2 hover:bg-slate-50"
-                            @click="pickDriver(driver)"
-                        >
+                        <template #option="{ option: driver }">
                             {{ driver.fullName }} ({{ driver.employeeNumber }})
-                        </li>
-                    </ul>
-                    <p v-if="form.errors.driver_employee_id" class="mt-1 text-sm text-red-600">
-                        {{ form.errors.driver_employee_id }}
-                    </p>
+                        </template>
+                    </SearchCombobox>
                 </div>
 
                 <button

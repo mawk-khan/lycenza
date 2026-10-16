@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SearchCombobox from '../../../../Components/Form/SearchCombobox.vue';
 import { useForm } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 
@@ -40,7 +41,8 @@ watch(copyQuery, (value) => {
         const response = await fetch(
             `/app/library/circulation/search/copies?q=${encodeURIComponent(value)}`,
         );
-        const body = await response.json();
+        // UAT-C4: a refused or non-JSON answer is simply no results.
+        const body = response.ok ? await response.json().catch(() => ({ data: [] })) : { data: [] };
         copyResults.value = body.data;
     }, 250);
 });
@@ -51,7 +53,8 @@ watch(studentQuery, (value) => {
         const response = await fetch(
             `/app/library/circulation/search/students?q=${encodeURIComponent(value)}`,
         );
-        const body = await response.json();
+        // UAT-C4: a refused or non-JSON answer is simply no results.
+        const body = response.ok ? await response.json().catch(() => ({ data: [] })) : { data: [] };
         studentResults.value = body.data;
     }, 250);
 });
@@ -83,56 +86,38 @@ function submit(): void {
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div class="relative">
                 <label class="block text-sm text-slate-600" for="copy-search">Library copy</label>
-                <input
+                <SearchCombobox
                     id="copy-search"
                     v-model="copyQuery"
-                    type="text"
                     placeholder="Search by title or accession code"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <ul
-                    v-if="copyResults.length > 0"
-                    class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                    :options="copyResults"
+                    :option-key="(o) => o.id"
+                    :error="form.errors.library_copy_id"
+                    @select="pickCopy"
                 >
-                    <li
-                        v-for="copy in copyResults"
-                        :key="copy.id"
-                        class="cursor-pointer px-3 py-2 hover:bg-slate-50"
-                        @click="pickCopy(copy)"
-                    >
+                    <template #option="{ option: copy }">
                         {{ copy.title }} ({{ copy.code }})
-                    </li>
-                </ul>
-                <p v-if="form.errors.library_copy_id" class="mt-1 text-sm text-red-600">
-                    {{ form.errors.library_copy_id }}
-                </p>
+                    </template>
+                </SearchCombobox>
             </div>
 
             <div class="relative">
                 <label class="block text-sm text-slate-600" for="student-search">Student</label>
-                <input
+                <SearchCombobox
                     id="student-search"
                     v-model="studentQuery"
-                    type="text"
                     placeholder="Search by name or student number"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <ul
-                    v-if="studentResults.length > 0"
-                    class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                    :options="studentResults"
+                    :option-key="(o) => o.id"
+                    :error="form.errors.student_id"
+                    @select="pickStudent"
                 >
-                    <li
-                        v-for="student in studentResults"
-                        :key="student.id"
-                        class="cursor-pointer px-3 py-2 hover:bg-slate-50"
-                        @click="pickStudent(student)"
-                    >
+                    <template #option="{ option: student }">
                         {{ student.name }} ({{ student.studentNumber }})
-                    </li>
-                </ul>
-                <p v-if="form.errors.student_id" class="mt-1 text-sm text-red-600">
-                    {{ form.errors.student_id }}
-                </p>
+                    </template>
+                </SearchCombobox>
             </div>
 
             <div>

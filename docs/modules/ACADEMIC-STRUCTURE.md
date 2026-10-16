@@ -309,3 +309,18 @@ a future module will need to reference a Student or Teacher (e.g. a
 future `student_sections` enrollment table, a future teacher-to-Section
 assignment) is left as an explicit gap for that future module to fill
 — nothing here fakes or stubs that relationship.
+
+## Presentation helpers (UAT-C4, 2026-10-16, ADR 0075 §17.1)
+
+- **`SectionLabel`** names a Section "Grade 6 · A" and sorts by Grade
+  `sequence`, then name.
+  - Use it wherever Sections of several Grades appear together. Section
+    names repeat across Grades, so a name alone is ambiguous.
+  - Load `gradeLevel` with the Section.
+- **`AcademicYearChoices`** orders academic years for a form that records
+  something for the current year: active (preselected), then upcoming
+  drafts, then closed, each labelled. Planning pages and report filters
+  keep their own ordering.
+
+Both are presentation only. They decide nothing about what a write
+accepts.

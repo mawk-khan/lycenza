@@ -4,6 +4,7 @@ namespace App\Http\Controllers\App\Finance;
 
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\Payments\Application\StudentFeeStatementReadService;
+use App\Domain\Students\Application\StudentSearch;
 use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Models\School;
@@ -40,10 +41,9 @@ class FeeStatementController extends Controller
     {
         $this->authorizeBoth($context);
         $validated = $request->validate(['q' => ['required', 'string', 'min:2', 'max:255']]);
-        $term = '%'.$validated['q'].'%';
 
         return response()->json(['data' => Student::query()
-            ->where(fn ($q) => $q->where('first_name', 'ilike', $term)->orWhere('last_name', 'ilike', $term)->orWhere('student_number', 'ilike', $term))
+            ->tap(fn ($q) => StudentSearch::anyField($q, $validated['q']))
             ->orderBy('first_name')
             ->limit(10)
             ->get()

@@ -8,6 +8,7 @@ use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\Payments\Application\Collections\OutstandingFeeRow;
 use App\Domain\Payments\Application\Collections\OutstandingFeesReadService;
 use App\Domain\Students\Application\StudentEnrollmentReadService;
+use App\Domain\Students\Application\StudentSearch;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Http\Controllers\Controller;
@@ -58,11 +59,8 @@ class OutstandingFeesController extends Controller
 
         $studentIds = null;
         if ($search !== '') {
-            $term = '%'.$search.'%';
             $studentIds = Student::query()
-                ->where(fn ($q) => $q->where('student_number', 'ilike', $term)
-                    ->orWhereRaw("concat_ws(' ', first_name, middle_name, last_name) ilike ?", [$term])
-                    ->orWhereRaw("concat_ws(' ', first_name, last_name) ilike ?", [$term]))
+                ->tap(fn ($q) => StudentSearch::anyField($q, $search))
                 ->pluck('id')->map(fn ($id) => (string) $id)->all();
         }
         $activeYear = AcademicYear::query()->where('status', 'active')->first();

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../../datetime';
 import { useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import StatusBadge from '../../../../Components/StatusBadge.vue';
@@ -105,7 +106,7 @@ function submitCopy(): void {
                         <span v-if="copy.available" class="text-emerald-700">Available</span>
                         <span v-else-if="copy.activeLoan">
                             On loan to {{ copy.activeLoan.studentName }} (due
-                            {{ copy.activeLoan.dueAt }})
+                            {{ formatDateTime(copy.activeLoan.dueAt) }})
                         </span>
                         <span v-else>Unavailable</span>
                     </td>

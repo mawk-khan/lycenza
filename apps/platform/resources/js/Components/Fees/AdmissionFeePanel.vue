@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from '../../datetime';
 // SWC.3 (ADR 0073 section 19.6): on an admission application, the School's
 // admission fee head and the fee intent its conversion recorded. Read-only:
 // fee intent is not a charge or a payment, and nothing here changes it.
@@ -47,7 +48,7 @@ const props = defineProps<{
             <span class="text-slate-600">Recorded at conversion:</span>
             {{ feeHeadText(props.panel.intent.feeHead) }} —
             {{ outcomeLabel(props.panel.intent.selectionOutcome) }},
-            {{ props.panel.intent.recordedAt?.slice(0, 10) }}. This is fee intent, not a charge;
+            {{ formatDate(props.panel.intent.recordedAt) }}. This is fee intent, not a charge;
             Finance creates the charge when it assesses fees.
         </p>
     </section>

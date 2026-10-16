@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SearchCombobox from '../../../../Components/Form/SearchCombobox.vue';
 import { router } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 
@@ -86,7 +87,10 @@ function searchDomainTargets() {
             const response = await fetch(`${endpoint}?q=${encodeURIComponent(q)}`, {
                 headers: { Accept: 'application/json' },
             });
-            const body = await response.json();
+            // UAT-C4: a refused or non-JSON answer is simply no results.
+            const body = response.ok
+                ? await response.json().catch(() => ({ data: [] }))
+                : { data: [] };
             const results: DomainTarget[] = (body.students ??
                 body.guardians ??
                 []) as DomainTarget[];
@@ -170,7 +174,10 @@ function searchCohort() {
             const response = await fetch(`${endpoint}?${params.toString()}`, {
                 headers: { Accept: 'application/json' },
             });
-            const body = await response.json();
+            // UAT-C4: a refused or non-JSON answer is simply no results.
+            const body = response.ok
+                ? await response.json().catch(() => ({ data: [] }))
+                : { data: [] };
             cohortResults.value = (body.gradeLevels ??
                 body.sections ??
                 body.subjectOfferings ??
@@ -383,6 +390,7 @@ function submit() {
                         <button
                             type="button"
                             class="text-slate-400 hover:text-slate-700"
+                            :aria-label="`Remove ${t.label}`"
                             @click="removeDomainTarget(t.id)"
                         >
                             ×
@@ -390,30 +398,26 @@ function submit() {
                     </span>
                 </div>
                 <div class="relative mt-1">
-                    <input
+                    <SearchCombobox
+                        id="announcement-recipient-search"
                         v-model="domainQuery"
-                        type="text"
+                        aria-label="Search recipients to add"
                         :placeholder="
                             audienceType === 'guardian'
                                 ? 'Search guardians by name…'
                                 : 'Search students by name or student number…'
                         "
                         class="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                        :options="domainResults"
+                        :option-key="(o) => o.id"
+                        option-class="cursor-pointer px-2 py-1 hover:bg-slate-50"
                         @input="searchDomainTargets"
-                    />
-                    <ul
-                        v-if="domainResults.length > 0"
-                        class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                        @select="addDomainTarget"
                     >
-                        <li
-                            v-for="result in domainResults"
-                            :key="result.id"
-                            class="cursor-pointer px-2 py-1 hover:bg-slate-50"
-                            @click="addDomainTarget(result)"
-                        >
+                        <template #option="{ option: result }">
                             {{ result.label }}
-                        </li>
-                    </ul>
+                        </template>
+                    </SearchCombobox>
                 </div>
             </div>
 
@@ -459,6 +463,7 @@ function submit() {
                         <button
                             type="button"
                             class="text-slate-400 hover:text-slate-700"
+                            :aria-label="`Remove ${selectedCohort.label}`"
                             @click="selectedCohort = null"
                         >
                             ×
@@ -466,9 +471,10 @@ function submit() {
                     </span>
                 </div>
                 <div v-else class="relative mt-1">
-                    <input
+                    <SearchCombobox
+                        id="announcement-cohort-search"
                         v-model="cohortQuery"
-                        type="text"
+                        aria-label="Search the audience group"
                         :placeholder="
                             audienceType === 'grade'
                                 ? 'Search grades…'
@@ -477,22 +483,17 @@ function submit() {
                                   : 'Search subject offerings by subject name or code…'
                         "
                         class="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                        :options="cohortResults"
+                        :option-key="(o) => o.id"
+                        option-class="cursor-pointer px-2 py-1 hover:bg-slate-50"
                         @focus="searchCohort"
                         @input="searchCohort"
-                    />
-                    <ul
-                        v-if="cohortResults.length > 0"
-                        class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                        @select="selectCohort"
                     >
-                        <li
-                            v-for="result in cohortResults"
-                            :key="result.id"
-                            class="cursor-pointer px-2 py-1 hover:bg-slate-50"
-                            @click="selectCohort(result)"
-                        >
+                        <template #option="{ option: result }">
                             {{ result.label }}
-                        </li>
-                    </ul>
+                        </template>
+                    </SearchCombobox>
                 </div>
 
                 <div class="mt-2 space-y-1 text-sm text-slate-600">

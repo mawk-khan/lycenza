@@ -2,6 +2,7 @@
 
 namespace App\Domain\Attendance\Application;
 
+use App\Domain\AcademicStructure\Application\SectionLabel;
 use App\Domain\Attendance\Infrastructure\AttendanceRecord;
 use App\Domain\Attendance\Infrastructure\AttendanceSession;
 use App\Models\School;
@@ -72,7 +73,7 @@ class AttendanceExceptionReadService
             ->whereIn('attendance_records.status', $statuses)
             ->when($sectionId !== null, fn ($q) => $q->where('attendance_records.section_id', $sectionId))
             ->with([
-                'session.section', 'session.subjectOffering.subject', 'session.period',
+                'session.section.gradeLevel', 'session.subjectOffering.subject', 'session.period',
                 'studentEnrollment.student:id,school_id,first_name,middle_name,last_name',
             ])
             ->orderBy('attendance_sessions.period_start_time')
@@ -86,7 +87,7 @@ class AttendanceExceptionReadService
      * The Sections that have a submitted register on `$date`, for the
      * filter -- derived from that day's registers, never every Section.
      *
-     * @return list<array{id: string, name: string|null, code: string|null}>
+     * @return list<array{id: string, name: string|null, code: string|null, label: string|null}>
      */
     public function sectionOptions(School $school, string $date, User $actor): array
     {
@@ -95,11 +96,12 @@ class AttendanceExceptionReadService
         return $this->context->withSchool($school, fn () => AttendanceSession::query()
             ->where('school_id', $school->id)
             ->where('attendance_date', $date)
-            ->with('section')
+            ->with('section.gradeLevel')
             ->get(['id', 'school_id', 'section_id'])
             ->pluck('section')->filter()->unique('id')
-            ->sortBy(fn ($s) => mb_strtoupper((string) $s->code))
-            ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name, 'code' => $s->code])
+            // UAT-C4 (UAT-ATT-08): Grade order, labelled "Grade 6 · A".
+            ->sortBy(fn ($s) => SectionLabel::sortKey($s))
+            ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name, 'code' => $s->code, 'label' => SectionLabel::of($s)])
             ->values()->all());
     }
 
@@ -128,6 +130,7 @@ class AttendanceExceptionReadService
             'rollNumber' => $enrollment?->roll_number,
             'sessionId' => $session?->id,
             'sectionName' => $session?->section?->name,
+            'classLabel' => SectionLabel::of($session?->section),
             'sectionCode' => $session?->section?->code,
             'subjectName' => $session?->subjectOffering?->subject?->name,
             'periodName' => $session?->period?->name,

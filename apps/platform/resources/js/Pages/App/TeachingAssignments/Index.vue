@@ -26,7 +26,7 @@ interface AcademicYearRow {
 interface AssignmentRow {
     id: string;
     employee: { id: string; employeeNumber: string | null; fullName: string | null };
-    section: { id: string; name: string | null; code: string | null };
+    section: { id: string; name: string | null; code: string | null; label?: string | null };
     subjectOffering: { id: string; subjectName: string | null; subjectCode: string | null };
     startsOn: string;
     endsOn: string | null;
@@ -83,7 +83,7 @@ interface Props {
     filters: { employeeId: string; sectionId: string };
     filterOptions: {
         employees: { id: string; employeeNumber: string | null; fullName: string | null }[];
-        sections: { id: string; name: string | null; code: string | null }[];
+        sections: { id: string; name: string | null; code: string | null; label: string | null }[];
     } | null;
 }
 
@@ -258,7 +258,7 @@ function submitEnd(): void {
                         :key="section.id"
                         :value="section.id"
                     >
-                        {{ section.name }} ({{ section.code }})
+                        {{ section.label ?? section.name }}
                     </option>
                 </select>
             </div>
@@ -321,7 +321,7 @@ function submitEnd(): void {
                                     >({{ row.employee.employeeNumber }})</span
                                 >
                             </td>
-                            <td class="py-2">{{ row.section.name }} ({{ row.section.code }})</td>
+                            <td class="py-2">{{ row.section.label ?? row.section.name }}</td>
                             <td class="py-2">
                                 {{ row.subjectOffering.subjectCode }} ·
                                 {{ row.subjectOffering.subjectName }}

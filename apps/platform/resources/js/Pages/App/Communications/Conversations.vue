@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../datetime';
 import { Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import HubNav from '@/Components/App/Communications/HubNav.vue';
@@ -608,7 +609,7 @@ function submitSearch() {
                                         v-if="thread.unread"
                                         class="h-1.5 w-1.5 rounded-full bg-slate-900"
                                     ></span>
-                                    {{ thread.lastActivityAt }}
+                                    {{ formatDateTime(thread.lastActivityAt) }}
                                 </span>
                             </div>
                             <p class="mt-0.5 truncate text-xs text-slate-500">

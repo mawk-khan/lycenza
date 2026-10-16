@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../datetime';
 import { router } from '@inertiajs/vue3';
 import EmptyState from '../../../Components/EmptyState.vue';
 
@@ -73,7 +74,7 @@ const suspensionText: Record<string, string> = {
 };
 
 function formatTime(value: string | null): string {
-    return value ? new Date(value).toLocaleString() : '—';
+    return value ? formatDateTime(value) : '—';
 }
 
 function act(rule: Rule, action: 'enable' | 'disable' | 'take-ownership'): void {

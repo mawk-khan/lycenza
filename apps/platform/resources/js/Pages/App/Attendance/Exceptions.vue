@@ -19,6 +19,7 @@ interface ExceptionRow {
     rollNumber: string | null;
     sessionId: string | null;
     sectionName: string | null;
+    classLabel: string | null;
     sectionCode: string | null;
     subjectName: string | null;
     periodName: string | null;
@@ -41,7 +42,12 @@ interface Props {
         total: number;
     };
     filters: { date: string; sectionId: string; status: string };
-    sectionOptions: { id: string; name: string | null; code: string | null }[];
+    sectionOptions: {
+        id: string;
+        name: string | null;
+        code: string | null;
+        label: string | null;
+    }[];
     statuses: ExceptionRow['status'][];
     canViewStudents: boolean;
 }
@@ -128,7 +134,7 @@ function periodLabel(row: ExceptionRow): string {
                 >
                     <option value="">All Sections with a register</option>
                     <option v-for="section in sectionOptions" :key="section.id" :value="section.id">
-                        {{ section.name }} ({{ section.code }})
+                        {{ section.label ?? section.name }}
                     </option>
                 </select>
             </div>
@@ -207,7 +213,7 @@ function periodLabel(row: ExceptionRow): string {
                             </td>
                             <td class="py-3 text-slate-600">{{ row.rollNumber ?? '—' }}</td>
                             <td class="py-3 text-slate-600">
-                                {{ row.sectionName ?? row.sectionCode ?? '—' }}
+                                {{ row.classLabel ?? row.sectionName ?? row.sectionCode ?? '—' }}
                             </td>
                             <td class="py-3 text-slate-600">{{ periodLabel(row) }}</td>
                             <td class="py-3 text-slate-600">{{ row.subjectName ?? '—' }}</td>

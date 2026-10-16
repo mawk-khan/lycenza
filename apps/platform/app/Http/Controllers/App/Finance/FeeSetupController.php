@@ -25,6 +25,7 @@ use App\Domain\Fees\Infrastructure\FeeStructure;
 use App\Domain\Fees\Infrastructure\FeeStructureLine;
 use App\Domain\Finance\Application\LedgerAccountSummary;
 use App\Domain\Finance\Application\LedgerService;
+use App\Domain\Students\Application\StudentSearch;
 use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
@@ -136,7 +137,7 @@ class FeeSetupController extends Controller
             'revenue_ledger_account_id' => ['required', 'uuid'],
         ]);
 
-        return $this->act(fn () => $service->create($school, $validated, $context->actor()), '/app/finance/fee-setup');
+        return $this->act(fn () => $service->create($school, $validated, $context->actor()), '/app/finance/fee-setup', 'Fee head created.');
     }
 
     public function updateFeeHead(Request $request, TenantContext $context, FeeHeadService $service, string $feeHead): RedirectResponse
@@ -163,7 +164,7 @@ class FeeSetupController extends Controller
                 FeeHead::STATUS_ACTIVE => $service->reactivate($school, $feeHead, $context->actor()),
                 default => null,
             };
-        }, '/app/finance/fee-setup');
+        }, '/app/finance/fee-setup', 'Fee head saved.');
     }
 
     // --- structures -------------------------------------------------------------
@@ -186,7 +187,7 @@ class FeeSetupController extends Controller
 
         $structure = $this->translatingFeeSetupErrors(fn () => $service->createDraft($school, $validated, $context->actor()));
 
-        return redirect("/app/finance/fee-setup/structures/{$structure->id}");
+        return redirect("/app/finance/fee-setup/structures/{$structure->id}")->with('flash', 'Draft fee structure created.');
     }
 
     public function showStructure(TenantContext $context, FeeStructureReadService $reads, CapabilityResolver $capabilities, string $feeStructure): Response
@@ -250,7 +251,7 @@ class FeeSetupController extends Controller
             'name' => ['sometimes', 'string', 'max:120'],
         ]);
 
-        return $this->act(fn () => $service->updateDraft($school, $feeStructure, $validated, $context->actor()), $this->structureUrl($feeStructure));
+        return $this->act(fn () => $service->updateDraft($school, $feeStructure, $validated, $context->actor()), $this->structureUrl($feeStructure), 'Fee structure saved.');
     }
 
     public function activate(TenantContext $context, FeeStructureService $service, string $feeStructure): RedirectResponse
@@ -258,7 +259,7 @@ class FeeSetupController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability('finance.fee_structures.manage', $school);
 
-        return $this->act(fn () => $service->activate($school, $feeStructure, $context->actor()), $this->structureUrl($feeStructure));
+        return $this->act(fn () => $service->activate($school, $feeStructure, $context->actor()), $this->structureUrl($feeStructure), 'Fee structure activated.');
     }
 
     public function retire(TenantContext $context, FeeStructureService $service, string $feeStructure): RedirectResponse
@@ -266,7 +267,7 @@ class FeeSetupController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability('finance.fee_structures.manage', $school);
 
-        return $this->act(fn () => $service->retire($school, $feeStructure, $context->actor()), $this->structureUrl($feeStructure));
+        return $this->act(fn () => $service->retire($school, $feeStructure, $context->actor()), $this->structureUrl($feeStructure), 'Fee structure retired.');
     }
 
     public function successor(Request $request, TenantContext $context, FeeStructureService $service, string $feeStructure): RedirectResponse
@@ -283,7 +284,7 @@ class FeeSetupController extends Controller
         $successor = null;
         $response = $this->act(function () use ($school, $feeStructure, $validated, $service, $context, &$successor) {
             $successor = $service->createSuccessor($school, $feeStructure, $validated, $context->actor());
-        }, $this->structureUrl($feeStructure));
+        }, $this->structureUrl($feeStructure), 'Successor draft created.');
 
         return $successor !== null ? redirect($this->structureUrl($successor->id)) : $response;
     }
@@ -301,7 +302,7 @@ class FeeSetupController extends Controller
             'is_optional' => ['sometimes', 'boolean'],
         ]);
 
-        return $this->act(fn () => $service->addLine($school, $feeStructure, $validated, $context->actor()), $this->structureUrl($feeStructure));
+        return $this->act(fn () => $service->addLine($school, $feeStructure, $validated, $context->actor()), $this->structureUrl($feeStructure), 'Fee line added.');
     }
 
     public function updateLine(Request $request, TenantContext $context, FeeStructureService $service, string $feeStructure, string $line): RedirectResponse
@@ -314,7 +315,7 @@ class FeeSetupController extends Controller
             'is_optional' => ['sometimes', 'boolean'],
         ]);
 
-        return $this->act(fn () => $service->updateLine($school, $feeStructure, $line, $validated, $context->actor()), $this->structureUrl($feeStructure));
+        return $this->act(fn () => $service->updateLine($school, $feeStructure, $line, $validated, $context->actor()), $this->structureUrl($feeStructure), 'Fee line saved.');
     }
 
     public function removeLine(TenantContext $context, FeeStructureService $service, string $feeStructure, string $line): RedirectResponse
@@ -322,7 +323,7 @@ class FeeSetupController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability('finance.fee_structures.manage', $school);
 
-        return $this->act(fn () => $service->removeLine($school, $feeStructure, $line, $context->actor()), $this->structureUrl($feeStructure));
+        return $this->act(fn () => $service->removeLine($school, $feeStructure, $line, $context->actor()), $this->structureUrl($feeStructure), 'Fee line removed.');
     }
 
     public function replaceInstallments(Request $request, TenantContext $context, FeeStructureService $service, string $feeStructure, string $line): RedirectResponse
@@ -344,6 +345,7 @@ class FeeSetupController extends Controller
         return $this->act(
             fn () => $service->replaceInstallments($school, $feeStructure, $line, $validated['installments'], $context->actor()),
             $this->structureUrl($feeStructure),
+            'Instalments saved.',
         );
     }
 
@@ -359,6 +361,7 @@ class FeeSetupController extends Controller
         return $this->act(
             fn () => $service->generateInstallments($school, $feeStructure, $line, $validated['frequency'], $context->actor()),
             $this->structureUrl($feeStructure),
+            'Instalments generated.',
         );
     }
 
@@ -370,12 +373,9 @@ class FeeSetupController extends Controller
         $this->authorizeCapability('finance.fee_structures.manage', $school);
 
         $validated = $request->validate(['q' => ['required', 'string', 'min:2', 'max:255']]);
-        $term = '%'.$validated['q'].'%';
 
         $students = Student::query()
-            ->where(fn ($q) => $q->where('first_name', 'ilike', $term)
-                ->orWhere('last_name', 'ilike', $term)
-                ->orWhere('student_number', 'ilike', $term))
+            ->tap(fn ($q) => StudentSearch::anyField($q, $validated['q']))
             ->orderBy('first_name')
             ->limit(10)
             ->get();
@@ -402,6 +402,7 @@ class FeeSetupController extends Controller
         return $this->act(
             fn () => $service->select($school, $validated['student_id'], $validated['fee_structure_line_id'], $context->actor()),
             null,
+            'Optional fee selection saved.',
         );
     }
 
@@ -410,7 +411,7 @@ class FeeSetupController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability('finance.fee_structures.manage', $school);
 
-        return $this->act(fn () => $service->withdraw($school, $selection, $context->actor()), null);
+        return $this->act(fn () => $service->withdraw($school, $selection, $context->actor()), null, 'Optional fee selection withdrawn.');
     }
 
     // --- helpers --------------------------------------------------------------------
@@ -421,7 +422,7 @@ class FeeSetupController extends Controller
      * translatingFeeSetupErrors); any other domain conflict is an `action`
      * error.
      */
-    private function act(callable $operation, ?string $url): RedirectResponse
+    private function act(callable $operation, ?string $url, ?string $success = null): RedirectResponse
     {
         try {
             $this->translatingFeeSetupErrors($operation);
@@ -431,7 +432,8 @@ class FeeSetupController extends Controller
             return ($url !== null ? redirect($url) : back())->withErrors(['action' => $e->getMessage()]);
         }
 
-        return $url !== null ? redirect($url) : back();
+        // UAT-C4 (UAT-FIN-23): say what happened (the shared flash banner).
+        return ($url !== null ? redirect($url) : back())->with('flash', $success);
     }
 
     private function structureUrl(string $feeStructureId): string

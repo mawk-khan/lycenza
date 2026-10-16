@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../../datetime';
 import { router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import StatusBadge from '../../../../Components/StatusBadge.vue';
@@ -104,15 +105,15 @@ function cancel(): void {
             </div>
             <div>
                 <dt class="text-slate-500">Placed</dt>
-                <dd>{{ new Date(order.placedAt).toLocaleString() }}</dd>
+                <dd>{{ formatDateTime(order.placedAt) }}</dd>
             </div>
             <div v-if="order.fulfilledAt">
                 <dt class="text-slate-500">Fulfilled</dt>
-                <dd>{{ new Date(order.fulfilledAt).toLocaleString() }}</dd>
+                <dd>{{ formatDateTime(order.fulfilledAt) }}</dd>
             </div>
             <div v-if="order.cancelledAt">
                 <dt class="text-slate-500">Cancelled</dt>
-                <dd>{{ new Date(order.cancelledAt).toLocaleString() }}</dd>
+                <dd>{{ formatDateTime(order.cancelledAt) }}</dd>
             </div>
             <div v-if="order.chargeId">
                 <dt class="text-slate-500">Charge</dt>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../datetime';
 import { router, useForm } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 import {
@@ -174,7 +175,7 @@ const leaveError = useLeaveError();
                     yearLabel(c.leaveYearId)
                 }}</a>
                 → {{ yearLabel(c.nextLeaveYearId) }} · {{ c.itemCount }} balances ·
-                {{ c.executedAt }}
+                {{ formatDateTime(c.executedAt) }}
             </li>
             <li v-if="closes.length === 0" class="text-slate-500">
                 No leave year has been closed.

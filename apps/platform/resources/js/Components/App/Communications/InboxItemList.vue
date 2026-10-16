@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../datetime';
 export interface InboxItem {
     type: 'conversation' | 'announcement' | 'template';
     id: string;
@@ -89,7 +90,7 @@ const typeLabels: Record<InboxItem['type'], string> = {
                             v-if="item.unread"
                             class="h-1.5 w-1.5 rounded-full bg-slate-900"
                         ></span>
-                        {{ item.latestActivityAt }}
+                        {{ formatDateTime(item.latestActivityAt) }}
                     </span>
                 </div>
                 <p class="mt-0.5 truncate text-xs text-slate-500">

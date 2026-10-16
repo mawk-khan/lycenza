@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../../datetime';
 import { Link } from '@inertiajs/vue3';
 
 interface ApprovalQueueRow {
@@ -50,7 +51,8 @@ const channelLabels: Record<string, string> = { in_app: 'In-app', email: 'Email'
                     >{{ r.title }}</Link
                 >
                 <p class="mt-0.5 text-xs text-slate-500">
-                    submitted by {{ r.requestedByName ?? 'Unknown' }} · {{ r.requestedAt }}
+                    submitted by {{ r.requestedByName ?? 'Unknown' }} ·
+                    {{ formatDateTime(r.requestedAt) }}
                 </p>
                 <div class="mt-1 flex flex-wrap gap-1.5 text-xs">
                     <span class="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">{{

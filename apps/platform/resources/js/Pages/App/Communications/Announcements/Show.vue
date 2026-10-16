@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../../datetime';
 import { router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import MfaCodeField from '../../../../Components/MfaCodeField.vue';
@@ -430,7 +431,7 @@ function formatFileSize(bytes: number): string {
                 }})</template
             >
             <template v-if="announcement.publishedAt">
-                · published {{ announcement.publishedAt }}</template
+                · published {{ formatDateTime(announcement.publishedAt) }}</template
             >
         </p>
 

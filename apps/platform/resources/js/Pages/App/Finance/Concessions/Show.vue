@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../../datetime';
 import { router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import MfaCodeField from '../../../../Components/MfaCodeField.vue';
@@ -137,15 +138,21 @@ function cancelAdjustment(a: Adjustment): void {
             </div>
             <div>
                 <dt class="text-slate-500">Requested by</dt>
-                <dd>{{ concession.requestedByName ?? '—' }} · {{ concession.createdAt }}</dd>
+                <dd>
+                    {{ concession.requestedByName ?? '—' }} ·
+                    {{ formatDateTime(concession.createdAt) }}
+                </dd>
             </div>
             <div v-if="concession.decidedAt">
                 <dt class="text-slate-500">Decided by</dt>
-                <dd>{{ concession.decidedByName ?? '—' }} · {{ concession.decidedAt }}</dd>
+                <dd>
+                    {{ concession.decidedByName ?? '—' }} ·
+                    {{ formatDateTime(concession.decidedAt) }}
+                </dd>
             </div>
             <div v-if="concession.revokedAt">
                 <dt class="text-slate-500">Revoked</dt>
-                <dd>{{ concession.revokedAt }}</dd>
+                <dd>{{ formatDateTime(concession.revokedAt) }}</dd>
             </div>
         </dl>
 

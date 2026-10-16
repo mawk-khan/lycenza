@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../datetime';
 // SWC.3 (ADR 0073 section 19): the fee intent OPF recorded for one source
 // (a Transport assignment, a Hostel residency). Intent is an optional-fee
 // selection for a year -- NOT a charge and NOT a payment; Finance creates
@@ -40,7 +41,7 @@ defineProps<{ rows: FeeIntentRow[]; caption: string; showScope?: boolean }>();
                     <td v-if="showScope" class="pr-3 py-1">{{ scopeLabel(row.mappingScope) }}</td>
                     <td class="pr-3 py-1">{{ reasonLabel(row.linkReason) }}</td>
                     <td class="pr-3 py-1">{{ outcomeLabel(row.selectionOutcome) }}</td>
-                    <td class="pr-3 py-1">{{ row.recordedAt ?? '—' }}</td>
+                    <td class="pr-3 py-1">{{ formatDateTime(row.recordedAt) }}</td>
                 </tr>
             </tbody>
         </table>

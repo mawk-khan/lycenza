@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { formatDate } from '../../../datetime';
+import SearchCombobox from '../../../Components/Form/SearchCombobox.vue';
 import { router, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import RelationshipFlags from '../../../Components/RelationshipFlags.vue';
@@ -94,7 +96,10 @@ function searchLinkCandidates(): void {
                 `/app/guardians/${props.guardian.id}/account-link/search?q=${encodeURIComponent(q)}`,
                 { headers: { Accept: 'application/json' } },
             );
-            const body = await response.json();
+            // UAT-C4: a refused or non-JSON answer is simply no results.
+            const body = response.ok
+                ? await response.json().catch(() => ({ data: [] }))
+                : { data: [] };
             linkCandidates.value = body.candidates as MembershipCandidate[];
         } finally {
             linkSearching.value = false;
@@ -541,26 +546,21 @@ function submitContact(): void {
                     Link account
                 </button>
                 <div v-else class="relative mt-3">
-                    <input
+                    <SearchCombobox
+                        id="guardian-link-search"
                         v-model="linkQuery"
-                        type="text"
+                        aria-label="Search Lycenza accounts to link"
                         placeholder="Search Lycenza accounts by name…"
                         class="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        :options="linkCandidates"
+                        :option-key="(o) => o.schoolMembershipId"
                         @input="searchLinkCandidates"
-                    />
-                    <ul
-                        v-if="linkCandidates.length > 0"
-                        class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                        @select="linkAccount"
                     >
-                        <li
-                            v-for="candidate in linkCandidates"
-                            :key="candidate.schoolMembershipId"
-                            class="cursor-pointer px-3 py-2 hover:bg-slate-50"
-                            @click="linkAccount(candidate)"
-                        >
+                        <template #option="{ option: candidate }">
                             {{ candidate.name }}
-                        </li>
-                    </ul>
+                        </template>
+                    </SearchCombobox>
                     <button
                         type="button"
                         class="mt-2 text-xs text-slate-400 underline"
@@ -597,7 +597,7 @@ function submitContact(): void {
                     <span class="font-medium">{{ accountInvitation.pending.status }}</span>
                     <span v-if="accountInvitation.pending.status === 'pending'">
                         (expires
-                        {{ new Date(accountInvitation.pending.expiresAt).toLocaleDateString() }})
+                        {{ formatDate(accountInvitation.pending.expiresAt) }})
                     </span>
                 </p>
                 <p v-if="accountInvitation.pending.email" class="mt-1 text-slate-600">

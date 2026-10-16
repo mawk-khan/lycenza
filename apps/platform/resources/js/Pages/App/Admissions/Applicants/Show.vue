@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from '../../../../datetime';
 import StatusBadge from '../../../../Components/StatusBadge.vue';
 
 interface Ref {
@@ -90,7 +91,7 @@ function applicationContext(a: ApplicationRow): string {
                         <a class="font-medium underline" :href="`/app/admissions/${a.id}`">{{
                             applicationContext(a)
                         }}</a>
-                        <p class="mt-0.5 text-slate-500">Applied {{ a.createdAt.slice(0, 10) }}</p>
+                        <p class="mt-0.5 text-slate-500">Applied {{ formatDate(a.createdAt) }}</p>
                     </div>
                     <StatusBadge :status="a.status" />
                 </li>

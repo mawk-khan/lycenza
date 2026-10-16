@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\App\Timetable;
 
+use App\Domain\AcademicStructure\Application\SectionLabel;
 use App\Domain\AcademicStructure\Infrastructure\Room;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
@@ -52,7 +53,7 @@ class TimetableEntryController extends Controller
         ]);
 
         $query = TimetableEntry::query()
-            ->with(['subjectOffering.subject', 'section', 'teacher', 'room', 'period'])
+            ->with(['subjectOffering.subject', 'section.gradeLevel', 'teacher', 'room', 'period'])
             ->where('status', 'active')
             ->orderBy('day_of_week')
             ->orderBy('period_id');
@@ -213,19 +214,23 @@ class TimetableEntryController extends Controller
         $this->authorizeCapability('timetable.schedule.manage', $school);
 
         $validated = $request->validate(['q' => ['sometimes', 'string', 'max:255']]);
-        $query = Section::query()->where('status', 'active')->orderBy('code');
+        $query = Section::query()->where('status', 'active')->with(['gradeLevel', 'academicYear'])->orderBy('code');
 
         if (isset($validated['q']) && trim($validated['q']) !== '') {
             $term = '%'.$validated['q'].'%';
-            $query->where(fn ($q) => $q->where('code', 'ilike', $term)->orWhere('name', 'ilike', $term));
+            $query->where(fn ($q) => $q->where('code', 'ilike', $term)->orWhere('name', 'ilike', $term)
+                ->orWhereHas('gradeLevel', fn ($g) => $g->where('name', 'ilike', $term)));
         }
 
-        $sections = $query->limit(20)->get();
+        $sections = $query->limit(20)->get()->sortBy(fn (Section $s) => SectionLabel::sortKey($s))->values();
 
+        // UAT-C4 (UAT-ATT-08): Section names repeat across Grades and years, so
+        // each result names both ("Grade 6 · A · 2026-27").
         return response()->json(['data' => $sections->map(fn (Section $s) => [
             'id' => $s->id,
             'code' => $s->code,
             'name' => $s->name,
+            'label' => implode(' · ', array_filter([SectionLabel::of($s), $s->academicYear?->name])),
         ])->all()]);
     }
 
@@ -343,6 +348,7 @@ class TimetableEntryController extends Controller
             'subjectName' => $entry->subjectOffering?->subject?->name,
             'sectionCode' => $entry->section?->code,
             'sectionName' => $entry->section?->name,
+            'classLabel' => SectionLabel::of($entry->section),
             'teacherId' => $entry->teacher_id,
             'teacherName' => $entry->teacher?->full_name,
             'roomCode' => $entry->room?->code,

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../../datetime';
 import { router } from '@inertiajs/vue3';
 import { reactive, ref } from 'vue';
 
@@ -104,7 +105,7 @@ function submitClose(period: Period): void {
                             </template>
                         </p>
                         <p v-if="period.status === 'closed'" class="text-sm text-slate-500">
-                            Closed {{ period.closedAt
+                            Closed {{ formatDateTime(period.closedAt)
                             }}{{ period.closedBy ? ` by ${period.closedBy}` : '' }}
                         </p>
                     </div>

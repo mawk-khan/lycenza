@@ -5399,3 +5399,31 @@ existing `selectableFeeHead()` still decides.
   - the 0G.0 `refunds` table and `finance.refunds.manage` design, which
     stays unbuilt (refunds here are recorded corrections under
     `finance.ledger.reverse`).
+
+## UAT-C4 — Ad-hoc charge form (2026-10-16, ADR 0075 §17.2–§17.3)
+
+- **Accounts:** an ad-hoc charge uses the fee-head rule.
+  - The receivable is an active **asset** account and the revenue an
+    active **income** account of the School.
+  - `ChargeAdministrationService::assess()` enforces this
+    (`CHARGE_ACCOUNT_INVALID`), and the form offers only those accounts.
+  - Fee runs and OPF charges are unchanged.
+- **Defaults:**
+  - the current academic year first, then upcoming draft years, then
+    closed years (`AcademicYearChoices`);
+  - an account only when it is the only valid choice.
+
+  Due date, amount and description stay the user's.
+- **Duplicate-charge warning:** a warning before assessing, never a refusal
+  (`similarUncancelledCharges()`). It fires when the Student has an
+  uncancelled charge in the same year where either:
+  - the description is equal or contained once case and punctuation are
+    ignored; or
+  - the amount and due date are the same.
+
+  "Assess it anyway" proceeds. Fee-run duplicate detection (UAT-FIN-20,
+  mid-term joiners) is not covered.
+- **Timestamps:** Finance pages show stored instants in the School's
+  timezone ("16 Oct 2026, 1:06 am"), not raw ISO text.
+- **Charge page:** a charge with payments standing on it explains what to
+  do instead of offering a cancel form that cannot succeed (UAT-FIN-26b).

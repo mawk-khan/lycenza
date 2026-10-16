@@ -12,6 +12,7 @@ use App\Models\SchoolAuditEvent;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\LocalCatalogueFixtures;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -35,6 +36,21 @@ class StaffInvitationTest extends TestCase
     {
         parent::setUp();
         $this->fakeEmail();
+    }
+
+    #[Test]
+    public function the_invitation_expiry_is_written_in_the_schools_own_time(): void
+    {
+        // UAT-C4 (UAT-STF-06): 2026-10-15 19:44 UTC is already 16 Oct in
+        // Kolkata; the 7-day expiry reads in School time, named, not UTC.
+        $this->travelTo(CarbonImmutable::parse('2026-10-15T19:44:00Z'));
+        [$admin, $school] = $this->staffAdmin($this->createSchool(['timezone' => 'Asia/Kolkata']));
+
+        $this->inviteStaff($admin, $school, 'new.teacher@example.test')->assertCreated();
+
+        $mail = $this->lastAcceptedEmail();
+        $this->assertStringContainsString('expires on Fri, Oct 23, 2026 1:14 AM (Asia/Kolkata)', $mail->text);
+        $this->assertStringNotContainsString('(UTC)', $mail->text);
     }
 
     #[Test]

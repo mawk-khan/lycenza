@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../../datetime';
 import { useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import EmptyState from '../../../../Components/EmptyState.vue';
@@ -143,8 +144,8 @@ function submitEdit(): void {
                 <tr v-for="paper in papers" :key="paper.id" class="border-b border-slate-100">
                     <td class="py-2 font-medium">{{ offeringLabel(paper.subjectOfferingId) }}</td>
                     <td class="py-2">{{ paper.scheduledOn }}</td>
-                    <td class="py-2">{{ paper.startsAt }}</td>
-                    <td class="py-2">{{ paper.endsAt }}</td>
+                    <td class="py-2">{{ formatDateTime(paper.startsAt) }}</td>
+                    <td class="py-2">{{ formatDateTime(paper.endsAt) }}</td>
                     <td class="py-2">{{ paper.maxMarks }}</td>
                     <td class="py-2 capitalize">{{ paper.status }}</td>
                     <td v-if="canManage" class="py-2 text-right">

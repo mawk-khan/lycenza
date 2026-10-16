@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../datetime';
 import { router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
@@ -221,7 +222,9 @@ function formatFileSize(bytes: number): string {
             >
                 <div class="flex items-center justify-between">
                     <span class="text-sm font-medium">{{ message.senderName ?? 'Unknown' }}</span>
-                    <span class="text-xs text-slate-400">{{ message.createdAt }}</span>
+                    <span class="text-xs text-slate-400">{{
+                        formatDateTime(message.createdAt)
+                    }}</span>
                 </div>
                 <p class="mt-1 text-sm whitespace-pre-wrap">{{ message.body }}</p>
                 <span

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\App\Finance;
 
+use App\Domain\AcademicStructure\Application\AcademicYearChoices;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\Fees\Application\AssessChargeData;
 use App\Domain\Fees\Application\ChargeAdministrationService;
@@ -13,6 +14,7 @@ use App\Domain\Fees\Application\Exceptions\AcademicYearNotFoundException;
 use App\Domain\Fees\Application\Exceptions\ChargeHasPaymentAllocationsException;
 use App\Domain\Fees\Application\Exceptions\ChargeNotFoundException;
 use App\Domain\Fees\Application\Exceptions\FeesException;
+use App\Domain\Fees\Application\Exceptions\InvalidChargeAccountException;
 use App\Domain\Fees\Application\Exceptions\StudentNotFoundException;
 use App\Domain\Fees\Application\FeeConcessionReadService;
 use App\Domain\Fees\Application\FeeConcessionService;
@@ -21,9 +23,9 @@ use App\Domain\Fees\Infrastructure\FeeAdjustment;
 use App\Domain\Finance\Application\Exceptions\FinanceException;
 use App\Domain\Finance\Application\Exceptions\LedgerAccountNotFoundException;
 use App\Domain\Finance\Application\LedgerAccountSummary;
-use App\Domain\Finance\Application\LedgerReadService;
 use App\Domain\Payments\Application\LateFeeReadService;
 use App\Domain\Payments\Application\PaymentApplicationReader;
+use App\Domain\Students\Application\StudentSearch;
 use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\AuthorizesCapability;
@@ -34,6 +36,8 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -65,6 +69,9 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 class ChargeController extends Controller
 {
     use AuthorizesCapability;
+
+    /** One-shot session key: the charges an ad-hoc charge resembled. */
+    public const SIMILAR_SESSION_KEY = 'finance.similar_charges';
 
     public function index(Request $request, TenantContext $context, ChargeReadService $service, CapabilityResolver $capabilities): Response
     {
@@ -107,22 +114,31 @@ class ChargeController extends Controller
         ]);
     }
 
-    public function create(TenantContext $context, LedgerReadService $ledger): Response
+    public function create(Request $request, TenantContext $context, ChargeAdministrationService $service): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('finance.charges.manage', $school);
 
-        $accounts = $ledger->listAccounts($school, $context->actor());
+        // UAT-C4 (UAT-FIN-11): only the accounts an ad-hoc charge may use (the
+        // fee-head rule: receivable = active asset, revenue = active income),
+        // preselected only when there is exactly one; the current year first
+        // and preselected (AcademicYearChoices).
+        $choices = fn (string $type) => $service->accountChoices($school, $type, $context->actor())
+            ->map(fn (LedgerAccountSummary $a) => ['id' => $a->ledgerAccountId, 'code' => $a->code, 'name' => $a->name])
+            ->values()->all();
+        $receivable = $choices('asset');
+        $revenue = $choices('income');
+        $years = AcademicYear::query()->get();
 
         return Inertia::render('App/Finance/Charges/Create', [
-            'ledgerAccounts' => $accounts
-                ->filter(fn (LedgerAccountSummary $a) => $a->status === 'active')
-                ->map(fn (LedgerAccountSummary $a) => ['id' => $a->ledgerAccountId, 'code' => $a->code, 'name' => $a->name])
-                ->values()
-                ->all(),
-            'academicYears' => AcademicYear::query()->orderByDesc('starts_on')->get(['id', 'name', 'code', 'status'])
-                ->map(fn (AcademicYear $y) => ['id' => $y->id, 'name' => $y->name, 'code' => $y->code, 'status' => $y->status])
-                ->all(),
+            'receivableAccounts' => $receivable,
+            'revenueAccounts' => $revenue,
+            'defaultReceivableAccountId' => count($receivable) === 1 ? $receivable[0]['id'] : null,
+            'defaultRevenueAccountId' => count($revenue) === 1 ? $revenue[0]['id'] : null,
+            'academicYears' => AcademicYearChoices::options($years),
+            'defaultAcademicYearId' => AcademicYearChoices::defaultId($years),
+            // UAT-C4 (UAT-FIN-20): charges the last submission resembled (one-shot).
+            'similarCharges' => $request->session()->get(self::SIMILAR_SESSION_KEY, []),
         ]);
     }
 
@@ -141,11 +157,8 @@ class ChargeController extends Controller
             'q' => ['required', 'string', 'min:2', 'max:255'],
         ]);
 
-        $term = '%'.$validated['q'].'%';
         $students = Student::query()
-            ->where(fn ($q) => $q->where('first_name', 'ilike', $term)
-                ->orWhere('last_name', 'ilike', $term)
-                ->orWhere('student_number', 'ilike', $term))
+            ->tap(fn ($q) => StudentSearch::anyField($q, $validated['q']))
             ->orderBy('first_name')
             ->limit(10)
             ->get();
@@ -175,18 +188,34 @@ class ChargeController extends Controller
             'receivable_ledger_account_id' => ['required', 'uuid'],
             'revenue_ledger_account_id' => ['required', 'uuid'],
             'due_date' => ['sometimes', 'nullable', 'date'],
+            'confirm_similar' => ['sometimes', 'boolean'],
         ]);
+
+        $amount = $this->parseAmount($validated['amount'], $validated['currency']);
+        $dueDate = isset($validated['due_date']) ? Carbon::parse($validated['due_date'])->toDateString() : null;
+        // UAT-C4 (UAT-FIN-20): a warning, never a refusal -- the form shows the
+        // similar charges and the user may assess anyway.
+        if (! ($validated['confirm_similar'] ?? false) && Str::isUuid($validated['student_id']) && Str::isUuid($validated['academic_year_id'])) {
+            $similar = $service->similarUncancelledCharges($school, $validated['student_id'], $validated['academic_year_id'], $validated['description'], $amount, $dueDate, $context->actor());
+            if ($similar !== []) {
+                return back()->withInput()->with(self::SIMILAR_SESSION_KEY, $similar)->withErrors([
+                    'confirm_similar' => 'This Student already has a similar charge this year. Review it below, then assess anyway only if this is a separate charge.',
+                ]);
+            }
+        }
 
         try {
             $result = $service->assess($school, new AssessChargeData(
                 studentId: $validated['student_id'],
                 academicYearId: $validated['academic_year_id'],
                 description: $validated['description'],
-                amount: $this->parseAmount($validated['amount'], $validated['currency']),
+                amount: $amount,
                 receivableLedgerAccountId: $validated['receivable_ledger_account_id'],
                 revenueLedgerAccountId: $validated['revenue_ledger_account_id'],
                 dueDate: $validated['due_date'] ?? null,
             ), $context->actor());
+        } catch (InvalidChargeAccountException $e) {
+            throw ValidationException::withMessages([$e->field => [$e->getMessage()]]);
         } catch (StudentNotFoundException $e) {
             throw ValidationException::withMessages(['student_id' => [$e->getMessage()]]);
         } catch (AcademicYearNotFoundException $e) {

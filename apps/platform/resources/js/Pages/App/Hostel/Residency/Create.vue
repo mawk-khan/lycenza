@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SearchCombobox from '../../../../Components/Form/SearchCombobox.vue';
 import { useForm } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 
@@ -37,7 +38,8 @@ watch(studentQuery, (value) => {
         const response = await fetch(
             `/app/hostel-residency/search/students?q=${encodeURIComponent(value)}`,
         );
-        const body = await response.json();
+        // UAT-C4: a refused or non-JSON answer is simply no results.
+        const body = response.ok ? await response.json().catch(() => ({ data: [] })) : { data: [] };
         studentResults.value = body.data;
     }, 250);
 });
@@ -48,7 +50,8 @@ watch(bedQuery, (value) => {
         const response = await fetch(
             `/app/hostel-residency/search/beds?q=${encodeURIComponent(value)}`,
         );
-        const body = await response.json();
+        // UAT-C4: a refused or non-JSON answer is simply no results.
+        const body = response.ok ? await response.json().catch(() => ({ data: [] })) : { data: [] };
         bedResults.value = body.data;
     }, 250);
 });
@@ -80,56 +83,38 @@ function submit(): void {
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div class="relative">
                 <label class="block text-sm text-slate-600" for="student-search">Student</label>
-                <input
+                <SearchCombobox
                     id="student-search"
                     v-model="studentQuery"
-                    type="text"
                     placeholder="Search by name or student number"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <ul
-                    v-if="studentResults.length > 0"
-                    class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                    :options="studentResults"
+                    :option-key="(o) => o.id"
+                    :error="form.errors.student_id"
+                    @select="pickStudent"
                 >
-                    <li
-                        v-for="student in studentResults"
-                        :key="student.id"
-                        class="cursor-pointer px-3 py-2 hover:bg-slate-50"
-                        @click="pickStudent(student)"
-                    >
+                    <template #option="{ option: student }">
                         {{ student.name }} ({{ student.studentNumber }})
-                    </li>
-                </ul>
-                <p v-if="form.errors.student_id" class="mt-1 text-sm text-red-600">
-                    {{ form.errors.student_id }}
-                </p>
+                    </template>
+                </SearchCombobox>
             </div>
 
             <div class="relative">
                 <label class="block text-sm text-slate-600" for="bed-search">Bed</label>
-                <input
+                <SearchCombobox
                     id="bed-search"
                     v-model="bedQuery"
-                    type="text"
                     placeholder="Search by bed code"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <ul
-                    v-if="bedResults.length > 0"
-                    class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                    :options="bedResults"
+                    :option-key="(o) => o.id"
+                    :error="form.errors.hostel_bed_id"
+                    @select="pickBed"
                 >
-                    <li
-                        v-for="bed in bedResults"
-                        :key="bed.id"
-                        class="cursor-pointer px-3 py-2 hover:bg-slate-50"
-                        @click="pickBed(bed)"
-                    >
+                    <template #option="{ option: bed }">
                         {{ bed.hostelName }} / {{ bed.roomCode }} / Bed {{ bed.code }}
-                    </li>
-                </ul>
-                <p v-if="form.errors.hostel_bed_id" class="mt-1 text-sm text-red-600">
-                    {{ form.errors.hostel_bed_id }}
-                </p>
+                    </template>
+                </SearchCombobox>
                 <p class="mt-1 text-xs text-slate-400">Only available (unoccupied) Beds appear.</p>
             </div>
 

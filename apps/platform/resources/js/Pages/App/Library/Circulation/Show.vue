@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate, formatDateTime } from '../../../../datetime';
 // SWC.3 (ADR 0073 section 19.5): one loan and, for a holder of
 // `library.fines.view`, its fine -- amount (the stored value), days, the
 // policy version it was assessed under, status -- and, with
@@ -57,9 +58,9 @@ function voidFine() {
             <dt class="text-slate-600">Student</dt>
             <dd>{{ props.loan.studentName }}</dd>
             <dt class="text-slate-600">Checked out</dt>
-            <dd>{{ props.loan.checkedOutAt }}</dd>
+            <dd>{{ formatDateTime(props.loan.checkedOutAt) }}</dd>
             <dt class="text-slate-600">Due</dt>
-            <dd>{{ props.loan.dueAt }}</dd>
+            <dd>{{ formatDateTime(props.loan.dueAt) }}</dd>
             <dt class="text-slate-600">Returned</dt>
             <dd>{{ props.loan.returnedAt ?? 'Not yet' }}</dd>
         </dl>
@@ -84,11 +85,11 @@ function voidFine() {
                         {{ feeHeadText(props.fine.feeHead) }}
                     </dd>
                     <dt class="text-slate-600">Assessed</dt>
-                    <dd>{{ props.fine.assessedAt?.slice(0, 10) }}</dd>
+                    <dd>{{ formatDate(props.fine.assessedAt) }}</dd>
                     <dt class="text-slate-600">Status</dt>
                     <dd>
                         <template v-if="props.fine.status === 'voided'">
-                            Voided {{ props.fine.voidedAt?.slice(0, 10) }} —
+                            Voided {{ formatDate(props.fine.voidedAt) }} —
                             {{ props.fine.voidReason }}
                         </template>
                         <template v-else>Assessed (charged through Finance)</template>

@@ -17,6 +17,7 @@ use App\Support\Email\Providers\EmailProviderResolver;
 use App\Support\Email\SenderIdentity;
 use App\Support\Privacy\EmailNormalizer;
 use App\Support\Tenancy\SchoolOperationalGuard;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -312,7 +313,9 @@ final class StaffInvitationService
             'schoolName' => $school->name,
             'platformName' => $this->sender->platformName(),
             'acceptanceUrl' => $this->origins->schoolUrl($school, "invitations/{$school->id}/staff/{$credential->selector}").'#'.$credential->secret,
-            'expiresAt' => $invitation->expires_at,
+            // UAT-C4 (UAT-STF-06): the School's own time, named, not UTC.
+            'expiresAt' => $invitation->expires_at->copy()->setTimezone(SchoolTimezone::resolve($school)),
+            'timezoneName' => SchoolTimezone::resolve($school)->getName(),
         ];
 
         $message = $this->email->queue(

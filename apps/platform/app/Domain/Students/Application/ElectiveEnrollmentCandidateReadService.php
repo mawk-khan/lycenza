@@ -59,14 +59,11 @@ class ElectiveEnrollmentCandidateReadService
                         ->where('student_subject_enrollments.status', 'active');
                 })
                 ->when($search !== null && $search !== '', function ($query) use ($search) {
-                    $term = '%'.$search.'%';
-                    $query->whereExists(function ($sub) use ($term) {
+                    $query->whereExists(function ($sub) use ($search) {
                         $sub->selectRaw('1')
                             ->from('students')
                             ->whereColumn('students.id', 'student_enrollments.student_id')
-                            ->where(fn ($q) => $q->where('students.first_name', 'ilike', $term)
-                                ->orWhere('students.last_name', 'ilike', $term)
-                                ->orWhere('students.student_number', 'ilike', $term));
+                            ->tap(fn ($q) => StudentSearch::anyField($q, $search));
                     });
                 })
                 ->with(['student', 'section'])

@@ -9,6 +9,6 @@
 <p>You have been invited to a staff account at {{ $schoolName }} on {{ $platformName }}.</p>
 <p><a href="{{ $acceptanceUrl }}">Accept the invitation</a></p>
 <p style="font-size: 13px; color: #475569;">Or copy this link into your browser:<br>{{ $acceptanceUrl }}</p>
-<p style="font-size: 13px; color: #475569;">The link expires on {{ $expiresAt->toDayDateTimeString() }} (UTC) and can be used once. If you already have a {{ $platformName }} account under this address, sign in first, then open the link again. If you did not expect this invitation, ignore this email.</p>
+<p style="font-size: 13px; color: #475569;">The link expires on {{ $expiresAt->toDayDateTimeString() }} ({{ $timezoneName }}) and can be used once. If you already have a {{ $platformName }} account under this address, sign in first, then open the link again. If you did not expect this invitation, ignore this email.</p>
 </body>
 </html>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../../datetime';
 import { router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import { formatMoney } from '../../../../money';
@@ -122,7 +123,7 @@ function cancel(): void {
             </div>
             <div>
                 <dt class="text-slate-500">Assessed</dt>
-                <dd>{{ charge.createdAt }}</dd>
+                <dd>{{ formatDateTime(charge.createdAt) }}</dd>
             </div>
             <div>
                 <dt class="text-slate-500">Recognition journal entry</dt>
@@ -136,7 +137,7 @@ function cancel(): void {
             </div>
             <div v-if="charge.cancelledAt">
                 <dt class="text-slate-500">Cancelled</dt>
-                <dd>{{ charge.cancelledAt }}</dd>
+                <dd>{{ formatDateTime(charge.cancelledAt) }}</dd>
             </div>
             <div v-if="charge.cancellationJournalEntryId">
                 <dt class="text-slate-500">Cancellation journal entry</dt>
@@ -257,24 +258,33 @@ function cancel(): void {
                 with payments still standing on it, or with a live concession adjustment, cannot be
                 cancelled; move the payments to the right charge from each payment's page first.
             </p>
-            <div class="mt-3">
-                <label class="block text-sm text-slate-600" for="reason">Reason (optional)</label>
-                <input
-                    id="reason"
-                    v-model="reason"
-                    type="text"
-                    maxlength="255"
-                    class="mt-1 w-full max-w-md rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-            </div>
-            <button
-                type="button"
-                :disabled="cancelling"
-                class="mt-3 rounded border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-                @click="cancel"
-            >
-                Cancel charge
-            </button>
+            <p v-if="payments && payments.length > 0" class="mt-3 text-sm text-amber-800">
+                Payments still stand on this charge, so it cannot be cancelled yet. Open each
+                payment above and move the money to the right charge (or reverse or refund it), then
+                cancel this charge.
+            </p>
+            <template v-else>
+                <div class="mt-3">
+                    <label class="block text-sm text-slate-600" for="reason"
+                        >Reason (optional)</label
+                    >
+                    <input
+                        id="reason"
+                        v-model="reason"
+                        type="text"
+                        maxlength="255"
+                        class="mt-1 w-full max-w-md rounded border border-slate-300 px-3 py-2 text-sm"
+                    />
+                </div>
+                <button
+                    type="button"
+                    :disabled="cancelling"
+                    class="mt-3 rounded border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                    @click="cancel"
+                >
+                    Cancel charge
+                </button>
+            </template>
         </section>
     </main>
 </template>

@@ -6,6 +6,7 @@ use App\Domain\Identity\Application\AccountLinkService;
 use App\Domain\Students\Application\Exceptions\DuplicateStudentNumberException;
 use App\Domain\Students\Application\StudentActivityHistoryService;
 use App\Domain\Students\Application\StudentEnrollmentReadService;
+use App\Domain\Students\Application\StudentSearch;
 use App\Domain\Students\Application\StudentService;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
@@ -59,13 +60,14 @@ class StudentController extends Controller
 
         $query = Student::query()->orderBy('first_name')->orderBy('last_name');
 
+        // UAT-C4 (UAT-SRCH-01): any part of the number; every name word in
+        // any name field (StudentSearch).
         if (isset($validated['student_number'])) {
-            $query->where('student_number', $validated['student_number']);
+            StudentSearch::number($query, $validated['student_number']);
         }
 
         if (isset($validated['name'])) {
-            $term = '%'.$validated['name'].'%';
-            $query->where(fn ($q) => $q->where('first_name', 'ilike', $term)->orWhere('last_name', 'ilike', $term));
+            StudentSearch::name($query, $validated['name']);
         }
 
         if (isset($validated['status'])) {

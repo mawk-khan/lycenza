@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SearchCombobox from '../../../../Components/Form/SearchCombobox.vue';
 import { useForm } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 
@@ -37,7 +38,8 @@ watch(itemQuery, (value) => {
         const response = await fetch(
             `/app/inventory-stock/search/items?q=${encodeURIComponent(value)}`,
         );
-        const body = await response.json();
+        // UAT-C4: a refused or non-JSON answer is simply no results.
+        const body = response.ok ? await response.json().catch(() => ({ data: [] })) : { data: [] };
         itemResults.value = body.data;
     }, 250);
 });
@@ -48,7 +50,8 @@ watch(locationQuery, (value) => {
         const response = await fetch(
             `/app/inventory-stock/search/locations?q=${encodeURIComponent(value)}`,
         );
-        const body = await response.json();
+        // UAT-C4: a refused or non-JSON answer is simply no results.
+        const body = response.ok ? await response.json().catch(() => ({ data: [] })) : { data: [] };
         locationResults.value = body.data;
     }, 250);
 });
@@ -79,56 +82,38 @@ function submit(): void {
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div class="relative">
                 <label class="block text-sm text-slate-600" for="item-search">Item</label>
-                <input
+                <SearchCombobox
                     id="item-search"
                     v-model="itemQuery"
-                    type="text"
                     placeholder="Search by code or name"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <ul
-                    v-if="itemResults.length > 0"
-                    class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                    :options="itemResults"
+                    :option-key="(o) => o.id"
+                    :error="form.errors.inventory_item_id"
+                    @select="pickItem"
                 >
-                    <li
-                        v-for="item in itemResults"
-                        :key="item.id"
-                        class="cursor-pointer px-3 py-2 hover:bg-slate-50"
-                        @click="pickItem(item)"
-                    >
+                    <template #option="{ option: item }">
                         {{ item.code }} — {{ item.name }} ({{ item.unitOfMeasure }})
-                    </li>
-                </ul>
-                <p v-if="form.errors.inventory_item_id" class="mt-1 text-sm text-red-600">
-                    {{ form.errors.inventory_item_id }}
-                </p>
+                    </template>
+                </SearchCombobox>
             </div>
 
             <div class="relative">
                 <label class="block text-sm text-slate-600" for="location-search">Location</label>
-                <input
+                <SearchCombobox
                     id="location-search"
                     v-model="locationQuery"
-                    type="text"
                     placeholder="Search by code or name"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <ul
-                    v-if="locationResults.length > 0"
-                    class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                    :options="locationResults"
+                    :option-key="(o) => o.id"
+                    :error="form.errors.inventory_location_id"
+                    @select="pickLocation"
                 >
-                    <li
-                        v-for="location in locationResults"
-                        :key="location.id"
-                        class="cursor-pointer px-3 py-2 hover:bg-slate-50"
-                        @click="pickLocation(location)"
-                    >
+                    <template #option="{ option: location }">
                         {{ location.code }} — {{ location.name }}
-                    </li>
-                </ul>
-                <p v-if="form.errors.inventory_location_id" class="mt-1 text-sm text-red-600">
-                    {{ form.errors.inventory_location_id }}
-                </p>
+                    </template>
+                </SearchCombobox>
             </div>
 
             <div>

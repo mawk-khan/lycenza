@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../../datetime';
 import { Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
@@ -120,7 +121,7 @@ function statusHref(status: string | null): string {
                         <span class="text-sm font-medium">{{ template.name }}</span>
                         <p class="mt-0.5 text-xs text-slate-500">
                             by {{ template.createdByName ?? 'Unknown' }} · updated
-                            {{ template.updatedAt }}
+                            {{ formatDateTime(template.updatedAt) }}
                         </p>
                     </div>
                     <span

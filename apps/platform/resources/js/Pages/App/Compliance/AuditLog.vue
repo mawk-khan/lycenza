@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../datetime';
 import EmptyState from '../../../Components/EmptyState.vue';
 
 /**
@@ -33,7 +34,7 @@ const props = defineProps<{ log: AuditLog }>();
 const isFirstPage = !new URLSearchParams(window.location.search).has('cursor');
 
 function formatTime(value: string): string {
-    return new Date(value).toLocaleString();
+    return formatDateTime(value);
 }
 
 function nextHref(): string {

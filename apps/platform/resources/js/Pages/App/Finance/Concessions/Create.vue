@@ -13,7 +13,13 @@ interface Props {
     idempotencyKey: string;
     charge: { id: string; description: string; amount: string; currency: string } | null;
     student: StudentOption | null;
-    academicYears: Array<{ id: string; name: string; startsOn: string; endsOn: string }>;
+    academicYears: Array<{
+        id: string;
+        name: string;
+        label: string;
+        startsOn: string;
+        endsOn: string;
+    }>;
     feeHeads: Array<{ id: string; label: string }>;
     categories: string[];
 }
@@ -161,7 +167,7 @@ function submit(): void {
                             @change="yearChanged"
                         >
                             <option v-for="y in academicYears" :key="y.id" :value="y.id">
-                                {{ y.name }}
+                                {{ y.label }}
                             </option>
                         </select>
                     </label>

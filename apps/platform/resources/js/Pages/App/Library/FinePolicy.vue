@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from '../../../datetime';
 // SWC.3 (ADR 0073 sections 19.4): the Library fine policy (OPF.4) -- the
 // current version, every published version, and publishing a new one.
 // Versions are immutable; publishing adds the next one. The form carries
@@ -102,7 +103,7 @@ const describe = (p: Policy) =>
                 <dt class="text-slate-600">Fee head</dt>
                 <dd>{{ props.current.feeHead ? feeHeadText(props.current.feeHead) : '—' }}</dd>
                 <dt class="text-slate-600">Published</dt>
-                <dd>{{ props.current.publishedAt?.slice(0, 10) }}</dd>
+                <dd>{{ formatDate(props.current.publishedAt) }}</dd>
             </dl>
         </section>
 
@@ -204,7 +205,7 @@ const describe = (p: Policy) =>
                             <td class="pr-3 py-2">
                                 {{ policy.feeHead ? feeHeadText(policy.feeHead) : '—' }}
                             </td>
-                            <td class="pr-3 py-2">{{ policy.publishedAt?.slice(0, 10) }}</td>
+                            <td class="pr-3 py-2">{{ formatDate(policy.publishedAt) }}</td>
                         </tr>
                     </tbody>
                 </table>

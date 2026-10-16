@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SearchCombobox from '../../../../Components/Form/SearchCombobox.vue';
 import { useForm } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 
@@ -49,7 +50,8 @@ watch(visitorQuery, (value) => {
         const response = await fetch(
             `/app/visitor/visits/search/visitors?q=${encodeURIComponent(value)}`,
         );
-        const body = await response.json();
+        // UAT-C4: a refused or non-JSON answer is simply no results.
+        const body = response.ok ? await response.json().catch(() => ({ data: [] })) : { data: [] };
         visitorResults.value = body.data;
     }, 250);
 });
@@ -60,7 +62,8 @@ watch(hostQuery, (value) => {
         const response = await fetch(
             `/app/visitor/visits/search/hosts?q=${encodeURIComponent(value)}`,
         );
-        const body = await response.json();
+        // UAT-C4: a refused or non-JSON answer is simply no results.
+        const body = response.ok ? await response.json().catch(() => ({ data: [] })) : { data: [] };
         hostResults.value = body.data;
     }, 250);
 });
@@ -98,30 +101,21 @@ function submit(): void {
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div class="relative">
                 <label class="block text-sm text-slate-600" for="visitor-search">Visitor</label>
-                <input
+                <SearchCombobox
                     id="visitor-search"
                     v-model="visitorQuery"
-                    type="text"
                     placeholder="Search by name or phone, or add a new Visitor first"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <ul
-                    v-if="visitorResults.length > 0"
-                    class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                    :options="visitorResults"
+                    :option-key="(o) => o.id"
+                    :error="form.errors.visitor_id"
+                    @select="pickVisitor"
                 >
-                    <li
-                        v-for="visitor in visitorResults"
-                        :key="visitor.id"
-                        class="cursor-pointer px-3 py-2 hover:bg-slate-50"
-                        @click="pickVisitor(visitor)"
-                    >
+                    <template #option="{ option: visitor }">
                         {{ visitor.fullName
                         }}<span v-if="visitor.phone"> ({{ visitor.phone }})</span>
-                    </li>
-                </ul>
-                <p v-if="form.errors.visitor_id" class="mt-1 text-sm text-red-600">
-                    {{ form.errors.visitor_id }}
-                </p>
+                    </template>
+                </SearchCombobox>
                 <p class="mt-1 text-xs text-slate-400">
                     Visitor not listed?
                     <a class="underline" href="/app/visitor/directory/create"
@@ -152,26 +146,19 @@ function submit(): void {
                 <label class="block text-sm text-slate-600" for="host-search"
                     >Host (optional)</label
                 >
-                <input
+                <SearchCombobox
                     id="host-search"
                     v-model="hostQuery"
-                    type="text"
                     placeholder="Search by Employee name"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <ul
-                    v-if="hostResults.length > 0"
-                    class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                    :options="hostResults"
+                    :option-key="(o) => o.id"
+                    @select="pickHost"
                 >
-                    <li
-                        v-for="host in hostResults"
-                        :key="host.id"
-                        class="cursor-pointer px-3 py-2 hover:bg-slate-50"
-                        @click="pickHost(host)"
-                    >
+                    <template #option="{ option: host }">
                         {{ host.fullName }}
-                    </li>
-                </ul>
+                    </template>
+                </SearchCombobox>
                 <button
                     v-if="selectedHost"
                     type="button"

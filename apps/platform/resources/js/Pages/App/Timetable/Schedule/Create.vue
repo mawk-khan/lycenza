@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import SearchCombobox from '../../../../Components/Form/SearchCombobox.vue';
 import { useForm } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { ref, watch, nextTick } from 'vue';
 
 interface SubjectOfferingOption {
     id: string;
@@ -15,6 +16,7 @@ interface SectionOption {
     id: string;
     code: string;
     name: string;
+    label: string;
 }
 
 interface TeacherOption {
@@ -55,6 +57,13 @@ const form = useForm({
     day_of_week: 1,
 });
 
+// UAT-C4 (UAT-A11Y-01): a pick swaps the search box for the chosen value and
+// its Change button, and Change swaps it back -- keep keyboard focus on what
+// replaced the focused control.
+function focusSoon(id: string): void {
+    nextTick(() => document.getElementById(id)?.focus());
+}
+
 function makePicker<T extends { id: string }>(endpoint: string) {
     const query = ref('');
     const results = ref<T[]>([]);
@@ -63,13 +72,21 @@ function makePicker<T extends { id: string }>(endpoint: string) {
 
     watch(query, (value) => {
         clearTimeout(debounce);
+        // UAT-C4: a pick clears the query; an empty search is no search.
+        if (value.trim() === '') {
+            results.value = [];
+            return;
+        }
         debounce = setTimeout(async () => {
             const response = await fetch(`${endpoint}?q=${encodeURIComponent(value)}`);
             if (!response.ok) {
                 results.value = [];
                 return;
             }
-            const body = await response.json();
+            // UAT-C4: a refused or non-JSON answer is simply no results.
+            const body = response.ok
+                ? await response.json().catch(() => ({ data: [] }))
+                : { data: [] };
             results.value = body.data as T[];
         }, 250);
     });
@@ -90,13 +107,15 @@ function selectOffering(option: SubjectOfferingOption): void {
     offeringPicker.selectedLabel.value = `${option.subjectCode} — ${option.subjectName} (${option.gradeLevelName}, ${option.academicYearName})`;
     offeringPicker.query.value = '';
     offeringPicker.results.value = [];
+    focusSoon('offering-change');
 }
 
 function selectSection(option: SectionOption): void {
     form.section_id = option.id;
-    sectionPicker.selectedLabel.value = `${option.code} — ${option.name}`;
+    sectionPicker.selectedLabel.value = option.label;
     sectionPicker.query.value = '';
     sectionPicker.results.value = [];
+    focusSoon('section-change');
 }
 
 function selectTeacher(option: TeacherOption): void {
@@ -104,6 +123,7 @@ function selectTeacher(option: TeacherOption): void {
     teacherPicker.selectedLabel.value = option.fullName;
     teacherPicker.query.value = '';
     teacherPicker.results.value = [];
+    focusSoon('teacher-change');
 }
 
 function selectRoom(option: RoomOption): void {
@@ -111,6 +131,7 @@ function selectRoom(option: RoomOption): void {
     roomPicker.selectedLabel.value = `${option.code} — ${option.name}`;
     roomPicker.query.value = '';
     roomPicker.results.value = [];
+    focusSoon('room-change');
 }
 
 function clearRoom(): void {
@@ -123,6 +144,7 @@ function selectPeriod(option: PeriodOption): void {
     periodPicker.selectedLabel.value = `${option.code} (${option.startTime}–${option.endTime})`;
     periodPicker.query.value = '';
     periodPicker.results.value = [];
+    focusSoon('period-change');
 }
 
 function submit(): void {
@@ -144,42 +166,35 @@ function submit(): void {
                 >
                     <span>{{ offeringPicker.selectedLabel.value }}</span>
                     <button
+                        id="offering-change"
                         type="button"
                         class="text-slate-400 hover:text-slate-700"
                         @click="
                             form.subject_offering_id = '';
                             offeringPicker.selectedLabel.value = '';
+                            focusSoon('offering');
                         "
                     >
                         Change
                     </button>
                 </div>
-                <input
+                <SearchCombobox
                     v-else
                     id="offering"
                     v-model="offeringPicker.query.value"
-                    type="text"
                     placeholder="Search by Subject code or name"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <ul
-                    v-if="offeringPicker.results.value.length > 0"
-                    class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                    :options="offeringPicker.results.value"
+                    :option-key="(o) => o.id"
+                    :error="form.errors.subject_offering_id"
+                    @select="selectOffering"
                 >
-                    <li
-                        v-for="option in offeringPicker.results.value"
-                        :key="option.id"
-                        class="cursor-pointer px-3 py-2 hover:bg-slate-50"
-                        @click="selectOffering(option)"
-                    >
+                    <template #option="{ option: option }">
                         {{ option.subjectCode }} — {{ option.subjectName }} ({{
                             option.gradeLevelName
                         }}, {{ option.academicYearName }})
-                    </li>
-                </ul>
-                <p v-if="form.errors.subject_offering_id" class="mt-1 text-sm text-red-600">
-                    {{ form.errors.subject_offering_id }}
-                </p>
+                    </template>
+                </SearchCombobox>
             </div>
 
             <div class="relative">
@@ -190,40 +205,33 @@ function submit(): void {
                 >
                     <span>{{ sectionPicker.selectedLabel.value }}</span>
                     <button
+                        id="section-change"
                         type="button"
                         class="text-slate-400 hover:text-slate-700"
                         @click="
                             form.section_id = '';
                             sectionPicker.selectedLabel.value = '';
+                            focusSoon('section');
                         "
                     >
                         Change
                     </button>
                 </div>
-                <input
+                <SearchCombobox
                     v-else
                     id="section"
                     v-model="sectionPicker.query.value"
-                    type="text"
                     placeholder="Search by Section code or name"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <ul
-                    v-if="sectionPicker.results.value.length > 0"
-                    class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                    :options="sectionPicker.results.value"
+                    :option-key="(o) => o.id"
+                    :error="form.errors.section_id"
+                    @select="selectSection"
                 >
-                    <li
-                        v-for="option in sectionPicker.results.value"
-                        :key="option.id"
-                        class="cursor-pointer px-3 py-2 hover:bg-slate-50"
-                        @click="selectSection(option)"
-                    >
-                        {{ option.code }} — {{ option.name }}
-                    </li>
-                </ul>
-                <p v-if="form.errors.section_id" class="mt-1 text-sm text-red-600">
-                    {{ form.errors.section_id }}
-                </p>
+                    <template #option="{ option: option }">
+                        {{ option.label }}
+                    </template>
+                </SearchCombobox>
             </div>
 
             <div class="relative">
@@ -234,40 +242,33 @@ function submit(): void {
                 >
                     <span>{{ teacherPicker.selectedLabel.value }}</span>
                     <button
+                        id="teacher-change"
                         type="button"
                         class="text-slate-400 hover:text-slate-700"
                         @click="
                             form.teacher_id = '';
                             teacherPicker.selectedLabel.value = '';
+                            focusSoon('teacher');
                         "
                     >
                         Change
                     </button>
                 </div>
-                <input
+                <SearchCombobox
                     v-else
                     id="teacher"
                     v-model="teacherPicker.query.value"
-                    type="text"
                     placeholder="Search by name"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <ul
-                    v-if="teacherPicker.results.value.length > 0"
-                    class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                    :options="teacherPicker.results.value"
+                    :option-key="(o) => o.id"
+                    :error="form.errors.teacher_id"
+                    @select="selectTeacher"
                 >
-                    <li
-                        v-for="option in teacherPicker.results.value"
-                        :key="option.id"
-                        class="cursor-pointer px-3 py-2 hover:bg-slate-50"
-                        @click="selectTeacher(option)"
-                    >
+                    <template #option="{ option: option }">
                         {{ option.fullName }}
-                    </li>
-                </ul>
-                <p v-if="form.errors.teacher_id" class="mt-1 text-sm text-red-600">
-                    {{ form.errors.teacher_id }}
-                </p>
+                    </template>
+                </SearchCombobox>
             </div>
 
             <div class="relative">
@@ -278,37 +279,32 @@ function submit(): void {
                 >
                     <span>{{ roomPicker.selectedLabel.value }}</span>
                     <button
+                        id="room-change"
                         type="button"
                         class="text-slate-400 hover:text-slate-700"
-                        @click="clearRoom"
+                        @click="
+                            clearRoom();
+                            focusSoon('room');
+                        "
                     >
                         Change
                     </button>
                 </div>
-                <input
+                <SearchCombobox
                     v-else
                     id="room"
                     v-model="roomPicker.query.value"
-                    type="text"
                     placeholder="Search by Room code or name"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <ul
-                    v-if="roomPicker.results.value.length > 0"
-                    class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                    :options="roomPicker.results.value"
+                    :option-key="(o) => o.id"
+                    :error="form.errors.room_id"
+                    @select="selectRoom"
                 >
-                    <li
-                        v-for="option in roomPicker.results.value"
-                        :key="option.id"
-                        class="cursor-pointer px-3 py-2 hover:bg-slate-50"
-                        @click="selectRoom(option)"
-                    >
+                    <template #option="{ option: option }">
                         {{ option.code }} — {{ option.name }}
-                    </li>
-                </ul>
-                <p v-if="form.errors.room_id" class="mt-1 text-sm text-red-600">
-                    {{ form.errors.room_id }}
-                </p>
+                    </template>
+                </SearchCombobox>
             </div>
 
             <div class="relative">
@@ -319,40 +315,33 @@ function submit(): void {
                 >
                     <span>{{ periodPicker.selectedLabel.value }}</span>
                     <button
+                        id="period-change"
                         type="button"
                         class="text-slate-400 hover:text-slate-700"
                         @click="
                             form.period_id = '';
                             periodPicker.selectedLabel.value = '';
+                            focusSoon('period');
                         "
                     >
                         Change
                     </button>
                 </div>
-                <input
+                <SearchCombobox
                     v-else
                     id="period"
                     v-model="periodPicker.query.value"
-                    type="text"
                     placeholder="Search by Period code or name"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <ul
-                    v-if="periodPicker.results.value.length > 0"
-                    class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                    :options="periodPicker.results.value"
+                    :option-key="(o) => o.id"
+                    :error="form.errors.period_id"
+                    @select="selectPeriod"
                 >
-                    <li
-                        v-for="option in periodPicker.results.value"
-                        :key="option.id"
-                        class="cursor-pointer px-3 py-2 hover:bg-slate-50"
-                        @click="selectPeriod(option)"
-                    >
+                    <template #option="{ option: option }">
                         {{ option.code }} ({{ option.startTime }}–{{ option.endTime }})
-                    </li>
-                </ul>
-                <p v-if="form.errors.period_id" class="mt-1 text-sm text-red-600">
-                    {{ form.errors.period_id }}
-                </p>
+                    </template>
+                </SearchCombobox>
             </div>
 
             <div>

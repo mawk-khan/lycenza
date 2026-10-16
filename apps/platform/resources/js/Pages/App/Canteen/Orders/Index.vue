@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../../datetime';
 import { router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import EmptyState from '../../../../Components/EmptyState.vue';
@@ -126,7 +127,7 @@ function cancel(order: OrderRow): void {
                 <tbody class="divide-y divide-slate-100">
                     <tr v-for="order in orders.data" :key="order.id">
                         <td class="py-3 text-slate-600">
-                            {{ new Date(order.placedAt).toLocaleString() }}
+                            {{ formatDateTime(order.placedAt) }}
                         </td>
                         <td class="py-3">
                             <a class="underline" :href="`/app/canteen-orders/${order.id}`">{{

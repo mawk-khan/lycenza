@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from '../../../datetime';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import StatusBadge from '../../../Components/StatusBadge.vue';
@@ -321,7 +322,7 @@ function switchToLinkExisting(g: GuardianCandidate): void {
             class="mt-6 rounded border border-slate-200 p-4 text-sm"
         >
             <h2 class="font-medium text-slate-500">Converted</h2>
-            <p class="mt-1">Converted {{ (application.convertedAt ?? '').slice(0, 10) }}.</p>
+            <p class="mt-1">Converted {{ formatDate(application.convertedAt) }}.</p>
             <a
                 v-if="canViewStudents && application.convertedStudentId"
                 class="mt-2 inline-block underline"

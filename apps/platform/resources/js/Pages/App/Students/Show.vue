@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SearchCombobox from '../../../Components/Form/SearchCombobox.vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
@@ -98,7 +99,8 @@ function searchLinkCandidates(): void {
             `/app/students/${props.student.id}/account-link/search?q=${encodeURIComponent(q)}`,
             { headers: { Accept: 'application/json' } },
         );
-        const body = await response.json();
+        // UAT-C4: a refused or non-JSON answer is simply no results.
+        const body = response.ok ? await response.json().catch(() => ({ data: [] })) : { data: [] };
         linkCandidates.value = body.candidates as MembershipCandidate[];
     }, 250);
 }
@@ -721,26 +723,21 @@ function unlink(r: Relationship): void {
                     Link account
                 </button>
                 <div v-else class="relative mt-3">
-                    <input
+                    <SearchCombobox
+                        id="student-link-search"
                         v-model="linkQuery"
-                        type="text"
+                        aria-label="Search Lycenza accounts to link"
                         placeholder="Search Lycenza accounts by name…"
                         class="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        :options="linkCandidates"
+                        :option-key="(o) => o.schoolMembershipId"
                         @input="searchLinkCandidates"
-                    />
-                    <ul
-                        v-if="linkCandidates.length > 0"
-                        class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                        @select="linkAccount"
                     >
-                        <li
-                            v-for="candidate in linkCandidates"
-                            :key="candidate.schoolMembershipId"
-                            class="cursor-pointer px-3 py-2 hover:bg-slate-50"
-                            @click="linkAccount(candidate)"
-                        >
+                        <template #option="{ option: candidate }">
                             {{ candidate.name }}
-                        </li>
-                    </ul>
+                        </template>
+                    </SearchCombobox>
                     <button
                         type="button"
                         class="mt-2 text-xs text-slate-400 underline"

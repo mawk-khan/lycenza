@@ -115,7 +115,8 @@ class TeachingAssignmentController extends Controller
             throw ValidationException::withMessages(['employee_id' => 'Choose an Employee, Section and Subject Offering of this School.']);
         }
 
-        return back();
+        // UAT-C4 (UAT-UX-01): confirm, through the shared flash banner.
+        return back()->with('flash', 'Teaching assignment added.');
     }
 
     public function end(Request $request, TenantContext $context, TeachingAssignmentService $service, string $teachingAssignment): RedirectResponse
@@ -134,7 +135,7 @@ class TeachingAssignmentController extends Controller
             throw ValidationException::withMessages(['ends_on' => $e->getMessage()]);
         }
 
-        return back();
+        return back()->with('flash', 'Teaching assignment ended.');
     }
 
     /**

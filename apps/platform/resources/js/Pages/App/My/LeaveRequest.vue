@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from '../../../datetime';
 import {
     portionLabels,
     reasonLabels,
@@ -75,7 +76,7 @@ const pathLabels: Record<string, string> = {
             <li v-for="d in request.decisions" :key="d.id">
                 {{ requestStatusLabels[d.decision] ?? d.decision }} {{ pathLabels[d.path] ?? '' }}
                 <span v-if="d.reasonCode"> · {{ reasonLabels[d.reasonCode] ?? d.reasonCode }}</span>
-                · {{ d.decidedAt.slice(0, 10) }}
+                · {{ formatDate(d.decidedAt) }}
             </li>
         </ul>
     </main>

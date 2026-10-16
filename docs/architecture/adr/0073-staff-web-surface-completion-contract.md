@@ -584,6 +584,12 @@ baseline:
   Status is never conveyed by colour alone (`StatusBadge` carries text).
 - **ARIA:** only where native semantics are insufficient.
 
+> **Amendment (UAT-C4, 2026-10-16, ADR 0075 §17.1):** search-and-pick
+> controls use the shared `Components/Form/SearchCombobox.vue` (keyboard
+> and screen-reader operable), and `SearchPickerGuardTest` refuses
+> click-only `<li>` results anywhere in `resources/js`. School-facing
+> timestamps use `resources/js/datetime.ts` in the School's timezone.
+
 ### 8.2 Tooling
 
 - **Plugin.** SWC.1 evaluates `eslint-plugin-vuejs-accessibility`

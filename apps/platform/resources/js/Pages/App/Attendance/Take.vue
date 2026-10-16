@@ -16,6 +16,7 @@ import EmptyState from '../../../Components/EmptyState.vue';
 interface ClassRow {
     timetableEntryId: string;
     sectionCode: string | null;
+    classLabel: string | null;
     subjectName: string | null;
     teacherName: string | null;
     periodName: string | null;
@@ -136,7 +137,9 @@ function submit(): void {
                     :disabled="row.alreadySubmitted"
                     @click="chooseClass(row.timetableEntryId)"
                 >
-                    <span class="font-medium">{{ row.sectionCode }} · {{ row.subjectName }}</span>
+                    <span class="font-medium"
+                        >{{ row.classLabel ?? row.sectionCode }} · {{ row.subjectName }}</span
+                    >
                     <span class="text-slate-500">
                         — {{ row.periodName }} ({{ row.periodStartTime }}–{{ row.periodEndTime }}),
                         {{ row.teacherName }}

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../datetime';
 import { Link } from '@inertiajs/vue3';
 import HubNav from '@/Components/App/Communications/HubNav.vue';
 
@@ -75,7 +76,7 @@ const channelLabels: Record<string, string> = { in_app: 'In-app', email: 'Email'
                         <p class="mt-0.5 text-xs text-slate-500">
                             by {{ a.createdByName ?? 'Unknown' }}
                             <template v-if="a.publishedAt">
-                                · published {{ a.publishedAt }}</template
+                                · published {{ formatDateTime(a.publishedAt) }}</template
                             >
                         </p>
                         <ul class="mt-2 space-y-0.5 text-xs text-red-600">

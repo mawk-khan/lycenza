@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\App\Attendance;
 
+use App\Domain\AcademicStructure\Application\SectionLabel;
 use App\Domain\Attendance\Infrastructure\AttendanceRecord;
 use App\Domain\Attendance\Infrastructure\AttendanceSession;
 
@@ -21,6 +22,7 @@ trait PresentsAttendancePages
             'id' => $session->id,
             'attendanceDate' => $session->attendance_date->toDateString(),
             'sectionCode' => $session->section?->code,
+            'classLabel' => SectionLabel::of($session->section),
             'subjectName' => $session->subjectOffering?->subject?->name,
             'teacherName' => $session->teacher?->full_name,
             'periodName' => $session->period?->name,

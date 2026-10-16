@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from '../../../datetime';
 import { router } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
@@ -182,7 +183,7 @@ function isReadyForConfigurationVersion(plan: PlanRow): boolean {
                                 {{ isReadyForConfigurationVersion(p) ? 'Yes' : 'No' }}
                             </td>
                             <td class="py-3 text-slate-600">
-                                {{ new Date(p.createdAt).toLocaleDateString() }}
+                                {{ formatDate(p.createdAt) }}
                             </td>
                             <td class="py-3 text-right">
                                 <a
@@ -202,9 +203,7 @@ function isReadyForConfigurationVersion(plan: PlanRow): boolean {
                     <a class="font-medium underline" :href="`/app/enrollment-rollovers/${p.id}`">
                         {{ p.sourceAcademicYear.name }} → {{ p.targetAcademicYear.name }}
                     </a>
-                    <p class="mt-1 text-sm text-slate-500">
-                        Created {{ new Date(p.createdAt).toLocaleDateString() }}
-                    </p>
+                    <p class="mt-1 text-sm text-slate-500">Created {{ formatDate(p.createdAt) }}</p>
                     <div class="mt-2"><StatusBadge :status="p.status" /></div>
                 </li>
             </ul>

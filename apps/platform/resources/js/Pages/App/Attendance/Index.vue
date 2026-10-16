@@ -15,6 +15,7 @@ interface SessionRow {
     id: string;
     attendanceDate: string;
     sectionCode: string | null;
+    classLabel: string | null;
     subjectName: string | null;
     teacherName: string | null;
     periodName: string | null;
@@ -120,7 +121,7 @@ watch(attendanceDate, () => {
                 <thead>
                     <tr class="border-b border-slate-200 text-left text-slate-500">
                         <th class="py-2">Date</th>
-                        <th class="py-2">Section</th>
+                        <th class="py-2">Class</th>
                         <th class="py-2">Subject</th>
                         <th class="py-2">Period</th>
                         <th class="py-2">Teacher</th>
@@ -135,7 +136,7 @@ watch(attendanceDate, () => {
                         class="border-b border-slate-100"
                     >
                         <td class="py-2">{{ row.attendanceDate }}</td>
-                        <td class="py-2">{{ row.sectionCode }}</td>
+                        <td class="py-2">{{ row.classLabel ?? row.sectionCode }}</td>
                         <td class="py-2">{{ row.subjectName }}</td>
                         <td class="py-2">
                             {{ row.periodName }}

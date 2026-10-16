@@ -5,6 +5,8 @@ namespace App\Http\Middleware;
 use App\Support\Navigation\NavigationBuilder;
 use App\Support\ProductIdentity;
 use App\Support\Tenancy\ElevationContext;
+use App\Support\Tenancy\SchoolTimezone;
+use App\Support\Tenancy\TenantContext;
 use Closure;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -88,6 +90,11 @@ class HandleInertiaRequests extends Middleware
             // `status`; nothing shared them, so none was ever shown. Namespaced
             // so it can never collide with a page's own `status` prop. Strings
             // only; errors stay with their forms (ValidationException).
+            // UAT-C4 (UAT-UX-02, ADR 0075 section 17): the active School's
+            // timezone, so every page shows School times the same way
+            // (resources/js/datetime.ts). Resolved lazily, after the School
+            // context middleware; null outside a School.
+            'schoolTimezone' => fn () => ($school = app(TenantContext::class)->school()) === null ? null : SchoolTimezone::resolve($school)->getName(),
             'flash' => fn () => [
                 'success' => self::flashedString($request, 'flash') ?? self::flashedString($request, 'status'),
             ],

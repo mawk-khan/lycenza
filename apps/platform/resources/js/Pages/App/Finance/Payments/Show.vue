@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../../datetime';
 import { useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import MfaCodeField from '../../../../Components/MfaCodeField.vue';
@@ -288,7 +289,7 @@ function submit(): void {
                 <div>
                     <dt class="text-slate-500">Recorded</dt>
                     <dd>
-                        {{ payment.recordedAt }}
+                        {{ formatDateTime(payment.recordedAt) }}
                         <span v-if="payment.recordedByName" class="block text-slate-500"
                             >by {{ payment.recordedByName }}</span
                         >

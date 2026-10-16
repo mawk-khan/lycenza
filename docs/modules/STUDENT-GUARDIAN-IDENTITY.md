@@ -1479,3 +1479,18 @@ current, so it cannot be minimized; once the User is minimized, the
 database refuses any new account link on its memberships. Minimizing a User
 never deletes or changes a Student, Guardian or link row: their own D7/G1
 retention governs them.
+
+## Student search (UAT-C4, 2026-10-16, ADR 0075 §17.1)
+
+`App\Domain\Students\Application\StudentSearch` is the one matching rule
+for the Students directory, the enrollment directory and every Student
+picker:
+- **Name words:** every typed word must appear in the first, middle or
+  last name. "Riya Kapoor", "kapoor riya" and middle names all work.
+- **Number fragments:** any part of the Student number matches ("0103"
+  finds LDS-0103). Pickers also accept number words mixed with name words.
+- **Literal input:** typed `%`, `_` and `\` are literal, and every value is
+  bound.
+- **Scope:** matching only. School scope, capabilities, status filters and
+  pagination stay with each caller. There is no fuzzy matching and no
+  global search (V11 D-12 remains deferred).

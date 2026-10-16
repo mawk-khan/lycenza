@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from '../../../datetime';
 import { router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import {
@@ -133,7 +134,7 @@ const attendanceError = useAttendanceError();
                                 {{ halfStatusLabel(c.after.firstHalf) }} /
                                 {{ halfStatusLabel(c.after.secondHalf) }} ·
                                 {{ reasonLabels[c.reasonCode] ?? c.reasonCode }} ·
-                                {{ c.correctedAt.slice(0, 10) }}
+                                {{ formatDate(c.correctedAt) }}
                             </li>
                         </ul>
                         <span v-else class="text-slate-400">—</span>

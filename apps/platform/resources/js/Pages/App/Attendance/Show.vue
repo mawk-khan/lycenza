@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../datetime';
 import { router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
@@ -98,7 +99,7 @@ function correct(record: RecordRow, newStatus: string): void {
         </p>
         <p class="mt-1 text-xs text-slate-400">
             {{ session.academicYearName }} · {{ session.campusName }} ·
-            {{ session.gradeLevelName }} · submitted {{ session.submittedAt }}
+            {{ session.gradeLevelName }} · submitted {{ formatDateTime(session.submittedAt) }}
         </p>
 
         <table class="mt-6 w-full border-collapse text-sm">

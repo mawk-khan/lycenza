@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SearchCombobox from '../../../../Components/Form/SearchCombobox.vue';
 import { useForm } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 
@@ -36,7 +37,8 @@ watch(locationQuery, (value) => {
             locationResults.value = [];
             return;
         }
-        const body = await response.json();
+        // UAT-C4: a refused or non-JSON answer is simply no results.
+        const body = response.ok ? await response.json().catch(() => ({ data: [] })) : { data: [] };
         locationResults.value = body.data;
     }, 250);
 });
@@ -107,27 +109,20 @@ function submit(): void {
                         Change
                     </button>
                 </div>
-                <input
+                <SearchCombobox
                     v-else
                     id="location-search"
                     v-model="locationQuery"
-                    type="text"
                     placeholder="Search by code or name"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                />
-                <ul
-                    v-if="locationResults.length > 0"
-                    class="absolute z-10 mt-1 w-full rounded border border-slate-200 bg-white text-sm shadow"
+                    :options="locationResults"
+                    :option-key="(o) => o.id"
+                    @select="pickLocation"
                 >
-                    <li
-                        v-for="location in locationResults"
-                        :key="location.id"
-                        class="cursor-pointer px-3 py-2 hover:bg-slate-50"
-                        @click="pickLocation(location)"
-                    >
+                    <template #option="{ option: location }">
                         {{ location.code }} — {{ location.name }}
-                    </li>
-                </ul>
+                    </template>
+                </SearchCombobox>
                 <p class="mt-1 text-xs text-slate-400">
                     Stock issued to fulfill Orders from this Outlet is drawn from this Location.
                 </p>

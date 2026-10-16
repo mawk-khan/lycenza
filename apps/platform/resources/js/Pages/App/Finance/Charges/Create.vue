@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useForm } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
+import { formatMoney } from '../../../../money';
 
 interface StudentCandidate {
     id: string;
@@ -10,22 +11,45 @@ interface StudentCandidate {
     lastName: string | null;
 }
 
-interface Props {
-    ledgerAccounts: Array<{ id: string; code: string; name: string }>;
-    academicYears: Array<{ id: string; name: string; code: string; status: string }>;
+interface Account {
+    id: string;
+    code: string;
+    name: string;
 }
 
-defineProps<Props>();
+interface SimilarCharge {
+    chargeId: string;
+    description: string;
+    amount: string;
+    currency: string;
+    dueDate: string | null;
+    assessedOn: string;
+}
 
+interface Props {
+    receivableAccounts: Account[];
+    revenueAccounts: Account[];
+    defaultReceivableAccountId: string | null;
+    defaultRevenueAccountId: string | null;
+    academicYears: Array<{ id: string; name: string; code: string; status: string; label: string }>;
+    defaultAcademicYearId: string | null;
+    similarCharges: SimilarCharge[];
+}
+
+const props = defineProps<Props>();
+
+// UAT-C4 (UAT-FIN-11): the current year and any single valid account are
+// preselected; everything stays editable.
 const form = useForm({
     student_id: '',
-    academic_year_id: '',
+    academic_year_id: props.defaultAcademicYearId ?? '',
     description: '',
     amount: '',
     currency: 'INR',
-    receivable_ledger_account_id: '',
-    revenue_ledger_account_id: '',
+    receivable_ledger_account_id: props.defaultReceivableAccountId ?? '',
+    revenue_ledger_account_id: props.defaultRevenueAccountId ?? '',
     due_date: '',
+    confirm_similar: false,
 });
 
 const selectedStudentLabel = ref('');
@@ -140,7 +164,7 @@ function submit(): void {
                 >
                     <option value="" disabled>Select an Academic Year</option>
                     <option v-for="year in academicYears" :key="year.id" :value="year.id">
-                        {{ year.name }} ({{ year.status }})
+                        {{ year.label }}
                     </option>
                 </select>
                 <p v-if="form.errors.academic_year_id" class="mt-1 text-sm text-red-600">
@@ -206,7 +230,11 @@ function submit(): void {
                     :aria-invalid="!!form.errors.receivable_ledger_account_id"
                 >
                     <option value="" disabled>Select an account</option>
-                    <option v-for="account in ledgerAccounts" :key="account.id" :value="account.id">
+                    <option
+                        v-for="account in receivableAccounts"
+                        :key="account.id"
+                        :value="account.id"
+                    >
                         {{ account.code }} — {{ account.name }}
                     </option>
                 </select>
@@ -229,10 +257,42 @@ function submit(): void {
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                 >
                     <option value="" disabled>Select an account</option>
-                    <option v-for="account in ledgerAccounts" :key="account.id" :value="account.id">
+                    <option
+                        v-for="account in revenueAccounts"
+                        :key="account.id"
+                        :value="account.id"
+                    >
                         {{ account.code }} — {{ account.name }}
                     </option>
                 </select>
+            </div>
+
+            <div
+                v-if="form.errors.confirm_similar && similarCharges.length > 0"
+                role="alert"
+                class="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+            >
+                <p class="font-medium">{{ form.errors.confirm_similar }}</p>
+                <ul class="mt-2 space-y-1">
+                    <li
+                        v-for="c in similarCharges"
+                        :key="c.chargeId"
+                        class="flex flex-wrap justify-between gap-2"
+                    >
+                        <a class="underline" :href="`/app/finance/charges/${c.chargeId}`">{{
+                            c.description
+                        }}</a>
+                        <span
+                            >{{ formatMoney(c.amount, c.currency)
+                            }}<template v-if="c.dueDate"> · due {{ c.dueDate }}</template> ·
+                            assessed {{ c.assessedOn }}</span
+                        >
+                    </li>
+                </ul>
+                <label class="mt-3 flex items-start gap-2">
+                    <input v-model="form.confirm_similar" type="checkbox" class="mt-1" />
+                    <span>This is a separate charge — assess it anyway.</span>
+                </label>
             </div>
 
             <button

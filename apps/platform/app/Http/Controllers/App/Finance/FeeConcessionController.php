@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\App\Finance;
 
+use App\Domain\AcademicStructure\Application\AcademicYearChoices;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\Fees\Application\Exceptions\ChargeNotFoundException;
 use App\Domain\Fees\Application\Exceptions\FeeAdjustmentNotFoundException;
@@ -19,6 +20,7 @@ use App\Domain\Fees\Infrastructure\FeeAdjustment;
 use App\Domain\Fees\Infrastructure\FeeConcession;
 use App\Domain\Fees\Infrastructure\FeeHead;
 use App\Domain\Finance\Application\LedgerAccountSummary;
+use App\Domain\Students\Application\StudentSearch;
 use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Models\School;
@@ -110,8 +112,9 @@ class FeeConcessionController extends Controller
                 'currency' => $charge->currency,
             ],
             'student' => $student === null ? null : ['id' => $student->id, 'name' => $this->fullName($student), 'studentNumber' => $student->student_number],
-            'academicYears' => AcademicYear::query()->orderByDesc('starts_on')->get()
-                ->map(fn (AcademicYear $y) => ['id' => $y->id, 'name' => $y->name, 'startsOn' => $y->starts_on->toDateString(), 'endsOn' => $y->ends_on->toDateString()])->values()->all(),
+            // UAT-C4: the current year first (the form preselects the first).
+            'academicYears' => AcademicYearChoices::operationalOrder(AcademicYear::query()->get())
+                ->map(fn (AcademicYear $y) => ['id' => $y->id, 'name' => $y->name, 'label' => AcademicYearChoices::label($y), 'startsOn' => $y->starts_on->toDateString(), 'endsOn' => $y->ends_on->toDateString()])->values()->all(),
             'feeHeads' => FeeHead::query()->where('status', FeeHead::STATUS_ACTIVE)->orderBy('code')->get()
                 ->map(fn (FeeHead $h) => ['id' => $h->id, 'label' => "{$h->code} · {$h->name}"])->values()->all(),
             'categories' => FeeConcession::CATEGORIES,
@@ -124,10 +127,9 @@ class FeeConcessionController extends Controller
         $this->authorizeCapability(FeeConcessionService::REQUEST, $school);
 
         $validated = $request->validate(['q' => ['required', 'string', 'min:2', 'max:255']]);
-        $term = '%'.$validated['q'].'%';
 
         return response()->json(['data' => Student::query()
-            ->where(fn ($q) => $q->where('first_name', 'ilike', $term)->orWhere('last_name', 'ilike', $term)->orWhere('student_number', 'ilike', $term))
+            ->tap(fn ($q) => StudentSearch::anyField($q, $validated['q']))
             ->orderBy('first_name')
             ->limit(10)
             ->get()

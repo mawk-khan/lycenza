@@ -7,6 +7,6 @@ You have been invited to a staff account at {{ $schoolName }} on {{ $platformNam
 To accept, open this link before it expires:
 {!! $acceptanceUrl !!}
 
-The link expires on {{ $expiresAt->toDayDateTimeString() }} (UTC) and can be used once. If you already have a {{ $platformName }} account under this address, sign in first, then open the link again.
+The link expires on {{ $expiresAt->toDayDateTimeString() }} ({{ $timezoneName }}) and can be used once. If you already have a {{ $platformName }} account under this address, sign in first, then open the link again.
 
 If you did not expect this invitation, ignore this email.

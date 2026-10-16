@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../../../datetime';
 import { router } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 import EmptyState from '../../../../../Components/EmptyState.vue';
@@ -180,7 +181,7 @@ const hasFilters =
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     <tr v-for="entry in journalEntries.data" :key="entry.id">
-                        <td class="py-3 text-slate-600">{{ entry.postedAt }}</td>
+                        <td class="py-3 text-slate-600">{{ formatDateTime(entry.postedAt) }}</td>
                         <td class="py-3">
                             <a
                                 class="font-medium underline"
@@ -231,7 +232,7 @@ const hasFilters =
                         >{{ entry.description }}</a
                     >
                     <p class="mt-1 text-sm text-slate-500">
-                        {{ entry.postedAt }} · {{ entry.lineCount }} lines
+                        {{ formatDateTime(entry.postedAt) }} · {{ entry.lineCount }} lines
                     </p>
                 </li>
             </ul>

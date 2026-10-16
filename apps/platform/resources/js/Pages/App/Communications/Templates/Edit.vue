@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../../datetime';
 import { router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
@@ -79,7 +80,8 @@ function useTemplate() {
             </span>
         </div>
         <p class="mt-1 text-xs text-slate-500">
-            by {{ template.createdByName ?? 'Unknown' }} · updated {{ template.updatedAt }}
+            by {{ template.createdByName ?? 'Unknown' }} · updated
+            {{ formatDateTime(template.updatedAt) }}
         </p>
 
         <div class="mt-4 flex gap-2">

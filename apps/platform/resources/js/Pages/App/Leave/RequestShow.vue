@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../datetime';
 import { computed } from 'vue';
 import {
     ledgerKindLabels,
@@ -132,7 +133,7 @@ function yearLabel(id: string): string {
                 {{ requestStatusLabels[d.decision] }} ·
                 {{ d.path === 'manager' ? 'manager' : 'administrator' }}
                 <template v-if="d.reasonCode">· {{ reasonLabels[d.reasonCode] }}</template>
-                · {{ d.decidedAt }}
+                · {{ formatDateTime(d.decidedAt) }}
             </li>
             <li v-if="request.decisions.length === 0" class="text-slate-500">Not decided yet.</li>
         </ul>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../../datetime';
 import { Link } from '@inertiajs/vue3';
 
 interface AuditEntry {
@@ -49,7 +50,7 @@ function formatMetadataKey(key: string): string {
                     :class="entry.isEmergency ? 'bg-red-600' : 'bg-slate-400'"
                 ></span>
 
-                <p class="text-xs text-slate-400">{{ entry.occurredAt }}</p>
+                <p class="text-xs text-slate-400">{{ formatDateTime(entry.occurredAt) }}</p>
                 <p
                     class="text-sm font-medium"
                     :class="entry.isEmergency ? 'text-red-700' : 'text-slate-900'"

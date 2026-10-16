@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\App\Attendance;
 
+use App\Domain\AcademicStructure\Application\SectionLabel;
 use App\Domain\Attendance\Application\AttendanceCorrectionService;
 use App\Domain\Attendance\Application\AttendanceSubmissionService;
 use App\Domain\Attendance\Application\Exceptions\AttendanceException;
@@ -57,7 +58,7 @@ class AttendanceController extends Controller
         ]);
 
         $paginator = AttendanceSession::query()
-            ->with(['section', 'subjectOffering.subject', 'teacher', 'period'])
+            ->with(['section.gradeLevel', 'subjectOffering.subject', 'teacher', 'period'])
             ->when(isset($validated['attendance_date']), fn ($q) => $q->whereDate('attendance_date', $validated['attendance_date']))
             ->orderByDesc('attendance_date')
             ->orderBy('period_start_time')
@@ -98,13 +99,16 @@ class AttendanceController extends Controller
             ->all();
 
         $classes = TimetableEntry::query()
-            ->with(['subjectOffering.subject', 'section', 'teacher', 'period'])
+            ->with(['subjectOffering.subject', 'section.gradeLevel', 'teacher', 'period'])
             ->where('status', 'active')
             ->where('day_of_week', Carbon::parse($date)->isoWeekday())
             ->get()
+            ->sortBy(fn (TimetableEntry $e) => SectionLabel::sortKey($e->section).'|'.$e->period?->start_time)
             ->map(fn (TimetableEntry $e) => [
                 'timetableEntryId' => $e->id,
                 'sectionCode' => $e->section?->code,
+                // UAT-C4 (UAT-ATT-08): "Grade 6 · A", never "A" alone.
+                'classLabel' => SectionLabel::of($e->section),
                 'subjectName' => $e->subjectOffering?->subject?->name,
                 'teacherName' => $e->teacher?->full_name,
                 'periodName' => $e->period?->name,

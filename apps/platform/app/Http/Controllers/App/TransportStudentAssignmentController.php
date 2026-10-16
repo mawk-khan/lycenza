@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\App;
 
+use App\Domain\Students\Application\StudentSearch;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Transport\Application\Exceptions\ConcurrentStudentAssignmentConflictException;
 use App\Domain\Transport\Application\Exceptions\RouteNotAvailableException;
@@ -71,9 +72,7 @@ class TransportStudentAssignmentController extends Controller
 
         $students = Student::query()
             ->where('status', 'active')
-            ->when($term !== '', fn ($q) => $q->where(fn ($w) => $w->where('student_number', 'ilike', "%{$term}%")
-                ->orWhere('first_name', 'ilike', "%{$term}%")
-                ->orWhere('last_name', 'ilike', "%{$term}%")))
+            ->when(trim($term) !== '', fn ($q) => StudentSearch::anyField($q, $term))
             ->limit(10)
             ->get();
 

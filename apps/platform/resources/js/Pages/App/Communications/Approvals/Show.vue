@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../../datetime';
 import { Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
@@ -81,7 +82,8 @@ function reject() {
             </span>
         </div>
         <p class="mt-1 text-xs text-slate-500">
-            submitted by {{ request.requestedByName ?? 'Unknown' }} · {{ request.requestedAt }}
+            submitted by {{ request.requestedByName ?? 'Unknown' }} ·
+            {{ formatDateTime(request.requestedAt) }}
         </p>
 
         <div class="mt-4 rounded border border-slate-200 p-4">
@@ -125,7 +127,9 @@ function reject() {
         >
             <p class="font-medium text-slate-600">
                 Decided by {{ request.decidedByName ?? 'Unknown' }}
-                <template v-if="request.decidedAt"> · {{ request.decidedAt }}</template>
+                <template v-if="request.decidedAt">
+                    · {{ formatDateTime(request.decidedAt) }}</template
+                >
             </p>
             <p v-if="request.decisionNote" class="mt-1 text-slate-500">
                 {{ request.decisionNote }}

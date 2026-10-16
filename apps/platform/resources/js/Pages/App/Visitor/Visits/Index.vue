@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../../datetime';
 import { router } from '@inertiajs/vue3';
 import EmptyState from '../../../../Components/EmptyState.vue';
 import Pagination from '../../../../Components/Pagination.vue';
@@ -127,14 +128,10 @@ function endVisit(visitId: string): void {
                         <td class="py-3 text-slate-600">{{ visit.campusName }}</td>
                         <td class="py-3 text-slate-600">{{ visit.hostName ?? '—' }}</td>
                         <td class="py-3 text-slate-600">
-                            {{ new Date(visit.checkedInAt).toLocaleString() }}
+                            {{ formatDateTime(visit.checkedInAt) }}
                         </td>
                         <td class="py-3 text-slate-600">
-                            {{
-                                visit.checkedOutAt
-                                    ? new Date(visit.checkedOutAt).toLocaleString()
-                                    : '—'
-                            }}
+                            {{ visit.checkedOutAt ? formatDateTime(visit.checkedOutAt) : '—' }}
                         </td>
                         <td class="py-3 text-right">
                             <button

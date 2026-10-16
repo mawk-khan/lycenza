@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\App;
 
+use App\Domain\AcademicStructure\Application\AcademicYearChoices;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Section;
@@ -128,7 +129,10 @@ class AdmissionApplicationController extends Controller
 
         return Inertia::render('App/Admissions/Create', [
             'applicant' => $this->presentApplicantRef($applicantModel),
-            'academicYears' => $this->academicYearOptions(),
+            // UAT-C4 (UAT-ADM-15/17): the current year first and preselected;
+            // the draft next year stays selectable, labelled.
+            'academicYears' => AcademicYearChoices::options($years = AcademicYear::query()->get()),
+            'defaultAcademicYearId' => AcademicYearChoices::defaultId($years),
             'campuses' => $this->campusOptions(),
             'gradeLevels' => $this->gradeLevelOptions(),
         ]);

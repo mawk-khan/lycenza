@@ -2,6 +2,7 @@
 
 namespace App\Domain\TeachingAssignments\Application;
 
+use App\Domain\AcademicStructure\Application\SectionLabel;
 use App\Domain\TeachingAssignments\Infrastructure\ElectiveTeachingAssignment;
 use App\Domain\TeachingAssignments\Infrastructure\TeachingAssignment;
 use App\Models\School;
@@ -43,7 +44,7 @@ class TeachingAssignmentReadService
 
         return $this->context->withSchool($school, fn () => TeachingAssignment::query()
             ->where('school_id', $school->id)
-            ->with(['employee', 'section', 'subjectOffering.subject'])
+            ->with(['employee', 'section.gradeLevel', 'subjectOffering.subject'])
             ->when(isset($filters['academic_year_id']), fn ($q) => $q->where('academic_year_id', $filters['academic_year_id']))
             ->when(isset($filters['employee_id']), fn ($q) => $q->where('employee_id', $filters['employee_id']))
             ->when(isset($filters['section_id']), fn ($q) => $q->where('section_id', $filters['section_id']))
@@ -72,7 +73,7 @@ class TeachingAssignmentReadService
             $rows = TeachingAssignment::query()
                 ->where('school_id', $school->id)
                 ->where('academic_year_id', $academicYearId)
-                ->with(['employee:id,school_id,employee_number,full_name', 'section:id,school_id,name,code'])
+                ->with(['employee:id,school_id,employee_number,full_name', 'section:id,school_id,name,code,grade_level_id', 'section.gradeLevel'])
                 ->get(['id', 'school_id', 'employee_id', 'section_id']);
 
             return [
@@ -81,8 +82,9 @@ class TeachingAssignmentReadService
                     ->map(fn ($e) => ['id' => $e->id, 'employeeNumber' => $e->employee_number, 'fullName' => $e->full_name])
                     ->values()->all(),
                 'sections' => $rows->pluck('section')->filter()->unique('id')
-                    ->sortBy(fn ($s) => mb_strtoupper((string) $s->code))
-                    ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name, 'code' => $s->code])
+                    // UAT-C4 (UAT-ATT-08): Grade order, "Grade 6 · A".
+                    ->sortBy(fn ($s) => SectionLabel::sortKey($s))
+                    ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name, 'code' => $s->code, 'label' => SectionLabel::of($s)])
                     ->values()->all(),
             ];
         });
@@ -140,7 +142,7 @@ class TeachingAssignmentReadService
 
         return $this->context->withSchool($school, fn () => self::present(
             TeachingAssignment::query()->where('school_id', $school->id)
-                ->with(['employee', 'section', 'subjectOffering.subject'])
+                ->with(['employee', 'section.gradeLevel', 'subjectOffering.subject'])
                 ->findOrFail($assignmentId),
             $this->today($school),
         ));
@@ -163,6 +165,7 @@ class TeachingAssignmentReadService
                 'id' => $a->section_id,
                 'name' => $a->section?->name,
                 'code' => $a->section?->code,
+                'label' => SectionLabel::of($a->section),
             ],
             'subjectOffering' => [
                 'id' => $a->subject_offering_id,

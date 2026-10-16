@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../../datetime';
 import EmptyState from '../../../../Components/EmptyState.vue';
 import Pagination from '../../../../Components/Pagination.vue';
 
@@ -46,7 +47,7 @@ defineProps<Props>();
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl p-4 font-sans text-slate-900 sm:p-8">
         <a class="text-sm underline" href="/app">← Dashboard</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
@@ -54,7 +55,7 @@ defineProps<Props>();
                 <h1 class="text-xl font-semibold">Inventory stock</h1>
                 <p class="mt-1 text-sm text-slate-500">Current balances and movement history.</p>
             </div>
-            <div v-if="canManage" class="flex shrink-0 gap-2">
+            <div v-if="canManage" class="flex flex-wrap gap-2">
                 <a
                     href="/app/inventory-stock/receive"
                     class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
@@ -87,28 +88,30 @@ defineProps<Props>();
             />
 
             <template v-else>
-                <table class="mt-3 w-full text-left text-sm">
-                    <thead>
-                        <tr class="border-b border-slate-200 text-xs text-slate-500">
-                            <th scope="col" class="py-2 font-medium">Item</th>
-                            <th scope="col" class="py-2 font-medium">Location</th>
-                            <th scope="col" class="py-2 font-medium">Quantity on hand</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        <tr v-for="balance in balances.data" :key="balance.id">
-                            <td class="py-3 font-medium">
-                                {{ balance.itemCode }} — {{ balance.itemName }}
-                            </td>
-                            <td class="py-3">
-                                {{ balance.locationCode }} — {{ balance.locationName }}
-                            </td>
-                            <td class="py-3">
-                                {{ balance.quantityOnHand }} {{ balance.unitOfMeasure }}
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div class="mt-3 overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead>
+                            <tr class="border-b border-slate-200 text-xs text-slate-500">
+                                <th scope="col" class="py-2 font-medium">Item</th>
+                                <th scope="col" class="py-2 font-medium">Location</th>
+                                <th scope="col" class="py-2 font-medium">Quantity on hand</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr v-for="balance in balances.data" :key="balance.id">
+                                <td class="py-3 font-medium">
+                                    {{ balance.itemCode }} — {{ balance.itemName }}
+                                </td>
+                                <td class="py-3">
+                                    {{ balance.locationCode }} — {{ balance.locationName }}
+                                </td>
+                                <td class="py-3">
+                                    {{ balance.quantityOnHand }} {{ balance.unitOfMeasure }}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
 
                 <Pagination :links="balances.links" />
             </template>
@@ -125,30 +128,32 @@ defineProps<Props>();
             />
 
             <template v-else>
-                <table class="mt-3 w-full text-left text-sm">
-                    <thead>
-                        <tr class="border-b border-slate-200 text-xs text-slate-500">
-                            <th scope="col" class="py-2 font-medium">When</th>
-                            <th scope="col" class="py-2 font-medium">Type</th>
-                            <th scope="col" class="py-2 font-medium">Item</th>
-                            <th scope="col" class="py-2 font-medium">From</th>
-                            <th scope="col" class="py-2 font-medium">To</th>
-                            <th scope="col" class="py-2 font-medium">Quantity</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        <tr v-for="movement in movements.data" :key="movement.id">
-                            <td class="py-3 text-slate-600">
-                                {{ new Date(movement.occurredAt).toLocaleString() }}
-                            </td>
-                            <td class="py-3 capitalize">{{ movement.movementType }}</td>
-                            <td class="py-3 font-medium">{{ movement.itemCode }}</td>
-                            <td class="py-3">{{ movement.fromLocationCode ?? '—' }}</td>
-                            <td class="py-3">{{ movement.toLocationCode ?? '—' }}</td>
-                            <td class="py-3">{{ movement.quantity }}</td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div class="mt-3 overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead>
+                            <tr class="border-b border-slate-200 text-xs text-slate-500">
+                                <th scope="col" class="py-2 font-medium">When</th>
+                                <th scope="col" class="py-2 font-medium">Type</th>
+                                <th scope="col" class="py-2 font-medium">Item</th>
+                                <th scope="col" class="py-2 font-medium">From</th>
+                                <th scope="col" class="py-2 font-medium">To</th>
+                                <th scope="col" class="py-2 font-medium">Quantity</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr v-for="movement in movements.data" :key="movement.id">
+                                <td class="py-3 text-slate-600">
+                                    {{ formatDateTime(movement.occurredAt) }}
+                                </td>
+                                <td class="py-3 capitalize">{{ movement.movementType }}</td>
+                                <td class="py-3 font-medium">{{ movement.itemCode }}</td>
+                                <td class="py-3">{{ movement.fromLocationCode ?? '—' }}</td>
+                                <td class="py-3">{{ movement.toLocationCode ?? '—' }}</td>
+                                <td class="py-3">{{ movement.quantity }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
 
                 <Pagination :links="movements.links" />
             </template>

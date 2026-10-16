@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../../datetime';
 import { Link } from '@inertiajs/vue3';
 
 interface AnnouncementSummary {
@@ -137,7 +138,7 @@ function tabHref(value: string | null): string {
                         <template
                             v-if="announcement.status === 'scheduled' && announcement.scheduledAt"
                         >
-                            · scheduled for {{ announcement.scheduledAt }}</template
+                            · scheduled for {{ formatDateTime(announcement.scheduledAt) }}</template
                         >
                         · by {{ announcement.createdByName ?? 'Unknown' }}
                     </p>

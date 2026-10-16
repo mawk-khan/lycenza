@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SearchCombobox from '../../../../Components/Form/SearchCombobox.vue';
 import { router, useForm } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 import EmptyState from '../../../../Components/EmptyState.vue';
@@ -63,7 +64,8 @@ watch(inventoryItemQuery, (value) => {
             inventoryItemResults.value = [];
             return;
         }
-        const body = await response.json();
+        // UAT-C4: a refused or non-JSON answer is simply no results.
+        const body = response.ok ? await response.json().catch(() => ({ data: [] })) : { data: [] };
         inventoryItemResults.value = body.data;
     }, 250);
 });
@@ -188,27 +190,21 @@ function removeRequirement(requirement: RecipeRow): void {
                             ×
                         </button>
                     </div>
-                    <input
+                    <SearchCombobox
                         v-else
                         id="inventory-item-search"
                         v-model="inventoryItemQuery"
-                        type="text"
                         placeholder="Search by code or name"
                         class="mt-1 w-64 rounded border border-slate-300 px-3 py-2 text-sm"
-                    />
-                    <ul
-                        v-if="inventoryItemResults.length > 0"
-                        class="absolute z-10 mt-1 w-64 rounded border border-slate-200 bg-white text-sm shadow"
+                        :options="inventoryItemResults"
+                        :option-key="(o) => o.id"
+                        list-class="absolute z-10 mt-1 w-64 rounded border border-slate-200 bg-white text-sm shadow max-h-72 overflow-y-auto"
+                        @select="pickInventoryItem"
                     >
-                        <li
-                            v-for="option in inventoryItemResults"
-                            :key="option.id"
-                            class="cursor-pointer px-3 py-2 hover:bg-slate-50"
-                            @click="pickInventoryItem(option)"
-                        >
+                        <template #option="{ option: option }">
                             {{ option.code }} — {{ option.name }} ({{ option.unitOfMeasure }})
-                        </li>
-                    </ul>
+                        </template>
+                    </SearchCombobox>
                     <p
                         v-if="requirementForm.errors.inventory_item_id"
                         class="mt-1 text-sm text-red-600"

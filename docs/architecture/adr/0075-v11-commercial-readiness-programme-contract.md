@@ -859,3 +859,128 @@ required. The contract is ADR 0031 amendment §3.
   (UX). They were optional and are not needed to close an S1.
 - Gateway refunds, Guardian-facing correction detail, and correction expiry
   under D8 retention (refused until a later contract).
+
+## 17. UAT-C4 — Cross-Cutting UX & Accessibility Closure (2026-10-16)
+
+Approved by the owner. It closes the S2/S3 usability and accessibility
+findings of the 2026-10-15 Local UAT assigned to UAT-C4. No schema, no new
+capability, and no change to any business rule except one: ad-hoc charges
+now follow the existing fee-head account rule (§17.2).
+
+### 17.1 Shared conventions (new)
+
+- **Search-and-pick (UAT-A11Y-01):** every search-result picker uses
+  `Components/Form/SearchCombobox.vue`, which implements the WAI-ARIA
+  combobox pattern with list autocomplete.
+  - **Keyboard:** Arrow Down/Up move through the results, Enter picks the
+    highlighted one (Enter otherwise still submits the form), and Escape
+    dismisses the list. The mouse still works.
+  - **Screen readers:** a polite live region announces the number of
+    results, "No matching results" and what was picked. Focus stays in
+    the input after a pick; where a pick swaps the input for a summary,
+    focus moves to its Change button and back.
+  - **Pages:** each page keeps its own label, query, search request and
+    pick handler. Every picker has an id and a `<label for>` or an
+    `aria-label`.
+  - **Guard:** `Tests\Feature\Accessibility\SearchPickerGuardTest`
+    refuses click-only `<li>` results and unnamed pickers.
+- **Student search (UAT-SRCH-01):** `App\Domain\Students\Application\StudentSearch`
+  is the matching rule for the Students and enrollment directories and
+  every Student picker.
+  - **Words:** each typed word must appear in the first, middle or last
+    name, so a full name matches in any order. Pickers also accept a word
+    from the Student number.
+  - **Numbers:** a Student number matches on any part ("0103" finds
+    LDS-0103).
+  - **Literal input:** typed `%`, `_` and `\` match themselves, and every
+    value is a bound parameter.
+  - **Scope:** it changes matching only, never who may be found. No fuzzy
+    or phonetic matching.
+  - **Query plan:** the contains-match runs inside one School's Students
+    (RLS plus each caller's School scope), the shape the pickers already
+    used.
+- **Class labels (UAT-ATT-08):** `App\Domain\AcademicStructure\Application\SectionLabel`
+  names a Section as "Grade 6 · A" and orders by Grade sequence, then name.
+  - It is used wherever Sections of several Grades are listed together: the
+    register class list, the register list, attendance exceptions, the
+    timetable schedule and its Section picker (which also adds the year),
+    and teaching assignments.
+  - Pages scoped to one Grade keep the plain name.
+- **Academic-year choices (UAT-FIN-11, UAT-ADM-15/17):**
+  `App\Domain\AcademicStructure\Application\AcademicYearChoices` sets the
+  order for forms that record something for the current year.
+  - **Order:** the active year first and preselected, then upcoming draft
+    years (soonest first), then closed years. Each option is labelled
+    "current year", "upcoming (draft)" or "closed".
+  - **Where it applies:** the ad-hoc charge, admission application and
+    concession request forms.
+  - **Unchanged:** planning pages (fee structures, rollovers, School
+    setup) keep their own rules, and report filters stay newest-first
+    with "All".
+- **Timestamps (UAT-UX-02, UAT-FIN-10/26b, UAT-STF-06):** stored instants
+  show in the School's timezone in one format ("16 Oct 2026, 1:06 am") via
+  `resources/js/datetime.ts`.
+  - **Timezone source:** the shared Inertia prop `schoolTimezone` (null
+    outside a School).
+  - **Fixed renderings:** raw ISO text, browser-locale `toLocaleString`
+    and UTC `slice(0, 10)` dates were replaced on School-facing pages:
+    Finance, Inventory, Canteen, Visitors, Library, Leave, Communications,
+    Attendance, Examinations, Admissions, Automation, rollovers and the
+    School audit log.
+  - **Invitation email:** the staff invitation email states its expiry in
+    School time, naming the zone.
+  - **Unchanged:** storage. Platform-only and identity-level surfaces
+    (platform audit log, elevation banner, account recovery) keep their
+    established UTC/browser semantics.
+- **Success messages (UAT-UX-01, UAT-FIN-23):** the following now flash
+  through the X-01 shared banner:
+  - Section creation;
+  - teaching assignment add and end;
+  - fee-head create and update;
+  - fee-structure create, update, activate, retire and successor;
+  - fee-line add, update and remove;
+  - instalment save and generate;
+  - optional fee selections.
+
+  Each message shows once and never on a refusal.
+
+### 17.2 Ad-hoc charge form (UAT-FIN-11)
+
+- **Accounts:** receivable choices are the School's active asset accounts
+  and revenue choices its active income accounts. This is the FEE.1
+  fee-head rule (`FeeHeadService`) that every fee-run charge already
+  follows.
+  - `ChargeAdministrationService::assess()` now enforces it for the
+    web and API ad-hoc paths (`CHARGE_ACCOUNT_INVALID`).
+  - Fee runs and OPF charges are unchanged.
+- **Defaults:** an account is preselected only when it is the only valid
+  choice. The current year is preselected.
+- **Left to the user:** due date, amount and description.
+
+### 17.3 Duplicate-charge warning (UAT-FIN-20)
+
+- **When it fires:** before an ad-hoc charge is assessed,
+  `ChargeAdministrationService::similarUncancelledCharges()` looks for
+  uncancelled charges of the same Student and academic year where either:
+  - the descriptions are equal once case, spacing and punctuation are
+    ignored;
+  - one description contains the other (at least 6 characters); or
+  - the amount and due date are the same.
+- **What the user sees:** the form lists the matches and offers "This is a
+  separate charge — assess it anyway".
+- **What it is not:** a warning, never a refusal. Nothing is stored, merged
+  or cancelled.
+- **Not covered:** fee-run duplicate detection (mid-term joiners, the rest
+  of UAT-FIN-20) is not in this slice.
+
+### 17.4 Not in scope
+
+- The 11-page phone overflow (UAT-UX-Phone).
+- Single-School auto-selection (UAT-UX-03).
+- Portal money separators (UAT-UX-04).
+- Canteen ids in charge descriptions (UAT-FIN-22).
+- Guardian contact search (UAT-SRCH-02).
+- The "mark all present" register control.
+- Fee-run proration and duplicate detection.
+- A full WCAG programme or external assistive-technology certification.
+- UAT-C5 (administrator guide).

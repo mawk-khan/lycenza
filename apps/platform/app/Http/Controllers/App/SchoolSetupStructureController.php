@@ -118,7 +118,8 @@ class SchoolSetupStructureController extends Controller
 
         $sections->create($school, $academicYear, $request->only(['campus_id', 'grade_level_id', 'name', 'code', 'capacity']), $context->actor());
 
-        return redirect()->route('app.school-setup.sections', ['academic_year_id' => $academicYear]);
+        // UAT-C4 (UAT-UX-01): confirm, through the shared flash banner.
+        return redirect()->route('app.school-setup.sections', ['academic_year_id' => $academicYear])->with('flash', 'Section created.');
     }
 
     public function updateSection(Request $request, TenantContext $context, SectionAdministrationService $sections, string $section): RedirectResponse

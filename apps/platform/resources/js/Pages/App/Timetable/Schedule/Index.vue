@@ -13,6 +13,7 @@ interface EntryRow {
     subjectName: string | null;
     sectionCode: string | null;
     sectionName: string | null;
+    classLabel: string | null;
     // Teacher: id + display name ONLY -- never work_email/work_phone or
     // any other HR field (Sensitive-tier data minimization).
     teacherId: string;
@@ -198,7 +199,7 @@ function toggle(entry: EntryRow): void {
                                 </span>
                             </td>
                             <td class="py-3">{{ entry.subjectCode }} — {{ entry.subjectName }}</td>
-                            <td class="py-3">{{ entry.sectionCode }} — {{ entry.sectionName }}</td>
+                            <td class="py-3">{{ entry.classLabel ?? entry.sectionName }}</td>
                             <td class="py-3">{{ entry.teacherName }}</td>
                             <td class="py-3">{{ entry.roomCode ?? '—' }}</td>
                             <td class="py-3"><StatusBadge :status="entry.status" /></td>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../../datetime';
 import { Link, router } from '@inertiajs/vue3';
 
 interface ChannelBucket {
@@ -102,7 +103,7 @@ function filterBy(
         <p class="mt-1 text-xs text-slate-500">
             by {{ announcement.createdByName ?? 'Unknown' }}
             <template v-if="announcement.publishedAt">
-                · published {{ announcement.publishedAt }}</template
+                · published {{ formatDateTime(announcement.publishedAt) }}</template
             >
         </p>
 

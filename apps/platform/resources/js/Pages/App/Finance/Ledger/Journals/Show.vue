@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from '../../../../../datetime';
 import { router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import MfaCodeField from '../../../../../Components/MfaCodeField.vue';
@@ -72,7 +73,7 @@ function reverse(): void {
             <div>
                 <h1 class="text-xl font-semibold">{{ journalEntry.description }}</h1>
                 <p class="mt-1 text-sm text-slate-500">
-                    Posted {{ journalEntry.postedAt }} · {{ journalEntry.currency }}
+                    Posted {{ formatDateTime(journalEntry.postedAt) }} · {{ journalEntry.currency }}
                 </p>
             </div>
             <span

@@ -13,7 +13,8 @@ interface Props {
         middleName: string | null;
         lastName: string | null;
     };
-    academicYears: Ref[];
+    academicYears: Array<{ id: string; name: string; label: string }>;
+    defaultAcademicYearId: string | null;
     campuses: Ref[];
     gradeLevels: Ref[];
 }
@@ -27,7 +28,7 @@ function applicantName(): string {
 }
 
 const form = useForm({
-    academic_year_id: '',
+    academic_year_id: props.defaultAcademicYearId ?? '',
     campus_id: '',
     grade_level_id: '',
 });
@@ -60,7 +61,7 @@ function submit(): void {
                 >
                     <option value="" disabled>Select an Academic Year…</option>
                     <option v-for="y in academicYears" :key="y.id" :value="y.id">
-                        {{ y.name }}
+                        {{ y.label }}
                     </option>
                 </select>
                 <p id="academic_year_id-error" class="mt-1 text-sm text-red-600">
