@@ -125,8 +125,9 @@ Since Phase 0O.6F:
     application, 55 Gateway), re-verified and renewed unchanged for 28 days.
   - All records expire **2026-11-13**, so the last passing day is
     2026-11-12.
-  - No Critical is excepted. The Debian nginx Criticals are remediated by
-    E16-R2.
+  - No Critical is excepted. The Debian nginx Criticals are **not
+    resolved**. Upstream-fixed remediation has been demonstrated in an unpublished candidate, but Lycenza's authoritative vulnerability scanner continues to classify the app image as blocked. E16-R2 therefore remains held pending a scanner-recognised/Debian-qualified remediation path.
+    The application image cannot be VERIFIED until then.
   - The superseded `OWNER-0O-E16-2026-10-11`, `OWNER-0O-E16-2026-09-29` and
     `OWNER-0O6E-2026-09-26` stay history and are no longer in `approvals`.
 - **Whole-file expiry.** One expired record invalidates the whole file,

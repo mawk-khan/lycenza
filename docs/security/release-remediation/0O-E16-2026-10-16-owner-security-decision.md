@@ -174,3 +174,32 @@ an upstream or Debian fix appears earlier.
   **PUBLISHED = NONE, PROMOTED = NONE**.
 - Final E02 (ADR 0058) is not satisfied by this decision. It resolves E16
   only, and only through 2026-11-12.
+
+## 8. Status note — E16-R2 held (2026-10-16)
+
+The §2 statement that the nginx Criticals are "remediated under E16-R2-a"
+records the route decided on 2026-10-16. It is **not** an outcome.
+
+**What happened.** The R2-a candidate (`fb29aff5`, nginx.org stable
+`1.30.6-1~trixie`) was built and verified:
+- the image works, and its hardening is intact;
+- the signing chain is sound;
+- nginx.org's 1.30.6 changelog fixes all four advisories.
+
+**Why it is held.** Grype still matches CVE-2026-15176, -93479 and -97205
+(Critical) and CVE-2026-97629 (High) against it. Debian's tracker records
+no fixed version for trixie (sid is fixed in 1.30.4-8), so the Debian 13
+feed flags every `nginx` deb version.
+
+**Owner decision (2026-10-16): HOLD / DO NOT PUBLISH.** Upstream-fixed remediation has been demonstrated in an unpublished candidate, but Lycenza's authoritative vulnerability scanner continues to classify the app image as blocked. E16-R2 therefore remains held pending a scanner-recognised/Debian-qualified remediation path.
+
+**Monitoring.** Debian trixie nginx is checked weekly, and immediately after
+a Debian security or point release or an nginx metadata change. Each check
+records:
+- the Debian version;
+- the tracker's fixed-version state;
+- the Grype database;
+- whether the three Criticals still match.
+
+When Debian ships a qualifying trixie fix, the image is rebuilt from `main`
+with Debian's fixed nginx, and R2-a is abandoned.

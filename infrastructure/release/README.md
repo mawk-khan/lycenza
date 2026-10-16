@@ -245,7 +245,7 @@ still match and still expire on 2026-10-29.
   evidence re-verified. They are renewed unchanged for 28 days: 115 records,
   valid through 2026-11-12 (expiry 2026-11-13).
 - **Not excepted:** the Debian `nginx` Criticals (E16-P1). They are
-  remediated by E16-R2.
+  not resolved: Upstream-fixed remediation has been demonstrated in an unpublished candidate, but Lycenza's authoritative vulnerability scanner continues to classify the app image as blocked. E16-R2 therefore remains held pending a scanner-recognised/Debian-qualified remediation path.
 - **Record:** `docs/security/release-remediation/0O-E16-2026-10-16-owner-security-decision.md`.
 
 Four **new** Debian advisories have no fix and no exception (krb5, Cyrus

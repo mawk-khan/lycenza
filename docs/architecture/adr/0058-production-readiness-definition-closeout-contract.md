@@ -1885,3 +1885,11 @@ deferred but that had no register row: the ESI disability wage ceiling.
   are remediated by **E16-R2-a** (nginx.org stable 1.30.6, ADR 0052
   amendment). Until then the application image cannot be VERIFIED.
 - **Register status.** Unchanged. E02 is not satisfied by this decision.
+
+## Note — E16-R2 held (2026-10-16)
+
+The E16-S1 note above names E16-R2-a as the nginx route. The owner then
+**held** it: Upstream-fixed remediation has been demonstrated in an unpublished candidate, but Lycenza's authoritative vulnerability scanner continues to classify the app image as blocked. E16-R2 therefore remains held pending a scanner-recognised/Debian-qualified remediation path.
+
+The application image is not VERIFIED. E16 stays current through
+2026-11-12. The register status is unchanged.

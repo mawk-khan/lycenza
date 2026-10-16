@@ -3300,3 +3300,21 @@ review, renewed unchanged:
 - Gateway **PASS** (55 excepted);
 - app blocked only by the 3 Critical and 1 High nginx findings (60
   excepted), which **E16-R2-a** remediates.
+
+## 69. Phase 0O / E16-R2 — held, not published (2026-10-16)
+
+**Owner decision: HOLD / DO NOT PUBLISH.** Upstream-fixed remediation has been demonstrated in an unpublished candidate, but Lycenza's authoritative vulnerability scanner continues to classify the app image as blocked. E16-R2 therefore remains held pending a scanner-recognised/Debian-qualified remediation path.
+
+**Candidate.** `fb29aff5` (nginx.org stable `1.30.6-1~trixie`, with its
+ADR 0052 amendment) is kept only as fallback evidence, on an unmerged
+branch. If R2 is ever selected, it needs a rebase, rebuild and
+requalification.
+
+**Why the scanner still blocks.** Grype matches every Debian `nginx` deb on
+trixie, because Debian's tracker has no trixie fixed version (sid is fixed
+in 1.30.4-8).
+
+**State:**
+- the application image is **not VERIFIED**;
+- the Gateway image can be;
+- E16 (`OWNER-0O-E16-2026-10-16`) stays current through 2026-11-12.

@@ -72,6 +72,7 @@ waived or complete.
   renewed unchanged (115 records). **E16 CURRENT through 2026-11-12; hard
   stop 2026-11-13.** Debian nginx carries 3 Critical, never excepted, which
   E16-R2-a remediates with nginx.org stable 1.30.6.)*
+  *(2026-10-16, E16-R2 HELD (owner): Upstream-fixed remediation has been demonstrated in an unpublished candidate, but Lycenza's authoritative vulnerability scanner continues to classify the app image as blocked. E16-R2 therefore remains held pending a scanner-recognised/Debian-qualified remediation path. Debian trixie nginx is monitored weekly; the nginx.org candidate `fb29aff5` stays unpublished as fallback evidence.)*
   *(Post-POR roadmap audit, 2026-10-09; a fact, not a new decision:* the
   lapse is not confined to final qualification. From 2026-10-29 (UTC) the
   `ci.yml` `supply-chain` job fails on every push to `main` and every pull
