@@ -603,3 +603,16 @@ The −2 for the regression is removed.
 **Next product action:** **UAT-C5** (DOC-01 demo copy and an
 administrator guide, including staff onboarding: invite, link, roles).
 Owner authorisation is needed.
+
+## S. UAT-C5 status (added 2026-10-16)
+
+- **UAT-DOC-01: FIXED.** The sign-in page shows no "(no menu link)". The
+  four desk hints say each module is linked from Home. The Accountant hint
+  matches UAT-C3: payments can be moved between charges; reversals and
+  refunds stay with School Admin.
+- **School Administrator Guide:** [SCHOOL-ADMINISTRATOR-GUIDE.md](SCHOOL-ADMINISTRATOR-GUIDE.md).
+  It was written against the current browser: a crawl of 41 School Admin
+  pages and 9 personas' Home pages, plus today's UAT runs.
+- **No new product finding.** The product-side staging handoff stays YES.
+  The open items are the S2/S3 list in §J and §R, now also stated in the
+  guide's "Known limitations".

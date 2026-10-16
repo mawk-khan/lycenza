@@ -26,3 +26,9 @@ UAT-C1–C5). It records and classifies; it fixes nothing.)*
 `LOCAL-UAT-READINESS-REASSESSMENT-2026-10-16.md` re-tests published `main`
 after UAT-C1 to UAT-C4: score 89.5, local UAT ready with limitations, one
 C4 regression. It records and classifies; it fixes nothing.)*
+
+*(2026-10-16, UAT-C5: `SCHOOL-ADMINISTRATOR-GUIDE.md` is the
+operator-facing School Administrator Guide. It covers setup, staff
+onboarding, finance corrections, fee-run overlap decisions, rollover and
+Data Health, plus the gated areas and known limitations. Written against
+`main` after UAT-C6 and browser-checked on the local demo.)*

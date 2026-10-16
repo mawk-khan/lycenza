@@ -1079,3 +1079,46 @@ existing charge is a different or partial charge.
 - the other P2/S3 items (§18);
 - staging (PPR);
 - E16.
+
+## 20. UAT-C5 — Administrator Guide & Demo Copy Closure (2026-10-16)
+
+**Authority.** The owner approved UAT-C5 as a documentation and demo-copy
+slice. It adds no product behaviour.
+
+**DOC-01:** `Database\Seeders\Demo\DemoAccountCatalog` hints no longer
+say "(no menu link)". Home links each of the four desks (Librarian,
+Transport, Front Office, Hostel), and Canteen + Stores includes
+inventory. The Accountant hint now reflects UAT-C3: moving a payment
+between charges, while payment reversals and refunds stay with School
+Admin. Browser-checked on the sign-in page.
+
+**Guide:** [`SCHOOL-ADMINISTRATOR-GUIDE.md`](../../product/SCHOOL-ADMINISTRATOR-GUIDE.md).
+- **Basis:** task-oriented, written against `main` `3ca6c58c`, with labels
+  taken from a fresh browser crawl and today's UAT runs.
+- **Covers:** the stage boundaries (local UAT proven; staging, pilot and
+  production not), and the first administrator (operator console, not a
+  browser path).
+- **Staff onboarding, as six explicit steps:** create Employee → add
+  employment and assignment → invite → acceptance → link account →
+  roles. Teacher does not include Staff Self-Service.
+- **Finance:** corrections (move, reverse, refund; concessions are not
+  corrections), fee-run "decision required", and no proration.
+- **Year handling:** rollover and the year-activation date rule.
+- **Data Health:** the 8 checks; it only reports.
+- **Library:** calendar due dates.
+- **Inventory:** covered as exercised; Transport, Hostel, Visitors and
+  Canteen are acknowledged but not proceduralised (shallow coverage).
+- **Gated areas:** marks E35–E44, payroll E45/ESI-12, Guardian portal
+  (development only), no Student portal (E46), production Teacher grants
+  (E33), production email.
+- **Known limitations:** stated plainly.
+- **No internal IDs** in any workflow.
+
+**No product contradiction was found.** The role statements were checked
+against `CapabilityAndRoleSeeder` and `PaymentCorrectionService`. The
+product-side staging handoff stays YES.
+
+**Next:** feature-driven UAT correction stops here. The programme focus
+moves to PPR (staging environment), E16-R2 (nginx release-image
+qualification) and legal-gate closure, then staging UAT. Each needs owner
+authorisation.

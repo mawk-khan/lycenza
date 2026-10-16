@@ -92,12 +92,12 @@ final class DemoAccountCatalog
         ];
 
         $operationsHints = [
-            'finance' => 'Accountant: ledger posting, fee setup and runs, charges, payments, offline payment recording and concession requests; reversals and approvals stay with School Admin (Dashboard > Finance).',
-            'library' => 'Librarian: catalogue, circulation and fines (view) at /app/library/titles and /app/library/circulation (no menu link).',
-            'transport' => 'Transport Coordinator: routes, vehicles, operations and assignments at /app/transport/routes (no menu link).',
-            'reception' => 'Front Office: visitor directory and check-in/out at /app/visitor/directory and /app/visitor/visits (no menu link).',
-            'hostel' => 'Hostel Warden: hostels, rooms, beds and residency at /app/hostels and /app/hostel-residency (no menu link).',
-            'canteen_stores' => 'Canteen Operator + Stores Officer (two roles): canteen outlets, items and orders (Dashboard) plus inventory at /app/inventory-stock; canteen settings stay with School Admin.',
+            'finance' => 'Accountant: ledger posting, fee setup and runs, charges, payments, offline payment recording, outstanding fees, moving a payment to the right charge, and concession requests; payment reversals and refunds, ledger reversals and approvals stay with School Admin (Home > Finance).',
+            'library' => 'Librarian: catalogue, circulation (check out, check in) and fines (view), linked from Home (Library: Catalogue, Circulation, Fine policy).',
+            'transport' => 'Transport Coordinator: routes, vehicles, daily operations, Student assignments and transport fees, linked from Home (Transport: …).',
+            'reception' => 'Front Office: visitor directory and check-in/out, linked from Home (Visitors: Visitors, Visits).',
+            'hostel' => 'Hostel Warden: hostels, rooms, beds, residency and hostel fees, linked from Home (Hostel: …).',
+            'canteen_stores' => 'Canteen Operator + Stores Officer (two roles): canteen outlets, items and orders plus inventory items, locations and stock, all linked from Home; canteen settings stay with School Admin.',
             'communications' => 'Communications Coordinator: Communication Hub messages, announcements, templates and Guardian conversations; approval stays with the Principal or School Admin.',
         ];
 

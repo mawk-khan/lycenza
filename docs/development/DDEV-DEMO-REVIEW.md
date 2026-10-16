@@ -195,6 +195,10 @@ tenant isolation.
 
 Password for every account: **`Demo1234!`** (LOCAL DEMO ONLY).
 
+For what each School role is for, and how to run the School in the
+browser, see the [School Administrator Guide](../product/SCHOOL-ADMINISTRATOR-GUIDE.md)
+(UAT-C5).
+
 ### Login-page shortcuts
 
 In the DDEV demo environment the login page shows a **Demo accounts**
