@@ -606,3 +606,56 @@ receives only `SERVICE_TOKEN`". Its secret table still lists
 
 The `§21 … not implemented` heading is historical. The implementation
 amendment above records what was built.
+
+## Implementation amendment (PPR F-D1-2, 2026-10-16): hardened Redis transport
+
+**Owner decision (2026-10-16).** A hardened Lycenza environment
+(`EnvironmentPolicy::HARDENED`: production and staging) must use TLS for
+Redis and must keep certificate verification on. Local development,
+DDEV, CI and tests are unchanged: plaintext Redis stays allowed there,
+because the guard runs only in a hardened environment.
+
+**Hardened Redis contract:**
+- authentication;
+- TLS;
+- certificate-chain verification;
+- hostname verification;
+- no plaintext fallback.
+
+**Where it applies in this ADR.** It amends §2 (Redis is never public;
+encryption in transit is now required too), the §4 secrets row (the
+`REDIS_PASSWORD` note) and §15 (guard additions).
+- The owner's brief cited "§6", but §6 here is the runtime role name. Older
+  staging documents cited "ADR 0050 §6: private network + auth" for Redis;
+  that citation meant §2, §4 and §15.
+- PPR.2D (ADR 0074 §28, F-D1) had already made Redis TLS mandatory on AWS,
+  because ElastiCache enables authentication only with in-transit TLS. This
+  amendment makes the requirement provider-independent.
+
+**Configuration:**
+- `REDIS_URL=tls://<endpoint>:6379` (or `rediss://`), with no credentials
+  in the URL;
+- `REDIS_PASSWORD`, and `REDIS_USERNAME` for an ACL user;
+- `?ssl[cafile]=` (or `capath`) for a private CA. A private CA is
+  supported; what is required is that verification stays on.
+- Proven live in PPR F-D1 (ADR 0074 §30).
+
+**Guard** (`ProductionConfigurationGuard`, codes only, never a value):
+
+| Code | Refused when |
+|---|---|
+| `redis_tls_required` | Any configured Redis connection's effective Predis scheme is not `tls`/`rediss`. The scheme is read as Laravel and Predis resolve it: URL driver, then explicit `scheme`, then a scheme on the host, else plaintext `tcp`. `default` and `cache` are checked separately, and so is any other connection |
+| `redis_tls_verification_disabled` | `ssl.verify_peer` or `ssl.verify_peer_name` is present and false by PHP truthiness (`0`, `false`, empty), or `ssl.allow_self_signed` is true |
+| `redis_configuration_unsupported` | Any of: a client other than Predis; a Redis cluster set; client-wide or per-connection `options.parameters` (which could override a connection); a non-array `ssl`; an `ssl` option outside `cafile`, `capath`, `peer_name` and the verification flags |
+
+- **Unchanged:** `redis_password_missing`.
+- **Parity:** `HardenedRedisTransportParityTest` pins the guard's reading
+  of a connection to the parameters the real RedisManager hands Predis.
+- **Release tooling:** `verify-images.sh` and
+  `verify-production-bootstrap.sh` now run a TLS-only throwaway Redis with
+  their own CA. The former also proves the plaintext and
+  disabled-verification refusals in the built image.
+
+**Not covered here:** the managed service's own certificate chain,
+cluster mode and failover. Those belong to PPR R-08 / E09 on the real
+service.

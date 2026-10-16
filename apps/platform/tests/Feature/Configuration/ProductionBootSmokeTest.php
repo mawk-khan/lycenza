@@ -197,6 +197,8 @@ class ProductionBootSmokeTest extends TestCase
             [['DB_DATABASE' => 'school_os_test'], 'environment_not_separated'],
             [['DB_SSLMODE' => 'prefer'], 'database_tls_not_required'],
             [['REDIS_PASSWORD' => ''], 'redis_password_missing'],
+            [['REDIS_URL' => 'redis://redis.example.internal:6379'], 'redis_tls_required'],
+            [['REDIS_URL' => 'tls://redis.example.internal:6379?ssl[verify_peer_name]=0'], 'redis_tls_verification_disabled'],
             [['DOCUMENTS_DISK' => 'local'], 'storage_disk_not_s3'],
             [['AWS_BUCKET' => 'school-os-local'], 'storage_bucket_not_production'],
             [['AWS_ENDPOINT' => 'http://minio:9000'], 'storage_endpoint_not_https'],

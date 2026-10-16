@@ -42,7 +42,12 @@ class ProductionConfigurationGuardTest extends TestCase
                 'default' => 'pgsql',
                 'testing_database' => 'school_os_test',
                 'connections' => ['pgsql' => ['sslmode' => 'require', 'database' => 'lycenza'], 'pgsql_admin' => ['sslmode' => 'verify-full', 'database' => 'lycenza']],
-                'redis' => ['default' => ['password' => 'redis-canary-5d1e'], 'cache' => ['password' => 'redis-canary-5d1e']],
+                // PPR F-D1-2: verified TLS on every connection, credentials outside the URL.
+                'redis' => [
+                    'client' => 'predis',
+                    'default' => ['url' => 'tls://redis.internal.example:6379', 'password' => 'redis-canary-5d1e', 'database' => '0'],
+                    'cache' => ['url' => 'tls://redis.internal.example:6379', 'password' => 'redis-canary-5d1e', 'database' => '1'],
+                ],
             ],
             'documents' => ['disk' => 's3'],
             'communications' => ['attachments' => ['disk' => 's3']],
@@ -114,6 +119,25 @@ class ProductionConfigurationGuardTest extends TestCase
             'redis password missing' => [['database.redis.default.password' => null], 'redis_password_missing'],
             'redis password literal null' => [['database.redis.default.password' => 'null'], 'redis_password_missing'],
             'redis cache password blank' => [['database.redis.cache.password' => ''], 'redis_password_missing'],
+            // PPR F-D1-2 (ADR 0050 implementation amendment 2026-10-16): verified TLS on every connection.
+            'redis plaintext url' => [['database.redis.default.url' => 'redis://redis.internal.example:6379'], 'redis_tls_required'],
+            'redis cache plaintext (mixed connections)' => [['database.redis.cache.url' => 'tcp://redis.internal.example:6379'], 'redis_tls_required'],
+            'redis no scheme anywhere (Predis default tcp)' => [['database.redis.default.url' => null, 'database.redis.default.host' => 'redis.internal.example'], 'redis_tls_required'],
+            'redis explicit scheme Predis does not know' => [['database.redis.default.url' => null, 'database.redis.default.host' => 'redis.internal.example', 'database.redis.default.scheme' => 'TLS'], 'redis_tls_required'],
+            'redis url driver beats an explicit tls scheme' => [['database.redis.default.url' => 'redis://redis.internal.example:6379', 'database.redis.default.scheme' => 'tls'], 'redis_tls_required'],
+            'redis extra plaintext connection' => [['database.redis.queue' => ['host' => 'queue.internal.example', 'password' => 'redis-canary-5d1e']], 'redis_tls_required'],
+            'redis verify_peer 0 in url' => [['database.redis.default.url' => 'tls://redis.internal.example:6379?ssl[verify_peer]=0'], 'redis_tls_verification_disabled'],
+            'redis verify_peer false in url' => [['database.redis.cache.url' => 'tls://redis.internal.example:6379?ssl[verify_peer]=false'], 'redis_tls_verification_disabled'],
+            'redis verify_peer empty in url' => [['database.redis.default.url' => 'tls://redis.internal.example:6379?ssl[verify_peer]='], 'redis_tls_verification_disabled'],
+            'redis verify_peer_name off (hostname)' => [['database.redis.default.ssl' => ['verify_peer_name' => false]], 'redis_tls_verification_disabled'],
+            'redis verify_peer_name 0 with a private CA' => [['database.redis.default.url' => 'tls://redis.internal.example:6379?ssl[cafile]=/run/ca.pem&ssl[verify_peer_name]=0'], 'redis_tls_verification_disabled'],
+            'redis allow_self_signed' => [['database.redis.default.url' => 'rediss://redis.internal.example:6379?ssl[allow_self_signed]=1'], 'redis_tls_verification_disabled'],
+            'redis unknown ssl option' => [['database.redis.default.url' => 'tls://redis.internal.example:6379?ssl[security_level]=0'], 'redis_configuration_unsupported'],
+            'redis ssl not an array' => [['database.redis.default.ssl' => 'off'], 'redis_configuration_unsupported'],
+            'redis client phpredis' => [['database.redis.client' => 'phpredis'], 'redis_configuration_unsupported'],
+            'redis client-wide parameters' => [['database.redis.options' => ['parameters' => ['ssl' => ['verify_peer' => false]]]], 'redis_configuration_unsupported'],
+            'redis connection parameters override' => [['database.redis.default.options' => ['parameters' => ['scheme' => 'tcp']]], 'redis_configuration_unsupported'],
+            'redis cluster set' => [['database.redis.clusters' => ['default' => [['host' => 'node.internal.example']]]], 'redis_configuration_unsupported'],
             'documents on local disk' => [['documents.disk' => 'local'], 'storage_disk_not_s3'],
             'attachments on local disk' => [['communications.attachments.disk' => 'local'], 'storage_disk_not_s3'],
             'bucket missing' => [['filesystems.disks.s3.bucket' => null], 'storage_bucket_not_production'],
@@ -218,6 +242,53 @@ class ProductionConfigurationGuardTest extends TestCase
             $this->fail('refused');
         } catch (ProductionConfigurationException $e) {
             $this->assertStringNotContainsString('probe-canary', $e->getMessage());
+        }
+    }
+
+    /**
+     * PPR F-D1-2: the accepted hardened Redis forms (ADR 0050 implementation amendment 2026-10-16).
+     *
+     * @return array<string, array{array<string, mixed>}>
+     */
+    public static function safeRedis(): array
+    {
+        return [
+            'tls url, system trust' => [[]],
+            'rediss url' => [['database.redis.default.url' => 'rediss://redis.internal.example:6379']],
+            'private CA' => [['database.redis.default.url' => 'tls://redis.internal.example:6379?ssl[cafile]=/run/redis-ca/ca.pem', 'database.redis.cache.url' => 'tls://redis.internal.example:6379?ssl[capath]=/run/redis-ca']],
+            'verification flags stated true' => [['database.redis.default.url' => 'tls://redis.internal.example:6379?ssl[verify_peer]=1&ssl[verify_peer_name]=true&ssl[allow_self_signed]=0']],
+            'ACL user' => [['database.redis.default.username' => 'lycenza', 'database.redis.cache.username' => 'lycenza']],
+            'scheme on the host' => [['database.redis.default.url' => null, 'database.redis.default.host' => 'tls://redis.internal.example']],
+            'explicit tls scheme' => [['database.redis.default.url' => null, 'database.redis.default.host' => 'redis.internal.example', 'database.redis.default.scheme' => 'tls']],
+            'peer name' => [['database.redis.default.ssl' => ['peer_name' => 'redis.internal.example', 'cafile' => '/run/redis-ca/ca.pem']]],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $overrides
+     */
+    #[Test]
+    #[DataProvider('safeRedis')]
+    public function verified_tls_redis_is_accepted(array $overrides): void
+    {
+        $this->assertSame([], (new ProductionConfigurationGuard($this->config($overrides)))->violations());
+    }
+
+    #[Test]
+    public function a_redis_refusal_names_codes_only(): void
+    {
+        $config = $this->config([
+            'database.redis.default.url' => 'redis://redis-user:canary-url-password-0b7e@redis.internal.example:6379?ssl[verify_peer]=0',
+        ]);
+
+        try {
+            (new ProductionConfigurationGuard($config))->assertSafe();
+            $this->fail('expected a refusal');
+        } catch (ProductionConfigurationException $e) {
+            $this->assertSame(['redis_tls_required', 'redis_tls_verification_disabled'], $e->violations);
+            foreach (['canary-url-password-0b7e', 'redis-canary-5d1e', 'redis-user', 'redis.internal.example'] as $value) {
+                $this->assertStringNotContainsString($value, $e->getMessage());
+            }
         }
     }
 

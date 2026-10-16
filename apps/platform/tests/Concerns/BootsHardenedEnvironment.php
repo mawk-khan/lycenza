@@ -46,6 +46,9 @@ trait BootsHardenedEnvironment
             'APP_MAINTENANCE_STORE' => 'database',
             'DB_SSLMODE' => 'require',
             'REDIS_PASSWORD' => self::CANARY_REDIS_PASSWORD,
+            // PPR F-D1-2: hardened Redis is verified TLS (credentials never in the URL).
+            'REDIS_CLIENT' => 'predis',
+            'REDIS_URL' => 'tls://redis.example.internal:6379',
             // The canary password reaches no real Redis: nothing in these
             // subprocesses may depend on one.
             'SESSION_DRIVER' => 'array',

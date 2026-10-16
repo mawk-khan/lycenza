@@ -134,7 +134,7 @@ step fails, as intended.
 | Product | any Redis-protocol service the code's `predis` client supports (Redis 7 / Valkey). E12 recovery is unchanged: Redis holds **no** irreplaceable record; PostgreSQL reconciliation rebuilds queued work |
 | Network | data zone, private; application zone only |
 | Authentication | `REDIS_PASSWORD` required (guard `redis_password_missing`). Two modes proven by F-D1: a password on the default user (ElastiCache AUTH-token style), or an ACL user (`REDIS_USERNAME` + `REDIS_PASSWORD`, ElastiCache RBAC style) |
-| TLS | Not required by the hardened contract (ADR 0050 §6), but **mandatory on AWS** (F-D1 below; PPR.2D F-D1: ElastiCache enables auth only with in-transit TLS). See the connection contract below |
+| TLS | **Required in every hardened environment** with certificate and hostname verification on (ADR 0050 F-D1-2 amendment; guard `redis_tls_required` / `redis_tls_verification_disabled`). On AWS it is also what enables auth (PPR.2D F-D1). See the connection contract below |
 | Logical databases | `0` = queues, locks, rate limits, the session handoff store; `1` = cache (`REDIS_DB`, `REDIS_CACHE_DB`); key prefix from `APP_NAME` |
 | Eviction | **`noeviction`**: queue and lock keys must never be silently evicted. Size memory so the cache cannot fill it |
 | Persistence | optional (AOF/RDB). Not required, because reconciliation exists. A loss signs users out (sessions/MFA assurance) and is exercised as E12 |
@@ -153,7 +153,9 @@ Predis 3.6.0 already expresses a verified TLS connection.
 | `?ssl[cafile]=<path>` (URL query) | only for a **private** CA. A publicly trusted service certificate uses the image's system CA bundle | P E |
 
 **Never set** `ssl[verify_peer]=0`, `ssl[verify_peer_name]=0` or
-`ssl[allow_self_signed]=1`. Both connections, `default` and `cache`, read the
+`ssl[allow_self_signed]=1`: since F-D1-2 a hardened environment refuses to
+boot with any of them, with a plaintext connection, or with an `ssl` option
+outside `cafile`/`capath`/`peer_name`. Both connections, `default` and `cache`, read the
 same URL and credentials. They keep their own logical databases
 (`REDIS_DB`, `REDIS_CACHE_DB`).
 

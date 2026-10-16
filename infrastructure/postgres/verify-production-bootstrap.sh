@@ -50,11 +50,23 @@ trap cleanup EXIT
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=${DB}" \
     -keyout "$CERTS/server.key" -out "$CERTS/server.crt" >/dev/null 2>&1
 
+# PPR F-D1-2: a hardened app requires verified TLS to Redis -- a throwaway CA and
+# a server certificate naming the Redis container.
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=lycenza-pgverify-redis-ca" \
+    -keyout "$CERTS/redis-ca.key" -out "$CERTS/redis-ca.pem" >/dev/null 2>&1
+openssl req -newkey rsa:2048 -nodes -subj "/CN=${REDIS}" -keyout "$CERTS/redis.key" -out "$CERTS/redis.csr" >/dev/null 2>&1
+printf 'subjectAltName=DNS:%s\n' "$REDIS" > "$CERTS/redis.ext"
+openssl x509 -req -in "$CERTS/redis.csr" -CA "$CERTS/redis-ca.pem" -CAkey "$CERTS/redis-ca.key" -CAcreateserial -days 1 \
+    -extfile "$CERTS/redis.ext" -out "$CERTS/redis.pem" >/dev/null 2>&1
+chmod a+rx "$CERTS" && chmod a+r "$CERTS"/redis*
+
 docker network create "$NETWORK" >/dev/null
 # The production guard requires a Redis-backed cache for the cross-host session handoff (ADR 0054,
-# added after this script; without it the image refuses to boot): a throwaway Redis, as verify-images.sh uses.
-docker run -d --name "$REDIS" --network "$NETWORK" \
-    redis:7.4.11-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499 redis-server --requirepass "$REDIS_PASSWORD" --save '' --appendonly no >/dev/null
+# added after this script; without it the image refuses to boot): a throwaway TLS-only Redis, as verify-images.sh uses.
+docker run -d --name "$REDIS" --network "$NETWORK" -v "$CERTS:/tls:ro" \
+    redis:7.4.11-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499 redis-server --port 0 --tls-port 6379 \
+    --tls-cert-file /tls/redis.pem --tls-key-file /tls/redis.key --tls-ca-cert-file /tls/redis-ca.pem --tls-auth-clients no \
+    --requirepass "$REDIS_PASSWORD" --save '' --appendonly no >/dev/null
 docker run -d --name "$DB" --network "$NETWORK" \
     -e POSTGRES_USER="$MIGRATION_ROLE" -e POSTGRES_PASSWORD="$OWNER_PASSWORD" -e POSTGRES_DB="$DATABASE" \
     -v "$CERTS:/certs:ro" --entrypoint bash postgres:16 -c '
@@ -104,7 +116,8 @@ ENV_ARGS=(
     -e METRICS_SCRAPE_TOKEN="$(random)$(random)"
     -e DB_HOST="$DB" -e DB_DATABASE="$DATABASE" -e DB_SSLMODE=require
     -e DB_USERNAME=school_os_app -e DB_PASSWORD="$APP_PASSWORD"
-    -e REDIS_HOST="$REDIS" -e REDIS_PASSWORD="$REDIS_PASSWORD" -e CACHE_STORE=redis -e SESSION_DRIVER=array -e QUEUE_CONNECTION=sync
+    -e REDIS_URL="tls://${REDIS}:6379?ssl[cafile]=/etc/lycenza-redis-ca/ca.pem" -v "$CERTS/redis-ca.pem:/etc/lycenza-redis-ca/ca.pem:ro"
+    -e REDIS_PASSWORD="$REDIS_PASSWORD" -e CACHE_STORE=redis -e SESSION_DRIVER=array -e QUEUE_CONNECTION=sync
     -e DOCUMENTS_DISK=s3 -e COMMUNICATION_ATTACHMENTS_DISK=s3
     -e AWS_BUCKET=lycenza-verify -e AWS_DEFAULT_REGION=us-east-1 -e AWS_ENDPOINT=https://objects.invalid
 )

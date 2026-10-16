@@ -16,6 +16,7 @@ use App\Support\ServiceAuth\ServiceSigningKey;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Encryption\Encrypter;
+use Illuminate\Support\ConfigurationUrlParser;
 
 /**
  * Phase 0O.1 (docs/architecture/PHASE-0O-READINESS.md §10): the fail-closed
@@ -63,6 +64,11 @@ use Illuminate\Encryption\Encrypter;
  * told which one. The only staging differences are the ones listed in
  * EnvironmentPolicy::STAGING_DIFFERENCES (the declared email capture sink);
  * everything else is identical.
+ *
+ * PPR F-D1-2 (ADR 0050 implementation amendment 2026-10-16): hardened Redis is
+ * authenticated TLS with certificate and hostname verification on, for every
+ * configured Redis connection (`redis_tls_required`,
+ * `redis_tls_verification_disabled`, `redis_configuration_unsupported`).
  */
 final class ProductionConfigurationGuard
 {
@@ -74,6 +80,12 @@ final class ProductionConfigurationGuard
 
     /** Phase 0O.4A (ADR 0050): PostgreSQL sslmodes that encrypt the connection. */
     public const SECURE_DB_SSLMODES = ['require', 'verify-ca', 'verify-full'];
+
+    /** PPR F-D1-2: the Predis schemes that encrypt the connection (`rediss` is Predis's alias of `tls`). */
+    public const SECURE_REDIS_SCHEMES = ['tls', 'rediss'];
+
+    /** PPR F-D1-2: `ssl` context options that only choose what to trust; verification flags are judged separately. */
+    public const REDIS_TLS_TRUST_OPTIONS = ['cafile', 'capath', 'peer_name'];
 
     /** The local/DDEV/test buckets a production deployment must never use. */
     public const NON_PRODUCTION_BUCKETS = ['school-os-local', 'school-os-test'];
@@ -290,6 +302,8 @@ final class ProductionConfigurationGuard
             }
         }
 
+        $violations = [...$violations, ...$this->redisTransportViolations()];
+
         if ($this->config->get('documents.disk') !== 's3' || $this->config->get('communications.attachments.disk') !== 's3') {
             $violations[] = 'storage_disk_not_s3';
         }
@@ -328,6 +342,93 @@ final class ProductionConfigurationGuard
      *
      * @return list<string>
      */
+    /**
+     * PPR F-D1-2 (ADR 0050 implementation amendment 2026-10-16): every Redis
+     * connection of a hardened environment is TLS with certificate-chain AND
+     * hostname verification on; the password check above stays separate.
+     * Judged on the parameters Laravel actually hands Predis: the URL driver
+     * (RedisManager), then an explicit scheme, then a scheme on the host
+     * (PredisConnector), else Predis's plaintext default. The `ssl` context is
+     * allow-listed: verification flags must be true by PHP's own truthiness
+     * (the stream layer reads them the same way), allow_self_signed must be
+     * false, and any other option -- or a client-wide parameter override, a
+     * cluster set or another client -- is refused rather than interpreted.
+     *
+     * @return list<string>
+     */
+    private function redisTransportViolations(): array
+    {
+        $violations = [];
+        $redis = (array) $this->config->get('database.redis', []);
+
+        if (($redis['client'] ?? null) !== 'predis'
+            || array_key_exists('clusters', $redis)
+            || array_key_exists('parameters', (array) ($redis['options'] ?? []))) {
+            $violations[] = 'redis_configuration_unsupported';
+        }
+
+        foreach ($redis as $name => $connection) {
+            if (in_array($name, ['client', 'options', 'clusters'], true)) {
+                continue;
+            }
+            if (! is_array($connection)) {
+                $violations[] = 'redis_configuration_unsupported';
+
+                continue;
+            }
+
+            $parsed = (new ConfigurationUrlParser)->parseConfiguration($connection);
+
+            if (! in_array(self::effectiveRedisScheme($parsed), self::SECURE_REDIS_SCHEMES, true)) {
+                $violations[] = 'redis_tls_required';
+            }
+
+            if (array_key_exists('parameters', (array) ($parsed['options'] ?? []))) {
+                $violations[] = 'redis_configuration_unsupported';
+            }
+
+            $ssl = $parsed['ssl'] ?? [];
+            if (! is_array($ssl)) {
+                $violations[] = 'redis_configuration_unsupported';
+
+                continue;
+            }
+            foreach ($ssl as $option => $value) {
+                if (in_array($option, ['verify_peer', 'verify_peer_name'], true)) {
+                    if (! (bool) $value) {
+                        $violations[] = 'redis_tls_verification_disabled';
+                    }
+                } elseif ($option === 'allow_self_signed') {
+                    if ((bool) $value) {
+                        $violations[] = 'redis_tls_verification_disabled';
+                    }
+                } elseif (! in_array($option, self::REDIS_TLS_TRUST_OPTIONS, true)) {
+                    $violations[] = 'redis_configuration_unsupported';
+                }
+            }
+        }
+
+        return array_values(array_unique($violations));
+    }
+
+    /**
+     * @param  array<string, mixed>  $parsed  a connection after ConfigurationUrlParser
+     */
+    private static function effectiveRedisScheme(array $parsed): string
+    {
+        $driver = strtolower((string) ($parsed['driver'] ?? ''));
+        if (in_array($driver, ['tcp', 'tls'], true)) {
+            return $driver;
+        }
+        if (is_string($parsed['scheme'] ?? null) && $parsed['scheme'] !== '') {
+            return $parsed['scheme'];
+        }
+        $host = $parsed['host'] ?? null;
+        $hostScheme = is_string($host) ? parse_url($host, PHP_URL_SCHEME) : null;
+
+        return is_string($hostScheme) ? $hostScheme : 'tcp';
+    }
+
     private function hostViolations(): array
     {
         $violations = [];

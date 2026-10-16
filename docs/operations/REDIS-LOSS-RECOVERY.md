@@ -37,8 +37,9 @@ sweeps once, for an operator who does not want to wait for the scheduler.
 
 ## After a Redis loss
 
-1. Bring Redis back (empty is fine) with its password (`REDIS_PASSWORD` is
-   required in production).
+1. Bring Redis back (empty is fine) with its password and TLS: in production
+   `REDIS_PASSWORD` is required and the connection must be verified TLS
+   (ADR 0050 F-D1-2 amendment).
 2. Nothing else is required: the scheduler's sweeps restore queued work
    within the stale windows above (≤ 10 minutes for outbox events).
 3. Optionally, after 10 minutes: `console platform:recover-queued-work`

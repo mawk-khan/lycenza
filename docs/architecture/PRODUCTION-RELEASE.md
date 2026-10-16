@@ -68,6 +68,9 @@ refuses to start on any of:
 | `database_connection_not_pgsql` (0O.4A) | `DB_CONNECTION` is not `pgsql` |
 | `database_tls_not_required` (0O.4A) | `DB_SSLMODE` is not `require`, `verify-ca` or `verify-full` (runtime and admin connections) |
 | `redis_password_missing` (0O.4A) | `REDIS_PASSWORD` is empty or `null` |
+| `redis_tls_required` (PPR F-D1-2) | any configured Redis connection would connect without TLS (`REDIS_URL` not `tls://`/`rediss://`, and no `tls` scheme on the connection or its host) |
+| `redis_tls_verification_disabled` (PPR F-D1-2) | a Redis `ssl` context turns `verify_peer` or `verify_peer_name` off, or `allow_self_signed` on |
+| `redis_configuration_unsupported` (PPR F-D1-2) | a Redis client other than Predis, a cluster set, an `options.parameters` override, or an `ssl` option outside `cafile`/`capath`/`peer_name` and the verification flags |
 | `storage_disk_not_s3` (0O.4A) | `DOCUMENTS_DISK` or `COMMUNICATION_ATTACHMENTS_DISK` is not `s3` |
 | `storage_bucket_not_production` (0O.4A) | `AWS_BUCKET` is empty, `school-os-local` or `school-os-test` |
 | `storage_endpoint_not_https` (0O.4A) | `AWS_ENDPOINT` is set and not `https://` |

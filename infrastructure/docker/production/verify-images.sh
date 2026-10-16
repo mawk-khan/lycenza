@@ -5,8 +5,9 @@
 # no real secret: every credential below is a random throwaway generated for
 # this run, the database host is an unroutable TEST-NET address (a real
 # unreachable database, no DNS involved), and the only
-# dependency started is a throwaway password-protected Redis container on a
-# private network that is removed on exit.
+# dependency started is a throwaway password-protected, TLS-only Redis
+# container (its own throwaway CA; PPR F-D1-2) on a private network that is
+# removed on exit.
 #
 # Usage (from the repository root):
 #   infrastructure/docker/production/verify-images.sh [--build]
@@ -150,7 +151,8 @@ APP_ENV_ARGS=(
     -e AI_GATEWAY_REPLAY_STORE=redis
     -e DB_HOST=192.0.2.10 -e DB_SSLMODE=require
     -e DB_USERNAME=school_os_app -e DB_PASSWORD="$(random)"
-    -e REDIS_HOST="${RUN_ID}-redis" -e REDIS_PASSWORD="$REDIS_PASSWORD"
+    -e REDIS_URL="tls://${RUN_ID}-redis:6379?ssl[cafile]=/etc/lycenza-redis-ca/ca.pem" -e REDIS_PASSWORD="$REDIS_PASSWORD"
+    -v "$SMOKE_DIR/redis-ca.pem:/etc/lycenza-redis-ca/ca.pem:ro"
     -e CACHE_STORE=redis -e SESSION_DRIVER=redis -e QUEUE_CONNECTION=redis
     -e DOCUMENTS_DISK=s3 -e COMMUNICATION_ATTACHMENTS_DISK=s3
     -e AWS_BUCKET=lycenza-verify -e AWS_DEFAULT_REGION=us-east-1 -e AWS_ENDPOINT=https://objects.invalid
@@ -203,8 +205,27 @@ check "graceful FPM stop signal is SIGQUIT" test "$(docker image inspect -f '{{.
 check "no private-key file in application or configuration paths" test -z "$(in_app 'find /var/www/app /usr/local/etc /etc/nginx \( -name "*.pem" -o -name "*.key" -o -name "id_rsa*" \) -not -path "*/vendor/*" 2>/dev/null')"
 
 docker network create "$NETWORK" >/dev/null
-docker run -d --name "${RUN_ID}-redis" --network "$NETWORK" \
-    redis:7.4.11-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499 redis-server --requirepass "$REDIS_PASSWORD" --save '' --appendonly no >/dev/null
+# PPR F-D1-2 (ADR 0050 implementation amendment): a hardened app refuses a
+# plaintext Redis, so this one is TLS-only (no plaintext listener) with a
+# throwaway CA whose certificate names the container; the app verifies it.
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=lycenza-verify-redis-ca" -keyout "$SMOKE_DIR/redis-ca.key" -out "$SMOKE_DIR/redis-ca.pem" >/dev/null 2>&1
+openssl req -newkey rsa:2048 -nodes -subj "/CN=${RUN_ID}-redis" -keyout "$SMOKE_DIR/redis.key" -out "$SMOKE_DIR/redis.csr" >/dev/null 2>&1
+printf 'subjectAltName=DNS:%s-redis\nextendedKeyUsage=serverAuth\n' "$RUN_ID" > "$SMOKE_DIR/redis.ext"
+openssl x509 -req -in "$SMOKE_DIR/redis.csr" -CA "$SMOKE_DIR/redis-ca.pem" -CAkey "$SMOKE_DIR/redis-ca.key" -CAcreateserial -days 1 -extfile "$SMOKE_DIR/redis.ext" -out "$SMOKE_DIR/redis.pem" >/dev/null 2>&1
+chmod a+rx "$SMOKE_DIR" && chmod a+r "$SMOKE_DIR"/redis*
+docker run -d --name "${RUN_ID}-redis" --network "$NETWORK" -v "$SMOKE_DIR:/tls:ro" \
+    redis:7.4.11-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499 redis-server --port 0 --tls-port 6379 \
+    --tls-cert-file /tls/redis.pem --tls-key-file /tls/redis.key --tls-ca-cert-file /tls/redis-ca.pem --tls-auth-clients no \
+    --requirepass "$REDIS_PASSWORD" --save '' --appendonly no >/dev/null
+redis_tls_ping() { docker exec "${RUN_ID}-redis" redis-cli --tls --cacert /tls/redis-ca.pem -h "${RUN_ID}-redis" -a "$REDIS_PASSWORD" --no-auth-warning PING 2>/dev/null | grep -q PONG; }
+for _ in $(seq 1 30); do redis_tls_ping && break; sleep 1; done
+check "Redis answers over verified TLS with its password" redis_tls_ping
+check "Redis has no plaintext listener" test "$(docker exec "${RUN_ID}-redis" redis-cli -p 6379 PING 2>&1)" != "PONG"
+plain_redis="$(drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e REDIS_URL="redis://${RUN_ID}-redis:6379" "$APP_IMAGE" web 2>&1 || true)"
+check "app refuses a plaintext Redis (redis_tls_required)" grep -q "redis_tls_required" <<<"$plain_redis"
+noverify_redis="$(drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e REDIS_URL="tls://${RUN_ID}-redis:6379?ssl[verify_peer_name]=0" "$APP_IMAGE" web 2>&1 || true)"
+check "app refuses Redis with hostname verification off (redis_tls_verification_disabled)" grep -q "redis_tls_verification_disabled" <<<"$noverify_redis"
+check "those refusals never print the Redis password" test -z "$(grep -F "$REDIS_PASSWORD" <<<"$plain_redis$noverify_redis")"
 
 unsafe_output="$(drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e APP_KEY=canary-unsafe-app-key "$APP_IMAGE" web 2>&1 || true)"
 check "unsafe configuration refuses to start" grep -q "Refusing to start" <<<"$unsafe_output"

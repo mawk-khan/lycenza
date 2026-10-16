@@ -30,7 +30,7 @@ may contain their secret values:
 | Public hostname and TLS certificate (at the proxy) | `APP_URL`; TLS terminates at the proxy |
 | Proxy address ranges | `TRUSTED_PROXIES` (explicit IPs/CIDRs, never `*`) |
 | PostgreSQL 16 endpoint with TLS, database name, migration role | `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_SSLMODE`, `DB_ADMIN_USERNAME` (release/console only); bootstrap per `docs/operations/DATABASE-BOOTSTRAP.md` |
-| Redis endpoint with authentication | `REDIS_HOST`, `REDIS_PORT` (+ secret `REDIS_PASSWORD`) |
+| Redis endpoint with authentication and in-transit TLS | `REDIS_URL=tls://<endpoint>:6379` (+ secret `REDIS_PASSWORD`, and `REDIS_USERNAME` for an ACL user); the guard refuses plaintext or unverified TLS (ADR 0050 F-D1-2 amendment) |
 | Private, versioned, encrypted bucket per environment (+ independent copy) | `AWS_BUCKET`, `AWS_DEFAULT_REGION`, `AWS_ENDPOINT` (HTTPS or empty), `DOCUMENTS_DISK=s3`, `COMMUNICATION_ATTACHMENTS_DISK=s3` |
 | Secret-store references | the `secret_groups` of `apps/platform/deploy/processes.json`, injected per process |
 | Backup policy references | PITR (RPO ≤ 15 min, 35 days), object copy (RPO ≤ 24 h) — `docs/operations/BACKUP-AND-RESTORE.md` |

@@ -1903,7 +1903,7 @@ positive cases).
 
 | ID | Finding | Recommendation |
 |---|---|---|
-| F-D1-2 | `ProductionConfigurationGuard` requires a Redis password but neither requires TLS nor refuses `ssl[verify_peer]=0` / `verify_peer_name=0` in a hardened environment. ADR 0050 §6 does not require Redis TLS, but AWS needs it for auth | A small guard slice before R-14, so that a disabled-verification Redis configuration refuses to boot. Whether to require TLS outright is an owner decision (it amends ADR 0050 §6) |
+| F-D1-2 (**RESOLVED §31**) | `ProductionConfigurationGuard` requires a Redis password but neither requires TLS nor refuses `ssl[verify_peer]=0` / `verify_peer_name=0` in a hardened environment. ADR 0050 §6 does not require Redis TLS, but AWS needs it for auth | A small guard slice before R-14, so that a disabled-verification Redis configuration refuses to boot. Whether to require TLS outright is an owner decision (it amends ADR 0050 §6) |
 | F-D1-3 | When Redis **hangs** rather than refuses (for example TLS to a plaintext endpoint, or a blackholed address), readiness takes about 10 s. The probe itself stops at its 0.5 s budget; the delay is the failure counter written through the metrics store to the same Redis, with Laravel's default 10 s connection timeout. This predates F-D1 | PPR.4: bound the connection timeout explicitly (a `timeout` on the Redis connections) or keep the readiness metric off the failing dependency, and align it with the load-balancer health-check timeout |
 
 ### 30.6 Not proven here (R-08 / E09 on the real service)
@@ -1915,3 +1915,50 @@ positive cases).
 
 **Status.** F-D1 is **PASS**: the Predis TLS + auth assumption is proven,
 with one wiring defect fixed. R-00a stays blocked (§29.2).
+
+## 31. F-D1-2 — Hardened Redis TLS configuration guard (2026-10-16)
+
+**Authority.** The owner approved F-D1-2 and decided the contract: **a
+hardened environment's Redis is authenticated TLS with certificate and
+hostname verification on.** Local development is unchanged.
+- **Recorded as:** the ADR 0050 implementation amendment of 2026-10-16.
+  The owner cited "§6"; the Redis rules there are §2, §4 and §15.
+- **Resolves:** finding F-D1-2 (§30.5).
+
+**Guard.** `ProductionConfigurationGuard` now checks every configured Redis
+connection on its effective Predis parameters:
+- `redis_tls_required`;
+- `redis_tls_verification_disabled`: `verify_peer`/`verify_peer_name`
+  false by PHP truthiness, or `allow_self_signed` true;
+- `redis_configuration_unsupported`: another client, a cluster set,
+  `options.parameters`, or an `ssl` option outside `cafile`, `capath`,
+  `peer_name` and the flags.
+
+What stays the same:
+- `redis_password_missing` is unchanged;
+- a private CA (`cafile`/`capath`) remains supported;
+- refusals print codes only.
+
+**Parity.** `HardenedRedisTransportParityTest` checks the guard's reading
+against the real RedisManager → Predis parameters for 12 connection
+shapes. They include URL driver versus explicit scheme, a scheme on the
+host, and upper-case `TLS://`.
+
+**Release tooling:**
+- **`verify-images.sh`** runs a TLS-only throwaway Redis with its own CA,
+  passed to the app as `REDIS_URL=tls://…?ssl[cafile]=`. It adds checks
+  that:
+  - Redis answers over verified TLS;
+  - Redis has no plaintext listener;
+  - the built image refuses a plaintext URL and a URL with hostname
+    verification off;
+  - no password is printed.
+
+  The existing web, replay-store and readiness checks now run over TLS.
+- **`verify-production-bootstrap.sh`** uses the same TLS Redis.
+
+**Readiness** is not redesigned (F-D1 already resolves it like the
+application). **F-D1-3** stays assigned to PPR.4.
+
+**Status.** F-D1-2 is **complete**. R-08 is still not done, and R-00a
+stays blocked (§29.2).
