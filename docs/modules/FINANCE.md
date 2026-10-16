@@ -5427,3 +5427,56 @@ existing `selectableFeeHead()` still decides.
   timezone ("16 Oct 2026, 1:06 am"), not raw ISO text.
 - **Charge page:** a charge with payments standing on it explains what to
   do instead of offering a cancel form that cannot succeed (UAT-FIN-26b).
+
+## Fee-run overlap review (UAT-C6, 2026-10-16, ADR 0062 amendment, ADR 0075 §19)
+
+**Rule:** a fee run never silently double-bills a Student, and never
+silently skips one. If a Student already has a charge that may cover the
+run's billing period, the preview shows the Student as **Decision
+required** ("Potential existing charge — decision required").
+
+**What is shown.** For each such Student the run page lists:
+- the existing charge(s): description, amount, due date, and what is still
+  owed or "paid" (from `ChargeStateReader`);
+- the charge the run would add: "Tuition · Term 1", amount, due date.
+
+**What may be a duplicate.** A charge qualifies only when it is
+uncancelled, for the same Student and academic year, and not made by any
+fee assessment. Fee assessments stay authoritative through
+`already_assessed`. A qualifying charge is flagged when any of these
+holds:
+- it is on the fee head's income account and due inside the billing
+  period;
+- its description resembles the run's charge (the shared `SimilarCharge`
+  rules of the UAT-C4 ad-hoc warning);
+- it has the same amount and due date.
+
+**Not a verdict.** A match is only a reason to look. The operator decides,
+per Student; there is deliberately no "include all":
+- **Include anyway:** the Student is charged in addition.
+- **Exclude from this run:** the Student is not charged by this run.
+
+**How a decision behaves:**
+- It is recorded (who, when) and audited:
+  `fee_assessment_run.item_overlap_included` / `_excluded`.
+- Like a staff exclusion, it needs a fresh preview before execution.
+- An "include anyway" Student can still be excluded before execution.
+
+**Safety at execution:**
+- **Execute is refused** while any Student needs a decision. It is also
+  refused if a charge that may cover the period was added after the
+  preview ("Preview again and decide"). Nothing is charged either way.
+- **Per-item backstop:** if such a charge appears while the run executes,
+  that item fails as `overlap_review_required` (never charged), and a new
+  run for the period brings the Student back for a decision.
+
+**API:**
+- `POST /api/v1/schools/{school}/fee-assessment-runs/{run}/items/{item}/decide`
+  with `{"decision": "include" | "exclude"}`;
+- the run's `preview.decisionRequiredCount`;
+- each item's `overlapChargeIds`, `overlapDecision` and `overlapDecidedAt`.
+
+**Unchanged:**
+- proration (none, owner decision D1);
+- run idempotency (`already_assessed`, `fee_assessments_one_live_per_period`);
+- exact instalment amounts.

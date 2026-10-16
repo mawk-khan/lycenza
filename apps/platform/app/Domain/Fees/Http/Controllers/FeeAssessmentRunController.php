@@ -39,7 +39,7 @@ class FeeAssessmentRunController extends Controller
 
     public function show(Request $request, School $school, string $run, FeeAssessmentRunReadService $reads): JsonResponse
     {
-        return response()->json(['data' => FeeSetupPresenter::run($reads->getRun($school, $run, $request->user()))]);
+        return response()->json(['data' => FeeSetupPresenter::run($reads->getRun($school, $run, $request->user()), $reads->decisionRequiredCount($school, $run, $request->user()))]);
     }
 
     public function items(Request $request, School $school, string $run, FeeAssessmentRunReadService $reads): JsonResponse
@@ -78,6 +78,14 @@ class FeeAssessmentRunController extends Controller
     public function exclude(Request $request, School $school, string $run, string $item, FeeAssessmentRunService $runs): JsonResponse
     {
         return response()->json(['data' => FeeSetupPresenter::run($runs->excludeItem($school, $run, $item, $request->user()))]);
+    }
+
+    /** UAT-C6 (UAT-FIN-20): the explicit decision on one "decision required" item. */
+    public function decide(Request $request, School $school, string $run, string $item, FeeAssessmentRunService $runs): JsonResponse
+    {
+        $validated = $request->validate(['decision' => ['required', 'string', 'in:include,exclude']]);
+
+        return response()->json(['data' => FeeSetupPresenter::run($this->fieldErrors(fn () => $runs->decideOverlap($school, $run, $item, $validated['decision'], $request->user())))]);
     }
 
     public function execute(Request $request, School $school, string $run, FeeAssessmentRunService $runs): JsonResponse

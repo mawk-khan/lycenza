@@ -104,6 +104,8 @@ class OperationalFeeUiTest extends TestCase
             ->where('assignments.data.0.intent.0.feeHead.id', $w['optionalHead']->id)
             ->where('assignments.data.0.intent.0.linkReason', 'assignment')
             ->where('assignments.data.0.intent.0.selectionOutcome', 'created')
+            // UAT-C6 (RA-LIB-DATES root): an instant, shown in School time -- never a bare UTC date.
+            ->where('assignments.data.0.intent.0.recordedAt', fn ($v) => is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/', $v) === 1)
             ->where('openYears', fn ($y) => collect($y)->pluck('id')->all() === [$w['year']->id])
             ->where('canCarryForward', true));
 

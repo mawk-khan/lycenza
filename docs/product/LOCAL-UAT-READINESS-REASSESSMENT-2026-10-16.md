@@ -504,3 +504,102 @@ UAT-C5 follows UAT-C6.
   - error logs `errors-anchors.jsonl`, `errors.jsonl` (both empty).
 - **Demo data:** demo data only, and nothing from UAT is committed. The
   demo was reset after testing.
+
+## R. UAT-C6 status (added 2026-10-16)
+
+The owner approved UAT-C6, pre-staging product corrections
+([ADR 0075 §19](../architecture/adr/0075-v11-commercial-readiness-programme-contract.md)).
+
+**How it was re-tested:**
+- **Where:** DDEV, after `ddev demo-reset`, with the C6 build.
+- **Browser monitor:** 0 5xx, 0 page errors.
+- **Server log:** 0 warnings and 0 errors.
+
+**What is preserved:** sections A–Q above are the reassessment as observed,
+and are unchanged.
+
+| Item | Result | Browser evidence |
+|---|---|---|
+| **RA-LIB-DATES** | **FIXED** | **IST and America/New_York give the same dates** on the loans list, loan page, returned list and catalogue copy, e.g. "Due 24 Oct 2026", "Checked out 16 Oct 2026". There is no time component. The timezone was restored afterwards. |
+| **UAT-STF-05** | **FIXED** | **Link in the browser:** HR typed "Pooja" in the Sign-in account picker; the matching account was listed first, by name only (re-run after the security minimization below). It was picked with Arrow Down and Enter, then Link account: "Account linked.". **Remove and relink:** Remove link (confirmed) unlinked it, and it was linked again. **Self-service:** the teacher's own leave, attendance and payslip pages opened (200) once the employment was active and the School Admin had granted the existing Staff Self-Service role (also in the browser). **No API, SQL or console.** |
+| **UAT-HR-23** | **FIXED** | **No identifier:** the form reads "Reports to (search by name or employee number)" with no UUID. **Keyboard pick:** "Nandini Iyer (EMP-000001) — Post Graduate Teacher · Academics · Main Campus" was picked by keyboard and saved ("Reports to Nandini Iyer"). **Loop refused:** making Nandini report to Kavya read "That choice would make the reporting line loop back to this Employee. Choose another manager." |
+| **UAT-FIN-20** (duplicate detection) | **FIXED** | **The original condition:** the Term 1 run showed **12 Students "Potential existing charge — decision required"**, each with "Term 1 tuition fee 2026-27 · 25,000.00 · due 30 Apr 2026 · paid" beside "This run would add: Tuition · Term 1 · 24,000.00". **Execute withheld:** the button was hidden; a crafted execute read "12 Students already have a charge that may cover this period…". **Decisions:** Include anyway for Aarav and Exclude from this run for the 11 others (one by one), then preview again and execute. The run charged 1 Student 24,000.00. **Statements:** Aarav's shows both charges; Diya's shows only her ad-hoc charge. **No false positives:** the Term 2 run needed 0 decisions, with ad-hoc Term 1 charges and a Term 2 lab charge on another account in place. |
+| FIN-20 proration | Not a defect | Owner decision D1. Not built. |
+
+**Security (browser):**
+- **Decide:** a crafted decide from the Annexe got 404; from a Teacher, 403.
+- **Account-link search:** Teacher 403, Annexe 404.
+
+**Phone (390 px):** the fee-run page and the Employee page fit.
+
+**Automated tests:** Library dates (both timezones, guard),
+account link, manager picker, fee-run overlap (service, web, API, database
+guard, executor backstop, cross-School). All are green, and the migration
+rollback is proven IDENTICAL.
+
+**Security review (static).** No findings at confidence 8 or above.
+
+What it confirmed:
+- **Fee-run decisions:** `finance.fee_assessments.run` at the route and
+  in the service; the run is School-scoped and the item is resolved
+  through the run. Only include/exclude are accepted, and every stored
+  value is set by the server.
+- **Overlap details:** `finance.charges.view`, School-scoped.
+- **Execution fails closed:** undecided items, overlaps changed since the
+  preview and the per-item re-check all stop it. The database lets only
+  ready items execute.
+- **Account link:** `hr.employees.manage`, through the governed
+  `EmployeeService` with the same protections as the API.
+- **Manager picker:** `hr.employees.assignments.manage`, chain-checked and
+  School-scoped.
+- **XSS:** no `v-html`.
+
+**Below the threshold:** one observation (confidence about 4). The search
+returned a `matchesWorkEmail` flag, which an HR manager could use to test
+guessed sign-in emails. **Minimized:** the match now only ranks the
+account first on the server and is never returned.
+
+**Runtime proof added:**
+- deciding an item through another run (404);
+- an Annexe decide (404) and a Teacher decide (403);
+- immutable overlap provenance, no execution state on a review item, no
+  undocumented decision (database);
+- a disabled account is neither offered nor linkable;
+- a mismatched employee/employment/assignment chain (404);
+- no one sets their own reporting line;
+- the existing concurrency tests on the shared link path.
+
+**One correction made while testing:** account candidates had been
+filtered on `disabled_at` instead of the authoritative `is_disabled` flag.
+The governed link always refused a disabled account (`isDisabled()`), but
+the picker could have listed one. Fixed, with a test.
+
+**Onboarding note (S3, guidance only).** A staff invitation's "Teacher"
+role does not include self-service. The Staff Self-Service role is
+separate by design (E33). An administrator grants it, and the
+administrator guide (UAT-C5) should say so.
+
+### Determinations after UAT-C6
+
+**Score:** **93.6**, as a post-C6 update with the same weights. The 89.5
+above stays the reassessment-time score. What changed:
+
+| Journey | From | To | Why |
+|---|---|---|---|
+| 8 Fee setup and assessment run | major gap | friction | — |
+| 15 Staff invitation | major gap | friction | the separate self-service role |
+| 16 Library | major gap | friction | LIB-05 remains |
+| 13 Onboard an employee | friction | pass | — |
+
+The −2 for the regression is removed.
+
+| Stage | Determination |
+|---|---|
+| Local UAT | **READY WITH LIMITATIONS**: the S2/S3 list in §J, without RA-LIB-DATES, STF-05, HR-23 and the FIN-20 run |
+| Product-side staging handoff | **YES**: the one condition (the regression) is fixed |
+| Actual staging | **NO** (PPR environment; E16-R2 held; app image not VERIFIED) |
+| Pilot | **NO**: legal gates and PPR/E16 as in §O. Product conditions left: FIN-22 if canteen is piloted. |
+
+**Next product action:** **UAT-C5** (DOC-01 demo copy and an
+administrator guide, including staff onboarding: invite, link, roles).
+Owner authorisation is needed.

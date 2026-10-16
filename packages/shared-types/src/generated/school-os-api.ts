@@ -3490,6 +3490,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/schools/{schoolId}/fee-assessment-runs/{runId}/items/{itemId}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** UAT-C6: records the explicit decision on one "review" item (its Student already has a charge that may cover the period) -- include (the item becomes ready) or exclude (excluded, reason overlap_excluded). Actor and time are recorded and audited. Returns the run to draft, so it must be previewed again. A run never executes while an item is still in review. Requires finance.fee_assessments.run. */
+        post: operations["decideFeeAssessmentRunItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/schools/{schoolId}/fee-assessments/{assessmentId}/void": {
         parameters: {
             query?: never;
@@ -6400,6 +6417,8 @@ export interface components {
                 excludedCount: number;
                 blockedCount: number;
                 alreadyAssessedCount: number;
+                /** @description UAT-C6: items still waiting for an include/exclude decision (getFeeAssessmentRun only). */
+                decisionRequiredCount?: number;
             };
             execution: {
                 succeededCount: number;
@@ -6438,20 +6457,29 @@ export interface components {
             amount: string;
             /** @example INR */
             currency: string;
-            /** @enum {string} */
-            previewResult: "ready" | "already_assessed" | "excluded" | "blocked";
+            /**
+             * @description review (UAT-C6) -- the Student already has a charge that may cover this period; an explicit include/exclude decision is required before the run can execute.
+             * @enum {string}
+             */
+            previewResult: "ready" | "already_assessed" | "review" | "excluded" | "blocked";
             /** @enum {string|null} */
-            reason: "optional_not_selected" | "period_before_enrollment" | "enrollment_cancelled" | "student_inactive" | "staff_excluded" | "no_structure" | "head_inactive" | "account_invalid" | null;
+            reason: "optional_not_selected" | "period_before_enrollment" | "enrollment_cancelled" | "student_inactive" | "staff_excluded" | "overlap_excluded" | "potential_overlap" | "no_structure" | "head_inactive" | "account_invalid" | null;
             /** Format: date-time */
             excludedAt: string | null;
             /** @enum {string|null} */
             executionStatus: "pending" | "succeeded" | "skipped_already_assessed" | "failed" | null;
             /** @enum {string|null} */
-            failureReason: "structure_not_active" | "structure_not_resolved" | "enrollment_not_qualifying" | "student_inactive" | "optional_not_selected" | "head_inactive" | "account_invalid" | "error" | "concession_exceeds_outstanding" | "concession_account_invalid" | null;
+            failureReason: "structure_not_active" | "structure_not_resolved" | "enrollment_not_qualifying" | "student_inactive" | "optional_not_selected" | "head_inactive" | "account_invalid" | "error" | "concession_exceeds_outstanding" | "concession_account_invalid" | "overlap_review_required" | null;
             /** Format: uuid */
             feeAssessmentId: string | null;
             /** Format: date-time */
             executedAt: string | null;
+            /** @description UAT-C6: uncancelled charges (not created by a fee assessment) that may already cover this period, seen at preview. Empty when none. */
+            overlapChargeIds: string[];
+            /** @enum {string|null} */
+            overlapDecision: "include" | "exclude" | null;
+            /** Format: date-time */
+            overlapDecidedAt: string | null;
         };
         FeeAssessment: {
             /** Format: uuid */
@@ -22785,7 +22813,7 @@ export interface operations {
     listFeeAssessmentRunItems: {
         parameters: {
             query?: {
-                preview_result?: "ready" | "already_assessed" | "excluded" | "blocked";
+                preview_result?: "ready" | "already_assessed" | "review" | "excluded" | "blocked";
                 execution_status?: "pending" | "succeeded" | "skipped_already_assessed" | "failed";
                 page?: number;
             };
@@ -22954,7 +22982,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description FEE_ASSESSMENT_RUN_STALE_PREVIEW or FEE_ASSESSMENT_RUN_ILLEGAL_STATE. */
+            /** @description FEE_ASSESSMENT_RUN_STALE_PREVIEW, FEE_ASSESSMENT_RUN_ILLEGAL_STATE, FEE_ASSESSMENT_RUN_OVERLAP_UNRESOLVED (an item still needs an include/exclude decision) or FEE_ASSESSMENT_RUN_OVERLAP_CHANGED (a charge that may cover the period appeared after the preview; preview again). Nothing is charged. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -23137,6 +23165,83 @@ export interface operations {
             };
             /** @description FEE_ASSESSMENT_RUN_ITEM_NOT_EXCLUDABLE or FEE_ASSESSMENT_RUN_ILLEGAL_STATE. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    decideFeeAssessmentRunItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+                runId: string;
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    decision: "include" | "exclude";
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FeeAssessmentRun"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking finance.fee_assessments.run in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_ASSESSMENT_RUN_NOT_FOUND or FEE_ASSESSMENT_RUN_ITEM_NOT_FOUND. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description FEE_ASSESSMENT_RUN_ITEM_NOT_DECIDABLE or FEE_ASSESSMENT_RUN_ILLEGAL_STATE. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed (decision missing or not include/exclude). */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

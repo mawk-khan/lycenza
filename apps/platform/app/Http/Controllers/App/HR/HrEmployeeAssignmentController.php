@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\App\HR;
 
 use App\Domain\HR\Application\EmployeeAssignmentService;
+use App\Domain\HR\Application\EmployeePickerReadService;
 use App\Domain\HR\Application\Exceptions\HrException;
 use App\Domain\HR\Application\ReportingHierarchyService;
 use App\Domain\HR\Infrastructure\Department;
@@ -14,20 +15,21 @@ use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Phase 8A closure correction -- `setManager()` deliberately takes a
- * raw manager Assignment id typed/pasted by the HR admin, not a
- * searchable picker across every Employee's Assignments -- building a
- * cross-Employee Assignment search UI is out of this correction's
- * scope (item 2 asks for the promised administrative UI, not a new
- * search feature `docs/modules/HR.md` never specified). Any invalid or
- * cross-School id is rejected cleanly by `ReportingHierarchyService`
- * itself.
+ * Phase 8A closure correction -- the inline Assignment actions.
+ *
+ * UAT-C6 (UAT-HR-23, ADR 0075 section 19): the reporting manager is picked
+ * by name from `managerCandidates()` (current assignments, see
+ * `EmployeePickerReadService`) instead of a typed Assignment id. The write
+ * is unchanged -- `ReportingHierarchyService::setManager()` still decides
+ * same School, not itself, not the same Employee, never your own reporting
+ * line, and no cycle -- and its refusals are shown without identifiers.
  */
 class HrEmployeeAssignmentController extends Controller
 {
@@ -104,23 +106,45 @@ class HrEmployeeAssignmentController extends Controller
         $this->authorizeCapability('hr.employees.assignments.manage', $school);
         [$employeeModel, , $subordinate] = $this->resolveChain($employee, $employment, $assignment);
 
-        $validated = $request->validate(['manager_assignment_id' => ['sometimes', 'nullable', 'uuid']]);
+        $validated = $request->validate(['manager_assignment_id' => ['sometimes', 'nullable', 'uuid']], ['manager_assignment_id.*' => 'Choose a manager from the list.']);
 
         $manager = isset($validated['manager_assignment_id'])
             ? EmployeeAssignment::query()->find($validated['manager_assignment_id'])
             : null;
 
         if (isset($validated['manager_assignment_id']) && $manager === null) {
-            throw ValidationException::withMessages(['manager_assignment_id' => ['No Assignment with that id was found in this School.']]);
+            throw ValidationException::withMessages(['manager_assignment_id' => ['That manager could not be found in this School. Search again.']]);
         }
 
         try {
             $service->setManager($subordinate, $manager, $context->actor());
         } catch (HrException $e) {
-            throw ValidationException::withMessages(['manager_assignment_id' => [$e->getMessage()]]);
+            throw ValidationException::withMessages(['manager_assignment_id' => [self::managerRefusal($e)]]);
         }
 
         return redirect("/app/hr/employees/{$employeeModel->id}");
+    }
+
+    /** UAT-C6 (UAT-HR-23): manager candidates for this assignment, by name. */
+    public function managerCandidates(Request $request, TenantContext $context, EmployeePickerReadService $reads, string $employee, string $employment, string $assignment): JsonResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('hr.employees.assignments.manage', $school);
+        [, , $subordinate] = $this->resolveChain($employee, $employment, $assignment);
+
+        return response()->json([
+            'candidates' => $reads->managerCandidates($school, $subordinate, (string) $request->string('q'), $context->actor()),
+        ]);
+    }
+
+    private static function managerRefusal(HrException $e): string
+    {
+        return match ($e->errorCode()) {
+            'HR_ASSIGNMENT_MANAGER_MISMATCH' => 'That manager could not be found in this School. Search again.',
+            'HR_SELF_REPORTING', 'HR_SAME_EMPLOYEE_REPORTING' => 'An Employee cannot report to themselves.',
+            'HR_REPORTING_HIERARCHY_CYCLE' => 'That choice would make the reporting line loop back to this Employee. Choose another manager.',
+            default => $e->getMessage(),
+        };
     }
 
     /**

@@ -470,3 +470,23 @@ A check-in that assessed a fine lands on that page.
   `library.circulation.view`; ADR 0073 §20.2. It lists loans only, never
   fines (X2).)*
 - Production stays gated by E34 (ADR 0058).
+
+## Date display (UAT-C6, 2026-10-16, ADR 0075 §19)
+
+A loan's checked-out, due and returned dates are sent to the pages as the
+**School's calendar dates** (`YYYY-MM-DD`, UAT-C1).
+
+**How they are shown.** The pages use `formatCalendarDate()`
+(`resources/js/datetime.ts`), which shows "16 Oct 2026" and never shifts
+the day.
+
+**What went wrong (RA-LIB-DATES).** UAT-C4 had passed these dates through
+the instant formatter, which read the bare date as midnight UTC:
+- an invented "5:30 am" in India;
+- the previous day for a School west of UTC.
+
+**Guard:** `Tests\Feature\Library\LibraryCalendarDateDisplayTest` checks
+this.
+
+**Unchanged:** stored `due_at` (end of the School day), overdue status
+and fines.

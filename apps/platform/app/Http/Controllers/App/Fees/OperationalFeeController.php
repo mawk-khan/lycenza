@@ -227,7 +227,7 @@ class OperationalFeeController extends Controller
             'mappingScope' => $link instanceof HostelFeeSelection ? $link->mapping_scope : null,
             'linkReason' => $link->link_reason,
             'selectionOutcome' => $link->selection_outcome,
-            'recordedAt' => $link->created_at?->toDateString(),
+            'recordedAt' => $link->created_at?->toIso8601String(),
         ])->values()->all();
     }
 

@@ -35,6 +35,10 @@ use Illuminate\Support\Carbon;
  * @property string|null $failure_reason
  * @property string|null $fee_assessment_id
  * @property Carbon|null $executed_at
+ * @property list<string>|null $overlap_charge_ids UAT-C6: uncancelled charges that may cover this period, seen at preview
+ * @property string|null $overlap_decision include|exclude
+ * @property string|null $overlap_decided_by_user_id
+ * @property Carbon|null $overlap_decided_at
  */
 class FeeAssessmentRunItem extends Model
 {
@@ -48,7 +52,20 @@ class FeeAssessmentRunItem extends Model
 
     public const RESULT_BLOCKED = 'blocked';
 
-    public const PREVIEW_RESULTS = [self::RESULT_READY, self::RESULT_ALREADY_ASSESSED, self::RESULT_EXCLUDED, self::RESULT_BLOCKED];
+    /** UAT-C6 (UAT-FIN-20): a potential same-period charge exists; an explicit decision is required. */
+    public const RESULT_REVIEW = 'review';
+
+    public const PREVIEW_RESULTS = [self::RESULT_READY, self::RESULT_ALREADY_ASSESSED, self::RESULT_REVIEW, self::RESULT_EXCLUDED, self::RESULT_BLOCKED];
+
+    // Review reason (UAT-C6).
+    public const REASON_POTENTIAL_OVERLAP = 'potential_overlap';
+
+    // Overlap decisions (UAT-C6); "exclude" is recorded as excluded / overlap_excluded.
+    public const DECISION_INCLUDE = 'include';
+
+    public const DECISION_EXCLUDE = 'exclude';
+
+    public const REASON_OVERLAP_EXCLUDED = 'overlap_excluded';
 
     // Excluded reasons (ADR 0062 §9.2 catalogue).
     public const REASON_OPTIONAL_NOT_SELECTED = 'optional_not_selected';
@@ -99,6 +116,9 @@ class FeeAssessmentRunItem extends Model
     /** FEE.3 (F2): a concession applies but the School's concession account is missing or invalid. */
     public const FAIL_CONCESSION_ACCOUNT_INVALID = 'concession_account_invalid';
 
+    /** UAT-C6 (UAT-FIN-20): at execution a possibly overlapping charge was not covered by an explicit decision; never charged. */
+    public const FAIL_OVERLAP_REVIEW_REQUIRED = 'overlap_review_required';
+
     protected $table = 'fee_assessment_run_items';
 
     protected $guarded = [];
@@ -109,6 +129,8 @@ class FeeAssessmentRunItem extends Model
             'enrollment_starts_on' => 'date',
             'excluded_at' => 'datetime',
             'executed_at' => 'datetime',
+            'overlap_charge_ids' => 'array',
+            'overlap_decided_at' => 'datetime',
         ];
     }
 }

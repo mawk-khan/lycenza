@@ -74,6 +74,7 @@ use App\Http\Controllers\App\HostelResidencyController;
 use App\Http\Controllers\App\HostelRoomController;
 use App\Http\Controllers\App\HR\HrController;
 use App\Http\Controllers\App\HR\HrDepartmentController;
+use App\Http\Controllers\App\HR\HrEmployeeAccountLinkController;
 use App\Http\Controllers\App\HR\HrEmployeeAddressController;
 use App\Http\Controllers\App\HR\HrEmployeeAssignmentController;
 use App\Http\Controllers\App\HR\HrEmployeeCategoryController;
@@ -1199,6 +1200,7 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         Route::get('/fee-runs/{run}', [FinanceFeeAssessmentRunController::class, 'show'])->name('fee-runs.show');
         Route::post('/fee-runs/{run}/preview', [FinanceFeeAssessmentRunController::class, 'preview'])->name('fee-runs.preview');
         Route::post('/fee-runs/{run}/items/{item}/exclude', [FinanceFeeAssessmentRunController::class, 'exclude'])->name('fee-runs.items.exclude');
+        Route::post('/fee-runs/{run}/items/{item}/decide', [FinanceFeeAssessmentRunController::class, 'decide'])->name('fee-runs.items.decide');
         Route::post('/fee-runs/{run}/execute', [FinanceFeeAssessmentRunController::class, 'execute'])->name('fee-runs.execute');
         Route::post('/fee-runs/{run}/resume', [FinanceFeeAssessmentRunController::class, 'resume'])->name('fee-runs.resume');
         Route::post('/fee-runs/{run}/cancel', [FinanceFeeAssessmentRunController::class, 'cancel'])->name('fee-runs.cancel');
@@ -1344,6 +1346,12 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         Route::post('/employees/{employee}/employment-records/{employment}/assignments/{assignment}/end', [HrEmployeeAssignmentController::class, 'end'])->name('employees.assignments.end');
         Route::post('/employees/{employee}/employment-records/{employment}/assignments/{assignment}/primary', [HrEmployeeAssignmentController::class, 'setPrimary'])->name('employees.assignments.set-primary');
         Route::post('/employees/{employee}/employment-records/{employment}/assignments/{assignment}/manager', [HrEmployeeAssignmentController::class, 'setManager'])->name('employees.assignments.set-manager');
+        // UAT-C6 (UAT-HR-23): manager picked by name, never a typed id.
+        Route::get('/employees/{employee}/employment-records/{employment}/assignments/{assignment}/manager-candidates', [HrEmployeeAssignmentController::class, 'managerCandidates'])->name('employees.assignments.manager-candidates');
+        // UAT-C6 (UAT-STF-05): the governed Employee <-> account link in the browser.
+        Route::get('/employees/{employee}/account-link/search', [HrEmployeeAccountLinkController::class, 'search'])->name('employees.account-link.search');
+        Route::post('/employees/{employee}/account-link', [HrEmployeeAccountLinkController::class, 'store'])->name('employees.account-link.store');
+        Route::post('/employees/{employee}/account-link/remove', [HrEmployeeAccountLinkController::class, 'destroy'])->name('employees.account-link.destroy');
 
         Route::post('/employees/{employee}/qualifications', [HrEmployeeQualificationController::class, 'store'])->name('employees.qualifications.store');
         Route::delete('/employees/{employee}/qualifications/{qualification}', [HrEmployeeQualificationController::class, 'destroy'])->name('employees.qualifications.destroy');

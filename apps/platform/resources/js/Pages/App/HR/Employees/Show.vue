@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { router, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { router, useForm, usePage } from '@inertiajs/vue3';
+import { computed, ref, watch } from 'vue';
+import SearchCombobox from '../../../../Components/Form/SearchCombobox.vue';
 import MfaCodeField from '../../../../Components/MfaCodeField.vue';
 import StatusBadge from '../../../../Components/StatusBadge.vue';
 
@@ -153,6 +154,17 @@ interface Props {
     departments: RefOption[];
     employeeCategories: RefOption[];
     hasMfaFactor: boolean;
+    linkedAccountName: string | null;
+}
+
+interface AccountCandidate {
+    userId: string;
+    name: string;
+}
+
+interface ManagerCandidate {
+    assignmentId: string;
+    label: string;
 }
 
 const props = defineProps<Props>();
@@ -308,16 +320,106 @@ function makeAssignmentPrimary(a: Assignment): void {
     );
 }
 
+// UAT-C6 (UAT-HR-23): the manager is picked by name; the request still
+// carries the chosen Assignment, and the server re-validates everything.
 const managingAssignmentId = ref<string | null>(null);
 const managerForm = useForm({ manager_assignment_id: '' });
+const managerQuery = ref('');
+const managerOptions = ref<ManagerCandidate[]>([]);
+let managerDebounce: ReturnType<typeof setTimeout> | undefined;
+function managerUrl(a: Assignment): string {
+    return `${base}/employment-records/${a.employment_record_id}/assignments/${a.id}`;
+}
+function toggleManager(a: Assignment): void {
+    managingAssignmentId.value = managingAssignmentId.value === a.id ? null : a.id;
+    managerForm.reset();
+    managerForm.clearErrors();
+    managerQuery.value = '';
+    managerOptions.value = [];
+}
+watch(managerQuery, (value) => {
+    const a = props.workspace.assignments.find((x) => x.id === managingAssignmentId.value);
+    clearTimeout(managerDebounce);
+    if (!a || value.trim() === '') {
+        managerOptions.value = [];
+        return;
+    }
+    managerDebounce = setTimeout(async () => {
+        const response = await fetch(
+            `${managerUrl(a)}/manager-candidates?q=${encodeURIComponent(value)}`,
+        );
+        // A refused or non-JSON answer is simply no results.
+        const body = response.ok
+            ? await response.json().catch(() => ({ candidates: [] }))
+            : { candidates: [] };
+        managerOptions.value = body.candidates;
+    }, 250);
+});
+function pickManager(c: ManagerCandidate): void {
+    managerForm.manager_assignment_id = c.assignmentId;
+    managerOptions.value = [];
+    managerQuery.value = c.label;
+}
 function submitManager(a: Assignment): void {
-    managerForm.post(
-        `${base}/employment-records/${a.employment_record_id}/assignments/${a.id}/manager`,
-        {
-            preserveScroll: true,
-            onSuccess: () => (managingAssignmentId.value = null),
+    managerForm.post(`${managerUrl(a)}/manager`, {
+        preserveScroll: true,
+        onSuccess: () => (managingAssignmentId.value = null),
+    });
+}
+function clearManager(a: Assignment): void {
+    managerForm.manager_assignment_id = '';
+    submitManager(a);
+}
+
+// --- Sign-in account link (UAT-C6, UAT-STF-05) ----------------------------
+// The governed Employee <-> User link (EmployeeService::linkUser/unlinkUser).
+
+// Refusals of a link or removal (including "never yourself", ADR 0071 §26.2).
+const accountError = computed(() => {
+    const errors = usePage().props.errors as Record<string, string | undefined>;
+    return errors.self_administration ?? errors.account ?? null;
+});
+const accountQuery = ref('');
+const accountOptions = ref<AccountCandidate[]>([]);
+const accountForm = useForm({ account: '' });
+let accountDebounce: ReturnType<typeof setTimeout> | undefined;
+watch(accountQuery, (value) => {
+    clearTimeout(accountDebounce);
+    if (value.trim() === '') {
+        accountOptions.value = [];
+        return;
+    }
+    accountDebounce = setTimeout(async () => {
+        const response = await fetch(`${base}/account-link/search?q=${encodeURIComponent(value)}`);
+        const body = response.ok
+            ? await response.json().catch(() => ({ candidates: [] }))
+            : { candidates: [] };
+        accountOptions.value = body.candidates;
+    }, 250);
+});
+function pickAccount(c: AccountCandidate): void {
+    accountForm.account = c.userId;
+    accountOptions.value = [];
+    accountQuery.value = c.name;
+}
+function submitAccountLink(): void {
+    accountForm.post(`${base}/account-link`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            accountForm.reset();
+            accountQuery.value = '';
         },
-    );
+    });
+}
+function removeAccountLink(): void {
+    if (
+        !window.confirm(
+            `Remove the link between ${props.workspace.summary.display_name} and the account ${props.linkedAccountName ?? ''}? Their own attendance, leave and payslip pages stop working until an account is linked again.`,
+        )
+    ) {
+        return;
+    }
+    router.post(`${base}/account-link/remove`, {}, { preserveScroll: true });
 }
 
 // --- Qualifications ----------------------------------------------------------
@@ -515,7 +617,90 @@ function removeNote(id: string): void {
                     <dt class="text-slate-500">Reports to</dt>
                     <dd class="mt-0.5">{{ workspace.summary.manager_display_name ?? '—' }}</dd>
                 </div>
+                <div>
+                    <dt class="text-slate-500">Sign-in account</dt>
+                    <dd class="mt-0.5">
+                        <template v-if="workspace.summary.user_linked">
+                            {{ linkedAccountName ?? 'Linked' }}
+                        </template>
+                        <template v-else>Not linked</template>
+                    </dd>
+                </div>
             </dl>
+
+            <div
+                v-if="can.manageEmployees"
+                class="mt-3 rounded border border-slate-200 p-4 text-sm"
+                aria-labelledby="account-link-heading"
+            >
+                <h3 id="account-link-heading" class="font-medium text-slate-900">
+                    Sign-in account
+                </h3>
+                <template v-if="workspace.summary.user_linked">
+                    <p class="mt-1 text-slate-600">
+                        Linked to <strong>{{ linkedAccountName }}</strong
+                        >. This person's own attendance, leave and payslip pages use this Employee
+                        record. To link a different account, remove this link first.
+                    </p>
+                    <button
+                        type="button"
+                        class="mt-2 rounded border border-red-300 px-3 py-1.5 font-medium text-red-700 hover:bg-red-50"
+                        @click="removeAccountLink"
+                    >
+                        Remove link
+                    </button>
+                    <p v-if="accountError" class="mt-1 text-red-600" role="alert">
+                        {{ accountError }}
+                    </p>
+                </template>
+                <form
+                    v-else-if="workspace.summary.employee_record_status === 'active'"
+                    class="mt-1"
+                    @submit.prevent="submitAccountLink"
+                >
+                    <p class="text-slate-600">
+                        Link the Lycenza account this person signs in with (for example after they
+                        accept a staff invitation), so their own attendance, leave and payslip pages
+                        work.
+                    </p>
+                    <label class="mt-2 block text-slate-600" for="account-search"
+                        >Account (an active member of this School)</label
+                    >
+                    <div class="relative mt-1 flex flex-wrap items-start gap-3">
+                        <div class="relative w-full max-w-md">
+                            <SearchCombobox
+                                id="account-search"
+                                v-model="accountQuery"
+                                placeholder="Search by name"
+                                class="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                :options="accountOptions"
+                                :option-key="(o) => o.userId"
+                                :error="accountForm.errors.account"
+                                @select="pickAccount"
+                            >
+                                <template #option="{ option }">{{ option.name }}</template>
+                            </SearchCombobox>
+                        </div>
+                        <button
+                            type="submit"
+                            :disabled="accountForm.processing || accountForm.account === ''"
+                            class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                        >
+                            Link account
+                        </button>
+                    </div>
+                    <p
+                        v-if="accountError && !accountForm.errors.account"
+                        class="mt-1 text-red-600"
+                        role="alert"
+                    >
+                        {{ accountError }}
+                    </p>
+                </form>
+                <p v-else class="mt-1 text-slate-600">
+                    An archived Employee cannot be linked to an account.
+                </p>
+            </div>
         </section>
 
         <!-- Personal & contact -->
@@ -1016,10 +1201,7 @@ function removeNote(id: string): void {
                                     <button
                                         type="button"
                                         class="underline"
-                                        @click="
-                                            managingAssignmentId =
-                                                managingAssignmentId === a.id ? null : a.id
-                                        "
+                                        @click="toggleManager(a)"
                                     >
                                         {{
                                             managingAssignmentId === a.id ? 'Cancel' : 'Set manager'
@@ -1044,27 +1226,45 @@ function removeNote(id: string): void {
                                 class="mt-3 border-t border-slate-200 pt-3"
                                 @submit.prevent="submitManager(a)"
                             >
-                                <label class="block text-sm text-slate-600"
-                                    >Manager Assignment id (blank clears it)</label
+                                <label class="block text-sm text-slate-600" for="manager-search"
+                                    >Reports to (search by name or employee number)</label
                                 >
-                                <div class="mt-1 flex flex-wrap items-center gap-3">
-                                    <input
-                                        v-model="managerForm.manager_assignment_id"
-                                        type="text"
-                                        placeholder="Assignment UUID"
-                                        class="w-72 rounded border border-slate-300 px-3 py-2 text-sm"
-                                    />
+                                <div class="mt-1 flex flex-wrap items-start gap-3">
+                                    <div class="relative w-full max-w-md">
+                                        <SearchCombobox
+                                            id="manager-search"
+                                            v-model="managerQuery"
+                                            placeholder="Search for the manager"
+                                            class="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                            :options="managerOptions"
+                                            :option-key="(o) => o.assignmentId"
+                                            :error="managerForm.errors.manager_assignment_id"
+                                            @select="pickManager"
+                                        >
+                                            <template #option="{ option }">{{
+                                                option.label
+                                            }}</template>
+                                        </SearchCombobox>
+                                    </div>
                                     <button
                                         type="submit"
-                                        :disabled="managerForm.processing"
+                                        :disabled="
+                                            managerForm.processing ||
+                                            managerForm.manager_assignment_id === ''
+                                        "
                                         class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
                                     >
                                         Save
                                     </button>
+                                    <button
+                                        type="button"
+                                        :disabled="managerForm.processing"
+                                        class="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+                                        @click="clearManager(a)"
+                                    >
+                                        Remove manager
+                                    </button>
                                 </div>
-                                <p class="mt-1 text-sm text-red-600">
-                                    {{ managerForm.errors.manager_assignment_id }}
-                                </p>
                             </form>
 
                             <form

@@ -2122,3 +2122,65 @@ Every comparison is byte-for-byte on the dump, not just a count.
   vs live issuance, adjustment cancel vs payment);
 - explicit FEE.3–FEE.5 School-deletion tests;
 - read-auditing of run items.
+
+## Amendment — UAT-C6 overlap review in assessment runs (2026-10-16)
+
+**Source:** UAT-FIN-20 (Local UAT readiness reassessment, 2026-10-16) and
+owner decision UAT-C6 §2, recorded in
+[ADR 0075 §19](0075-v11-commercial-readiness-programme-contract.md).
+
+**Problem.** A Term 1 run billed 12 Students who already had an ad-hoc
+"Term 1 tuition fee 2026-27" charge. The preview said "0 already
+assessed", because `already_assessed` only knows run-made assessments.
+
+**Owner decision.** When a run finds a charge that may already cover the
+period, it neither excludes the Student automatically nor includes them
+silently. The Student needs an explicit decision first.
+
+**What changes in the §9.2 closed catalogue (additive):**
+- **New preview result `review`**, reason `potential_overlap`: decision
+  required.
+- **New excluded reason `overlap_excluded`**: excluded by an explicit
+  overlap decision.
+- **New execution failure reason `overlap_review_required`**: never
+  charged.
+- **Decision columns** `overlap_decision` (`include` | `exclude`),
+  `overlap_decided_by_user_id` and `overlap_decided_at`, plus
+  `overlap_charge_ids`, the provenance, which is immutable.
+- **Enforcement:** database CHECKs and the phase guard
+  (`2026_12_16_090000`).
+
+**Detection (`FeeRunOverlapDetector`).** A charge is a candidate only when
+it is:
+- uncancelled;
+- for the same Student and academic year;
+- **not** created by any fee assessment (run provenance stays
+  authoritative through `already_assessed` and
+  `fee_assessments_one_live_per_period`).
+
+A candidate overlaps when any of these holds:
+1. it posts to the fee head's income account and is due inside the
+   instalment's billing period;
+2. its description resembles "{head} · {instalment}" (`SimilarCharge`,
+   shared with the UAT-C4 ad-hoc warning);
+3. it has the instalment's amount and due date.
+
+**Behaviour:**
+- **Decisions** (`decideOverlap`) need `finance.fee_assessments.run`, are
+  audited and return the run to `draft`, like a staff exclusion.
+- **Re-preview:**
+  - an exclusion always stands;
+  - an inclusion stands only while no new overlapping charge appeared.
+- **`execute()`:**
+  - refuses while any item is in `review`;
+  - refuses when a charge appeared since the preview;
+  - the executor fails such an item closed as a per-item backstop.
+
+**Unchanged:**
+- run idempotency;
+- D1: no proration;
+- every amount is the instalment amount.
+
+**Rollback.** `down()` restores the FEE.2/FEE.3 checks and guard. It fails
+closed once any row uses the new values, which is the same rule as
+FEE.3's caveat.

@@ -40,7 +40,9 @@ use Illuminate\Support\Collection;
  * is an active asset account and the revenue an active income account of
  * the School. `similarUncancelledCharges()` finds charges the new one looks
  * like, so the form can warn before a Student is billed twice -- a warning
- * only; nothing is refused for resembling another charge.
+ * only; nothing is refused for resembling another charge. UAT-C6: the
+ * resemblance rules live in `SimilarCharge`, shared with fee-run overlap
+ * detection.
  */
 class ChargeAdministrationService
 {
@@ -92,8 +94,6 @@ class ChargeAdministrationService
     {
         $this->authorizeCapabilityFor($actor, 'finance.charges.manage', $school);
 
-        $wanted = self::normalize($description);
-
         return $this->context->withSchool($school, fn () => Charge::query()
             ->where('school_id', $school->id)
             ->where('student_id', $studentId)
@@ -102,14 +102,8 @@ class ChargeAdministrationService
             ->orderByDesc('created_at')
             ->limit(500)
             ->get()
-            ->filter(function (Charge $c) use ($wanted, $amount, $dueDate) {
-                $existing = self::normalize($c->description);
-                $shorter = min(strlen($existing), strlen($wanted));
-
-                return $existing === $wanted
-                    || ($shorter >= 6 && (str_contains($existing, $wanted) || str_contains($wanted, $existing)))
-                    || ($dueDate !== null && $c->due_date?->toDateString() === $dueDate && bccomp($c->amount, $amount->amount(), 2) === 0);
-            })
+            ->filter(fn (Charge $c) => SimilarCharge::descriptionsResemble($c->description, $description)
+                || SimilarCharge::sameAmountAndDueDate($c, $amount->amount(), $dueDate))
             ->take(10)
             ->map(fn (Charge $c) => [
                 'chargeId' => $c->id,
@@ -119,11 +113,6 @@ class ChargeAdministrationService
                 'dueDate' => $c->due_date?->toDateString(),
                 'assessedOn' => $c->created_at->copy()->setTimezone($school->timezone)->toDateString(),
             ])->values()->all());
-    }
-
-    private static function normalize(string $description): string
-    {
-        return (string) preg_replace('/[^a-z0-9]+/', '', mb_strtolower($description));
     }
 
     /** @return Collection<int, string> */

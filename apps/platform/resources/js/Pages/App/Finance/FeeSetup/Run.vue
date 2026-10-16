@@ -2,6 +2,7 @@
 import { router, usePage } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted } from 'vue';
 import Pagination from '../../../../Components/Pagination.vue';
+import { formatCalendarDate } from '../../../../datetime';
 import { formatMoney } from '../../../../money';
 
 interface Run {
@@ -17,6 +18,7 @@ interface Run {
         excludedCount: number;
         blockedCount: number;
         alreadyAssessedCount: number;
+        decisionRequiredCount?: number;
     };
     execution: {
         succeededCount: number;
@@ -44,6 +46,19 @@ interface Item {
     executionStatus: string | null;
     failureReason: string | null;
     feeAssessmentId: string | null;
+    overlapDecision: 'include' | 'exclude' | null;
+    overlapCharges: OverlapCharge[];
+    proposedDescription: string | null;
+    proposedDueDate: string | null;
+}
+
+interface OverlapCharge {
+    description: string;
+    amount: string;
+    currency: string;
+    dueDate: string | null;
+    cancelled: boolean;
+    outstanding: string | null;
 }
 
 interface Paginated<T> {
@@ -71,6 +86,8 @@ const reasonText: Record<string, string> = {
     enrollment_cancelled: 'Enrollment cancelled',
     student_inactive: 'Student inactive',
     staff_excluded: 'Excluded by staff',
+    potential_overlap: 'Potential existing charge — decision required',
+    overlap_excluded: 'Excluded: an existing charge covers this period',
     no_structure: 'No fee structure',
     head_inactive: 'Fee head inactive',
     account_invalid: 'Ledger account invalid',
@@ -79,6 +96,35 @@ const reasonText: Record<string, string> = {
 function post(url: string, confirmText?: string, data: Record<string, unknown> = {}): void {
     if (confirmText && !window.confirm(confirmText)) return;
     router.post(url, data as never, { preserveScroll: true });
+}
+
+const previewText: Record<string, string> = {
+    ready: 'Ready',
+    already_assessed: 'Already assessed',
+    review: 'Decision required',
+    excluded: 'Excluded',
+    blocked: 'Blocked',
+};
+
+const failureText: Record<string, string> = {
+    overlap_review_required: 'A charge that may cover this period appeared; not charged',
+};
+
+// UAT-C6 (UAT-FIN-20): no automatic exclusion, no silent inclusion.
+const decisionsRequired = computed(() => props.run.preview.decisionRequiredCount ?? 0);
+
+function decide(i: Item, decision: 'include' | 'exclude'): void {
+    const who = i.studentName ?? 'this Student';
+    const text =
+        decision === 'include'
+            ? `Include ${who} anyway? They will be charged ${formatMoney(i.amount, i.currency)} for this period in addition to the existing charge shown. The run must be previewed again.`
+            : `Exclude ${who} from this run? They will not be charged by this run. The run must be previewed again.`;
+    post(`${base.value}/items/${i.id}/decide`, text, { decision });
+}
+
+// Exact decimal strings only (never a float, CLAUDE.md rule 9).
+function isZero(amount: string): boolean {
+    return /^0+(\.0+)?$/.test(amount);
 }
 
 function filter(result: string): void {
@@ -125,6 +171,14 @@ onBeforeUnmount(() => clearInterval(timer));
                     {{ run.preview.blockedCount }} blocked ·
                     {{ run.preview.alreadyAssessedCount }} already assessed
                 </p>
+                <p v-if="decisionsRequired > 0" class="mt-1 font-medium text-amber-800">
+                    {{ decisionsRequired }}
+                    {{ decisionsRequired === 1 ? 'Student needs' : 'Students need' }} a decision:
+                    they already have a charge that may cover this period.
+                    <button type="button" class="underline" @click="filter('review')">
+                        Show them
+                    </button>
+                </p>
             </div>
             <div
                 v-if="!isOpen && run.status !== 'cancelled'"
@@ -157,7 +211,7 @@ onBeforeUnmount(() => clearInterval(timer));
                 {{ run.previewedAt ? 'Preview again' : 'Preview' }}
             </button>
             <button
-                v-if="run.status === 'previewed' && run.previewIsCurrent"
+                v-if="run.status === 'previewed' && run.previewIsCurrent && decisionsRequired === 0"
                 type="button"
                 class="rounded bg-emerald-700 px-3 py-1.5 text-white"
                 @click="
@@ -169,6 +223,12 @@ onBeforeUnmount(() => clearInterval(timer));
             >
                 Execute
             </button>
+            <p
+                v-if="run.status === 'previewed' && run.previewIsCurrent && decisionsRequired > 0"
+                class="self-center text-amber-800"
+            >
+                Decide for every Student who needs a decision, preview again, then execute.
+            </p>
             <button
                 v-if="run.status === 'executing'"
                 type="button"
@@ -196,6 +256,7 @@ onBeforeUnmount(() => clearInterval(timer));
                     @change="filter(($event.target as HTMLSelectElement).value)"
                 >
                     <option value="">All</option>
+                    <option value="review">Decision required</option>
                     <option value="ready">Ready</option>
                     <option value="excluded">Excluded</option>
                     <option value="blocked">Blocked</option>
@@ -246,22 +307,76 @@ onBeforeUnmount(() => clearInterval(timer));
                             >
                         </td>
                         <td class="py-2">
-                            <span class="capitalize">{{
-                                i.previewResult.replaceAll('_', ' ')
-                            }}</span>
+                            <span
+                                :class="
+                                    i.previewResult === 'review' ? 'font-medium text-amber-800' : ''
+                                "
+                                >{{ previewText[i.previewResult] ?? i.previewResult }}</span
+                            >
                             <span v-if="i.reason" class="block text-xs text-slate-500">{{
                                 reasonText[i.reason] ?? i.reason
                             }}</span>
+                            <span
+                                v-if="i.overlapDecision === 'include'"
+                                class="block text-xs text-slate-500"
+                                >Included anyway (decided)</span
+                            >
+                            <div
+                                v-if="i.overlapCharges.length > 0"
+                                class="mt-1 rounded bg-amber-50 p-2 text-xs text-slate-700"
+                            >
+                                <p class="font-medium">Existing charge(s):</p>
+                                <ul class="mt-0.5 list-disc pl-4">
+                                    <li v-for="(c, n) in i.overlapCharges" :key="n">
+                                        {{ c.description }} ·
+                                        {{ formatMoney(c.amount, c.currency) }} · due
+                                        {{ formatCalendarDate(c.dueDate) }}
+                                        <template v-if="c.cancelled"> · cancelled</template>
+                                        <template v-else-if="c.outstanding !== null">
+                                            ·
+                                            {{
+                                                isZero(c.outstanding)
+                                                    ? 'paid'
+                                                    : `${formatMoney(c.outstanding, c.currency)} still owed`
+                                            }}
+                                        </template>
+                                    </li>
+                                </ul>
+                                <p v-if="i.proposedDescription" class="mt-1">
+                                    This run would add: {{ i.proposedDescription }} ·
+                                    {{ formatMoney(i.amount, i.currency) }} · due
+                                    {{ formatCalendarDate(i.proposedDueDate) }}
+                                </p>
+                            </div>
                         </td>
                         <td class="py-2">
                             <span v-if="i.executionStatus" class="capitalize">{{
                                 i.executionStatus.replaceAll('_', ' ')
                             }}</span>
                             <span v-if="i.failureReason" class="block text-xs text-red-700">{{
-                                i.failureReason.replaceAll('_', ' ')
+                                failureText[i.failureReason] ?? i.failureReason.replaceAll('_', ' ')
                             }}</span>
                         </td>
                         <td class="py-2 text-right text-xs">
+                            <div
+                                v-if="canRun && isOpen && i.previewResult === 'review'"
+                                class="flex flex-col items-end gap-1"
+                            >
+                                <button
+                                    type="button"
+                                    class="rounded border border-slate-300 px-2 py-1"
+                                    @click="decide(i, 'include')"
+                                >
+                                    Include anyway
+                                </button>
+                                <button
+                                    type="button"
+                                    class="rounded border border-slate-300 px-2 py-1"
+                                    @click="decide(i, 'exclude')"
+                                >
+                                    Exclude from this run
+                                </button>
+                            </div>
                             <button
                                 v-if="canRun && isOpen && i.previewResult === 'ready'"
                                 type="button"

@@ -7477,7 +7477,7 @@ paths:
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
-        - { name: preview_result, in: query, required: false, schema: { type: string, enum: [ready, already_assessed, excluded, blocked] } }
+        - { name: preview_result, in: query, required: false, schema: { type: string, enum: [ready, already_assessed, review, excluded, blocked] } }
         - { name: execution_status, in: query, required: false, schema: { type: string, enum: [pending, succeeded, skipped_already_assessed, failed] } }
         - { name: page, in: query, required: false, schema: { type: integer, minimum: 1 } }
       responses:
@@ -7565,7 +7565,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "409":
-          description: FEE_ASSESSMENT_RUN_STALE_PREVIEW or FEE_ASSESSMENT_RUN_ILLEGAL_STATE.
+          description: FEE_ASSESSMENT_RUN_STALE_PREVIEW, FEE_ASSESSMENT_RUN_ILLEGAL_STATE, FEE_ASSESSMENT_RUN_OVERLAP_UNRESOLVED (an item still needs an include/exclude decision) or FEE_ASSESSMENT_RUN_OVERLAP_CHANGED (a charge that may cover the period appeared after the preview; preview again). Nothing is charged.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -7666,6 +7666,54 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "409":
           description: FEE_ASSESSMENT_RUN_ITEM_NOT_EXCLUDABLE or FEE_ASSESSMENT_RUN_ILLEGAL_STATE.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/fee-assessment-runs/{runId}/items/{itemId}/decide:
+    post:
+      operationId: decideFeeAssessmentRunItem
+      summary: >
+        UAT-C6: records the explicit decision on one "review" item (its Student already has a charge that may cover the period) -- include (the item becomes ready) or exclude (excluded, reason overlap_excluded). Actor and time are recorded and audited. Returns the run to draft, so it must be previewed again. A run never executes while an item is still in review. Requires finance.fee_assessments.run.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: itemId, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [include, exclude] }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/FeeAssessmentRun" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking finance.fee_assessments.run in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: FEE_ASSESSMENT_RUN_NOT_FOUND or FEE_ASSESSMENT_RUN_ITEM_NOT_FOUND.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: FEE_ASSESSMENT_RUN_ITEM_NOT_DECIDABLE or FEE_ASSESSMENT_RUN_ILLEGAL_STATE.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed (decision missing or not include/exclude).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -14946,6 +14994,7 @@ components:
             excludedCount: { type: integer }
             blockedCount: { type: integer }
             alreadyAssessedCount: { type: integer }
+            decisionRequiredCount: { type: integer, description: "UAT-C6: items still waiting for an include/exclude decision (getFeeAssessmentRun only)." }
         execution:
           type: object
           required: [succeededCount, skippedCount, failedCount, assessedAmount]
@@ -14961,7 +15010,7 @@ components:
         cancelledAt: { type: string, format: date-time, nullable: true }
     FeeAssessmentRunItem:
       type: object
-      required: [id, studentId, studentEnrollmentId, campusId, enrollmentStartsOn, feeStructureLineId, feeHeadId, billingPeriodKey, amount, currency, previewResult, reason, excludedAt, executionStatus, failureReason, feeAssessmentId, executedAt]
+      required: [id, studentId, studentEnrollmentId, campusId, enrollmentStartsOn, feeStructureLineId, feeHeadId, billingPeriodKey, amount, currency, previewResult, reason, excludedAt, executionStatus, failureReason, feeAssessmentId, executedAt, overlapChargeIds, overlapDecision, overlapDecidedAt]
       properties:
         id: { type: string, format: uuid }
         studentId: { type: string, format: uuid }
@@ -14973,13 +15022,16 @@ components:
         billingPeriodKey: { type: string }
         amount: { type: string, pattern: "^\\d{1,12}(\\.\\d{1,2})?$", description: The instalment amount -- never prorated. }
         currency: { type: string, example: INR }
-        previewResult: { type: string, enum: [ready, already_assessed, excluded, blocked] }
-        reason: { type: string, nullable: true, enum: [optional_not_selected, period_before_enrollment, enrollment_cancelled, student_inactive, staff_excluded, no_structure, head_inactive, account_invalid, null] }
+        previewResult: { type: string, enum: [ready, already_assessed, review, excluded, blocked], description: "review (UAT-C6) -- the Student already has a charge that may cover this period; an explicit include/exclude decision is required before the run can execute." }
+        reason: { type: string, nullable: true, enum: [optional_not_selected, period_before_enrollment, enrollment_cancelled, student_inactive, staff_excluded, overlap_excluded, potential_overlap, no_structure, head_inactive, account_invalid, null] }
         excludedAt: { type: string, format: date-time, nullable: true }
         executionStatus: { type: string, nullable: true, enum: [pending, succeeded, skipped_already_assessed, failed, null] }
-        failureReason: { type: string, nullable: true, enum: [structure_not_active, structure_not_resolved, enrollment_not_qualifying, student_inactive, optional_not_selected, head_inactive, account_invalid, error, concession_exceeds_outstanding, concession_account_invalid, null] }
+        failureReason: { type: string, nullable: true, enum: [structure_not_active, structure_not_resolved, enrollment_not_qualifying, student_inactive, optional_not_selected, head_inactive, account_invalid, error, concession_exceeds_outstanding, concession_account_invalid, overlap_review_required, null] }
         feeAssessmentId: { type: string, format: uuid, nullable: true }
         executedAt: { type: string, format: date-time, nullable: true }
+        overlapChargeIds: { type: array, items: { type: string, format: uuid }, description: "UAT-C6: uncancelled charges (not created by a fee assessment) that may already cover this period, seen at preview. Empty when none." }
+        overlapDecision: { type: string, nullable: true, enum: [include, exclude, null] }
+        overlapDecidedAt: { type: string, format: date-time, nullable: true }
     FeeAssessment:
       type: object
       required: [id, studentId, academicYearId, feeHeadId, billingPeriodKey, chargeId, feeAssessmentRunId, voidedAt]

@@ -1012,3 +1012,70 @@ It changes no code, decision or permission.
 
 **Recommended next:** UAT-C6, pre-staging product corrections, before
 UAT-C5. It needs owner authorisation and is not started.
+
+## 19. UAT-C6 — Pre-Staging Product Corrections (2026-10-16)
+
+**Authority.** The owner approved UAT-C6 after the readiness reassessment
+(§18). It closes the product items that outranked UAT-C5 (DOC-01).
+
+### 19.1 Owner decision: fee-run overlap (UAT-FIN-20)
+
+**Rule:** no automatic exclusion and no silent inclusion. A Student whose
+existing charge may cover the run's period needs an explicit **Include
+anyway** or **Exclude from this run** before the run can execute.
+
+**No bulk "include all".**
+
+**Why automatic exclusion was rejected:** it would under-bill whenever the
+existing charge is a different or partial charge.
+
+### 19.2 What was built
+
+**RA-LIB-DATES** (the C4 regression):
+- Library calendar dates use a new `formatCalendarDate()`. It never builds
+  a Date and never applies a timezone.
+- Instants keep `formatDateTime()`.
+- The fee-intent "recorded" value (Hostel/Transport fees) is now sent as an
+  instant.
+- `LibraryCalendarDateDisplayTest` guards it.
+
+**UAT-STF-05:**
+- **Where:** Employee page → Sign-in account (`HrEmployeeAccountLinkController`).
+- **Write path:** the governed `EmployeeService::linkUser()` /
+  `unlinkUser()` (ADR 0063 §6).
+- **Search:** names only (`EmployeePickerReadService`). An account whose
+  sign-in email matches the Employee's work email is ranked first on the
+  server; that match is never returned (security-review minimization).
+- **Relinking:** never implicit.
+
+**UAT-HR-23:**
+- The manager is picked by name from current assignments
+  (`managerCandidates`), with no UUID field.
+- `ReportingHierarchyService` still decides.
+- Refusals carry no identifiers.
+
+**UAT-FIN-20:**
+- A new `review` item state, explicit `decideOverlap()`, and
+  re-detection at `execute()` plus a per-item backstop.
+- One additive migration (`2026_12_16_090000`), documented in the
+  [ADR 0062 amendment](0062-fee-structures-assessment-concessions-receipts-contract.md).
+- The C4 ad-hoc warning and the fee run share `SimilarCharge`.
+
+### 19.3 Scope kept
+
+**No new capability.** Existing permissions:
+- linking: `hr.employees.manage`;
+- reporting manager: `hr.employees.assignments.manage`;
+- run decisions: `finance.fee_assessments.run`;
+- run reads: `finance.charges.view`.
+
+**Unchanged:**
+- run idempotency;
+- proration (D1);
+- Library loan semantics.
+
+**Not in C6:**
+- UAT-C5;
+- the other P2/S3 items (§18);
+- staging (PPR);
+- E16.

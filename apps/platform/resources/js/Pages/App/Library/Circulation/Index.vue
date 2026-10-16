@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatDateTime } from '../../../../datetime';
+import { formatCalendarDate } from '../../../../datetime';
 import { router } from '@inertiajs/vue3';
 import Pagination from '../../../../Components/Pagination.vue';
 import EmptyState from '../../../../Components/EmptyState.vue';
@@ -152,11 +152,11 @@ function checkIn(loanId: string): void {
                                     loan.isOverdue ? 'font-medium text-red-600' : 'text-slate-600'
                                 "
                             >
-                                {{ formatDateTime(loan.dueAt)
+                                {{ formatCalendarDate(loan.dueAt)
                                 }}<span v-if="loan.isOverdue"> (overdue)</span>
                             </td>
                             <td v-if="status === 'returned'" class="pr-3 py-3 text-slate-600">
-                                {{ formatDateTime(loan.returnedAt) }}
+                                {{ formatCalendarDate(loan.returnedAt) }}
                             </td>
                             <td class="pr-3 py-3 text-right">
                                 <button

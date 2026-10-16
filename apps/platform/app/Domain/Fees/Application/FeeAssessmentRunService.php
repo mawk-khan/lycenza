@@ -3,11 +3,14 @@
 namespace App\Domain\Fees\Application;
 
 use App\Domain\Fees\Application\Exceptions\FeeAssessmentRunIllegalStateException;
+use App\Domain\Fees\Application\Exceptions\FeeAssessmentRunItemNotDecidableException;
 use App\Domain\Fees\Application\Exceptions\FeeAssessmentRunItemNotExcludableException;
 use App\Domain\Fees\Application\Exceptions\FeeAssessmentRunItemNotFoundException;
 use App\Domain\Fees\Application\Exceptions\FeeAssessmentRunNotFoundException;
 use App\Domain\Fees\Application\Exceptions\FeeAssessmentRunOpenConflictException;
+use App\Domain\Fees\Application\Exceptions\FeeAssessmentRunOverlapChangedException;
 use App\Domain\Fees\Application\Exceptions\FeeAssessmentRunStalePreviewException;
+use App\Domain\Fees\Application\Exceptions\FeeAssessmentRunUnresolvedOverlapException;
 use App\Domain\Fees\Application\Exceptions\InvalidFeeAssessmentRunException;
 use App\Domain\Fees\Domain\FeeCode;
 use App\Domain\Fees\Events\FeeAssessmentRunCompleted;
@@ -56,6 +59,17 @@ use Symfony\Component\Uid\UuidV7;
  *   selection), `head_inactive`, `account_invalid`, `already_assessed`
  *   (advisory -- the database key decides at execution), a carried-over
  *   `staff_excluded`, else `ready` at the instalment's full amount.
+ *
+ * UAT-C6 (UAT-FIN-20, ADR 0075 section 19; owner decision: no automatic
+ * exclusion, no silent inclusion): a would-be-ready item whose Student has
+ * a charge that MAY already cover the period (`FeeRunOverlapDetector`) is
+ * `review` (`potential_overlap`) until someone holding the run capability
+ * decides it -- `decideOverlap()`: include anyway (ready) or exclude from
+ * this run (`overlap_excluded`). Decisions carry over a re-preview (an
+ * include only while no new overlapping charge appeared). A run never
+ * executes with an undecided item, and `execute()` re-detects: any change
+ * since the preview refuses before anything is charged; the executor
+ * re-checks each item once more.
  */
 class FeeAssessmentRunService
 {
@@ -69,6 +83,7 @@ class FeeAssessmentRunService
         private readonly LedgerService $ledger,
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly FeeRunOverlapDetector $overlaps,
     ) {}
 
     public function create(School $school, string $feeStructureId, string $billingPeriodKey, User $actor): FeeAssessmentRun
@@ -141,7 +156,13 @@ class FeeAssessmentRunService
                     ->get()
                     ->keyBy(fn (FeeAssessmentRunItem $i) => $i->student_id.'|'.$i->fee_structure_line_id);
 
-                $rows = $this->computeItems($school, $run, $structure, $carried);
+                $decided = FeeAssessmentRunItem::query()
+                    ->where('fee_assessment_run_id', $run->id)
+                    ->whereNotNull('overlap_decision')
+                    ->get()
+                    ->keyBy(fn (FeeAssessmentRunItem $i) => $i->student_id.'|'.$i->fee_structure_line_id);
+
+                $rows = $this->computeItems($school, $run, $structure, $carried, $decided);
 
                 FeeAssessmentRunItem::query()->where('fee_assessment_run_id', $run->id)->delete();
                 foreach (array_chunk($rows, 500) as $chunk) {
@@ -165,6 +186,66 @@ class FeeAssessmentRunService
                     'excludedCount' => $totals['excluded_count'],
                     'blockedCount' => $totals['blocked_count'],
                     'alreadyAssessedCount' => $totals['already_assessed_count'],
+                    'decisionRequiredCount' => $this->reviewCount($run),
+                ]);
+
+                return $run->refresh();
+            });
+        });
+    }
+
+    /**
+     * UAT-C6 (UAT-FIN-20): the explicit decision on one `review` item --
+     * include anyway (it becomes `ready`) or exclude from this run
+     * (`excluded` / `overlap_excluded`). Recorded with actor and time,
+     * audited, and like a staff exclusion it returns the run to `draft`, so
+     * a fresh preview is required before execution.
+     */
+    public function decideOverlap(School $school, string $runId, string $itemId, string $decision, User $actor): FeeAssessmentRun
+    {
+        $this->authorizeCapabilityFor($actor, self::CAPABILITY, $school);
+
+        if (! in_array($decision, [FeeAssessmentRunItem::DECISION_INCLUDE, FeeAssessmentRunItem::DECISION_EXCLUDE], true)) {
+            throw new InvalidFeeAssessmentRunException('decision', 'Choose "Include anyway" or "Exclude from this run".');
+        }
+
+        return $this->context->withSchool($school, function () use ($school, $runId, $itemId, $decision, $actor) {
+            return DB::transaction(function () use ($school, $runId, $itemId, $decision, $actor) {
+                $run = $this->lockRun($school, $runId);
+
+                if (! in_array($run->status, [FeeAssessmentRun::STATUS_DRAFT, FeeAssessmentRun::STATUS_PREVIEWED], true)) {
+                    throw new FeeAssessmentRunIllegalStateException($run->status, 'decide an item');
+                }
+
+                $item = FeeAssessmentRunItem::query()->where('fee_assessment_run_id', $run->id)->lockForUpdate()->find($itemId);
+                if ($item === null) {
+                    throw new FeeAssessmentRunItemNotFoundException($itemId);
+                }
+
+                if ($item->preview_result !== FeeAssessmentRunItem::RESULT_REVIEW || $item->overlap_decision !== null) {
+                    throw new FeeAssessmentRunItemNotDecidableException;
+                }
+
+                $include = $decision === FeeAssessmentRunItem::DECISION_INCLUDE;
+                $item->forceFill([
+                    'preview_result' => $include ? FeeAssessmentRunItem::RESULT_READY : FeeAssessmentRunItem::RESULT_EXCLUDED,
+                    'reason' => $include ? null : FeeAssessmentRunItem::REASON_OVERLAP_EXCLUDED,
+                    'overlap_decision' => $decision,
+                    'overlap_decided_by_user_id' => $actor->id,
+                    'overlap_decided_at' => now(),
+                ])->save();
+
+                $run->forceFill([
+                    'status' => FeeAssessmentRun::STATUS_DRAFT,
+                    'configuration_version' => $run->configuration_version + 1,
+                ])->save();
+
+                $this->audit->school($school, $include ? 'fee_assessment_run.item_overlap_included' : 'fee_assessment_run.item_overlap_excluded', actor: $actor, subject: $run, metadata: [
+                    'runId' => $run->id,
+                    'itemId' => $item->id,
+                    'studentId' => $item->student_id,
+                    'feeStructureLineId' => $item->fee_structure_line_id,
+                    'overlapChargeCount' => count($item->overlap_charge_ids ?? []),
                 ]);
 
                 return $run->refresh();
@@ -199,7 +280,15 @@ class FeeAssessmentRunService
                     throw new FeeAssessmentRunItemNotExcludableException($item->id);
                 }
 
-                $item->forceFill([
+                // UAT-C6: excluding an "include anyway" item changes that
+                // overlap decision to "exclude" (recorded, carried over).
+                $item->forceFill($item->overlap_decision === FeeAssessmentRunItem::DECISION_INCLUDE ? [
+                    'preview_result' => FeeAssessmentRunItem::RESULT_EXCLUDED,
+                    'reason' => FeeAssessmentRunItem::REASON_OVERLAP_EXCLUDED,
+                    'overlap_decision' => FeeAssessmentRunItem::DECISION_EXCLUDE,
+                    'overlap_decided_by_user_id' => $actor->id,
+                    'overlap_decided_at' => now(),
+                ] : [
                     'preview_result' => FeeAssessmentRunItem::RESULT_EXCLUDED,
                     'reason' => FeeAssessmentRunItem::REASON_STAFF_EXCLUDED,
                     'excluded_by_user_id' => $actor->id,
@@ -242,6 +331,17 @@ class FeeAssessmentRunService
 
                 if ($run->status !== FeeAssessmentRun::STATUS_PREVIEWED) {
                     throw new FeeAssessmentRunIllegalStateException($run->status, 'execute');
+                }
+
+                // UAT-C6 (UAT-FIN-20): never with an undecided Student, and
+                // never through a preview a new possibly-overlapping charge
+                // has made stale. Refused before anything is charged.
+                $undecided = $this->reviewCount($run);
+                if ($undecided > 0) {
+                    throw new FeeAssessmentRunUnresolvedOverlapException($undecided);
+                }
+                if ($this->overlapsChangedSincePreview($school, $run)) {
+                    throw new FeeAssessmentRunOverlapChangedException;
                 }
 
                 $claimed = FeeAssessmentRun::query()
@@ -426,9 +526,10 @@ class FeeAssessmentRunService
 
     /**
      * @param  Collection<string, FeeAssessmentRunItem>  $carried  staff exclusions keyed "studentId|lineId"
+     * @param  Collection<string, FeeAssessmentRunItem>  $decided  overlap decisions keyed "studentId|lineId" (UAT-C6)
      * @return list<array<string, mixed>>
      */
-    private function computeItems(School $school, FeeAssessmentRun $run, FeeStructure $structure, Collection $carried): array
+    private function computeItems(School $school, FeeAssessmentRun $run, FeeStructure $structure, Collection $carried, Collection $decided): array
     {
         $installments = $this->installmentsFor($structure, $run->billing_period_key);
         $lines = FeeStructureLine::query()->whereIn('id', $installments->pluck('fee_structure_line_id'))->get()->keyBy('id');
@@ -464,6 +565,8 @@ class FeeAssessmentRunService
             ->whereIn('fee_head_id', $headIds)
             ->get()
             ->mapWithKeys(fn (FeeAssessment $a) => [$a->student_id.'|'.$a->fee_head_id => true]);
+
+        $pool = $this->overlaps->pool($structure->academic_year_id, $studentIds);
 
         $now = now();
         $rows = [];
@@ -502,6 +605,27 @@ class FeeAssessmentRunService
                     [$result, $reason] = [FeeAssessmentRunItem::RESULT_EXCLUDED, FeeAssessmentRunItem::REASON_STAFF_EXCLUDED];
                 }
 
+                // UAT-C6 (UAT-FIN-20): a possibly overlapping charge needs an
+                // explicit decision. An "exclude" stands; an "include" stands
+                // only while every overlapping charge is one it was made for.
+                [$overlapIds, $decision] = [null, null];
+                if ($result === null) {
+                    $found = $this->overlaps->overlapping($pool->get($studentId, collect()), $head, $installment);
+                    $prior = $decided->get($studentId.'|'.$line->id);
+
+                    if ($prior?->overlap_decision === FeeAssessmentRunItem::DECISION_EXCLUDE) {
+                        [$result, $reason, $decision] = [FeeAssessmentRunItem::RESULT_EXCLUDED, FeeAssessmentRunItem::REASON_OVERLAP_EXCLUDED, $prior];
+                        $overlapIds = $found !== [] ? $found : $prior->overlap_charge_ids;
+                    } elseif ($found !== []) {
+                        $overlapIds = $found;
+                        if ($prior?->overlap_decision === FeeAssessmentRunItem::DECISION_INCLUDE && array_diff($found, $prior->overlap_charge_ids ?? []) === []) {
+                            $decision = $prior;
+                        } else {
+                            [$result, $reason] = [FeeAssessmentRunItem::RESULT_REVIEW, FeeAssessmentRunItem::REASON_POTENTIAL_OVERLAP];
+                        }
+                    }
+                }
+
                 $rows[] = [
                     'id' => (string) new UuidV7,
                     'school_id' => $school->id,
@@ -525,6 +649,10 @@ class FeeAssessmentRunService
                     'failure_reason' => null,
                     'fee_assessment_id' => null,
                     'executed_at' => null,
+                    'overlap_charge_ids' => $overlapIds === null ? null : json_encode($overlapIds),
+                    'overlap_decision' => $decision?->overlap_decision,
+                    'overlap_decided_by_user_id' => $decision?->overlap_decided_by_user_id,
+                    'overlap_decided_at' => $decision?->overlap_decided_at,
                     'created_at' => $now,
                     'updated_at' => $now,
                 ];
@@ -565,6 +693,48 @@ class FeeAssessmentRunService
         }
 
         return [null, null, null];
+    }
+
+    /** UAT-C6: items still waiting for an Include/Exclude decision. */
+    private function reviewCount(FeeAssessmentRun $run): int
+    {
+        return FeeAssessmentRunItem::query()
+            ->where('fee_assessment_run_id', $run->id)
+            ->where('preview_result', FeeAssessmentRunItem::RESULT_REVIEW)
+            ->count();
+    }
+
+    /**
+     * UAT-C6 (UAT-FIN-20): does any ready item now see a possibly
+     * overlapping charge that its preview (and any include decision) did not
+     * cover -- e.g. an ad-hoc charge assessed after the preview?
+     */
+    private function overlapsChangedSincePreview(School $school, FeeAssessmentRun $run): bool
+    {
+        $items = FeeAssessmentRunItem::query()
+            ->where('fee_assessment_run_id', $run->id)
+            ->where('preview_result', FeeAssessmentRunItem::RESULT_READY)
+            ->get();
+
+        if ($items->isEmpty()) {
+            return false;
+        }
+
+        $structure = FeeStructure::query()->where('school_id', $school->id)->findOrFail($run->fee_structure_id);
+        $installments = FeeStructureInstallment::query()->whereIn('id', $items->pluck('fee_structure_installment_id')->unique())->get()->keyBy('id');
+        $heads = FeeHead::query()->whereIn('id', $items->pluck('fee_head_id')->unique())->get()->keyBy('id');
+        $pool = $this->overlaps->pool($structure->academic_year_id, $items->pluck('student_id')->unique()->values()->all());
+
+        foreach ($items as $item) {
+            $found = $this->overlaps->overlapping($pool->get($item->student_id, collect()), $heads[$item->fee_head_id], $installments[$item->fee_structure_installment_id]);
+            $covered = $item->overlap_decision === FeeAssessmentRunItem::DECISION_INCLUDE ? ($item->overlap_charge_ids ?? []) : [];
+
+            if (array_diff($found, $covered) !== []) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** @return array{ready_count: int, ready_amount: string, excluded_count: int, blocked_count: int, already_assessed_count: int} */

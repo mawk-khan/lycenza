@@ -62,6 +62,13 @@ use Throwable;
  * the savepoint rolls back the charge, the assessment and any adjustment
  * already posted, and the item fails closed
  * (`concession_exceeds_outstanding` / `concession_account_invalid`).
+ *
+ * UAT-C6 (UAT-FIN-20, ADR 0075 section 19): last, the item's Student is
+ * checked once more for a charge that may cover the period. One that no
+ * explicit "include anyway" decision covered fails the item closed
+ * (`overlap_review_required`) -- nothing is charged; a new run for the period
+ * brings that Student back for a decision. `execute()` already refused a
+ * run whose preview this made stale; this is the per-item backstop.
  */
 class FeeAssessmentItemExecutor
 {
@@ -75,6 +82,7 @@ class FeeAssessmentItemExecutor
         private readonly FeeStructureResolver $resolver,
         private readonly SchoolOperationalGuard $operational,
         private readonly TenantContext $context,
+        private readonly FeeRunOverlapDetector $overlaps,
     ) {}
 
     /**
@@ -188,6 +196,16 @@ class FeeAssessmentItemExecutor
             return $this->fail($item, FeeAssessmentRunItem::FAIL_ACCOUNT_INVALID);
         }
 
+        $found = $this->overlaps->overlapping(
+            $this->overlaps->pool($structure->academic_year_id, [$item->student_id])->get($item->student_id, collect()),
+            $head,
+            $installment,
+        );
+        $covered = $item->overlap_decision === FeeAssessmentRunItem::DECISION_INCLUDE ? ($item->overlap_charge_ids ?? []) : [];
+        if (array_diff($found, $covered) !== []) {
+            return $this->fail($item, FeeAssessmentRunItem::FAIL_OVERLAP_REVIEW_REQUIRED);
+        }
+
         $actor = $run->executed_by_user_id === null ? null : User::query()->find($run->executed_by_user_id);
 
         try {
@@ -195,7 +213,7 @@ class FeeAssessmentItemExecutor
                 $charge = $this->charges->assess($school, new AssessChargeData(
                     studentId: $item->student_id,
                     academicYearId: $structure->academic_year_id,
-                    description: mb_substr("{$head->name} · {$installment->label}", 0, 255),
+                    description: FeeRunOverlapDetector::proposedDescription($head, $installment),
                     amount: Money::of((string) $installment->amount, 'INR'),
                     receivableLedgerAccountId: $head->receivable_ledger_account_id,
                     revenueLedgerAccountId: $head->revenue_ledger_account_id,

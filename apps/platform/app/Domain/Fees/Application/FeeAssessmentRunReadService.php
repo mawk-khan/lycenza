@@ -3,6 +3,7 @@
 namespace App\Domain\Fees\Application;
 
 use App\Domain\Fees\Application\Exceptions\FeeAssessmentRunNotFoundException;
+use App\Domain\Fees\Infrastructure\Charge;
 use App\Domain\Fees\Infrastructure\FeeAssessmentRun;
 use App\Domain\Fees\Infrastructure\FeeAssessmentRunItem;
 use App\Models\School;
@@ -70,5 +71,46 @@ class FeeAssessmentRunReadService
             ->orderBy('student_id')
             ->orderBy('fee_structure_line_id')
             ->paginate($perPage, ['*'], 'page', $page));
+    }
+
+    /** UAT-C6 (UAT-FIN-20): how many items still need an Include/Exclude decision. */
+    public function decisionRequiredCount(School $school, string $runId, User $actor): int
+    {
+        $run = $this->getRun($school, $runId, $actor);
+
+        return $this->context->withSchool($school, fn () => FeeAssessmentRunItem::query()
+            ->where('fee_assessment_run_id', $run->id)
+            ->where('preview_result', FeeAssessmentRunItem::RESULT_REVIEW)
+            ->count());
+    }
+
+    /**
+     * UAT-C6 (UAT-FIN-20): the charges behind overlap reviews, as the
+     * decision needs them -- this School's only (tenant scope), read under
+     * the same `finance.charges.view`.
+     *
+     * @param  list<string>  $chargeIds
+     * @return array<string, array{description: string, amount: string, currency: string, dueDate: string|null, cancelled: bool}>
+     */
+    public function overlapCharges(School $school, array $chargeIds, User $actor): array
+    {
+        $this->authorizeCapabilityFor($actor, 'finance.charges.view', $school);
+
+        if ($chargeIds === []) {
+            return [];
+        }
+
+        return $this->context->withSchool($school, fn () => Charge::query()
+            ->where('school_id', $school->id)
+            ->whereIn('id', array_values(array_unique($chargeIds)))
+            ->get()
+            ->mapWithKeys(fn (Charge $c) => [$c->id => [
+                'description' => $c->description,
+                'amount' => (string) $c->amount,
+                'currency' => $c->currency,
+                'dueDate' => $c->due_date?->toDateString(),
+                'cancelled' => $c->cancelled_at !== null,
+            ]])
+            ->all());
     }
 }

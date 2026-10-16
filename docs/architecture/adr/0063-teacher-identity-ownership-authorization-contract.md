@@ -654,6 +654,23 @@ TCH.1 and TCH.2 must close these races:
 No TCH checkpoint includes generic staff-role expansion, tenant-custom
 roles, HRX, RES, POR, Lesson Planning or LMS Submission.
 
+**Amendment (UAT-C6, 2026-10-16, ADR 0075 §19).** The link also has a browser path.
+
+**Where:** Employee page → Sign-in account (`HrEmployeeAccountLinkController`).
+
+**Same governed path:** it calls `EmployeeService::linkUser()` /
+`unlinkUser()`, with the same `hr.employees.manage`, the same
+never-yourself rule, the same active-membership rule, the same
+one-Employee-per-User rule and the same audit.
+
+**Candidate search:** names only, from this School's active, enabled,
+unlinked members. A work-email match only ranks a candidate first; it is
+never returned.
+
+**Never implicit:**
+- relinking requires removing the current link first;
+- no identifier is typed.
+
 ## 26. Legal register
 
 | ID | Question | Surface | Blocks development? | Blocks production? |

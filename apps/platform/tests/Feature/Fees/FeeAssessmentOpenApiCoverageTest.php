@@ -27,7 +27,7 @@ class FeeAssessmentOpenApiCoverageTest extends TestCase
 
         $this->assertSame([], array_values(array_diff($live, $documented)), 'Live but undocumented: '.implode(', ', array_diff($live, $documented)));
         $this->assertSame([], array_values(array_diff($documented, $live)), 'Documented but not live: '.implode(', ', array_diff($documented, $live)));
-        $this->assertCount(10, $live, 'FEE.2 pin: 10 operations. Update deliberately.');
+        $this->assertCount(11, $live, 'FEE.2 pin: 10 operations + UAT-C6 decide (ADR 0075 section 19). Update deliberately.');
     }
 
     #[Test]

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\App\HR;
 use App\Domain\HR\Application\EmployeeDirectoryEntry;
 use App\Domain\HR\Application\EmployeeDirectoryQuery;
 use App\Domain\HR\Application\EmployeeDirectoryService;
+use App\Domain\HR\Application\EmployeePickerReadService;
 use App\Domain\HR\Application\EmployeeProfileWorkspaceService;
 use App\Domain\HR\Application\EmployeeService;
 use App\Domain\HR\Application\Exceptions\DuplicateWorkEmailException;
@@ -185,6 +186,10 @@ class HrEmployeeController extends Controller
             'employeeCategories' => ! $canManageAssignments ? [] : EmployeeCategory::query()->where('status', 'active')->orderBy('name')->get(['id', 'name'])->toArray(),
             // SR.4 (ADR 0071 §26.7): registering a highly sensitive record needs a fresh code.
             'hasMfaFactor' => app(FreshMfaRequirement::class)->hasActiveFactor($actor),
+            // UAT-C6 (UAT-STF-05): the linked sign-in account, for an HR manager only.
+            'linkedAccountName' => $capabilities->canInSchool($actor, 'hr.employees.manage', $school)
+                ? app(EmployeePickerReadService::class)->linkedAccountName($school, Employee::query()->findOrFail($employee), $actor)
+                : null,
         ]);
     }
 

@@ -4055,3 +4055,39 @@ finding is CLOSED.
 
 **Step-up.** Highly sensitive document writes need a fresh MFA code, and
 their metadata read needs current MFA assurance.
+
+## Browser account link and manager picker (UAT-C6, 2026-10-16, ADR 0075 §19)
+
+### Sign-in account (UAT-STF-05)
+
+**Where:** Employee page → Sign-in account. This links the Lycenza account
+a person signs in with, for example after they accept a staff invitation,
+to their Employee record. Their own attendance, leave and payslip pages
+then work.
+
+**Search:** by name, among this School's active, not-yet-linked members
+other than yourself who are not disabled. Results are names only. An
+account whose sign-in email is this Employee's work email is listed first.
+That match is used only on the server and never returned, so the search
+cannot be used to test whether an address is someone's sign-in email.
+
+**Self-service needs a role too.** A linked teacher's own pages need the
+separate Staff Self-Service role (never on Teacher, E33). Grant it under
+Settings → Staff accounts.
+
+**Rules:** the write is the governed `EmployeeService::linkUser()` /
+`unlinkUser()` (`hr.employees.manage`; ADR 0063 §6; never yourself, ADR
+0071 §26.2). Relinking requires "Remove link" first.
+
+### Reporting manager (UAT-HR-23)
+
+**What changed:** "Set manager" searches by name or employee number,
+labelled "Name (EMP-…) — Position · Department · Campus". It replaces the
+former free-text Assignment UUID field.
+
+**Who is offered:** current assignments of active Employees whose
+employment is active or in notice, never the same Employee or yourself.
+
+**Rules:** `ReportingHierarchyService::setManager()` still decides (same
+School, not the same Employee, no cycle, never your own reporting line),
+and its refusals read without identifiers.

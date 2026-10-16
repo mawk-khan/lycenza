@@ -92,7 +92,7 @@ final class UserReferenceCatalog
         // RES.3 (ADR 0068 §21): who locked a paper's marks.
         'examination_paper_mark_states' => ['locked_by_user_id' => self::RETAIN_REFERENCE],
         'fee_adjustments' => ['cancelled_by_user_id' => self::RETAIN_REFERENCE, 'posted_by_user_id' => self::RETAIN_REFERENCE],
-        'fee_assessment_run_items' => ['excluded_by_user_id' => self::RETAIN_REFERENCE],
+        'fee_assessment_run_items' => ['excluded_by_user_id' => self::RETAIN_REFERENCE, 'overlap_decided_by_user_id' => self::RETAIN_REFERENCE],
         'fee_assessment_runs' => ['cancelled_by_user_id' => self::RETAIN_REFERENCE, 'created_by_user_id' => self::RETAIN_REFERENCE, 'executed_by_user_id' => self::RETAIN_REFERENCE, 'previewed_by_user_id' => self::RETAIN_REFERENCE],
         'fee_assessments' => ['created_by_user_id' => self::RETAIN_REFERENCE, 'voided_by_user_id' => self::RETAIN_REFERENCE],
         'fee_concessions' => ['decided_by_user_id' => self::RETAIN_REFERENCE, 'requested_by_user_id' => self::RETAIN_REFERENCE, 'revoked_by_user_id' => self::RETAIN_REFERENCE],

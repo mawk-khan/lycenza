@@ -106,7 +106,7 @@ final class FeeSetupPresenter
     }
 
     /** @return array<string, mixed> */
-    public static function run(FeeAssessmentRun $run): array
+    public static function run(FeeAssessmentRun $run, ?int $decisionRequiredCount = null): array
     {
         return [
             'id' => $run->id,
@@ -123,6 +123,8 @@ final class FeeSetupPresenter
                 'excludedCount' => $run->excluded_count,
                 'blockedCount' => $run->blocked_count,
                 'alreadyAssessedCount' => $run->already_assessed_count,
+                // UAT-C6 (UAT-FIN-20): only where it was counted (one run, not lists).
+                ...($decisionRequiredCount === null ? [] : ['decisionRequiredCount' => $decisionRequiredCount]),
             ],
             'execution' => [
                 'succeededCount' => $run->succeeded_count,
@@ -159,6 +161,11 @@ final class FeeSetupPresenter
             'failureReason' => $item->failure_reason,
             'feeAssessmentId' => $item->fee_assessment_id,
             'executedAt' => $item->executed_at?->toIso8601String(),
+            // UAT-C6 (UAT-FIN-20): the charges that may already cover this
+            // period, and the explicit decision on them.
+            'overlapChargeIds' => $item->overlap_charge_ids ?? [],
+            'overlapDecision' => $item->overlap_decision,
+            'overlapDecidedAt' => $item->overlap_decided_at?->toIso8601String(),
         ];
     }
 

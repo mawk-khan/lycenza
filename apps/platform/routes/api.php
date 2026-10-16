@@ -1359,6 +1359,9 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/fee-assessment-runs/{run}/items/{item}/exclude', [FeeAssessmentRunController::class, 'exclude'])
                 ->middleware(['capability:finance.fee_assessments.run', 'throttle:school-api-mutations'])
                 ->name('schools.fee-assessment-runs.items.exclude');
+            Route::post('/fee-assessment-runs/{run}/items/{item}/decide', [FeeAssessmentRunController::class, 'decide'])
+                ->middleware(['capability:finance.fee_assessments.run', 'throttle:school-api-mutations'])
+                ->name('schools.fee-assessment-runs.items.decide');
             Route::post('/fee-assessment-runs/{run}/execute', [FeeAssessmentRunController::class, 'execute'])
                 ->middleware(['capability:finance.fee_assessments.run', 'throttle:school-api-mutations'])
                 ->name('schools.fee-assessment-runs.execute');

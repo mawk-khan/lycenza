@@ -48,3 +48,24 @@ export function formatDateTime(iso: string | null | undefined, timeZone?: string
 export function formatDate(iso: string | null | undefined, timeZone?: string): string {
     return format(iso, { dateStyle: 'medium' }, timeZone);
 }
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * UAT-C6 (RA-LIB-DATES): a School-local calendar date ("2026-10-16", e.g. a
+ * loan's due date) as "16 Oct 2026" -- the same day in every timezone. It is
+ * a date, not an instant: it is never parsed into a Date and never shifted.
+ * Anything that is not a plain YYYY-MM-DD value is shown as it is.
+ */
+export function formatCalendarDate(value: string | null | undefined): string {
+    if (!value) {
+        return '—';
+    }
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) {
+        return value;
+    }
+    const month = MONTHS[Number(match[2]) - 1];
+
+    return month ? `${Number(match[3])} ${month} ${match[1]}` : value;
+}

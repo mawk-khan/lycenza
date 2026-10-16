@@ -13,12 +13,15 @@ use App\Domain\Fees\Application\FeeAssessmentRunReadService;
 use App\Domain\Fees\Application\FeeAssessmentRunService;
 use App\Domain\Fees\Application\FeeAssessmentService;
 use App\Domain\Fees\Application\FeeConcessionReadService;
+use App\Domain\Fees\Application\FeeRunOverlapDetector;
 use App\Domain\Fees\Application\FeeStructureReadService;
 use App\Domain\Fees\Http\FeeSetupPresenter;
 use App\Domain\Fees\Infrastructure\FeeAssessmentRun;
 use App\Domain\Fees\Infrastructure\FeeAssessmentRunItem;
 use App\Domain\Fees\Infrastructure\FeeHead;
 use App\Domain\Fees\Infrastructure\FeeStructure;
+use App\Domain\Fees\Infrastructure\FeeStructureInstallment;
+use App\Domain\Payments\Application\Charges\ChargeStateReader;
 use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
@@ -41,6 +44,12 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * needs finance.fee_assessments.run; voiding an assessment needs
  * finance.charges.manage -- checked here and again in the Application
  * services. Preview never creates a charge; there is no proration control.
+ *
+ * UAT-C6 (UAT-FIN-20, ADR 0075 section 19): a "decision required" item
+ * shows the charges that may already cover its period (description,
+ * amount, due date, what is still owed -- this School's, under the page's
+ * finance.charges.view) next to the charge the run would create, and takes
+ * an explicit Include anyway / Exclude from this run (`decide`).
  */
 class FeeAssessmentRunController extends Controller
 {
@@ -98,7 +107,7 @@ class FeeAssessmentRunController extends Controller
         return redirect("/app/finance/fee-runs/{$run->id}");
     }
 
-    public function show(Request $request, TenantContext $context, FeeAssessmentRunReadService $reads, CapabilityResolver $capabilities, FeeConcessionReadService $concessions, string $run): Response
+    public function show(Request $request, TenantContext $context, FeeAssessmentRunReadService $reads, CapabilityResolver $capabilities, FeeConcessionReadService $concessions, ChargeStateReader $chargeStates, string $run): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('finance.charges.view', $school);
@@ -127,9 +136,24 @@ class FeeAssessmentRunController extends Controller
             ? $concessions->previewStanding($school, $structure->academic_year_id, collect($items->items())->filter(fn (FeeAssessmentRunItem $i) => $i->preview_result === FeeAssessmentRunItem::RESULT_READY && in_array($i->execution_status, [null, FeeAssessmentRunItem::EXEC_PENDING], true)), $actor)
             : null;
 
+        // UAT-C6 (UAT-FIN-20): the charges behind this page's overlap reviews.
+        $overlapIds = collect($items->items())->flatMap(fn (FeeAssessmentRunItem $i) => $i->overlap_charge_ids ?? [])->unique()->values()->all();
+        $overlapCharges = $reads->overlapCharges($school, $overlapIds, $actor);
+        $owed = collect($chargeStates->forCharges($school, array_keys($overlapCharges)))->map(fn ($state) => $state->outstanding()->amount());
+        $reviewed = collect($items->items())->filter(fn (FeeAssessmentRunItem $i) => ($i->overlap_charge_ids ?? []) !== []);
+        $installments = FeeStructureInstallment::query()->whereIn('id', $reviewed->pluck('fee_structure_installment_id')->unique()->all())->get()->keyBy('id');
+        $proposals = [];
+        foreach ($reviewed as $i) {
+            $head = $heads->get($i->fee_head_id);
+            $installment = $installments->get($i->fee_structure_installment_id);
+            if ($head !== null && $installment !== null) {
+                $proposals[$i->id] = ['description' => FeeRunOverlapDetector::proposedDescription($head, $installment), 'dueDate' => $installment->due_date->toDateString()];
+            }
+        }
+
         return Inertia::render('App/Finance/FeeSetup/Run', [
             'run' => [
-                ...FeeSetupPresenter::run($model),
+                ...FeeSetupPresenter::run($model, $reads->decisionRequiredCount($school, $run, $actor)),
                 'structureLabel' => $structure ? ($this->structureNames())($structure) : null,
             ],
             'items' => $items->through(fn (FeeAssessmentRunItem $i) => [
@@ -138,6 +162,12 @@ class FeeAssessmentRunController extends Controller
                 'studentNumber' => $students->get($i->student_id)?->student_number,
                 'feeHeadCode' => $heads->get($i->fee_head_id)?->code,
                 'concessionPreview' => $projection[$i->id] ?? null,
+                'overlapCharges' => collect($i->overlap_charge_ids ?? [])
+                    ->filter(fn (string $id) => isset($overlapCharges[$id]))
+                    ->map(fn (string $id) => [...$overlapCharges[$id], 'outstanding' => $owed[$id] ?? null])
+                    ->values()->all(),
+                'proposedDescription' => $proposals[$i->id]['description'] ?? null,
+                'proposedDueDate' => $proposals[$i->id]['dueDate'] ?? null,
             ])->appends($request->only('preview_result')),
             'filters' => ['preview_result' => $validated['preview_result'] ?? ''],
             'canRun' => $capabilities->canInSchool($actor, 'finance.fee_assessments.run', $school),
@@ -153,6 +183,14 @@ class FeeAssessmentRunController extends Controller
     public function exclude(TenantContext $context, FeeAssessmentRunService $runs, string $run, string $item): RedirectResponse
     {
         return $this->act($context, $run, fn ($school, $actor) => $runs->excludeItem($school, $run, $item, $actor));
+    }
+
+    /** UAT-C6 (UAT-FIN-20): Include anyway / Exclude from this run, for one "decision required" item. */
+    public function decide(Request $request, TenantContext $context, FeeAssessmentRunService $runs, string $run, string $item): RedirectResponse
+    {
+        $validated = $request->validate(['decision' => ['required', 'string', 'in:include,exclude']], ['decision.*' => 'Choose "Include anyway" or "Exclude from this run".']);
+
+        return $this->act($context, $run, fn ($school, $actor) => $runs->decideOverlap($school, $run, $item, $validated['decision'], $actor));
     }
 
     public function execute(TenantContext $context, FeeAssessmentRunService $runs, string $run): RedirectResponse
