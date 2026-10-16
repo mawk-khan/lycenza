@@ -9,6 +9,8 @@ use App\Domain\Payments\Application\Charges\ChargeStateReader;
 use App\Domain\Payments\Infrastructure\LateFeeAssessment;
 use App\Domain\Payments\Infrastructure\Payment;
 use App\Domain\Payments\Infrastructure\PaymentAllocation;
+use App\Domain\Payments\Infrastructure\PaymentCorrection;
+use App\Domain\Payments\Infrastructure\PaymentCorrectionLine;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
@@ -61,8 +63,16 @@ class StudentFeeStatementReadService
                 ->where('school_id', $school->id)
                 ->whereIn('charge_id', $chargeIds)
                 ->get();
+            // UAT-C3: correction lines on these charges -- shown as their own
+            // rows (history is never rewritten); amounts already come through
+            // the charge-state read below.
+            $corrections = $chargeIds === [] ? collect() : PaymentCorrectionLine::query()
+                ->where('school_id', $school->id)
+                ->whereIn('charge_id', $chargeIds)
+                ->with('correction')
+                ->get();
             $payments = Payment::query()
-                ->whereIn('id', $allocations->pluck('payment_id')->unique()->all())
+                ->whereIn('id', $allocations->pluck('payment_id')->merge($corrections->pluck('payment_id'))->unique()->all())
                 ->with('receipt')
                 ->get()
                 ->keyBy('id');
@@ -91,12 +101,29 @@ class StudentFeeStatementReadService
                 foreach ($allocations->where('charge_id', $fact->chargeId)->sortBy(fn (PaymentAllocation $a) => ($payments->get($a->payment_id)?->settled_at->format('Y-m-d H:i:s') ?? '').$a->payment_id) as $allocation) {
                     $payment = $payments->get($allocation->payment_id);
                     $rows[] = [
+                        'kind' => 'payment',
                         'paymentId' => $allocation->payment_id,
                         'amount' => $allocation->amount,
                         'settledAt' => $payment?->settled_at->toIso8601String(),
                         'method' => $payment?->method,
                         'source' => $payment?->source,
                         'receiptNumber' => $payment?->receipt?->receipt_number,
+                    ];
+                }
+                foreach ($corrections->where('charge_id', $fact->chargeId)->sortBy(fn (PaymentCorrectionLine $l) => $l->created_at->format('Y-m-d H:i:s.u').$l->id) as $line) {
+                    $payment = $payments->get($line->payment_id);
+                    $rows[] = [
+                        // reallocation_in / reallocation_out / reversal / refund
+                        'kind' => $line->correction->kind === PaymentCorrection::REALLOCATION
+                            ? ($line->direction === PaymentCorrectionLine::APPLY ? 'reallocation_in' : 'reallocation_out')
+                            : $line->correction->kind,
+                        'paymentId' => $line->payment_id,
+                        'amount' => $line->direction === PaymentCorrectionLine::APPLY ? $line->amount : '-'.$line->amount,
+                        'settledAt' => $line->created_at->toIso8601String(),
+                        'method' => $payment?->method,
+                        'source' => $payment?->source,
+                        'receiptNumber' => $payment?->receipt?->receipt_number,
+                        'reason' => $line->correction->reason,
                     ];
                 }
 

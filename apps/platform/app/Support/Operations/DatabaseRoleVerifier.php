@@ -54,6 +54,8 @@ class DatabaseRoleVerifier
         'financial_periods', 'financial_period_account_balances', 'financial_period_charge_states',
         // E21.3A2: Finance ledgers lose detail only through retention_expire_finance_unit.
         'financial_period_expiries', 'journal_entries', 'journal_lines', 'charges', 'payments', 'payment_allocations', 'payment_receipts',
+        // UAT-C3: payment corrections are append-only Finance history.
+        'payment_corrections', 'payment_correction_lines',
         // E21.3B: Student consent evidence leaves only with its core record, through its retention function.
         'communication_domain_consent_events',
         // E21.3F: posted payroll adjustments and postings leave only through the payroll retention functions.
@@ -159,6 +161,8 @@ class DatabaseRoleVerifier
         'student_processing_authorizations', 'communication_domain_consent_events',
         'financial_periods', 'financial_period_account_balances', 'financial_period_expiries', 'financial_period_charge_states',
         'journal_entries', 'journal_lines', 'ledger_accounts', 'charges', 'payments', 'payment_allocations', 'payment_receipt_counters',
+        // UAT-C3: the charge-state read the finance retention unit runs includes payment corrections.
+        'payment_corrections', 'payment_correction_lines',
         'late_fee_assessments', 'payroll_run_postings', 'payroll_statutory_run_postings',
         'fee_adjustments', 'fee_assessments', 'fee_heads', 'fee_structure_installments',
         'communication_approval_requests', 'communication_attachments',

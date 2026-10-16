@@ -43,6 +43,7 @@ interface Props {
         raised: Array<{ assessmentId: string; chargeId: string; voided: boolean }>;
         sourceChargeId: string | null;
     };
+    payments: Array<{ paymentId: string; amount: string }> | null;
 }
 
 const props = defineProps<Props>();
@@ -194,6 +195,26 @@ function cancel(): void {
             </ul>
         </section>
 
+        <section v-if="payments && payments.length > 0" class="mt-8 border-t border-slate-200 pt-6">
+            <h2 class="text-sm font-medium text-slate-900">Payments on this charge</h2>
+            <p class="mt-1 text-sm text-slate-500">
+                What each payment has on this charge now, after any corrections. Open a payment to
+                move, reverse or refund it.
+            </p>
+            <ul class="mt-2 divide-y divide-slate-100 text-sm">
+                <li
+                    v-for="p in payments"
+                    :key="p.paymentId"
+                    class="flex flex-wrap items-center justify-between gap-2 py-2"
+                >
+                    <a class="underline" :href="`/app/finance/payments/${p.paymentId}`"
+                        >View payment</a
+                    >
+                    <span class="font-mono">{{ formatMoney(p.amount, charge.currency) }}</span>
+                </li>
+            </ul>
+        </section>
+
         <section
             v-if="canRequestConcession && !charge.cancelledAt"
             class="mt-8 border-t border-slate-200 pt-6"
@@ -233,8 +254,8 @@ function cancel(): void {
             <p class="mt-1 text-sm text-slate-500">
                 Cancelling records a reversing journal entry against the original recognition entry.
                 The charge itself is kept, marked cancelled -- never deleted or edited. A charge
-                with Payment allocations already applied, or with a live concession adjustment,
-                cannot be cancelled.
+                with payments still standing on it, or with a live concession adjustment, cannot be
+                cancelled; move the payments to the right charge from each payment's page first.
             </p>
             <div class="mt-3">
                 <label class="block text-sm text-slate-600" for="reason">Reason (optional)</label>

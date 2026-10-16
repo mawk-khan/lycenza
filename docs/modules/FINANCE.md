@@ -5341,3 +5341,61 @@ existing `selectableFeeHead()` still decides.
 - Charges, concessions and payments.
 - The pages describe fee intent as "not a charge or a payment".
 - A voided fine still cancels its charge through the unchanged OPF.4 path.
+
+## UAT-C3 as-built — Corrections & collections visibility (2026-10-16, ADR 0075 §16, ADR 0031 amendment §3)
+
+### Outstanding fees (UAT-FIN-08)
+
+- **Where.** Finance → Outstanding fees (`/app/finance/outstanding`).
+  Built on `OutstandingFeesReadService`, which reads
+  `ChargeService::collectionFacts()` and `ChargeStateReader`.
+- **Who.** Needs `finance.charges.view` and `finance.payments.view`.
+- **What a row shows.** One per Student who owes money: outstanding,
+  overdue, open charges, earliest overdue date and next due date.
+  - Overdue means a due date before the School's today.
+  - A charge without a due date is never overdue.
+  - Rows are sorted most overdue first.
+- **Filters.** Status, academic year, and name or number search. The class
+  column and the Grade/Section filter need `enrollments.view`.
+- **Audit and limits.** Each view is audited once
+  (`fee_outstanding_list.viewed`, filters only). Queries are bounded. There
+  is no export.
+
+### Payment corrections (UAT-FIN-05/24/27)
+
+- **Where.** The payment page: Correct this payment → move to another
+  charge, reverse, or refund.
+- **Who.**
+  - Reallocation: `finance.payments.record` and `finance.charges.manage`
+    (Accountant, School Admin).
+  - Reversal and refund: `finance.ledger.reverse` and
+    `finance.payments.view` (School Admin).
+  - Every kind needs a fresh MFA code and a reason.
+- **Posted history never changes.** Each correction is a new
+  `payment_corrections` row with balanced `release`/`apply` lines and its
+  own journal entry. The original allocations, the receipt number and the
+  settlement journal entry stay as recorded.
+- **What each page shows.**
+  - Payment page: where the payment stands now, the correction history,
+    and a Reversed banner with a link to record the replacement.
+  - Receipt: later corrections, and REVERSED when reversed.
+  - Charge page: lists the payments standing on it.
+  - Statement: correction rows. The Guardian view shows net amounts.
+- **Effective allocation.** Charge state, period close, the all-history
+  check, capacity, concessions and cancellation all count original
+  allocations plus `apply` lines minus `release` lines. A duplicate charge
+  is fixed like this:
+  1. Move its payment to the right charge.
+  2. Cancel the duplicate charge.
+
+  No SQL and no concession is needed.
+- **Retention.** The D8 retention unit refuses any unit with a corrected
+  Payment or charge, until a contract for expiring corrections exists.
+- **Not built:**
+  - edit, delete or void;
+  - negative payments;
+  - gateway refunds;
+  - corrections across Students;
+  - the 0G.0 `refunds` table and `finance.refunds.manage` design, which
+    stays unbuilt (refunds here are recorded corrections under
+    `finance.ledger.reverse`).

@@ -10,8 +10,8 @@ use App\Domain\Identity\Application\Portal\ActingGuardian;
 use App\Domain\Identity\Application\Portal\GuardianPortalAccessDeniedException;
 use App\Domain\Payments\Application\Charges\ChargeState;
 use App\Domain\Payments\Application\Charges\ChargeStateReader;
+use App\Domain\Payments\Application\PaymentApplicationReader;
 use App\Domain\Payments\Infrastructure\Payment;
-use App\Domain\Payments\Infrastructure\PaymentAllocation;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\School;
 use App\Models\User;
@@ -21,6 +21,7 @@ use App\Support\Money\Money;
 use App\Support\Portal\PortalAvailability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Str;
 
 /**
  * POR.3 (ADR 0070 §26): one linked Student's fees for an already-resolved
@@ -95,10 +96,10 @@ final class GuardianFeeReadService
             [$facts, $states, $activeYearId] = $this->visible($school, $guardian, $studentId);
             $chargeIds = array_map(fn (ChargeStatementLine $l) => $l->chargeId, $facts);
 
-            $allocations = $chargeIds === [] ? collect() : PaymentAllocation::query()
-                ->where('school_id', $school->id)->whereIn('charge_id', $chargeIds)->get();
+            // UAT-C3: what each Payment currently has on each charge, after any correction.
+            $applied = app(PaymentApplicationReader::class)->netByCharge($school, $chargeIds);
             $payments = Payment::query()->where('school_id', $school->id)
-                ->whereIn('id', $allocations->pluck('payment_id')->unique()->all())->with('receipt')->get()->keyBy('id');
+                ->whereIn('id', array_values(array_unique(array_merge([], ...array_map('array_keys', array_values($applied))))))->with('receipt')->get()->keyBy('id');
 
             $currency = $facts[0]->currency ?? 'INR';
             $totals = ['charged' => Money::of('0.00', $currency), 'adjusted' => Money::of('0.00', $currency), 'paid' => Money::of('0.00', $currency), 'outstanding' => Money::of('0.00', $currency)];
@@ -125,15 +126,16 @@ final class GuardianFeeReadService
                     'paidTotal' => $state->allocated->amount(),
                     'outstanding' => $outstanding->amount(),
                     // Only THIS charge's allocations: the amount applied here, never a Payment's total.
-                    'payments' => $allocations->where('charge_id', $fact->chargeId)
-                        ->sortBy(fn (PaymentAllocation $a) => ($payments->get($a->payment_id)?->settled_at->format('Y-m-d H:i:s') ?? '').$a->payment_id)
-                        ->map(fn (PaymentAllocation $a): array => [
-                            'paymentId' => $a->payment_id,
-                            'settledOn' => $payments->get($a->payment_id)?->settled_at->copy()->setTimezone($school->timezone ?: 'UTC')->toDateString(),
-                            'method' => $payments->get($a->payment_id)?->method,
-                            'receiptNumber' => $payments->get($a->payment_id)?->receipt?->receipt_number,
-                            'appliedAmount' => Money::of($a->amount, $a->currency)->amount(),
-                        ])->values()->all(),
+                    'payments' => collect($applied[$fact->chargeId] ?? [])
+                        ->map(fn (string $amount, string $paymentId): array => [
+                            'paymentId' => $paymentId,
+                            'settledOn' => $payments->get($paymentId)?->settled_at->copy()->setTimezone($school->timezone ?: 'UTC')->toDateString(),
+                            'method' => $payments->get($paymentId)?->method,
+                            'receiptNumber' => $payments->get($paymentId)?->receipt?->receipt_number,
+                            'appliedAmount' => Money::of($amount, $fact->currency)->amount(),
+                        ])
+                        ->sortBy(fn (array $p) => ($payments->get($p['paymentId'])?->settled_at->format('Y-m-d H:i:s') ?? '').$p['paymentId'])
+                        ->values()->all(),
                 ];
             }
 
@@ -171,10 +173,10 @@ final class GuardianFeeReadService
             [$facts] = $this->visible($school, $guardian, $studentId);
             $byCharge = collect($facts)->keyBy(fn (ChargeStatementLine $l) => $l->chargeId);
 
-            $allocations = $byCharge->isEmpty() ? collect() : PaymentAllocation::query()
-                ->where('school_id', $school->id)->where('payment_id', $paymentId)
-                ->whereIn('charge_id', $byCharge->keys()->all())->orderBy('charge_id')->get();
-            $payment = $allocations->isEmpty() ? null
+            // UAT-C3: what this Payment currently has on the Student's charges, after any correction.
+            $net = $byCharge->isEmpty() || ! Str::isUuid($paymentId) ? [] : app(PaymentApplicationReader::class)->netByCharge($school, $byCharge->keys()->all(), $paymentId);
+            ksort($net);
+            $payment = $net === [] ? null
                 : Payment::query()->where('school_id', $school->id)->whereKey($paymentId)->with('receipt')->first();
             if ($payment === null) {
                 throw (new ModelNotFoundException)->setModel(Payment::class);
@@ -182,9 +184,9 @@ final class GuardianFeeReadService
 
             $applied = Money::of('0.00', $payment->currency);
             $lines = [];
-            foreach ($allocations as $allocation) {
-                $fact = $byCharge->get($allocation->charge_id);
-                $amount = Money::of($allocation->amount, $allocation->currency);
+            foreach ($net as $chargeId => $byPayment) {
+                $fact = $byCharge->get($chargeId);
+                $amount = Money::of($byPayment[$paymentId], $payment->currency);
                 $applied = $applied->add($amount);
                 $lines[] = [
                     'description' => $fact->description,

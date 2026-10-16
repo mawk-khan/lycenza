@@ -108,6 +108,8 @@ final class UserReferenceCatalog
         'notifications' => ['recipient_user_id' => self::RETAIN_REFERENCE],
         'payment_receipts' => ['issued_by_user_id' => self::RETAIN_REFERENCE],
         'payments' => ['recorded_by_user_id' => self::RETAIN_REFERENCE],
+        // UAT-C3: who corrected a payment is kept with the Finance correction it attributes.
+        'payment_corrections' => ['corrected_by_user_id' => self::RETAIN_REFERENCE],
         'payroll_adjustments' => ['actor_user_id' => self::RETAIN_REFERENCE],
         'payroll_run_postings' => ['actor_user_id' => self::RETAIN_REFERENCE],
         'payroll_runs' => ['approved_by_user_id' => self::RETAIN_REFERENCE, 'posted_by_user_id' => self::RETAIN_REFERENCE, 'prepared_by_user_id' => self::RETAIN_REFERENCE],

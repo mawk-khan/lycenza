@@ -36,6 +36,12 @@ class AllHistoryChargeReader
                 ->groupBy('charge_id')->selectRaw('charge_id, sum(amount) AS total')->toBase()->get() as $row) {
                 $allocated[(string) $row->charge_id] = (string) $row->total;
             }
+            // UAT-C3: plus every payment-correction line (apply +, release -).
+            foreach (ChargeStateReader::correctionFacts($school, $chargeIds) as $chargeId => $rows) {
+                foreach ($rows as [$amount]) {
+                    $allocated[$chargeId] = bcadd($allocated[$chargeId] ?? '0.00', $amount, 2);
+                }
+            }
             $adjusted = [];
             foreach ($this->charges->adjustmentLedgerFacts($school, $chargeIds) as $adjustment) {
                 if (! $adjustment->cancelled) {

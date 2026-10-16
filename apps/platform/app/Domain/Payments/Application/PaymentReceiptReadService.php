@@ -7,6 +7,7 @@ use App\Domain\Fees\Application\ChargeStatementLine;
 use App\Domain\Payments\Application\Exceptions\PaymentReceiptNotFoundException;
 use App\Domain\Payments\Infrastructure\Payment;
 use App\Domain\Payments\Infrastructure\PaymentAllocation;
+use App\Domain\Payments\Infrastructure\PaymentCorrection;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
@@ -82,6 +83,12 @@ class PaymentReceiptReadService
                         'academicYearId' => $fact?->academicYearId,
                     ];
                 })->values()->all(),
+                // UAT-C3: the receipt keeps its number and original lines; a
+                // later reversal, refund or reallocation is shown beside it.
+                corrections: PaymentCorrection::query()->where('school_id', $school->id)->where('payment_id', $payment->id)
+                    ->orderBy('created_at')->orderBy('id')->get()
+                    ->map(fn (PaymentCorrection $c) => ['kind' => $c->kind, 'amount' => $c->amount, 'recordedAt' => $c->created_at])
+                    ->values()->all(),
             );
         });
     }

@@ -44,8 +44,9 @@ use Inertia\Response;
  * `Student` is read directly for display/search only -- the same
  * cross-module read-for-display pattern `ChargeController` uses.
  *
- * There is still no edit/delete/refund/void/reversal route: a recorded
- * Payment is immutable (ADR 0031 amendment section 2).
+ * There is no edit/delete/void route: a recorded Payment is immutable (ADR
+ * 0031 amendment section 2); corrections are new linked records on the
+ * payment page (UAT-C3, `PaymentController::correct()`).
  */
 class ManualPaymentController extends Controller
 {
@@ -150,8 +151,8 @@ class ManualPaymentController extends Controller
             $allocations[] = new ChargeAllocationInput($allocation['charge_id'], $this->parseAmount($allocation['amount'], "allocations.{$index}.amount"));
         }
 
-        // SR.4 (ADR 0071 §26.7): a posted Payment is immutable (no v1
-        // correction), so recording one needs a fresh code -- outside the
+        // SR.4 (ADR 0071 §26.7): a posted Payment is immutable (corrected only
+        // by new linked records, UAT-C3), so recording one needs a fresh code -- outside the
         // recording transaction.
         $mfa->requireForAction($request, $context->actor());
 

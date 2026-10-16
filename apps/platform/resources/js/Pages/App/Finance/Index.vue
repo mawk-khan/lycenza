@@ -96,6 +96,14 @@ defineProps<Props>();
                 </p>
             </li>
             <li v-if="can.viewStatements" class="px-4 py-3">
+                <a class="text-sm font-medium underline" href="/app/finance/outstanding"
+                    >Outstanding fees</a
+                >
+                <p class="mt-1 text-sm text-slate-500">
+                    Students who still owe money -- outstanding and overdue -- for follow-up.
+                </p>
+            </li>
+            <li v-if="can.viewStatements" class="px-4 py-3">
                 <a class="text-sm font-medium underline" href="/app/finance/fee-statements"
                     >Student fee statements</a
                 >

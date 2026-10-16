@@ -49,8 +49,9 @@ use Illuminate\Support\Str;
  * serialize so the second deterministically sees the first's Payment
  * instead of racing it into a Charge over-allocation error.
  *
- * Posted manual Payments are immutable and have no correction action in
- * v1 (owner decision 2026-09-28, ADR 0031 amendment section 2).
+ * Posted manual Payments are immutable (ADR 0031 amendment section 2). Since
+ * UAT-C3 they are corrected only by new linked records through
+ * `PaymentCorrectionService` (ADR 0031 amendment §3).
  */
 class ManualPaymentRecordingService
 {

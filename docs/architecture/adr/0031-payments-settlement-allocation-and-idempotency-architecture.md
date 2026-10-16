@@ -651,3 +651,92 @@ ADR 0062 §16 (owner decision H) is implemented in migrations
   - Fees never reads `payment_allocations` or any late-fee table.
 - **Legal.** DEVELOPMENT AUTHORISED — PROD LEGAL SIGN-OFF REQUIRED (ADR
   0058 E31).
+
+## Amendment §3 — payment corrections (UAT-C3, 2026-10-16)
+
+Approved by the owner in the UAT-C3 brief (ADR 0075 §16). It closes the
+local UAT pilot blockers UAT-FIN-05/24/27. It supersedes the "no correction
+action in v1" clause of the 0O.11A amendment and of CLAUDE.md rule 91.
+The rest of rule 91 stands.
+
+**Implemented in** the Payments-owned migration
+`2026_12_15_090000_create_payment_corrections` and
+`PaymentCorrectionService`.
+
+- **Posted history never changes.** These stay exactly as recorded:
+  - `payments`, `payment_allocations` and `payment_receipts`;
+  - the Payment's settlement journal entry.
+
+  `journal_entries_payment_reversal_guard` still forbids reversing it.
+  A correction is a new, linked `payment_corrections` row with its own
+  journal entry, a required reason (5–500 characters) and the acting User.
+- **Three kinds, nothing else:**
+  - **reallocation** — the money is valid but sits on the wrong charge.
+    An amount moves to another uncancelled charge of the same Student.
+    Cash is unchanged. Dr source receivable / Cr destination receivable.
+  - **reversal** — the Payment should not stand as recorded. Everything it
+    still has on its charges returns to its settlement account. Dr each
+    receivable / Cr settlement. At most one per Payment, and nothing
+    corrects a reversed Payment afterwards. The right payment is recorded
+    as an ordinary new one.
+  - **refund** — money actually paid back to the payer. The refund records:
+    - an amount of what this Payment has on one charge;
+    - the active asset account it was paid out of;
+    - the method: cash, bank transfer or cheque;
+    - the date, between the payment date and the School's today;
+    - an optional reference.
+
+    Dr receivable / Cr that account. The charge is owed again.
+  - A refund here records money already paid back. Lycenza moves no money,
+    and there is no gateway refund.
+  - Concessions are never a correction tool.
+- **Effective allocation.** A charge's effective allocation is its original
+  allocations plus `apply` lines minus `release` lines
+  (`payments_effective_allocated()`). Every rule uses it:
+  - allocation capacity;
+  - concession capacity;
+  - the cancellation guard. A charge whose payments were all moved away can
+    be cancelled.
+  - the carry-forward state (`ChargeStateReader`), period close and
+    all-history check, which date each line by its correction's journal
+    entry;
+  - statements, the Guardian fee view and the outstanding list.
+- **Database-enforced:**
+  - Lines are written only in their correction's own transaction.
+  - An `apply` never targets a cancelled charge and never exceeds capacity.
+  - A `release` never exceeds the Payment's effective amount on that charge.
+  - The lines balance at commit (deferred constraint trigger).
+  - One reversal per Payment, and nothing after it.
+  - Both tables are RLS-scoped and append-only for the runtime role.
+  - The Finance D8 retention unit refuses any unit with a corrected Payment
+    or charge until a later contract says how corrections expire.
+- **Concurrency and idempotency** (rules 29–33):
+  - The order is: capability → input → School operational → advisory lock
+    on (School, key) → replay or conflict → advisory lock on the Payment →
+    charge row locks in ascending id → checks → ledger → rows → audit.
+  - The same User and the same content replays.
+  - Anything else under the same key fails closed
+    (`PAYMENT_CORRECTION_IDEMPOTENCY_CONFLICT`).
+  - The key is server-issued per page load and unique per School.
+- **Authorization:**
+  - Reallocation needs `finance.payments.record` and
+    `finance.charges.manage` (Accountant, School Admin).
+  - Reversal and refund need `finance.ledger.reverse` and
+    `finance.payments.view` (School Admin).
+  - Every kind needs a fresh MFA code (`FreshMfaRequirement`, rule 95).
+  - No capability or role catalogue change. The deferred
+    `finance.refunds.manage` design (0G.0) stays unbuilt.
+- **Audit:** `payment.reallocated`, `payment.reversed` and
+  `payment.refunded` record ids, amount and journal entry. They never
+  record the reason text, reference or key.
+- **Receipts:** a receipt keeps its number and original lines. The page and
+  the printed receipt show later corrections, and REVERSED when reversed.
+- **Not in scope:**
+  - editing or deleting a Payment, a negative Payment, or a void;
+  - a provider/gateway refund;
+  - a correction across Students;
+  - a correction of a Payment's settlement account or date (reverse, then
+    record a replacement instead);
+  - a Guardian-visible correction history beyond net amounts.
+- **Rollback.** `down()` refuses while any correction exists. Otherwise it
+  restores the capacity, cancellation and retention function bodies.

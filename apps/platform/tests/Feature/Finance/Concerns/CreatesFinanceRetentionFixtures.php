@@ -36,7 +36,8 @@ trait CreatesFinanceRetentionFixtures
 {
     use CreatesFinancialPeriodFixtures;
 
-    protected function d8World(bool $closeSecondYear = true): array
+    /** @param  (callable(array<string, mixed>): void)|null  $inFirstYear  UAT-C3: extra facts in the 2015-16 period, before it closes */
+    protected function d8World(bool $closeSecondYear = true, ?callable $inFirstYear = null): array
     {
         $this->travelTo(Carbon::parse('2015-06-15 06:00:00', 'UTC'));
         $w = $this->concessionWorld();
@@ -61,6 +62,9 @@ trait CreatesFinanceRetentionFixtures
         $this->travelTo(Carbon::parse('2015-11-10 06:00:00', 'UTC'));
         $w['p2'] = $this->pay($w, '700.00', null, $w['c1'])->paymentId;
         app(ChargeService::class)->cancel($w['school'], $w['c2']->id, $w['actor'], 'billed twice');
+        if ($inFirstYear !== null) {
+            $inFirstYear($w);
+        }
 
         $this->travelTo(Carbon::parse('2016-04-05 06:00:00', 'UTC'));
         $w['fy1516'] = $this->periodByKey($w['school'], '2015-16');

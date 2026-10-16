@@ -813,3 +813,49 @@ change, no new capability and no change to what a decision means.
 - UAT-C4: global UX, search, labels elsewhere, and accessibility outside
   the rollover page.
 - Reopening a year, automatic activation, and automatic placement closure.
+
+## 16. UAT-C3 — Finance Corrections & Collections Visibility (2026-10-16)
+
+Approved by the owner to close UAT-FIN-08 and UAT-FIN-05/24/27 (all S1).
+This is the "approved Finance correction contract" that CLAUDE.md rule 91
+required. The contract is ADR 0031 amendment §3.
+
+### 16.1 Contract
+
+- **Outstanding fees (UAT-FIN-08):** Finance → Outstanding fees, at
+  `/app/finance/outstanding`.
+  - **Who:** needs `finance.charges.view` and `finance.payments.view`.
+  - **Rows:** one per Student who owes money, with outstanding, overdue,
+    open charges, earliest overdue date and next due date.
+  - **Balances:** come from `ChargeStateReader` — amount − effective
+    allocations − live concessions. A cancelled charge owes nothing.
+  - **Overdue:** a due date before the School's today. A charge with no due
+    date is never overdue.
+  - **Filters:** status (outstanding/overdue), year, and name or number
+    search.
+  - **Class:** column and Grade/Section filter only with `enrollments.view`.
+  - **Order and size:** most overdue first, then most outstanding;
+    25 per page; bounded queries.
+  - **Audit:** one `fee_outstanding_list.viewed` event per view, recording
+    filters only.
+  - **Not included:** export, reminders and headcount analytics.
+- **Payment corrections (UAT-FIN-05/24/27):** reallocate, reverse or refund
+  from the payment page (ADR 0031 amendment §3).
+  - **Payment page shows:** where the payment stands now, the original
+    allocations, a correction history with reasons, and a Reversed banner
+    with a link to record the replacement.
+  - **Charge page:** lists the payments standing on it, so a duplicate
+    charge's payment can be found and moved. A charge cannot be cancelled
+    while payments stand on it, and the message says what to do.
+  - **Statements and the Guardian view:** show net amounts.
+- **Schema:** `payment_corrections` and `payment_correction_lines`
+  (justified: posted rows are append-only, and corrections need their own
+  dated, reasoned, balanced facts). No capability or role change.
+
+### 16.2 Not in scope
+
+- Fee reminders and exports.
+- FIN-11 form defaults and the duplicate-charge warning: deferred to UAT-C4
+  (UX). They were optional and are not needed to close an S1.
+- Gateway refunds, Guardian-facing correction detail, and correction expiry
+  under D8 retention (refused until a later contract).

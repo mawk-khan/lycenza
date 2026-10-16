@@ -3,6 +3,9 @@
 namespace Tests\Feature\Postgres;
 
 use App\Domain\Fees\Infrastructure\FeeAssessmentRunItem;
+use App\Domain\Payments\Application\PaymentCorrectionData;
+use App\Domain\Payments\Application\PaymentCorrectionService;
+use App\Support\Money\Money;
 use App\Support\Retention\RetentionExpiry;
 use App\Support\Tenancy\TenantRls;
 use Illuminate\Database\QueryException;
@@ -117,6 +120,21 @@ class FinanceRetentionFunctionTest extends TestCase
 
         $this->assertTrue($this->rowExists($w, 'charges', $w['c3']->id));
         $this->assertTrue($this->rowExists($w, 'journal_entries', $w['m1']));
+    }
+
+    #[Test]
+    public function a_unit_with_a_corrected_payment_or_charge_is_refused_until_a_contract_says_how(): void
+    {
+        // UAT-C3 (ADR 0031 amendment §3): c1 is otherwise an eligible unit
+        // (an_eligible_unit_dry_runs_then_expires_whole); 100.00 of its p1 moved to c3.
+        $w = $this->d8World(inFirstYear: fn (array $w) => app(PaymentCorrectionService::class)->correct($w['school'], new PaymentCorrectionData(
+            paymentId: $w['p1'], kind: PaymentCorrectionData::REALLOCATION, reason: 'Applied to the wrong charge',
+            idempotencyKey: (string) Str::uuid(), chargeId: $w['c1']->id, toChargeId: $w['c3']->id, amount: Money::of('100.00', 'INR'),
+        ), $w['recorder']));
+        $this->setSchool($w['school']->id);
+
+        $this->refused('retention_finance_dependency', fn () => $this->expire($w['school']->id, [$w['c1']->id], []), 'a corrected payment is never expired');
+        $this->assertTrue($this->rowExists($w, 'payments', $w['p1']));
     }
 
     #[Test]

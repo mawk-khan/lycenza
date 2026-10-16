@@ -14,6 +14,7 @@ use Illuminate\Support\Carbon;
  *
  * @param  list<array{chargeId: string, amount: string, description: string|null, feeHeadName: string|null, billingPeriodKey: string|null, billingPeriodLabel: string|null, academicYearId: string|null}>  $lines
  * @param  list<string>  $studentIds
+ * @param  list<array{kind: string, amount: string, recordedAt: Carbon}>  $corrections  UAT-C3: later corrections of the Payment; the receipt itself never changes
  */
 final class ReceiptDocument
 {
@@ -34,5 +35,6 @@ final class ReceiptDocument
         public readonly Carbon $settledAt,
         public readonly array $studentIds,
         public readonly array $lines,
+        public readonly array $corrections = [],
     ) {}
 }

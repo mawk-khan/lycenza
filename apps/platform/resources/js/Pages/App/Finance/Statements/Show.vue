@@ -2,13 +2,24 @@
 import { router } from '@inertiajs/vue3';
 import { formatMoney } from '../../../../money';
 
+// UAT-C3: payment rows and, as their own rows, payment corrections (history
+// is never rewritten): moved in/out between charges, reversed, refunded.
 interface StatementPayment {
+    kind?: 'payment' | 'reallocation_in' | 'reallocation_out' | 'reversal' | 'refund';
     paymentId: string;
     amount: string;
     receivedOn: string | null;
     method: string | null;
     receiptNumber: string | null;
+    reason?: string | null;
 }
+
+const CORRECTION_LABELS: Record<string, string> = {
+    reallocation_in: 'Moved here from another charge',
+    reallocation_out: 'Moved to another charge',
+    reversal: 'Payment reversed',
+    refund: 'Refunded',
+};
 
 interface StatementAdjustment {
     id: string;
@@ -157,8 +168,14 @@ function filterYear(id: string): void {
                             <span class="capitalize">{{ a.category }}</span>
                             −{{ formatMoney(a.amount, l.currency) }}
                         </p>
-                        <p v-for="p in l.payments" :key="p.paymentId">
-                            Paid {{ formatMoney(p.amount, l.currency) }} on {{ p.receivedOn }}
+                        <p v-for="(p, i) in l.payments" :key="`${p.paymentId}-${i}`">
+                            <template v-if="!p.kind || p.kind === 'payment'">
+                                Paid {{ formatMoney(p.amount, l.currency) }} on {{ p.receivedOn }}
+                            </template>
+                            <template v-else>
+                                {{ CORRECTION_LABELS[p.kind] }}
+                                {{ formatMoney(p.amount, l.currency) }} on {{ p.receivedOn }}
+                            </template>
                             <a
                                 v-if="p.receiptNumber"
                                 class="font-mono underline"
@@ -166,6 +183,9 @@ function filterYear(id: string): void {
                                 >{{ p.receiptNumber }}</a
                             >
                             <span v-else class="text-slate-500">(no receipt yet)</span>
+                            <span v-if="p.reason" class="block text-xs text-slate-500"
+                                >Reason: {{ p.reason }}</span
+                            >
                         </p>
                     </td>
                     <td

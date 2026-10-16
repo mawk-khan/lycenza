@@ -125,6 +125,8 @@ final class RetentionAnchors
         'charges' => ['academic_year_id', 'cancellation_journal_entry_id', 'currency', 'journal_entry_id', 'receivable_ledger_account_id', 'revenue_ledger_account_id', 'student_id'],
         'payments' => ['currency', 'journal_entry_id', 'provider_event_id', 'settlement_ledger_account_id'],
         'payment_allocations' => ['charge_id', 'payment_id'],
+        'payment_corrections' => ['currency', 'journal_entry_id', 'payment_id', 'settlement_ledger_account_id'],
+        'payment_correction_lines' => ['charge_id', 'payment_correction_id', 'payment_id'],
         'payment_receipts' => ['payment_id', 'series_key'],
         'payment_provider_events' => [],
         'journal_entries' => ['financial_period_id', 'currency', 'reversal_of_journal_entry_id'],

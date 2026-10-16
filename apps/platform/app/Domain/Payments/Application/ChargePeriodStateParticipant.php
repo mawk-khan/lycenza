@@ -197,6 +197,12 @@ class ChargePeriodStateParticipant implements FinancialPeriodCloseParticipant
             ->toBase()->select(['payment_allocations.charge_id', 'payment_allocations.amount', 'payments.journal_entry_id'])->cursor() as $row) {
             $allocations[(string) $row->charge_id][] = [(string) $row->amount, (string) $row->journal_entry_id];
         }
+        // UAT-C3: payment corrections, dated by their own journal entries.
+        foreach (ChargeStateReader::correctionFacts($school, null) as $chargeId => $rows) {
+            foreach ($rows as $row) {
+                $allocations[$chargeId][] = $row;
+            }
+        }
 
         $adjustments = [];
         foreach ($this->charges->adjustmentLedgerFacts($school) as $adjustment) {

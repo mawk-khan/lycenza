@@ -60,6 +60,7 @@ use App\Http\Controllers\App\Finance\JournalEntryController as FinanceJournalEnt
 use App\Http\Controllers\App\Finance\LateFeeController as FinanceLateFeeController;
 use App\Http\Controllers\App\Finance\LedgerAccountController as FinanceLedgerAccountController;
 use App\Http\Controllers\App\Finance\ManualPaymentController as FinanceManualPaymentController;
+use App\Http\Controllers\App\Finance\OutstandingFeesController as FinanceOutstandingFeesController;
 use App\Http\Controllers\App\Finance\PaymentController as FinancePaymentController;
 use App\Http\Controllers\App\Groups\GroupReportController;
 use App\Http\Controllers\App\Groups\SchoolGroupController;
@@ -1151,9 +1152,10 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
     // the Bearer-token JSON API under /api/v1 that 0G.6 built (that
     // surface exists for Flutter/external consumers). Capability checks
     // live inside each controller (AuthorizesCapability trait), same as
-    // every other module. Payments has no edit/delete/refund route and
-    // no `finance.payments.manage` capability; since Phase 0O.11A its one
-    // write is recording an offline payment (payments/record below).
+    // every other module. Payments has no edit/delete route and no
+    // `finance.payments.manage` capability; its writes are recording an
+    // offline payment (Phase 0O.11A, payments/record below) and, since
+    // UAT-C3, a correction (payments/{payment}/corrections below).
     Route::prefix('app/finance')->name('app.finance.')->group(function (): void {
         Route::get('/', [FinanceController::class, 'index'])->name('index');
 
@@ -1281,6 +1283,14 @@ Route::middleware(['auth', 'school-context'])->group(function (): void {
         // (finance.payments.view) and the staff Student fee statement
         // (finance.charges.view AND finance.payments.view).
         Route::get('/payments/{payment}/receipt', [FinancePaymentController::class, 'receipt'])->name('payments.receipt');
+        // UAT-C3 (ADR 0031 amendment §3, ADR 0075 §16): reallocate, reverse or
+        // refund a posted Payment as a new linked correction -- never an edit.
+        // Capabilities per kind and fresh MFA in the controller; re-checked in
+        // PaymentCorrectionService.
+        Route::post('/payments/{payment}/corrections', [FinancePaymentController::class, 'correct'])
+            ->middleware('throttle:finance-payment-recording')->name('payments.corrections.store');
+        // UAT-C3 (UAT-FIN-08): who still owes what, for follow-up.
+        Route::get('/outstanding', [FinanceOutstandingFeesController::class, 'index'])->name('outstanding.index');
         Route::get('/fee-statements', [FinanceFeeStatementController::class, 'index'])->name('fee-statements.index');
         Route::get('/fee-statements/students/search', [FinanceFeeStatementController::class, 'searchStudents'])->name('fee-statements.students.search');
         Route::get('/fee-statements/{student}', [FinanceFeeStatementController::class, 'show'])->name('fee-statements.show');

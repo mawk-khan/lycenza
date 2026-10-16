@@ -66,6 +66,9 @@ final class TenantRetentionCatalog
             'journal_entries', 'journal_lines', 'charges', 'fee_adjustments', 'fee_assessments', 'fee_assessment_runs',
             'fee_assessment_run_items', 'fee_concessions', 'fee_optional_selections', 'late_fee_assessments', 'late_fee_runs',
             'late_fee_run_items', 'payments', 'payment_allocations', 'payment_provider_events', 'payment_receipts',
+            // UAT-C3 (ADR 0031 amendment §3): payment corrections. The D8 unit refuses a corrected Payment or charge;
+            // no unit deletes a correction yet.
+            'payment_corrections', 'payment_correction_lines',
             'payment_receipt_counters', 'canteen_orders', 'canteen_order_lines', 'canteen_order_stock_consumptions',
             // OPF.1 (ADR 0067 §21): provenance of Transport-recorded fee selections, retained with them.
             'transport_fee_selections',

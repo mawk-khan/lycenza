@@ -558,6 +558,36 @@ class ChargeService
     }
 
     /**
+     * UAT-C3 (UAT-FIN-08): every UNCANCELLED charge of the School (optionally
+     * one academic year) for Payments' outstanding-fees list, which computes
+     * what is still owed through `ChargeStateReader`. Trusted, read-only, no
+     * capability check (the Payments read service authorizes). Ordered by id.
+     *
+     * @return list<ChargeCollectionFact>
+     */
+    public function collectionFacts(School $school, ?string $academicYearId = null): array
+    {
+        return $this->context->withSchool($school, function () use ($school, $academicYearId) {
+            $facts = [];
+            foreach (Charge::query()->where('school_id', $school->id)->whereNull('cancelled_at')
+                ->when($academicYearId !== null, fn ($q) => $q->where('academic_year_id', $academicYearId))
+                ->orderBy('id')->toBase()->select(['id', 'student_id', 'academic_year_id', 'amount', 'currency', 'due_date'])
+                ->cursor() as $row) {
+                $facts[] = new ChargeCollectionFact(
+                    id: (string) $row->id,
+                    studentId: (string) $row->student_id,
+                    academicYearId: (string) $row->academic_year_id,
+                    amount: (string) $row->amount,
+                    currency: (string) $row->currency,
+                    dueDate: $row->due_date === null ? null : substr((string) $row->due_date, 0, 10),
+                );
+            }
+
+            return $facts;
+        });
+    }
+
+    /**
      * E21.3A: every fee adjustment of the School (live or voided) with its
      * posting and void journal entries. Same contract as `ledgerFacts()`.
      *

@@ -10,6 +10,7 @@ use App\Domain\Fees\Application\ChargeQuery;
 use App\Domain\Fees\Application\ChargeReadService;
 use App\Domain\Fees\Application\ChargeSummary;
 use App\Domain\Fees\Application\Exceptions\AcademicYearNotFoundException;
+use App\Domain\Fees\Application\Exceptions\ChargeHasPaymentAllocationsException;
 use App\Domain\Fees\Application\Exceptions\ChargeNotFoundException;
 use App\Domain\Fees\Application\Exceptions\FeesException;
 use App\Domain\Fees\Application\Exceptions\StudentNotFoundException;
@@ -22,6 +23,7 @@ use App\Domain\Finance\Application\Exceptions\LedgerAccountNotFoundException;
 use App\Domain\Finance\Application\LedgerAccountSummary;
 use App\Domain\Finance\Application\LedgerReadService;
 use App\Domain\Payments\Application\LateFeeReadService;
+use App\Domain\Payments\Application\PaymentApplicationReader;
 use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\AuthorizesCapability;
@@ -198,7 +200,7 @@ class ChargeController extends Controller
         return redirect("/app/finance/charges/{$result->chargeId}");
     }
 
-    public function show(TenantContext $context, ChargeReadService $service, CapabilityResolver $capabilities, FeeConcessionReadService $concessions, LateFeeReadService $lateFees, string $charge): Response
+    public function show(TenantContext $context, ChargeReadService $service, CapabilityResolver $capabilities, FeeConcessionReadService $concessions, LateFeeReadService $lateFees, PaymentApplicationReader $applications, string $charge): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('finance.charges.view', $school);
@@ -242,7 +244,13 @@ class ChargeController extends Controller
                 ];
             })(),
             // FEE.4: a link to the Student's fee statement (charges + payments view).
-            'canViewStatement' => $capabilities->canInSchool($context->actor(), 'finance.payments.view', $school),
+            'canViewStatement' => $canViewPayments = $capabilities->canInSchool($context->actor(), 'finance.payments.view', $school),
+            // UAT-C3: the payments standing on this charge now (after any
+            // corrections) -- the way to the payment page to correct one.
+            'payments' => $canViewPayments
+                ? collect($applications->netByCharge($school, [$detail->chargeId])[$detail->chargeId] ?? [])
+                    ->map(fn (string $amount, string $paymentId) => ['paymentId' => $paymentId, 'amount' => $amount])->values()->all()
+                : null,
         ]);
     }
 
@@ -259,6 +267,9 @@ class ChargeController extends Controller
             $service->cancel($school, $charge, $context->actor(), $validated['reason'] ?? null);
         } catch (ChargeNotFoundException) {
             throw new NotFoundHttpException;
+        } catch (ChargeHasPaymentAllocationsException) {
+            // UAT-C3 (UAT-FIN-24): say what to do, not the raw charge id.
+            return redirect("/app/finance/charges/{$charge}")->withErrors(['cancellation' => 'Payments still stand on this charge. Open each payment and move the money to the right charge (or reverse or refund it), then cancel this charge.']);
         } catch (FeesException $e) {
             // Already cancelled, payments allocated, fee-assessed (void the
             // assessment) or live concession adjustments (cancel them first).

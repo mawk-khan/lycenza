@@ -26,10 +26,18 @@ interface Props {
         currency: string;
         students: Array<{ name: string; studentNumber: string | null }>;
         lines: ReceiptLine[];
+        corrections: Array<{
+            kind: 'reallocation' | 'reversal' | 'refund';
+            amount: string;
+            on: string;
+        }>;
     };
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
+
+const reversal = props.receipt.corrections.find((c) => c.kind === 'reversal');
+const correctionLabel = { reallocation: 'Reallocated', reversal: 'Reversed', refund: 'Refunded' };
 
 function print(): void {
     window.print();
@@ -50,6 +58,15 @@ function print(): void {
                 Print
             </button>
         </div>
+
+        <p
+            v-if="reversal"
+            role="note"
+            class="mt-4 rounded border border-amber-300 bg-amber-50 p-3 text-sm font-medium text-amber-900"
+        >
+            REVERSED on {{ reversal.on }} -- this payment no longer stands. The receipt number is
+            kept for the record.
+        </p>
 
         <article class="mt-6 rounded border border-slate-300 p-6 print:mt-0 print:border-0">
             <header class="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
@@ -128,6 +145,23 @@ function print(): void {
                     </tr>
                 </tfoot>
             </table>
+
+            <div
+                v-if="receipt.corrections.length > 0"
+                class="mt-4 border-t border-slate-200 pt-3 text-sm"
+            >
+                <p class="font-medium">Later corrections</p>
+                <ul class="mt-1 space-y-1">
+                    <li
+                        v-for="(c, i) in receipt.corrections"
+                        :key="i"
+                        class="flex justify-between gap-2"
+                    >
+                        <span>{{ correctionLabel[c.kind] }} on {{ c.on }}</span>
+                        <span class="font-mono">{{ formatMoney(c.amount, receipt.currency) }}</span>
+                    </li>
+                </ul>
+            </div>
 
             <p class="mt-6 text-xs text-slate-500">
                 This is an acknowledgement that the payment above was received. It is not a tax

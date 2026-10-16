@@ -7,12 +7,15 @@ use App\Domain\Identity\Application\Portal\ActingGuardianResolver;
 use App\Domain\Identity\Application\Portal\GuardianOffboardingService;
 use App\Domain\Identity\Application\Portal\GuardianPortalAccessDeniedException;
 use App\Domain\Identity\Application\Staff\StaffAccessService;
+use App\Domain\Payments\Application\PaymentCorrectionData;
+use App\Domain\Payments\Application\PaymentCorrectionService;
 use App\Domain\Payments\Application\Portal\GuardianFeeReadService;
 use App\Domain\Payments\Application\StudentFeeStatementReadService;
 use App\Http\Middleware\EnsurePortalDevelopmentOnly;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Money\Money;
 use App\Support\Portal\PortalUnavailableException;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\LocalCatalogueFixtures;
@@ -138,6 +141,37 @@ class GuardianFeePortalTest extends TestCase
         $metadata = json_decode($this->audits($w['school'], GuardianFeeReadService::PAYMENT_VIEWED)->sole()->metadata, true);
         $this->assertSame([$w['a']->id, $w['shared']->paymentId, 1], [$metadata['studentId'], $metadata['paymentId'], $metadata['allocationCount']]);
         $this->assertStringNotContainsString('300.00', json_encode($metadata));
+    }
+
+    #[Test]
+    public function corrections_show_only_net_amounts_for_this_student_and_never_the_siblings_or_their_detail(): void
+    {
+        // UAT-C3: 100.00 of the shared payment moved from A's tuition to A's
+        // transport; the sibling's own payment reversed; a sibling-side move too.
+        $w = $this->world();
+        $b3 = $this->assessCharge($w['school'], $w['b'], $w['year'], $w['receivable'], $w['revenue'], '200.00', description: 'Sibling fee B3');
+        $correct = fn (string $paymentId, string $kind, array $extra = []) => app(PaymentCorrectionService::class)->correct($w['school'], new PaymentCorrectionData(
+            paymentId: $paymentId, kind: $kind, reason: 'Internal finance reason text', idempotencyKey: (string) Str::uuid(),
+            chargeId: $extra[0] ?? null, toChargeId: $extra[1] ?? null, amount: isset($extra[2]) ? Money::of($extra[2], 'INR') : null,
+        ), $w['recorder']);
+        $correct($w['shared']->paymentId, PaymentCorrectionData::REALLOCATION, [$w['a1']->id, $w['a3']->id, '100.00']);
+        $correct($w['shared']->paymentId, PaymentCorrectionData::REALLOCATION, [$w['b1']->id, $b3->id, '40.00']);
+        $correct($w['bOnly']->paymentId, PaymentCorrectionData::REVERSAL);
+
+        $statement = $this->asGuardian($w['g']['user'], $w['school'])->get($this->url($w['a']->id))->assertOk();
+        $statement->assertInertia(fn ($page) => $page
+            ->where('statement.totals', ['charged' => '1300.00', 'adjusted' => '200.00', 'paid' => '300.00', 'outstanding' => '800.00'])
+            ->where('statement.lines.0.paidTotal', '200.00')->where('statement.lines.0.outstanding', '600.00')
+            ->where('statement.lines.2.paidTotal', '100.00')->where('statement.lines.2.outstanding', '200.00'));
+        $payment = $this->get($this->url($w['a']->id, $w['shared']->paymentId))->assertOk();
+        $payment->assertInertia(fn ($page) => $page->where('payment.appliedTotal', '300.00'));
+
+        foreach ([$statement, $payment] as $response) {
+            foreach ([$w['b']->id, 'Sibling fee B', $b3->id, '940.00', '640.00', '600.00 to B', 'Internal finance reason text', $w['bOnly']->paymentId] as $leak) {
+                $this->assertStringNotContainsString($leak, (string) $response->getContent());
+            }
+        }
+        $this->get($this->url($w['a']->id, $w['bOnly']->paymentId))->assertNotFound();
     }
 
     #[Test]

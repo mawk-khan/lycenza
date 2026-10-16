@@ -129,24 +129,29 @@ class FinanceHttpArchitectureGuardTest extends TestCase
     }
 
     #[Test]
-    public function the_only_payment_mutation_route_is_the_browser_offline_recording_route(): void
+    public function the_only_payment_mutation_routes_are_browser_recording_and_correction(): void
     {
         $routes = collect(Route::getRoutes())
             ->filter(fn ($route) => str_contains($route->uri(), 'payments'))
             ->filter(fn ($route) => array_intersect(['POST', 'PUT', 'PATCH', 'DELETE'], $route->methods()) !== [])
             ->values();
 
-        // Phase 0O.11A (ADR 0031 implementation amendment section 9): exactly
-        // one Payment write exists -- recording an offline payment from a
-        // School browser session. No /api/v1 write, no edit/delete/refund,
-        // no provider callback; finance.payments.manage still does not exist.
-        $this->assertCount(1, $routes, 'Exactly one Payment mutation route may exist.');
-        $route = $routes->first();
-        $this->assertSame('app.finance.payments.record.store', $route->getName());
-        $this->assertSame(['POST'], $route->methods());
-        $this->assertContains('web', $route->gatherMiddleware(), 'The recording route must run in the web group (session + CSRF).');
-        $this->assertContains('throttle:finance-payment-recording', $route->gatherMiddleware());
-        $this->assertStringStartsNotWith('api/', $route->uri());
+        // Phase 0O.11A (ADR 0031 implementation amendment section 9): recording
+        // an offline payment from a School browser session. UAT-C3 (ADR 0031
+        // amendment §3): correcting one (reallocate, reverse, refund) as a new
+        // linked record. No /api/v1 write, no edit/delete, no provider
+        // callback; finance.payments.manage still does not exist.
+        $this->assertSame(
+            ['app.finance.payments.corrections.store', 'app.finance.payments.record.store'],
+            $routes->map(fn ($route) => $route->getName())->sort()->values()->all(),
+            'Only the recording and correction Payment mutation routes may exist.',
+        );
+        foreach ($routes as $route) {
+            $this->assertSame(['POST'], $route->methods());
+            $this->assertContains('web', $route->gatherMiddleware(), 'Payment writes must run in the web group (session + CSRF).');
+            $this->assertContains('throttle:finance-payment-recording', $route->gatherMiddleware());
+            $this->assertStringStartsNotWith('api/', $route->uri());
+        }
     }
 
     #[Test]

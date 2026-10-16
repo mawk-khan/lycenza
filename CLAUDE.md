@@ -951,12 +951,19 @@ docs/roadmap             MASTER-ROADMAP.md
     (same User + identical content replays, anything else fails closed).
     The settlement account is an active School `asset` account; `settled_at`
     is the School-local occurred date, `created_at` the recorded-at. Posted
-    Payments are immutable with NO correction action in v1 -- never add an
-    edit, delete, refund, void, negative Payment or "correction" without an
-    approved Finance correction contract, and never reverse a Payment's
-    journal entry (`journal_entries_payment_reversal_guard`). Never log or
-    audit the reference, key or form payload, and never accept card or
-    bank credentials.
+    Payments, allocations and receipts are immutable. The ONLY correction
+    path is `PaymentCorrectionService` (UAT-C3, ADR 0031 amendment §3):
+    reallocation, reversal (once, final) or recorded refund, each a new
+    linked `payment_corrections` row with its own journal entry, a reason,
+    fresh MFA and a server-issued key. Never add an edit, delete, void,
+    negative Payment, gateway refund or a further correction kind without
+    amending that contract. Never use a concession as a correction, and
+    never reverse a Payment's own journal entry
+    (`journal_entries_payment_reversal_guard`). Capacity, cancellation and
+    charge state always use the EFFECTIVE allocation
+    (`payments_effective_allocated()`). Never log or audit the reference,
+    key, reason text or form payload, and never accept card or bank
+    credentials.
 
 92. **Staff and School-admin accounts are provisioned only through the ADR
     0059 paths, and School access is revoked by suspension, never by

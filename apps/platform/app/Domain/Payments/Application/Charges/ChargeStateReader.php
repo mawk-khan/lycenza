@@ -6,6 +6,7 @@ use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Finance\Application\Periods\FinancialPeriodService;
 use App\Domain\Payments\Infrastructure\FinancialPeriodChargeState;
 use App\Domain\Payments\Infrastructure\PaymentAllocation;
+use App\Domain\Payments\Infrastructure\PaymentCorrectionLine;
 use App\Models\School;
 use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
@@ -56,6 +57,30 @@ class ChargeStateReader
     }
 
     /**
+     * UAT-C3: every payment-correction line on these charges as a signed
+     * amount (apply +, release -) with its correction's journal entry -- the
+     * same [amount, entry] shape as an allocation, so every reader that sums
+     * allocations by entry (this one, the period close, the all-history
+     * check) treats a correction as a later fact of its own entry.
+     *
+     * @param  list<string>|null  $chargeIds  null: every charge of the School
+     * @return array<string, list<array{0: string, 1: string}>>
+     */
+    public static function correctionFacts(School $school, ?array $chargeIds): array
+    {
+        $facts = [];
+        foreach (PaymentCorrectionLine::query()->where('payment_correction_lines.school_id', $school->id)
+            ->when($chargeIds !== null, fn ($q) => $q->whereIn('payment_correction_lines.charge_id', $chargeIds))
+            ->join('payment_corrections', fn ($join) => $join->on('payment_corrections.id', '=', 'payment_correction_lines.payment_correction_id')->on('payment_corrections.school_id', '=', 'payment_correction_lines.school_id'))
+            ->toBase()->select(['payment_correction_lines.charge_id', 'payment_correction_lines.direction', 'payment_correction_lines.amount', 'payment_corrections.journal_entry_id'])->cursor() as $row) {
+            $amount = (string) $row->amount;
+            $facts[(string) $row->charge_id][] = [$row->direction === PaymentCorrectionLine::RELEASE ? '-'.$amount : $amount, (string) $row->journal_entry_id];
+        }
+
+        return $facts;
+    }
+
+    /**
      * @param  list<string>  $ids
      * @return array<string, ChargeState>
      */
@@ -72,6 +97,13 @@ class ChargeStateReader
             ->join('payments', fn ($join) => $join->on('payments.id', '=', 'payment_allocations.payment_id')->on('payments.school_id', '=', 'payment_allocations.school_id'))
             ->toBase()->select(['payment_allocations.charge_id', 'payment_allocations.amount', 'payments.journal_entry_id'])->get() as $row) {
             $allocations[(string) $row->charge_id][] = [(string) $row->amount, (string) $row->journal_entry_id];
+        }
+        // UAT-C3: correction lines move a Payment's effect between charges
+        // (apply +, release -), dated by the correction's own journal entry.
+        foreach (self::correctionFacts($school, $ids) as $chargeId => $rows) {
+            foreach ($rows as $row) {
+                $allocations[$chargeId][] = $row;
+            }
         }
         $adjustments = [];
         foreach ($this->charges->adjustmentLedgerFacts($school, $ids) as $adjustment) {
