@@ -442,6 +442,15 @@ Recorded as **SB-08** (LATER CHECKPOINT, P3). Not built.
 **Proposed additions** to the register. These are proposals, not approved
 decisions, and none blocks any stage.
 
+*(2026-10-16, owner decisions recorded in ADR 0075 §22:
+- **D-14:** APPROVED CLASSIFICATION, privacy-gated.
+- **D-15:** do not add now.
+- **D-16:** defer.
+- **D-17:** defer; no generic grouping framework.
+
+SB-01 to SB-03b are accepted as a post-staging P2 backlog. They are not staging
+blockers. The "Recommended answer" column below is kept as written.)*
+
 | ID | Question | Why | Recommended answer (not approval) | Gate |
 |---|---|---|---|---|
 | D-14 | Are money totals grouped by a people dimension (admission cohort, Grade, Campus, fee head) person-derived Analytics cells under the ADR 0040 amendment §1 ("could disclose information about people")? | SB-04. A one-Student Grade discloses one family's balance | **Yes**: treat them as Highly Sensitive person-derived cells under the same N and complementary suppression, decided together with D-01–D-03. An ungrouped School-wide collection/day-book for Finance staff stays an operational Finance list (V11.7 backlog) | Owner + privacy |

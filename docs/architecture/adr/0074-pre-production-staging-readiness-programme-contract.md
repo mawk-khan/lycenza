@@ -1672,3 +1672,112 @@ PROVISIONING NOT STARTED.**
 - E05, E08 and E09 are not complete.
 - E16: valid through **2026-11-09**; successor cycle around
   **2026-10-30**.
+
+## 29. Post-V11 PPR re-entry reconciliation (2026-10-16, record only)
+
+**Authority.** The owner's post-V11 transition brief. Baseline: `main` =
+`53e29ca6`. V11 is reconciled (ADR 0075 §21–§22), with the product-side
+staging handoff YES. **Nothing was provisioned, no credential was created
+or requested, and no product code changed.**
+
+### 29.1 Checkpoint map
+
+| Slice | State | Evidence |
+|---|---|---|
+| PPR.0 | Complete | §1–§25 |
+| PPR.1 | Complete | §26, `37e0b319` |
+| PPR.2 | Plan complete; **operator action not started** | §27 |
+| PPR.2D | Frozen (AWS, ap-south-1, ECS on EC2, Terraform) | §28 |
+| PPR.2 **R-00a** | Approved by the owner 2026-10-14, **BLOCKED**, no resource created; re-verified here (§29.2) | — |
+| PPR.2 R-00b, R-01 to R-13 | Not started (each needs R-00a and its own approval) | — |
+| PPR.2 R-14 to R-20 | Blocked until PPR.3 (VERIFIED digest) | §27 |
+| PPR.3 | Not started (needs PPR.2, OD-PPR-5, a VERIFIED app image) | — |
+| PPR.4, PPR.5, PPR.6, PPR.7, PPR.8 | Not started (need PPR.2) | — |
+| PPR.9 | Not started (parallel; needs OD-PPR-10/-11/-12/-15/-19) | — |
+| PPR.10 | Not started (legal answers outstanding) | — |
+| PPR.11 | Last | — |
+| PPR-E16 | Gate current: OWNER-0O-E16-2026-10-16 (E16-S1, `c638121e`), valid through **2026-11-12**, hard stop **2026-11-13**. **App image NOT VERIFIED**: three Critical and one High Debian-nginx findings with no trixie fix. **E16-R2 HELD** (candidate `fb29aff5` on `integration/e16-r2`, unpublished) | `docs/security/release-remediation/` |
+
+**Date drift.** §26–§28 and the roadmap row say E16 is valid through
+2026-11-09 with publication blocked from 2026-11-10. E16-S1 superseded
+those dates (2026-11-12 and 2026-11-13). The earlier text is kept as
+written.
+
+### 29.2 R-00a re-verification (once)
+
+**Still BLOCKED.**
+- **What changed since 2026-10-14:** an AWS CLI is now installed
+  (`aws-cli/2.37.4`).
+- **What is still missing:**
+  - no profile, credentials or region is configured (`aws configure list`
+    shows all four entries unset);
+  - `aws sts get-caller-identity` fails with `NoCredentials`;
+  - Terraform is not installed;
+  - no `AWS_*` variables and no `LYCENZA_OPERATOR_EVIDENCE_ROOT` are set.
+- **How it was checked:** through the standard credential chain only. No
+  credential search, no key request, nothing installed, no account touched.
+- **Consequence:** the AWS Organization state (precondition §1) still
+  cannot be determined.
+
+**What the owner must provide to unblock R-00a.** Nothing below may be
+improvised:
+1. **An authorised short-lived session** in this environment, or the owner
+   performing R-00a in the console. A short-lived session means IAM
+   Identity Center or `aws login`, never long-lived access keys.
+2. **The Organization status:**
+   - if one exists, it must be all-features mode and owner-controlled;
+   - if none exists, creating one needs a separate **R-00a0** approval.
+3. **A member-account root mailbox.** It is never recorded.
+4. **The CloudTrail log destination,** if no organisation trail exists.
+5. **The Identity Center permission-set scope**
+   (Terraform-apply, read-only verify, secret-writer).
+6. **An operator evidence root outside Git** (OD-PPR-9 store).
+
+**Reconciliation item.** The runbook's R-00a text ("protect the root user
+with MFA") must be reconciled with the root-access posture the owner
+approves for R-00a. This is done when the R-00a evidence is recorded, not
+now.
+
+### 29.3 Work that does not need AWS
+
+| Item | Nature | Blocks | Ready? |
+|---|---|---|---|
+| **F-D1 / P2-F3:** prove `predis` with TLS + AUTH (and a publicly trusted certificate) | Engineering verification on a local TLS Redis; an application change only if it fails | R-08 | **Yes**, no decision needed |
+| Reviewed R-00b / R-01 Terraform change | First IaC slice (F-D3); needs a pinned Terraform toolchain decision | R-01 | After the tooling decision; cannot be planned against a real account |
+| P2-F2: boot check for the lookup HMAC keys | Small code slice | Staging configuration confidence | Yes |
+| OD-PPR-22: per-role secret narrowing | Guard + manifest change | PPR.6 | Owner decision first |
+| PPR.9 runbooks (key rotation, incident/breach, tenant support) | Documentation | PPR.11 | OD-PPR-10/-11/-12/-15 |
+| Legal requests (E17, E21 ratification, E30–E34, PAY-L1, breach framework) | Owner sends | PPR.6, PPR.10 | Drafts exist; sending is the owner's action |
+| E16-R2 monitoring | Weekly Debian trixie nginx / Grype check | PPR.3 (VERIFIED app image) | Cadence; last check 2026-10-16 |
+
+### 29.4 Prerequisites before the first staging deployment (R-14)
+
+1. R-00a, R-00b and R-01 to R-13 approved and evidenced:
+   - E09 platform;
+   - E08 secrets, including both lookup HMAC keys and the
+     `MAIL_STAGING_DELIVERY=capture` sink;
+   - E05 database / storage verifiers, 0 failed.
+2. F-D1 proven before R-08.
+3. OD-PPR-8 non-production domains, DNS and public TLS certificates.
+4. PPR.3:
+   - OD-PPR-5 registry and signing custody;
+   - **VERIFIED app and Gateway digests** built from a published `main`
+     SHA;
+   - E16 valid on that date. The app image is blocked today by the nginx
+     Criticals.
+5. Synthetic data only (OD-PPR-2). No real Student or customer data, and no
+   benchmark data.
+6. Automated database backups and point-in-time recovery enabled at R-05,
+   so the E10 history accrues before the E11 drill.
+
+### 29.5 Recommendation
+
+**The next PPR checkpoint is the F-D1 Redis TLS + AUTH verification.** It
+is the highest-value AWS-independent item that needs no owner decision:
+- it is a named prerequisite on the staging path (R-08);
+- it is the only PPR.2D data-tier assumption still unproven;
+- if it fails, the application change it needs should land before
+  infrastructure exists, not after.
+
+It is not started automatically. R-00a stays blocked until the owner
+provides authorised access (§29.2).

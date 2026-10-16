@@ -1174,3 +1174,31 @@ handoff (YES), pilot and production requirements are unchanged.
 **Recommendation.** No new V11 implementation should precede PPR /
 staging. A later read-only bundle, SB-01 to SB-03b (no migration), needs
 owner authorisation and is not started.
+
+## 22. Benchmark owner decisions and V11 closure position (2026-10-16)
+
+The owner decided the four proposals from §21. They now enter the decision
+register, replacing the §21 recommendations.
+
+| ID | Decision | Effect |
+|---|---|---|
+| **D-14** | **APPROVED CLASSIFICATION: PRIVACY-GATED.** Money totals grouped by Grade, Campus or another cohort fall under the people-derived Analytics/privacy gate wherever a small cohort could disclose, or allow inference of, family-level financial information | No admission-cohort money totals (SB-04) until the V11.1 privacy decisions (D-01–D-04) are resolved |
+| **D-15** | **DO NOT ADD NOW.** No Student gender or other demographic or sensitive field because a benchmark reports it | A field may be considered only with a specific statutory or reporting requirement, a defined lawful purpose, data minimisation, authorization, and a retention/privacy review. Analytics alone is never sufficient |
+| **D-16** | **DEFER** Student Leave | Revisit only when a pilot School shows a real requirement, with defined leave semantics, a clear attendance interaction, and Guardian/Teacher notification rules approved under the existing notification architecture (ADR 0043, D-08) |
+| **D-17** | **DEFER** houses, clubs, activities and custom groups. **No generic Student-grouping framework** | Revisit only for a concrete pilot requirement (House, Club, Activity, lab/practical group or another named membership), modelled as that business concept |
+
+**Accepted post-staging P2 backlog.** SB-01, SB-02, SB-03a and SB-03b
+(§21) are accepted P2 improvements:
+- they are not staging blockers;
+- they are not implemented during the PPR transition;
+- each still needs owner authorisation when product work resumes.
+
+**V11 closure position:**
+- V11.1 to V11.7 are not restarted. Their recorded decisions stay
+  authoritative.
+- The completed benchmark is additional evidence only. It produced no P0
+  and no P1; four accepted P2 items; P3 candidates; and the four decisions
+  above.
+- The product-side staging handoff stays **YES**. This is not a claim that
+  actual staging is ready (ADR 0074).
+- The programme focus returns to PPR (ADR 0074 §29).
