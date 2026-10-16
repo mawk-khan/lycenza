@@ -984,3 +984,31 @@ now follow the existing fee-head account rule (§17.2).
 - Fee-run proration and duplicate detection.
 - A full WCAG programme or external assistive-technology certification.
 - UAT-C5 (administrator guide).
+
+## 18. Local UAT readiness reassessment (record only, 2026-10-16)
+
+**What was assessed:** published `main` `3184d981` was reassessed in the
+browser. The full evidence is
+[`LOCAL-UAT-READINESS-REASSESSMENT-2026-10-16.md`](../../product/LOCAL-UAT-READINESS-REASSESSMENT-2026-10-16.md).
+It changes no code, decision or permission.
+
+**Outcome:**
+- All five former S1s pass, and there is no S0.
+- One UAT-C4 regression (S2, display only): Library loan dates are
+  formatted as instants, so a School west of UTC sees the previous day
+  (RA-LIB-DATES).
+- New S2 gaps:
+  - the Employee↔User link is API-only (UAT-STF-05);
+  - the reporting manager is entered as an Assignment UUID (UAT-HR-23);
+  - fee runs double-bill Students who already carry a same-term ad-hoc
+    charge (UAT-FIN-20).
+
+**Determinations:**
+- New weighted score: 89.5 (not added to the 72 % of 2026-10-15).
+- Local UAT: READY WITH LIMITATIONS.
+- Product-side staging handoff: CONDITIONAL on the regression fix.
+- Actual staging: NO (PPR, E16-R2 hold).
+- Pilot: NO.
+
+**Recommended next:** UAT-C6, pre-staging product corrections, before
+UAT-C5. It needs owner authorisation and is not started.

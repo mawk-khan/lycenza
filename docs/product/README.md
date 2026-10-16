@@ -21,3 +21,8 @@ decision register D-01–D-13, stage gates and the UAT matrix.)*
 *(2026-10-15, Local UAT: `LOCAL-UAT-2026-10-15.md` is the structured local
 UAT evidence record (167 checks, defect register UAT-*, correction sequence
 UAT-C1–C5). It records and classifies; it fixes nothing.)*
+
+*(2026-10-16, readiness reassessment:
+`LOCAL-UAT-READINESS-REASSESSMENT-2026-10-16.md` re-tests published `main`
+after UAT-C1 to UAT-C4: score 89.5, local UAT ready with limitations, one
+C4 regression. It records and classifies; it fixes nothing.)*
