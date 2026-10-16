@@ -123,7 +123,9 @@ E05-5 is RECOMMENDED corroboration.
 | `DB_ADMIN_USERNAME`, `DB_ADMIN_PASSWORD` | S E | staging migration role (release/console only) |
 | `DB_RETENTION_USERNAME`, `DB_RETENTION_PASSWORD` | S E | staging retention role (scheduler/console only) |
 | `DB_CONNECT_TIMEOUT` | P = | 5 |
-| `REDIS_HOST` / `REDIS_PORT` / `REDIS_CLIENT` | P E | staging endpoint / 6379 / `predis` |
+| `REDIS_HOST` / `REDIS_PORT` / `REDIS_CLIENT` | P E | staging endpoint / 6379 / `predis` (with `REDIS_URL` set, the URL's host and port win) |
+| `REDIS_URL` | P E | `tls://<endpoint>:6379`, no credentials in the URL; `?ssl[cafile]=` only for a private CA (F-D1, STAGING-INFRASTRUCTURE-ARCHITECTURE §5) |
+| `REDIS_USERNAME` | S E | only for an ACL (RBAC) user |
 | `REDIS_PASSWORD` | S E | staging |
 | `CACHE_STORE` / `QUEUE_CONNECTION` / `SESSION_DRIVER` | P = | `redis` |
 | `APP_MAINTENANCE_DRIVER` / `APP_MAINTENANCE_STORE` | P = | `cache` / `database` (image defaults) |

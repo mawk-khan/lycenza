@@ -1781,3 +1781,137 @@ is the highest-value AWS-independent item that needs no owner decision:
 
 It is not started automatically. R-00a stays blocked until the owner
 provides authorised access (§29.2).
+
+## 30. F-D1 — Redis TLS + authentication verification (2026-10-16)
+
+**Authority.** The owner approved F-D1 (2026-10-16). It is a local
+protocol and client proof. **No AWS access was used and no cloud resource
+was created.** R-08 is **not** complete. F-D1 clears only its stated
+prerequisite.
+
+### 30.1 Redis architecture (as found)
+
+- **Client:** Predis 3.6.0 (`REDIS_CLIENT=predis`, set in the production
+  image). No phpredis is compiled in; Horizon is not installed; the AI
+  Gateway uses no Redis.
+- **Two connections, one set of credentials.** Both `default` and `cache`
+  read `REDIS_URL`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_USERNAME` and
+  `REDIS_PASSWORD`. They differ only in the logical database:
+
+| Connection | Database | Used by |
+|---|---|---|
+| `default` | `REDIS_DB` | queues; cache locks (`lock_connection`, including `TenantLock` and scheduler overlap locks); Redis sessions; the metrics hash |
+| `cache` | `REDIS_CACHE_DB` | the cache store, and with it the rate limiter, the session handoff store and the AI replay store |
+
+- **Readiness:** probes `default`.
+
+### 30.2 Configuration contract
+
+No new variable and no code path were needed. Laravel's
+`ConfigurationUrlParser` maps `tls://` and `rediss://` to Predis's `tls`
+scheme and carries `?ssl[...]` into the stream context. Predis enables
+crypto with PHP's defaults, so peer and hostname verification stay on.
+
+**Contract:**
+- `REDIS_URL=tls://<endpoint>:6379`, with no credentials in the URL;
+- `REDIS_PASSWORD` always;
+- `REDIS_USERNAME` only for an ACL user;
+- `?ssl[cafile]=` only for a private CA.
+
+Recorded in `docs/operations/STAGING-INFRASTRUCTURE-ARCHITECTURE.md` §5,
+`STAGING-EVIDENCE-PLAN.md`, the R-08 runbook step and `.env.example`.
+
+### 30.3 Finding F-D1-1 (FIXED): readiness ignored the connection configuration
+
+**Defect.** `OperationalStatusService::redis()` built its own Predis client
+with a hard-coded `scheme => 'tcp'`, reading only host, port and password.
+Against a TLS-only Redis it reported `unhealthy`, which would fail E09-5 and
+keep every role out of service. Against a plaintext Redis wrongly
+configured as `tls://` it reported `healthy`: a silent downgrade.
+
+**Fix.** The probe now resolves `default` through Laravel's own
+`RedisManager`, overriding only its short timeouts. This is the same
+principle as 0O.4A's `sslmode` fix for PostgreSQL.
+
+**Test.** `Tests\Feature\Observability\RedisReadinessConnectionTest` covers:
+- the URL being followed;
+- no TLS downgrade;
+- the probe's own timeout;
+- the `tls`/`rediss` parameter contract.
+
+Two of its tests fail on the previous code.
+
+### 30.4 Live proof
+
+**Evidence id:** `EVID-PPR2-2026-1`.
+- **Raw evidence:** outside Git under the operator evidence root
+  `ppr/EVID-PPR2-2026-1/`. It holds the `before-fix` and `after-fix`
+  runs, the harness, certificate subjects (never keys), server
+  configuration notes and a leak check.
+- **Role:** Engineering, authorised by Owner 2026-10-16.
+
+**Setup:**
+- **Runtime:** the production application image runtime (PHP 8.3.35,
+  Debian OpenSSL) with the repository code mounted.
+- **Network:** a disposable `--internal` network, isolated from everything
+  else.
+- **Servers:**
+  - **Redis 7.4.11** (the digest pinned in `verify-images.sh`) and
+    **Valkey 8.1.9**;
+  - `port 0` (no plaintext listener), `tls-port 6379`, no client
+    certificates;
+  - a default-user password and an ACL user.
+- **Certificates:** a generated test CA, a server certificate with
+  endpoint SANs, an unknown CA, and an expired certificate signed by the
+  trusted CA. Passwords and keys were generated per run and deleted.
+
+**Before the fix:** at `b2bea79c`, everything below passed except
+readiness, which reported `unhealthy` on a valid TLS connection (4 of 4
+positive cases).
+
+**After the fix:** 36 of 36 checks passed.
+
+- **TLS:** TLS 1.3 (`TLS_AES_256_GCM_SHA384`) on both connections, both
+  servers and both auth modes.
+- **Consumers:**
+  - cache put/get/forget, and TTL expiry (server TTL 2 s, then gone);
+  - a lock held and a second acquire refused;
+  - rate-limiter hits;
+  - Redis session write and read;
+  - the metrics hash;
+  - readiness `healthy` in about 0.02 s.
+- **Queue:**
+  - a job dispatched over TLS;
+  - a `lycenza console queue:work` worker (the deployment entrypoint) ran
+    it;
+  - a worker with a wrong password, or presented an unknown CA, consumed
+    nothing and logged only the exception class.
+- **Refused:**
+  - unknown CA;
+  - system trust only (private CA not supplied);
+  - wrong hostname (SAN mismatch);
+  - expired certificate;
+  - wrong, missing or wrong-user credentials;
+  - plaintext to the TLS port;
+  - TLS to a plaintext server.
+
+  Readiness reported `unhealthy` in each of those cases.
+- **Leak check:** no password or private-key material in any captured
+  output. Predis errors name only `tls://host:port`.
+
+### 30.5 Findings reported, not fixed (outside F-D1)
+
+| ID | Finding | Recommendation |
+|---|---|---|
+| F-D1-2 | `ProductionConfigurationGuard` requires a Redis password but neither requires TLS nor refuses `ssl[verify_peer]=0` / `verify_peer_name=0` in a hardened environment. ADR 0050 §6 does not require Redis TLS, but AWS needs it for auth | A small guard slice before R-14, so that a disabled-verification Redis configuration refuses to boot. Whether to require TLS outright is an owner decision (it amends ADR 0050 §6) |
+| F-D1-3 | When Redis **hangs** rather than refuses (for example TLS to a plaintext endpoint, or a blackholed address), readiness takes about 10 s. The probe itself stops at its 0.5 s budget; the delay is the failure counter written through the metrics store to the same Redis, with Laravel's default 10 s connection timeout. This predates F-D1 | PPR.4: bound the connection timeout explicitly (a `timeout` on the Redis connections) or keep the readiness metric off the failing dependency, and align it with the load-balancer health-check timeout |
+
+### 30.6 Not proven here (R-08 / E09 on the real service)
+
+- ElastiCache's actual certificate chain verified by the image CA bundle.
+- Cluster mode, replicas, failover, Multi-AZ, and IAM authentication.
+- The guard-hardened `APP_ENV=staging` boot against the real endpoint,
+  including scheduler and web roles under load.
+
+**Status.** F-D1 is **PASS**: the Predis TLS + auth assumption is proven,
+with one wiring defect fixed. R-00a stays blocked (§29.2).

@@ -235,7 +235,7 @@ R-05 and R-09 only choose services that support them.
 - **Evidence:** `EVID-E09-…`.
 
 ### R-08 — Redis-compatible service
-- **Pre:** R-01, **and finding F-D1 cleared**: an engineering verification that `predis` connects with TLS + AUTH (ElastiCache enables AUTH only with in-transit TLS).
+- **Pre:** R-01. Finding F-D1 is **cleared** (2026-10-16, ADR 0074 §30): `predis` connects with verified TLS and auth, and the readiness probe follows the same connection. That proof was local, not of this service.
 - **Approve:** create the cache/queue service only.
 - **Do:** create a private Redis-protocol service:
   - authentication required;
@@ -244,7 +244,10 @@ R-05 and R-09 only choose services that support them.
 - **Verify:**
   - an unauthenticated `PING` is refused;
   - an authenticated `PING` succeeds from the application zone;
-  - there is no public address.
+  - there is no public address;
+  - in-transit TLS is on, and the service certificate verifies against the
+    image's CA bundle under the endpoint name (a `tls://` `REDIS_URL` with no
+    `ssl[cafile]`).
 - **Undo:** D-08.
 - **Secrets:** `REDIS_PASSWORD` (`app_runtime`).
 - **Evidence:** `EVID-E09-…`.

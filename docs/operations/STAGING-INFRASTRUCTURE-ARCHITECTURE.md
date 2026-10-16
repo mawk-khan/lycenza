@@ -133,12 +133,53 @@ step fails, as intended.
 |---|---|
 | Product | any Redis-protocol service the code's `predis` client supports (Redis 7 / Valkey). E12 recovery is unchanged: Redis holds **no** irreplaceable record; PostgreSQL reconciliation rebuilds queued work |
 | Network | data zone, private; application zone only |
-| Authentication | `REDIS_PASSWORD` required (guard `redis_password_missing`); ACL user if the service supports it |
-| TLS | **not required** by the hardened contract (ADR 0050 §6: private network + auth). *RECOMMENDED where the provider offers it;* `predis` speaks TLS through a `tls://` `REDIS_URL`, which **is not yet proven in this repository** and would need a verification step before being relied on |
+| Authentication | `REDIS_PASSWORD` required (guard `redis_password_missing`). Two modes proven by F-D1: a password on the default user (ElastiCache AUTH-token style), or an ACL user (`REDIS_USERNAME` + `REDIS_PASSWORD`, ElastiCache RBAC style) |
+| TLS | Not required by the hardened contract (ADR 0050 §6), but **mandatory on AWS** (F-D1 below; PPR.2D F-D1: ElastiCache enables auth only with in-transit TLS). See the connection contract below |
 | Logical databases | `0` = queues, locks, rate limits, the session handoff store; `1` = cache (`REDIS_DB`, `REDIS_CACHE_DB`); key prefix from `APP_NAME` |
 | Eviction | **`noeviction`**: queue and lock keys must never be silently evicted. Size memory so the cache cannot fill it |
 | Persistence | optional (AOF/RDB). Not required, because reconciliation exists. A loss signs users out (sessions/MFA assurance) and is exercised as E12 |
 | Monitoring | readiness (OBS-03) and the provider's memory/eviction metrics (PPR.4) |
+
+### TLS connection contract (F-D1, proven 2026-10-16)
+
+**Configuration.** No new variable and no code path were added. Laravel 13 with
+Predis 3.6.0 already expresses a verified TLS connection.
+
+| Variable | Value | Kind |
+|---|---|---|
+| `REDIS_URL` | `tls://<endpoint>:6379` (or `rediss://`). **Never put credentials in the URL** | P E |
+| `REDIS_PASSWORD` | the auth token / ACL password | S E |
+| `REDIS_USERNAME` | only for an ACL (RBAC) user | S E |
+| `?ssl[cafile]=<path>` (URL query) | only for a **private** CA. A publicly trusted service certificate uses the image's system CA bundle | P E |
+
+**Never set** `ssl[verify_peer]=0`, `ssl[verify_peer_name]=0` or
+`ssl[allow_self_signed]=1`. Both connections, `default` and `cache`, read the
+same URL and credentials. They keep their own logical databases
+(`REDIS_DB`, `REDIS_CACHE_DB`).
+
+**What the live proof covered.** The proof ran on the production
+application image runtime (PHP 8.3.35) with the F-D1 change applied, against TLS-only servers:
+- **Servers:** Redis 7.4.11 and Valkey 8.1.9, with no plaintext listener and
+  auth required.
+- **Connection:** TLS 1.3 with peer and hostname verification, for both
+  connections and both auth modes.
+- **Consumers exercised:** cache (put/get/forget/TTL), locks, rate limiter,
+  Redis sessions, the metrics hash, readiness, and queue dispatch plus a
+  `lycenza console queue:work` worker.
+- **Refused:**
+  - unknown CA, system trust only for a private CA, wrong hostname, expired
+    certificate;
+  - wrong, missing or wrong-user credentials;
+  - plaintext to the TLS port, and TLS to a plaintext server. There is no
+    downgrade path.
+- **Workers:** a worker given bad credentials or an untrusted CA consumes
+  nothing and logs only the exception class.
+- **Secrets:** no password or key material appeared in any output.
+
+**Not covered** (R-08 / E09 on the real service):
+- ElastiCache's actual certificate chain against the image CA bundle;
+- cluster mode, replicas, failover, Multi-AZ and IAM authentication;
+- the guard-hardened (`APP_ENV=staging`) boot against the real endpoint.
 
 ## 6. Object storage
 

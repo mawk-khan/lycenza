@@ -5,10 +5,10 @@ namespace App\Support\Observability;
 use App\Support\Email\EmailStatus;
 use App\Support\Email\Providers\EmailProviderResolver;
 use App\Support\Observability\Signals\OperationalSignals;
+use Illuminate\Redis\RedisManager;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use PDO;
-use Predis\Client as PredisClient;
 use Throwable;
 
 /**
@@ -93,16 +93,16 @@ class OperationalStatusService
     {
         try {
             $start = microtime(true);
-            $config = (array) config('database.redis.default');
-            $client = new PredisClient([
-                'scheme' => 'tcp',
-                'host' => $config['host'] ?? '127.0.0.1',
-                'port' => $config['port'] ?? 6379,
-                'password' => $config['password'] ?? null,
-                'timeout' => max(0.1, (int) config('observability.readiness_check_timeout_ms') / 1000),
-                'read_write_timeout' => max(0.1, (int) config('observability.readiness_check_timeout_ms') / 1000),
-            ]);
-            $client->ping();
+            $timeout = max(0.1, (int) config('observability.readiness_check_timeout_ms') / 1000);
+            // PPR F-D1: the probe resolves the `default` connection exactly
+            // as the application does -- REDIS_URL, a tls:// or rediss://
+            // scheme, REDIS_USERNAME, the ssl context, the database -- and
+            // only shortens the timeouts. A hand-built tcp client reported a
+            // healthy TLS-only Redis as unreachable (like 0O.4A's sslmode).
+            $redis = (array) config('database.redis');
+            $redis['default'] = ['timeout' => $timeout, 'read_write_timeout' => $timeout] + (array) ($redis['default'] ?? []);
+            unset($redis['default']['retry']);
+            (new RedisManager(app(), (string) ($redis['client'] ?? 'predis'), $redis))->connection('default')->ping();
             $durationMs = (int) round((microtime(true) - $start) * 1000);
 
             return new ComponentStatus('redis', OperationalStatus::Healthy, detail: ['duration_ms' => $durationMs]);
