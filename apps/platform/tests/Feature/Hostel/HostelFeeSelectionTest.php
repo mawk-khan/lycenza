@@ -131,7 +131,10 @@ class HostelFeeSelectionTest extends TestCase
     /** @param  array<string, mixed>  $w */
     private function charges(array $w, Student $student): Collection
     {
-        return $this->inSchool($w['school'], fn () => Charge::query()->where('student_id', $student->id)->orderBy('created_at')->get());
+        // `created_at` has one-second precision and a whole test usually lands
+        // in one second, so the id breaks ties: a total order, identical on
+        // every read of the same rows.
+        return $this->inSchool($w['school'], fn () => Charge::query()->where('student_id', $student->id)->orderBy('created_at')->orderBy('id')->get());
     }
 
     /** @return array<string, list<string>> charged amounts by fee head id @param  array<string, mixed>  $w */
@@ -298,8 +301,13 @@ class HostelFeeSelectionTest extends TestCase
 
         // The next period bills the new tier in full; nothing is prorated or credited.
         $this->executedRun($w, 'T2');
-        $this->assertSame([$w['standard']->id => ['5000.00'], $w['premium']->id => ['9000.00']],
-            array_intersect_key($this->chargedByHead($w, $student), [$w['standard']->id => 1, $w['premium']->id => 1]));
+        // What each head was charged -- a mapping, so both sides are compared
+        // in key order (fee-head ids carry no order of their own).
+        $expected = [$w['standard']->id => ['5000.00'], $w['premium']->id => ['9000.00']];
+        $actual = array_intersect_key($this->chargedByHead($w, $student), $expected);
+        ksort($expected);
+        ksort($actual);
+        $this->assertSame($expected, $actual);
     }
 
     #[Test]
