@@ -118,15 +118,17 @@ Since Phase 0O.6F:
 - A new advisory, a new package version, a raised severity, or a fix
   becoming available is **not** covered. It blocks and goes to a separate
   review; it is never folded into an existing approval.
-- **Current approval (since 2026-10-11):** `OWNER-0O-E16-2026-10-11`
-  (`docs/security/release-remediation/0O-E16-2026-10-11-owner-security-decision.md`).
-  - It is a new decision after the E16-R1 remediation and a fresh scan of
-    `29785e1`: 16 advisories and 115 records (97 renewed after
-    re-verification, plus 18 new; 60 application, 55 Gateway).
-  - All records expire **2026-11-10**, so the last passing day is
-    2026-11-09.
-  - The superseded `OWNER-0O-E16-2026-09-29` and `OWNER-0O6E-2026-09-26`
-    stay history and are no longer in `approvals`.
+- **Current approval (since 2026-10-16):** `OWNER-0O-E16-2026-10-16`
+  (`docs/security/release-remediation/0O-E16-2026-10-16-owner-security-decision.md`).
+  - It is the E16 successor (E16-S1), decided after a fresh scan of
+    `78b68d6d`. It covers the same 16 no-fix advisories and 115 records (60
+    application, 55 Gateway), re-verified and renewed unchanged for 28 days.
+  - All records expire **2026-11-13**, so the last passing day is
+    2026-11-12.
+  - No Critical is excepted. The Debian nginx Criticals are remediated by
+    E16-R2.
+  - The superseded `OWNER-0O-E16-2026-10-11`, `OWNER-0O-E16-2026-09-29` and
+    `OWNER-0O6E-2026-09-26` stay history and are no longer in `approvals`.
 - **Whole-file expiry.** One expired record invalidates the whole file,
   so a replacement decision must land **before** the common expiry.
 

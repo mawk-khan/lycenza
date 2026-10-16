@@ -1,6 +1,14 @@
 # E16 successor review — 2026-10-16
 
-**Status: DECISION REQUIRED (owner).**
+**Status: DECIDED 2026-10-16.**
+- **E16-S1:** renewal approved as proposed, as `OWNER-0O-E16-2026-10-16`,
+  expiring 2026-11-13. See
+  [`0O-E16-2026-10-16-owner-security-decision.md`](0O-E16-2026-10-16-owner-security-decision.md).
+- **nginx:** route **E16-R2-a** approved; R2-b and R2-c rejected.
+
+The text below is the review as it stood before the decision.
+
+**Status before the decision: DECISION REQUIRED (owner).**
 
 This is a review and a proposal. **No exception was created, renewed or
 changed.** `infrastructure/release/vulnerability-exceptions.json` is

@@ -100,6 +100,10 @@ class PublicationTest(unittest.TestCase):
         if {record.get("approved_by") for record in document["exceptions"]} == {"OWNER-0O-E16-2026-10-11"}:
             self.assertEqual("2026-11-10", expiry.isoformat())
             self.assertEqual("2026-11-09", on_last_day.e16_last_valid_day)
+        # OWNER-0O-E16-2026-10-16 (E16-S1): valid through 2026-11-12, refused from 2026-11-13.
+        if {record.get("approved_by") for record in document["exceptions"]} == {"OWNER-0O-E16-2026-10-16"}:
+            self.assertEqual("2026-11-13", expiry.isoformat())
+            self.assertEqual("2026-11-12", on_last_day.e16_last_valid_day)
 
     def test_the_earliest_record_expiry_governs(self) -> None:
         self.assertEqual("2026-10-20", earliest_expiry({"exceptions": [{"expires": "2026-11-10"}, {"expires": "2026-10-20"}]}).isoformat())

@@ -19,7 +19,7 @@ own). Each security tool runs from a digest-pinned container image named in
 | File | Purpose |
 |---|---|
 | `artifact-policy.json` (+ `schema/`) | The one policy manifest: images, required evidence, vulnerability thresholds, scanner-database age, exception limits, signing custody (unconfigured), pinned tool digests, reachable states. `verify-artifact` reads only this. |
-| `vulnerability-exceptions.json` (+ `schema/`) | Time-bounded, exact-match vulnerability exceptions, each linked to a recorded human approval (`approvals`). Since 2026-10-11 (E16-D1): the 115 records of owner decision `OWNER-0O-E16-2026-10-11` (a fresh scan after E16-R1; 16 Debian 13 advisories; all expire 2026-11-10), which replaced `OWNER-0O-E16-2026-09-29` (itself the successor of `OWNER-0O6E-2026-09-26`). |
+| `vulnerability-exceptions.json` (+ `schema/`) | Time-bounded, exact-match vulnerability exceptions, each linked to a recorded human approval (`approvals`). Since 2026-10-16 (E16-S1): the 115 records of owner decision `OWNER-0O-E16-2026-10-16` (the successor review of `78b68d6d`; the same 16 Debian 13 no-fix advisories, re-verified; all expire 2026-11-13), which replaced `OWNER-0O-E16-2026-10-11` (itself the successor of `OWNER-0O-E16-2026-09-29` and `OWNER-0O6E-2026-09-26`). |
 | `runtime-security.json` (+ `schema/`) | Phase 0O.6F: the provider-neutral runtime security contract every production container is started with (never privileged, ALL capabilities dropped, none added, no-new-privileges, existing non-root user) and the checks `verify-images.sh` must pass to prove it. |
 | `retained-releases.json` (+ `schema/`) | Releases whose retained SBOMs the scheduled re-scan covers. **Empty** (nothing promoted). |
 | `gitleaks-image.toml`, `../../.gitleaks.toml` | Image-filesystem and source secret-scan configuration: gitleaks' default rules with an **exact-match** allowlist (one path + exact value per entry). |
@@ -237,6 +237,16 @@ still match and still expire on 2026-10-29.
   holds the decision and its per-package evidence.
 - The qualification of the `main` commit that carries it is recorded in
   `PHASE-0O-READINESS.md` §50.
+
+**E16-S1 (2026-10-16): successor decision `OWNER-0O-E16-2026-10-16`.**
+- **Covers:** the fresh scan of `78b68d6d`
+  (`docs/security/release-remediation/E16-2026-10-16-SUCCESSOR-REVIEW.md`)
+  found the same 16 no-fix advisories, at the same versions, with the
+  evidence re-verified. They are renewed unchanged for 28 days: 115 records,
+  valid through 2026-11-12 (expiry 2026-11-13).
+- **Not excepted:** the Debian `nginx` Criticals (E16-P1). They are
+  remediated by E16-R2.
+- **Record:** `docs/security/release-remediation/0O-E16-2026-10-16-owner-security-decision.md`.
 
 Four **new** Debian advisories have no fix and no exception (krb5, Cyrus
 SASL, and two in libstdc++; 18 matches). Until a fresh owner/security

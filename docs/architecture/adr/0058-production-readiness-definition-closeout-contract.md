@@ -1873,3 +1873,15 @@ deferred but that had no register row: the ESI disability wage ceiling.
   implementation contract that waits on the answers.
 - **Unchanged until the answer.** Golden fixture ESI-12 stays a recorded
   skip, and nothing is implemented or collected.
+
+## Note — E16-S1: successor decision `OWNER-0O-E16-2026-10-16` (2026-10-16)
+
+- **Decision.** Owner/security approved `OWNER-0O-E16-2026-10-16` after the
+  fresh successor review of `78b68d6d`. The same 16 no-fix High advisories
+  (115 records) were re-verified and renewed unchanged for 28 days.
+- **Dates.** The E16 gate is current through **2026-11-12**. The hard stop
+  is **2026-11-13**.
+- **Not excepted.** The three Critical findings in Debian `nginx` (E16-P1)
+  are remediated by **E16-R2-a** (nginx.org stable 1.30.6, ADR 0052
+  amendment). Until then the application image cannot be VERIFIED.
+- **Register status.** Unchanged. E02 is not satisfied by this decision.

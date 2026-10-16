@@ -67,6 +67,11 @@ waived or complete.
   *(2026-10-11, E16-D1: fresh decision `OWNER-0O-E16-2026-10-11`, 115
   records; `ea3d43d` VERIFIED. **E16 supply-chain gate CURRENT through
   2026-11-09.** A fresh scan and decision are needed before 2026-11-10.)*
+  *(2026-10-16, E16-S1: successor decision `OWNER-0O-E16-2026-10-16`. The
+  fresh scan of `78b68d6d` found the same 16 no-fix advisories, which are
+  renewed unchanged (115 records). **E16 CURRENT through 2026-11-12; hard
+  stop 2026-11-13.** Debian nginx carries 3 Critical, never excepted, which
+  E16-R2-a remediates with nginx.org stable 1.30.6.)*
   *(Post-POR roadmap audit, 2026-10-09; a fact, not a new decision:* the
   lapse is not confined to final qualification. From 2026-10-29 (UTC) the
   `ci.yml` `supply-chain` job fails on every push to `main` and every pull

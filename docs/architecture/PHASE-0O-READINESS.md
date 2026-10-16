@@ -3281,3 +3281,22 @@ route is an owner decision. Code publication is unaffected.
 - The hard stop is verified in code: the last valid day is
   **2026-11-09**, and from **2026-11-10** the CI `Supply chain` job and
   `publication-check` refuse.
+
+## 68. Phase 0O / E16-S1 — Successor decision recorded (2026-10-16)
+
+**Decision:** `OWNER-0O-E16-2026-10-16`
+([record](../security/release-remediation/0O-E16-2026-10-16-owner-security-decision.md)).
+
+**Scope:** the 16 no-fix High advisories and 115 records of the successor
+review, renewed unchanged:
+- only `approved_by`, `created` and `expires` changed;
+- the approval's `max_days` is 28;
+- the approval's `reviewed_digests` are `344c9fc1` (app) and `db4d8830`
+  (Gateway).
+
+**Dates:** valid through **2026-11-12**; hard stop **2026-11-13**.
+
+**Evaluator on the reviewed scan:**
+- Gateway **PASS** (55 excepted);
+- app blocked only by the 3 Critical and 1 High nginx findings (60
+  excepted), which **E16-R2-a** remediates.
