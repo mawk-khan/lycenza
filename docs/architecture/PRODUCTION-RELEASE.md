@@ -68,6 +68,10 @@ refuses to start on any of:
 | `database_connection_not_pgsql` (0O.4A) | `DB_CONNECTION` is not `pgsql` |
 | `database_tls_not_required` (0O.4A) | `DB_SSLMODE` is not `require`, `verify-ca` or `verify-full` (runtime and admin connections) |
 | `redis_password_missing` (0O.4A) | `REDIS_PASSWORD` is empty or `null` |
+| `contact_lookup_key_missing` / `statutory_identifier_lookup_key_missing` (PPR P2-F2) | `CONTACT_LOOKUP_HMAC_KEY` / `STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY` is unset, empty or blank |
+| `contact_lookup_key_placeholder` / `statutory_identifier_lookup_key_placeholder` (PPR P2-F2) | that key is a committed development or test value (`.env.example`, `.ddev`, `phpunit.xml`) |
+| `contact_lookup_key_version_invalid` / `statutory_identifier_lookup_key_version_invalid` (PPR P2-F2) | the key's `_VERSION` is not an integer ≥ 1 |
+| `lookup_keys_not_distinct` (PPR P2-F2) | the two lookup keys are the same value, or either equals `APP_KEY` |
 | `redis_tls_required` (PPR F-D1-2) | any configured Redis connection would connect without TLS (`REDIS_URL` not `tls://`/`rediss://`, and no `tls` scheme on the connection or its host) |
 | `redis_tls_verification_disabled` (PPR F-D1-2) | a Redis `ssl` context turns `verify_peer` or `verify_peer_name` off, or `allow_self_signed` on |
 | `redis_configuration_unsupported` (PPR F-D1-2) | a Redis client other than Predis, a cluster set, an `options.parameters` override, or an `ssl` option outside `cafile`/`capath`/`peer_name` and the verification flags |

@@ -149,7 +149,7 @@ E05-5 is RECOMMENDED corroboration.
 | `AI_GATEWAY_BASE_URL` | P = | empty (E26 disabled) |
 | `AI_GATEWAY_CONTEXT_SIGNING_KEY` | S E | staging-generated (the guard requires it) |
 | `AI_GATEWAY_SERVICE_SIGNING_KEY`, `AI_GATEWAY_SERVICE_TOKEN` | — | unset |
-| `CONTACT_LOOKUP_HMAC_KEY`, `STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY` (+ versions) | S E | staging-generated (P2-F2) |
+| `CONTACT_LOOKUP_HMAC_KEY`, `STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY` (+ versions) | S E | staging-generated, two distinct values, versions `1`. Mandatory at boot since P2-F2 (STAGING-INFRASTRUCTURE-ARCHITECTURE §7.2) |
 | Retention settings (`E21-RETENTION-DETERMINATION.md` §6) | P E | as project-adopted; unset = fail-closed (E21 ratification pending) |
 
 **No external production provider is configured in staging.**

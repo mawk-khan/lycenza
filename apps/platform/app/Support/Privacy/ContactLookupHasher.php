@@ -37,7 +37,7 @@ class ContactLookupHasher
 
     public function hash(string $schoolId, string $contactType, string $normalizedValue): string
     {
-        if ($this->hmacKey === null || $this->hmacKey === '') {
+        if (! LookupHmacKey::isUsable($this->hmacKey)) {
             throw new ContactLookupKeyNotConfiguredException;
         }
 

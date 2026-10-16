@@ -20,6 +20,10 @@ trait BootsHardenedEnvironment
 
     protected const CANARY_SCRAPE_TOKEN = 'canary-scrape-token-6d2e8f0a1b3c5d7e9f2a4b6c8d0e';
 
+    protected const CANARY_CONTACT_LOOKUP_KEY = 'canary-contact-lookup-key-5f1b9d3a7c2e';
+
+    protected const CANARY_STATUTORY_LOOKUP_KEY = 'canary-statutory-lookup-key-0e6c2a8d4b1f';
+
     /**
      * @param  array<string, string>  $overrides
      * @return array<string, string>
@@ -49,6 +53,12 @@ trait BootsHardenedEnvironment
             // PPR F-D1-2: hardened Redis is verified TLS (credentials never in the URL).
             'REDIS_CLIENT' => 'predis',
             'REDIS_URL' => 'tls://redis.example.internal:6379',
+            // PPR P2-F2: both dedicated lookup HMAC keys (phpunit.xml's committed
+            // test values, inherited by these subprocesses, are refused here).
+            'CONTACT_LOOKUP_HMAC_KEY' => self::CANARY_CONTACT_LOOKUP_KEY,
+            'CONTACT_LOOKUP_HMAC_KEY_VERSION' => '1',
+            'STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY' => self::CANARY_STATUTORY_LOOKUP_KEY,
+            'STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY_VERSION' => '1',
             // The canary password reaches no real Redis: nothing in these
             // subprocesses may depend on one.
             'SESSION_DRIVER' => 'array',

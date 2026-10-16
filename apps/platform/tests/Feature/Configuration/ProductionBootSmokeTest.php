@@ -198,6 +198,10 @@ class ProductionBootSmokeTest extends TestCase
             [['DB_SSLMODE' => 'prefer'], 'database_tls_not_required'],
             [['REDIS_PASSWORD' => ''], 'redis_password_missing'],
             [['REDIS_URL' => 'redis://redis.example.internal:6379'], 'redis_tls_required'],
+            [['CONTACT_LOOKUP_HMAC_KEY' => ''], 'contact_lookup_key_missing'],
+            [['STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY' => ''], 'statutory_identifier_lookup_key_missing'],
+            [['CONTACT_LOOKUP_HMAC_KEY' => 'dev-local-only-contact-lookup-hmac-key-change-me'], 'contact_lookup_key_placeholder'],
+            [['STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY' => self::CANARY_CONTACT_LOOKUP_KEY], 'lookup_keys_not_distinct'],
             [['REDIS_URL' => 'tls://redis.example.internal:6379?ssl[verify_peer_name]=0'], 'redis_tls_verification_disabled'],
             [['DOCUMENTS_DISK' => 'local'], 'storage_disk_not_s3'],
             [['AWS_BUCKET' => 'school-os-local'], 'storage_bucket_not_production'],
@@ -209,7 +213,7 @@ class ProductionBootSmokeTest extends TestCase
 
             $this->assertNotSame(0, $process->getExitCode(), json_encode($unsafe).' must refuse to boot');
             $this->assertStringContainsString($code, $output);
-            foreach ([self::CANARY_REDIS_PASSWORD, self::CANARY_SIGNING_KEY, self::CANARY_SCRAPE_TOKEN, $storageCanary] as $secret) {
+            foreach ([self::CANARY_REDIS_PASSWORD, self::CANARY_SIGNING_KEY, self::CANARY_SCRAPE_TOKEN, $storageCanary, self::CANARY_CONTACT_LOOKUP_KEY, self::CANARY_STATUTORY_LOOKUP_KEY, 'dev-local-only-contact-lookup-hmac-key-change-me'] as $secret) {
                 $this->assertStringNotContainsString($secret, $output);
             }
         }
@@ -248,6 +252,29 @@ class ProductionBootSmokeTest extends TestCase
         $process = $this->runArtisan(['about'], $env);
         $this->assertNotSame(0, $process->getExitCode());
         $this->assertStringContainsString('app_debug_enabled', $process->getOutput().$process->getErrorOutput());
+    }
+
+    #[Test]
+    public function the_lookup_keys_are_judged_from_the_cached_configuration(): void
+    {
+        // PPR P2-F2: a valid cache boots even when the environment is emptied
+        // afterwards (the guard reads config, never env()), and a cache whose
+        // lookup key is blank refuses with a code, never a key.
+        $env = $this->productionEnv();
+        $this->assertSame(0, $this->runArtisan(['config:cache'], $env)->getExitCode());
+
+        $emptied = $this->runArtisan(['route:list', '--path=api/health'], [...$env, 'CONTACT_LOOKUP_HMAC_KEY' => '', 'STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY' => '']);
+        $this->assertSame(0, $emptied->getExitCode(), $emptied->getOutput().$emptied->getErrorOutput());
+
+        $config = require $this->dir.'/config.php';
+        $config['privacy']['statutory_identifier_lookup']['hmac_key'] = '';
+        file_put_contents($this->dir.'/config.php', '<?php return '.var_export($config, true).';'.PHP_EOL);
+
+        $refused = $this->runArtisan(['about'], $env);
+        $output = $refused->getOutput().$refused->getErrorOutput();
+        $this->assertNotSame(0, $refused->getExitCode());
+        $this->assertStringContainsString('statutory_identifier_lookup_key_missing', $output);
+        $this->assertStringNotContainsString(self::CANARY_CONTACT_LOOKUP_KEY, $output);
     }
 
     #[Test]
@@ -291,6 +318,9 @@ class ProductionBootSmokeTest extends TestCase
             'APP_DEBUG' => 'true',
             'SESSION_SECURE_COOKIE' => 'false',
             'AI_GATEWAY_CONTEXT_SIGNING_KEY' => 'dev-local-only-context-signing-key-change-me',
+            // PPR P2-F2: local keeps the committed development lookup keys, or none.
+            'CONTACT_LOOKUP_HMAC_KEY' => 'dev-local-only-contact-lookup-hmac-key-change-me',
+            'STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY' => '',
             'APP_CONFIG_CACHE' => $this->dir.'/config.php',
             'APP_ROUTES_CACHE' => $this->dir.'/routes.php',
         ]);

@@ -24,6 +24,10 @@ class ProductionConfigurationGuardTest extends TestCase
 
     private const CANARY_SIGNING_KEY = 'canary-signing-key-7f3a9c1e5b2d4f6a8c0e';
 
+    private const CANARY_CONTACT_LOOKUP_KEY = 'canary-contact-lookup-key-3e9a1c7b5d2f';
+
+    private const CANARY_STATUTORY_LOOKUP_KEY = 'canary-statutory-lookup-key-8b4d0f2a6c1e';
+
     /**
      * @param  array<string, mixed>  $overrides
      */
@@ -51,6 +55,11 @@ class ProductionConfigurationGuardTest extends TestCase
             ],
             'documents' => ['disk' => 's3'],
             'communications' => ['attachments' => ['disk' => 's3']],
+            // PPR P2-F2: both dedicated lookup HMAC keys, distinct, versioned.
+            'privacy' => [
+                'contact_lookup' => ['hmac_key' => self::CANARY_CONTACT_LOOKUP_KEY, 'hmac_key_version' => 1],
+                'statutory_identifier_lookup' => ['hmac_key' => self::CANARY_STATUTORY_LOOKUP_KEY, 'hmac_key_version' => 1],
+            ],
             'filesystems' => ['disks' => ['s3' => ['bucket' => 'lycenza-production-objects', 'endpoint' => 'https://objects.example.net', 'key' => null, 'secret' => null]]],
         ]);
 
@@ -119,6 +128,22 @@ class ProductionConfigurationGuardTest extends TestCase
             'redis password missing' => [['database.redis.default.password' => null], 'redis_password_missing'],
             'redis password literal null' => [['database.redis.default.password' => 'null'], 'redis_password_missing'],
             'redis cache password blank' => [['database.redis.cache.password' => ''], 'redis_password_missing'],
+            // PPR P2-F2 (ADR 0074 section 32): both lookup HMAC keys proven at boot.
+            'contact lookup key missing' => [['privacy.contact_lookup.hmac_key' => null], 'contact_lookup_key_missing'],
+            'contact lookup key empty' => [['privacy.contact_lookup.hmac_key' => ''], 'contact_lookup_key_missing'],
+            'contact lookup key blank' => [['privacy.contact_lookup.hmac_key' => "  \t"], 'contact_lookup_key_missing'],
+            'contact lookup key not a string' => [['privacy.contact_lookup.hmac_key' => 12345], 'contact_lookup_key_missing'],
+            'contact lookup key dev placeholder' => [['privacy.contact_lookup.hmac_key' => 'dev-local-only-contact-lookup-hmac-key-change-me'], 'contact_lookup_key_placeholder'],
+            'contact lookup key test placeholder' => [['privacy.contact_lookup.hmac_key' => 'test-only-contact-lookup-hmac-key'], 'contact_lookup_key_placeholder'],
+            'contact lookup key version 0' => [['privacy.contact_lookup.hmac_key_version' => 0], 'contact_lookup_key_version_invalid'],
+            'statutory lookup key missing' => [['privacy.statutory_identifier_lookup.hmac_key' => null], 'statutory_identifier_lookup_key_missing'],
+            'statutory lookup key empty' => [['privacy.statutory_identifier_lookup.hmac_key' => ''], 'statutory_identifier_lookup_key_missing'],
+            'statutory lookup key dev placeholder' => [['privacy.statutory_identifier_lookup.hmac_key' => 'dev-local-only-statutory-identifier-lookup-hmac-key-change-me'], 'statutory_identifier_lookup_key_placeholder'],
+            'statutory lookup key test placeholder' => [['privacy.statutory_identifier_lookup.hmac_key' => 'test-only-statutory-identifier-lookup-hmac-key'], 'statutory_identifier_lookup_key_placeholder'],
+            'statutory lookup key version negative' => [['privacy.statutory_identifier_lookup.hmac_key_version' => -1], 'statutory_identifier_lookup_key_version_invalid'],
+            'statutory lookup key version not an int' => [['privacy.statutory_identifier_lookup.hmac_key_version' => '1'], 'statutory_identifier_lookup_key_version_invalid'],
+            'one key for both lookups' => [['privacy.statutory_identifier_lookup.hmac_key' => self::CANARY_CONTACT_LOOKUP_KEY], 'lookup_keys_not_distinct'],
+            'APP_KEY reused as a lookup key' => [['privacy.contact_lookup.hmac_key' => 'base64:'.base64_encode(str_repeat('k', 32))], 'lookup_keys_not_distinct'],
             // PPR F-D1-2 (ADR 0050 implementation amendment 2026-10-16): verified TLS on every connection.
             'redis plaintext url' => [['database.redis.default.url' => 'redis://redis.internal.example:6379'], 'redis_tls_required'],
             'redis cache plaintext (mixed connections)' => [['database.redis.cache.url' => 'tcp://redis.internal.example:6379'], 'redis_tls_required'],
@@ -272,6 +297,25 @@ class ProductionConfigurationGuardTest extends TestCase
     public function verified_tls_redis_is_accepted(array $overrides): void
     {
         $this->assertSame([], (new ProductionConfigurationGuard($this->config($overrides)))->violations());
+    }
+
+    #[Test]
+    public function a_lookup_key_refusal_names_codes_only(): void
+    {
+        $config = $this->config([
+            'privacy.contact_lookup.hmac_key' => 'test-only-contact-lookup-hmac-key',
+            'privacy.statutory_identifier_lookup.hmac_key' => '   ',
+        ]);
+
+        try {
+            (new ProductionConfigurationGuard($config))->assertSafe();
+            $this->fail('expected a refusal');
+        } catch (ProductionConfigurationException $e) {
+            $this->assertSame(['contact_lookup_key_placeholder', 'statutory_identifier_lookup_key_missing'], $e->violations);
+            foreach (['test-only-contact-lookup-hmac-key', self::CANARY_CONTACT_LOOKUP_KEY, self::CANARY_STATUTORY_LOOKUP_KEY] as $value) {
+                $this->assertStringNotContainsString($value, $e->getMessage());
+            }
+        }
     }
 
     #[Test]

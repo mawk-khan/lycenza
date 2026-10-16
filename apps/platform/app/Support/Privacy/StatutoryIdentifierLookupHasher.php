@@ -27,7 +27,7 @@ class StatutoryIdentifierLookupHasher
 
     public function hash(string $schoolId, string $identifierType, string $normalizedValue): string
     {
-        if ($this->hmacKey === null || $this->hmacKey === '') {
+        if (! LookupHmacKey::isUsable($this->hmacKey)) {
             throw new StatutoryIdentifierLookupKeyNotConfiguredException;
         }
 

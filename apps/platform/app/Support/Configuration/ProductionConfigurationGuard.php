@@ -9,6 +9,7 @@ use App\Support\Email\Providers\EmailProviderResolver;
 use App\Support\Email\Providers\SmtpEmailProvider;
 use App\Support\Email\SenderIdentity;
 use App\Support\Email\Suppression\SuppressionKeyRing;
+use App\Support\Privacy\LookupHmacKey;
 use App\Support\ServiceAuth\ServiceAuthContract;
 use App\Support\ServiceAuth\ServiceKeyConfigException;
 use App\Support\ServiceAuth\ServiceKeyRing;
@@ -65,6 +66,10 @@ use Illuminate\Support\ConfigurationUrlParser;
  * EnvironmentPolicy::STAGING_DIFFERENCES (the declared email capture sink);
  * everything else is identical.
  *
+ * PPR P2-F2 (ADR 0074 section 32): both lookup HMAC keys are configured,
+ * non-placeholder, distinct and versioned (`contact_lookup_key_*`,
+ * `statutory_identifier_lookup_key_*`, `lookup_keys_not_distinct`).
+ *
  * PPR F-D1-2 (ADR 0050 implementation amendment 2026-10-16): hardened Redis is
  * authenticated TLS with certificate and hostname verification on, for every
  * configured Redis connection (`redis_tls_required`,
@@ -80,6 +85,24 @@ final class ProductionConfigurationGuard
 
     /** Phase 0O.4A (ADR 0050): PostgreSQL sslmodes that encrypt the connection. */
     public const SECURE_DB_SSLMODES = ['require', 'verify-ca', 'verify-full'];
+
+    /**
+     * PPR P2-F2: the committed development / test lookup HMAC keys
+     * (`.env.example`, `.ddev/config.yaml`, phpunit.xml) -- public, so never a
+     * hardened key.
+     */
+    public const PLACEHOLDER_LOOKUP_KEYS = [
+        'dev-local-only-contact-lookup-hmac-key-change-me',
+        'dev-local-only-statutory-identifier-lookup-hmac-key-change-me',
+        'test-only-contact-lookup-hmac-key',
+        'test-only-statutory-identifier-lookup-hmac-key',
+    ];
+
+    /** PPR P2-F2: config key under `privacy.` => violation-code prefix, one dedicated key each. */
+    public const LOOKUP_KEYS = [
+        'contact_lookup' => 'contact_lookup_key',
+        'statutory_identifier_lookup' => 'statutory_identifier_lookup_key',
+    ];
 
     /** PPR F-D1-2: the Predis schemes that encrypt the connection (`rediss` is Predis's alias of `tls`). */
     public const SECURE_REDIS_SCHEMES = ['tls', 'rediss'];
@@ -145,7 +168,7 @@ final class ProductionConfigurationGuard
             $violations[] = 'teacher_attendance_api_development_enabled';
         }
 
-        return [...$violations, ...$this->serviceAuthViolations(), ...$this->infrastructureViolations(), ...$this->hostViolations(), ...$this->emailViolations(), ...$this->accountRecoveryViolations()];
+        return [...$violations, ...$this->serviceAuthViolations(), ...$this->infrastructureViolations(), ...$this->lookupKeyViolations(), ...$this->hostViolations(), ...$this->emailViolations(), ...$this->accountRecoveryViolations()];
     }
 
     public function assertSafe(): void
@@ -342,6 +365,47 @@ final class ProductionConfigurationGuard
      *
      * @return list<string>
      */
+    /**
+     * PPR P2-F2 (ADR 0074 section 32): both lookup HMAC keys are proven at boot,
+     * in every hardened process, instead of failing at the first Guardian
+     * contact or statutory identifier write. "Configured" is the hashers' own
+     * rule (LookupHmacKey::isUsable); a hardened environment additionally
+     * refuses a blank value, a committed development value and a
+     * non-positive key version. The keys are separate secrets by design
+     * (config/privacy.php, ADR 0036, ADR 0041): one key for both purposes, or
+     * APP_KEY reused as either, is refused. Codes only, never a value.
+     *
+     * @return list<string>
+     */
+    private function lookupKeyViolations(): array
+    {
+        $violations = [];
+        $keys = [];
+
+        foreach (self::LOOKUP_KEYS as $config => $code) {
+            $key = $this->config->get("privacy.{$config}.hmac_key");
+            if (! is_string($key) || ! LookupHmacKey::isUsable($key) || trim($key) === '') {
+                $violations[] = "{$code}_missing";
+            } elseif (in_array($key, self::PLACEHOLDER_LOOKUP_KEYS, true)) {
+                $violations[] = "{$code}_placeholder";
+            } else {
+                $keys[] = $key;
+            }
+
+            $version = $this->config->get("privacy.{$config}.hmac_key_version");
+            if (! is_int($version) || $version < 1) {
+                $violations[] = "{$code}_version_invalid";
+            }
+        }
+
+        $appKey = $this->config->get('app.key');
+        if (count(array_unique($keys)) !== count($keys) || (is_string($appKey) && in_array($appKey, $keys, true))) {
+            $violations[] = 'lookup_keys_not_distinct';
+        }
+
+        return $violations;
+    }
+
     /**
      * PPR F-D1-2 (ADR 0050 implementation amendment 2026-10-16): every Redis
      * connection of a hardened environment is TLS with certificate-chain AND

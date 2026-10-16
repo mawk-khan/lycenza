@@ -1336,7 +1336,7 @@ host build. The registry (E13) and signing custody (E14) are PPR.3.
 | # | Finding | Disposition |
 |---|---|---|
 | P2-F1 | `processes.json` gives web, all three workers and the scheduler the same `app_runtime` group, and `ProductionConfigurationGuard` requires several of its secrets in every hardened process (`APP_KEY`, the metrics token, the AI context key, the mail secrets when email is on). Narrowing within `app_runtime` per role (e.g. a future SendGrid key only for `worker-notifications`) needs a code change: a process-role-aware guard and a split group. | E08's required "per-process secret groups" is met by the existing manifest. Finer narrowing is **OD-PPR-22** (RECOMMENDED before PPR.6 enables any provider key) |
-| P2-F2 | The contact and statutory-identifier lookup HMAC keys are not boot-checked. A missing key fails closed at first use (`ContactLookupKeyNotConfiguredException`), not at boot. | The staging configuration inventory requires them. A boot check is a candidate for a later engineering slice (no code in PPR.2) |
+| P2-F2 (**RESOLVED §32**) | The contact and statutory-identifier lookup HMAC keys are not boot-checked. A missing key fails closed at first use (`ContactLookupKeyNotConfiguredException`), not at boot. | The staging configuration inventory requires them. A boot check is a candidate for a later engineering slice (no code in PPR.2) |
 | P2-F3 | Redis TLS is not required by the hardened contract (private network + authentication, ADR 0050). `predis` supports a `tls://` `REDIS_URL`, but this repository has never proven it. | RECOMMENDED where offered, but only after a verification step; not part of E09 |
 
 ### 27.6 Decisions before real provisioning
@@ -1962,3 +1962,82 @@ application). **F-D1-3** stays assigned to PPR.4.
 
 **Status.** F-D1-2 is **complete**. R-08 is still not done, and R-00a
 stays blocked (§29.2).
+
+## 32. P2-F2 — Lookup HMAC key startup guard (2026-10-16)
+
+**Authority.** The owner approved P2-F2, together with one
+`.dockerignore` correction. It resolves finding P2-F2 (§27). There is no
+schema change and no lookup behaviour change.
+
+### 32.1 The keys
+
+| Key (env → config) | Consumer | Purpose | Failure before P2-F2 |
+|---|---|---|---|
+| `CONTACT_LOOKUP_HMAC_KEY` → `privacy.contact_lookup.hmac_key` (+ `_VERSION`) | `ContactLookupHasher` (`GuardianContactService`: contact write and duplicate lookup) | HMAC-SHA256 of `guardian-contact|school|type|value` (ADR 0041) | The web request that first wrote or looked up a contact threw `ContactLookupKeyNotConfiguredException` |
+| `STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY` → `privacy.statutory_identifier_lookup.hmac_key` (+ `_VERSION`) | `StatutoryIdentifierLookupHasher` (`StatutoryIdentifierAdminService`) | HMAC-SHA256 of `statutory-identifier|school|type|value` (ADR 0036) | The first statutory identifier write threw `StatutoryIdentifierLookupKeyNotConfiguredException` |
+
+- **What the failure did:** each hasher failed closed. It never used a
+  default, never fell back to `APP_KEY`, and never fell back to the other
+  key. So the gap was late discovery, not insecure behaviour.
+- **Separate by design:** config/privacy.php, ADR 0036 and ADR 0041 all
+  make the two keys separate secrets.
+- **Who computes them today:** only web requests. No job or scheduled
+  command hashes.
+
+### 32.2 Contract
+
+- **One runtime rule.** `App\Support\Privacy\LookupHmacKey::isUsable()`
+  (a non-empty string) is now the single runtime rule. Both hashers call
+  it, with unchanged behaviour.
+- **The hardened guard applies that rule, plus:**
+  - a blank value counts as missing;
+  - committed development and test values are refused
+    (`PLACEHOLDER_LOOKUP_KEYS`, as for the AI signing key);
+  - `_VERSION` must be an integer ≥ 1;
+  - the two keys must differ from each other and from `APP_KEY`.
+- **Codes:**
+  - `contact_lookup_key_missing|_placeholder|_version_invalid`;
+  - `statutory_identifier_lookup_key_missing|_placeholder|_version_invalid`;
+  - `lookup_keys_not_distinct`.
+- **Not added:** a length or encoding rule. None was ever part of the
+  contract; the generation guidance (32 random bytes) is in
+  STAGING-INFRASTRUCTURE-ARCHITECTURE §7.2.
+- **Unchanged:** rotation (versions only, no re-hash backfill) and
+  readiness. Readiness does not re-check static secrets.
+
+### 32.3 Coverage and evidence
+
+- **Processes.** The guard runs in `AppServiceProvider::register()` for
+  every hardened process:
+  - web;
+  - every `queue:work`;
+  - `schedule:work`;
+  - console/release commands;
+  - with or without cached configuration.
+
+  It reads configuration, never `env()`. `ProductionBootSmokeTest` proves
+  that a cached valid configuration boots with the environment emptied, and
+  that a cached blank key refuses.
+- **Tests:**
+  - guard unit cases (missing, empty, blank, non-string, both committed
+    forms, version, shared key, `APP_KEY` reuse, codes-only message);
+  - `LookupHmacKeyGuardParityTest`: the guard never accepts a key the
+    hasher refuses; an accepted key is the one the container's hashers use
+    (same digest and version); every committed value is a refused
+    placeholder;
+  - the hardened subprocess smoke cases;
+  - the Guardian identity, Admissions, Payroll and Unit suites.
+- **Release tooling:**
+  - `verify-images.sh` gives the app generated keys. In the built image it
+    proves the missing-contact, missing-statutory, committed-value and
+    shared-key refusals, with no key printed;
+  - `verify-production-bootstrap.sh` supplies generated keys.
+- **`.dockerignore`.** It now excludes `phpunit.shard.xml`, a file
+  `bin/safe-test --shard` leaves behind with test credentials. Proof: a
+  local build with that file present now passes the unchanged
+  "no committed local credential" check, which failed on 2026-10-16 before
+  the fix (the local F-D1-2 build). `ProductionImageContractTest` pins the rule.
+
+**Status.** P2-F2 is **complete**. OD-PPR-22 (per-role narrowing) is still
+open; §7.2 of the staging architecture now records that only the web role
+computes digests. R-00a stays blocked.

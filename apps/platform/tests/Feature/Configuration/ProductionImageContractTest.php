@@ -41,7 +41,7 @@ class ProductionImageContractTest extends TestCase
     {
         $rules = $this->ignoreRules('apps/platform/.dockerignore');
 
-        foreach (['.env', '.env.*', '**/.env', '**/*.pem', '**/*.key', 'tests', 'phpunit.xml', 'node_modules', 'vendor', 'storage', 'bin', '.git',
+        foreach (['.env', '.env.*', '**/.env', '**/*.pem', '**/*.key', 'tests', 'phpunit.xml', 'phpunit.shard.xml', 'node_modules', 'vendor', 'storage', 'bin', '.git',
             'database/seeders/Demo/*', 'app/Console/Commands/ResetTestDatabase.php'] as $rule) {
             $this->assertContains($rule, $rules, "apps/platform/.dockerignore must exclude {$rule}");
         }

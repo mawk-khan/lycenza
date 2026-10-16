@@ -223,7 +223,7 @@ application image runtime (PHP 8.3.35) with the F-D1 change applied, against TLS
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | app_runtime | ✓ | ✓ | ✓ | ✓ | ✓ | | staging bucket identity (or none: credential chain) |
 | `AI_GATEWAY_CONTEXT_SIGNING_KEY` | app_runtime | ✓ | guard | guard | guard | guard | | staging-generated (required by the guard even with the Gateway off) |
 | `AI_GATEWAY_SERVICE_SIGNING_KEY` | app_runtime | — | — | — | — | — | | **not set** (Gateway not deployed, E26) |
-| `CONTACT_LOOKUP_HMAC_KEY`, `STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY` | app_runtime | ✓ | ✓ | ✓ | ✓ | ✓ | | staging-generated (see finding P2-F2) |
+| `CONTACT_LOOKUP_HMAC_KEY`, `STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY` (+ `_VERSION`) | app_runtime | ✓ | guard | guard | guard | guard | | staging-generated, **two distinct values**; mandatory since P2-F2 (see §7.2) |
 | `DOMAIN_PROBE_KEY` | app_runtime | — | — | — | — | — | | **not set** (custom domains off until PPR.7) |
 | `MAIL_PASSWORD` | app_runtime | ✓ | ✓ | ✓ | ✓ | ✓ | | the capture service's SMTP credential |
 | `MAIL_SUPPRESSION_HMAC_KEY` (+ previous) | app_runtime | ✓ | ✓ | ✓ | ✓ | ✓ | | staging-generated |
@@ -238,6 +238,18 @@ application image runtime (PHP 8.3.35) with the F-D1 change applied, against TLS
 
 "guard" = not used by the role's own work, but required at boot by
 `ProductionConfigurationGuard`, which runs in every hardened process.
+
+### 7.2 Lookup HMAC keys (PPR P2-F2)
+
+| | `CONTACT_LOOKUP_HMAC_KEY` | `STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY` |
+|---|---|---|
+| Purpose | keyed HMAC-SHA256 exact-match digest of a Guardian contact (`guardian_contacts.lookup_hash`, ADR 0041) | keyed HMAC-SHA256 exact-match digest of PAN/UAN/PF/ESIC (`employee_statutory_identifiers.lookup_hash`, ADR 0036) |
+| Computed by | the web role only today: Guardian contact writes and duplicate lookups, admissions conversion, statutory identifier administration. No job or scheduled command hashes | the web role only today (statutory identifier administration) |
+| Required presence | every hardened process: the boot guard refuses without it (OD-PPR-22 may later narrow non-web roles) | same |
+| Format | an opaque secret: any non-blank string that is not a committed development value. Generate at least 32 random bytes (for example `openssl rand -hex 32`); no length is enforced, because none is part of the contract | same |
+| Separation | its own key: never equal to the other lookup key or to `APP_KEY` (`lookup_keys_not_distinct`) | same |
+| Rotation | `_VERSION` (integer ≥ 1) is stored per row. Rotation needs a re-hash backfill that does not exist yet (ADR 0041); changing the key without it breaks exact-match lookups for existing rows | same |
+| Sensitivity | Highly Sensitive secret: with the database, it allows dictionary confirmation of contacts | same, for statutory identifiers |
 
 ### 7.2 Finding P2-F1 — per-process narrowing beyond the manifest
 

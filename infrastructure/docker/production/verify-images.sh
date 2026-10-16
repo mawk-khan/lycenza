@@ -110,6 +110,7 @@ random() { head -c 32 /dev/urandom | base64 | tr -d '/+=' | cut -c1-40; }
 
 REDIS_PASSWORD="$(random)"
 METRICS_TOKEN="$(random)$(random)"
+CONTACT_LOOKUP_KEY="$(random)"; STATUTORY_LOOKUP_KEY="$(random)"
 
 # Phase 0O.7A (ADR 0053): ephemeral NON-PRODUCTION Ed25519 service keys for this
 # run only -- generated inside the app image by libsodium, held in memory,
@@ -150,6 +151,7 @@ APP_ENV_ARGS=(
     -e AI_GATEWAY_INBOUND_VERIFICATION_KEYS="[$GATEWAY_PUBLIC]"
     -e AI_GATEWAY_REPLAY_STORE=redis
     -e DB_HOST=192.0.2.10 -e DB_SSLMODE=require
+    -e CONTACT_LOOKUP_HMAC_KEY="$CONTACT_LOOKUP_KEY" -e STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY="$STATUTORY_LOOKUP_KEY"
     -e DB_USERNAME=school_os_app -e DB_PASSWORD="$(random)"
     -e REDIS_URL="tls://${RUN_ID}-redis:6379?ssl[cafile]=/etc/lycenza-redis-ca/ca.pem" -e REDIS_PASSWORD="$REDIS_PASSWORD"
     -v "$SMOKE_DIR/redis-ca.pem:/etc/lycenza-redis-ca/ca.pem:ro"
@@ -226,6 +228,17 @@ check "app refuses a plaintext Redis (redis_tls_required)" grep -q "redis_tls_re
 noverify_redis="$(drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e REDIS_URL="tls://${RUN_ID}-redis:6379?ssl[verify_peer_name]=0" "$APP_IMAGE" web 2>&1 || true)"
 check "app refuses Redis with hostname verification off (redis_tls_verification_disabled)" grep -q "redis_tls_verification_disabled" <<<"$noverify_redis"
 check "those refusals never print the Redis password" test -z "$(grep -F "$REDIS_PASSWORD" <<<"$plain_redis$noverify_redis")"
+# PPR P2-F2: both lookup HMAC keys are proven at boot (every role boots the same guard).
+lookup_refusal() { drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" "$@" "$APP_IMAGE" web 2>&1 || true; }
+no_contact_key="$(lookup_refusal -e CONTACT_LOOKUP_HMAC_KEY=)"
+no_statutory_key="$(lookup_refusal -e STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY=)"
+placeholder_key="$(lookup_refusal -e CONTACT_LOOKUP_HMAC_KEY=dev-local-only-contact-lookup-hmac-key-change-me)"
+shared_key="$(lookup_refusal -e STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY="$CONTACT_LOOKUP_KEY")"
+check "app refuses a missing contact lookup key" grep -q "contact_lookup_key_missing" <<<"$no_contact_key"
+check "app refuses a missing statutory identifier lookup key" grep -q "statutory_identifier_lookup_key_missing" <<<"$no_statutory_key"
+check "app refuses a committed development lookup key" grep -q "contact_lookup_key_placeholder" <<<"$placeholder_key"
+check "app refuses one key for both lookups" grep -q "lookup_keys_not_distinct" <<<"$shared_key"
+check "lookup-key refusals never print a key" test -z "$(grep -F -e "$CONTACT_LOOKUP_KEY" -e "$STATUTORY_LOOKUP_KEY" <<<"$no_contact_key$no_statutory_key$placeholder_key$shared_key")"
 
 unsafe_output="$(drun --rm --network "$NETWORK" "${APP_ENV_ARGS[@]}" -e APP_KEY=canary-unsafe-app-key "$APP_IMAGE" web 2>&1 || true)"
 check "unsafe configuration refuses to start" grep -q "Refusing to start" <<<"$unsafe_output"

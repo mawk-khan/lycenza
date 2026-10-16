@@ -114,6 +114,7 @@ ENV_ARGS=(
     -e APP_KEY="base64:$(head -c 32 /dev/urandom | base64)" -e APP_URL=https://verify.invalid
     -e SESSION_SECURE_COOKIE=true -e AI_GATEWAY_CONTEXT_SIGNING_KEY="$(random)"
     -e METRICS_SCRAPE_TOKEN="$(random)$(random)"
+    -e CONTACT_LOOKUP_HMAC_KEY="$(random)" -e STATUTORY_IDENTIFIER_LOOKUP_HMAC_KEY="$(random)"
     -e DB_HOST="$DB" -e DB_DATABASE="$DATABASE" -e DB_SSLMODE=require
     -e DB_USERNAME=school_os_app -e DB_PASSWORD="$APP_PASSWORD"
     -e REDIS_URL="tls://${REDIS}:6379?ssl[cafile]=/etc/lycenza-redis-ca/ca.pem" -v "$CERTS/redis-ca.pem:/etc/lycenza-redis-ca/ca.pem:ro"

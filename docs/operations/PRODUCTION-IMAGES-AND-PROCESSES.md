@@ -205,7 +205,7 @@ valid non-development `platform` key at most 90 days old, valid
 `ai-gateway` ring, Redis replay store); CORS allowlist
 valid; `TRUSTED_PROXIES` explicit (never trust-all); `DB_CONNECTION=pgsql`;
 `DB_SSLMODE` `require`/`verify-ca`/`verify-full` (runtime **and** admin);
-`REDIS_PASSWORD` set, and every Redis connection over TLS with certificate and hostname verification on (`REDIS_URL=tls://…`, PPR F-D1-2); shared maintenance mode (`cache` driver); Documents
+both lookup HMAC keys set, distinct, versioned and not a committed development value (PPR P2-F2); `REDIS_PASSWORD` set, and every Redis connection over TLS with certificate and hostname verification on (`REDIS_URL=tls://…`, PPR F-D1-2); shared maintenance mode (`cache` driver); Documents
 and Communication attachments on `s3`; a production bucket (never
 `school-os-local`/`school-os-test`); an HTTPS endpoint (or none, for the
 provider default); storage credentials both set or both absent and never
