@@ -780,3 +780,102 @@ The High rules, the exception maximums for High and other severities, and
 the scanner thresholds are **unchanged**. The active decision
 `OWNER-0O-E16-2026-10-11` (115 High records, none Critical) is unaffected,
 and its validity is unchanged (through 2026-11-09).
+
+## Amendment — E16-R2-a: nginx from the official nginx.org stable repository (2026-10-16)
+
+**Owner decision (2026-10-16),** taken with the E16 successor decision
+`OWNER-0O-E16-2026-10-16`. Route **E16-R2-a** was approved; **R2-b** (wait
+for Debian) and **R2-c** (a source build) were rejected.
+
+**Narrow exception to §3.2.** The application image installs **one**
+package, `nginx`, from **one** third-party apt repository: the official
+nginx.org stable repository. It is pinned to **one exact version**. This is
+not a general allowance for third-party package repositories. Any other
+package, repository or mirror needs its own ADR amendment.
+
+**Why Debian's nginx cannot satisfy E16.**
+- **The advisories.** The successor scan of `78b68d6d`
+  (`docs/security/release-remediation/E16-2026-10-16-SUCCESSOR-REVIEW.md`)
+  found three Critical advisories (CVE-2026-15176, CVE-2026-93479,
+  CVE-2026-97205) and one High (CVE-2026-97629) in Debian
+  `nginx 1.26.3-3+deb13u9`.
+- **No Debian fix.** `1.26.3-3+deb13u9` is the newest version in trixie,
+  trixie-updates and trixie-security.
+- **No exception possible.** A Critical is never exception-eligible (E16-P1),
+  so no release candidate could be VERIFIED.
+- **Upstream has the fix.** nginx.org fixed all four in **1.30.6** (stable)
+  and 1.31.7 (mainline).
+
+**Why waiting for a Debian backport was rejected (R2-b).** The backport
+date is unknown, and until it lands no application image can be VERIFIED.
+
+**Why the official binary, not a source build (R2-c).** The nginx.org
+package is built and signed by the upstream maintainers for Debian 13. A
+source build would make Lycenza responsible for the compiler, build flags,
+modules and every future security rebuild of the web server.
+
+**Trust boundary**
+- **Origin:** `https://nginx.org/packages/debian`, suite `trixie`, component
+  `nginx`. This is the **stable** repository; the mainline repository is
+  never configured.
+- **Signing key:**
+  1. `https://nginx.org/keys/nginx_signing.key` is fetched over HTTPS in the
+     build's `sources` stage.
+  2. The build verifies that the key file contains the fingerprint nginx.org
+     publishes in its package instructions,
+     `573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62`.
+  3. It verifies that **nginx signing key-2**,
+     `8540A6F18833A80E9C1653A42FD21310B49F6B46`, carries a valid
+     certification by that published key. Key-2 is the key that signs the
+     trixie repository's `Release` file (verified 2026-10-16).
+  4. **Only key-2** is exported into
+     `/usr/share/keyrings/nginx-archive-keyring.gpg`.
+
+  A different fingerprint, a missing certification, or more than one key in
+  the keyring fails the build. Only public key material is stored.
+- **apt configuration:**
+  - `deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg]
+    https://nginx.org/packages/debian trixie nginx`, in the application
+    image only.
+  - Never `trusted=yes`, never unsigned, and apt authentication is never
+    bypassed.
+- **Scope pinning:** `/etc/apt/preferences.d/99nginx`.
+  - Every nginx.org package gets priority **-1** (refused).
+  - Only `nginx` at the pinned version gets priority **1001**.
+  - Every other package still comes from Debian.
+- **Version pinning:**
+  - `LYCENZA_NGINX_VERSION=1.30.6-1~trixie` is set at the start of the
+    runtime install step (a shell variable, never a build `ARG`; build
+    arguments are only the pinned images) and installed as
+    `nginx=<version>`.
+  - The build fails unless `dpkg-query` reports exactly that version, apt
+    shows it as the 1001-pinned candidate, and no Debian `nginx-common`
+    remains.
+  - Packages are only ever installed at image build time, never at runtime
+    or start-up.
+- **Proof per artifact:** `verify-images.sh` checks:
+  - the installed version, and that no Debian nginx package is present;
+  - `nginx -v`;
+  - the exact source line, with no `trusted=yes` and no mainline;
+  - the exact preferences file;
+  - `nginx -t` as `www-data`.
+
+**Updates and re-review**
+- **When to move.** An nginx.org stable release that fixes a security
+  advisory, a new advisory against the pinned version, a key rotation, or a
+  change to nginx.org's published instructions triggers a re-review and a
+  pinned-version or key-fingerprint change.
+- **How to move.** Each change is a reviewed commit with a fresh scan, image
+  verification, the full exact-SHA regression and independent publication.
+- **Cadence.** The weekly E16 review checks the pinned version against
+  nginx.org's security advisories.
+
+**Rollback.**
+- **How.** Reverting the E16-R2 commit restores Debian
+  `nginx 1.26.3-3+deb13u9`, the previous source.
+- **When.** That image carries the three Critical advisories and can never
+  be VERIFIED. Rollback is an incident-recovery measure only (for example,
+  if nginx.org is unavailable while an emergency rebuild is needed). It is
+  never a production-safe long-term state.
+- **The forward path.** Re-pin a different nginx.org stable release, or
+  return to Debian once Debian ships a fixed package. Either needs a review.

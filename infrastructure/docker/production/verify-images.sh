@@ -201,6 +201,14 @@ check "patched libraries carry their ELF package notes" in_app 'grep -aq "\"name
 check "no headers, PHP/curl/libxml2 source, phpize, php-config or PEAR" in_app 'test -z "$(find /usr/local/include /usr/src -mindepth 1 2>/dev/null)" && ! command -v phpize && ! command -v php-config && ! command -v pear && ! command -v curl-config && ! command -v xmllint'
 check "graceful FPM stop signal is SIGQUIT" test "$(docker image inspect -f '{{.Config.StopSignal}}' "$APP_IMAGE")" = "SIGQUIT"
 check "no private-key file in application or configuration paths" test -z "$(in_app 'find /var/www/app /usr/local/etc /etc/nginx \( -name "*.pem" -o -name "*.key" -o -name "id_rsa*" \) -not -path "*/vendor/*" 2>/dev/null')"
+# E16-R2-a (ADR 0052 nginx.org amendment): nginx is exactly the pinned nginx.org
+# STABLE build; nginx.org may supply nothing else; no Debian nginx remains.
+NGINX_PINNED="$(sed -n 's/^RUN LYCENZA_NGINX_VERSION=\([^ ]*\) .*/\1/p' "$ROOT/infrastructure/docker/production/app.Dockerfile")"
+check "nginx is the pinned nginx.org stable package ($NGINX_PINNED), with no Debian nginx package" in_app "test \"\$(dpkg-query -W -f='\${Version}' nginx)\" = '$NGINX_PINNED' && ! dpkg -s nginx-common >/dev/null 2>&1 && ! dpkg-query -W 'libnginx-mod-*' >/dev/null 2>&1"
+check "nginx reports the stable 1.30.6 release" in_app 'nginx -v 2>&1 | grep -qx "nginx version: nginx/1.30.6"'
+check "nginx.org is one HTTPS signed-by source (stable, not mainline), never trusted=yes" in_app 'test "$(cat /etc/apt/sources.list.d/nginx.list)" = "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://nginx.org/packages/debian trixie nginx" && ! grep -rqi "trusted=yes" /etc/apt && ! grep -rq "mainline" /etc/apt/sources.list.d && test -s /usr/share/keyrings/nginx-archive-keyring.gpg'
+check "apt prefers nginx.org for nginx only (every other nginx.org package refused)" in_app 'printf "Package: *\nPin: origin nginx.org\nPin-Priority: -1\n\nPackage: nginx\nPin: version %s\nPin-Priority: 1001\n" "'"$NGINX_PINNED"'" | cmp -s - /etc/apt/preferences.d/99nginx'
+check "the nginx configuration is valid as www-data" in_app 'nginx -t -q -c /etc/nginx/nginx.conf'
 
 docker network create "$NETWORK" >/dev/null
 docker run -d --name "${RUN_ID}-redis" --network "$NETWORK" \

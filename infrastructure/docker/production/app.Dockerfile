@@ -65,7 +65,9 @@ ENV LYCENZA_PHP_VERSION=8.3.35 \
     LYCENZA_CURL_SIGNER_FINGERPRINT=27EDEAF22F3ABCEB50DB9A125CC908FDB71E12C2 \
     LYCENZA_LIBXML2_VERSION=2.15.4 \
     LYCENZA_LIBXML2_URL=https://download.gnome.org/sources/libxml2/2.15/libxml2-2.15.4.tar.xz \
-    LYCENZA_LIBXML2_SHA256=98087fd181d9070724f3fbc65c7377db03038eb92bd882374daff44940138821
+    LYCENZA_LIBXML2_SHA256=98087fd181d9070724f3fbc65c7377db03038eb92bd882374daff44940138821 \
+    LYCENZA_NGINX_PUBLISHED_SIGNER_FINGERPRINT=573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62 \
+    LYCENZA_NGINX_REPO_SIGNER_FINGERPRINT=8540A6F18833A80E9C1653A42FD21310B49F6B46
 RUN set -eux; \
     apt-get update; apt-get install -y --no-install-recommends gnupg; rm -rf /var/lib/apt/lists/*; \
     mkdir -p /usr/src/lycenza; cd /usr/src/lycenza; \
@@ -85,7 +87,23 @@ RUN set -eux; \
     gpg --batch --import curl-release-key.asc; \
     gpg --batch --status-fd 1 --verify curl.tar.xz.asc curl.tar.xz > curl.verify; \
     awk '$2 == "VALIDSIG" { print $12 }' curl.verify | grep -Fqx "$LYCENZA_CURL_SIGNER_FINGERPRINT"; \
-    gpgconf --kill all; rm -rf "$GNUPGHOME" *.asc *.verify *.keys php-keyring.gpg
+    # E16-R2-a (ADR 0052 nginx.org amendment): the apt keyring for nginx.org's
+    # stable repository holds ONE key -- nginx signing key-2, which signs the
+    # trixie repository -- and only after its certification by the fingerprint
+    # nginx.org publishes in its package instructions (573BFD6B...) verifies.
+    # Any other key, a missing certification or a changed fingerprint fails
+    # the build.
+    curl -fsSL --proto '=https' -o nginx_signing.key https://nginx.org/keys/nginx_signing.key; \
+    gpg --batch --import nginx_signing.key; \
+    gpg --batch --with-colons --list-keys "$LYCENZA_NGINX_PUBLISHED_SIGNER_FINGERPRINT" | grep -Fqx "fpr:::::::::$LYCENZA_NGINX_PUBLISHED_SIGNER_FINGERPRINT:"; \
+    gpg --batch --with-colons --check-sigs "$LYCENZA_NGINX_REPO_SIGNER_FINGERPRINT" > nginx.sigs; \
+    grep -Fqx "fpr:::::::::$LYCENZA_NGINX_REPO_SIGNER_FINGERPRINT:" nginx.sigs; \
+    grep -q "^sig:!:.*:$LYCENZA_NGINX_PUBLISHED_SIGNER_FINGERPRINT:" nginx.sigs; \
+    mkdir -p /usr/src/nginx-keyring; \
+    gpg --batch --export "$LYCENZA_NGINX_REPO_SIGNER_FINGERPRINT" > /usr/src/nginx-keyring/nginx-archive-keyring.gpg; \
+    test "$(gpg --batch --with-colons --show-keys /usr/src/nginx-keyring/nginx-archive-keyring.gpg | awk -F: '$1 == "pub"' | wc -l)" = 1; \
+    gpg --batch --with-colons --show-keys /usr/src/nginx-keyring/nginx-archive-keyring.gpg | grep -Fqx "fpr:::::::::$LYCENZA_NGINX_REPO_SIGNER_FINGERPRINT:"; \
+    gpgconf --kill all; rm -rf "$GNUPGHOME" *.asc *.verify *.keys php-keyring.gpg nginx_signing.key nginx.sigs
 
 # --- Native security libraries + PHP (repository-built) -----------------------
 # The official image's recipe environment (PHP_CFLAGS/CPPFLAGS/LDFLAGS,
@@ -206,16 +224,34 @@ RUN npm run build
 # libcurl.so.4 / libxml2.so.16 live in /usr/local/lib, registered with the
 # dynamic loader explicitly (ld.so.conf.d + ldconfig). STOPSIGNAL, PHP_INI_DIR
 # and the FPM configuration layout reproduce the official image.
+#
+# E16-R2-a (ADR 0052 nginx.org amendment): nginx is the official nginx.org
+# STABLE package at one exact version, not Debian's (whose 1.26.3 build
+# carries Critical advisories without a Debian fix). The nginx.org source is
+# HTTPS, `signed-by` a one-key keyring verified in the sources stage, and
+# pinned so that nginx.org can supply ONLY the nginx package (every other
+# nginx.org package is refused, priority -1); everything else still comes
+# from Debian. The build fails unless exactly that version is installed and
+# no Debian nginx package is present. Never `trusted=yes`, never mainline.
 FROM ${RUNTIME_IMAGE} AS runtime
 ENV PHP_INI_DIR=/usr/local/etc/php
-RUN apt-get update \
+COPY --from=sources /usr/src/nginx-keyring/nginx-archive-keyring.gpg /usr/share/keyrings/nginx-archive-keyring.gpg
+RUN LYCENZA_NGINX_VERSION=1.30.6-1~trixie \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates \
+ && printf 'deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://nginx.org/packages/debian trixie nginx\n' > /etc/apt/sources.list.d/nginx.list \
+ && printf 'Package: *\nPin: origin nginx.org\nPin-Priority: -1\n\nPackage: nginx\nPin: version %s\nPin-Priority: 1001\n' "$LYCENZA_NGINX_VERSION" > /etc/apt/preferences.d/99nginx \
+ && apt-get update \
  && apt-get install -y --no-install-recommends \
-        ca-certificates nginx \
+        "nginx=${LYCENZA_NGINX_VERSION}" \
         libargon2-1 libonig5 libreadline8t64 libsodium23 libsqlite3-0 libssl3t64 zlib1g \
         libnghttp2-14 libidn2-0 libpsl5t64 \
         libpq5 libpng16-16t64 libzip5 \
+ && test "$(dpkg-query -W -f='${Version}' nginx)" = "$LYCENZA_NGINX_VERSION" \
+ && apt-cache policy nginx | grep -Fq "*** $LYCENZA_NGINX_VERSION 1001" \
+ && ! dpkg -s nginx-common >/dev/null 2>&1 \
  && rm -rf /var/lib/apt/lists/* \
- && rm -f /etc/nginx/sites-enabled/default
+ && rm -f /etc/nginx/sites-enabled/default /etc/nginx/conf.d/default.conf
 COPY --from=php-build /usr/local/bin/php /usr/local/bin/php
 COPY --from=php-build /usr/local/sbin/php-fpm /usr/local/sbin/php-fpm
 COPY --from=php-build /usr/local/lib/php/extensions /usr/local/lib/php/extensions
