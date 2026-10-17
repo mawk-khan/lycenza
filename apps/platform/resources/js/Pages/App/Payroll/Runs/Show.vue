@@ -403,7 +403,7 @@ const reversalPosting = computed(
                 >
                     <p class="text-sm font-medium text-amber-900">
                         Manual payroll input required —
-                        {{ e.employeeFullName ?? e.employmentRecordId }}
+                        {{ e.employeeFullName ?? 'Employee record unavailable' }}
                         <span v-if="e.employeeNumber" class="text-xs text-amber-700"
                             >({{ e.employeeNumber }})</span
                         >
@@ -481,7 +481,7 @@ const reversalPosting = computed(
                             :key="c.employmentRecordId"
                             :value="c.employmentRecordId"
                         >
-                            {{ c.employeeFullName ?? c.employmentRecordId }}
+                            {{ c.employeeFullName ?? 'Employee record unavailable' }}
                         </option>
                     </select>
                     <p
@@ -578,7 +578,7 @@ const reversalPosting = computed(
                 <tbody class="divide-y divide-slate-100">
                     <tr v-for="r in results" :key="r.employmentRecordId">
                         <td class="py-2">
-                            {{ r.employeeFullName ?? r.employmentRecordId }}
+                            {{ r.employeeFullName ?? 'Employee record unavailable' }}
                             <span v-if="r.employeeNumber" class="text-xs text-slate-500"
                                 >({{ r.employeeNumber }})</span
                             >

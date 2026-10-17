@@ -212,7 +212,9 @@ earnings, to expense), one aggregate credit (total net pay, to
 payable), and one aggregate credit per deduction with a nonzero total
 (to its liability account) — balanced by construction. A deduction
 with a nonzero total and no mapping blocks posting entirely; there is
-no suspense-account fallback.
+no suspense-account fallback. The journal narrative names the period and
+run kind, never ids: "Payroll · August 2026 · regular run" (statutory:
+"Statutory payroll · …"; LC-3, 2026-10-17, `PayrollRun::narrativeLabel()`).
 
 **Account resolution (amended at Checkpoint 9.5's accounting-integrity
 review):** all three account categories — salary expense, salary
@@ -431,6 +433,11 @@ compliance claim — Checkpoint 9.6 remains `[LEGAL REVIEW REQUIRED]`,
 and `Payslip::$statutoryDeductionsIncluded` is always `false` in Phase
 9 so a renderer can show an explicit "does not include statutory
 deductions" notice rather than silently omitting it.
+
+The page names its run by kind and pay period ("Regular payroll run ·
+August 2026"), never by the run's id (LC-3, `PayslipPresenter::labels()`,
+a page-only prop built from the fixed period month and run kind; the JSON
+API shape is unchanged).
 
 Output format: an Inertia/HTML printable view
 (`resources/js/Pages/App/Payroll/Payslips/Show.vue`, `window.print()`),

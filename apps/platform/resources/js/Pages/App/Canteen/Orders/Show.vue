@@ -7,7 +7,8 @@ import { formatMoney } from '../../../../money';
 
 interface OrderLine {
     id: string;
-    canteenItemId: string;
+    itemName: string;
+    itemCode: string | null;
     quantity: number;
     unitPrice: string;
     lineTotal: string;
@@ -16,8 +17,11 @@ interface OrderLine {
 interface OrderDetail {
     id: string;
     status: 'pending' | 'fulfilled' | 'cancelled';
-    studentId: string;
-    outletId: string;
+    // LC-3: what people read -- never the internal ids.
+    studentName: string;
+    studentNumber: string | null;
+    outletName: string;
+    outletCode: string | null;
     placedAt: string;
     fulfilledAt: string | null;
     cancelledAt: string | null;
@@ -77,9 +81,14 @@ function cancel(): void {
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
-                <h1 class="text-xl font-semibold">Order {{ order.id }}</h1>
+                <h1 class="text-xl font-semibold">
+                    Canteen order · {{ order.studentName }}
+                    <span v-if="order.studentNumber" class="text-base font-normal text-slate-500"
+                        >({{ order.studentNumber }})</span
+                    >
+                </h1>
                 <p class="mt-1 text-sm text-slate-500">
-                    Student {{ order.studentId }} · Outlet {{ order.outletId }}
+                    {{ order.outletName }} · placed {{ formatDateTime(order.placedAt) }}
                 </p>
             </div>
             <StatusBadge :status="order.status" />
@@ -138,7 +147,12 @@ function cancel(): void {
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     <tr v-for="line in order.lines" :key="line.id">
-                        <td class="py-3">{{ line.canteenItemId }}</td>
+                        <td class="py-3">
+                            {{ line.itemName }}
+                            <span v-if="line.itemCode" class="text-xs text-slate-500"
+                                >({{ line.itemCode }})</span
+                            >
+                        </td>
                         <td class="py-3">{{ line.quantity }}</td>
                         <td class="py-3 text-right font-mono">
                             {{ formatMoney(line.unitPrice, order.currency) }}

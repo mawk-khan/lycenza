@@ -56,7 +56,7 @@ watch(query, (value) => {
         <ul class="mt-4 space-y-1 text-sm">
             <li v-for="r in results" :key="r.employmentRecordId">
                 <a class="underline" :href="`/app/payroll/compensation/${r.employmentRecordId}`">
-                    {{ r.employeeFullName ?? r.employmentRecordId }}
+                    {{ r.employeeFullName ?? 'Employee record unavailable' }}
                     <span v-if="r.employeeNumber" class="text-xs text-slate-500"
                         >({{ r.employeeNumber }})</span
                     >

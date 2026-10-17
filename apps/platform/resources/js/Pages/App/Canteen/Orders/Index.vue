@@ -15,8 +15,11 @@ import StatusBadge from '../../../../Components/StatusBadge.vue';
 interface OrderRow {
     id: string;
     status: 'pending' | 'fulfilled' | 'cancelled';
-    studentId: string;
-    outletId: string;
+    // LC-3: what people read -- never the internal ids.
+    studentName: string;
+    studentNumber: string | null;
+    outletName: string;
+    outletCode: string | null;
     placedAt: string;
     fulfilledAt: string | null;
     cancelledAt: string | null;
@@ -131,10 +134,13 @@ function cancel(order: OrderRow): void {
                         </td>
                         <td class="py-3">
                             <a class="underline" :href="`/app/canteen-orders/${order.id}`">{{
-                                order.studentId
+                                order.studentName
                             }}</a>
+                            <span v-if="order.studentNumber" class="ml-1 text-xs text-slate-500"
+                                >({{ order.studentNumber }})</span
+                            >
                         </td>
-                        <td class="py-3">{{ order.outletId }}</td>
+                        <td class="py-3">{{ order.outletName }}</td>
                         <td class="py-3"><StatusBadge :status="order.status" /></td>
                         <td class="py-3 text-right">
                             <div v-if="canManage && order.status === 'pending'" class="space-x-3">
@@ -143,14 +149,18 @@ function cancel(order: OrderRow): void {
                                     class="text-sm underline"
                                     @click="fulfill(order)"
                                 >
-                                    Fulfill
+                                    Fulfill<span class="sr-only">
+                                        order for {{ order.studentName }}</span
+                                    >
                                 </button>
                                 <button
                                     type="button"
                                     class="text-sm text-red-600 underline"
                                     @click="cancel(order)"
                                 >
-                                    Cancel
+                                    Cancel<span class="sr-only">
+                                        order for {{ order.studentName }}</span
+                                    >
                                 </button>
                             </div>
                         </td>

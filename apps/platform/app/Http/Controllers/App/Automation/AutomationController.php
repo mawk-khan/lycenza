@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\App\Automation;
 
+use App\Domain\AcademicStructure\Application\CurrentAcademicYearResolver;
 use App\Domain\Automation\Application\AutomationReadService;
 use App\Domain\Automation\Application\AutomationRuleService;
 use App\Http\Controllers\Controller;
@@ -26,11 +27,25 @@ use Inertia\Response;
  */
 class AutomationController extends Controller
 {
-    public function index(Request $request, AutomationReadService $read): Response
+    public function index(Request $request, AutomationReadService $read, CurrentAcademicYearResolver $academicYears): Response
     {
-        return Inertia::render('App/Automation/Index', [
-            'automation' => $read->overview($this->school(), $request->user()),
-        ]);
+        $school = $this->school();
+        $overview = $read->overview($school, $request->user());
+
+        // LC-3 (M3): people read each record by name ("Academic year 2027-28"),
+        // never its internal id. Resolved here, where the page is composed, so
+        // the Automation domain keeps importing no other module (ADR 0043).
+        $yearIds = collect([...$overview['reviewItems'], ...$overview['executions']])
+            ->where('subjectType', 'academic_year')->pluck('subjectId')->unique()->values()->all();
+        $years = $academicYears->namesFor($school, $yearIds);
+        $label = fn (array $row): array => $row + ['subjectLabel' => match ($row['subjectType']) {
+            'academic_year' => isset($years[$row['subjectId']]) ? "Academic year {$years[$row['subjectId']]}" : 'Academic year (no longer available)',
+            default => 'Unavailable record',
+        }];
+        $overview['reviewItems'] = array_map($label, $overview['reviewItems']);
+        $overview['executions'] = array_map($label, $overview['executions']);
+
+        return Inertia::render('App/Automation/Index', ['automation' => $overview]);
     }
 
     public function enable(Request $request, string $ruleType, AutomationRuleService $rules): RedirectResponse

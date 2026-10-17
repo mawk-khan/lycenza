@@ -412,7 +412,14 @@ evidence by
    nested-transaction behavior).
 7. Call `ChargeService::assess()` for the Order's frozen `total_amount`
    against the billing configuration's two accounts — also a nested
-   SAVEPOINT.
+   SAVEPOINT. The Charge's description (also its journal entry's) is
+   `CanteenChargeDescription` (LC-3): what was bought and on which School
+   day, e.g. "Canteen · Lunch meal ×1, Flavoured milk (250 ml) ×1 ·
+   17 Oct 2026", fitted to 255 characters ("… and N more"). It is a
+   snapshot: both rows are immutable once posted, so renaming an item
+   never changes it. Charges raised before LC-3 keep their original
+   "Canteen order <id>" text; posted history is never rewritten, and
+   Finance does not read Canteen tables to re-label it.
 8. Create one `CanteenOrderStockConsumption` row per `StockMovement`
    `issueMany()` returned, linking each by id (§12).
 9. Update the Order to `fulfilled`, set `fulfilled_at`/`charge_id`.

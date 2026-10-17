@@ -155,7 +155,7 @@ class PayrollPostingService
 
                 $posted = $this->ledger->post($school, new PostJournalEntryData(
                     currency: self::CURRENCY,
-                    description: "Payroll run {$run->id} (period {$run->payroll_period_id})",
+                    description: 'Payroll · '.$run->narrativeLabel(),
                     lines: $lines,
                 ), $actor);
 

@@ -57,6 +57,7 @@ class PayslipController extends Controller
 
         return Inertia::render('App/Payroll/Payslips/Show', [
             'payslip' => PayslipPresenter::present($payslip),
+            'labels' => PayslipPresenter::labels($payslip),
         ]);
     }
 }

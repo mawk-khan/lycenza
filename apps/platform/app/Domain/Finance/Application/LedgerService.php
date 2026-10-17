@@ -182,7 +182,9 @@ class LedgerService
                     $reversal = JournalEntry::query()->create([
                         'school_id' => $original->school_id,
                         'currency' => $original->currency,
-                        'description' => $reason ?? "Reversal of journal entry {$original->id}.",
+                        // LC-3 (M3): the default names what is reversed, not its id;
+                        // the structured link is reversal_of_journal_entry_id.
+                        'description' => $reason ?? mb_substr("Reversal of: {$original->description}", 0, 255),
                         'reversal_of_journal_entry_id' => $original->id,
                         'posted_at' => now(),
                     ]);

@@ -58,8 +58,17 @@ interface Payslip {
     statutory: PayslipStatutorySection | null;
 }
 
+// LC-3: what people read in place of internal ids (built by the server).
+interface PayslipLabels {
+    periodLabel: string;
+    runLabel: string;
+    correctsPeriodLabel: string | null;
+    employeeLabel: string;
+}
+
 interface Props {
     payslip: Payslip;
+    labels: PayslipLabels;
     /** HRX.4: the own-payslip page links back to My Payslips instead of the run. */
     back?: { href: string; label: string } | null;
 }
@@ -96,10 +105,9 @@ function print(): void {
         >
             This is a CORRECTION payslip -- it shows only the delta effect recorded against the
             original run
-            <span v-if="payslip.correctsPayrollPeriodMonth">
-                ({{ payslip.correctsPayrollPeriodMonth }})</span
-            >, never a merged, replacement statement. The original run's own payslip remains
-            unchanged and immutable.
+            <span v-if="labels.correctsPeriodLabel"> ({{ labels.correctsPeriodLabel }})</span>,
+            never a merged, replacement statement. The original run's own payslip remains unchanged
+            and immutable.
         </p>
         <p
             v-if="payslip.isReversed"
@@ -131,12 +139,10 @@ function print(): void {
         <div class="mt-6 flex items-start justify-between gap-4 border-b border-slate-300 pb-4">
             <div>
                 <h1 class="text-lg font-semibold">{{ payslip.schoolName }}</h1>
-                <p class="text-sm text-slate-600">Payslip -- {{ payslip.periodMonth }}</p>
+                <p class="text-sm text-slate-600">Payslip -- {{ labels.periodLabel }}</p>
             </div>
             <div class="text-right text-xs text-slate-500">
-                <p>
-                    Run: <span class="font-mono">{{ payslip.payrollRunId }}</span>
-                </p>
+                <p>Run: {{ labels.runLabel }}</p>
                 <p v-if="payslip.paymentDate">Payment date: {{ payslip.paymentDate }}</p>
             </div>
         </div>
@@ -144,7 +150,7 @@ function print(): void {
         <dl class="mt-4 grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
             <dt class="text-slate-500">Employee</dt>
             <dd>
-                {{ payslip.employeeFullName ?? payslip.employeeId }}
+                {{ labels.employeeLabel }}
                 <span v-if="payslip.employeeNumber" class="text-xs text-slate-500"
                     >({{ payslip.employeeNumber }})</span
                 >

@@ -196,7 +196,11 @@ class LedgerServiceReverseTest extends TestCase
 
         $reversal = $this->service()->reverse($original);
 
-        $this->assertStringContainsString($original->id, $reversal->description);
+        // LC-3 (M3): the default names what is reversed, never its id; the
+        // link to the original is the structured reversal_of_journal_entry_id.
+        $this->assertSame('Reversal of: '.$original->description, $reversal->description);
+        $this->assertStringNotContainsString($original->id, $reversal->description);
+        $this->assertSame($original->id, $reversal->reversalOfJournalEntryId);
     }
 
     /**

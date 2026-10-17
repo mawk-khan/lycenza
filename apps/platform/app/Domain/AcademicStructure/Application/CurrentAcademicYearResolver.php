@@ -49,4 +49,26 @@ class CurrentAcademicYearResolver
             fn () => AcademicYear::query()->where('school_id', $school->id)->whereIn('status', ['draft', 'active'])->find($academicYearId),
         );
     }
+
+    /**
+     * LC-3 (M3): the names ("2026-27") of this School's Academic Years among
+     * the given ids, keyed by id, in one query -- for a module that holds a
+     * year id and must show people a name. Another School's or an unknown id
+     * is simply absent; the caller decides how an absent year reads.
+     *
+     * @param  list<string>  $academicYearIds
+     * @return array<string, string>
+     */
+    public function namesFor(School $school, array $academicYearIds): array
+    {
+        if ($academicYearIds === []) {
+            return [];
+        }
+
+        return $this->context->withSchool(
+            $school,
+            fn () => AcademicYear::query()->where('school_id', $school->id)->whereIn('id', array_values(array_unique($academicYearIds)))
+                ->pluck('name', 'id')->all(),
+        );
+    }
 }

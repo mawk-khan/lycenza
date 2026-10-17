@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Payroll;
 
+use App\Domain\Finance\Infrastructure\JournalEntry;
 use App\Domain\Finance\Infrastructure\JournalLine;
 use App\Domain\Finance\Infrastructure\LedgerAccount;
 use App\Domain\Payroll\Application\AddStructureComponentData;
@@ -139,6 +140,10 @@ class PayrollPostingServiceTest extends TestCase
         $this->assertSame('50000.00', $expenseLine->debit_amount);
         $this->assertSame('48200.00', $payableLine->credit_amount);
         $this->assertSame('1800.00', $pfLine->credit_amount);
+
+        // LC-3 (M3): the journal narrative names the period and run kind, never ids.
+        $entry = $context->withSchool($school, fn () => JournalEntry::query()->findOrFail($posting->journal_entry_id));
+        $this->assertSame('Payroll · September 2026 · regular run', $entry->description);
     }
 
     #[Test]

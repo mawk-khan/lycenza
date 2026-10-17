@@ -1845,8 +1845,10 @@ with no dedicated reversal-reason column (FINANCE.md does not require
 one, and 0G.2 does not add one). `reverse()` accepts an optional
 `?string $reason` — if given, it becomes the reversal's description
 (validated non-empty, ≤255 characters, the same bound as posting); if
-omitted, a description is derived automatically
-(`"Reversal of journal entry {original id}."`).
+omitted, a description is derived automatically: `"Reversal of:
+{original description}"`, cut to 255 characters (LC-3, 2026-10-17; it used
+to name the original's id). The link to the original is always the
+structured `reversal_of_journal_entry_id`.
 
 ### Reversing a reversal: resolved, not guessed
 

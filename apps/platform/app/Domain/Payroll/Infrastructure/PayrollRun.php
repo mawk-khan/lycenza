@@ -88,6 +88,18 @@ class PayrollRun extends Model
         return $this->belongsTo(PayrollPeriod::class, 'payroll_period_id');
     }
 
+    /**
+     * LC-3 (M3): how a person reads this run in a journal narrative --
+     * "August 2026 · regular run" -- from its fixed period month and kind,
+     * never its internal id.
+     */
+    public function narrativeLabel(): string
+    {
+        $month = $this->period?->period_month->format('F Y') ?? 'Payroll period';
+
+        return $month.' · '.($this->run_kind === 'correction' ? 'correction run' : 'regular run');
+    }
+
     /** @return BelongsTo<self, $this> */
     public function correctsRun(): BelongsTo
     {

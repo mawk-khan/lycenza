@@ -227,7 +227,7 @@ const hasFilters = studentId.value || academicYearId.value || includeCancelled.v
                             <a
                                 class="font-medium underline"
                                 :href="`/app/finance/charges/${charge.id}`"
-                                >{{ charge.studentName ?? charge.studentId }}</a
+                                >{{ charge.studentName ?? 'Student unavailable' }}</a
                             >
                         </td>
                         <td class="py-3 text-slate-600">{{ charge.description }}</td>

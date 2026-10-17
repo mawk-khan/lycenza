@@ -144,8 +144,11 @@ class StaffSelfServiceController extends Controller
         $this->authorizeCapability(PayslipReadService::SELF, $school);
         abort_if(! Str::isUuid($payrollRun) || ! Str::isUuid($employmentRecord), 404);
 
+        $payslip = $payslips->renderOwn($school, $payrollRun, $employmentRecord, $context->actor());
+
         return Inertia::render('App/Payroll/Payslips/Show', [
-            'payslip' => PayslipPresenter::present($payslips->renderOwn($school, $payrollRun, $employmentRecord, $context->actor())),
+            'payslip' => PayslipPresenter::present($payslip),
+            'labels' => PayslipPresenter::labels($payslip),
             'back' => ['href' => '/app/my-payslips', 'label' => 'My payslips'],
         ]);
     }

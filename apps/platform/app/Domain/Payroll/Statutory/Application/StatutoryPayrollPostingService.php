@@ -109,7 +109,7 @@ class StatutoryPayrollPostingService
 
                 $posted = $this->ledger->post($school, new PostJournalEntryData(
                     currency: self::CURRENCY,
-                    description: "Statutory payroll for run {$run->id} (period {$run->payroll_period_id})",
+                    description: 'Statutory payroll · '.$run->narrativeLabel(),
                     lines: $lines,
                 ), $actor);
 

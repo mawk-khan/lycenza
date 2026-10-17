@@ -654,8 +654,10 @@ how you are using Lycenza.
 - **School selection:** a person with one School may still need to pick it
   after signing in.
 - **Formatting:** the Guardian portal shows amounts without thousands
-  separators. Canteen charges show an internal order code in their
-  description.
+  separators. Canteen charges name what was bought and the day ("Canteen ·
+  Lunch meal ×1 · 17 Oct 2026"); a canteen charge recorded before this
+  change keeps its original "Canteen order …" description, because posted
+  charges are never rewritten.
 - **Guardian search** is by name only. Search by phone or email awaits a
   privacy decision.
 - **No fee proration** (approved current behaviour).

@@ -522,6 +522,31 @@ class PayrollUiTest extends TestCase
     }
 
     #[Test]
+    public function the_payslip_page_names_its_run_by_kind_and_period_never_by_id(): void
+    {
+        $school = $this->createSchool();
+        $fixtures = $this->makeStructureAndPeriod($school);
+        $preparer = $this->memberWith(['payroll.runs.prepare', 'payroll.runs.view'], $school);
+        $runId = $this->makeCalculatedRun($school, $fixtures['periodId'], $preparer);
+        $approver = $this->memberWith(['payroll.runs.approve'], $school);
+        app(TenantContext::class)->withSchool($school, fn () => app(PayrollRunAdministrationService::class)->approve(PayrollRun::query()->findOrFail($runId), $approver));
+
+        // LC-3 (M3): labels come from the run's fixed period month and kind.
+        $sensitiveViewer = $this->memberWith(['payroll.compensation.sensitive.view'], $school);
+        $this->actingAs($sensitiveViewer)->get("/app/payroll/runs/{$runId}/payslips/{$fixtures['employmentRecordId']}")
+            ->assertInertia(fn ($page) => $page
+                ->component('App/Payroll/Payslips/Show')
+                ->where('labels.periodLabel', 'October 2026')
+                ->where('labels.runLabel', 'Regular payroll run · October 2026')
+                ->where('labels.correctsPeriodLabel', null)
+                ->where('labels.employeeLabel', fn (string $name) => preg_match('/[0-9a-f]{8}-[0-9a-f]{4}-/i', $name) === 0));
+
+        // Authorization is unchanged: the labels never open the page to someone else.
+        $this->actingAs($this->memberWith(['payroll.runs.view'], $school))
+            ->get("/app/payroll/runs/{$runId}/payslips/{$fixtures['employmentRecordId']}")->assertForbidden();
+    }
+
+    #[Test]
     public function the_payslip_page_is_forbidden_without_sensitive_view(): void
     {
         $school = $this->createSchool();

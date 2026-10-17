@@ -70,7 +70,8 @@ class StaffSelfServiceUiTest extends TestCase
         $this->actor($w, $me['user'])->get('/app/my-payslips')->assertInertia(fn (AssertableInertia $page) => $page
             ->component('App/My/Payslips')->has('payslips', 1)->where('payslips.0.employmentRecordId', $me['employment']->id));
         $this->actor($w, $me['user'])->get("/app/my-payslips/{$run}/{$me['employment']->id}")->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
-            ->component('App/Payroll/Payslips/Show')->where('back.href', '/app/my-payslips')->where('payslip.employeeId', $me['employment']->employee_id));
+            ->component('App/Payroll/Payslips/Show')->where('back.href', '/app/my-payslips')->where('payslip.employeeId', $me['employment']->employee_id)
+            ->where('labels.runLabel', fn (string $label) => str_starts_with($label, 'Regular payroll run · ')));
         $this->actor($w, $me['user'])->get("/app/my-payslips/{$run}/{$colleague['employment']->id}")->assertNotFound();
         $this->actor($w, $me['user'])->get('/app/my-payslips/'.Str::uuid().'/'.$me['employment']->id)->assertNotFound();
 

@@ -37,6 +37,8 @@ interface Execution {
     triggerEventType: string;
     subjectType: string;
     subjectId: string;
+    // LC-3: what people read for the record (e.g. "Academic year 2027-28").
+    subjectLabel: string;
     status: string;
     outcomeCode: string | null;
     attempts: number;
@@ -50,6 +52,8 @@ interface ReviewItem {
     itemType: string;
     subjectType: string;
     subjectId: string;
+    // LC-3: what people read for the record (e.g. "Academic year 2027-28").
+    subjectLabel: string;
     executionId: string;
     createdAt: string;
 }
@@ -227,9 +231,7 @@ function ruleLabel(key: string | null): string {
                             </template>
                             <template v-else>{{ item.itemType }}</template>
                         </td>
-                        <td class="py-2 font-mono text-xs">
-                            {{ item.subjectType }}<br />{{ item.subjectId }}
-                        </td>
+                        <td class="py-2">{{ item.subjectLabel }}</td>
                     </tr>
                 </tbody>
             </table>

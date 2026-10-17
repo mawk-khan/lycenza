@@ -203,8 +203,13 @@ creating the item.
 Records hold identifiers, codes, statuses and timestamps only. The review
 item stores `subject_type = academic_year` and the year's id (from the
 School's own outbox event; no foreign key into Academic Structure). The
-page shows the id and a link to School setup; it never shows an event
-payload and never claims anything was set up automatically.
+page names the record ("Academic year 2027-28") and links to School setup;
+it never shows an event payload and never claims anything was set up
+automatically. *(LC-3, 2026-10-17: the page used to show the raw id. The
+name is resolved by the page controller through
+`CurrentAcademicYearResolver::namesFor()` for the viewer's School only, so
+the Automation domain still imports no other module; a year that no longer
+resolves reads "Academic year (no longer available)", never its id.)*
 
 ### Tests
 

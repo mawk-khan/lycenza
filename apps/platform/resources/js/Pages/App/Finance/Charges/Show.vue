@@ -82,9 +82,9 @@ function cancel(): void {
             <div>
                 <h1 class="text-xl font-semibold">{{ charge.description }}</h1>
                 <p class="mt-1 text-sm text-slate-500">
-                    {{ charge.studentName ?? charge.studentId }}
+                    {{ charge.studentName ?? 'Student unavailable' }}
                     <span v-if="charge.studentNumber">({{ charge.studentNumber }})</span>
-                    · {{ charge.academicYearName ?? charge.academicYearId }}
+                    · {{ charge.academicYearName ?? 'Academic year unavailable' }}
                 </p>
                 <a
                     v-if="canViewStatement"

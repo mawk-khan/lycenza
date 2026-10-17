@@ -39,6 +39,9 @@ class CanteenOrderController extends Controller
 {
     use AuthorizesCapability;
 
+    /** The Student and Outlet an order is shown by (LC-3). */
+    private const SUMMARY_RELATIONS = ['student:id,school_id,first_name,last_name,student_number', 'outlet:id,school_id,code,name'];
+
     public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities): Response
     {
         $school = $context->requireSchool();
@@ -48,7 +51,8 @@ class CanteenOrderController extends Controller
             'status' => ['sometimes', Rule::in(['pending', 'fulfilled', 'cancelled'])],
         ]);
 
-        $query = CanteenOrder::query()->orderByDesc('placed_at');
+        // LC-3: names, never ids -- one eager load per relation, not a query per row.
+        $query = CanteenOrder::query()->with(self::SUMMARY_RELATIONS)->orderByDesc('placed_at');
         if (isset($validated['status'])) {
             $query->where('status', $validated['status']);
         }
@@ -142,7 +146,7 @@ class CanteenOrderController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability('canteen.orders.view', $school);
 
-        $order = CanteenOrder::query()->with('lines')->find($canteenOrder);
+        $order = CanteenOrder::query()->with([...self::SUMMARY_RELATIONS, 'lines.canteenItem:id,school_id,code,name'])->find($canteenOrder);
         if ($order === null) {
             throw new NotFoundHttpException;
         }
@@ -189,8 +193,12 @@ class CanteenOrderController extends Controller
         return [
             'id' => $order->id,
             'status' => $order->status,
-            'studentId' => $order->student_id,
-            'outletId' => $order->outlet_id,
+            // LC-3 (M3): people read names and numbers. A record that can no
+            // longer be resolved reads neutrally, never as its internal id.
+            'studentName' => $order->student === null ? 'Student unavailable' : trim($order->student->first_name.' '.$order->student->last_name),
+            'studentNumber' => $order->student?->student_number,
+            'outletName' => $order->outlet === null ? 'Outlet unavailable' : $order->outlet->name,
+            'outletCode' => $order->outlet?->code,
             'placedAt' => $order->placed_at->toIso8601String(),
             'fulfilledAt' => $order->fulfilled_at?->toIso8601String(),
             'cancelledAt' => $order->cancelled_at?->toIso8601String(),
@@ -209,7 +217,8 @@ class CanteenOrderController extends Controller
             'chargeId' => $order->charge_id,
             'lines' => $order->lines->map(fn ($line) => [
                 'id' => $line->id,
-                'canteenItemId' => $line->canteen_item_id,
+                'itemName' => $line->canteenItem === null ? 'Item unavailable' : $line->canteenItem->name,
+                'itemCode' => $line->canteenItem?->code,
                 'quantity' => $line->quantity,
                 'unitPrice' => $line->unit_price,
                 'lineTotal' => $line->line_total,

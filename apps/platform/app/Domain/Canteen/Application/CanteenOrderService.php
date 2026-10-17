@@ -263,7 +263,7 @@ class CanteenOrderService
             $chargeResult = $this->chargeService->assess($school, new AssessChargeData(
                 studentId: $order->student_id,
                 academicYearId: $academicYear->id,
-                description: "Canteen order {$order->id}",
+                description: CanteenChargeDescription::for($school, $order, $lines, $lockedItems),
                 amount: Money::of($order->total_amount, $order->currency),
                 receivableLedgerAccountId: $billingConfig->receivable_ledger_account_id,
                 revenueLedgerAccountId: $billingConfig->revenue_ledger_account_id,

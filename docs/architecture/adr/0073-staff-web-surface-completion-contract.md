@@ -2101,3 +2101,58 @@ teacher timetable features and facility modelling.
 
 **Tests.** `Tests\Feature\Timetable\TimetableAcademicYearBoundaryTest`;
 `TimetableEntryConcurrencyTest` (same-year concurrent conflict still refused).
+
+## Amendment (LC-3, 2026-10-17): people read names, software reads ids
+
+**Problem.** The Local Product Completion Audit (M3) found internal UUIDs
+shown to people:
+- the Canteen order list and detail named the Student, outlet and items by id;
+- every canteen charge, and its journal entry, read "Canteen order <id>", on
+  the staff statement and the Guardian portal too;
+- the payslip showed the payroll run's id;
+- the Automation page showed each review item's record id.
+
+The browser sweep found the same root in two journal narratives: payroll
+postings ("Payroll run <id> (period <id>)") and the default reversal text
+("Reversal of journal entry <id>.").
+
+**Decision.** Ids identify records to software; names, numbers, codes and
+dates identify them to people. Ids stay in routes, request values, keys,
+audit internals and the JSON APIs.
+
+1. **Canteen pages.** Orders show the Student (name and number), outlet and
+   item (name and code), each eager-loaded once per page. A record that no
+   longer resolves reads "Student unavailable" / "Outlet unavailable" /
+   "Item unavailable", never its id.
+2. **Canteen charges (strategy A, stored snapshot).** A charge's
+   description is immutable once posted
+   (`fees_reject_recognized_charge_mutation`), and so is its journal entry.
+   `CanteenChargeDescription` writes "Canteen · <item> ×<qty>, … · <School
+   day>" at fulfilment, fitted to 255 characters. Charges posted before
+   LC-3 keep their text. Display-time re-labelling (strategy B) is not
+   used: Finance would have to read Canteen tables, reversing the dependency
+   direction (Canteen depends on Fees).
+3. **Payroll.** The payslip page names the run by kind and period ("Regular
+   payroll run · August 2026"), through a page-only `labels` prop
+   (`PayslipPresenter::labels()`); the published JSON payslip shape is
+   unchanged. Payroll and statutory postings narrate "Payroll · August
+   2026 · regular run". No calculation, approval or statutory behaviour
+   changed.
+4. **Automation.** The page controller resolves each record's name
+   ("Academic year 2027-28") through `CurrentAcademicYearResolver::namesFor()`,
+   for the viewer's School only. The Automation domain still imports no
+   other module (`AutomationArchitectureGuardTest`). An unresolvable record
+   reads "Academic year (no longer available)".
+5. **Reversals.** Without a reason, a reversal reads "Reversal of:
+   <original description>"; the link stays `reversal_of_journal_entry_id`.
+6. **Fallbacks.** On the Finance charge and Payroll run and compensation
+   pages, a missing name no longer falls back to the id.
+
+**Unchanged.** Amounts, allocations, payments, corrections, reversal and
+cancellation rules, concessions, payroll calculation and statutory
+behaviour, authorization and tenancy. No schema change.
+
+**Tests.** `Tests\Feature\Canteen\CanteenHumanLabelsTest`,
+`Tests\Feature\Automation\AutomationSubjectLabelsTest`, the payslip label
+tests in `PayrollUiTest` and `StaffSelfServiceUiTest`, the posting narrative
+in `PayrollPostingServiceTest`, and `LedgerServiceReverseTest`.

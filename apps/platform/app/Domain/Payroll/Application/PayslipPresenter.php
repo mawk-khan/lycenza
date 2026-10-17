@@ -2,6 +2,8 @@
 
 namespace App\Domain\Payroll\Application;
 
+use Carbon\CarbonImmutable;
+
 /**
  * The one JSON/Inertia shape of a rendered `Payslip` DTO -- shared by the
  * administrative payslip API and page (Phase 9.10) and the HRX.4 own-payslip
@@ -10,6 +12,29 @@ namespace App\Domain\Payroll\Application;
  */
 final class PayslipPresenter
 {
+    /**
+     * LC-3 (M3): what a person reads on the payslip PAGE in place of the
+     * run's internal id -- the run kind and its pay period, e.g. "Regular
+     * payroll run · August 2026". Built from the period month and run kind,
+     * both fixed once a run exists, so a historical payslip always reads the
+     * same. Page-only: the API shape above is a published contract and is
+     * unchanged.
+     *
+     * @return array{periodLabel: string, runLabel: string, correctsPeriodLabel: ?string, employeeLabel: string}
+     */
+    public static function labels(Payslip $payslip): array
+    {
+        $month = fn (string $date): string => CarbonImmutable::parse($date)->format('F Y');
+        $period = $month($payslip->periodMonth);
+
+        return [
+            'periodLabel' => $period,
+            'runLabel' => ($payslip->runKind === 'correction' ? 'Correction run' : 'Regular payroll run').' · '.$period,
+            'correctsPeriodLabel' => $payslip->correctsPayrollPeriodMonth === null ? null : $month($payslip->correctsPayrollPeriodMonth),
+            'employeeLabel' => $payslip->employeeFullName ?? 'Employee record unavailable',
+        ];
+    }
+
     /** @return array<string, mixed> */
     public static function present(Payslip $payslip): array
     {
