@@ -2045,3 +2045,59 @@ that refuses anything changes.
 - `Tests\Unit\Http\WebDomainRefusalResponderTest`;
 - the route-parameter guard;
 - `AttendanceAdminUiTest::a_refused_correction_reaches_the_register_page_as_a_visible_error`.
+
+## Amendment (LC-2, 2026-10-17): the timetable has an academic-year boundary
+
+**Problem.** The Local Product Completion Audit (M2) found that the annual
+timetable change-over could not be done:
+- the teacher and room slot indexes were keyed without `academic_year_id`,
+  so an active current-year class blocked the same teacher or room in the
+  same slot of next year's draft timetable;
+- closing a year does not deactivate its timetable, and Take listed active
+  classes of **any** year for the weekday;
+- entries and periods were listed only while active, so a deactivated one
+  could not be found or reactivated, and a period could be edited only
+  through the API.
+
+**Decision (owner).** Collisions are checked within the same School **and**
+the same academic year. Every same-year protection is kept.
+
+1. **Indexes.** Migration
+   `2026_12_17_090000_scope_timetable_slot_uniqueness_to_academic_year`
+   re-keys `timetable_entries_teacher_slot_unique` and
+   `timetable_entries_room_slot_unique` to
+   `(school_id, academic_year_id, …, day_of_week, period_id)`. The Section
+   index is already year-scoped (a Section belongs to one year, rule 66).
+   `down()` refuses, and removes nothing, while any slot is reused across
+   years.
+2. **Attendance reads the active year only.** Every register list built from
+   the timetable uses `TimetableEntry::forAcademicYear()` with
+   `CurrentAcademicYearResolver`: the office and teacher Take pages and both
+   `scheduled-classes` APIs. With no current year, nothing is listed. A
+   crafted submission for another year's class is still refused by
+   `AttendanceSubmissionService`.
+3. **Browser recovery.**
+   - The Schedule list filters by academic year (default: active) and
+     status (active/inactive/all); the Periods list by status.
+   - Classes (teacher, room, period, day) and Periods (code, name, times,
+     order) are editable in the browser through the existing services and
+     capabilities (`timetable.schedule.manage`, `timetable.periods.manage`).
+   - Activate re-runs every collision check.
+   - Every refusal (create, edit, activate) reaches the page through the
+     LC-1 renderer; the controllers no longer catch it. The browser re-test
+     found that Create's clash message was carried on `period_id`, which
+     the form hides once a Period is chosen, so a same-year clash looked
+     like nothing happening.
+   - The list's Section and teacher filter options (X-04) follow the chosen
+     year and status. The default (active) is unchanged.
+
+**Unchanged.** Rollover, Section and Grade lifecycle, placements, the
+activation guard and closed-year logic. The Period catalogue stays
+School-wide. A Period's times cannot change while any active class uses it,
+including a closed year's still-active class (recorded, not changed).
+
+**Not in scope.** Copying a timetable to the next year, a weekly grid, new
+teacher timetable features and facility modelling.
+
+**Tests.** `Tests\Feature\Timetable\TimetableAcademicYearBoundaryTest`;
+`TimetableEntryConcurrencyTest` (same-year concurrent conflict still refused).

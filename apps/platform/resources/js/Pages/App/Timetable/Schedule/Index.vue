@@ -41,11 +41,16 @@ interface Props {
     filters: {
         sectionId: string;
         teacherId: string;
+        // LC-2: one academic year at a time (default: the active year), and
+        // inactive classes stay findable.
+        academicYearId: string;
+        status: 'active' | 'inactive' | 'all';
     };
-    // X-04: Sections and teachers on active timetable classes (no typed ids).
+    // X-04: Sections and teachers on the chosen year's classes (no typed ids).
     filterOptions: {
         sections: { id: string; label: string }[];
         teachers: { id: string; label: string }[];
+        academicYears: { id: string; label: string }[];
     };
     canManage: boolean;
 }
@@ -65,6 +70,8 @@ const DAY_NAMES = [
 
 const sectionId = ref(props.filters.sectionId);
 const teacherId = ref(props.filters.teacherId);
+const academicYearId = ref(props.filters.academicYearId);
+const statusFilter = ref(props.filters.status);
 
 function applyFilters(resetTeacher = false): void {
     if (resetTeacher) {
@@ -73,18 +80,36 @@ function applyFilters(resetTeacher = false): void {
     }
     router.get(
         '/app/timetable-schedule',
-        { section_id: sectionId.value || undefined, teacher_id: teacherId.value || undefined },
+        {
+            academic_year_id: academicYearId.value || undefined,
+            status: statusFilter.value === 'active' ? undefined : statusFilter.value,
+            section_id: sectionId.value || undefined,
+            teacher_id: teacherId.value || undefined,
+        },
         { preserveScroll: true, replace: true },
     );
 }
 
-function clearFilters(): void {
+function changeYear(): void {
+    // Sections and teachers belong to a year: start again within the new one.
     sectionId.value = '';
     teacherId.value = '';
     applyFilters();
 }
 
-const hasFilters = computed(() => props.filters.sectionId !== '' || props.filters.teacherId !== '');
+function clearFilters(): void {
+    sectionId.value = '';
+    teacherId.value = '';
+    statusFilter.value = 'active';
+    applyFilters();
+}
+
+const hasFilters = computed(
+    () =>
+        props.filters.sectionId !== '' ||
+        props.filters.teacherId !== '' ||
+        props.filters.status !== 'active',
+);
 
 function toggle(entry: EntryRow): void {
     const action = entry.status === 'active' ? 'deactivate' : 'activate';
@@ -113,6 +138,32 @@ function toggle(entry: EntryRow): void {
         </div>
 
         <div class="mt-6 flex flex-wrap items-end gap-4">
+            <div>
+                <label class="block text-sm text-slate-600" for="filter-year">Academic year</label>
+                <select
+                    id="filter-year"
+                    v-model="academicYearId"
+                    class="mt-1 w-56 max-w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    @change="changeYear"
+                >
+                    <option v-for="y in filterOptions.academicYears" :key="y.id" :value="y.id">
+                        {{ y.label }}
+                    </option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm text-slate-600" for="filter-status">Status</label>
+                <select
+                    id="filter-status"
+                    v-model="statusFilter"
+                    class="mt-1 w-36 max-w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    @change="applyFilters()"
+                >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="all">All</option>
+                </select>
+            </div>
             <div>
                 <label class="block text-sm text-slate-600" for="filter-section">Section</label>
                 <select
@@ -203,7 +254,17 @@ function toggle(entry: EntryRow): void {
                             <td class="py-3">{{ entry.teacherName }}</td>
                             <td class="py-3">{{ entry.roomCode ?? '—' }}</td>
                             <td class="py-3"><StatusBadge :status="entry.status" /></td>
-                            <td class="py-3 text-right">
+                            <td class="py-3 text-right whitespace-nowrap">
+                                <a
+                                    v-if="canManage"
+                                    class="mr-3 text-sm underline"
+                                    :href="`/app/timetable-schedule/${entry.id}/edit`"
+                                    >Edit<span class="sr-only">
+                                        {{ entry.subjectCode }} {{ entry.classLabel }}
+                                        {{ DAY_NAMES[entry.dayOfWeek] }}
+                                        {{ entry.periodCode }}</span
+                                    ></a
+                                >
                                 <button
                                     v-if="canManage"
                                     type="button"

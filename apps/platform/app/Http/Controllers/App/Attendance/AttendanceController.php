@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\App\Attendance;
 
+use App\Domain\AcademicStructure\Application\CurrentAcademicYearResolver;
 use App\Domain\AcademicStructure\Application\SectionLabel;
 use App\Domain\Attendance\Application\AttendanceCorrectionService;
 use App\Domain\Attendance\Application\AttendanceSubmissionService;
@@ -98,9 +99,12 @@ class AttendanceController extends Controller
             ->pluck('timetable_entry_id')
             ->all();
 
+        // LC-2: only the active year's classes -- next year's timetable can be
+        // prepared alongside, and must never appear among today's registers.
         $classes = TimetableEntry::query()
             ->with(['subjectOffering.subject', 'section.gradeLevel', 'teacher', 'period'])
             ->where('status', 'active')
+            ->forAcademicYear(app(CurrentAcademicYearResolver::class)->tryResolve($school)?->id)
             ->where('day_of_week', Carbon::parse($date)->isoWeekday())
             ->get()
             ->sortBy(fn (TimetableEntry $e) => SectionLabel::sortKey($e->section).'|'.$e->period?->start_time)

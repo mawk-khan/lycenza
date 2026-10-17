@@ -316,6 +316,24 @@ then lists an inactive Student who still has a placement.
 - **Timetable** (`Timetable schedule`): schedule an offering for a Section
   in a period, with a teacher and a room. Every picker searches as you
   type.
+  - **Academic year filter.** The list opens on the active year. Choose a
+    draft year to prepare next year's timetable while this year's stays
+    in use.
+  - **Clashes are checked within one academic year.** A teacher, room or
+    Section cannot be in two classes in the same period and day of the
+    same year. The same teacher or room may hold that slot in another
+    year.
+  - **Edit** changes a class's teacher, room, period or day. To change
+    its subject or Section, schedule a new class and deactivate the old
+    one.
+  - **Status filter.** Deactivated classes are listed under Inactive or
+    All. **Activate** checks every clash again; if one exists, the page
+    says why and nothing changes.
+- **Timetable periods:** **Edit** corrects a period's code, name, times or
+  order. Its times cannot change, and it cannot be deactivated, while any
+  active class uses it — including an active class of a closed year.
+  Deactivate those classes first. Inactive periods are listed under the
+  Status filter.
 - **Teaching assignments:** who teaches which offering to which Section,
   from which date. **End** an assignment with its last day and a reason.
   It stays current until that day ends.
@@ -328,7 +346,9 @@ then lists an inactive Student who still has a placement.
 ### Taking a register (office)
 1. **Attendance → Take a register**. The date defaults to the School's
    today.
-2. Choose a class: "Grade 6 · A · Subject — Period".
+2. Choose a class: "Grade 6 · A · Subject — Period". Only classes of the
+   active academic year are listed; a draft year's timetable never
+   appears here.
 3. Mark **every** Student present, absent, late or excused, then submit.
    A register is submitted complete; there is no partial save.
 
@@ -496,7 +516,14 @@ payment corrections or refunds (§14).
 **Goal:** move Students from this year into next year's Sections in one
 reviewed operation.
 
-1. **Prepare the target year** as a draft, with its Sections (§4–§5).
+1. **Prepare the target year** as a draft, with its Sections (§4–§5),
+   its subject offerings and its teaching assignments.
+   - **Prepare its timetable now** (§10): choose the draft year in the
+     Timetable schedule's year filter and schedule its classes. The same
+     teachers and rooms can be used as this year; clashes are checked
+     within the draft year only.
+   - **Leave this year's timetable active.** Registers keep using it
+     until the draft year is activated.
 2. **Enrollment rollovers → Create Plan**: source and target year, then
    **Open** it.
 3. **Mappings:** **Add mapping** from each source Grade (optionally
@@ -512,7 +539,8 @@ reviewed operation.
 7. **Run Validation** until nothing blocks.
 8. **Start Rollover.** It places Students in the target year.
 9. **On or after the target year's start date,** **Activate** it. This
-   closes the old year.
+   closes the old year, and registers switch to the new year's timetable
+   at once.
 10. **Complete the old year's open placements:** Data Health → "Placement
     still open in a closed academic year" → **Open placements in closed
     years**, preview, then complete.
@@ -524,6 +552,9 @@ reviewed operation.
 - **Nothing is closed automatically.** Old placements stay open until you
   complete them (step 10).
 - **A closed year cannot be reopened** through School administration.
+- **Old timetables stay active** after their year closes. They no longer
+  appear in registers, but a period they use cannot change its times.
+  Deactivate them when you need to change the bell times.
 
 ## 17. Data Health
 

@@ -265,7 +265,9 @@ class TimetableAdminUiTest extends TestCase
             'day_of_week' => 1,
         ]);
 
-        $store->assertSessionHasErrors('period_id');
+        // LC-2: shown as the layout's refusal banner; nothing is scheduled.
+        $store->assertSessionHasErrors('refusal');
+        $this->assertSame(1, app(TenantContext::class)->withSchool($school, fn () => TimetableEntry::query()->count()));
     }
 
     // --- Timetable-owned helper/search endpoints -- capability boundary --------

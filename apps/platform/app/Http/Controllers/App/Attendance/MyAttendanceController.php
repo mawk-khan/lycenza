@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\App\Attendance;
 
+use App\Domain\AcademicStructure\Application\CurrentAcademicYearResolver;
 use App\Domain\AcademicStructure\Application\SectionLabel;
 use App\Domain\Attendance\Application\AttendanceCorrectionService;
 use App\Domain\Attendance\Application\AttendanceSubmissionService;
@@ -111,6 +112,7 @@ class MyAttendanceController extends Controller
         $owned = TimetableEntry::query()
             ->with(['subjectOffering.subject', 'section.gradeLevel', 'teacher', 'period'])
             ->where('status', 'active')
+            ->forAcademicYear(app(CurrentAcademicYearResolver::class)->tryResolve($school)?->id)
             ->where('day_of_week', Carbon::parse($date)->isoWeekday())
             ->get()
             ->filter(fn (TimetableEntry $e) => $scope->ownsOn($e->section_id, $e->subject_offering_id, $date))

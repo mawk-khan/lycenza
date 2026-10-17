@@ -2,6 +2,7 @@
 
 namespace App\Domain\Attendance\Http\Controllers;
 
+use App\Domain\AcademicStructure\Application\CurrentAcademicYearResolver;
 use App\Domain\Attendance\Application\AttendanceCorrectionService;
 use App\Domain\Attendance\Application\AttendanceSubmissionService;
 use App\Domain\Attendance\Infrastructure\AttendanceRecord;
@@ -214,6 +215,7 @@ class AttendanceSessionController extends Controller
         $entries = TimetableEntry::query()
             ->with(['subjectOffering.subject', 'section', 'teacher', 'period'])
             ->where('status', 'active')
+            ->forAcademicYear(app(CurrentAcademicYearResolver::class)->tryResolve($school)?->id)
             ->where('day_of_week', $date->isoWeekday())
             ->get();
 

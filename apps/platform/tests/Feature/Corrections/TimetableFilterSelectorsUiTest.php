@@ -87,6 +87,21 @@ class TimetableFilterSelectorsUiTest extends TestCase
     }
 
     #[Test]
+    public function the_options_follow_the_status_filter(): void
+    {
+        $w = $this->world();
+        $this->viewer($w['school']);
+
+        // LC-2: an inactive class is findable, so its Section and teacher are offered there.
+        $inactive = $this->props('status=inactive')['filterOptions'];
+        $this->assertSame([$w['idle']->id], array_column($inactive['sections'], 'id'));
+        $this->assertSame([$w['retired']->id], array_column($inactive['teachers'], 'id'));
+
+        $all = $this->props('status=all')['filterOptions'];
+        $this->assertEqualsCanonicalizing([$w['a']->id, $w['b']->id, $w['idle']->id], array_column($all['sections'], 'id'));
+    }
+
+    #[Test]
     public function another_schools_options_never_appear_and_its_ids_match_nothing(): void
     {
         $w = $this->world();

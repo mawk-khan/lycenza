@@ -11,6 +11,7 @@ use App\Models\Campus;
 use App\Support\Identifiers\GeneratesUuidV7;
 use App\Support\Tenancy\BelongsToSchool;
 use Database\Factories\TimetableEntryFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -59,6 +60,22 @@ class TimetableEntry extends Model
     protected static function newFactory(): TimetableEntryFactory
     {
         return TimetableEntryFactory::new();
+    }
+
+    /**
+     * LC-2: one academic year's classes. A School can hold this year's and
+     * next year's timetable side by side (collisions are per year), so every
+     * "today's classes" list names the year it means; no year (none active)
+     * means no classes, never every year's.
+     *
+     * @param  Builder<TimetableEntry>  $query
+     * @return Builder<TimetableEntry>
+     */
+    public function scopeForAcademicYear(Builder $query, ?string $academicYearId): Builder
+    {
+        return $academicYearId === null
+            ? $query->whereRaw('false')
+            : $query->where('timetable_entries.academic_year_id', $academicYearId);
     }
 
     public function isActive(): bool

@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\App\Timetable;
 
 use App\Domain\AcademicStructure\Application\SectionLabel;
+use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\Room;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\HR\Infrastructure\Employee;
-use App\Domain\Timetable\Application\Exceptions\TimetableException;
 use App\Domain\Timetable\Application\TimetableScheduleService;
 use App\Domain\Timetable\Infrastructure\TimetableEntry;
 use App\Domain\Timetable\Infrastructure\TimetablePeriod;
@@ -18,7 +18,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -42,6 +42,9 @@ class TimetableEntryController extends Controller
 {
     use AuthorizesCapability;
 
+    /** LC-2: the list's status filter. */
+    private const STATUS_FILTERS = ['active', 'inactive', 'all'];
+
     public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities): Response
     {
         $school = $context->requireSchool();
@@ -50,11 +53,22 @@ class TimetableEntryController extends Controller
         $validated = $request->validate([
             'section_id' => ['sometimes', 'uuid'],
             'teacher_id' => ['sometimes', 'uuid'],
+            'academic_year_id' => ['sometimes', 'uuid'],
+            'status' => ['sometimes', Rule::in(self::STATUS_FILTERS)],
         ]);
+
+        // LC-2: one academic year at a time (this year's and next year's
+        // timetables live side by side), defaulting to the active year; and
+        // inactive classes stay findable so they can be reactivated.
+        $years = AcademicYear::query()->orderByDesc('starts_on')->get(['id', 'school_id', 'name', 'status']);
+        $defaultYear = $years->firstWhere('status', 'active') ?? $years->first();
+        $yearId = $validated['academic_year_id'] ?? $defaultYear?->id;
+        $status = $validated['status'] ?? 'active';
 
         $query = TimetableEntry::query()
             ->with(['subjectOffering.subject', 'section.gradeLevel', 'teacher', 'room', 'period'])
-            ->where('status', 'active')
+            ->forAcademicYear($yearId)
+            ->when($status !== 'all', fn ($q) => $q->where('status', $status))
             ->orderBy('day_of_week')
             ->orderBy('period_id');
 
@@ -72,8 +86,12 @@ class TimetableEntryController extends Controller
             'filters' => [
                 'sectionId' => $validated['section_id'] ?? '',
                 'teacherId' => $validated['teacher_id'] ?? '',
+                'academicYearId' => $yearId ?? '',
+                'status' => $status,
             ],
-            'filterOptions' => $this->filterOptions($school->id, $validated['section_id'] ?? null),
+            'filterOptions' => $this->filterOptions($school->id, $validated['section_id'] ?? null, $yearId, $status) + [
+                'academicYears' => $years->map(fn (AcademicYear $y) => ['id' => $y->id, 'label' => "{$y->name} ({$y->status})"])->values()->all(),
+            ],
             'canManage' => $capabilities->canInSchool($context->actor(), 'timetable.schedule.manage', $school),
         ]);
     }
@@ -82,15 +100,18 @@ class TimetableEntryController extends Controller
      * X-04 (OD-V11-7, ADR 0075 section 12): the filter choices, so nobody has
      * to type an internal id. Only the Sections and teachers that appear on
      * this School's ACTIVE timetable classes -- what the list itself can
-     * show, never every Section or the HR directory. Teachers narrow to the
+     * show, never every Section or the HR directory. LC-2: within the chosen
+     * academic year, and following the status filter (inactive / all offer
+     * the Sections and teachers of the classes that filter shows). Teachers narrow to the
      * chosen Section. The request contract (UUID section_id / teacher_id,
      * unknown or foreign ids match nothing) is unchanged.
      *
      * @return array{sections: list<array{id: string, label: string}>, teachers: list<array{id: string, label: string}>}
      */
-    private function filterOptions(string $schoolId, ?string $sectionId): array
+    private function filterOptions(string $schoolId, ?string $sectionId, ?string $yearId, string $status): array
     {
-        $scheduled = fn () => TimetableEntry::query()->where('school_id', $schoolId)->where('status', 'active');
+        $scheduled = fn () => TimetableEntry::query()->where('school_id', $schoolId)->forAcademicYear($yearId)
+            ->when($status !== 'all', fn ($q) => $q->where('status', $status));
 
         return [
             'sections' => Section::query()->where('school_id', $schoolId)
@@ -126,37 +147,29 @@ class TimetableEntryController extends Controller
 
         [$offering, $section, $teacher, $room, $period, $dayOfWeek] = $this->resolveEntryInput($request);
 
-        try {
-            $service->create($school, $offering, $section, $teacher, $room, $period, $dayOfWeek, $context->actor());
-        } catch (TimetableException $e) {
-            // Reuses the form's own `period_id` field to carry the
-            // message -- every conflict/eligibility exception this
-            // service can throw (double-booking, an inactive parent,
-            // ...) is fundamentally about whether THIS Period/day
-            // combination is schedulable, mirroring
-            // CanteenOrderController's identical "reuse an existing
-            // form field, don't invent a synthetic error key" choice
-            // for its own `lines` field.
-            throw ValidationException::withMessages(['period_id' => [$e->getMessage()]]);
-        }
+        // LC-2: a clash or eligibility refusal reaches the page through the
+        // LC-1 renderer (the layout's refusal banner). It used to be carried
+        // on `period_id`, which the form does not show once a Period is chosen.
+        $service->create($school, $offering, $section, $teacher, $room, $period, $dayOfWeek, $context->actor());
 
         return redirect('/app/timetable-schedule')->with('flash', 'Class scheduled.');
     }
 
+    /**
+     * LC-2: re-runs the full create-time validation (TimetableScheduleService
+     * ::activate) -- a class that now collides with another one in its year
+     * stays inactive and the page says why (WebDomainRefusalResponder).
+     * Stays on the list the operator was looking at.
+     */
     public function activate(TenantContext $context, TimetableScheduleService $service, string $timetableEntry): RedirectResponse
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('timetable.schedule.manage', $school);
 
         $entry = TimetableEntry::query()->findOrFail($timetableEntry);
+        $service->activate($entry, $context->actor());
 
-        try {
-            $service->activate($entry, $context->actor());
-        } catch (TimetableException $e) {
-            return redirect('/app/timetable-schedule')->withErrors(['schedule' => $e->getMessage()]);
-        }
-
-        return redirect('/app/timetable-schedule')->with('flash', 'Class activated.');
+        return back()->with('flash', 'Class activated.');
     }
 
     public function deactivate(TenantContext $context, TimetableScheduleService $service, string $timetableEntry): RedirectResponse
@@ -167,7 +180,60 @@ class TimetableEntryController extends Controller
         $entry = TimetableEntry::query()->findOrFail($timetableEntry);
         $service->deactivate($entry, $context->actor());
 
-        return redirect('/app/timetable-schedule')->with('flash', 'Class deactivated.');
+        return back()->with('flash', 'Class deactivated.');
+    }
+
+    /**
+     * LC-2: correct a scheduled class in the browser -- its teacher, room,
+     * period and day. The Subject Offering and Section are what the class
+     * IS; a different one is a different class (schedule it, deactivate
+     * this one). Same service and validation as creating one, scoped to the
+     * class's own academic year; a collision is refused and nothing changes.
+     */
+    public function edit(TenantContext $context, string $timetableEntry): Response
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('timetable.schedule.manage', $school);
+
+        $entry = TimetableEntry::query()
+            ->with(['subjectOffering.subject', 'subjectOffering.academicYear', 'section.gradeLevel', 'teacher', 'room', 'period'])
+            ->findOrFail($timetableEntry);
+
+        return Inertia::render('App/Timetable/Schedule/Edit', [
+            'entry' => $this->present($entry) + [
+                'academicYearName' => $entry->subjectOffering?->academicYear?->name,
+                'roomId' => $entry->room_id,
+                'periodId' => $entry->period_id,
+            ],
+        ]);
+    }
+
+    public function update(Request $request, TenantContext $context, TimetableScheduleService $service, string $timetableEntry): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('timetable.schedule.manage', $school);
+
+        $entry = TimetableEntry::query()->findOrFail($timetableEntry);
+        $validated = $request->validate([
+            'teacher_id' => ['required', 'uuid'],
+            'room_id' => ['sometimes', 'nullable', 'uuid'],
+            'period_id' => ['required', 'uuid'],
+            'day_of_week' => ['required', 'integer', 'between:1,7'],
+        ]);
+
+        $service->update(
+            $entry,
+            $entry->subjectOffering()->firstOrFail(),
+            $entry->section()->firstOrFail(),
+            Employee::query()->findOrFail($validated['teacher_id']),
+            isset($validated['room_id']) ? Room::query()->findOrFail($validated['room_id']) : null,
+            TimetablePeriod::query()->findOrFail($validated['period_id']),
+            (int) $validated['day_of_week'],
+            $context->actor(),
+        );
+
+        return redirect('/app/timetable-schedule?'.http_build_query(['academic_year_id' => $entry->academic_year_id, 'status' => 'all']))
+            ->with('flash', 'Class updated.');
     }
 
     // --- Timetable-owned helper/search endpoints ---------------------------

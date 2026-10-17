@@ -144,13 +144,25 @@ Employee) × optional Room × Period × day-of-week.
 - **Three partial-unique conflict indexes** on `timetable_entries`,
   each `WHERE status = 'active'`:
   - `timetable_entries_teacher_slot_unique` on
-    `(school_id, teacher_id, day_of_week, period_id)`
+    `(school_id, academic_year_id, teacher_id, day_of_week, period_id)`
   - `timetable_entries_section_slot_unique` on
-    `(school_id, section_id, day_of_week, period_id)`
+    `(school_id, section_id, day_of_week, period_id)` — a Section
+    belongs to exactly one AcademicYear (CLAUDE.md rule 66), so this
+    one is year-scoped by construction
   - `timetable_entries_room_slot_unique` on
-    `(school_id, room_id, day_of_week, period_id)` — additionally
-    `AND room_id IS NOT NULL`, so any number of roomless entries never
-    collide with each other.
+    `(school_id, academic_year_id, room_id, day_of_week, period_id)` —
+    additionally `AND room_id IS NOT NULL`, so any number of roomless
+    entries never collide with each other.
+
+  **Collision scope is the same School AND the same AcademicYear (LC-2,
+  2026-10-17, owner decision).** The teacher and room indexes were
+  originally keyed without `academic_year_id`, so an active current-year
+  class blocked preparing next year's timetable with the same teacher or
+  room in the same slot (M2 of the Local Product Completion Audit).
+  Migration `2026_12_17_090000_scope_timetable_slot_uniqueness_to_academic_year`
+  re-keys them; every same-year protection is unchanged. Its `down()`
+  refuses (and removes nothing) while any teacher or room slot is reused
+  across years, since the old indexes could not be rebuilt over that data.
 
   **Why these are sufficient given the Period invariant**: a
   TimetableEntry references a Period **by id**, not by its own copy of
@@ -393,7 +405,33 @@ to retry by construction, exactly like Hostel residency `end()`.
 Session-authenticated Inertia pages under `/app/timetable-periods` and
 `/app/timetable-schedule` (`auth` middleware, capability checks inside
 each controller action via `AuthorizesCapability`): Periods
-Index/Create, Schedule Index/Create. Dashboard navigation
+Index/Create/Edit, Schedule Index/Create/Edit.
+
+**Browser recovery (LC-2).** The Schedule list is filtered by academic
+year (default: the active year; a draft future year is selectable, so
+next year's timetable is prepared while the current one stays active)
+and by status (active/inactive/all). The Periods list has the same
+status filter. A deactivated class or Period therefore stays findable,
+and Activate re-runs every collision and eligibility check. Every
+refusal (schedule, edit, activate) is shown by the layout's refusal
+message (LC-1) and nothing changes. The Section and teacher filter
+options follow the chosen year and status.
+Edit corrects a class's teacher, room, Period and day (the Subject
+Offering and Section are what the class *is*; schedule a new class for
+a different one) and a Period's code, name, times and order. A Period's
+times cannot change, and it cannot be deactivated, while any active
+class references it — including an active class of a closed year,
+because closing a year does not deactivate its timetable (deactivate
+those classes first).
+
+**Attendance reads the active year only.** Every register list built
+from the timetable (`/app/attendance/take`, `/app/my-attendance/take`,
+the Tier 1 `scheduled-classes` API and the teacher `/my/` API) lists
+only classes of the School's current AcademicYear
+(`TimetableEntry::forAcademicYear()` with `CurrentAcademicYearResolver`;
+no current year lists nothing). A crafted submission for another
+year's class is still refused by `AttendanceSubmissionService`
+(`AcademicYearNotActiveException`). Dashboard navigation
 (`DashboardController`) exposes `canViewTimetablePeriods`/
 `canViewTimetableSchedule` flags, each independently derived from the
 matching `.view` capability — a user with neither sees neither link.
@@ -493,6 +531,9 @@ should be inferred from anything above:
 - Bell-schedule variants (e.g. a different Period set on different
   days of the week) — one Period catalogue applies uniformly across
   all seven days.
+- Copying a timetable to the next year, a weekly grid view, and
+  per-year Period catalogues (LC-2 non-scope: the Period catalogue stays
+  School-wide; a future year's classes are entered individually).
 
 ## Retention (E21.3D, 2026-10-02)
 

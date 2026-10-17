@@ -1513,6 +1513,7 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::get('/', [TimetablePeriodController::class, 'index'])->name('index');
         Route::get('/create', [TimetablePeriodController::class, 'create'])->name('create');
         Route::post('/', [TimetablePeriodController::class, 'store'])->name('store');
+        Route::get('/{timetablePeriod}/edit', [TimetablePeriodController::class, 'edit'])->name('edit');
         Route::patch('/{timetablePeriod}', [TimetablePeriodController::class, 'update'])->name('update');
     });
 
@@ -1862,6 +1863,8 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::get('/search/rooms', [TimetableEntryController::class, 'searchRooms'])->name('search-rooms');
         Route::get('/search/periods', [TimetableEntryController::class, 'searchPeriods'])->name('search-periods');
         Route::post('/', [TimetableEntryController::class, 'store'])->name('store');
+        Route::get('/{timetableEntry}/edit', [TimetableEntryController::class, 'edit'])->name('edit');
+        Route::patch('/{timetableEntry}', [TimetableEntryController::class, 'update'])->name('update');
         Route::post('/{timetableEntry}/activate', [TimetableEntryController::class, 'activate'])->name('activate');
         Route::post('/{timetableEntry}/deactivate', [TimetableEntryController::class, 'deactivate'])->name('deactivate');
     });
