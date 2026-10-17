@@ -2,6 +2,7 @@
 
 namespace App\Domain\Canteen\Application;
 
+use App\Domain\Canteen\Application\Exceptions\CanteenInvalidRecipeQuantityException;
 use App\Domain\Canteen\Infrastructure\CanteenItem;
 use App\Domain\Canteen\Infrastructure\CanteenItemInventoryRequirement;
 use App\Domain\Inventory\Infrastructure\InventoryItem;
@@ -31,6 +32,12 @@ class CanteenRecipeService
 
     public function setRequirement(School $school, CanteenItem $canteenItem, InventoryItem $inventoryItem, string $quantityRequired, ?User $actor = null): CanteenItemInventoryRequirement
     {
+        // LC-1: the same rule the database CHECK enforces (> 0), plus the
+        // column's own bound, refused before the write rather than by it.
+        if (! is_numeric($quantityRequired) || bccomp($quantityRequired, '0', 3) <= 0 || bccomp($quantityRequired, '99999999999.999', 3) > 0) {
+            throw new CanteenInvalidRecipeQuantityException;
+        }
+
         return DB::transaction(function () use ($school, $canteenItem, $inventoryItem, $quantityRequired, $actor) {
             CanteenItem::query()->where('id', $canteenItem->id)->lockForUpdate()->firstOrFail();
 

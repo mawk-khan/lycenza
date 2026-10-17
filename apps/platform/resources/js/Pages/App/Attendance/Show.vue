@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { formatDateTime } from '../../../datetime';
-import { router } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { router, usePage } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 
 /**
  * One submitted register.
@@ -72,6 +72,14 @@ const DAY_NAMES = [
 // correction.
 const correcting = ref<string | null>(null);
 
+// LC-1: a refused correction (a colleague changed the record first, or the
+// date is outside your teaching assignment) used to vanish -- the error came
+// back on `new_status`/`expected_status` and nothing rendered it.
+const page = usePage<{ errors?: Record<string, string> }>();
+const correctionError = computed(
+    () => page.props.errors?.new_status ?? page.props.errors?.expected_status ?? null,
+);
+
 function correct(record: RecordRow, newStatus: string): void {
     if (newStatus === record.status) {
         return;
@@ -100,6 +108,15 @@ function correct(record: RecordRow, newStatus: string): void {
         <p class="mt-1 text-xs text-slate-400">
             {{ session.academicYearName }} · {{ session.campusName }} ·
             {{ session.gradeLevelName }} · submitted {{ formatDateTime(session.submittedAt) }}
+        </p>
+
+        <p
+            v-if="correctionError"
+            class="mt-4 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900"
+            role="alert"
+        >
+            <span class="font-semibold">Not corrected:</span> {{ correctionError }} Reload the page
+            to see the register as it is now.
         </p>
 
         <table class="mt-6 w-full border-collapse text-sm">

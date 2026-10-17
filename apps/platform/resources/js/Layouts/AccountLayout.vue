@@ -23,6 +23,7 @@ import { Link as InertiaLink, router, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import ElevationBanner from '../Components/ElevationBanner.vue';
 import FlashMessage from '../Components/FlashMessage.vue';
+import RefusalMessage from '../Components/RefusalMessage.vue';
 import NavigationGroupList from '../Components/Navigation/NavigationGroupList.vue';
 import { GUARDIAN_GROUP_KEYS, PLATFORM_GROUP_KEYS, type Navigation } from '../types/navigation';
 
@@ -192,6 +193,7 @@ const accountLinkClass =
             </div>
             <div id="main-content" tabindex="-1" class="min-w-0 flex-1 focus:outline-none">
                 <FlashMessage />
+                <RefusalMessage />
                 <slot />
             </div>
         </div>

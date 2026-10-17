@@ -26,4 +26,10 @@ class EmploymentAlreadyEndedException extends HrException
     ) {
         parent::__construct(409, 'HR_EMPLOYMENT_ALREADY_ENDED', "EmploymentRecord {$employmentRecordId} was already ended on {$existingEndsOn}.");
     }
+
+    /** LC-1: shown on the browser page instead of the id-bearing message (WebDomainRefusalResponder). */
+    public function operatorMessage(): string
+    {
+        return 'This employment has already ended.';
+    }
 }

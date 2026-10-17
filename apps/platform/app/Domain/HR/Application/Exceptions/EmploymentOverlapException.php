@@ -17,4 +17,10 @@ class EmploymentOverlapException extends HrException
     ) {
         parent::__construct(422, 'HR_EMPLOYMENT_OVERLAP', "Employee {$employeeId} already has an overlapping EmploymentRecord ({$conflictingEmploymentRecordId}).");
     }
+
+    /** LC-1: shown on the browser page instead of the id-bearing message (WebDomainRefusalResponder). */
+    public function operatorMessage(): string
+    {
+        return 'This person already has an employment that overlaps these dates. End the current employment first, or choose a start date after it ends.';
+    }
 }

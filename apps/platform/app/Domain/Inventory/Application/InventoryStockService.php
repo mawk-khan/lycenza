@@ -45,6 +45,9 @@ class InventoryStockService
 {
     private const PG_CHECK_VIOLATION = '23514';
 
+    /** LC-1: the largest value `quantity` / `quantity_on_hand` (decimal(14,3)) can hold. */
+    public const MAX_QUANTITY = '99999999999.999';
+
     public function __construct(
         private readonly AuditRecorder $audit,
     ) {}
@@ -64,7 +67,7 @@ class InventoryStockService
             return DB::transaction(function () use ($item, $location, $quantity, $actor) {
                 $balance = $this->lockBalance($this->ensureBalanceRow($item, $location));
 
-                $balance->quantity_on_hand = bcadd($balance->quantity_on_hand, $quantity, 3);
+                $balance->quantity_on_hand = $this->boundedSum($balance->quantity_on_hand, $quantity);
                 $balance->save();
 
                 $movement = $this->recordMovement($item, 'receipt', null, $location, $quantity);
@@ -167,7 +170,7 @@ class InventoryStockService
                 $sourceBalance->quantity_on_hand = bcsub($sourceBalance->quantity_on_hand, $quantity, 3);
                 $sourceBalance->save();
 
-                $destBalance->quantity_on_hand = bcadd($destBalance->quantity_on_hand, $quantity, 3);
+                $destBalance->quantity_on_hand = $this->boundedSum($destBalance->quantity_on_hand, $quantity);
                 $destBalance->save();
 
                 $movement = $this->recordMovement($item, 'transfer', $from, $to, $quantity);
@@ -438,9 +441,28 @@ class InventoryStockService
             throw new InvalidQuantityException('Quantity must be greater than zero.');
         }
 
+        if (bccomp($quantity, self::MAX_QUANTITY, 3) > 0) {
+            throw new InvalidQuantityException('Quantity cannot be more than 99,999,999,999.999.');
+        }
+
         if (! $item->allowsFractionalQuantity() && ! $this->isWholeNumber($quantity)) {
             throw new InvalidQuantityException("Quantity for unit '{$item->unit_of_measure}' must be a whole number.");
         }
+    }
+
+    /**
+     * LC-1: a balance can never be taken past what its column holds -- a
+     * refusal inside the transaction (nothing is written), not a numeric
+     * overflow from the database.
+     */
+    private function boundedSum(string $onHand, string $quantity): string
+    {
+        $sum = bcadd($onHand, $quantity, 3);
+        if (bccomp($sum, self::MAX_QUANTITY, 3) > 0) {
+            throw new InvalidQuantityException('That would take the stock on hand above 99,999,999,999.999.');
+        }
+
+        return $sum;
     }
 
     private function isWholeNumber(string $quantity): bool

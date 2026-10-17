@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { router, useForm } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
 
 /**
@@ -80,6 +80,12 @@ const form = useForm({
     attendance_date: '',
     records: [] as { student_enrollment_id: string; status: string }[],
 });
+
+const recordErrors = computed(() =>
+    Object.entries(form.errors as Record<string, string | undefined>)
+        .filter(([key, value]) => (key === 'records' || key.startsWith('records.')) && value)
+        .map(([, value]) => value as string),
+);
 
 function unmarkedCount(): number {
     return props.roster.filter((member) => !marks.value[member.studentEnrollmentId]).length;
@@ -215,8 +221,12 @@ function submit(): void {
                 </span>
             </div>
 
-            <p v-if="form.errors.timetable_entry_id" class="mt-3 text-sm text-red-700">
+            <p v-if="form.errors.timetable_entry_id" class="mt-3 text-sm text-red-700" role="alert">
                 {{ form.errors.timetable_entry_id }}
+            </p>
+            <!-- LC-1: a refused register line (records.*) used to show nothing. -->
+            <p v-if="recordErrors.length" class="mt-3 text-sm text-red-700" role="alert">
+                {{ recordErrors[0] }}
             </p>
         </template>
     </main>

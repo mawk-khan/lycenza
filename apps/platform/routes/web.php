@@ -158,6 +158,7 @@ use App\Http\Controllers\HomeController;
 use App\Http\Controllers\Identity\InvitationAcceptanceController;
 use App\Http\Controllers\Identity\StaffInvitationAcceptanceController;
 use App\Http\Controllers\Internal\MfaDemoController;
+use App\Support\Routing\WebRouteParameters;
 use Illuminate\Support\Facades\Route;
 
 // SWC.1 (ADR 0073 section 7.1): the public product entry; a signed-in
@@ -260,7 +261,7 @@ Route::get('/session/handoff', SessionHandoffController::class)
 // deliberately small and mirrored by the explicit allowlist in
 // Tests\Feature\Tenancy\SchoolContextRouteGuardTest -- anything that
 // reads or writes one School's data belongs in the School group below.
-Route::middleware('auth')->group(function (): void {
+Route::middleware('auth')->where(WebRouteParameters::uuidPatterns())->group(function (): void {
     Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
 
     Route::get('/app', [DashboardController::class, 'index'])->name('app.dashboard');
@@ -438,7 +439,9 @@ Route::middleware('auth')->group(function (): void {
 // a page request without one goes back to the /app landing, a mutation
 // or JSON request gets a 409 `school_context_required`. It never selects
 // a School. Controllers here may rely on TenantContext::requireSchool().
-Route::middleware(['auth', 'school-context'])->group(function (): void {
+// LC-1: a malformed record id in either signed-in group is a plain 404
+// (WebRouteParameters), never a database error.
+Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPatterns())->group(function (): void {
     Route::get('/app/settings', [SchoolSettingsController::class, 'show'])
         ->middleware('capability:school.settings.view')
         ->name('app.settings.show');

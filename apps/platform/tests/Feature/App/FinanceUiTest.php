@@ -5,6 +5,7 @@ namespace Tests\Feature\App;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\Testing\LocalCatalogueFixtures;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesFeesFixtures;
 use Tests\Concerns\CreatesFinanceFixtures;
@@ -476,8 +477,11 @@ class FinanceUiTest extends TestCase
         // Tests\Feature\App\ManualPaymentUiTest); a recorded Payment
         // still has no edit, delete or refund route.
         $this->post('/app/finance/payments', [])->assertStatus(405);
-        $this->patch('/app/finance/payments/anything', [])->assertStatus(405);
-        $this->delete('/app/finance/payments/anything')->assertStatus(405);
+        // LC-1: record ids are UUID-constrained (a non-UUID is simply a 404),
+        // so the verb check uses a well-formed id.
+        $id = (string) Str::uuid();
+        $this->patch("/app/finance/payments/{$id}", [])->assertStatus(405);
+        $this->delete("/app/finance/payments/{$id}")->assertStatus(405);
         $this->put('/app/finance/payments/record', [])->assertStatus(405);
     }
 

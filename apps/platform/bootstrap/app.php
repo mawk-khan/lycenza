@@ -32,6 +32,7 @@ use App\Http\Middleware\ResolveSchoolContext;
 use App\Http\Middleware\TrustConfiguredProxies;
 use App\Support\Api\ApiAuthFailureLimiter;
 use App\Support\Auth\SessionEndedResponder;
+use App\Support\Http\WebDomainRefusalResponder;
 use App\Support\Observability\Metrics\MetricCatalog;
 use App\Support\Observability\MetricsRecorder;
 use App\Support\Observability\SafeException;
@@ -297,6 +298,16 @@ return Application::configure(basePath: dirname(__DIR__))
                 ],
             ], $status, $headers);
         });
+
+        // LC-1 (Local Product Completion M1): an expected domain refusal on
+        // a browser page is a form error (or its 404/403), never a 500 --
+        // see WebDomainRefusalResponder. It is an expected outcome, like a
+        // ValidationException, so a web request does not report it as an
+        // error; queue/console code (runningInConsole) still reports it.
+        $exceptions->render(fn (Throwable $e, Request $request) => app(WebDomainRefusalResponder::class)->render($e, $request));
+        $exceptions->dontReportWhen(fn (Throwable $e) => WebDomainRefusalResponder::refusalStatus($e) !== null
+            && ! app()->runningInConsole()
+            && WebDomainRefusalResponder::isBrowserRequest(request()));
 
         // A signed-in browser page whose session ended without logout
         // (expired, or signed out elsewhere): hard navigation to a fresh

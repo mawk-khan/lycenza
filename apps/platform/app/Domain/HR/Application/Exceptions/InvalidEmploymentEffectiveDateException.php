@@ -32,4 +32,14 @@ class InvalidEmploymentEffectiveDateException extends HrException
     ) {
         parent::__construct(422, 'HR_INVALID_EMPLOYMENT_EFFECTIVE_DATE', "EmploymentRecord {$employmentRecordId}'s effective date {$attemptedEndsOn} is invalid ({$reason}).");
     }
+
+    /** LC-1: shown on the browser page instead of the id-bearing message (WebDomainRefusalResponder). */
+    public function operatorMessage(): string
+    {
+        return match ($this->reason) {
+            'before_employment_start' => "The end date ({$this->attemptedEndsOn}) is before this employment's start date. Choose a date on or after the start date.",
+            'future_dated' => "The separation date ({$this->attemptedEndsOn}) is in the future. Separate on or before today.",
+            default => 'That date is not valid for this employment.',
+        };
+    }
 }

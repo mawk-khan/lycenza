@@ -1988,3 +1988,60 @@ accessibility), Prettier and the production build.
 (ADR 0072 §28.8, §31).
 
 **Counts:** recorded in the SWC.5 commit.
+
+## Amendment (LC-1, 2026-10-17): one floor under every web refusal
+
+**Problem.** §2.5 and SWC.2 introduced `MapsDomainRefusals`, so a domain
+refusal on a form becomes a field error instead of a 500. Only six
+controllers adopted it. The Local Product Completion Audit (M1) confirmed
+live 500s from ordinary input in four modules: Timetable, HR, Canteen and
+Inventory. It also found two other gaps:
+- a malformed or mistyped record id in a URL reached a UUID column
+  (SQLSTATE 22P02);
+- a refused attendance correction was returned but never rendered.
+
+**Decision.** These rules now hold for every signed-in web page; no rule
+that refuses anything changes.
+
+1. **Shared renderer.** `App\Support\Http\WebDomainRefusalResponder` is
+   registered in `bootstrap/app.php`. For an HTML/Inertia request, a 4xx
+   domain exception (`getStatusCode()` + `errorCode()`) becomes:
+   - the form error `refusal`, which the layout shows (`RefusalMessage.vue`,
+     `role="alert"`, focused);
+   - or a 404 or 403 page, so a refusal never says more than the page it
+     came from.
+
+   What stays untouched:
+   - `api/*` and JSON requests keep the JSON envelope;
+   - 5xx and non-domain exceptions stay real errors;
+   - `MapsDomainRefusals` keeps its field-level mapping.
+2. **Messages.**
+   - The domain's own message is shown when it is operator-grade.
+   - A message naming internal ids is replaced by "This change was not
+     accepted (CODE)", or by the exception's `operatorMessage()`. The HR
+     employment exceptions now define one.
+3. **Logging.** An expected web refusal is not reported as an error, in the
+   same way as a `ValidationException`. Refusals in queue and console code
+   (`runningInConsole()`) are still reported.
+4. **Route parameters.**
+   - Every signed-in route parameter that names a record is UUID-constrained
+     at the group level (`App\Support\Routing\WebRouteParameters`). A
+     malformed id, or a mistyped path that fell through to `/{id}`, is a
+     plain 404 before any query runs.
+   - Non-UUID parameters are listed by name.
+   - `Tests\Feature\Routing\WebRouteParametersGuardTest` makes every new
+     parameter be classified.
+5. **Database-only rules.** A rule enforced only by a database constraint
+   that an operator can reach is stated in the service and refused before
+   the write:
+   - canteen recipe quantity > 0 (`CANTEEN_INVALID_RECIPE_QUANTITY`);
+   - inventory quantity and balance within `decimal(14,3)`
+     (`INVENTORY_INVALID_QUANTITY`).
+
+   The JSON API refuses the same input through the same service.
+
+**Tests.**
+- `Tests\Feature\Http\WebDomainRefusalTest`;
+- `Tests\Unit\Http\WebDomainRefusalResponderTest`;
+- the route-parameter guard;
+- `AttendanceAdminUiTest::a_refused_correction_reaches_the_register_page_as_a_visible_error`.

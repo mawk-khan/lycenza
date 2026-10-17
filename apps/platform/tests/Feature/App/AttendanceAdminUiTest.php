@@ -128,6 +128,40 @@ class AttendanceAdminUiTest extends TestCase
     }
 
     #[Test]
+    public function a_refused_correction_reaches_the_register_page_as_a_visible_error(): void
+    {
+        // LC-1 (M1): the refusal used to come back on `new_status` while the
+        // register page rendered no errors at all, so a stale tab's click
+        // looked like it did nothing.
+        $w = $this->attendanceWorld();
+        $a = $this->enrollStudent($w['section'], '1', '2026-06-01');
+
+        $service = app(AttendanceSubmissionService::class);
+        $session = $this->inSchool($w['school'], fn () => $service->guarded(
+            fn () => DB::transaction(fn () => $service->submit(
+                $w['school'], $w['entry']->id, self::MONDAY,
+                $this->registerPayload([$a->id => 'absent']), $w['actor'],
+            ))
+        ));
+        $record = $this->inSchool($w['school'], fn () => AttendanceRecord::query()
+            ->where('attendance_session_id', $session->id)->firstOrFail());
+        $this->actor($w)->post("/app/attendance/records/{$record->id}/correct", [
+            'expected_status' => 'absent', 'new_status' => 'present',
+        ]);
+
+        $this->actor($w)->from("/app/attendance/{$session->id}")->followingRedirects()
+            ->post("/app/attendance/records/{$record->id}/correct", ['expected_status' => 'absent', 'new_status' => 'late'])
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('App/Attendance/Show')
+                ->where('errors.new_status', fn ($message) => str_contains((string) $message, "now 'present'")));
+
+        $view = (string) file_get_contents(resource_path('js/Pages/App/Attendance/Show.vue'));
+        $this->assertMatchesRegularExpression('/errors\?\.new_status/', $view);
+        $this->assertStringContainsString('v-if="correctionError"', $view);
+        $this->assertStringContainsString('role="alert"', $view);
+    }
+
+    #[Test]
     public function an_incomplete_register_is_refused_by_the_ui_endpoint(): void
     {
         $w = $this->attendanceWorld();
