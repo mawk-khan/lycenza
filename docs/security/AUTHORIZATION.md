@@ -15,23 +15,32 @@ has the same kind of answer regardless of who or what the actor is.
 Roles remain useful as a **convenience bundle of capabilities** assigned
 to a user (e.g. a "Teacher" role grants a default capability set), but
 the enforcement point is always the capability check, never the role
-name — so a school that needs a custom variant (e.g. a "Teacher" who
-should not have `attendance.mark`) is a configuration change, not a
-code change.
+name. Roles are platform-curated global templates (ADR 0071): a School
+cannot create, edit or compose a role. A School that needs a different
+capability set grants a different combination of catalogue roles, or a
+new template is added through the reviewed catalogue release
+(`StaffRoleCatalogueSnapshotTest`). Tenant-custom roles stay deferred
+(ADR 0071 §5, ADR 0076 §19).
 
 ## Actor categories
 
 This table is a design reference, not a list of implemented roles.
 (Historical, Phase 0A: none were implemented then.) As built
-(2026-10-01, TCH development-closed):
-- the system roles are `platform_super_admin`, `platform_auditor`
-  (platform), `group_admin` (Group), and `school_admin`, `principal` and
-  `teacher` (School);
-- every other row here is a design-reference actor, with no production
-  role *(ADR 0071, SR.0 2026-10-09, contracts fixed roles for the
-  Accountant, HR Staff, Librarian, Receptionist, Transport Staff and
-  Admissions Staff personas, among others; built in SR.3, 2026-10-09 --
-  see the role list below)*;
+(updated 2026-10-17, ORG.1):
+- the system roles are `platform_super_admin` and `platform_auditor`
+  (platform), `group_admin` (Group), `guardian` (`guardian` scope), and
+  the 17 School staff roles pinned by `StaffRoleCatalogueSnapshotTest`
+  (ADR 0071 §4, built in SR.3);
+- **no grant is Campus-scoped.** Every School grant covers the whole
+  School. "Campus" in the "Typical scope" column below is design intent.
+  ADR 0076 §11 contracts Campus-scoped assignments for ORG.7 (NULL = whole
+  School), and they are not built;
+- the product's "Platform Admin" is `platform_super_admin` (root). A
+  Platform Manager is contracted by ADR 0076 §7 and not built;
+- rows with no matching catalogue role (e.g. Academic Coordinator,
+  Counsellor, Driver) are design-reference actors with no production role.
+  The Accountant, HR Staff, Librarian, Receptionist, Transport Staff and
+  Admissions Staff personas map to SR.3 catalogue roles (ADR 0071 §4);
 - the Teacher row is implemented by ADR 0063 (TCH): the `teacher` role is a
   bundle of five owned-scope capabilities whose every use also needs a
   verified ActingEmployee and TeachingAssignment ownership — see
@@ -46,7 +55,8 @@ This table is a design reference, not a list of implemented roles.
 | Platform Super Admin | Human, platform staff | Cross-tenant | Operates through a dedicated, audited administrative path (`docs/architecture/TENANCY.md`) — not a permanent "bypass tenant scoping" flag in normal application code. Entering one School is a temporary, explicit elevation that grants no School capability (ADR 0044; substrate built in Phase 0N.3, no School page opens under it yet). |
 | School Group Admin | Human | One School Group's member schools | Cross-school access within a group is an explicit, granted, audited elevation (ADR 0004) — not automatic from group membership alone. ADR 0045, foundation built in Phase 0N.5: a distinct Group scope with its own grant (`group_role_assignments`) and `group.*` capabilities, granting no School capability; School entry only through ADR 0044 elevation; Group membership and grants are platform-governed. |
 | School Admin | Human | One School (all campuses) | |
-| Principal / Vice Principal | Human | One School (or one Campus, per school configuration) | |
+| Platform Manager | Human, platform staff | School onboarding (`provisioning`) and module entitlements | ADR 0076 §7: contracted, **not built**. Never lifecycle control, platform-role governance, Group governance, elevation or any School authority; never also a Platform Auditor. |
+| Principal / Vice Principal | Human | One School (a single-Campus scope is contracted by ADR 0076 §11, not built) | |
 | Academic Coordinator | Human | One School/Campus, academic-domain capabilities | |
 | Teacher | Human | One School/Campus, own classes/sections by default | |
 | Accountant | Human | One School, financial-domain capabilities | |
@@ -1122,13 +1132,26 @@ No new capability.
 - **Not authorization.** Every destination re-checks its own capability;
   hiding an entry never replaces that check
   (`NavigationVisibilityTest::a_hidden_entry_is_never_authorization...`).
-  The Finance, HR and Payroll hubs render for any active member and show
-  only the sub-areas the actor holds; they display no data themselves
-  (ADR 0073 §17.9, finding F-1).
+  The Finance, HR and Payroll hubs authorize their navigation entry's
+  any-of requirement (`StaffNavigation::hubRequirement()`,
+  `authorizeAnyCapability`). They show only the sub-areas the actor
+  holds and display no data themselves (ADR 0073 §20.3, finding F-1
+  resolved).
+- **Future layers (ADR 0076 §15).** Module entitlements (ORG.5) and Campus
+  scope (ORG.7) reach navigation only through the capabilities it already
+  evaluates. No menu configuration is ever stored as authorization or
+  entitlement state.
 
 ## What is NOT yet implemented
 
-Tenant-custom roles (role *assignment* exists: Settings → Staff accounts
+Contracted by ADR 0076 (ORG.1, 2026-10-17) and not built:
+- the Platform Manager role;
+- Campus-scoped School role assignments;
+- per-School module entitlements;
+- the School Registry read model.
+
+ADR 0076 §17 gives the authorization evaluation order those phases must
+follow. Also not implemented: tenant-custom roles (role *assignment* exists: Settings → Staff accounts
 grants and revokes School roles from the closed catalog, ADR 0059; role
 *creation* does not; ADR 0071 keeps it that way and instead contracts a
 fixed operational catalogue), ownership-based authorization beyond the four TCH

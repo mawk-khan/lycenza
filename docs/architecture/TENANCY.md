@@ -15,14 +15,21 @@ not only the target design.
 - **Campus** = a sub-tenant dimension. A `campus_id` column exists on
   campus-scoped tables, but Campus is **not** a separate isolation
   boundary — staff scoped to a School may legitimately need
-  cross-campus visibility within that one School.
+  cross-campus visibility within that one School. Campus is the
+  canonical "Branch" (ADR 0076 §10). **Today Campus is data only:** no
+  grant is Campus-scoped, and `TenantContext::campus()` is never set by a
+  request and is never authority. ADR 0076 §11 contracts an optional,
+  additive Campus scope on School role assignments (NULL = whole School)
+  for ORG.7. It does not change RLS or tenant context.
 - **School Group / Trust** = a grouping entity *above* the tenant
   boundary. A group admin's cross-school access is an explicit,
   granted, audited elevation (see `docs/security/AUTHORIZATION.md`),
   never a default consequence of a school belonging to a group.
 - **Platform Super Admin** = operates outside normal tenant scoping
   through a dedicated, audited administrative path — not a flag that
-  application code can casually flip.
+  application code can casually flip. It is the product's "Platform
+  Admin" (ADR 0076 §6). Platform authority never becomes School authority
+  (ADR 0076 §5).
 
 ## Isolation layers (defense in depth)
 
@@ -412,14 +419,16 @@ context is set exactly as for a first dispatch (rule 21).
 Real School/Campus/membership/role data model, RLS, application-layer
 scoping, and tenant-aware queue/cache/storage/log/AI plumbing are now
 real (this section previously said none of it existed — that was
-Phase 0A). What remains for a future phase: School Group/Trust
-cross-school elevation workflows (the *structural* tables exist —
-`school_groups`, `school_group_members` — but no "enter a member
-School's context as a group admin" action is built, deliberately, per
-section 12 of the Phase 0B brief: no invisible see-every-tenant-row
-mode), tenant-custom roles (only system-defined roles exist), and a
-production-grade credential-issuance story for the `school_os`/
-`school_os_app` role split (ADR 0021's "Future extraction path").
+Phase 0A). *(Corrected 2026-10-17, ORG.1: this note previously listed
+Group elevation as unbuilt. Group-derived elevation into one member
+School exists since Phase 0N.5 (ADR 0045, "School Groups" above), and it
+still grants no School capability.)* What remains for a future phase:
+- tenant-custom roles: only platform-curated system roles exist, and
+  that is deliberate (ADR 0071, ADR 0076 §19);
+- Campus-scoped authority and per-School module entitlements (contracted
+  by ADR 0076, not built);
+- a production-grade credential-issuance story for the `school_os`/
+  `school_os_app` role split (ADR 0021's "Future extraction path").
 
 ## Custom School domains (ADR 0054 — contract Phase 0O.8, implemented Phase 0O.8A)
 

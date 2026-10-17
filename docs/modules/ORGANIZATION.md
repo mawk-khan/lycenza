@@ -78,6 +78,15 @@ check (`App\Support\NormalizesCodeInput`), so a duplicate submission
 returns a clean `422` validation error rather than a raw database
 constraint-violation exception.
 
+**Campus is the canonical Branch (ADR 0076 §10, ORG.1).** There is no
+Branch entity; "Branch" may be a UI label for Campus. Campus is data, not
+authority: no School grant is Campus-scoped today. ADR 0076 §11 contracts
+an optional Campus scope on School role assignments for ORG.7, where NULL
+keeps meaning the whole School. No new "Organisation" entity sits above
+School (ADR 0076 §4). Platform onboarding, lifecycle and module
+entitlements are platform-governed (ADR 0076 §6–§7, §12); School profile
+fields stay School-owned.
+
 ## Multi-campus defaults
 
 See `docs/modules/ACADEMIC-STRUCTURE.md` ("Multi-campus rules") for the

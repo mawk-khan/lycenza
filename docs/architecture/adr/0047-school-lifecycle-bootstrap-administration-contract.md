@@ -3,6 +3,11 @@
 - Status: Accepted; foundation implemented in Phase 0N.9 (see
   "Implementation amendment" at the end)
 - Date: 2026-09-25 (Phase 0N.8); amended 2026-09-25 (Phase 0N.9)
+- **Amended by ADR 0076 (ORG.1, 2026-10-17):** CREATE and bootstrap
+  establish/replace (§1 decisions 1 and 5, §7, invariant 7) may later also
+  be performed by a Platform Manager through a narrow onboarding
+  capability. ACTIVATE, SUSPEND, RESUME, close and reopen stay root-only
+  under `platform.schools.manage`. See "Amendment — ORG.1" at the end.
 
 ## Context
 
@@ -787,3 +792,34 @@ A closed School is a suspended one with a durable closure record. Because
 the closure lives on the School row, it does not depend on the 7-year
 platform audit. Retention maintenance keeps walking closed Schools.
 Destructive tenant purge stays prohibited (E21-D11; determination §5.5).
+
+## Amendment — ORG.1 (ADR 0076, 2026-10-17) — delegated onboarding
+
+Owner decisions ORG-D7 and ORG-D8 (ADR 0076 §7). Documentation only;
+nothing is built by this amendment.
+
+- **§1 decision 1, §1 decision 5, §7 and invariant 7 are amended for
+  CREATE and the bootstrap administrator path only.** A future Platform
+  Manager (ADR 0076 §7) may perform them through a narrow,
+  non-root-reserved onboarding capability (provisionally
+  `platform.schools.onboard`). The same rules apply:
+  - fresh MFA re-verification and explicit confirmation;
+  - an existing, enabled, non-self bootstrap target;
+  - the path is open only while `provisioning` and closes permanently at
+    first activation;
+  - one transaction, and the bootstrap service remains the only platform
+    writer of memberships.
+- **§7's "narrower keys rejected for v1" reasoning is superseded for
+  onboarding only.** A non-root role now exists in the design, so a
+  narrower key adds real separation. For every other operation the
+  original reasoning stands.
+- **Unchanged:**
+  - ACTIVATE, SUSPEND, RESUME, close and reopen need
+    `platform.schools.manage` (root-reserved), fresh MFA and confirmation.
+    In v1 the Platform Manager can never perform them;
+  - §5's activation preconditions. ADR 0076 §9.3 registry readiness is
+    advisory and adds no setup requirement;
+  - D13: no platform membership administration after activation;
+  - no archive, no delete, no purge (§12; E21-D11).
+- **Consequence:** a School onboarded by a Platform Manager is always
+  activated by a different person (root).

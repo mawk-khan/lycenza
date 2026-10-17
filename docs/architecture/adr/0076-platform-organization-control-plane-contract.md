@@ -1,0 +1,1040 @@
+# ADR 0076: Platform & Organization Control-Plane Contract (ORG.1)
+
+- Status: **Accepted. ORG.1 CONTRACT PUBLISHED (2026-10-17, documentation
+  only).** No code, schema, seed, route, UI or runtime behaviour changes.
+  ORG.1A and every later ORG phase need separate, explicit owner
+  authorization.
+- Date: 2026-10-17
+- Programme: **ORG — Platform & Organization Foundation**
+  (`MASTER-ROADMAP.md`, post-foundation programme 11).
+- Baseline: `origin/main` = local `main` = `HEAD` =
+  `f183c851ae229ad83c6649781358b4548602ea5a` (LC-4). The tree is clean,
+  there is one worktree, and the historical stash (`phase-5d3-preflight`)
+  is untouched.
+- Evidence: the ORG.0 readiness audit (2026-10-17, read-only, reported to
+  the owner in session; its findings are summarized in §1 and its defects
+  in §24).
+- Amends: **ADR 0046** (D12 decision 2; frozen invariants 3 and 6) and
+  **ADR 0047** (§1 decisions 1 and 5; §7; invariant 7). Each carries an
+  amendment note pointing here. Cross-referenced, unchanged: ADR 0004,
+  ADR 0020, ADR 0044, ADR 0045, ADR 0048, ADR 0071.
+
+## 1. Context
+
+The owner wants a governance/control plane for Lycenza: a place from
+which platform operators manage every School tenant, and a School-side
+organization model (Schools, Campuses, staff, roles, modules) that can
+express real operating structures. Reference-ERP screenshots and menu
+matrices were supplied as requirement evidence.
+
+ORG.0 audited the repository at `f183c851` and found that most of the
+foundation already exists and is database-enforced:
+
+| Concept | State at `f183c851` | Canonical implementation |
+|---|---|---|
+| Tenant | **Exists** | School; `school_id` (ADR 0004, ADR 0020); `BelongsToSchool`/`SchoolScope` (fail closed); `TenantRls` FORCE RLS; `school_os_app` without BYPASSRLS |
+| Platform plane | **Partial** | `App\Domain\Platform\Application\{Schools,Elevation,Groups,Roles,Audit,Domains}`; `/app/platform/{schools,groups,roles,audit-log,elevation}` |
+| Platform roles | **Partial** | `platform_super_admin` (root, out of band), `platform_auditor` (only runtime-assignable role, `platform.audit.view` only) |
+| School lifecycle | **Exists** | `SchoolLifecycleService` (create, activate, suspend, resume, close, reopen); `trg_schools_status_transition`; no archive, no delete |
+| School Groups | **Exists** | ADR 0045 / ADR 0048; `group.*` scope; reporting only |
+| Campus | **Data only** | `campuses` (`unique(id, school_id)`), composite FKs from ~25 tables; **no authorization uses Campus** (`membership_role_assignments` has no campus column; `CapabilityResolver` has no campus parameter; no HTTP path sets `TenantContext::campus()`) |
+| Roles | **Exists** | Global templates (ADR 0071): 17 School staff roles + `guardian`; runtime cannot write the catalogue |
+| Capabilities | **Exists** | 196 keys; one Gate `capability` → `CapabilityResolver`; four scopes that never mix (DB triggers) |
+| Ownership scope | **Exists** | ActingEmployee + TeachingOwnership; self scope; `GuardianStudentScope` |
+| Module entitlement | **Missing** | Only per-School feature flags (`FeatureFlagResolver`, "NEVER an authorization check"; two flags; no writer) |
+| Navigation | **Exists** | `StaffNavigation` + `NavigationBuilder`: a capability projection; every route re-checks |
+| Audit | **Exists** | `school_audit_events` (RLS, append-only), `platform_audit_events` (append-only); one writer `AuditRecorder` |
+
+ORG.0 also found what is missing: a Platform Manager persona (blocked by
+ADR 0046 D12 and the root-reserve trigger), Campus-scoped authority,
+module entitlements, a single authorization coverage guard, and a real
+School registry (search, filter, counts, readiness). **This ADR freezes
+the decisions those phases need.** It redesigns nothing that works.
+
+### 1.1 Terminology
+
+| Product / UI word | Canonical repository concept | Persistence |
+|---|---|---|
+| Platform, Platform Console | The Lycenza platform control plane | Platform tables (no `school_id`) |
+| Organization, School, Tenant | **School** | `schools`, `school_id` |
+| Branch, Campus | **Campus** | `campuses`, `campus_id` |
+| Group, Trust, Franchise | **School Group** | `school_groups` |
+| Platform Admin | `platform_super_admin` (root) | `platform_role_assignments` |
+| Platform Manager | a future runtime-assignable platform role (§7) | not created |
+| Platform Auditor | `platform_auditor` | `platform_role_assignments` |
+| Module | a future code-owned product module (§12) | not created |
+
+The UI may display "Organization" (for the School's own administration
+area) and "Branch" (for Campus) where that helps users. Persistence,
+capability keys, route names and authority semantics keep the canonical
+words. `tenant_id`, `organisation_id`, `organization_id` and `branch_id`
+remain forbidden column names (ADR 0020).
+
+## 2. Owner decisions (2026-10-17)
+
+The product owner approved D1–D20 for ORG.1. They are recorded here as
+ORG-D1–ORG-D20 and specified in the sections named.
+
+| ID | Decision | Section |
+|---|---|---|
+| ORG-D1 | School remains the only canonical tenant; ADR 0004 / ADR 0020 stay authoritative | §4 |
+| ORG-D2 | No new Organisation entity above School; School Groups remain the cross-School construct with ADR 0045 / ADR 0048 semantics; cross-School operational roles deferred | §4, §18 |
+| ORG-D3 | Campus is the canonical Branch entity; no Branch table | §10 |
+| ORG-D4 | Role does not define scope; no role-name branching | §11 |
+| ORG-D5 | School role assignments may later carry an optional Campus scope; NULL = whole School; existing grants keep their meaning; adoption is incremental by domain | §11 |
+| ORG-D6 | Platform Admin = existing root (`platform_super_admin`); no second root-equivalent role | §6 |
+| ORG-D7 | A distinct, runtime-assignable Platform Manager persona, created in a later phase | §7 |
+| ORG-D8 | Platform Manager may not activate, suspend, resume, close, reopen or purge a School, nor manage platform roles, Group grants or School authority | §7 |
+| ORG-D9 | Platform Auditor remains strictly read-only | §8 |
+| ORG-D10 | Platform authority never becomes School authority; ADR 0044 unchanged; no impersonation | §5 |
+| ORG-D11 | Module entitlements are a new concept: effective capabilities = role/scope grants ∩ capabilities of entitled modules | §12 |
+| ORG-D12 | Feature flags and entitlements remain different mechanisms | §13 |
+| ORG-D13 | Existing Schools must not lose functionality when entitlements arrive | §22 |
+| ORG-D14 | A non-disableable core module set exists | §14 |
+| ORG-D15 | Navigation remains a projection of authority | §15 |
+| ORG-D16 | Approvals remain domain capabilities; no generic workflow engine; naming rule for new capabilities | §16 |
+| ORG-D17 | The eight-layer authorization evaluation order | §17 |
+| ORG-D18 | Global role templates remain canonical; no tenant-owned roles in ORG | §19 |
+| ORG-D19 | Reference role names are evidence, not requirements | §19 |
+| ORG-D20 | SIS stays paused through ORG.1–ORG.6; SIS is the last Campus-scope consumer; LC-5–LC-10 remain open and paused | §23 |
+
+### 2.1 Contract defaults added by this ADR
+
+ORG.1 also had to settle questions the owner decisions leave open. These
+are contract defaults; the owner may override any of them before the
+phase that implements it.
+
+| ID | Default | Section |
+|---|---|---|
+| ORG-C1 | A Campus-scoped assignment confers only capabilities whose domain has adopted Campus scope; until then it confers nothing (fail closed) | §11.3 |
+| ORG-C2 | Authority over School access (`school.members.*`, `school.roles.*`, the grant rights) and School-wide configuration stay whole-School only in v1 | §11.4 |
+| ORG-C3 | Platform Manager and Platform Auditor are mutually exclusive on one user | §7.4 |
+| ORG-C4 | Registry readiness is advisory and derived; it never becomes an activation precondition beyond ADR 0047 §5 | §9.3 |
+| ORG-C5 | A capability may require more than one module; it is available only when every one is entitled | §12.3 |
+| ORG-C6 | `TenantContext::campus()` is context, never authority | §11.8 |
+| ORG-C7 | Entitlement changes must take effect within a documented staleness bound no longer than today's 60 s capability cache | §12.8 |
+
+## 3. Existing architecture preserved
+
+Nothing in ORG weakens, replaces or bypasses:
+
+1. School tenancy (ADR 0004, ADR 0020, ADR 0022), `BelongsToSchool`,
+   fail-closed `SchoolScope`, FORCE RLS (`TenantRls`), and `school_os_app`
+   without BYPASSRLS or superuser (ADR 0021; CLAUDE.md rules 5, 17–23, 26).
+2. The four authority scopes and their database separation (CLAUDE.md
+   rules 25, 84, 85; `trg_role_capabilities_scope`,
+   `roles_scope_check`).
+3. Root provisioning out of band and the root-reserve triggers (ADR 0046,
+   0O.1A amendment).
+4. Elevation that grants no School capability, fixed 30 minutes, default
+   deny on every School route (ADR 0044; CLAUDE.md rule 83).
+5. The School lifecycle, its database transition trigger, closure, no
+   archive, no delete, and execution-time re-checks (ADR 0047; CLAUDE.md
+   rule 86).
+6. The staff role catalogue, grant authority and grant history (ADR 0071;
+   CLAUDE.md rules 92–95).
+7. Teacher ownership (ADR 0063), Guardian scope (ADR 0070), self-service
+   and self-administration protections (ADR 0065, ADR 0071 §26).
+8. Legal and environment gates (production refusals in code, `legal-gated`
+   capabilities held by no role) and every retention decision (E21).
+9. Separation-of-duties checks in the application and the database
+   (fee concessions, payroll runs, mark corrections, leave, communications).
+10. The capability-projected navigation (ADR 0073 §6, §17).
+11. The two audit ledgers and their separation (ADR 0017, ADR 0046 §11).
+
+## 4. School is the canonical tenant (ORG-D1, ORG-D2)
+
+- **School is the only tenant.** Every tenant-owned row carries
+  `school_id`; every query is School-scoped by construction and by RLS.
+- **No entity above School is introduced.** The hierarchy is:
+
+  ```
+  Lycenza Platform
+    ├── School A ── Campus A1, Campus A2
+    ├── School B ── Campus B1
+    └── School Groups (cross-School governance/reporting, ADR 0045/0048)
+  ```
+
+- **School Groups keep exactly their ADR 0045 / ADR 0048 semantics.** A
+  Group is never tenant context, grants no School capability, and reaches
+  tenant data only through the one registered Group-safe report.
+- **A multi-School organisation is represented as several Schools**,
+  optionally in a Group. A person who works for several Schools holds a
+  separate membership and separate grants in each.
+- **Cross-School operational roles** (e.g. a corporate finance officer
+  acting in several Schools at once) are **deferred** until a concrete
+  business requirement and a separate ADR exist (§18).
+
+## 5. Platform authority vs School authority (ORG-D10)
+
+**Platform authority is never School authority.**
+
+1. A platform role holds only `platform.*` capabilities (database:
+   `trg_role_capabilities_scope`). No platform role, present or future,
+   carries a School, Group or portal capability.
+2. `CapabilityResolver` answers platform, School and Group questions
+   separately and never merges them. A platform capability never satisfies
+   a School check.
+3. A platform operator obtains School authority only the way anyone does:
+   an ordinary, active School membership with ordinary School grants,
+   given by that School's own administrators (ADR 0047 D13 after
+   activation; the bootstrap path before it).
+4. Elevation (ADR 0044) establishes context only and grants no School
+   capability. No School route accepts elevation (CLAUDE.md rule 83).
+   Making any School operation usable under elevation still needs its own
+   ADR, a narrow `platform.*` capability and allow/deny tests.
+5. **No impersonation or "view as user" exists or is authorized.** Any
+   future proposal is a separate, high-risk ADR (at minimum dual control,
+   a closed reason code, a time bound, visible notice and full audit).
+6. A School role, however powerful, never implies platform scope. A School
+   Administrator sees only their own School.
+
+## 6. Platform Admin = root (ORG-D6)
+
+"Platform Admin" in the product is the existing **`platform_super_admin`**
+root role. Nothing changes:
+
+- **Provisioning:** out of band only (`platform:bootstrap-root`,
+  `platform:provision-root`) on the admin connection; never granted or
+  revoked in the application; rare.
+- **No second root-equivalent role** (CLAUDE.md rule 85). The
+  root-reserved capabilities `platform.role_grants.manage` and
+  `platform.schools.manage` stay on root only (trigger
+  `trg_role_capabilities_root_reserved`).
+- **Duties (v1):**
+
+| Duty | Capability | Controls |
+|---|---|---|
+| School registry view | `platform.schools.view` (once wired, §9) and today's lifecycle pages | ordinary session |
+| Create / onboard a School | `platform.schools.manage` (today); the onboarding capability as well once it exists (§7) | fresh MFA, confirmation |
+| Activate, suspend, resume, close, reopen | `platform.schools.manage` | fresh MFA, confirmation, closed reason codes |
+| Grant / revoke runtime platform roles | `platform.role_grants.manage` | audited; **fresh MFA to be added in ORG.1A** (§24, V-2) |
+| Group governance and Group grants | `platform.school_groups.manage`, `platform.school_group_grants.manage` | audited |
+| Module entitlements (future) | entitlement capability (§12) | fresh MFA, reason, impact preview |
+| Platform audit review | `platform.audit.view` | current MFA assurance |
+| Elevation | `platform.schools.elevate` | ADR 0044 controls |
+| Reset another user's MFA | `platform.users.mfa.reset` | existing |
+
+- **The UI may label root "Platform Admin";** code and checks keep using
+  capabilities, never the role name (CLAUDE.md rule 24).
+- **Root must never:** hold School capabilities; read tenant business data
+  or `school_audit_events`; impersonate; delete or purge a School (tenant
+  destruction is not authorized, E21-D11); edit the capability catalogue
+  at runtime; grant root.
+- **Dual approval** for close and reopen is recommended for a later
+  hardening phase once more than one root is guaranteed. It is not
+  adopted now, because v1 cannot guarantee a second root is available.
+
+## 7. Platform Manager (ORG-D7, ORG-D8)
+
+### 7.1 Purpose
+
+The Platform Manager is an **operational tenant-onboarding role, not a
+weaker root.** It prepares Schools for service. It never decides whether a
+School operates, never governs platform authority and never acts inside a
+School.
+
+### 7.2 Capability split
+
+`platform.schools.manage` **remains root-only and root-reserved.** The
+Platform Manager never receives it. Onboarding is delegated through new,
+narrower, non-root-reserved capabilities, introduced by a later
+capability-catalogue release (ORG.4). The duties separate as follows:
+
+| Duty | Capability | Platform Manager | Root |
+|---|---|---|---|
+| **VIEW** — School registry | `platform.schools.view` (existing key, final) | yes | yes |
+| **VIEW** — School Groups | `platform.school_groups.view` (existing key, final) | yes | yes |
+| **ONBOARD** — create a School in `provisioning`; set its permitted provisioning metadata; establish / replace the bootstrap administrator while `provisioning` | new key, provisionally `platform.schools.onboard` | yes | yes |
+| **ENTITLEMENT MANAGEMENT** — view and change non-core module entitlements | new keys, provisionally `platform.school_entitlements.view` / `.manage` | yes | yes |
+| **LIFECYCLE CONTROL** — activate, suspend, resume, close, reopen | `platform.schools.manage` (root-reserved) | **no** | yes |
+| **SECURITY GOVERNANCE** — grant / revoke platform roles | `platform.role_grants.manage` (root-reserved) | **no** | yes |
+| **GROUP GOVERNANCE** — Group membership and Group grants | `platform.school_groups.manage`, `platform.school_group_grants.manage` | **no** | yes |
+| **ELEVATION** | `platform.schools.elevate` | **no** (v1) | yes |
+
+Keys marked "provisionally" are finalized by the ORG.4 catalogue release,
+under the existing naming convention (`platform.<resource>.<verb>`). The
+role key is provisionally `platform_manager`.
+
+### 7.3 Rules for the Platform Manager
+
+1. **Onboarding stays inside ADR 0047.** The Manager may create a School
+   only into `provisioning`. The bootstrap administrator must be an
+   existing, enabled user who is not the operator (`self_nomination`); an
+   administrator without an activated credential still blocks activation
+   (`admin_not_activated`, ADR 0047 Phase 0O.12A note). The bootstrap path
+   still closes for good at first activation. Permitted provisioning metadata is what School creation
+   accepts today (`name`, `slug`, optional `code`) plus the School's
+   initial entitlements (§12). School profile fields stay School-owned
+   (`docs/modules/ORGANIZATION.md`).
+2. **Every onboarding and entitlement write** needs the capability, a
+   fresh MFA re-verification (`MfaReverificationService`), explicit
+   confirmation and a per-actor rate limit, exactly like today's lifecycle
+   writes. Every refusal is audited.
+3. **The Manager may not:** activate, suspend, resume, close or reopen a
+   School; purge or delete one; grant or revoke platform roles; grant
+   root; manage Group membership or Group grants; hold or acquire any
+   School, Group or portal capability; read tenant business data or
+   `school_audit_events`; impersonate; elevate; disable a core module
+   (§14).
+4. **Natural separation of duties.** Because activation stays root-only,
+   a School onboarded by a Manager is activated by a different person.
+   This is a consequence, not an additional check.
+5. **Grant governance.** Root grants and revokes the Manager role through
+   `PlatformRoleGovernanceService` (code allowlist plus
+   `roles.runtime_assignable`). No self-grant, no delegation chain.
+
+### 7.4 Separation from the Auditor (ORG-C3)
+
+A user may not hold an active Platform Manager grant and an active
+Platform Auditor grant at the same time. The auditor oversees operator
+activity, including the manager's. ORG.4 enforces this in the service and
+the database (the `platform_role_assignments` governance trigger).
+
+## 8. Platform Auditor (ORG-D9)
+
+The existing `platform_auditor` stays **strictly read-only**.
+
+- **Today:** `platform.audit.view` only (platform-ledger envelope, current
+  MFA assurance, one `platform.audit_log.viewed` per review).
+- **Later (ORG.6), read-only additions** to purpose-built platform read
+  models: the School registry and lifecycle state (`platform.schools.view`),
+  School Group membership (`platform.school_groups.view`), entitlement
+  configuration (`platform.school_entitlements.view`, provisional),
+  operational/readiness warnings, and platform-role assignment counts or
+  equivalent non-sensitive summaries.
+- **The Auditor must never:** mutate anything; elevate; enter School
+  operational authority; read tenant business records; read
+  `school_audit_events` (ADR 0046 §10–§11); impersonate; export audit
+  metadata, IP or user agent; acquire a School capability; hold the
+  Manager role (§7.4).
+- **Any future access to School audit evidence** needs a new, narrow ADR
+  with a legal/privacy justification. ORG grants none.
+
+## 9. School Registry (platform control plane)
+
+### 9.1 Responsibility
+
+The School Registry is the platform's read/write surface for tenants:
+list and search Schools, open a School overview, onboard (§7) and change
+lifecycle (root). It is **context-neutral** (no `active_school_id`, no
+School route, no elevation) and is never a School data browser.
+
+### 9.2 Registry read model (ORG.3)
+
+The registry may expose **non-business tenant metadata only:**
+
+| Field | Source | Notes |
+|---|---|---|
+| School id, name, `legal_name`, `slug`, `code` | `schools` | |
+| Lifecycle status; closure state | `schools.status`, closure columns | |
+| Campus count (active / inactive) | Campuses | aggregate only |
+| Active academic year | Academic Structure | name only |
+| Domain status | `school_domains` | state only |
+| Administrator readiness | `SchoolAdministrators` | a yes/no "qualifying, activated administrator exists"; the bootstrap administrator's identity stays visible only while `provisioning` (ADR 0047 amendment, item 8) |
+| Module entitlement summary | entitlements (§12) | module keys and state |
+| Readiness and warnings | derived (§9.3) | |
+| Recent platform audit events for this School | `platform_audit_events` with this School as subject | envelope fields only, through `PlatformAuditEventReader` rules |
+
+- **List behaviour:** keyset pagination, deterministic order, filters by
+  status, closure, Group and exact name/slug/code. No free-text search
+  across tenant data.
+- **The registry never surfaces:** students, guardians, staff HR records,
+  payroll, fees, ledger or payment data, marks, `school_audit_events`
+  content, tenant files or documents, or any other tenant business record.
+- **Reading RLS-protected tables (campuses, academic years):** only
+  through the owning module's Application service, inside that one
+  School's `TenantContext` (the ADR 0048 one-School-at-a-time precedent),
+  returning aggregates or names only. Never a raw cross-tenant query, never
+  BYPASSRLS, never a cross-tenant cache. Page size bounds the work.
+- **Access:** `platform.schools.view` (Platform Admin, Platform Manager,
+  and the Auditor from ORG.6). Registry reads of Confidential metadata are
+  not individually audited, matching the lifecycle pages today (ADR 0047
+  amendment, item 8). ORG.6 decides whether Auditor read models need
+  current MFA assurance.
+
+### 9.3 Readiness is derived and advisory (ORG-C4)
+
+Readiness is **computed when read, never stored**, unless later evidence
+proves a stored state is required. Candidate checks: a qualifying,
+activated administrator; at least one active Campus; an active academic
+year; domain state where custom domains are enabled; entitlements
+configured. Readiness and warnings are **advisory**: they never add an
+activation precondition beyond ADR 0047 §5, which deliberately invents no
+setup requirements.
+
+## 10. Campus / Branch (ORG-D3)
+
+- **Campus is the canonical sub-School organizational unit.** There is no
+  Branch table; "Branch" is at most a UI label for Campus.
+- Campus remains a **sub-tenant dimension, not an isolation boundary**
+  (ADR 0004). RLS and tenant context stay School-level.
+- Campus integrity stays structural: `campuses.unique(id, school_id)` and
+  composite `(campus_id, school_id)` foreign keys (CLAUDE.md rule 70).
+  Campuses are deactivated, never deleted (CLAUDE.md rule 73).
+- Which entities are School-wide and which are Campus-scoped stays as
+  documented in `docs/modules/ACADEMIC-STRUCTURE.md` ("Multi-campus rules")
+  and in each module's schema.
+- **Today no authority is Campus-scoped.** §11 defines what ORG.7 adds.
+
+## 11. Campus-scoped assignment semantics (ORG-D4, ORG-D5)
+
+ORG.1 defines the semantics only. No schema is authorized here.
+
+### 11.1 Role ≠ scope
+
+A role template is a capability bundle. Scope is a property of the
+**assignment**. The same role may be assigned with different scopes:
+
+| Example | Role | Scope |
+|---|---|---|
+| Principal of the whole School | `principal` | whole School |
+| Principal of Campus A | `principal` | Campus A |
+| Accountant for Campus B | `accountant` | Campus B |
+| Teacher | `teacher` | whole School (membership), **plus** teaching ownership |
+
+No code branches on a role name (CLAUDE.md rule 24).
+
+### 11.2 Scope values
+
+- **Absent / NULL Campus scope = whole-School authority.** It covers every
+  Campus of that School, present and future, and the School's records
+  that have no Campus. This is exactly what every grant means today.
+- **Campus scope = Campus X** means authority restricted to Campus X, and
+  only for capabilities whose domain supports Campus scope (§11.3).
+- **One assignment is either whole-School or exactly one Campus.**
+  Several Campuses are expressed as several assignments, never an array or
+  JSON scope.
+- **Compatibility:** no migration may ever reinterpret an existing
+  unscoped grant as Campus-limited. Existing rows keep NULL, and NULL
+  keeps its meaning.
+
+### 11.3 Capabilities and Campus support (ORG-C1)
+
+Each School capability is declared, in a code catalogue reviewed like
+`CapabilityClasses`, as either **School-only** or **Campus-capable**:
+
+- A Campus-scoped assignment confers **only the Campus-capable
+  capabilities** of its role, restricted to that Campus. The role's
+  School-only capabilities are not conferred by that assignment. Example:
+  Principal @ Campus A does not receive `academics.years.manage`, because
+  academic years are School-wide.
+- **Fail closed until adoption.** A capability becomes Campus-capable only
+  when its domain adopts Campus scope in ORG.7. Until then, a Campus-scoped
+  assignment confers **nothing** for it. The existing `can()` /
+  `schoolCapabilities()` answers therefore keep returning only
+  whole-School grants. Campus-scoped authority is reachable only through a
+  new scope-aware resolver path that an adopting domain calls explicitly.
+  This is the safety rule that stops a Campus grant from silently acting
+  School-wide in code that has not adopted Campus scope.
+- A Campus-scoped grant of a role that would confer no Campus-capable
+  capability is refused, like an empty role today.
+
+### 11.4 Authority that stays whole-School (ORG-C2)
+
+In v1 these capabilities are School-only, so they are never conferred by
+a Campus-scoped assignment:
+
+- School access administration: `school.members.*`, `school.roles.*` and
+  the grant rights `school.roles.grant.*`;
+- School configuration: `school.profile.*`, `school.settings.*`,
+  `school.campuses.*`, `school.domains.*`, `school.audit.view`;
+- integration administration (`integrations.*`) and School-wide academic
+  configuration (`academics.years.*` and similar), unless a domain's
+  adoption explicitly argues otherwise.
+
+Consequences: grant issuers (`RoleGrantAuthority`, the grantor trigger)
+are always whole-School holders. The last-administrator protection
+(`SchoolAdministrators`) and ADR 0047 §5 activation count whole-School
+grants only. Campus administrators who administer staff access are a
+later decision.
+
+### 11.5 Combination rules
+
+- **Several Campus assignments** for the same capability combine as a
+  union of Campuses.
+- **Whole-School supersedes narrower grants** of the same capability.
+  Holding Accountant School-wide and Accountant @ Campus B is permitted and
+  resolves to whole-School. If the whole-School grant is revoked, the
+  Campus grant still applies.
+- **Duplicates:** at most one active assignment per (membership, role,
+  scope). The scope is either whole School or one specific Campus.
+- **Ownership combines with AND.** For teacher, self and Guardian
+  surfaces, Campus scope (where adopted) and ownership must both pass.
+  Campus scope never widens ownership, and ownership never widens Campus
+  scope.
+- **Other gates are unaffected.** Campus scope never replaces teacher
+  ownership, Guardian/Student scope, HR self scope, payroll
+  self-protection, legal gates or separation-of-duties checks. It is an
+  additional dimension.
+
+### 11.6 Integrity and lifecycle
+
+- **Belonging to the School is structural.** The assignment row carries
+  `school_id` and the Campus through a composite foreign key to
+  `campuses(id, school_id)`, plus RLS. No cross-School Campus reference
+  is possible, even by raw SQL (CLAUDE.md rule 70).
+- **Inactive Campus:** no new assignment may target an inactive Campus.
+  Existing assignments to it confer **no new operational work** (no create
+  or change for that Campus). Historical records of that Campus stay
+  readable according to the domain's retention rules and its declared
+  Campus-capable reads, and always to whole-School holders. Reactivating
+  the Campus restores the grant's effect; history is unchanged.
+- **Revocation** is per assignment, keeps history (revoked, never deleted;
+  CLAUDE.md rule 92) and invalidates that user's School capability cache.
+  Off-boarding revokes every assignment of the membership, scoped or not.
+- **Grants and revocations are audited** with the existing School-ledger
+  role-grant events, adding the Campus id as an identifier in metadata.
+
+### 11.7 How domains apply Campus scope (ORG.7)
+
+- **Scope value.** For (user, School, capability) the resolver returns one
+  of: *none*, *whole School*, or *a set of Campus ids*.
+- **Read models take the scope as an explicit parameter.** It is never
+  read from request input or `TenantContext`. Campus-scoped reads apply
+  `campus_id IN (…)`. A user-chosen Campus filter is **intersected** with
+  the scope, never added to it.
+- **Records without a Campus** (`campus_id` NULL, or entities with no
+  Campus dimension) are visible only to whole-School scope, unless the
+  domain's adoption explicitly declares a Campus-scoped read of them (for
+  example, the School-default fee structure a Campus cashier needs).
+- **Writes:** the target's Campus must be within scope. Creating a
+  School-wide (NULL Campus) record needs whole-School scope. Moving a
+  record between Campuses (e.g. a Campus transfer) needs scope over both
+  the source and the destination.
+- **Domains without a Campus dimension** (Finance ledger, Payroll, Leave,
+  StaffAttendance, Documents, Analytics, Compliance, Automation today)
+  keep their capabilities School-only. Campus-scoped grants confer nothing
+  there.
+- **Derived Campus** (e.g. `student_enrollments.campus_id` from the
+  Section) uses the stored, FK-consistent column as authoritative.
+- **Students:** a Student's Campus visibility derives from enrollments. A
+  Student with no current enrollment is visible only to whole-School
+  scope, unless the SIS adoption (ORG.7, last) decides otherwise.
+- **Navigation** shows an entry when the capability is held at any scope.
+  The page then applies the scope.
+
+### 11.8 Campus context is not authority (ORG-C6)
+
+`TenantContext::campus()` is an optional working context (today replayed
+only for jobs). It is never consulted for an authorization decision. A
+future "current Campus" selector in the UI is a filter intersected with
+the user's scope, never a grant.
+
+### 11.9 Jobs and background work
+
+- A job that performs actor-authorized work carries the School id
+  (CLAUDE.md rule 21), the actor, and an explicit Campus id when the work
+  is bound to one Campus. It **re-resolves the actor's scoped capability
+  at execution**, never trusting a scope computed at dispatch, and
+  re-checks the Campus belongs to the School and is active for new work.
+- System jobs that act without an actor (retention, maintenance) are
+  unaffected by Campus scope.
+
+### 11.10 Incremental adoption
+
+Campus scope is adopted **domain by domain** in ORG.7: lowest risk first
+(Visitor, Library, Hostel, Transport, Inventory, Canteen), then HR and
+Fees/Payments, then Attendance, Timetable, LMS, Academics and
+Examinations, then Admissions, and **SIS last** (ORG-D20). Each adoption
+declares its Campus-capable capabilities, applies §11.7, and ships allow
+and deny tests (including "a Campus A holder cannot read or write Campus
+B"). Academic Structure configuration stays School-only.
+
+## 12. Module entitlements (ORG-D11)
+
+### 12.1 Definition
+
+An **entitlement** says whether a School may use a product module. It is
+platform-governed tenant configuration. It is **not** a role, a
+permission, a navigation setting or a feature flag.
+
+**Effective School capabilities = capabilities granted by role and scope
+∩ capabilities available under the School's entitled modules.**
+
+A user can never gain a module capability that the School is not
+entitled to, and **a disabled module never stays executable because a
+user still holds a historical grant.**
+
+### 12.2 Module catalogue (code-owned)
+
+- A code catalogue (reviewed like `CapabilityClasses`; no database row is
+  the source of truth) defines each module:
+  - a **stable identifier** (lowercase snake case, never reused or
+    renamed once released);
+  - its capability keys;
+  - its dependencies;
+  - whether it is **core**.
+- The catalogue and the per-School entitlement state are owned by the
+  **Platform** domain. `CapabilityResolver` (Identity & Access) consumes
+  them through a Platform Application contract. Platform is the shared
+  kernel every module already depends on, so no new dependency direction
+  appears. `DOMAIN-MAP.md` is updated in ORG.5.
+- Every School capability belongs to at least one module. A catalogue
+  guard test refuses an unmapped capability, in the way
+  `CapabilityClasses` refuses an unclassified one.
+
+### 12.3 Capability → module mapping (ORG-C5)
+
+- A capability may require **more than one** module. It is available only
+  when **every** required module is entitled. Example:
+  `portal.fees.view` requires both the Guardian Portal module and Fees.
+- Portal (`portal.*`) capabilities belong to the Guardian Portal module
+  **and** to the module whose data they show.
+
+### 12.4 Provisional module map
+
+The identifiers and boundaries below are **provisional**. ORG.5 freezes
+them against the code. Names follow the `DOMAIN-MAP.md` modules.
+
+| Module (provisional id) | Capability families | Core? | Provisional dependencies |
+|---|---|---|---|
+| `identity_access` | `school.members.*`, `school.roles.*` | **core** | — |
+| `organization` | `school.profile.*`, `school.settings.*`, `school.campuses.*`, `school.domains.*` | **core** | — |
+| `academic_structure` | `academics.*`, `teaching.assignments.*` | **core** | — |
+| `student_records` | `students.*` (incl. `students.processing_authorizations.*`), `enrollments.*`, `guardians.*` | **core** | — |
+| `staff_records` | `hr.employees.*`, `hr.departments.*`, `hr.positions.*`, `hr.categories.*` | **core** | — |
+| `compliance_audit` | `school.audit.view` | **core** | — |
+| `documents` (infrastructure) | none of its own (owner-delegated) | **core** | — |
+| `admissions` | `admissions.*` | optional | student_records |
+| `attendance` | `attendance.*` | optional | academic_structure |
+| `timetable` | `timetable.*` | optional | academic_structure |
+| `academics` (Syllabus, Curriculum Delivery) | `syllabus.*`, `curriculum.delivery.*` | optional | academic_structure |
+| `lms` | `lms.*` | optional | academic_structure |
+| `examinations` | `examinations.*` | optional | academic_structure, student_records |
+| `finance` (ledger) | `finance.ledger.*`, `finance.accounts.*`, `finance.periods.*` | optional | — |
+| `fees` (receivables, payments) | `finance.fee_*`, `finance.charges.*`, `finance.payments.*` | optional | finance, student_records |
+| `leave` | `hr.leave.*` | optional | staff_records |
+| `staff_attendance` | `hr.staff_attendance.*` | optional | staff_records, leave (StaffAttendance → Leave, `DOMAIN-MAP.md`) |
+| `payroll` | `payroll.*` | optional | staff_records, finance |
+| `library` | `library.*` | optional | (fines: fees) |
+| `transport` | `transport.*` | optional | (billing: fees) |
+| `hostel` | `hostel.*` | optional | (billing: fees) |
+| `inventory` | `inventory.*` | optional | — |
+| `canteen` | `canteen.*` | optional | inventory, fees (to be verified) |
+| `visitor` | `visitor.*` | optional | — |
+| `communications` | `communications.*` | optional | — |
+| `guardian_portal` | `portal.*` | optional | communications, plus the source module per capability |
+| `analytics` | `analytics.*` | optional | the source module per report |
+| `automation` | `automation.*` | optional | — |
+| `integrations` | `integrations.*` | optional | — |
+
+"(billing: fees)" means the operational module works alone, while its fee
+integration (ADR 0067 seams) needs Fees. ORG.5 decides whether that is a
+dependency or a capability-level requirement.
+
+### 12.5 Per-School entitlement state
+
+- **Ownership:** keyed by `school_id`. Written only by a Platform
+  Application service and never by a School. Readable by the School as a
+  read-only fact (e.g. on its settings page).
+- **History:** every change keeps the previous state (an append-only
+  change record, or a status row plus audit; ORG.5 chooses). Nothing is
+  deleted.
+- **Storage:** follows CLAUDE.md rule 18 if tenant-owned. Being written
+  from platform context is an ORG.5 design point; the precedents are
+  `TenantRls` with platform scope and the documented platform-table
+  exceptions.
+
+### 12.6 Changing entitlements
+
+- **Who:** Platform Admin (root) and Platform Manager, with the
+  entitlement-management capability (§7.2). Never a School actor.
+- **Every enable or disable needs:** the capability, fresh MFA, explicit
+  confirmation, and a closed reason code (plus optional bounded
+  justification, never personal data). Every refusal is audited.
+- **Disable shows an impact preview first:** affected grants and roles,
+  pending scheduled or queued work, open workflow items and dependent
+  modules.
+- **Disabling never deletes, revokes or archives data** and never revokes
+  role grants; the grants simply confer nothing for that module.
+  Re-enabling restores the effect.
+- **Dependencies:** enabling a module requires its dependencies to be
+  entitled. Disabling one that an entitled module depends on is refused
+  until the dependants are disabled.
+- **Core modules** can never be disabled through entitlement management
+  (§14).
+- **Lifecycle interaction:** entitlement changes are allowed in
+  `provisioning`, `active` and `suspended`. They never change lifecycle
+  state.
+
+### 12.7 Enforcement points
+
+1. **Capability resolution:** `CapabilityResolver` intersects School
+   capabilities with entitled modules. Every Gate, middleware, trait and
+   direct resolver check inherits it. That is why ORG.2's coverage guard
+   (§24) precedes ORG.5.
+2. **Direct URL / API:** a disabled module's routes refuse through the
+   capability check. No route stays reachable because a menu was hidden or
+   a link was bookmarked.
+3. **Jobs, consumers, scheduled work and the outbox:** a business effect
+   of a disabled module **re-checks entitlement at execution time**, like
+   `SchoolOperationalGuard` (CLAUDE.md rule 86). It refuses or defers with
+   a bounded outcome and never loops. Platform safety, retention, legal
+   holds and maintenance continue for disabled modules (the ADR 0047 §9
+   principle). ORG.5 decides per substrate (webhooks, communications,
+   assessment runs).
+4. **Navigation:** follows automatically, because it is a projection of
+   resolved capabilities (§15).
+5. **Legal gates:** an entitlement can never make a legal-gated
+   capability, an environment-gated surface (`PortalAvailability`,
+   `StudentMarkAvailability`) or a production refusal reachable. Both
+   layers must pass.
+
+### 12.8 Staleness bound (ORG-C7)
+
+Capabilities are cached for 60 s per (School, user). An entitlement
+change must take effect within a documented bound no longer than that,
+across all users of the School. Example: a per-School entitlement version
+in the cache key, through `TenantCache`. Execution-time checks (§12.7(3))
+never rely on the cache.
+
+### 12.9 Audit
+
+Platform ledger, identifiers and codes only:
+`platform.school_entitlement.enabled`, `.disabled`, `.denied`
+(provisional names). Metadata: module key, reason code, and for a disable
+the preview counts. Never capability arrays or personal data. Whether the
+School's own ledger also records a notice is an ORG.5 decision.
+
+## 13. Feature flags remain distinct (ORG-D12)
+
+| | Feature flag | Entitlement |
+|---|---|---|
+| Purpose | Controlled rollout, experiments, temporary operational switches | Licensed / approved product availability |
+| Authorization? | **Never** (`FeatureFlagResolver` docblock) | Yes: it constrains effective capabilities (§12) |
+| Scope | Platform default + per-School override | Per School |
+| Writer | none today | Platform Admin / Platform Manager (§12.6) |
+
+- A flag may switch behaviour *inside* an entitled module. It can never
+  enable a module the School is not entitled to, and never grants a
+  capability. Entitlement is evaluated first.
+- **ORG.5 may:** retire the dead `students.processing_authorizations` flag
+  (seeded, never read); decide whether `automation.rules` is a rollout
+  switch (keep as a flag) or product availability (move to the
+  `automation` entitlement, on evidence); and decide whether the dormant
+  `platform.feature_flags.view/.manage` capabilities get a root-only flag
+  surface or are retired through a catalogue release.
+- Until then, both flag tables and their resolver stay exactly as they are.
+
+## 14. Core modules (ORG-D14)
+
+**Core modules cannot be disabled through tenant entitlement
+management.** The logical core:
+
+1. **Identity & Access:** memberships, roles, grants, MFA, invitations.
+2. **Organization:** School identity, settings, Campuses, domains.
+3. **Academic Structure:** years, terms, grade levels, sections,
+   subjects, offerings, rooms, **and Teaching Assignments**. Teacher
+   ownership (ADR 0063) derives from Teaching Assignments, which every
+   teacher surface uses.
+4. **Student Records:** Students, enrollments, the processing-authorization
+   registry (ADR 0038) **and Guardians**.
+5. **Staff Records:** the HR employee foundation (Employee,
+   EmploymentRecord, EmployeeAssignment, departments, positions,
+   categories). `ActingEmployee`, teacher ownership, self-service and
+   Payroll all depend on it. Leave, Staff Attendance and Payroll are
+   optional modules on top of it.
+6. **Compliance / Audit:** the School audit-log review and audit
+   infrastructure.
+7. **Documents infrastructure:** shared storage and the owner-delegated
+   document service.
+
+**Students and Guardians form one core family, not two modules.**
+Guardian records and Guardian↔Student relationships are part of the
+student record: legal-guardian status, contacts, `GuardianStudentScope`,
+fee subjects and communications all depend on them. Neither can be
+operated meaningfully without the other. The **Guardian Portal** (the
+`portal.*` capabilities and Guardian accounts) is a separate,
+**optional** module. It stays production-refused in code until POR-L1
+(ADR 0070).
+
+**Platform infrastructure is outside the module model:** tenancy, audit
+ledgers, the outbox, the durable email layer (ADR 0055/0056), retention,
+observability and health. It is never entitlement-controlled.
+
+ORG.5 binds this logical core to catalogue entries. No core module may
+later become disableable without an ADR amendment.
+
+## 15. Navigation remains a projection (ORG-D15)
+
+```
+capability resolution (roles ∩ scope ∩ entitlements)  ──►  navigation projection
+```
+
+- `StaffNavigation` / `NavigationBuilder` stay the single catalogue and
+  evaluator. Navigation never reads roles, entitlement rows or menu
+  configuration directly. It follows entitlements and Campus scope
+  because the capabilities it evaluates already reflect them.
+- **A hidden entry never substitutes for a backend check. A visible entry
+  never grants authority.** Every destination keeps its own capability
+  check (`NavigationVisibilityTest`, `HubAuthorizationTest`).
+- **No menu configuration is stored** as entitlement or authorization
+  state. Reference-product role/menu matrices are requirement evidence
+  only. Web, mobile and dashboard projections derive from the same
+  capabilities when those clients exist.
+
+## 16. Approval capability convention (ORG-D16)
+
+- **No generic workflow engine** (CLAUDE.md rule 2). Approval stays
+  module-owned.
+- **Naming rule for NEW capabilities:**
+
+  ```
+  <domain>.<resource>.request
+  <domain>.<resource>.approve
+  <domain>.<resource>.reverse
+  <domain>.<resource>.override
+  ```
+
+  These are used only where the domain actually has that operation.
+  Existing keys are **not renamed** for cosmetic consistency, for example
+  `communications.approve`, `hr.leave.approve`, `payroll.runs.approve`,
+  `finance.fee_concessions.request/.approve`,
+  `examinations.marks.correction.request/.approve` and
+  `finance.ledger.reverse`.
+- **Meanings:**
+  - `request` proposes.
+  - `approve` decides another person's request. It is never implied by
+    `manage` or `request`.
+  - `reverse` creates a new compensating record and never edits or
+    deletes (CLAUDE.md rules 9, 11, 91).
+  - `override` is a documented exception path with a closed reason code,
+    fresh MFA and an audit event. It never bypasses a legal gate, the
+    lifecycle, tenancy or separation of duties.
+- **Separation of duties:**
+  - The requester never approves their own item.
+  - Material workflows also enforce this in the database: financial,
+    payroll, marks, refunds, student status changes and other high-risk
+    corrections. The existing `fee_concessions_sod_check`,
+    `payroll_runs_sod_check` and
+    `student_mark_corrections_maker_checker_check` are the pattern.
+  - Holding both capabilities, as `school_admin` does, never satisfies
+    separation of duties. The check is per actor and per item.
+- **Classification:** approve, reverse and override keys are classed
+  `authority` unless the catalogue review decides otherwise. Operational
+  roles never carry them (ADR 0071 §7).
+- **Campus:** approval authority may be Campus-scoped where its domain
+  adopts Campus scope (§11). Separation of duties is unchanged.
+- **Known gaps (ORG.8 candidates, each needing its own contract work):**
+  - a refund/reversal approver for payment corrections (this amends the
+    ADR 0031 correction contract, CLAUDE.md rule 91);
+  - an actor rule between ledger posting and reversal;
+  - library fine void approval;
+  - attendance regularisation;
+  - student status (inactive / reactivate) requests;
+  - fee unassignment;
+  - lesson-plan approval (no lesson-plan module exists).
+
+## 17. Authorization evaluation order (ORG-D17)
+
+| # | Layer | Enforced today at | State |
+|---|---|---|---|
+| 1 | Platform / environment policy | `EnvironmentPolicy`, `ProductionConfigurationGuard`, `ClassifyRequestHost` (421), `*Availability` classes and their route middleware (`portal-development-only`, `marks-development-only`, `teacher-attendance-api`), elevation refusal in `RequireSchoolContext` | exists |
+| 2 | Legal / regulatory availability | `legal-gated` capabilities held by no role, with no grant right covering them; read-only catalogue (ADR 0071); production refusals in code; empty production `PartnerScopeRegistry` | exists |
+| 3 | School lifecycle / operational state | `ResolveSchoolContext` / `RequireSchoolContext` (active School only), `EnsureSchoolMembershipContext` (API 404), `SchoolOperationalGuard` inside transactions, job re-checks | exists |
+| 4 | Module entitlement | — | **ORG.5** |
+| 5 | Role capability | Gate `capability` → `CapabilityResolver`; `capability:` middleware (`EnsureCapability`); `AuthorizesCapability`; Application-service checks | exists |
+| 6 | Assignment scope (School or Campus) | School: active membership + School grant. Campus: none | School exists; Campus **ORG.7** |
+| 7 | Ownership / self / Guardian scope | `ActingEmployeeResolver` + `TeachingOwnership` and the Teacher*Guard classes; `HrSelfAdministrationGuard`; Payroll self-refusal; `ActingGuardianResolver` + `GuardianStudentScope` | exists |
+| 8 | Request-specific assurance | `FreshMfaRequirement::requireForAction()` (after the capability check, outside the transaction), `SensitiveReadAssurance`, separation-of-duties checks (application + database), `EnsureIdempotent` / `IdempotencyGuard`, `RoleGrantAuthority` | exists |
+
+- **Not every request needs every layer.** A layer applies only when
+  relevant: a platform page has no layers 3–7, and a School read with no
+  ownership dimension skips 7.
+- **A lower layer never overrides a refusal by a higher one.** No role,
+  scope, ownership, flag or entitlement can re-open what platform policy,
+  a legal gate or the School lifecycle refused. An entitlement can never
+  open a legal gate.
+- **Authentication and tenant/membership validation come first,** and
+  idempotency replay is evaluated only after authorization (CLAUDE.md
+  rule 32).
+- **Order of checks inside a service may differ** where a refusal must be
+  audited. The platform lifecycle POSTs deliberately skip route middleware
+  so the service audits the refusal. The rule is unchanged: nothing
+  executes unless every applicable layer passes.
+
+## 18. School Groups and cross-School authority
+
+- School Groups stay governance and reporting constructs (ADR 0045,
+  ADR 0048). A Group grant never creates or implies a School membership
+  or School capability. Group entry into a School is ADR 0044 elevation,
+  which grants nothing. The single Group-safe report remains the only
+  tenant-data exception.
+- **Cross-School operational authority is not introduced.** Where a person
+  genuinely works for several Schools, they hold separate memberships and
+  separate grants in each, given by each School's own administrators.
+- A future "organisation-level role" (e.g. Finance Manager over selected
+  Schools) needs a concrete business requirement and its own ADR. It must
+  not reuse Group authority for operational data.
+
+## 19. Role-template policy (ORG-D18, ORG-D19)
+
+- **School roles remain platform-curated global templates** (`roles` has
+  no `school_id`) assigned within a School and, once ORG.7 lands, within a
+  Campus. The runtime cannot write the catalogue (ADR 0071 §11).
+- **No tenant-owned or arbitrary roles in ORG.** If custom roles are ever
+  required, the preferred direction is **constrained composition from
+  platform-approved capability bundles**, never unrestricted capability
+  creation. Such roles never include authority, legal-gated or
+  owned-scope capabilities. This requires its own ADR 0071 amendment.
+- **Reference role names are evidence, not requirements.** Computer
+  Operator, Class Coordinator, Corporate Academic Incharge and Franchise
+  BDM do not become roles automatically. A new role template is added only
+  when:
+  - a real Lycenza workflow needs it;
+  - existing roles cannot express it safely;
+  - its capability set is reviewed;
+  - the catalogue release process (ADR 0071, `StaffRoleCatalogueSnapshotTest`)
+    is followed.
+- Homeroom / class-teacher or grade-coordinator authority, if needed, is
+  an **ownership** predicate under a teacher-identity ADR (in the style of
+  ADR 0063), not a new role.
+
+## 20. Audit expectations
+
+| Action | Ledger | Event | State |
+|---|---|---|---|
+| School created / onboarded (root or Manager) | platform | `platform.school.created`, `.bootstrap_admin_assigned`, `.bootstrap_admin_replaced` | exists; the actor is recorded as today |
+| Activate / suspend / resume / close / reopen | platform | `platform.school.*` | exists |
+| Lifecycle or onboarding refused | platform | `platform.school.lifecycle_denied` | exists |
+| Platform role granted / revoked / refused (incl. Platform Manager) | platform | `platform.role_grant.*` | exists |
+| Module enabled / disabled / refused | platform | `platform.school_entitlement.*` (provisional) | ORG.5 |
+| Campus-scoped School grant / revoke | School | existing role-grant events, with the Campus id in metadata | ORG.7 |
+| Privileged access (elevation) | platform + `school_audit_events.elevation_id` | `platform.school_elevation.*` | exists |
+| Tenant setting changed by a platform actor | — | not applicable: no platform path writes School settings, and none is authorized | — |
+
+Every record keeps actor, target, action and time, and scope where
+relevant. Records are identifiers and codes only, never personal data or
+capability arrays. Ledgers stay append-only and separate (ADR 0046 §11).
+The Platform Auditor's read path is `platform.audit.view` (today) plus
+the ORG.6 read models; it never gains mutation authority.
+
+## 21. Explicit non-goals
+
+ORG does **not** introduce:
+
+- a tenant column other than `school_id`, or an Organisation/Branch entity;
+- cross-School operational roles, or Group authority over operational
+  data;
+- impersonation, "view as user" or School authority under elevation;
+- a runtime-grantable root, or any root-equivalent role;
+- tenant-owned or arbitrary roles;
+- a generic workflow or approval engine;
+- menu-as-security, or stored menu configuration;
+- a School archive, delete or purge path (tenant destruction stays not
+  authorized; E21-D11);
+- billing, subscriptions, plans or pricing (entitlements are availability
+  only; any commercial model needs its own decision);
+- configurable Guardian/Student profile-field exposure (it stays fixed in
+  code under ADR 0070 until POR-L1);
+- Student accounts (POR-L1), or a mobile menu projection before a real
+  mobile client exists.
+
+## 22. Migration and compatibility requirements
+
+1. **Unscoped grants keep their meaning forever** (§11.2). Campus scope is
+   additive. No backfill reinterprets a grant.
+2. **Campus-scoped grants confer nothing in non-adopting domains** (§11.3),
+   so introducing the column cannot widen or narrow any existing check.
+3. **Entitlement backfill (ORG-D13).** When entitlements are introduced,
+   every existing School is entitled to every currently generally
+   available module it can reach today, in the same migration or release
+   that introduces enforcement. No School loses a working domain.
+   Backfilling a module whose surfaces are still environment- or
+   legal-gated (Guardian Portal, StudentMark, statutory payroll) leaves
+   them exactly as gated as before. The entitlement never opens a gate.
+4. **New Schools:** the default entitlement set at onboarding is an ORG.5
+   decision. The recommended default is the same generally available set,
+   adjustable during onboarding, so onboarding never strands a School
+   without modules it expects.
+5. **No capability key is renamed** (§16). `platform.schools.manage`
+   stays root-reserved, and no root-reserve trigger is relaxed.
+6. **Dormant keys:** `platform.schools.view` gets its first use in ORG.3.
+   `platform.feature_flags.*` stay dormant until ORG.5 decides (§13).
+7. **Every migration** keeps a working `down()` and a rollback proof
+   (CLAUDE.md rule 10). Every tenant-owned table keeps `TenantRls`
+   (rule 18) and composite foreign keys (rule 70).
+
+## 23. Phased adoption plan
+
+Each phase needs separate, explicit owner authorization. Each ships its
+own UI (the SWC practice; no separate "administration UI" phase) and its
+own allow/deny, tenancy and negative tests (CLAUDE.md rule 13).
+
+| Phase | Scope | Depends on |
+|---|---|---|
+| **ORG.1** | This contract (documentation only) | — |
+| **ORG.1A** | Hardening defects V-1–V-5 (§24) | ORG.1 |
+| **ORG.2** | Authorization coverage guard: prove every School route and Application entry point is capability-gated; move ad-hoc enforcement (e.g. inline `canInSchool` + manual 403) onto the Gate. No behaviour change. | ORG.1A |
+| **ORG.3** | School Registry read model (§9) under `platform.schools.view` | ORG.2 |
+| **ORG.4** | Platform Manager catalogue release and role (§7), the Manager/Auditor exclusivity (§7.4); requires the ORG.1A platform-grant MFA | ORG.1A, ORG.3 |
+| **ORG.5** | Module catalogue, entitlement state, resolver intersection, execution-time guard, backfill, flag clean-up (§12–§14) | ORG.2, ORG.4 |
+| **ORG.6** | Platform Auditor read models (§8) | ORG.3, ORG.5 |
+| **ORG.7** | Campus-scoped assignments and domain adoption waves, **SIS last** (§11.10) | ORG.2, ORG.5 |
+| **ORG.8** | Approval-authority completion (§16 gaps) | ORG.2 |
+| **ORG.9** | Reference parity: requires the owner's screenshots and XLS menu reports available to the execution environment | ORG.5 |
+| **ORG.10** | UAT, DDEV smoke, full regression and closure | all |
+
+**SIS (ORG-D20):** SIS is not modified in ORG.1–ORG.6. SIS adopts Campus
+scope only in the last ORG.7 wave, after the semantics are frozen, the
+coverage guard exists, the registry and platform contracts exist, and the
+entitlement infrastructure exists. LC-5–LC-10 remain open and paused.
+
+## 24. ORG.1A prerequisites (ORG.0 findings, accepted, not fixed here)
+
+| ID | Finding (verified at `f183c851`) | Fix direction (ORG.1A) |
+|---|---|---|
+| V-1 | `School::$fillable` includes `status` (`apps/platform/app/Models/School.php:59`); only controller whitelists protect the lifecycle column, and the transition trigger would accept active → suspended from a mass-assignment bug. The migration comment `2026_08_23_090100…:17-19` claims the opposite. | Remove `status` from `$fillable` (lifecycle writes already use `forceFill` in `SchoolLifecycleService`); add a guard test; correct the comment. |
+| V-2 | Platform role grant/revoke (`PlatformRoleGovernanceService`, `PlatformRoleAdminController`) requires no fresh MFA, unlike every lifecycle write. | Fresh MFA re-verification on grant and revoke, **before ORG.4 creates a second grantable role**. |
+| V-3 | 204 `school_id → schools` foreign keys are `ON DELETE CASCADE`, including `school_audit_events` and finance tables; `users → school_memberships → membership_role_assignments` cascades away grant history. Only the runtime role's missing DELETE protects them. | RESTRICT at least for audit, finance and grant-history paths; rollback-proven. |
+| V-4 | `school_audit_events.elevation_id` is a single-column FK to `school_elevations(id)` (`2026_10_15_090100…:20`), and `school_elevations` has no `unique(id, school_id)`, so the database does not prevent a cross-School elevation reference. | Composite `(elevation_id, school_id)` FK. |
+| V-5 | Composite `nullOnDelete()` that includes NOT NULL `school_id`: `hr_departments` (campus, parent; `2026_08_23_100500…:69-75`), `employee_assignments.manager_assignment_id` (`2026_08_23_100900…:72-74`), `communication_messages` reply-to, `communication_attachments`. A parent delete fails instead of demoting the row (fails closed). | `ON DELETE SET NULL (<column>)` column lists (PostgreSQL 15+) or RESTRICT, matching each docblock's stated intent. |
+
+Order: V-1 and V-2 (code) are independent and small. V-3, V-4 and V-5
+are schema changes, each rollback-proven. V-2 must land before ORG.4.
+V-3 must land before any future archive or purge contract.
+
+## 25. Consequences and risks
+
+**Positive:**
+- **Nothing that works is rebuilt.** Tenancy, scopes, the role catalogue,
+  navigation and audit are reused.
+- **The Platform Manager is delegated narrowly.** Root keeps lifecycle and
+  security governance, and onboarding gains a natural second person.
+- **Campus authority is additive and fail-closed.** No existing grant
+  changes meaning, and non-adopting code cannot be widened by accident.
+- **Entitlements enforce through the existing resolver**, so the backend,
+  API, jobs and navigation agree.
+
+**Risks and mitigations:**
+- **Entitlement enforcement depends on coverage.** An unguarded route
+  would ignore entitlements. ORG.2 must precede ORG.5.
+- **Campus adoption touches many read models.** Composite foreign keys
+  (Academic Structure, Examinations' campus trigger, LMS) make Campus
+  changes costly. Domains are adopted one at a time, with SIS last.
+- **Cache staleness after entitlement or grant changes** is bounded by
+  ORG-C7, and execution-time checks never use the cache.
+- **Two platform operators (Manager, Auditor) increase the attack
+  surface.** Mitigated by narrow keys, fresh MFA on every write, mutual
+  exclusivity, no School authority and full audit.
+- **The provisional module map may be wrong at the edges** (dependencies
+  marked "to be verified"). ORG.5 freezes it against the code, with a
+  guard test refusing unmapped capabilities.
+
+## 26. References
+
+- ADR 0004, ADR 0020, ADR 0021, ADR 0022 (tenancy); ADR 0017 (audit);
+  ADR 0044 (elevation); ADR 0045, ADR 0048 (Groups); ADR 0046 (platform
+  authority, amended); ADR 0047 (School lifecycle, amended); ADR 0063
+  (teacher ownership); ADR 0065 (HRX); ADR 0067 (operational fee seams);
+  ADR 0070 (portal); ADR 0071 (role catalogue); ADR 0073 (navigation).
+- `docs/architecture/TENANCY.md`, `docs/security/AUTHORIZATION.md`,
+  `docs/modules/ORGANIZATION.md`, `docs/modules/ACADEMIC-STRUCTURE.md`,
+  `docs/architecture/DOMAIN-MAP.md`.
+- Code (read only): `App\Support\Authorization\CapabilityResolver`,
+  `CapabilityClasses`, `App\Support\Navigation\StaffNavigation`,
+  `App\Support\FeatureFlags\FeatureFlagResolver`,
+  `App\Domain\Platform\Application\Schools\SchoolLifecycleService`,
+  `App\Domain\Platform\Application\Roles\PlatformRoleGovernanceService`,
+  `App\Support\Tenancy\TenantContext`.

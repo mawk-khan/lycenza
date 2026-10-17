@@ -123,3 +123,13 @@ discriminator and RLS-policy discipline mean the schema is already
 fresh database), rather than requiring a redesign. This is an
 intentionally deferred, not-yet-needed capability, not a plan being
 executed now.
+
+## Cross-reference — ADR 0076 (ORG.1, 2026-10-17)
+
+This ADR stays authoritative: School is the only tenant, and Campus is a
+sub-tenant dimension, not an isolation boundary. ADR 0076 §10–§11 defines
+a future, additive **authorization** dimension: a School role assignment
+may carry one Campus scope (NULL = whole School, today's meaning
+preserved). It changes neither RLS nor tenant context. The `tenant_id`
+wording in "Future extraction/evolution path" above predates ADR 0020;
+the discriminator is `school_id`.

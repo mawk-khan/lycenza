@@ -1736,3 +1736,20 @@ keys (SR.2) are class `authority` and are themselves never covered.
 | `visitor.directory.view` | operational, sensitive | — |
 | `visitor.visits.manage` | operational, sensitive | — |
 | `visitor.visits.view` | operational, sensitive | — |
+
+## Cross-reference — ADR 0076 (ORG.1, 2026-10-17)
+
+ADR 0076 (owner decisions ORG-D18, ORG-D19) keeps this ADR's direction:
+School roles stay platform-curated global templates, and tenant-custom
+roles stay deferred (§5).
+- **If custom roles are ever required,** the preferred direction is
+  constrained composition from platform-approved capability bundles,
+  never including authority, legal-gated or owned-scope capabilities. That
+  needs an amendment to this ADR.
+- **Reference-product role names** become roles only through this ADR's
+  catalogue release process.
+- **ADR 0076 §11 contracts an optional Campus scope on School role
+  assignments** for ORG.7, which will amend §10 (grant/revoke) and §14
+  (concurrency) here. Grant authority (`school.roles.*`,
+  `school.members.*`, the grant rights) stays whole-School only (ADR 0076
+  §11.4).

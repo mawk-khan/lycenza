@@ -7,6 +7,11 @@
   suspension and resume mean under the root-reserved
   `platform.schools.manage`; lifecycle audit events join the platform
   ledger)
+- **Amended by ADR 0076 (ORG.1, 2026-10-17):** D12 decision 2 and frozen
+  invariants 3 and 6 are amended so a future runtime-assignable Platform
+  Manager may onboard Schools into `provisioning` through a narrower,
+  non-root-reserved capability. `platform.schools.manage` stays
+  root-reserved. See "Amendment — ORG.1" at the end.
 
 ## Context
 
@@ -515,3 +520,37 @@ account. Both are corrected by Phase 0O.1A below.
   connection (`CreatesTenancyFixtures::createPlatformRoot()`) and purged
   after each test; `Tests\Feature\Postgres\PlatformRootBoundaryTest` proves
   the boundary on the real runtime role.
+
+## Amendment — ORG.1 (ADR 0076, 2026-10-17) — Platform Manager onboarding
+
+Owner decisions ORG-D6–ORG-D8 (ADR 0076 §6–§7). Documentation only; no
+code, trigger, seed or behaviour changes with this amendment.
+
+- **D12 decision 2 is amended.** School *creation into `provisioning`*,
+  and the bootstrap administrator path while `provisioning`, are no
+  longer Platform Super Admin only. A later catalogue release (ORG.4) may
+  delegate them to a runtime-assignable **Platform Manager** through a new,
+  narrower capability (provisionally `platform.schools.onboard`).
+  Activation, suspension, resume, closure and reopening are unchanged and
+  stay root-only.
+- **Frozen invariant 3 is amended.** `platform_auditor` stays runtime-
+  assignable. ORG.4 may add exactly one more code-approved,
+  runtime-assignable, non-root role, provisionally `platform_manager`,
+  defined in ADR 0076 §7. There is still no generic role builder (D12
+  decision 3).
+- **Frozen invariant 6 is amended.** It now reads: *School lifecycle
+  control (activate, suspend, resume, close, reopen) and platform-role
+  governance are Platform Super Admin only, through the root-reserved
+  `platform.schools.manage` and `platform.role_grants.manage`. School
+  onboarding into `provisioning` may also be performed through the
+  non-root onboarding capability of ADR 0076 §7.*
+- **Unchanged:**
+  - D12 decisions 1, 3, 4, 5 and 6;
+  - frozen invariants 1, 2, 4, 5 and 7–16. In particular, invariant 16
+    still holds: `platform.schools.manage` and
+    `platform.role_grants.manage` are never held by a runtime-assignable
+    role, and the Platform Manager never receives either;
+  - `platform_auditor` gains no operational power. ADR 0076 §7.4 adds that
+    one user may not hold both the Auditor and Manager roles.
+- **Prerequisite:** fresh MFA on platform-role grant and revoke (ADR 0076
+  §24, V-2, ORG.1A) before a second runtime-assignable role exists.
