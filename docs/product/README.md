@@ -39,3 +39,14 @@ against `main` `d0fe3590`. It holds the full gap matrix and the "Completed
 SIS benchmark delta" table, which has four P2 findings and four decisions.
 It contains no benchmark material. It records and classifies; it builds
 nothing.)*
+
+*(2026-10-17, local completion: `LOCAL-PRODUCT-COMPLETION-AUDIT-2026-10-17.md`
+is the local-product completion audit of `main` `f805aef8`. It follows the
+owner's direction to develop on local DDEV only, with staging/PPR paused.
+Contents:
+- a score of 83/100 and a per-domain scorecard;
+- five must-complete items (M1–M5), with six 500s confirmed live;
+- should-complete and deferral registers;
+- the local-completion slice series LC-1 to LC-10.
+
+It records and classifies; it builds nothing.)*
