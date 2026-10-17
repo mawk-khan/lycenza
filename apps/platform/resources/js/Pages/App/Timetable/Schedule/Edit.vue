@@ -7,8 +7,8 @@ import { ref, watch, nextTick } from 'vue';
  * LC-2: correct a scheduled class -- its teacher, room, period and day. The
  * Subject Offering and Section are what the class is; for a different one,
  * schedule a new class. Collisions are checked within the class's own
- * academic year; a refused change is explained by the layout and nothing is
- * saved.
+ * academic year; a refused change is explained in the refusal banner and
+ * nothing is saved.
  */
 interface Props {
     entry: {

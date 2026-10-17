@@ -4,7 +4,7 @@ import { useForm } from '@inertiajs/vue3';
 /**
  * LC-2: correct a Period in the browser -- code, name, times, order. The
  * service applies the same overlap rule as adding one, and refuses a time
- * change while active classes still use the Period (shown by the layout's
+ * change while active classes still use the Period (shown by the page's
  * refusal message; nothing is saved).
  */
 interface Props {
