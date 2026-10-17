@@ -4,6 +4,9 @@ namespace App\Http\Controllers\App\Finance;
 
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\Fees\Application\Exceptions\ChargeNotFoundException;
+use App\Domain\Payments\Application\Collections\DailyCollectionRow;
+use App\Domain\Payments\Application\Collections\DailyCollectionsQuery;
+use App\Domain\Payments\Application\Collections\DailyCollectionsReadService;
 use App\Domain\Payments\Application\Exceptions\PaymentCorrectionIdempotencyConflictException;
 use App\Domain\Payments\Application\Exceptions\PaymentCorrectionRefusedException;
 use App\Domain\Payments\Application\Exceptions\PaymentNotFoundException;
@@ -13,12 +16,11 @@ use App\Domain\Payments\Application\PaymentCorrectionData;
 use App\Domain\Payments\Application\PaymentCorrectionReadService;
 use App\Domain\Payments\Application\PaymentCorrectionService;
 use App\Domain\Payments\Application\PaymentDetail;
-use App\Domain\Payments\Application\PaymentQuery;
 use App\Domain\Payments\Application\PaymentReadService;
 use App\Domain\Payments\Application\PaymentReceiptReadService;
-use App\Domain\Payments\Application\PaymentSummary;
 use App\Domain\Payments\Application\ReceiptDocument;
 use App\Domain\Payments\Domain\ManualPaymentMethod;
+use App\Domain\Students\Application\StudentSearch;
 use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Models\School;
@@ -28,7 +30,9 @@ use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Money\Exceptions\InvalidMoneyException;
 use App\Support\Money\Money;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -62,30 +66,72 @@ class PaymentController extends Controller
     /** One-shot session key the Payment page reads after a correction. */
     public const CORRECTED_SESSION_KEY = 'finance.payment_correction_outcome';
 
-    public function index(Request $request, TenantContext $context, PaymentReadService $service, CapabilityResolver $capabilities): Response
+    /**
+     * LC-4 (M4): the collections list -- receipts RECORDED on a School-local
+     * date (default: the School's today), with the Student, receipt number,
+     * method, amount and current correction status, and totals across every
+     * matching receipt. Read only under `finance.payments.view` (the Cashier
+     * holds it); corrections stay on each Payment's own page.
+     */
+    public function index(Request $request, TenantContext $context, DailyCollectionsReadService $collections, CapabilityResolver $capabilities): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('finance.payments.view', $school);
+        $this->authorizeCapability(DailyCollectionsReadService::CAPABILITY, $school);
 
+        $today = CarbonImmutable::now(SchoolTimezone::resolve($school))->toDateString();
+        $methods = [...array_column(ManualPaymentRecordingService::methodOptions(), 'value'), 'provider'];
         $validated = $request->validate([
-            'provider_payment_reference' => ['sometimes', 'string', 'max:255'],
+            'from' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
+            'to' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
+            'receipt' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'student' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'method' => ['sometimes', 'nullable', Rule::in($methods)],
             'page' => ['sometimes', 'integer', 'min:1'],
         ]);
+        $from = $validated['from'] ?? $today;
+        $to = $validated['to'] ?? $from;
+        if ($to < $from || CarbonImmutable::parse($from)->diffInDays(CarbonImmutable::parse($to)) > 366) {
+            throw ValidationException::withMessages(['to' => 'Choose an end date on or after the start date, at most a year later.']);
+        }
+        $receipt = trim((string) ($validated['receipt'] ?? '')) ?: null;
+        $search = trim((string) ($validated['student'] ?? ''));
+        $studentIds = $search === '' ? null : Student::query()->tap(fn ($q) => StudentSearch::anyField($q, $search))
+            ->pluck('id')->map(fn ($id) => (string) $id)->all();
 
-        $query = new PaymentQuery(
-            providerPaymentReference: $validated['provider_payment_reference'] ?? null,
-            page: (int) ($validated['page'] ?? 1),
-        );
+        $result = $collections->list($school, $context->actor(), new DailyCollectionsQuery(
+            from: $from, to: $to, receipt: $receipt, method: $validated['method'] ?? null,
+            studentIds: $studentIds, page: (int) ($validated['page'] ?? 1),
+        ));
 
-        $page = $service->listPayments($school, $query, $context->actor());
+        // Names for this page only: Students (name and number) and who recorded each receipt.
+        $rows = $result->rows->getCollection();
+        $students = Student::query()->whereIn('id', $rows->flatMap(fn (DailyCollectionRow $r) => $r->studentIds)->unique()->values()->all())
+            ->get(['id', 'school_id', 'first_name', 'middle_name', 'last_name', 'student_number'])->keyBy('id');
+        $recorders = User::query()->whereIn('id', $rows->pluck('recordedByUserId')->filter()->unique()->values()->all())->pluck('name', 'id');
 
         return Inertia::render('App/Finance/Payments/Index', [
-            'payments' => $page
-                ->through(fn (PaymentSummary $p) => $this->presentSummary($p, $school))
-                ->appends($request->only(['provider_payment_reference'])),
-            'filters' => [
-                'provider_payment_reference' => $validated['provider_payment_reference'] ?? '',
-            ],
+            'payments' => $result->rows
+                ->through(fn (DailyCollectionRow $r) => [
+                    'id' => $r->paymentId,
+                    'receiptNumber' => $r->receiptNumber,
+                    'students' => array_map(fn (string $id) => ($s = $students->get($id)) === null
+                        ? 'Student unavailable'
+                        : trim(collect([$s->first_name, $s->middle_name, $s->last_name])->filter()->implode(' '))." ({$s->student_number})", $r->studentIds),
+                    'recordedAt' => $r->recordedAt->toIso8601String(),
+                    'receivedOn' => $r->receivedOn,
+                    'methodLabel' => $r->source === 'provider' ? 'Online ('.($r->provider ?? 'provider').')' : ($this->methodLabel($r->method) ?? 'Offline'),
+                    'amount' => $r->amount,
+                    'currency' => $r->currency,
+                    'status' => $r->status,
+                    'refunded' => $r->refunded,
+                    'reallocated' => $r->reallocated,
+                    'recordedBy' => $r->recordedByUserId === null ? null : ($recorders[$r->recordedByUserId] ?? null),
+                ])
+                ->withQueryString(),
+            'totals' => $result->totals,
+            'filters' => ['from' => $from, 'to' => $to, 'receipt' => $receipt ?? '', 'student' => $search, 'method' => $validated['method'] ?? ''],
+            'today' => $today,
+            'methods' => [...ManualPaymentRecordingService::methodOptions(), ['value' => 'provider', 'label' => 'Online (payment provider)']],
             'canRecord' => $capabilities->canInSchool($context->actor(), ManualPaymentRecordingService::CAPABILITY, $school),
         ]);
     }
@@ -216,24 +262,6 @@ class PaymentController extends Controller
         } catch (InvalidMoneyException $e) {
             throw ValidationException::withMessages(['amount' => [$e->getMessage()]]);
         }
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function presentSummary(PaymentSummary $payment, School $school): array
-    {
-        return [
-            'id' => $payment->paymentId,
-            'source' => $payment->source,
-            'provider' => $payment->provider,
-            'method' => $payment->method,
-            'methodLabel' => $this->methodLabel($payment->method),
-            'amount' => $payment->amount,
-            'currency' => $payment->currency,
-            'settledAt' => $payment->settledAt->toIso8601String(),
-            'occurredOn' => $payment->settledAt->copy()->setTimezone($school->timezone)->toDateString(),
-        ];
     }
 
     /**

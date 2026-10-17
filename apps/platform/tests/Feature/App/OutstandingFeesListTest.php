@@ -154,7 +154,8 @@ class OutstandingFeesListTest extends TestCase
 
         $event = $this->inSchool($w['school'], fn () => SchoolAuditEvent::query()->where('event_type', 'fee_outstanding_list.viewed')->sole());
         // jsonb does not keep key order.
-        $this->assertEqualsCanonicalizing(['status' => 'overdue', 'academicYearId' => null, 'narrowed' => false], $event->metadata);
+        // LC-4: whether a Campus filter narrowed the charge lines -- never which Campus.
+        $this->assertEqualsCanonicalizing(['status' => 'overdue', 'academicYearId' => null, 'narrowed' => false, 'chargeFiltered' => false], $event->metadata);
     }
 
     #[Test]

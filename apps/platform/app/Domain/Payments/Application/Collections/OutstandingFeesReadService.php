@@ -2,6 +2,7 @@
 
 namespace App\Domain\Payments\Application\Collections;
 
+use App\Domain\Fees\Application\ChargeCollectionFact;
 use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Payments\Application\Charges\ChargeStateReader;
 use App\Models\School;
@@ -11,6 +12,7 @@ use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Money\Money;
 use App\Support\Tenancy\SchoolTimezone;
 use Carbon\CarbonImmutable;
+use Closure;
 
 /**
  * UAT-C3 (UAT-FIN-08): the operational "who owes what" list -- computed on
@@ -47,8 +49,15 @@ class OutstandingFeesReadService
         private readonly AuditRecorder $audit,
     ) {}
 
-    /** @param  list<string>|null  $studentIds */
-    public function list(School $school, User $actor, string $status = self::OUTSTANDING, ?string $academicYearId = null, ?array $studentIds = null): OutstandingFeesList
+    /**
+     * LC-4 (SB-03b): `$chargeFilter` narrows the charge LINES before
+     * anything is added up (e.g. one Campus's obligations), so a Student
+     * whose debts span Campuses is never counted in full under one of them.
+     *
+     * @param  list<string>|null  $studentIds
+     * @param  (Closure(list<ChargeCollectionFact>): list<ChargeCollectionFact>)|null  $chargeFilter
+     */
+    public function list(School $school, User $actor, string $status = self::OUTSTANDING, ?string $academicYearId = null, ?array $studentIds = null, ?Closure $chargeFilter = null): OutstandingFeesList
     {
         $this->authorizeCapabilityFor($actor, 'finance.charges.view', $school);
         $this->authorizeCapabilityFor($actor, 'finance.payments.view', $school);
@@ -60,6 +69,9 @@ class OutstandingFeesReadService
             $this->charges->collectionFacts($school, $academicYearId),
             fn ($f) => $only === null || isset($only[$f->studentId]),
         ));
+        if ($chargeFilter !== null) {
+            $facts = $chargeFilter($facts);
+        }
         $states = $this->states->forCharges($school, array_map(fn ($f) => $f->id, $facts));
 
         /** @var array<string, array{outstanding: Money, overdue: Money, open: int, earliestOverdue: ?string, nextDue: ?string}> $byStudent */
@@ -104,6 +116,7 @@ class OutstandingFeesReadService
             'status' => $status,
             'academicYearId' => $academicYearId,
             'narrowed' => $studentIds !== null,
+            'chargeFiltered' => $chargeFilter !== null,
         ]);
 
         return new OutstandingFeesList($rows, $totalOutstanding, $totalOverdue, $today);

@@ -456,6 +456,23 @@ What to expect:
 | **Where it is applied** | The payment's charges; the charge page's "Payments on this charge" |
 | **What the Student still owes** | **Student fee statements**; **Outstanding fees** |
 
+### Payments received: the day's collections (Finance → Payments)
+Opens on **today** (by the School's date). For each receipt:
+- the receipt number, the Student, when it was recorded and by whom;
+- the method and amount;
+- where it stands now: **Received**, **Partly refunded**, **Refunded** or
+  **Reversed**. "Reallocated" means it was moved to another charge; the
+  money received is unchanged.
+
+**Totals** cover every matching receipt, not just the page:
+- **Gross received** is what was recorded that day. A later correction
+  never removes a receipt from its day.
+- **Still retained** is gross less anything since reversed or refunded.
+
+**Find something:** part of a receipt number, a Student's name or number,
+a method, or another date (**Today** returns to today). Cashiers can see
+this page; corrections are made on a payment's own page by School Admin.
+
 ### Outstanding fees (Finance → Outstanding fees)
 Shows Students who still owe money, most overdue first.
 
@@ -463,6 +480,14 @@ Shows Students who still owe money, most overdue first.
   School's date. Not every outstanding amount is overdue.
 - **Filters:** outstanding or overdue only, year, Grade, Section and
   Student search.
+- **Students:** All, Current, or **Leavers** (Students marked inactive,
+  shown as "Left (inactive)"). A leaver has no current class, so a Grade or
+  Section filter excludes them.
+- **Campus:** each charge counts for the Campus the Student was placed in
+  for that charge's year (the one in effect when it was charged, if they
+  moved). A Student with debts at two Campuses appears under each with only
+  that Campus's part. "Campus unavailable" lists charges with no such
+  placement.
 - **Statement:** open a Student to see every charge.
 
 ## 14. Correcting payments and charges

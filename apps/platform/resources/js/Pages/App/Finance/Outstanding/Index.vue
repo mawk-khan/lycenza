@@ -14,6 +14,8 @@ interface Row {
     name: string;
     studentNumber: string | null;
     class: string | null;
+    // LC-4 (SB-03b): marked inactive -- has left the School.
+    leaver: boolean;
     outstanding: string;
     overdue: string;
     openCharges: number;
@@ -37,7 +39,10 @@ interface Props {
         q: string;
         grade_level_id: string;
         section_id: string;
+        standing: '' | 'current' | 'leavers';
+        campus_id: string;
     };
+    campuses: { id: string; name: string }[];
     academicYears: { id: string; name: string }[];
     canSeeClass: boolean;
     gradeLevels: { id: string; name: string }[];
@@ -51,6 +56,16 @@ const yearId = ref(props.filters.academic_year_id);
 const q = ref(props.filters.q);
 const gradeId = ref(props.filters.grade_level_id);
 const sectionId = ref(props.filters.section_id);
+const standing = ref(props.filters.standing);
+const campusId = ref(props.filters.campus_id);
+
+const emptyTitle = computed(() =>
+    props.filters.standing === 'leavers'
+        ? 'No leavers owe money for these filters'
+        : props.filters.campus_id
+          ? 'No outstanding balances for this Campus'
+          : 'Nobody owes money for these filters',
+);
 
 const sectionsForGrade = computed(() =>
     gradeId.value ? props.sections.filter((s) => s.gradeLevelId === gradeId.value) : props.sections,
@@ -68,6 +83,8 @@ function apply(): void {
             q: q.value.trim() || undefined,
             grade_level_id: gradeId.value || undefined,
             section_id: sectionId.value || undefined,
+            standing: standing.value || undefined,
+            campus_id: campusId.value || undefined,
         },
         { preserveState: true, preserveScroll: true, replace: true },
     );
@@ -109,6 +126,32 @@ function apply(): void {
                     <option v-for="y in academicYears" :key="y.id" :value="y.id">
                         {{ y.name }}
                     </option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-slate-600" for="filter-standing">Students</label>
+                <select
+                    id="filter-standing"
+                    v-model="standing"
+                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    @change="apply"
+                >
+                    <option value="">All Students</option>
+                    <option value="current">Current Students</option>
+                    <option value="leavers">Leavers (marked inactive)</option>
+                </select>
+            </div>
+            <div v-if="campuses.length > 0">
+                <label class="block text-xs text-slate-600" for="filter-campus">Campus</label>
+                <select
+                    id="filter-campus"
+                    v-model="campusId"
+                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                    @change="apply"
+                >
+                    <option value="">All campuses</option>
+                    <option v-for="c in campuses" :key="c.id" :value="c.id">{{ c.name }}</option>
+                    <option value="unavailable">Campus unavailable</option>
                 </select>
             </div>
             <template v-if="canSeeClass">
@@ -171,11 +214,21 @@ function apply(): void {
             </div>
         </dl>
 
+        <p v-if="filters.campus_id" class="mt-3 text-xs text-slate-500">
+            A charge belongs to the Campus of the Student's placement in that charge's academic year
+            (the one in effect when it was charged, if they moved). Charges with no such placement
+            are under "Campus unavailable".
+        </p>
+
         <EmptyState
             v-if="rows.data.length === 0"
             class="mt-6"
-            title="Nobody owes money for these filters"
-            description="Every matching charge is paid, covered by a concession or cancelled."
+            :title="emptyTitle"
+            :description="
+                filters.standing === 'leavers' && (filters.grade_level_id || filters.section_id)
+                    ? 'Leavers have no current class, so a Grade or Section filter excludes them.'
+                    : 'Every matching charge is paid, covered by a concession or cancelled.'
+            "
         />
 
         <template v-else>
@@ -201,9 +254,14 @@ function apply(): void {
                                     :href="`/app/finance/fee-statements/${row.studentId}`"
                                     >{{ row.name }}</a
                                 >
-                                <span class="block text-xs text-slate-500">{{
-                                    row.studentNumber
-                                }}</span>
+                                <span class="block text-xs text-slate-500"
+                                    >{{ row.studentNumber
+                                    }}<span
+                                        v-if="row.leaver"
+                                        class="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-slate-700"
+                                        >Left (inactive)</span
+                                    ></span
+                                >
                             </td>
                             <td v-if="canSeeClass" class="py-2 text-slate-600">
                                 {{ row.class ?? '—' }}

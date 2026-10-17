@@ -234,9 +234,10 @@ class ChargeServiceTest extends TestCase
         // POR.3 (ADR 0070 §26): statementLinesForStudentWithin() is a read-only
         // twin of statementLinesForStudent() with the Guardian scope embedded.
         // UAT-C3: collectionFacts() is the read-only input of Payments'
-        // outstanding-fees list.
+        // outstanding-fees list. LC-4: studentIdsForCharges()/chargeIdsForStudents()
+        // are read-only lookups for Payments' collections list.
         $this->assertFalse(method_exists(ChargeService::class, 'update'));
-        $this->assertSame(['assess', 'cancel', 'lockChargeForAllocation', 'liveAdjustmentTotalsFor', 'statementLinesForStudent', 'statementLinesForStudentWithin', 'statementLinesForCharges', 'lateFeeCandidates', 'lateFeeSource', 'uncancelledChargesForStudent', 'ledgerFacts', 'collectionFacts', 'adjustmentLedgerFacts'], array_values(array_filter(
+        $this->assertSame(['assess', 'cancel', 'lockChargeForAllocation', 'liveAdjustmentTotalsFor', 'statementLinesForStudent', 'statementLinesForStudentWithin', 'statementLinesForCharges', 'lateFeeCandidates', 'lateFeeSource', 'uncancelledChargesForStudent', 'ledgerFacts', 'studentIdsForCharges', 'chargeIdsForStudents', 'collectionFacts', 'adjustmentLedgerFacts'], array_values(array_filter(
             array_map(fn ($m) => $m->name, (new \ReflectionClass(ChargeService::class))->getMethods(\ReflectionMethod::IS_PUBLIC)),
             fn ($name) => $name !== '__construct',
         )));

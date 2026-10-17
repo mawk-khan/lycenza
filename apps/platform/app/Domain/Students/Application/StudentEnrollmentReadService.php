@@ -98,6 +98,57 @@ class StudentEnrollmentReadService
     }
 
     /**
+     * LC-4 (SB-03b): the Campus each obligation belongs to, for Finance's
+     * Campus filter -- from the Student's placements in the obligation's
+     * academic year, never their current placement (a leaver has none, and
+     * a moved Student's earlier debt stays with the earlier Campus).
+     *
+     * For each item [studentId, academicYearId, onDate], ignoring
+     * `cancelled` placements (recorded in error):
+     * 1. one Campus across that year's placements -> that Campus;
+     * 2. several -> the Campus of the one placement in effect on `onDate`
+     *    (`starts_on <= onDate <= ends_on`, open-ended when `ends_on` is
+     *    null);
+     * 3. otherwise (no placement, or no single placement on that date) ->
+     *    null: unavailable, never guessed.
+     *
+     * One query for all items; tenant-safe through the ambient scope like
+     * every method here; authorization-neutral (the caller authorizes).
+     *
+     * @param  array<string, array{0: string, 1: string, 2: ?string}>  $items  key => [studentId, academicYearId, onDate]
+     * @return array<string, ?string> key => campus id, or null when unavailable
+     */
+    public function campusAttribution(array $items): array
+    {
+        if ($items === []) {
+            return [];
+        }
+
+        $placements = StudentEnrollment::query()
+            ->whereIn('student_id', array_values(array_unique(array_column($items, 0))))
+            ->whereIn('academic_year_id', array_values(array_unique(array_column($items, 1))))
+            ->where('status', '!=', 'cancelled')
+            ->get(['student_id', 'academic_year_id', 'campus_id', 'starts_on', 'ends_on'])
+            ->groupBy(fn (StudentEnrollment $e) => $e->student_id.'|'.$e->academic_year_id);
+
+        $result = [];
+        foreach ($items as $key => [$studentId, $yearId, $onDate]) {
+            $inYear = $placements->get($studentId.'|'.$yearId, new Collection);
+            $campuses = $inYear->pluck('campus_id')->unique()->values();
+            if ($campuses->count() === 1) {
+                $result[$key] = (string) $campuses->first();
+
+                continue;
+            }
+            $onThatDay = $onDate === null ? new Collection : $inYear->filter(fn (StudentEnrollment $e) => $e->starts_on->toDateString() <= $onDate
+                && ($e->ends_on === null || $e->ends_on->toDateString() >= $onDate));
+            $result[$key] = $onThatDay->pluck('campus_id')->unique()->count() === 1 ? (string) $onThatDay->first()?->campus_id : null;
+        }
+
+        return $result;
+    }
+
+    /**
      * Every permitted Enrollment record for a Student, across every
      * AcademicYear and every status (active/completed/withdrawn/
      * transferred/cancelled) -- the full historical record, never

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\App\Finance;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Section;
+use App\Domain\Fees\Application\ChargeCollectionFact;
 use App\Domain\Payments\Application\Collections\OutstandingFeeRow;
 use App\Domain\Payments\Application\Collections\OutstandingFeesReadService;
 use App\Domain\Students\Application\StudentEnrollmentReadService;
@@ -12,6 +13,7 @@ use App\Domain\Students\Application\StudentSearch;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Http\Controllers\Controller;
+use App\Models\Campus;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
@@ -37,6 +39,9 @@ class OutstandingFeesController extends Controller
 
     private const int PER_PAGE = 25;
 
+    /** LC-4 (SB-03b): the Campus filter's value for obligations whose Campus cannot be determined. */
+    public const string CAMPUS_UNAVAILABLE = 'unavailable';
+
     public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities, OutstandingFeesReadService $outstanding, StudentEnrollmentReadService $placements): Response
     {
         $school = $context->requireSchool();
@@ -50,8 +55,14 @@ class OutstandingFeesController extends Controller
             'q' => ['sometimes', 'nullable', 'string', 'max:100'],
             'grade_level_id' => ['sometimes', 'nullable', 'uuid'],
             'section_id' => ['sometimes', 'nullable', 'uuid'],
+            // LC-4 (SB-03b): `students.status` is the lifecycle -- a leaver is a
+            // Student marked inactive, never one merely without a current class.
+            'standing' => ['sometimes', 'nullable', Rule::in(['current', 'leavers'])],
+            'campus_id' => ['sometimes', 'nullable', Rule::in([self::CAMPUS_UNAVAILABLE, ...Campus::query()->pluck('id')->map(fn ($id) => (string) $id)->all()])],
             'page' => ['sometimes', 'integer', 'min:1'],
         ]);
+        $standing = $validated['standing'] ?? null;
+        $campusId = $validated['campus_id'] ?? null;
         $status = $validated['status'] ?? OutstandingFeesReadService::OUTSTANDING;
         $search = trim((string) ($validated['q'] ?? ''));
         $gradeId = $canSeeClass ? ($validated['grade_level_id'] ?? null) : null;
@@ -73,7 +84,26 @@ class OutstandingFeesController extends Controller
             $studentIds = $studentIds === null ? $inClass : array_values(array_intersect($studentIds, $inClass));
         }
 
-        $list = $outstanding->list($school, $context->actor(), $status, $validated['academic_year_id'] ?? null, $studentIds);
+        if ($standing !== null) {
+            $inStanding = Student::query()->where('status', $standing === 'leavers' ? 'inactive' : 'active')
+                ->when($studentIds !== null, fn ($q) => $q->whereIn('id', $studentIds))
+                ->pluck('id')->map(fn ($id) => (string) $id)->all();
+            $studentIds = $inStanding;
+        }
+
+        // LC-4 (SB-03b): a Campus is chosen per obligation (charge line), from
+        // the Student's placement in that charge's academic year -- never the
+        // current one -- and only then added up (StudentEnrollmentReadService::campusAttribution).
+        $chargeFilter = $campusId === null ? null : function (array $facts) use ($placements, $campusId): array {
+            $attributed = $placements->campusAttribution(array_combine(
+                array_map(fn (ChargeCollectionFact $f) => $f->id, $facts),
+                array_map(fn (ChargeCollectionFact $f) => [$f->studentId, $f->academicYearId, $f->assessedOn], $facts),
+            ) ?: []);
+
+            return array_values(array_filter($facts, fn (ChargeCollectionFact $f) => ($attributed[$f->id] ?? null) === ($campusId === self::CAMPUS_UNAVAILABLE ? null : $campusId)));
+        };
+
+        $list = $outstanding->list($school, $context->actor(), $status, $validated['academic_year_id'] ?? null, $studentIds, $chargeFilter);
 
         $page = (int) ($validated['page'] ?? 1);
         $slice = array_slice($list->rows, ($page - 1) * self::PER_PAGE, self::PER_PAGE);
@@ -86,6 +116,7 @@ class OutstandingFeesController extends Controller
                 'studentId' => $r->studentId,
                 'name' => collect([$students->get($r->studentId)?->first_name, $students->get($r->studentId)?->middle_name, $students->get($r->studentId)?->last_name])->filter()->implode(' '),
                 'studentNumber' => $students->get($r->studentId)?->student_number,
+                'leaver' => $students->get($r->studentId)?->status === 'inactive',
                 'class' => ($e = $classes->get($r->studentId)) === null ? null : "{$e->gradeLevel?->name} · {$e->section?->name}",
                 'outstanding' => $r->outstanding->amount(),
                 'overdue' => $r->overdue->amount(),
@@ -109,7 +140,10 @@ class OutstandingFeesController extends Controller
                 'q' => $search,
                 'grade_level_id' => $gradeId ?? '',
                 'section_id' => $sectionId ?? '',
+                'standing' => $standing ?? '',
+                'campus_id' => $campusId ?? '',
             ],
+            'campuses' => Campus::query()->orderBy('name')->get(['id', 'school_id', 'name'])->map(fn (Campus $c) => ['id' => $c->id, 'name' => $c->name])->values()->all(),
             'academicYears' => AcademicYear::query()->orderByDesc('starts_on')->get()->map(fn (AcademicYear $y) => ['id' => $y->id, 'name' => $y->name])->values()->all(),
             'canSeeClass' => $canSeeClass,
             'gradeLevels' => $canSeeClass ? GradeLevel::query()->orderBy('sequence')->get()->map(fn (GradeLevel $g) => ['id' => $g->id, 'name' => $g->name])->values()->all() : [],

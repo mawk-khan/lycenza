@@ -195,7 +195,7 @@ class ManualPaymentUiTest extends TestCase
         $this->recordManualPayment($this->school, $recorder, $this->settlement->id, [[$this->charge, '50.00']], '50.00', reference: 'SECRETISH-REF');
 
         $this->get('/app/finance/payments')->assertInertia(fn ($page) => $page
-            ->where('payments.data', fn ($rows) => collect($rows)->pluck('source')->sort()->values()->all() === ['manual', 'provider'])
+            ->where('payments.data', fn ($rows) => collect($rows)->pluck('methodLabel')->sort()->values()->all() === ['Cash', 'Online (test-provider)'])
             ->where('payments.data', fn ($rows) => ! str_contains(json_encode($rows), 'SECRETISH-REF')));
     }
 

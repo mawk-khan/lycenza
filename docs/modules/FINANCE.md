@@ -5362,6 +5362,51 @@ existing `selectableFeeHead()` still decides.
 - **Audit and limits.** Each view is audited once
   (`fee_outstanding_list.viewed`, filters only). Queries are bounded. There
   is no export.
+- **Leavers and Campus (LC-4, SB-03b, 2026-10-17).**
+  - *Students:* All / Current / Leavers. A leaver is a Student marked
+    inactive (`students.status = 'inactive'`), the one lifecycle state that
+    means "left"; a missing current class never makes anyone a leaver.
+    Leavers stay in All and are marked "Left (inactive)".
+  - *Campus:* filters charge LINES before anything is added up
+    (`OutstandingFeesReadService::list(..., $chargeFilter)`), so a Student
+    whose debts span Campuses is never counted in full under one. A charge
+    belongs to the Campus of the Student's placement in that charge's
+    academic year (`StudentEnrollmentReadService::campusAttribution()`):
+    one Campus that year -> it; several -> the placement in effect on the
+    date the charge was assessed; none, or no single one -> "Campus
+    unavailable", never a guess. Cancelled placements are ignored. The
+    Student's current placement is never used.
+  - Balances are the same post-correction amounts (`ChargeStateReader`).
+
+### Payments received (LC-4, M4, 2026-10-17)
+
+Operational visibility of the day's receipts. This is not a cashbook or a
+settlement report.
+
+- **Where.** Finance -> Payments received (`/app/finance/payments`), built
+  on `DailyCollectionsReadService`.
+- **Who.** `finance.payments.view`: the Cashier (who records payments)
+  already holds it. Corrections stay on each payment's page with their own
+  capabilities.
+- **Which day.** Receipts RECORDED on the School-local date
+  (`payments.created_at` in `schools.timezone`; default the School's
+  today), optionally a range of up to a year. The received date the
+  cashier entered is shown when it differs.
+- **Each row.** Receipt number, Student(s) the payment was applied to
+  (name and number), recorded time and by whom, method, amount and status.
+  The manual reference is never listed (rule 91).
+- **Status** is read from the correction records: Received; Partly
+  refunded; Refunded; Reversed. A reallocation leaves the status as
+  Received and is flagged "Reallocated".
+- **Totals** cover every matching receipt, not the page:
+  - Receipts and Gross received: original amounts, so a later correction
+    never removes a receipt from its day.
+  - Still retained: gross less what was since reversed or refunded,
+    whenever that happened. It is not the day's cash movement.
+- **Filters.** Receipt number (part; a provider reference matches
+  exactly), Student (name or number), method.
+- One `payment.list_viewed` audit per view (dates, count and whether it was
+  filtered; never a Student, receipt or reference). No export.
 
 ### Payment corrections (UAT-FIN-05/24/27)
 

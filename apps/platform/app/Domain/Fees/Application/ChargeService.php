@@ -29,7 +29,9 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Money\Money;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Database\QueryException;
@@ -558,6 +560,45 @@ class ChargeService
     }
 
     /**
+     * LC-4 (M4): which Student each of these charges (cancelled or not)
+     * belongs to, keyed by charge id -- the collections list names the
+     * Students a Payment was applied to. Trusted, read-only, one query; the
+     * Payments read service authorizes.
+     *
+     * @param  list<string>  $chargeIds
+     * @return array<string, string>
+     */
+    public function studentIdsForCharges(School $school, array $chargeIds): array
+    {
+        if ($chargeIds === []) {
+            return [];
+        }
+
+        return $this->context->withSchool($school, fn () => Charge::query()->where('school_id', $school->id)
+            ->whereIn('id', array_values(array_unique($chargeIds)))->pluck('student_id', 'id')
+            ->map(fn ($id) => (string) $id)->all());
+    }
+
+    /**
+     * LC-4 (M4): every charge (cancelled or not) of these Students -- the
+     * collections list's Student search narrows Payments through what they
+     * were applied to. Trusted, read-only, one query.
+     *
+     * @param  list<string>  $studentIds
+     * @return list<string>
+     */
+    public function chargeIdsForStudents(School $school, array $studentIds): array
+    {
+        if ($studentIds === []) {
+            return [];
+        }
+
+        return $this->context->withSchool($school, fn () => Charge::query()->where('school_id', $school->id)
+            ->whereIn('student_id', array_values(array_unique($studentIds)))->pluck('id')
+            ->map(fn ($id) => (string) $id)->values()->all());
+    }
+
+    /**
      * UAT-C3 (UAT-FIN-08): every UNCANCELLED charge of the School (optionally
      * one academic year) for Payments' outstanding-fees list, which computes
      * what is still owed through `ChargeStateReader`. Trusted, read-only, no
@@ -567,11 +608,13 @@ class ChargeService
      */
     public function collectionFacts(School $school, ?string $academicYearId = null): array
     {
-        return $this->context->withSchool($school, function () use ($school, $academicYearId) {
+        $timezone = SchoolTimezone::resolve($school);
+
+        return $this->context->withSchool($school, function () use ($school, $academicYearId, $timezone) {
             $facts = [];
             foreach (Charge::query()->where('school_id', $school->id)->whereNull('cancelled_at')
                 ->when($academicYearId !== null, fn ($q) => $q->where('academic_year_id', $academicYearId))
-                ->orderBy('id')->toBase()->select(['id', 'student_id', 'academic_year_id', 'amount', 'currency', 'due_date'])
+                ->orderBy('id')->toBase()->select(['id', 'student_id', 'academic_year_id', 'amount', 'currency', 'due_date', 'created_at'])
                 ->cursor() as $row) {
                 $facts[] = new ChargeCollectionFact(
                     id: (string) $row->id,
@@ -580,6 +623,7 @@ class ChargeService
                     amount: (string) $row->amount,
                     currency: (string) $row->currency,
                     dueDate: $row->due_date === null ? null : substr((string) $row->due_date, 0, 10),
+                    assessedOn: CarbonImmutable::parse((string) $row->created_at, 'UTC')->setTimezone($timezone)->toDateString(),
                 );
             }
 

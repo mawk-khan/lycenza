@@ -16,5 +16,8 @@ final readonly class ChargeCollectionFact
         public string $amount,
         public string $currency,
         public ?string $dueDate,
+        // LC-4 (SB-03b): the School-local date the charge was assessed --
+        // which placement it belongs to when a Student moved Campus mid-year.
+        public ?string $assessedOn = null,
     ) {}
 }

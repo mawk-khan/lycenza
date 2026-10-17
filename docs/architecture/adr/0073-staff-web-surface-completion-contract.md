@@ -2156,3 +2156,53 @@ behaviour, authorization and tenancy. No schema change.
 `Tests\Feature\Automation\AutomationSubjectLabelsTest`, the payslip label
 tests in `PayrollUiTest` and `StaffSelfServiceUiTest`, the posting narrative
 in `PayrollPostingServiceTest`, and `LedgerServiceReverseTest`.
+
+## Amendment (LC-4, 2026-10-17): the day's collections and who still owes
+
+**Problem.** The Local Product Completion Audit found two Finance gaps:
+- **M4.** The payments list showed only received date, source and amount,
+  with one filter (provider reference). It had no Student, receipt number
+  or total, so a cashier could not reconcile a day.
+- **SB-03b.** Outstanding fees could not isolate leavers, and could narrow
+  by class only through the CURRENT placement.
+
+**Decision.** Operational visibility only. No accounting rule, capability
+or schema changes.
+
+1. **Payments received** (`DailyCollectionsReadService`, under
+   `finance.payments.view`, which the Cashier already holds).
+   - **Day:** receipts RECORDED on the School-local date (`created_at` in
+     `schools.timezone`), never a UTC date.
+   - **Totals:** gross is the original Payment amounts across every
+     matching receipt. A posted Payment never changes, so a correction never
+     moves a receipt off its day.
+   - **Status:** read from `payment_corrections`, without recomputing any
+     balance: Received / Partly refunded / Refunded / Reversed;
+     reallocation is flagged but never changes the status.
+   - **Still retained:** gross less refunded and reversed amounts.
+   - **Display:** Students come from the Payment's allocations through Fees'
+     read-only `studentIdsForCharges()`/`chargeIdsForStudents()`. The manual
+     reference is never listed.
+2. **Leavers.** `students.status = 'inactive'` is the lifecycle state that
+   means a Student has left. Placement withdrawal deliberately does not set
+   it, so the filter follows the Student's status, never a missing class.
+3. **Campus, charge by charge.** `OutstandingFeesReadService` accepts a
+   charge-line filter applied before aggregation.
+   `StudentEnrollmentReadService::campusAttribution()` resolves each line
+   from the Student's placements in that charge's academic year:
+   - one Campus -> that Campus;
+   - several -> the placement in effect on the charge's School-local
+     assessment date (`ChargeCollectionFact::assessedOn`);
+   - otherwise -> unavailable, never guessed.
+
+   Cancelled placements are ignored; the current placement is never used.
+
+**Not in scope.** Exports, printing, a cashbook or settlement report, new
+payment methods or lifecycle states.
+
+**Tests.**
+- `Tests\Feature\Payments\DailyCollectionsTest`: School day in Kolkata and
+  New York, totals across pages, corrections, filters, Cashier boundary and
+  tenancy.
+- `Tests\Feature\App\OutstandingFeesLeaverCampusTest`: leavers, a mover's
+  split debt, unavailable Campus, composed filters and tenancy.
