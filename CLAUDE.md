@@ -1182,3 +1182,21 @@ once several modules copy it.
     `platform-coverage` proves equal to the canonical inventory; never shard
     by hand-picked lists, never drop a test to balance a shard. Never change a contributor's
     IDE settings to enforce this.
+
+97. **Lifecycle state, history and composite keys stay structurally safe
+    (ADR 0076 §27, ORG.1A).**
+    - **`schools.status` is not mass assignable.** Only the lifecycle
+      services write it, explicitly (`forceFill`). Never add it back to
+      `School::$fillable`.
+    - **Platform-role grant and revoke re-verify a fresh MFA code** inside
+      `PlatformRoleGovernanceService`.
+    - **History fails closed.** Audit, accounting, settlement and grant
+      history reference their School and User `ON DELETE RESTRICT`. Never
+      give such a table a cascading `school_id` or `user_id` key. Committed
+      test fixtures are removed only through
+      `TestCase::purgeSchoolsAsAdmin()`.
+    - **A composite same-School key that may null its relationship uses
+      `ON DELETE SET NULL (<column>)`,** never whole-key SET NULL, which
+      would null `school_id`.
+    - **A School-scoped reference to a platform row** that names a School
+      (e.g. an elevation) uses a composite `(id, school_id)` key (rule 70).

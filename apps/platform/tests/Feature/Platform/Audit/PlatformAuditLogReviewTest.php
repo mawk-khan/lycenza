@@ -10,6 +10,7 @@ use App\Support\Audit\AuditRecorder;
 use App\Support\Audit\PlatformAuditEventEntry;
 use App\Support\Audit\PlatformAuditEventReader;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -37,7 +38,10 @@ class PlatformAuditLogReviewTest extends TestCase
     private function auditor(): User
     {
         $auditor = $this->createUser();
-        app(PlatformRoleGovernanceService::class)->grant($this->platformAdmin(), $auditor->email, 'platform_auditor');
+        $root = $this->platformAdmin();
+        // ORG.1A (V-2): the grant itself needs the root's fresh code.
+        $request = Request::create('/app/platform/roles/grants', 'POST', ['mfa_code' => $this->issueRecoveryCodes($root, 1)[0]]);
+        app(PlatformRoleGovernanceService::class)->grant($request, $root, $auditor->email, 'platform_auditor');
         $this->enrollActiveMfaFactor($auditor);
 
         return $auditor;

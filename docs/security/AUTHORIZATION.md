@@ -742,7 +742,10 @@ ADR 0045.
   Grants keep history; the database refuses a runtime grant or revocation
   of the root role (`roles.runtime_assignable`,
   `trg_platform_role_assignments_governance`). Every refused grant or
-  revoke is audited as `platform.role_grant.denied`.
+  revoke is audited as `platform.role_grant.denied`. Since ORG.1A (ADR 0076
+  §27) every grant and revoke also needs a fresh MFA code
+  (`FreshMfaRequirement`), re-verified in `PlatformRoleGovernanceService`
+  itself.
 - **Platform audit review** needs `platform.audit.view` (root and
   `platform_auditor`; no School or Group role) **and current MFA
   assurance** (an enrolled factor and a sign-in code within the assurance
@@ -1090,7 +1093,8 @@ No new capability.
   - highly sensitive HR document writes;
   - webhook register, rotate, re-enable and subscribe;
   - Emergency publishing;
-  - Finance period close (since E21.3A).
+  - Finance period close (since E21.3A);
+  - platform-role grant and revoke (since ORG.1A, ADR 0076 §27).
 
 **Current MFA assurance for Highly Sensitive reads:**
 - **The control:** `mfa` / `mfa-page` / `SensitiveReadAssurance`.

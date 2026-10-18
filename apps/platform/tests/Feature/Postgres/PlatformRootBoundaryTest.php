@@ -6,10 +6,12 @@ use App\Domain\Platform\Application\Roles\PlatformRoleGovernanceService;
 use App\Models\PlatformRoleAssignment;
 use App\Models\User;
 use Illuminate\Database\QueryException;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Feature\Auth\Mfa\Concerns\CreatesMfaFixtures;
 use Tests\TestCase;
 
 /**
@@ -21,7 +23,7 @@ use Tests\TestCase;
  */
 class PlatformRootBoundaryTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesMfaFixtures, CreatesTenancyFixtures;
 
     public const REFUSAL = 'only the trusted administrative database role may provision';
 
@@ -102,7 +104,11 @@ class PlatformRootBoundaryTest extends TestCase
         $root = $this->createPlatformRoot();
         $target = $this->createUser();
 
-        $grant = app(PlatformRoleGovernanceService::class)->grant($root, $target->email, 'platform_auditor');
+        // ORG.1A (V-2): the runtime grant re-verifies the root's fresh code.
+        $this->enrollActiveMfaFactor($root);
+        $request = Request::create('/app/platform/roles/grants', 'POST', ['mfa_code' => $this->issueRecoveryCodes($root, 1)[0]]);
+
+        $grant = app(PlatformRoleGovernanceService::class)->grant($request, $root, $target->email, 'platform_auditor');
 
         $this->assertSame($root->id, $grant->granted_by_user_id);
         $this->assertSame(1, DB::table('platform_role_assignments')->where('user_id', $target->id)->whereNull('revoked_at')->count());

@@ -25,7 +25,10 @@ use Illuminate\Support\Carbon;
  * profile fields added in Phase 0D below. No `school.profile.manage`-
  * gated code path may write `status`; see
  * App\Http\Controllers\Api\V1\SchoolProfileController, whose validated
- * field list deliberately excludes it. See
+ * field list deliberately excludes it. ORG.1A (ADR 0076 §24, V-1): `status`
+ * is also NOT fillable, so `create()`/`fill()`/`update()` silently drop it
+ * even if a whitelist ever slips; the lifecycle services write it
+ * explicitly through `forceFill()`. See
  * docs/modules/ORGANIZATION.md ("School operational configuration vs.
  * platform tenant lifecycle").
  *
@@ -56,7 +59,7 @@ class School extends Model
     use GeneratesUuidV7, HasFactory, NormalizesCode;
 
     protected $fillable = [
-        'name', 'slug', 'status', 'timezone', 'default_locale',
+        'name', 'slug', 'timezone', 'default_locale',
         'legal_name', 'code', 'website', 'email', 'phone',
         'address_line1', 'address_line2', 'city', 'state_region', 'postal_code',
         'country_code', 'education_board_id',

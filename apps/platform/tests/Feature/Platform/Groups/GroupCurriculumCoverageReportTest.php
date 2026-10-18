@@ -149,7 +149,7 @@ class GroupCurriculumCoverageReportTest extends TestCase
         $noYear = $this->coverageSchool(5, 5, 'No Year School');
         $this->inDeliverySchool($noYear, fn () => DB::table('academic_years')->where('school_id', $noYear->id)->update(['status' => 'closed']));
         $suspended = $this->coverageSchool(6, 6, 'Suspended School');
-        $suspended->update(['status' => 'suspended']);
+        $suspended->forceFill(['status' => 'suspended'])->save();
         $provisioning = $this->createSchool(['status' => 'provisioning', 'name' => 'Provisioning School']);
         $archived = $this->createSchool(['status' => 'archived', 'name' => 'Archived School']);
         $group = $this->createGroup([$active, $noYear, $suspended, $provisioning, $archived]);

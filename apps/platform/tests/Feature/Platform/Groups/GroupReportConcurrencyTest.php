@@ -40,7 +40,7 @@ class GroupReportConcurrencyTest extends TestCase
     {
         $admin = DB::connection('pgsql_admin');
         $admin->table('platform_audit_events')->whereIn('actor_user_id', $this->userIds)->orWhere('subject_id', $this->groupId)->delete();
-        $admin->table('schools')->whereIn('id', $this->schoolIds)->delete();
+        $this->purgeSchoolsAsAdmin($this->schoolIds); // ORG.1A (V-3): School history is RESTRICT
         $admin->table('group_role_assignments')->where('school_group_id', $this->groupId)->delete();
         $admin->table('school_groups')->where('id', $this->groupId)->delete();
         $admin->table('platform_role_assignments')->whereIn('user_id', $this->userIds)->delete();

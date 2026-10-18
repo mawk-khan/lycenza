@@ -212,10 +212,10 @@ class PartnerApiClientTest extends TestCase
     {
         [$school, , , $credential] = $this->issued();
 
-        $school->update(['status' => 'suspended']);
+        $school->forceFill(['status' => 'suspended'])->save();
         $this->probe($credential)->assertNotFound()->assertJsonPath('error.message', 'Not found.');
 
-        $school->update(['status' => 'active']);
+        $school->forceFill(['status' => 'active'])->save();
         $this->probe($credential)->assertOk();
     }
 

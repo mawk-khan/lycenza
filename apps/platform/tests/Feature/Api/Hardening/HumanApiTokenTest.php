@@ -236,7 +236,7 @@ class HumanApiTokenTest extends TestCase
         $this->bearer($token)->getJson("/api/v1/schools/{$b->id}/context")->assertOk();
 
         // B is suspended: the same 404, no disclosure.
-        $b->update(['status' => 'suspended']);
+        $b->forceFill(['status' => 'suspended'])->save();
         $this->app['auth']->forgetGuards();
         $this->bearer($token)->getJson("/api/v1/schools/{$b->id}/context")->assertNotFound();
     }

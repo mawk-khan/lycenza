@@ -12,6 +12,7 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 use Tests\Concerns\AssertsNavigation;
 
 /**
@@ -140,9 +141,9 @@ abstract class TestCase extends BaseTestCase
 
     /**
      * Phase 0N.9 (ADR 0047 section 12): the runtime role cannot DELETE a
-     * School (147 foreign keys cascade from it), so a committing test
-     * cleans up its School through the administrative connection -- the
-     * one sanctioned test-only path. Never available to application code.
+     * School, so a committing test cleans up its School through the
+     * administrative connection -- the one sanctioned test-only path. Never
+     * available to application code.
      */
     protected function deleteSchoolAsAdmin(School|string|null $school): void
     {
@@ -150,12 +151,57 @@ abstract class TestCase extends BaseTestCase
             return;
         }
 
-        $id = $school instanceof School ? $school->id : $school;
+        $this->purgeSchoolsAsAdmin([$school instanceof School ? $school->id : $school]);
+    }
 
-        // ADR 0054: `school_domains.school_id` is RESTRICT (domain history is
-        // kept); an administrative School deletion removes those rows first.
-        DB::connection('pgsql_admin')->table('school_domains')->where('school_id', $id)->delete();
-        DB::connection('pgsql_admin')->table('schools')->where('id', $id)->delete();
+    /**
+     * ORG.1A (ADR 0076 §24, V-3): audit, accounting, settlement and grant
+     * history are `ON DELETE RESTRICT`, so a School can no longer be removed
+     * by an ordinary cascade (by design: that is the protection). A
+     * committed test fixture School is therefore removed the way
+     * CreatesFinancialPeriodFixtures and PurgesCommittedHrxFixtures already
+     * do it: through the migration role in replica mode (test database
+     * only), every `school_id` row, then the School. Every table that
+     * references a School-owned row carries `school_id` itself. Replica mode
+     * skips the backlog projection triggers, so the projection rows of the
+     * purged deliveries, executions and email are removed explicitly.
+     *
+     * @param  list<string>  $schoolIds
+     */
+    protected function purgeSchoolsAsAdmin(array $schoolIds): void
+    {
+        $schoolIds = array_values(array_filter($schoolIds));
+        if ($schoolIds === []) {
+            return;
+        }
+
+        $admin = DB::connection('pgsql_admin');
+        if ($admin->selectOne('select current_database() as db')->db !== config('database.testing_database')) {
+            throw new RuntimeException('purgeSchoolsAsAdmin() runs only against the test database (CLAUDE.md rule 50).');
+        }
+
+        $admin->transaction(function () use ($admin, $schoolIds): void {
+            $admin->statement("SET LOCAL session_replication_role = 'replica'");
+
+            $projected = [];
+            foreach (['automation_executions', 'communication_deliveries', 'webhook_deliveries', 'email_messages'] as $source) {
+                array_push($projected, ...$admin->table($source)->whereIn('school_id', $schoolIds)->pluck('id')->all());
+            }
+            foreach (array_chunk($projected, 1000) as $chunk) {
+                $admin->table('operational_work_backlog')->whereIn('item_id', $chunk)->delete();
+            }
+
+            $tables = $admin->select(
+                "SELECT c.table_name FROM information_schema.columns c
+                   JOIN pg_class t ON t.relname = c.table_name AND t.relkind = 'r' AND t.relnamespace = 'public'::regnamespace
+                  WHERE c.table_schema = 'public' AND c.column_name = 'school_id'",
+            );
+            foreach ($tables as $row) {
+                $admin->table($row->table_name)->whereIn('school_id', $schoolIds)->delete();
+            }
+
+            $admin->table('schools')->whereIn('id', $schoolIds)->delete();
+        });
     }
 
     /**

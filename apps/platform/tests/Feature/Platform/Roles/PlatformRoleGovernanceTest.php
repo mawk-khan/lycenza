@@ -8,6 +8,7 @@ use App\Models\PlatformRoleAssignment;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\Authorization\CapabilityResolver;
+use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
@@ -20,7 +21,8 @@ use Tests\TestCase;
  * Phase 0N.7 (ADR 0046 sections 3, 4, 6): runtime platform-role governance
  * -- only `platform_auditor`, only by a holder of the root-reserved
  * `platform.role_grants.manage`, never to or by oneself, never the root
- * role, history kept, every refusal audited.
+ * role, history kept, every refusal audited. Since ORG.1A (V-2) every grant
+ * and revoke also re-verifies a fresh code (PlatformRoleGovernanceMfaTest).
  */
 class PlatformRoleGovernanceTest extends TestCase
 {
@@ -29,6 +31,22 @@ class PlatformRoleGovernanceTest extends TestCase
     private function governance(): PlatformRoleGovernanceService
     {
         return app(PlatformRoleGovernanceService::class);
+    }
+
+    /** A request carrying a fresh, single-use recovery code of $actor (ORG.1A, V-2). */
+    private function mfaRequest(User $actor): Request
+    {
+        return Request::create('/app/platform/roles/grants', 'POST', ['mfa_code' => $this->issueRecoveryCodes($actor, 1)[0]]);
+    }
+
+    private function grantAs(User $actor, string $identifier, string $roleKey): PlatformRoleAssignment
+    {
+        return $this->governance()->grant($this->mfaRequest($actor), $actor, $identifier, $roleKey);
+    }
+
+    private function revokeAs(User $actor, PlatformRoleAssignment $assignment): void
+    {
+        $this->governance()->revoke($this->mfaRequest($actor), $actor, $assignment);
     }
 
     private function denials(User $actor): array
@@ -45,7 +63,7 @@ class PlatformRoleGovernanceTest extends TestCase
         $resolver = app(CapabilityResolver::class);
         $this->assertSame([], $resolver->platformCapabilities($person));
 
-        $grant = $this->governance()->grant($root, 'AUDITOR.PERSON@example.test', 'platform_auditor');
+        $grant = $this->grantAs($root, 'AUDITOR.PERSON@example.test', 'platform_auditor');
 
         $this->assertSame($root->id, $grant->granted_by_user_id);
         $this->assertSame(['platform.audit.view'], $resolver->platformCapabilities($person), 'The grant takes effect at once (cache forgotten).');
@@ -54,7 +72,7 @@ class PlatformRoleGovernanceTest extends TestCase
         $this->assertSame($grant->id, $granted->subject_id);
         $this->assertSame($root->id, $granted->actor_user_id);
 
-        $this->governance()->revoke($root, $grant);
+        $this->revokeAs($root, $grant);
 
         $grant->refresh();
         $this->assertNotNull($grant->revoked_at);
@@ -64,13 +82,13 @@ class PlatformRoleGovernanceTest extends TestCase
         $this->assertEquals(['user_id' => $person->id, 'role_key' => 'platform_auditor'], $revoked->metadata);
 
         // Re-granting is a new row; the old one is history.
-        $again = $this->governance()->grant($root, $person->id, 'platform_auditor');
+        $again = $this->grantAs($root, $person->id, 'platform_auditor');
         $this->assertNotSame($grant->id, $again->id);
         $this->assertSame(2, PlatformRoleAssignment::query()->where('user_id', $person->id)->count());
         $this->assertSame(1, PlatformRoleAssignment::query()->where('user_id', $person->id)->active()->count());
 
         try {
-            $this->governance()->revoke($root, $grant->fresh());
+            $this->revokeAs($root, $grant->fresh());
             $this->fail('A revoked grant cannot be revoked again.');
         } catch (ValidationException) {
         }
@@ -85,7 +103,7 @@ class PlatformRoleGovernanceTest extends TestCase
 
         foreach (['platform_super_admin', 'group_admin', 'school_admin', 'no_such_role'] as $key) {
             try {
-                $this->governance()->grant($root, $other->email, $key);
+                $this->grantAs($root, $other->email, $key);
                 $this->fail("{$key} must not be grantable at runtime");
             } catch (ValidationException $e) {
                 $this->assertArrayHasKey('role', $e->errors());
@@ -94,7 +112,7 @@ class PlatformRoleGovernanceTest extends TestCase
 
         $rootAssignment = PlatformRoleAssignment::query()->where('user_id', $otherRoot->id)->firstOrFail();
         try {
-            $this->governance()->revoke($root, $rootAssignment);
+            $this->revokeAs($root, $rootAssignment);
             $this->fail('The root role must not be revocable at runtime.');
         } catch (ValidationException) {
         }
@@ -115,16 +133,16 @@ class PlatformRoleGovernanceTest extends TestCase
         $rootB = $this->platformAdmin();
 
         try {
-            $this->governance()->grant($rootA, $rootA->email, 'platform_auditor');
+            $this->grantAs($rootA, $rootA->email, 'platform_auditor');
             $this->fail('Self-grant must be refused.');
         } catch (ValidationException $e) {
             $this->assertSame(['You cannot grant a platform role to yourself.'], $e->errors()['user']);
         }
 
         // A second root grants A the auditor role; A may not revoke it.
-        $grant = $this->governance()->grant($rootB, $rootA->email, 'platform_auditor');
+        $grant = $this->grantAs($rootB, $rootA->email, 'platform_auditor');
         try {
-            $this->governance()->revoke($rootA, $grant);
+            $this->revokeAs($rootA, $grant);
             $this->fail('Self-revoke must be refused.');
         } catch (ValidationException) {
         }
@@ -141,14 +159,14 @@ class PlatformRoleGovernanceTest extends TestCase
     {
         $root = $this->platformAdmin();
         $auditorUser = $this->createUser();
-        $auditorGrant = $this->governance()->grant($root, $auditorUser->email, 'platform_auditor');
+        $auditorGrant = $this->grantAs($root, $auditorUser->email, 'platform_auditor');
         $group = $this->createGroup([$this->createSchool()]);
         [$schoolAdmin] = $this->createSchoolAdmin('school_admin');
         $target = $this->createUser();
 
         foreach ([$auditorUser, $this->groupAdmin($group), $schoolAdmin] as $actor) {
             try {
-                $this->governance()->grant($actor, $target->email, 'platform_auditor');
+                $this->grantAs($actor, $target->email, 'platform_auditor');
                 $this->fail('Refused without platform.role_grants.manage');
             } catch (AccessDeniedHttpException) {
             }
@@ -174,7 +192,7 @@ class PlatformRoleGovernanceTest extends TestCase
 
         foreach (['nobody@example.test', 'auditor', $disabled->email] as $identifier) {
             try {
-                $this->governance()->grant($root, $identifier, 'platform_auditor');
+                $this->grantAs($root, $identifier, 'platform_auditor');
                 $this->fail("{$identifier} must not resolve to an eligible person");
             } catch (ValidationException $e) {
                 $this->assertArrayHasKey('user', $e->errors());
@@ -182,9 +200,9 @@ class PlatformRoleGovernanceTest extends TestCase
         }
         $this->assertSame([], $this->denials($root), 'Input validation is not an escalation signal.');
 
-        $this->governance()->grant($root, $person->email, 'platform_auditor');
+        $this->grantAs($root, $person->email, 'platform_auditor');
         try {
-            $this->governance()->grant($root, $person->email, 'platform_auditor');
+            $this->grantAs($root, $person->email, 'platform_auditor');
             $this->fail('A second active grant must be refused.');
         } catch (ValidationException) {
         }
@@ -196,7 +214,7 @@ class PlatformRoleGovernanceTest extends TestCase
     {
         $root = $this->platformAdmin();
         $person = $this->createUser(['email' => 'listed.auditor@example.test']);
-        $this->governance()->grant($root, $person->email, 'platform_auditor');
+        $this->grantAs($root, $person->email, 'platform_auditor');
 
         $response = $this->actingAs($root)->get('/app/platform/roles');
         $response->assertOk()->assertInertia(fn (AssertableInertia $p) => $p
@@ -209,7 +227,7 @@ class PlatformRoleGovernanceTest extends TestCase
 
         // The page's POST grants the auditor role whatever a client sends.
         $other = $this->createUser();
-        $this->post('/app/platform/roles/grants', ['user' => $other->email, 'role' => 'platform_super_admin'])->assertRedirect();
+        $this->post('/app/platform/roles/grants', ['user' => $other->email, 'role' => 'platform_super_admin', 'mfa_code' => $this->issueRecoveryCodes($root, 1)[0]])->assertRedirect();
         $this->assertSame(['platform.audit.view'], app(CapabilityResolver::class)->platformCapabilities($other));
 
         $this->get('/app')->assertInertia(fn (AssertableInertia $p) => $p
@@ -223,7 +241,7 @@ class PlatformRoleGovernanceTest extends TestCase
     {
         $root = $this->platformAdmin();
         $auditor = $this->createUser();
-        $this->governance()->grant($root, $auditor->email, 'platform_auditor');
+        $this->grantAs($root, $auditor->email, 'platform_auditor');
         $school = $this->createSchool();
         $group = $this->createGroup([$school]);
         $resolver = app(CapabilityResolver::class);

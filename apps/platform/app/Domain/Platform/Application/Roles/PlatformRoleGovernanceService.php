@@ -6,8 +6,10 @@ use App\Models\PlatformRoleAssignment;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\CapabilityResolver;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -24,8 +26,15 @@ use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
  *
  * Every refusal that reaches this service is audited as
  * `platform.role_grant.denied` (privilege-escalation signals); plain input
- * validation (an unknown or disabled person) is not. A change forgets the
- * target's platform capability cache at once.
+ * validation (an unknown or disabled person, a missing code) is not. A change
+ * forgets the target's platform capability cache at once.
+ *
+ * ORG.1A (ADR 0076 §24, V-2): a grant or revoke also needs a fresh MFA
+ * re-verification of the request's `mfa_code` -- FreshMfaRequirement, the
+ * mechanism every other consequential platform write uses -- checked after
+ * every authorization and assignability check (an unauthorized caller never
+ * burns a code) and outside the transaction (a rollback never un-consumes
+ * one). Stale sign-in assurance is never enough.
  */
 class PlatformRoleGovernanceService
 {
@@ -37,9 +46,10 @@ class PlatformRoleGovernanceService
     public function __construct(
         private readonly CapabilityResolver $capabilities,
         private readonly AuditRecorder $audit,
+        private readonly FreshMfaRequirement $mfa,
     ) {}
 
-    public function grant(User $actor, string $userIdentifier, string $roleKey): PlatformRoleAssignment
+    public function grant(Request $request, User $actor, string $userIdentifier, string $roleKey): PlatformRoleAssignment
     {
         $this->requireCapability($actor, $roleKey, null);
         $role = $this->assignableRole($actor, $roleKey, null);
@@ -48,6 +58,8 @@ class PlatformRoleGovernanceService
         if ($target->id === $actor->id) {
             $this->deny($actor, $target, 'self_grant', $roleKey, 'user', 'You cannot grant a platform role to yourself.');
         }
+
+        $this->requireFreshMfa($request, $actor, $target, $role->key);
 
         try {
             $assignment = DB::transaction(function () use ($actor, $target, $role): PlatformRoleAssignment {
@@ -74,7 +86,7 @@ class PlatformRoleGovernanceService
         return $assignment;
     }
 
-    public function revoke(User $actor, PlatformRoleAssignment $assignment): void
+    public function revoke(Request $request, User $actor, PlatformRoleAssignment $assignment): void
     {
         $role = Role::query()->findOrFail($assignment->role_id);
         $target = User::query()->findOrFail($assignment->user_id);
@@ -85,6 +97,8 @@ class PlatformRoleGovernanceService
         if ($target->id === $actor->id) {
             $this->deny($actor, $target, 'self_revoke', $role->key, 'grant', 'You cannot revoke your own platform role.');
         }
+
+        $this->requireFreshMfa($request, $actor, $target, $role->key);
 
         $revoked = DB::transaction(function () use ($actor, $assignment, $target, $role): bool {
             $updated = PlatformRoleAssignment::query()->whereKey($assignment->id)->active()
@@ -115,6 +129,30 @@ class PlatformRoleGovernanceService
             $this->audit->platform('platform.role_grant.denied', actor: $actor, subject: $target, metadata: $this->deniedMetadata('capability_missing', $roleKey));
 
             throw new AccessDeniedHttpException('This account cannot govern platform roles.');
+        }
+    }
+
+    /**
+     * A fresh re-verification of the request's `mfa_code`. No enrolled
+     * factor, or a code that does not verify now (wrong, reused or expired),
+     * is an audited refusal; a missing code is plain validation, as for the
+     * School lifecycle (ADR 0047 section 7).
+     */
+    private function requireFreshMfa(Request $request, User $actor, User $target, string $roleKey): void
+    {
+        if (! $this->mfa->hasActiveFactor($actor)) {
+            $this->deny($actor, $target, 'mfa_not_enrolled', $roleKey, 'mfa_code', 'This action requires multi-factor authentication. Enroll a factor under Account security first.');
+        }
+
+        $code = $request->input('mfa_code');
+        if (! is_string($code) || trim($code) === '') {
+            throw ValidationException::withMessages(['mfa_code' => 'Enter a current authentication code.']);
+        }
+
+        try {
+            $this->mfa->requireForAction($request, $actor);
+        } catch (ValidationException) {
+            $this->deny($actor, $target, 'mfa_verification_failed', $roleKey, 'mfa_code', 'That code is not valid.');
         }
     }
 

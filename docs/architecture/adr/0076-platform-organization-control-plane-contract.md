@@ -1,9 +1,10 @@
 # ADR 0076: Platform & Organization Control-Plane Contract (ORG.1)
 
 - Status: **Accepted. ORG.1 CONTRACT PUBLISHED (2026-10-17, documentation
-  only).** No code, schema, seed, route, UI or runtime behaviour changes.
-  ORG.1A and every later ORG phase need separate, explicit owner
-  authorization.
+  only). ORG.1A FOUNDATION HARDENING IMPLEMENTED (2026-10-18, §27): V-1 to
+  V-5 closed; three rollback-proven migrations; no new capability, role,
+  route or Organization feature.** ORG.2 and every later ORG phase need
+  separate, explicit owner authorization.
 - Date: 2026-10-17
 - Programme: **ORG — Platform & Organization Foundation**
   (`MASTER-ROADMAP.md`, post-foundation programme 11).
@@ -1038,3 +1039,144 @@ V-3 must land before any future archive or purge contract.
   `App\Domain\Platform\Application\Schools\SchoolLifecycleService`,
   `App\Domain\Platform\Application\Roles\PlatformRoleGovernanceService`,
   `App\Support\Tenancy\TenantContext`.
+
+## 27. ORG.1A — Foundation hardening (implemented, 2026-10-18)
+
+Owner authorization: ORG.1A, scope V-1 to V-5 only (§24). Baseline
+`origin/main` = `e08f9bde` (ORG.1). Nothing else in §23 was started.
+
+### 27.1 V-1 — School status is not mass assignable
+
+- `status` is removed from `School::$fillable`. `create()`, `fill()` and
+  `update()` now drop it, even if a controller whitelist ever slips.
+- `SchoolLifecycleService` writes it explicitly (`forceFill()`) for create,
+  activate, suspend, resume, close and reopen. The database transition
+  trigger is unchanged and stays authoritative.
+- The guarded local demo builder creates its two `active` Schools with
+  `forceCreate()`. `SchoolLifecycleArchitectureGuardTest` also refuses
+  `new School(` and `School::query()->forceCreate(` outside the lifecycle
+  service.
+- The Phase 0D migration comment ("nothing in … `School.php`'s fillable
+  list lets a School-scoped capability touch `status`") was inaccurate
+  before ORG.1A and is now true. That historical migration is not edited.
+
+### 27.2 V-2 — Fresh MFA for platform-role governance
+
+- `PlatformRoleGovernanceService::grant()` and `revoke()` take the request
+  and call `FreshMfaRequirement::requireForAction()`. This is the existing
+  mechanism; no new MFA path is added.
+- **Order:** the call comes after the capability, assignability, target
+  and self-grant checks (an unauthorized caller never burns a code) and
+  outside the transaction (a rollback never un-consumes one).
+- **Refusals:** no enrolled factor is an audited refusal
+  (`mfa_not_enrolled`), and so is a wrong, replayed or used code
+  (`mfa_verification_failed`). A missing code is plain validation. Sign-in
+  assurance alone never suffices, and a refusal changes no assignment.
+- **The Roles page** sends a code with every grant and revoke.
+- **Unchanged:** the allowlist, `roles.runtime_assignable`, the governance
+  trigger, root provisioning out of band, and the read-only Auditor (audit
+  review still needs current assurance only).
+
+### 27.3 V-3 — Protected history fails closed under deletion
+
+- **Inventory at `e08f9bde`:** 211 `school_id → schools` foreign keys
+  cascade and 4 restrict; 5 `users` foreign keys cascade.
+- **Classification:**
+  - A audit;
+  - B accounting;
+  - C receivables and settlement;
+  - D grant history;
+  - E operational, configuration and domain rows, including evidence
+    governed by its own E21 retention contract;
+  - F ephemeral or credential material (idempotency keys, counters, MFA
+    factors, recovery codes, activation and recovery tokens).
+- **The 22 A–D keys** (migration `2026_12_18_090200`) become `ON DELETE
+  RESTRICT` under their own names:
+  - A: `school_audit_events`;
+  - B: `ledger_accounts`, `journal_entries`, `journal_lines`,
+    `financial_periods`, `financial_period_account_balances`,
+    `financial_period_charge_states`, `financial_period_expiries`,
+    `payroll_run_postings`, `payroll_statutory_run_postings`;
+  - C: `charges`, `fee_adjustments`, `payments`, `payment_allocations`,
+    `payment_receipts`, `payment_corrections`, `payment_correction_lines`,
+    `payment_provider_events`;
+  - D: `school_memberships` (School and User),
+    `membership_role_assignments` (School and the composite membership
+    key).
+- **E and F are unchanged** (about 190 School cascades). Account links
+  (identity, not grants), domain evidence such as leave ledgers, mark
+  revisions and staff-attendance corrections, and `school_group_members`
+  were reviewed and left as they are.
+- **Why this does not conflict with retention:**
+  - retention prunes delete these rows directly as the retention role,
+    never through a School or User delete;
+  - the retention guards act only for that role;
+  - no application path deletes Schools, Users or memberships (the runtime
+    role cannot delete Schools or Users).
+- **Evidence the finance graph was already mostly protected:** its rows
+  already refused an ordinary School cascade through internal RESTRICT
+  references (documented in `CreatesFinancialPeriodFixtures`). The School
+  key now makes that explicit for every protected table.
+- **Test support:** committed test fixtures are removed by
+  `TestCase::purgeSchoolsAsAdmin()`. It is the existing replica-mode
+  pattern, test database only, and also removes the backlog projections
+  replica mode skips. `deleteSchoolAsAdmin()` uses it.
+
+### 27.4 V-4 — Audit elevation references are School-bound
+
+- `school_elevations` gains `UNIQUE (id, school_id)`.
+- `school_audit_events_elevation_id_foreign` (single column) is replaced by
+  `school_audit_events_elevation_school_foreign`: `(elevation_id,
+  school_id) → school_elevations(id, school_id)`, still RESTRICT. A NULL
+  elevation stays valid.
+- The migration refuses, with a count, if any row references another
+  School's elevation. None existed on the DDEV development, DDEV test or
+  isolated test databases.
+
+### 27.5 V-5 — Composite SET NULL clears only the relationship
+
+The five constraints keep their names and become `ON DELETE SET NULL
+(<column>)`, so deleting the parent demotes the child and never touches
+`school_id`:
+- `hr_departments` (`campus_id`; `parent_department_id`);
+- `employee_assignments` (`manager_assignment_id`);
+- `communication_messages` (`reply_to_message_id`);
+- `communication_attachments` (`communication_message_id`).
+
+The composite same-School check is unchanged.
+
+### 27.6 Evidence
+
+- **Data preconditions:** zero violating rows on all three databases (§27.4,
+  plus cross-School V-5 references, NULL tenant keys and orphaned
+  memberships).
+- **Rollback (`/rollback-proof 3`):** the schema-only dump is byte-identical
+  before and after re-migration (the rollback removes 37 schema lines);
+  the rolled-back constraint definitions equal the pre-ORG.1A ones exactly
+  (22 V-3 keys, the V-4 single-column key, the 5 whole-key SET NULLs);
+  `platform:verify-database` reports `failed=0`.
+- **Tests:**
+  - new: `SchoolStatusMassAssignmentTest`, `PlatformRoleGovernanceMfaTest`,
+    `ProtectedHistoryDeletionTest`, `SchoolAuditElevationIntegrityTest`,
+    `TenantCompositeSetNullTest`;
+  - affected-area targeted run (Platform, Postgres, Tenancy, Authorization,
+    Audit, Retention, Identity, Compliance): 1,865 tests green after
+    fixture updates;
+  - the exact-SHA `CI gate` carries the canonical full regression (ADR 0072
+    §28.8).
+- **DDEV:** `ddev demo-reset --build` passes, and both demo Schools come up
+  `active`.
+
+### 27.7 Unchanged and still open
+
+- No platform role, capability, Campus authority, entitlement, navigation,
+  SIS or route change; `platform.schools.manage` stays root-reserved.
+- **Remaining ORG findings:**
+  - `platform.schools.view` and `platform.feature_flags.*` are dormant
+    (ORG.3 / ORG.5);
+  - `students.processing_authorizations` is a dead flag (ORG.5);
+  - the runtime role still holds DELETE on `school_memberships`. No code
+    uses it, and grant history is now RESTRICT-protected; revoking it is a
+    candidate for a later hardening pass;
+  - domain-evidence cascades (class E) remain retention-governed.
+- **Next:** ORG.2 (authorization coverage guard) needs owner authorization.

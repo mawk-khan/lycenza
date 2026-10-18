@@ -51,7 +51,7 @@ class SchoolLifecycleConcurrencyTest extends TestCase
         $admin = DB::connection('pgsql_admin');
         $admin->table('school_elevations')->whereIn('school_id', $this->schoolIds)->orWhereIn('actor_user_id', $this->userIds)->delete();
         $admin->table('platform_audit_events')->whereIn('actor_user_id', $this->userIds)->orWhereIn('subject_id', $this->schoolIds)->delete();
-        $admin->table('schools')->whereIn('id', $this->schoolIds)->delete();
+        $this->purgeSchoolsAsAdmin($this->schoolIds); // ORG.1A (V-3): School history is RESTRICT
         $admin->table('platform_role_assignments')->whereIn('user_id', $this->userIds)->delete();
         $admin->table('user_mfa_recovery_codes')->whereIn('user_id', $this->userIds)->delete();
         $admin->table('user_mfa_factors')->whereIn('user_id', $this->userIds)->delete();

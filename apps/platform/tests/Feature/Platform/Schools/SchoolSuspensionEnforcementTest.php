@@ -66,12 +66,12 @@ class SchoolSuspensionEnforcementTest extends TestCase
 
     private function suspend(School $school): void
     {
-        $school->update(['status' => 'suspended']);
+        $school->forceFill(['status' => 'suspended'])->save();
     }
 
     private function resume(School $school): void
     {
-        $school->update(['status' => 'active']);
+        $school->forceFill(['status' => 'active'])->save();
     }
 
     // --- Communications -------------------------------------------------------------

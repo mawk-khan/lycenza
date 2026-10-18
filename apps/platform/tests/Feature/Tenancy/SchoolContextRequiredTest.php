@@ -281,7 +281,7 @@ class SchoolContextRequiredTest extends TestCase
     {
         [$user, $school] = $this->selectedMember();
 
-        $school->update(['status' => 'suspended']);
+        $school->forceFill(['status' => 'suspended'])->save();
 
         $this->assertStaleSelectionHandled($user);
 

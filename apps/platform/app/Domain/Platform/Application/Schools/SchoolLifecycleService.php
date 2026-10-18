@@ -55,12 +55,9 @@ class SchoolLifecycleService
 
         try {
             return DB::transaction(function () use ($actor, $target, $name, $slug, $schoolCode): School {
-                $school = School::query()->create([
-                    'name' => $name,
-                    'slug' => $slug,
-                    'code' => $schoolCode,
-                    'status' => SchoolStatus::Provisioning->value,
-                ]);
+                // `status` is not fillable (ORG.1A, V-1): written explicitly.
+                $school = new School(['name' => $name, 'slug' => $slug, 'code' => $schoolCode]);
+                $school->forceFill(['status' => SchoolStatus::Provisioning->value])->save();
 
                 $membership = $this->bootstrap->establish($school, $target, $actor);
 
@@ -108,7 +105,7 @@ class SchoolLifecycleService
                 return $this->authority->missingAdministratorOutcome($locked);
             }
 
-            $locked->update(['status' => SchoolStatus::Active->value]);
+            $locked->forceFill(['status' => SchoolStatus::Active->value])->save();
             $this->transitionAudit(SchoolLifecycleAudit::ACTIVATED, $actor, $locked, SchoolStatus::Provisioning, SchoolStatus::Active);
 
             return null;
@@ -147,7 +144,7 @@ class SchoolLifecycleService
                 return 'invalid_transition';
             }
 
-            $locked->update(['status' => SchoolStatus::Suspended->value]);
+            $locked->forceFill(['status' => SchoolStatus::Suspended->value])->save();
             $this->transitionAudit(SchoolLifecycleAudit::SUSPENDED, $actor, $locked, SchoolStatus::Active, SchoolStatus::Suspended, ['reason_code' => $reason->value]);
 
             $this->elevations->terminateWhere(
@@ -185,7 +182,7 @@ class SchoolLifecycleService
                 return 'invalid_transition';
             }
 
-            $locked->update(['status' => SchoolStatus::Active->value]);
+            $locked->forceFill(['status' => SchoolStatus::Active->value])->save();
             $this->transitionAudit(SchoolLifecycleAudit::RESUMED, $actor, $locked, SchoolStatus::Suspended, SchoolStatus::Active);
 
             return null;

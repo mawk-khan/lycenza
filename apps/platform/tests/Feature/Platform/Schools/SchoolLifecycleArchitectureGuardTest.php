@@ -82,7 +82,7 @@ class SchoolLifecycleArchitectureGuardTest extends TestCase
             $relative = Str::after($file, base_path().'/');
 
             if ($relative !== 'app/Domain/Platform/Application/Schools/SchoolLifecycleService.php') {
-                foreach (['School::query()->create(', 'School::create(', 'School::forceCreate(', "table('schools')->insert"] as $creation) {
+                foreach (['School::query()->create(', 'School::query()->forceCreate(', 'School::create(', 'School::forceCreate(', 'new School(', "table('schools')->insert"] as $creation) {
                     $this->assertStringNotContainsString($creation, $source, "{$relative} must not create a School");
                 }
             }

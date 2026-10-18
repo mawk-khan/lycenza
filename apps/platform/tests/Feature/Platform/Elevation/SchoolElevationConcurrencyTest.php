@@ -36,6 +36,8 @@ class SchoolElevationConcurrencyTest extends TestCase
         // Elevation rows are undeletable for the runtime role (evidence);
         // clean up this test's committed rows as the admin role.
         $admin = DB::connection('pgsql_admin');
+        // ORG.1A (V-3): School history is RESTRICT, so the Schools go first, purged.
+        $this->purgeSchoolsAsAdmin(array_map(fn ($school) => $school->id, $this->schools));
         if ($this->actor !== null) {
             $admin->table('school_elevations')->where('actor_user_id', $this->actor->id)->delete();
             $admin->table('platform_audit_events')->where('actor_user_id', $this->actor->id)->delete();
@@ -43,9 +45,6 @@ class SchoolElevationConcurrencyTest extends TestCase
             $admin->table('user_mfa_recovery_codes')->where('user_id', $this->actor->id)->delete();
             $admin->table('user_mfa_factors')->where('user_id', $this->actor->id)->delete();
             $admin->table('users')->where('id', $this->actor->id)->delete();
-        }
-        foreach ($this->schools as $school) {
-            $admin->table('schools')->where('id', $school->id)->delete();
         }
 
         parent::tearDown();

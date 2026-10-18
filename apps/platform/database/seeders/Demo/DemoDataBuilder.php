@@ -205,7 +205,9 @@ final class DemoDataBuilder
 
     private function buildSchoolsAndStaffAccounts(): void
     {
-        $this->school = School::query()->create([
+        // `status` is not fillable (ORG.1A, V-1): the guarded local demo
+        // creates its operational Schools `active` explicitly.
+        $this->school = School::query()->forceCreate([
             'name' => 'Lycenza Demo School',
             'slug' => self::SCHOOL_SLUG,
             'status' => 'active',
@@ -222,7 +224,7 @@ final class DemoDataBuilder
             'country_code' => 'IN',
         ]);
 
-        $this->secondSchool = School::query()->create([
+        $this->secondSchool = School::query()->forceCreate([
             'name' => 'Lycenza Demo Annexe School',
             'slug' => self::SECOND_SCHOOL_SLUG,
             'status' => 'active',

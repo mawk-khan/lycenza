@@ -41,6 +41,8 @@ class GroupAuthorityConcurrencyTest extends TestCase
     {
         $admin = DB::connection('pgsql_admin');
         $userIds = array_map(fn (User $u) => $u->id, $this->users);
+        // ORG.1A (V-3): School history is RESTRICT, so the Schools go first, purged.
+        $this->purgeSchoolsAsAdmin(array_map(fn ($school) => $school->id, $this->schools));
 
         $admin->table('school_elevations')->whereIn('actor_user_id', $userIds)->delete();
         if ($this->group !== null) {
@@ -53,9 +55,6 @@ class GroupAuthorityConcurrencyTest extends TestCase
         $admin->table('user_mfa_recovery_codes')->whereIn('user_id', $userIds)->delete();
         $admin->table('user_mfa_factors')->whereIn('user_id', $userIds)->delete();
         $admin->table('users')->whereIn('id', $userIds)->delete();
-        foreach ($this->schools as $school) {
-            $admin->table('schools')->where('id', $school->id)->delete();
-        }
 
         parent::tearDown();
     }

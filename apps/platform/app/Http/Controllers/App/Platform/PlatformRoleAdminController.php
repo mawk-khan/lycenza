@@ -45,14 +45,14 @@ class PlatformRoleAdminController extends Controller
 
     public function grant(Request $request): RedirectResponse
     {
-        $this->governance->grant($request->user(), (string) $request->input('user'), self::ROLE);
+        $this->governance->grant($request, $request->user(), (string) $request->input('user'), self::ROLE);
 
         return back();
     }
 
     public function revoke(Request $request, PlatformRoleAssignment $assignment): RedirectResponse
     {
-        $this->governance->revoke($request->user(), $assignment);
+        $this->governance->revoke($request, $request->user(), $assignment);
 
         return back();
     }

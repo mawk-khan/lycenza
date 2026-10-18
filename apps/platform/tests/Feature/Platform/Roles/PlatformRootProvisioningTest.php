@@ -8,6 +8,7 @@ use App\Models\PlatformRoleAssignment;
 use App\Models\User;
 use App\Support\Authorization\CapabilityResolver;
 use Illuminate\Database\QueryException;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -202,7 +203,7 @@ class PlatformRootProvisioningTest extends TestCase
 
         // The governance service refuses to grant it...
         try {
-            app(PlatformRoleGovernanceService::class)->grant($root->fresh(), $target->email, $roleKey);
+            app(PlatformRoleGovernanceService::class)->grant(Request::create('/app/platform/roles/grants', 'POST'), $root->fresh(), $target->email, $roleKey);
             $this->fail('The runtime grant path must refuse the root role.');
         } catch (ValidationException $e) {
             $this->assertArrayHasKey('role', $e->errors());
