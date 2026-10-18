@@ -796,7 +796,14 @@ whole-School supersedes. A selected or current Campus
     with the returned `CampusScope`: SQL `campus_id IN (…)`, NULL-Campus
     records whole-School only, out of scope = 404;
   - route coverage class C6 proves both.
-- **Adopted in ORG.7A:** `visitor.visits.*` and `inventory.stock.*`.
+- **Adopted in ORG.7A:** `visitor.visits.*` and `inventory.stock.*`. ORG.7B
+  (§34) audited HR, Admissions, Communications, Fees, Payments and Canteen
+  and deferred each one with recorded decision points; it adopted nothing
+  new.
+- **Refusals look the same.** A Campus-scoped actor's refusals do not
+  differ between an in-scope and an out-of-scope conflict (Visitor
+  check-in: one generic refusal; the School-wide one-active-Visit rule
+  still reveals "busy somewhere", never where).
   Every other capability of a Campus-scoped role confers nothing from that
   grant.
 - **Granting:**

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\App;
 
 use App\Domain\HR\Infrastructure\Employee;
+use App\Domain\Visitor\Application\Exceptions\ConcurrentCheckInConflictException;
 use App\Domain\Visitor\Application\Exceptions\HostEmployeeNotEligibleException;
 use App\Domain\Visitor\Application\Exceptions\VisitAlreadyCheckedOutException;
 use App\Domain\Visitor\Application\Exceptions\VisitorAlreadyCheckedInException;
@@ -141,8 +142,16 @@ class VisitorVisitController extends Controller
 
         try {
             $service->checkIn($visitor, $campus, $host, $validated['purpose'], $validated['gate_pass_number'] ?? null, $context->actor());
-        } catch (VisitorNotEligibleException|VisitorAlreadyCheckedInException $e) {
+        } catch (VisitorNotEligibleException $e) {
             throw ValidationException::withMessages(['visitor_id' => [$e->getMessage()]]);
+        } catch (VisitorAlreadyCheckedInException|ConcurrentCheckInConflictException $e) {
+            // ORG.7B: a Campus-scoped actor sees one generic refusal (never where the Visit is).
+            $shown = $access->concealCheckInConflict($scope, $e);
+            if ($shown instanceof ConcurrentCheckInConflictException) {
+                throw $shown;
+            }
+
+            throw ValidationException::withMessages(['visitor_id' => [$shown->getMessage()]]);
         } catch (HostEmployeeNotEligibleException $e) {
             throw ValidationException::withMessages(['host_employee_id' => [$e->getMessage()]]);
         }

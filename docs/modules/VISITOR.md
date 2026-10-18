@@ -565,3 +565,11 @@ the visit. Project-adopted, pending legal ratification (`docs/security/E21-RETEN
   phone; active host Employees: names) answer a Campus-scoped holder.
 - **One access class.** All reads and targets go through
   `App\Domain\Visitor\Application\VisitorVisitAccess`.
+- **ORG.7B (ADR 0076 §34):**
+  - A Campus-scoped holder's check-in conflict is one generic refusal
+    (`VISITOR_CHECK_IN_UNAVAILABLE`, 409). It is never "already checked
+    in" and never where. Residual: since a Visitor has one active Visit
+    School-wide, the refusal still shows the Visitor is busy somewhere.
+  - The two shared lookups are owner-approved and pinned minimal:
+    Visitors with id, name and phone; hosts with id and display name, no
+    HR authority.

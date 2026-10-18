@@ -2,6 +2,10 @@
 
 namespace App\Domain\Visitor\Application;
 
+use App\Domain\Visitor\Application\Exceptions\ConcurrentCheckInConflictException;
+use App\Domain\Visitor\Application\Exceptions\VisitorAlreadyCheckedInException;
+use App\Domain\Visitor\Application\Exceptions\VisitorCheckInUnavailableException;
+use App\Domain\Visitor\Application\Exceptions\VisitorException;
 use App\Domain\Visitor\Infrastructure\VisitorVisit;
 use App\Models\Campus;
 use App\Support\Authorization\Campus\CampusScope;
@@ -44,6 +48,18 @@ final class VisitorVisitAccess
         $campus = Str::isUuid($campusId) && $scope->covers($campusId) ? Campus::query()->find($campusId) : null;
 
         return $campus ?? throw (new ModelNotFoundException)->setModel(Campus::class, [$campusId]);
+    }
+
+    /**
+     * ORG.7B (ADR 0076 §34): a check-in conflict seen by a Campus-scoped
+     * actor is always the same generic refusal -- whether the active Visit is
+     * in their scope or not -- so the answer never contrasts an in-scope
+     * conflict with an out-of-scope one. Whole-School actors keep the
+     * specific message.
+     */
+    public function concealCheckInConflict(CampusScope $scope, VisitorAlreadyCheckedInException|ConcurrentCheckInConflictException $e): VisitorException
+    {
+        return $scope->isWholeSchool() ? $e : new VisitorCheckInUnavailableException;
     }
 
     /** @return list<array{id: string, name: string}> the Campuses offered for a new Visit */

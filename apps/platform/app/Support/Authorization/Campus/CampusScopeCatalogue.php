@@ -30,7 +30,7 @@ final class CampusScopeCatalogue
             'label' => 'Visitor check-in and visits',
             'nullCampus' => 'None: every Visit has a Campus (visitor_visits.campus_id NOT NULL).',
             'inactiveCampus' => 'A grant on an inactive Campus confers nothing (no read, no new Visit, no check-out); whole-School holders keep every Visit.',
-            'sharedLookups' => 'The check-in lookups of the School-wide Visitor directory (active Visitors: id, name, phone) and of active host Employees (id, name) answer a Campus-scoped visits.manage holder; the directory itself (visitor.directory.*) stays School-only.',
+            'sharedLookups' => 'Owner-approved (ORG.7B): the check-in lookup of the School-wide Visitor directory (active Visitors: id, name, phone -- no other field without a privacy review) and the host lookup (active Employees: id and display name only, no HR authority; re-evaluated when HR adopts Campus scope) answer a Campus-scoped visits.manage holder. The directory itself (visitor.directory.*) stays School-only. A check-in conflict seen by a Campus-scoped holder is one generic refusal that never names where the other Visit is (it still reveals the Visitor is busy somewhere in the School).',
         ],
         'inventory' => [
             'label' => 'Inventory stock',

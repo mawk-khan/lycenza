@@ -178,4 +178,55 @@ class VisitorCampusScopeTest extends TestCase
     {
         return app(TenantContext::class)->withSchool($this->school, fn () => VisitorVisit::query()->findOrFail($this->visits[$key]->id)->status);
     }
+
+    #[Test]
+    public function a_campus_scoped_check_in_conflict_never_discloses_another_campus(): void
+    {
+        $user = $this->frontOffice([$this->a->id]);
+        $busyElsewhere = $this->visits['b']->visitor_id;   // checked in at South Campus
+        $busyHere = $this->visits['a']->visitor_id;        // checked in at North Campus
+
+        $responses = [];
+        foreach (['elsewhere' => $busyElsewhere, 'here' => $busyHere] as $key => $visitorId) {
+            $responses[$key] = $this->withHeader('Authorization', 'Bearer '.$this->token($user))->withHeader('Idempotency-Key', "campus-conflict-{$key}")
+                ->postJson("/api/v1/schools/{$this->school->id}/visitor-visits", ['visitor_id' => $visitorId, 'campus_id' => $this->a->id, 'purpose' => 'Meeting'])
+                ->assertStatus(409);
+        }
+        // Identical refusals: an in-scope conflict and an out-of-scope one cannot be told apart.
+        $error = fn (string $key): array => array_diff_key($responses[$key]->json('error'), ['requestId' => true]);
+        $this->assertSame($error('here'), $error('elsewhere'));
+        $body = (string) $responses['elsewhere']->getContent();
+        foreach (['South Campus', $this->b->id, $this->visits['b']->id, 'already', 'elsewhere', 'active'] as $leak) {
+            $this->assertStringNotContainsStringIgnoringCase($leak, $body);
+        }
+
+        // Web: the same generic message, nothing about where.
+        $this->actingAs($user)->post("/app/schools/{$this->school->id}/activate");
+        $this->post('/app/visitor/visits', ['visitor_id' => $busyElsewhere, 'campus_id' => $this->a->id, 'purpose' => 'Meeting'])
+            ->assertSessionHasErrors(['visitor_id' => 'This Visitor cannot be checked in right now.']);
+
+        // A whole-School actor keeps the specific message.
+        $whole = $this->frontOffice([null]);
+        $this->withHeader('Authorization', 'Bearer '.$this->token($whole))->withHeader('Idempotency-Key', 'campus-conflict-whole')
+            ->postJson("/api/v1/schools/{$this->school->id}/visitor-visits", ['visitor_id' => $busyElsewhere, 'campus_id' => $this->a->id, 'purpose' => 'Meeting'])
+            ->assertStatus(422)->assertJsonPath('error.code', 'VISITOR_ALREADY_CHECKED_IN');
+    }
+
+    #[Test]
+    public function the_shared_check_in_lookups_stay_minimal(): void
+    {
+        // ORG.7B (owner-approved contract): Visitors id/name/phone; hosts id/display name only.
+        $this->createEmployee($this->school, ['full_name' => 'Host Person', 'record_status' => 'active']);
+        $user = $this->frontOffice([$this->a->id]);
+        $this->actingAs($user)->post("/app/schools/{$this->school->id}/activate");
+
+        foreach ($this->getJson('/app/visitor/visits/search/visitors?q=')->assertOk()->json('data') as $row) {
+            $this->assertSame(['id', 'fullName', 'phone'], array_keys($row));
+        }
+        $hosts = $this->getJson('/app/visitor/visits/search/hosts?q=Host')->assertOk()->json('data');
+        $this->assertNotEmpty($hosts);
+        foreach ($hosts as $row) {
+            $this->assertSame(['id', 'fullName'], array_keys($row));
+        }
+    }
 }

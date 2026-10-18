@@ -167,3 +167,7 @@ School setting, a role, a navigation toggle or a commercial plan.
   administrator role is never Campus-scoped.
 - **Inactivating a Campus** deletes and revokes nothing. Its scoped grants
   confer no work until it is reactivated, and new grants cannot target it.
+- **ORG.7B (ADR 0076 §34)** reviewed HR, Admissions, Communications, Fees,
+  Payments and Canteen and deferred them. Each needs an owner decision, or
+  Student-Campus semantics from the SIS wave, before a Campus grant can
+  work there.

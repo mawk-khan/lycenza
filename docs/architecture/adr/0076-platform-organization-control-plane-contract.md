@@ -27,7 +27,11 @@
   (2026-10-18, §33): optional `campus_id` scope on School role assignments
   (NULL = whole School, unchanged), scope-aware resolver path, Campus scope
   adopted for Visitor visits and Inventory stock; Hostel, Transport and
-  Library deferred (Student lookup needs the SIS wave).** ORG.7B and every
+  Library deferred (Student lookup needs the SIS wave). ORG.7B SECOND
+  ADOPTION WAVE CLOSED (2026-10-18, §34): Visitor cross-Campus check-in
+  disclosure removed, shared lookups pinned minimal; HR, Admissions,
+  Communications, Fees, Payments and Canteen audited and DEFERRED with
+  recorded decision points; no new capability adopted.** ORG.7C and every
   later ORG phase need separate, explicit owner authorization.
 - Date: 2026-10-17
 - Programme: **ORG — Platform & Organization Foundation**
@@ -2266,3 +2270,78 @@ not started.
 - Module entitlements stay per School and are applied before Campus scope.
 - SIS is unchanged, and LC-5–LC-10 remain paused.
 - Group authority is unchanged.
+
+## 34. ORG.7B — Campus second adoption wave (implemented, 2026-10-18)
+
+Owner authorization: ORG.7B only. Baseline `origin/main` = `fe6ab5a7`
+(ORG.7A). The ORG.7A invariants (§33) are unchanged; no ORG.7C or ORG.7D
+work was started.
+
+### 34.1 Visitor hardening and owner-approved lookup contracts
+
+- **Check-in conflict concealment.** A Campus-scoped actor's check-in
+  conflict is now one generic refusal (`VISITOR_CHECK_IN_UNAVAILABLE`,
+  409, "This Visitor cannot be checked in right now."). It applies:
+  - whether the other active Visit is in their scope or not, so the
+    response itself is identical in both cases;
+  - to a concurrent check-in too.
+
+  The response never names another Campus, Visit or state. Whole-School
+  actors keep the specific messages.
+- **Accepted residual (owner to confirm).** A Visitor has at most one
+  active Visit in the whole School (unchanged rule). So a refused check-in
+  still tells the actor that the Visitor is busy somewhere. Combined with
+  their own empty in-scope Visit list, they can infer "somewhere outside
+  my Campuses", though never where, which Visit or its state. Closing it
+  would need a per-Campus active-Visit rule, which was not chosen.
+- **Pre-existing, recorded.** `gate_pass_number` is unique School-wide,
+  so a Campus actor can learn that a gate-pass number has already been
+  used somewhere. `VisitorVisitAccess::concealCheckInConflict()`
+  is used by both controllers, and the test is
+  `VisitorCampusScopeTest::a_campus_scoped_check_in_conflict_never_discloses_another_campus`.
+- **Visitor directory lookup (approved).** A School-wide shared reference
+  for check-in only: active Visitors with id, name and phone. Any further
+  field needs a privacy review. It is never Campus operational authority;
+  the directory capabilities stay School-only.
+- **Host lookup (approved, temporary).** Active Employees, id and display
+  name only. It confers no HR authority, and is re-evaluated when HR
+  adopts Campus scope. Both lookups' fields are pinned by
+  `the_shared_check_in_lookups_stay_minimal`.
+- **Rollback contract (confirmed, unchanged).** Before any Campus-scoped
+  grant exists, `2026_12_21_090000` rolls back exactly (pristine proof,
+  ORG.7A). After any current or historical Campus grant exists, rollback
+  refuses rather than widen authority (post-use proof, ORG.7A, on DDEV).
+  Future Campus migrations follow the same rule. ORG.7B has no migration.
+
+### 34.2 Domain audits (mini-contracts)
+
+| Candidate | Campus in the data | Decision | Why (the open decision) |
+|---|---|---|---|
+| **HR** | `employee_assignments.campus_id` (optional; `is_primary`, dated); `hr_departments.campus_id` (optional); no Campus on `employees` | **Deferred** | An Employee's Campus is derived and may be multi-valued or empty. Owner decisions needed: primary vs any current assignment; a newly created Employee has no assignment, so a Campus actor could not see whom they created; whether `hr.employees.sensitive.*`, personal, document and note capabilities are ever Campus-adoptable; ended employment and history. Departments are School HR configuration (whole-School). Self-protection and grant rights stay as they are. |
+| **Admissions** | `admission_applications.campus_id` NOT NULL; `applicants` have no Campus | **Deferred** | `admissions.view` / `.manage` each cover applicants (people with no Campus until an application exists), applications, the Guardian search (School-wide Guardian records) and conversion (`AdmissionConversionService` creates Student, Guardian, relationship and enrollment: SIS, ORG.7D). Needed: an applicant visibility rule, and whether conversion and Guardian search stay whole-School-only operations of an adopted key. |
+| **Communications** | `communication_announcements` and `communication_threads` `campus_id` (optional) | **Deferred** | The tag is informational by contract: audiences ignore it, and no reliable Campus↔membership relationship exists (`SchoolWideAudienceResolver`). Treating it as authority would reinterpret history. |
+| **Fees** | `fee_structures.campus_id` (optional override); `fee_assessment_run_items.campus_id` (snapshot); none on `charges` | **Deferred** | A structure's override applies to candidates drawn from Student enrollments, and the School default (no Campus) spans every Campus without an override. A charge's Campus is therefore only derivable through SIS. The structure capabilities also govern School-wide fee heads. |
+| **Payments** | none | **Deferred** | Campus is only a derived filter via the Student (SIS). A request filter is never authority. The ledger stays whole-School. |
+| **Canteen** | `canteen_outlets.campus_id` (optional) | **Deferred** | Orders target Students and post charges through Fees (`ChargeService`), which stays whole-School. Adopting would need Student lookup and Fees Campus semantics. |
+
+- **No adoptions this wave.** No capability was added to
+  `CampusScopeCatalogue` in ORG.7B. Adopted capabilities remain
+  `visitor.visits.*` and `inventory.stock.*`.
+- **No hidden SIS.** No generic Campus Student search was created.
+  Hostel, Transport and Library stay deferred (§33.3).
+- **When later waves adopt.** Existing Campus-scoped grants automatically
+  become useful for each newly adopted capability family. That is
+  expected, and grants are never rewritten.
+
+### 34.3 Campus-status cost (evaluated, not changed)
+
+- **The cost.** A Campus-scoped request makes a constant number of small
+  Campus-status reads (§33: Visitor 22 queries against 10 for a
+  whole-School actor).
+- **The fix considered.** A per-request memo would need a scoped container
+  binding whose reset must be proven in queue workers and in multi-request
+  tests. That reset is what keeps an inactivation effective in the next
+  request.
+- **Decision.** The status stays re-read on every call. The cost is
+  bounded and not per row, and correctness is preferred to the saving.
+  The 60-second authorization cache is not extended to Campus status.

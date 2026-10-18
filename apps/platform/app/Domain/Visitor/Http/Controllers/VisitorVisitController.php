@@ -3,6 +3,8 @@
 namespace App\Domain\Visitor\Http\Controllers;
 
 use App\Domain\HR\Infrastructure\Employee;
+use App\Domain\Visitor\Application\Exceptions\ConcurrentCheckInConflictException;
+use App\Domain\Visitor\Application\Exceptions\VisitorAlreadyCheckedInException;
 use App\Domain\Visitor\Application\VisitorVisitAccess;
 use App\Domain\Visitor\Application\VisitorVisitService;
 use App\Domain\Visitor\Infrastructure\Visitor;
@@ -84,7 +86,12 @@ class VisitorVisitController extends Controller
         $campus = $access->campusForNewVisit($scope, $validated['campus_id']);
         $host = isset($validated['host_employee_id']) ? Employee::query()->findOrFail($validated['host_employee_id']) : null;
 
-        $visit = $service->checkIn($visitor, $campus, $host, $validated['purpose'], $validated['gate_pass_number'] ?? null, $request->user());
+        try {
+            $visit = $service->checkIn($visitor, $campus, $host, $validated['purpose'], $validated['gate_pass_number'] ?? null, $request->user());
+        } catch (VisitorAlreadyCheckedInException|ConcurrentCheckInConflictException $e) {
+            // ORG.7B: a Campus-scoped actor sees one generic refusal (never where the Visit is).
+            throw $access->concealCheckInConflict($scope, $e);
+        }
 
         return response()->json(['data' => $this->present($visit->load(['visitor', 'campus', 'hostEmployee']))], 201);
     }

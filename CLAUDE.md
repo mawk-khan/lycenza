@@ -1305,3 +1305,7 @@ once several modules copy it.
      - **Never authority:** a context or selected Campus
        (`TenantContext::campus()`). It is a filter, intersected with the
        scope.
+     - **Refusals look the same in and out of scope.** A Campus-scoped
+       actor's refusal never differs between an in-scope and an
+       out-of-scope conflict, and never names another Campus, record or
+       state (the Visitor check-in standard, ORG.7B §34).
