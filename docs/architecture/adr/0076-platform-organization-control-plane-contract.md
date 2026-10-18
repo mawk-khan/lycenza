@@ -31,8 +31,11 @@
   ADOPTION WAVE CLOSED (2026-10-18, §34): Visitor cross-Campus check-in
   disclosure removed, shared lookups pinned minimal; HR, Admissions,
   Communications, Fees, Payments and Canteen audited and DEFERRED with
-  recorded decision points; no new capability adopted.** ORG.7C and every
-  later ORG phase need separate, explicit owner authorization.
+  recorded decision points; no new capability adopted. ORG.7C ACADEMIC & SIS
+  CAMPUS DEPENDENCY AUDIT DONE (2026-10-18, §35, read-only): proposed
+  Student, HR and Admissions Campus contracts, capability matrix, defects
+  found (not fixed), recommended sequence.** The next ORG phase needs
+  separate, explicit owner authorization.
 - Date: 2026-10-17
 - Programme: **ORG — Platform & Organization Foundation**
   (`MASTER-ROADMAP.md`, post-foundation programme 11).
@@ -537,6 +540,10 @@ later decision.
   there.
 - **Derived Campus** (e.g. `student_enrollments.campus_id` from the
   Section) uses the stored, FK-consistent column as authoritative.
+  *(ORG.7C correction, §35.1: the column is stored and Campus-FK'd, but the
+  database does not yet bind it to its Section. Consistency is enforced
+  only in `StudentEnrollmentService`, and binding it is a prerequisite
+  before any Student-dependent adoption.)*
 - **Students:** a Student's Campus visibility derives from enrollments. A
   Student with no current enrollment is visible only to whole-School
   scope, unless the SIS adoption (ORG.7, last) decides otherwise.
@@ -2345,3 +2352,266 @@ work was started.
 - **Decision.** The status stays re-read on every call. The cost is
   bounded and not per row, and correctness is preferred to the saving.
   The 60-second authorization cache is not extended to Campus status.
+
+## 35. ORG.7C — Academic & SIS Campus dependency audit (read-only, 2026-10-18)
+
+Owner authorization: a read-only contract audit only; no implementation.
+Baseline `origin/main` = `39ba0bab` (ORG.7B). Evidence: live schema
+(`\d`, `pg_proc` on the test database), services, triggers, tests and
+`route:list`. No production code changed.
+
+**Owner decision recorded.** The Visitor residual (§34.1: the School-wide
+one-active-Visit rule reveals "busy somewhere") is accepted as LOW.
+`VISITOR_CHECK_IN_UNAVAILABLE` stays the external behaviour. The
+uniqueness rule and School-wide gate-pass uniqueness are unchanged.
+
+### 35.1 Student and enrollment reality
+
+- **`students`.** No Campus. Status `active`/`inactive` only, with no CHECK
+  and no alumni state. A Student can exist with no enrollment
+  (`StudentService::create`); Admissions conversion creates Student and
+  enrollment atomically.
+- **`student_enrollments`.** `campus_id` is NOT NULL and Campus-FK'd, but
+  it is **not** bound to the Section: there are separate `(campus_id,
+  school_id)` and `(section_id, school_id)` keys, and no FK to
+  `sections_context_unique`. It is set from the Section in code only.
+  `school_os_app` can UPDATE every placement column; the retention guard
+  freezes id, school, student and `starts_on` only. Section Campus is
+  immutable in code only.
+- **At most one `active` enrollment per (Student, academic year)**
+  (`student_enrollments_one_active_per_student_year`), deliberately not
+  global. Rollover leaves the source row active and creates the target
+  one, and closing a year never ends its placements, so **two active
+  placements in two years, possibly in two Campuses, are normal.**
+- **No status CHECK, no date-overlap exclusion.** Student status and
+  enrollment status are independent.
+- **"Current" has five or more resolvers that disagree:**
+  - `StudentEnrollmentReadService::currentFor` (active row in the School's
+    active year) is the canonical one;
+  - `campusAttribution` (charge-year attribution, LC-4);
+  - `StudentEnrollmentFeeTargetReadService::currentForYear` (open and not
+    cancelled);
+  - the roster service (as of a date, any status);
+  - ad-hoc readers (Communication Hub: any active row, no year;
+    OutstandingFees: a direct model read).
+- **Transfer.** `transferPlacement()` works within a year and a grade, may
+  change Campus, and ends the source row as `transferred` and creates a
+  new one. There is no separate Campus transfer. In-place `campus_id`
+  edits are not done by code, but are not blocked by the database.
+- **Promotion** (rollover) creates target-year rows. The target Campus is
+  the target Section's.
+- **Leavers.** `students.status = 'inactive'`. Retention exit needs
+  inactive plus no open placement plus a terminal last placement.
+- **Guardian scope** (`GuardianStudentScope`): legal-guardian relationship,
+  active Student and Guardian. No Campus or enrollment condition.
+  (Finding: its docblock claims withdrawn/transferred Students are
+  excluded; they are not, while `students.status` is active.)
+
+### 35.2 Proposed canonical Student Campus contract (not implemented)
+
+1. **Student identity is School-wide, never Campus-owned.** The
+   enrollment is the Campus-bound relationship.
+2. **Operational Campus** = the Campus of the Student's `active`
+   enrollment in the School's **active** academic year: one value or none,
+   from one Students-owned resolver used by every consumer. Rows in draft
+   or closed years confer no current Campus authority. Next-year intake
+   (draft-year rows only) is whole-School until the year activates, unless
+   the owner adds an explicit "intake" rule.
+3. **History** (records already written: attendance, marks, charges)
+   keeps the Campus stored on the record or its parent, never the
+   Student's current Campus. Charge-year attribution may serve finance
+   reads only, and an ambiguous result means whole-School only.
+4. **No current enrollment** (new, leaver, withdrawn, between years):
+   whole-School only. Domains that need historical-purpose access (Fees
+   and Payments dues, retention, report history) use record-stored Campus
+   or attribution, never a widened Student search.
+5. **Transfer stays a named operation.** It is never a `campus_id`
+   update, and it requires scope over both the source and destination
+   Campus, or whole-School (§11.7).
+6. **Database hardening before adoption:**
+   - a composite FK `student_enrollments(section_id, school_id,
+     academic_year_id, campus_id, grade_level_id) →
+     sections_context_unique`;
+   - freezing placement columns after insert;
+   - a Section Campus immutability trigger;
+   - consolidating the current-enrollment resolvers.
+7. **Purpose lookups, not `students.view` in Campus.** Every existing
+   picker (Library, Hostel, Transport, Canteen web and API, Finance ×5,
+   Communications ×2) shows only name and number and posts the id. A
+   future lookup returns exactly `id`, `displayName` and `studentNumber`;
+   eligibility is a server-side filter (current Campus in scope, or
+   charge-year attribution for finance, leavers included). No Campus,
+   Section, date of birth or Guardian field is returned; anything more
+   needs a privacy review.
+8. **Guardian scope is unchanged.** It stays relationship-based, never
+   Campus-scoped.
+
+### 35.3 HR
+
+- **Schema.** `employees` has no Campus.
+  - `employee_assignments.campus_id` is optional, with `is_primary` and
+    dates. The one-open-primary index covers only `ends_on IS NULL`.
+  - There is no overlap constraint, and assignments are reached through
+    `employment_records`.
+- **"Current" has five definitions**, two of them on UTC `Carbon::today()`
+  rather than the School-local date. Ending an employment clips only
+  assignments with no end date.
+- **Proposed contract** (validates the owner model). An Employee's
+  operational Campuses are the union of the Campuses of CURRENT
+  assignments, where current means all of:
+  - an active Employee;
+  - employment `active`/`notice_period` (pre_joining is an owner decision)
+    covering the School-local date;
+  - an assignment covering that date;
+  - an active Campus.
+
+  The rule is deterministic in SQL (proven with `EXPLAIN`), lives in one
+  HR-owned resolver on the School timezone, and avoids the
+  primary-uniqueness hole.
+  - **No current assignment** means whole-School only; ended assignments
+    confer nothing; history is used only for retention and reads.
+  - **No visibility capture.** A Campus actor may act only on an Employee
+    already in scope. Onboarding is an atomic "employee + employment +
+    assignment in my Campus" path (the import shape). Moving an Employee
+    needs both Campuses.
+- **Capabilities:**
+  - **A (Campus-operational candidates):** `hr.employees.view`;
+    `hr.employees.manage`, except link/unlink account, archive/restore and
+    import, which stay whole-School; `hr.employees.assignments.view`;
+    `hr.employees.assignments.manage` (the highest risk: it defines the
+    scope itself and cascades into teaching ownership).
+  - **B (whole-School configuration):** `hr.departments.*`,
+    `hr.positions.*`, `hr.categories.*`, `hr.leave.configure`.
+  - **C (sensitive; stay whole-School in the first release):**
+    `hr.employees.personal.*`, `.qualifications.*`, `.documents.*`,
+    `.notes.*`, `.sensitive.*`.
+  - **D (self-service):** `hr.leave.self`, `hr.staff_attendance.self`.
+  - **Relationship-scoped:** `hr.leave.approve`.
+  - **Leave and StaffAttendance** (`hr.leave.view/manage`,
+    `hr.staff_attendance.view/manage`) stay School-only per §11.7 unless
+    amended.
+  - **E:** there is no dedicated historical key.
+- **Blockers:**
+  - the profile entry gate is `hr.employees.personal.view` (class C), so
+    an operational Campus HR role cannot open a profile without a gate
+    change;
+  - 32 of 37 HR controllers and the services query or authorize directly,
+    so access classes are needed;
+  - the manager-candidate list is School-wide;
+  - the architecture guard has no form for "whole-School-only operation of
+    an adopted key".
+- **Unchanged:** `HrSelfAdministrationGuard`, which runs alongside scope.
+- **Async:** no jobs.
+
+### 35.4 Admissions
+
+- **Schema.** `admission_applications.campus_id` is NOT NULL. The
+  one-open index includes Campus, so it is not an existence oracle.
+  Applicants have no Campus and no update path. The fee head is School
+  configuration, and fee selections are written at conversion.
+- **Proposed contract** (validates the owner model):
+  - **Campus-aware pre-conversion work:** list, open and transition
+    applications in scope; out of scope is 404.
+  - **Applicants:** visible only through an in-scope application, and that
+    application list is scope-filtered.
+  - **Creation:** a new applicant comes only from an atomic "applicant +
+    first application in my Campus" path. An existing applicant cannot be
+    claimed by naming its id (capture risk).
+  - **Whole-School only:** the applicant directory, standalone applicant
+    create, conversion, both Guardian searches (name search; the contact
+    lookup, which is a contact-to-identity oracle), fee-head writes, the
+    post-conversion fee selection, and converted Student/enrollment
+    references.
+  - **Campus is immutable** after create (trigger at adoption); a change
+    of Campus is withdraw-and-reapply.
+- **Conversion is the SIS boundary.** `AdmissionConversionService`
+  composes Student, Guardian, contact, relationship and enrollment
+  services that do no authorization of their own, under
+  `admissions.manage`. It stays whole-School until the Student contract
+  (§35.2) is implemented.
+- **The split needs no new capability,** but it does need a guard and ADR
+  extension: a declared "whole-School-only operation of an adopted key"
+  coverage form (today `CampusScopeAdoptionArchitectureTest` forbids any
+  whole-School check of an adopted key).
+
+### 35.5 Academic domains
+
+| Domain | Campus source | Pre-SIS? | Notes |
+|---|---|---|---|
+| Academic Structure | config (years, terms, grades, departments, subjects, Campus master): none; sections, rooms, offerings, elective groups, teaching assignments: direct, NOT NULL, composite FKs | configuration **never** Campus-mutable | `academics.structure.*` and `academics.subjects.*` bundle School config, Campus entities and (subjects) SIS subject-enrollment writes, so they stay whole-School unless split (a catalogue release, rule 93) |
+| Timetable | entries: from the offering, NOT NULL, composite FKs; periods: one School-wide bell schedule | **yes**, after fixes | **Defect R1:** `timetable_entries_room_fk` is `(room_id, school_id)` only, and no code checks the room's Campus, so a cross-Campus room booking is possible. Also needs a minimal Employee lookup (teacher picker) and conflict concealment (teacher/room slot conflicts reveal other Campuses' bookings) |
+| Attendance (Tier 1) | session from the locked timetable entry; records bound by session-context and enrollment-context 6-tuple FKs | **yes** | Campus authority comes from the timetable alone; the roster is Section-bound. Needs access classes and `campus_id` indexes on sessions and records |
+| Attendance (teacher) | ownership already implies the Campus | with ownership | low value; Campus AND ownership, never instead of it |
+| Examinations | `examinations` and grade scales: none (year- and School-wide); papers: direct, NOT NULL, FK-consistent | papers **yes**; marks **after SIS** (and after RES-L1/L2) | production marks gates unchanged and first; marks correction approval scope is an owner decision |
+| LMS | offering and section audiences, FK-consistent; no Student reads | admin **yes**; teacher with ownership | LMS document endpoints must adopt together |
+| Curriculum Delivery / Syllabus | deliveries direct and FK-consistent; units via the offering | **yes** | syllabus as School configuration is an owner choice; inline controller writes need an access class |
+
+### 35.6 Deferred-domain Campus source map
+
+| Domain | Source category | Unblocked by |
+|---|---|---|
+| Library | copies A (nullable); loans B by copy but the borrower is D, so F; fines F | Student contract + purpose lookup + copy-vs-borrower rule |
+| Hostel | hostels A; rooms and beds B; residency B but the Student is D, so F | Student contract + resident-Campus rule |
+| Transport | routes and vehicles A (nullable); route assignments F (route vs vehicle Campus unchecked; driver C); student assignments F | Student contract + shared-route rule + route/vehicle consistency |
+| Canteen | outlets A (nullable; a NULL outlet can use a Campus location); orders F (Student D + Fees charge) | Student contract + Fees decision |
+| Fees | structures A (nullable default); run items E snapshot; assessments D snapshot; charges, concessions and adjustments F | Student contract + charge-year attribution (finance reads only) |
+| Payments | F (no Student or Campus on `payments`) | as Fees; ledger whole-School |
+| Admissions | applications A; applicants none | guard extension + capture-safe create (pre-conversion); conversion after Student contract |
+| HR | employee C (multi-valued) | owner decisions in §35.3 + guard extension |
+
+### 35.7 Findings (recorded, NOT fixed — each needs owner approval)
+
+1. **R1 (integrity):** cross-Campus room on a timetable entry (no FK or
+   code check).
+2. **R2 (integrity):** enrollment `campus_id` is not DB-bound to its
+   Section, placement columns are not frozen, and Section Campus is
+   mutable at the database level. §11.7 has been corrected.
+3. **R3 (authorization inconsistency):** the Canteen API Student search
+   is gated on `canteen.orders.view`; the web search needs
+   `canteen.orders.manage`.
+4. **R4:** HR "current" uses UTC dates in the directory and profile, and
+   employment end leaves dated assignments open.
+5. **R5:** missing active-Campus checks on Section, Offering, Timetable,
+   admission-application and assignment writes.
+6. **R6:** existing Campus grants widen on adoption. A `principal@Campus`
+   grant gains Exams/LMS/Curriculum keys, and the marks keys, the moment
+   those domains are adopted. Each adoption release must state this, and
+   the marks keys need an explicit owner decision.
+7. **R7:** School-wide uniqueness creates "busy elsewhere" residuals on
+   adoption: hostel residency, transport assignment, library loan,
+   teacher and room slots, codes. Each needs the §34.1 concealment
+   decision.
+8. **R8 (pre-existing hygiene):** unescaped LIKE wildcards in applicant
+   and Guardian searches; the `GuardianStudentScope` docblock does not
+   match its behaviour; no DB CHECK on several status columns.
+
+### 35.8 Recommended sequence (decision D)
+
+The evidence contradicts "SIS absolutely last" **and** "SIS first". Five
+academic domains already carry structurally bound Campus and need no
+Student semantics, while every operational deferral needs the Student
+contract. Proposed order:
+
+1. **ORG.7D-0 — prerequisites (implementation, owner-approved):**
+   - fix R1, R2 (DB hardening), R3 and R5;
+   - add the guard/ADR form for "whole-School-only operation of an adopted
+     key";
+   - decide the minimal Employee lookup (teacher, host and manager
+     pickers) and record each concealment decision.
+2. **ORG.7D-1 — pre-SIS academic wave:**
+   - `timetable.schedule.*`;
+   - `attendance.view/manage`;
+   - `curriculum.delivery.*` (and `syllabus.*` if owner-approved);
+   - `lms.content/assignments.*` admin;
+   - `examinations.papers.*`.
+
+   Each with access classes and C6 entries. Marks and teacher keys come
+   later.
+3. **ORG.7D-2 — narrow Student Campus foundation:** the canonical
+   resolver (§35.2) plus purpose lookups. It unblocks Library, Hostel,
+   Transport and Canteen, Admissions pre-conversion (with capture-safe
+   create), and the marks keys after RES gates.
+4. **ORG.7D-3 — HR**, after the owner decisions in §35.3.
+5. **ORG.7D-4 — full SIS adoption** (profile and enrollment operations,
+   dual-scope transfer, conversion), then Fees and Payments on
+   charge-year attribution. The ledger stays whole-School.
