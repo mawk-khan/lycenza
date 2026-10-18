@@ -2,6 +2,7 @@
 
 namespace App\Domain\Platform\Application\Audit;
 
+use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Audit\PlatformAuditEventEntry;
@@ -49,17 +50,7 @@ class PlatformAuditLogReviewService
      */
     public function review(Request $request, User $actor, ?string $cursor = null): array
     {
-        if (! $this->capabilities->canPlatform($actor, self::VIEW_CAPABILITY)) {
-            throw new AccessDeniedHttpException('This account cannot review the platform audit log.');
-        }
-
-        if (! $this->mfa->userHasActiveFactor($actor)) {
-            throw new MfaRequiredNotEnrolledException;
-        }
-
-        if (! $this->mfa->hasValidAssurance($request)) {
-            throw new MfaStepUpRequiredException;
-        }
+        $this->authorizeReview($request, $actor);
 
         $page = $this->reader->page($cursor);
 
@@ -74,5 +65,42 @@ class PlatformAuditLogReviewService
             'nextCursor' => $page->nextCursor,
             'pageSize' => PlatformAuditEventReader::PAGE_SIZE,
         ];
+    }
+
+    /**
+     * ORG.3 (ADR 0076 §9.2): the School registry overview's recent platform
+     * governance events for ONE School -- the same review (capability,
+     * current MFA assurance, envelope only, one access event naming the
+     * School as subject). Never the School audit ledger.
+     *
+     * @return list<array<string, string|null>>
+     */
+    public function reviewSchool(Request $request, User $actor, School $school): array
+    {
+        $this->authorizeReview($request, $actor);
+
+        $entries = $this->reader->recentForSchool($school);
+
+        $this->audit->platform(self::ACCESS_EVENT, actor: $actor, subject: $school, metadata: [
+            'paged' => false,
+            'resultCount' => count($entries),
+        ]);
+
+        return array_map(fn (PlatformAuditEventEntry $entry): array => $entry->toArray(), $entries);
+    }
+
+    private function authorizeReview(Request $request, User $actor): void
+    {
+        if (! $this->capabilities->canPlatform($actor, self::VIEW_CAPABILITY)) {
+            throw new AccessDeniedHttpException('This account cannot review the platform audit log.');
+        }
+
+        if (! $this->mfa->userHasActiveFactor($actor)) {
+            throw new MfaRequiredNotEnrolledException;
+        }
+
+        if (! $this->mfa->hasValidAssurance($request)) {
+            throw new MfaStepUpRequiredException;
+        }
     }
 }

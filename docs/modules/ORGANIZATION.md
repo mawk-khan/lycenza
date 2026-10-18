@@ -95,3 +95,24 @@ Campus itself is the scoping boundary several Academic Structure
 entities (Room, Section, Subject Offering) reference via a composite
 foreign key back to `campuses(id, school_id)`, guaranteeing a School A
 entity can never reference a School B Campus at the database level.
+
+## Platform School Registry (ORG.3, ADR 0076 §9.2, §29)
+
+The platform's read view of every School (`/app/platform/schools`, under
+`platform.schools.view`) is a control plane, never a School data browser.
+**Platform Registry metadata is not tenant business data.**
+
+| Shown | Source | How it is read |
+| --- | --- | --- |
+| identity (name, legal name, slug, code, time zone, locale), lifecycle and closure | `schools` (platform table) | directly; search, filters and keyset pagination run here |
+| custom-domain state (never hostnames) | `school_domains` (platform table) | batched for the page |
+| School Group membership | `school_group_members` (platform table) | batched for the page |
+| Campus counts (and, on the overview, Campus names/codes) | Campuses (FORCE RLS) | `CampusStructureSummary`, inside that one School's TenantContext |
+| active academic-year name | Academic Structure (FORCE RLS) | `CurrentAcademicYearResolver::tryResolve()`, one School at a time |
+| administrator readiness (yes / not activated / missing) | Identity (role grants, FORCE RLS) | `SchoolAdministrators::readiness()`, the one definition |
+| readiness and warnings | derived | `SchoolReadiness`, computed when read, never stored, advisory |
+| recent platform governance events | `platform_audit_events` | only through `PlatformAuditLogReviewService::reviewSchool()` (`platform.audit.view` + current MFA), envelope only |
+
+Never shown: students, guardians, staff HR, payroll, fees, ledger,
+payments, marks, attendance, documents or `school_audit_events`. Campus
+appears as structure only; it is never authority (ADR 0076 §10-§11).

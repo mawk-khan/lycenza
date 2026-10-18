@@ -6,8 +6,12 @@
   route or Organization feature. ORG.2 AUTHORIZATION COVERAGE GUARD
   IMPLEMENTED (2026-10-18, §28): every School-facing route has a
   machine-checked authorization contract; two authorization findings
-  fixed; no new capability or role.** ORG.3 and every later ORG phase need
-  separate, explicit owner authorization.
+  fixed; no new capability or role. ORG.3 PLATFORM SCHOOL REGISTRY
+  IMPLEMENTED (2026-10-18, §29): read model, search, filters, keyset
+  pagination, derived readiness and warnings, School overview under
+  `platform.schools.view`; no new capability, role, table or migration.**
+  ORG.4 and every later ORG phase need separate, explicit owner
+  authorization.
 - Date: 2026-10-17
 - Programme: **ORG — Platform & Organization Foundation**
   (`MASTER-ROADMAP.md`, post-foundation programme 11).
@@ -1366,3 +1370,150 @@ a `SchoolRouteCoverage` entry whose evidence the code shows. A new non-School
 route is classified in `RouteUniverse`. Otherwise CI fails (CLAUDE.md
 rule 98). Never add a capability, a wildcard or a C5 entry to make the
 guard pass. An unexpressible route is an architecture gap to report.
+
+## 29. ORG.3 — Platform School Registry (implemented, 2026-10-18)
+
+Owner authorization: ORG.3 only. Baseline `origin/main` = `c421796b`
+(ORG.2). ORG.4 and later phases were not started.
+
+### 29.1 Before ORG.3
+
+- **The old list.** `/app/platform/schools` listed every School (name,
+  slug, code, status) with no search, filter or pagination.
+- **The old detail page.** It showed the same fields, closure, the
+  bootstrap administrator while `provisioning`, and the lifecycle
+  actions.
+- **Gating.** Both pages needed `platform.schools.manage`.
+  `platform.schools.view` existed but no route checked it.
+
+### 29.2 Authorization
+
+- **Registry reads.** The list and overview (`app.platform.schools.index`,
+  `.show`) need `platform.schools.view` through route `capability:`
+  middleware (platform mode).
+- **Lifecycle pages.** Create and review keep `platform.schools.manage`.
+  The lifecycle POSTs are unchanged: no route capability, and the
+  services authorize, audit refusals and need confirmation plus a fresh
+  MFA code.
+- **What the overview offers.** Actions and the create link appear only
+  for `platform.schools.manage`, the same Gate check the services make.
+- **Navigation.** The navigation entry follows the page:
+  `platform.schools.view`.
+- **Personas as built:**
+  - `platform_super_admin` holds both capabilities;
+  - `platform_auditor` holds `platform.audit.view` only, so it is refused
+    (pinned by a test). ORG.4/ORG.6 own any Auditor extension;
+  - School roles never reach the registry, and a School grant plus a
+    platform grant never merge.
+- **No new capability or role.**
+
+### 29.3 Read model (`App\Domain\Platform\Application\Schools\Registry`)
+
+- **`SchoolRegistryReadService`:**
+  - **Platform tables, read directly.** `schools` carries search, filters
+    and keyset pagination. `school_domains` states and Group membership
+    are batched for the page.
+  - **RLS-protected structure, one School at a time.** It is read only
+    through the owning modules, inside ONE School's TenantContext:
+    - `CampusStructureSummary` (new, Campuses): counts, plus names/codes
+      on the overview;
+    - `CurrentAcademicYearResolver::tryResolve()`: the active year's name;
+    - `SchoolAdministrators::readiness()` (new): `ready`,
+      `not_activated` or `missing`, no identity.
+  - **No shortcuts.** No BYPASSRLS, no admin connection at runtime, no
+    cross-tenant query or cache.
+- **`SchoolAdministrators` gains a narrowing pre-filter.**
+  - It reads only memberships with an active grant whose role carries
+    `school.members.manage`.
+  - School capabilities come only from active grants, so this is a strict
+    superset of the true administrators. The unchanged per-user check
+    still decides.
+  - It serves activation, off-boarding and the registry alike.
+  - No second definition of a School administrator exists.
+- **List search.** It is case-insensitive substring search on `name`,
+  `legal_name`, `slug` and `code` only.
+  - Bounded to 100 characters.
+  - `%`, `_` and `\` are escaped.
+  - Parameter-bound ILIKE.
+  - This replaces §9.2's "exact name/slug/code". It still never touches
+    tenant data.
+- **Filters:**
+  - status: `provisioning`, `active`, `suspended` (open) or `closed`;
+  - School Group (exact id);
+  - custom-domain state: `none`, `pending`, `active` or `attention`
+    (precedence: suspended > active primary > being verified);
+  - **deferred:** the readiness filter, which would need every School's
+    tenant reads.
+- **Pagination.** Keyset on `(name, id)` with an opaque cursor.
+  - 25 per page by default, bounded 10–50.
+  - A forged cursor is refused.
+  - No duplicates or gaps under stable data.
+- **Query cost.** A 10-row page issued 173 statements with 10 Schools and
+  with 30 Schools. It is proportional to the page, never to the
+  population (`SchoolRegistryTenancyAndQueryBoundsTest`).
+
+### 29.4 Readiness and warnings (§9.3, ORG-C4)
+
+- **`SchoolReadiness` is derived when read** and never stored (no column;
+  a test pins it).
+- **Checks:**
+  - an activated administrator;
+  - at least one active Campus;
+  - an active academic year;
+  - only where custom domains are enabled and a domain is claimed, an
+    active primary domain.
+- **States:** `ready`; else `partially_configured` while `provisioning`;
+  else `needs_attention`.
+- **Warnings** (key and severity, no tenant data):
+  - `awaiting_activation`, `school_closed` (info);
+  - `school_suspended`;
+  - `administrator_missing` and `administrator_not_activated`;
+  - `no_active_campus`, `no_active_academic_year`;
+  - `custom_domain_suspended`; `custom_domain_pending` (info).
+- **Advisory only:** readiness never becomes an activation precondition.
+
+### 29.5 Recent platform events on the overview
+
+- **Read path.** `PlatformAuditEventReader::recentForSchool()` reads the
+  10 newest events whose subject is the School, envelope columns only,
+  through the existing `(subject_type, subject_id)` index.
+  - Included: `platform.school.*` (lifecycle, including refusals) and
+    `platform.school_elevation.*`.
+  - Excluded: a user's own `school_context.activated`.
+- **Access.** Events are shown only through
+  `PlatformAuditLogReviewService::reviewSchool()`:
+  - `platform.audit.view` and current MFA assurance, both re-checked;
+  - one `platform.audit_log.viewed` with the School as subject.
+  - Otherwise the section says why it is unavailable and records nothing.
+- **Never** `school_audit_events`.
+
+### 29.6 Unchanged
+
+- **No new things:** no new capability, role, table, column, migration,
+  index or API route.
+- **Lifecycle unchanged:** rules, fresh MFA, root-only School creation and
+  the bootstrap administrator's provisioning-only visibility.
+- **No Platform Manager, module entitlements, Campus authority or SIS
+  change.**
+- **Entitlement summary.** The §9.2 entitlement row stays for ORG.5. No
+  placeholder control is shown.
+
+### 29.7 Evidence
+
+- **Tests:**
+  - `Tests\Feature\Platform\Schools\Registry\SchoolRegistryTest`
+    covers authorization for every persona, metadata only, search,
+    filters, pagination, readiness fixtures A–G, the unactivated
+    administrator, readiness never stored, and audit review and envelope;
+  - `SchoolRegistryTenancyAndQueryBoundsTest` covers one-School reads and
+    context restoration, the RLS negative case, pre-filter equivalence
+    and the query bound;
+  - updated `SchoolLifecycleTest` (the row shape) and
+    `SchoolLifecycleArchitectureGuardTest` (view and manage routes).
+- **DDEV smoke:**
+  - the Platform Admin sees both demo Schools: Demo *Ready*, Annexe
+    *Needs attention* (no active academic year);
+  - search and status filter narrow correctly, and an invalid filter is
+    refused;
+  - the overview shows its checks, with events gated on MFA;
+  - the School Admin and the Platform Auditor get 403.

@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers\App\Platform;
 
+use App\Domain\Platform\Application\Audit\PlatformAuditLogReviewService;
+use App\Domain\Platform\Application\Schools\Registry\SchoolRegistryFilters;
+use App\Domain\Platform\Application\Schools\Registry\SchoolRegistryReadService;
 use App\Domain\Platform\Application\Schools\SchoolBootstrapAdministrationService;
 use App\Domain\Platform\Application\Schools\SchoolClosureReason;
 use App\Domain\Platform\Application\Schools\SchoolLifecycleAuthority;
@@ -10,10 +13,14 @@ use App\Domain\Platform\Application\Schools\SchoolLifecycleService;
 use App\Domain\Platform\Application\Schools\SchoolSuspensionReason;
 use App\Http\Controllers\Controller;
 use App\Models\School;
+use App\Models\SchoolGroup;
 use App\Models\SchoolMembership;
+use App\Support\Auth\Mfa\SensitiveReadAssurance;
 use App\Support\Tenancy\SchoolStatus;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -22,15 +29,20 @@ use Inertia\Response;
  * Phase 0N.9 (ADR 0047 sections 7, 16): the narrow platform School
  * lifecycle surface -- list, create (with the bootstrap administrator),
  * replace that administrator while `provisioning`, activate, suspend,
- * resume. Context-neutral: no School context is set and no tenant-domain
- * table is read. It shows only the School's platform metadata (id, name,
- * slug, code, status: Confidential) and, for a `provisioning` School
- * only, its bootstrap administrator (Sensitive). No archive, no delete,
- * no membership or role administration, no counts, no API route.
+ * resume. Context-neutral: no School context is set. No archive, no
+ * delete, no membership or role administration, no API route.
  *
- * Reads need `platform.schools.manage` (route middleware); every change
- * reaches the lifecycle services, which authorize, audit refusals and
- * require explicit confirmation plus a fresh MFA re-verification.
+ * ORG.3 (ADR 0076 §9.2): the list and the overview are the School
+ * Registry, under `platform.schools.view` (route middleware). They show
+ * non-business tenant metadata only, through SchoolRegistryReadService
+ * (one School's TenantContext at a time for Campus, academic-year and
+ * administrator summaries). The bootstrap administrator's identity is
+ * shown only while `provisioning`. The recent platform governance events
+ * appear only through the platform audit review (`platform.audit.view` +
+ * current MFA assurance, one access event). Lifecycle pages and actions
+ * keep `platform.schools.manage`; every change reaches the lifecycle
+ * services, which authorize, audit refusals and require explicit
+ * confirmation plus a fresh MFA re-verification.
  */
 class PlatformSchoolAdminController extends Controller
 {
@@ -40,14 +52,47 @@ class PlatformSchoolAdminController extends Controller
         private readonly SchoolLifecycleService $lifecycle,
         private readonly SchoolBootstrapAdministrationService $bootstrap,
         private readonly SchoolLifecycleAuthority $authority,
+        private readonly SchoolRegistryReadService $registry,
+        private readonly PlatformAuditLogReviewService $audit,
     ) {}
 
-    public function index(): Response
+    public function index(Request $request): Response
     {
+        $validated = $request->validate([
+            'q' => ['nullable', 'string', 'max:'.SchoolRegistryReadService::MAX_SEARCH_LENGTH],
+            'status' => ['nullable', Rule::in(SchoolRegistryReadService::STATUS_FILTERS)],
+            'group' => ['nullable', 'uuid'],
+            'domain' => ['nullable', Rule::in(SchoolRegistryReadService::DOMAIN_FILTERS)],
+            'cursor' => ['nullable', 'string', 'max:512', fn ($attribute, $value, $fail) => SchoolRegistryReadService::isValidCursor((string) $value) ? null : $fail('The page link is no longer valid.')],
+            'per_page' => ['nullable', 'integer', 'between:'.SchoolRegistryReadService::MIN_PER_PAGE.','.SchoolRegistryReadService::MAX_PER_PAGE],
+        ]);
+
+        $page = $this->registry->list(new SchoolRegistryFilters(
+            search: $validated['q'] ?? null,
+            status: $validated['status'] ?? null,
+            groupId: $validated['group'] ?? null,
+            domain: $validated['domain'] ?? null,
+            cursor: $validated['cursor'] ?? null,
+            perPage: (int) ($validated['per_page'] ?? SchoolRegistryReadService::DEFAULT_PER_PAGE),
+        ));
+
         return Inertia::render('App/Platform/Schools/Index', [
-            'schools' => School::query()->orderBy('name')->orderBy('id')
-                ->get(['id', 'name', 'slug', 'code', 'status'])
-                ->map(fn (School $s) => $this->summary($s))->values(),
+            ...$page,
+            'filters' => [
+                'q' => $validated['q'] ?? '',
+                'status' => $validated['status'] ?? null,
+                'group' => $validated['group'] ?? null,
+                'domain' => $validated['domain'] ?? null,
+                'perPage' => $page['perPage'],
+                'paged' => isset($validated['cursor']),
+            ],
+            'options' => [
+                'statuses' => SchoolRegistryReadService::STATUS_FILTERS,
+                'domains' => SchoolRegistryReadService::DOMAIN_FILTERS,
+                'groups' => SchoolGroup::query()->where('status', SchoolGroup::STATUS_ACTIVE)->orderBy('name')->get(['id', 'name'])
+                    ->map(fn (SchoolGroup $g): array => ['id' => $g->id, 'name' => $g->name])->values(),
+            ],
+            'canCreate' => $this->canManage($request),
         ]);
     }
 
@@ -71,19 +116,26 @@ class PlatformSchoolAdminController extends Controller
         return redirect()->route('app.platform.schools.show', $school)->with('lifecycleNotice', 'created');
     }
 
-    public function show(Request $request, School $school): Response
+    public function show(Request $request, School $school, SensitiveReadAssurance $assurance): Response
     {
+        $canManage = $this->canManage($request);
+
         return Inertia::render('App/Platform/Schools/Show', [
             'school' => $this->summary($school),
+            'registry' => $this->registry->overview($school),
+            'audit' => $this->auditSummary($request, $school, $assurance),
+            'canManage' => $canManage,
             'bootstrapAdmins' => $this->bootstrapAdmins($school),
-            'actions' => [
+            // Offered only to `platform.schools.manage`; the lifecycle services
+            // remain the authority for every change.
+            'actions' => array_map(fn (bool $offered): bool => $offered && $canManage, [
                 'activate' => $school->isProvisioning(),
                 'replaceBootstrapAdmin' => $school->isProvisioning(),
                 'suspend' => $school->isActive(),
                 'resume' => $school->isSuspended() && ! $school->isClosed(),
                 'close' => ($school->isActive() || $school->isSuspended()) && ! $school->isClosed(),
                 'reopen' => $school->isClosed(),
-            ],
+            ]),
             'notice' => $request->session()->get('lifecycleNotice'),
         ]);
     }
@@ -127,6 +179,30 @@ class PlatformSchoolAdminController extends Controller
         });
 
         return redirect()->route('app.platform.schools.show', $school)->with('lifecycleNotice', $action);
+    }
+
+    private function canManage(Request $request): bool
+    {
+        return Gate::forUser($request->user())->allows('capability', [SchoolLifecycleAuthority::CAPABILITY, null]);
+    }
+
+    /**
+     * ORG.3: the School's recent platform governance events, shown only
+     * through the platform audit review (`platform.audit.view` + current MFA
+     * assurance; the review service re-checks both and records the access).
+     *
+     * @return array{available: bool, reason: string|null, entries: list<array<string, string|null>>}
+     */
+    private function auditSummary(Request $request, School $school, SensitiveReadAssurance $assurance): array
+    {
+        if (Gate::forUser($request->user())->denies('capability', [PlatformAuditLogReviewService::VIEW_CAPABILITY, null])) {
+            return ['available' => false, 'reason' => 'capability', 'entries' => []];
+        }
+        if (! $assurance->holds($request)) {
+            return ['available' => false, 'reason' => 'mfa', 'entries' => []];
+        }
+
+        return ['available' => true, 'reason' => null, 'entries' => $this->audit->reviewSchool($request, $request->user(), $school)];
     }
 
     /**

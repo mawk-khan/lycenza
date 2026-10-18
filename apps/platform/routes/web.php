@@ -392,14 +392,18 @@ Route::middleware('auth')->where(WebRouteParameters::uuidPatterns())->group(func
     // Phase 0N.9 (ADR 0047): School lifecycle -- create (with the bootstrap
     // School Administrator), replace that administrator while
     // `provisioning`, activate, suspend, resume, and (E21.2F, E21-D11) close
-    // and reopen. Context-neutral; no archive or delete route exists. Reads need platform.schools.manage;
+    // and reopen. Context-neutral; no archive or delete route exists.
+    // ORG.3 (ADR 0076 §9.2): the registry list and overview need
+    // platform.schools.view; the lifecycle pages need platform.schools.manage;
     // the POSTs carry no capability middleware on purpose so a refusal
     // reaches the service and is audited (platform.school.lifecycle_denied).
     Route::prefix('app/platform/schools')->name('app.platform.schools.')->group(function (): void {
-        Route::middleware('capability:platform.schools.manage,platform')->group(function (): void {
+        Route::middleware('capability:platform.schools.view,platform')->group(function (): void {
             Route::get('/', [PlatformSchoolAdminController::class, 'index'])->name('index');
-            Route::get('/create', [PlatformSchoolAdminController::class, 'create'])->name('create');
             Route::get('/{school}', [PlatformSchoolAdminController::class, 'show'])->whereUuid('school')->name('show');
+        });
+        Route::middleware('capability:platform.schools.manage,platform')->group(function (): void {
+            Route::get('/create', [PlatformSchoolAdminController::class, 'create'])->name('create');
             Route::get('/{school}/{action}', [PlatformSchoolAdminController::class, 'review'])
                 ->whereUuid('school')->whereIn('action', ['activate', 'suspend', 'resume', 'bootstrap-admin', 'close', 'reopen'])->name('review');
         });

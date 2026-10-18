@@ -393,7 +393,12 @@ class SchoolLifecycleTest extends TestCase
         $index = $this->actingAs($root)->get('/app/platform/schools');
         $index->assertOk()->assertInertia(fn (AssertableInertia $p) => $p->component('App/Platform/Schools/Index')->has('schools'));
         $row = collect($index->viewData('page')['props']['schools'])->firstWhere('id', $school->id);
-        $this->assertSame(['id', 'name', 'slug', 'code', 'status', 'closedAt', 'closureReason'], array_keys($row), 'platform lifecycle metadata only (E21.2F adds the closure marker)');
+        // ORG.3 (ADR 0076 §9.2): the School Registry row -- non-business metadata only.
+        $this->assertSame(
+            ['id', 'name', 'legalName', 'slug', 'code', 'status', 'closed', 'closedAt', 'createdAt', 'campuses', 'academicYear', 'domain', 'groups', 'readiness', 'warningCount'],
+            array_keys($row),
+            'platform registry metadata only (E21.2F closure marker, ORG.3 registry summary)',
+        );
 
         $this->get("/app/platform/schools/{$school->id}/activate")->assertOk()
             ->assertInertia(fn (AssertableInertia $p) => $p->component('App/Platform/Schools/Action')->where('targetStatus', 'active'));

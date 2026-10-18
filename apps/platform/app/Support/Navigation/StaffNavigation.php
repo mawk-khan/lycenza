@@ -178,7 +178,7 @@ final class StaffNavigation
             new E('school-groups', 'school-groups', 'Your School Groups', 'app.groups.index', scope: E::SCOPE_GROUP, all: ['group.schools.view'], platformHostOnly: true),
 
             // Platform authority (ADR 0046/0047) -- never School authority.
-            new E('platform-schools', 'platform', 'Schools', 'app.platform.schools.index', scope: E::SCOPE_PLATFORM, all: ['platform.schools.manage'], platformHostOnly: true),
+            new E('platform-schools', 'platform', 'Schools', 'app.platform.schools.index', scope: E::SCOPE_PLATFORM, all: ['platform.schools.view'], platformHostOnly: true),
             new E('platform-groups', 'platform', 'School Groups', 'app.platform.groups.index', scope: E::SCOPE_PLATFORM, all: ['platform.school_groups.view'], platformHostOnly: true),
             new E('platform-audit-log', 'platform', 'Platform audit log', 'app.platform.audit-log', scope: E::SCOPE_PLATFORM, all: ['platform.audit.view'], platformHostOnly: true),
             new E('platform-roles', 'platform', 'Platform roles', 'app.platform.roles.index', scope: E::SCOPE_PLATFORM, all: ['platform.role_grants.manage'], platformHostOnly: true),

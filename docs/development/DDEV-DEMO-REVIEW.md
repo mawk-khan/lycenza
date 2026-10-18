@@ -255,7 +255,7 @@ minute.
 | HR & Payroll | `hr.payroll@example.test` | HR and payroll depth | Production `hr_officer` + `hr_sensitive_records` + `payroll_officer` (additive, SR.3), plus the ONE remaining demo-only role `demo.payroll_statutory` (exactly the five legally gated `payroll.statutory.*` keys, so the built statutory screens stay reviewable) | Payroll approval, posting and reversal stay with School Admin (maker/checker); no students/academics/finance access |
 | Multi-school Admin | `multi.school@example.test` | School switching, tenant isolation | Principal at Demo School, School Admin at Annexe | Must pick a School after every login |
 | Annexe School Admin | `annexe.admin@example.test` | Tenant isolation | `school_admin` at the Annexe only (3 students) | Demo School records return 404 |
-| Platform Admin | `platform.admin@example.test` | Platform scope | `platform_super_admin` (14 `platform.*` capabilities, incl. `platform.schools.elevate`, School Group governance, `platform.audit.view`, `platform.role_grants.manage`) | `/app` shows a neutral "platform account, no School access" state, **Enter a School (elevated access)** (step 13), **School Groups (platform)** (step 13a), **Platform audit log** and **Platform roles** (step 13b), **Schools (platform)** (step 13c); School URLs return to `/app` without elevation and are 403 under it. Not a Group Admin |
+| Platform Admin | `platform.admin@example.test` | Platform scope | `platform_super_admin` (14 `platform.*` capabilities, incl. `platform.schools.elevate`, School Group governance, `platform.audit.view`, `platform.role_grants.manage`) | `/app` shows a neutral "platform account, no School access" state, **Enter a School (elevated access)** (step 13), **School Groups (platform)** (step 13a), **Platform audit log** and **Platform roles** (step 13b), **School Registry** (step 13c); School URLs return to `/app` without elevation and are 403 under it. Not a Group Admin |
 | Platform Auditor | `platform.auditor@example.test` | Platform scope, review only | `platform_auditor` (`platform.audit.view` only), granted by the Platform Admin | **Platform audit log** only (needs MFA; step 13b). No School, Group, elevation or governance action |
 | Group Admin | `group.admin@example.test` | Group scope: Lycenza Demo Trust | `group_admin` Group grant (`group.schools.view`, `group.schools.elevate`, `group.reporting.view`), granted by the Platform Admin | **Your School Groups** -> the Trust's two Schools (name, status); enter one through elevated access (needs MFA). No School membership or School permission; cannot change the Group |
 | Teacher | `teacher@example.test` | Owned teacher access (TCH, ADR 0063) | Production `teacher` role (exactly `curriculum.delivery.teacher`, `attendance.teacher`, `lms.content.teacher`, `lms.assignments.teacher` and, development only, `examinations.marks.teacher`), plus the separate `staff_self_service` role (HRX.4: `hr.leave.self`, `hr.staff_attendance.self`, `payroll.payslips.self`), linked to Employee EMP-000003 (Kavya Reddy), one TeachingAssignment: G8-A Mathematics | **My Curriculum Delivery**, **My Attendance**, **My Learning Content** and **My Assignments** for G8-A Mathematics only; **My Leave**, **My Staff Attendance** and **My Payslips** for herself (read-only attendance, posted payslips only); every School-wide module (Students, Timetable, TeachingAssignment admin, LMS admin) is 403. Teacher Attendance is production-blocked by open TCH-L1 (dated note: E33 determined 2026-10-07, ADR 0063 §42–§44; teacher marks refused in production code, ADR 0068 §25.3) |
@@ -484,8 +484,15 @@ Platform Admin.
       Revoking the auditor's grant removes access on the next page.
 13c. **School lifecycle** (Phase 0N.9, ADR 0047). The Platform Admin needs
     an MFA factor (every change asks for a fresh code).
-    - `/app` -> **Schools (platform)** lists the two demo Schools (name,
-      slug, code, status only). **Create a School**: name, slug, and an
+    - `/app` -> **Schools** opens the **School Registry** (ORG.3, ADR 0076
+      §9.2): the two demo Schools with status, Campus count, active
+      academic-year name, custom-domain state, Group and derived readiness
+      (the Annexe shows *Needs attention*: it has no active academic year).
+      Search by name, legal name, slug or code; filter by status, domain or
+      Group. A School's page adds identity, structure, an advisory setup
+      checklist and warnings; its recent platform events appear only after
+      an MFA confirmation (platform audit review). Only School metadata --
+      never students, staff or money. **Create a School**: name, slug, and an
       existing person's exact email as its first School Administrator
       (e.g. `teacher@example.test`; your own email is refused). It starts
       **provisioning**: that person sees it on their `/app` as

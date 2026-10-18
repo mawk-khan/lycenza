@@ -211,7 +211,11 @@ class SchoolLifecycleArchitectureGuardTest extends TestCase
             }
         }
 
-        $this->assertContains('capability:platform.schools.manage,platform', $routes->getByName('app.platform.schools.index')->gatherMiddleware());
+        // ORG.3 (ADR 0076 §9.2): the registry reads need view; the lifecycle pages keep manage.
+        $this->assertContains('capability:platform.schools.view,platform', $routes->getByName('app.platform.schools.index')->gatherMiddleware());
+        $this->assertContains('capability:platform.schools.view,platform', $routes->getByName('app.platform.schools.show')->gatherMiddleware());
+        $this->assertContains('capability:platform.schools.manage,platform', $routes->getByName('app.platform.schools.create')->gatherMiddleware());
+        $this->assertContains('capability:platform.schools.manage,platform', $routes->getByName('app.platform.schools.review')->gatherMiddleware());
         $this->assertContains('throttle:platform-school-lifecycle', $routes->getByName('app.platform.schools.perform')->gatherMiddleware());
     }
 

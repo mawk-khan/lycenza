@@ -3,6 +3,7 @@
 namespace App\Support\Audit;
 
 use App\Models\PlatformAuditEvent;
+use App\Models\School;
 use InvalidArgumentException;
 
 /**
@@ -31,6 +32,18 @@ class PlatformAuditEventReader
 {
     public const PAGE_SIZE = 50;
 
+    /** ORG.3 (ADR 0076 §9.2): how many recent School events the registry overview shows. */
+    public const SCHOOL_RECENT = 10;
+
+    /**
+     * ORG.3: the platform governance events whose subject is a School --
+     * lifecycle (`platform.school.*`, refusals included) and elevation into
+     * it (`platform.school_elevation.*`). A User's own School switch
+     * (`school_context.activated`) is identity evidence, not School
+     * governance, and is left out.
+     */
+    private const SCHOOL_EVENT_PREFIXES = ['platform.school.', 'platform.school_elevation.'];
+
     /** Envelope columns read from the ledger -- never metadata, IP or user agent. */
     private const COLUMNS = ['id', 'occurred_at', 'actor_user_id', 'event_type', 'subject_type', 'subject_id', 'request_id'];
 
@@ -58,15 +71,7 @@ class PlatformAuditEventReader
         $hasMore = $rows->count() > self::PAGE_SIZE;
         $rows = $rows->take(self::PAGE_SIZE);
 
-        $entries = $rows->map(fn (PlatformAuditEvent $event): PlatformAuditEventEntry => new PlatformAuditEventEntry(
-            id: $event->id,
-            occurredAt: $event->occurred_at->toIso8601String(),
-            eventType: $event->event_type,
-            actorUserId: $event->getAttribute('actor_user_id'),
-            subjectType: $event->getAttribute('subject_type') === null ? null : class_basename((string) $event->getAttribute('subject_type')),
-            subjectId: $event->getAttribute('subject_id'),
-            requestId: $event->getAttribute('request_id'),
-        ))->values()->all();
+        $entries = $rows->map(fn (PlatformAuditEvent $event): PlatformAuditEventEntry => self::entry($event))->values()->all();
 
         $last = $rows->last();
 
@@ -75,6 +80,46 @@ class PlatformAuditEventReader
             nextCursor: $hasMore && $last instanceof PlatformAuditEvent
                 ? self::encodeCursor((string) $last->getRawOriginal('occurred_at'), $last->id)
                 : null,
+        );
+    }
+
+    /**
+     * ORG.3 (ADR 0076 §9.2): the newest platform governance events for one
+     * School, envelope only, through the existing
+     * `(subject_type, subject_id)` index. Same columns and order as page().
+     *
+     * @return list<PlatformAuditEventEntry>
+     */
+    public function recentForSchool(School $school): array
+    {
+        return PlatformAuditEvent::query()
+            ->select(self::COLUMNS)
+            ->where('subject_type', School::class)
+            ->where('subject_id', $school->id)
+            ->where(function ($query): void {
+                foreach (self::SCHOOL_EVENT_PREFIXES as $prefix) {
+                    $query->orWhereRaw('starts_with(event_type, ?)', [$prefix]);
+                }
+            })
+            ->orderByDesc('occurred_at')
+            ->orderByDesc('id')
+            ->limit(self::SCHOOL_RECENT)
+            ->get()
+            ->map(fn (PlatformAuditEvent $event): PlatformAuditEventEntry => self::entry($event))
+            ->values()
+            ->all();
+    }
+
+    private static function entry(PlatformAuditEvent $event): PlatformAuditEventEntry
+    {
+        return new PlatformAuditEventEntry(
+            id: $event->id,
+            occurredAt: $event->occurred_at->toIso8601String(),
+            eventType: $event->event_type,
+            actorUserId: $event->getAttribute('actor_user_id'),
+            subjectType: $event->getAttribute('subject_type') === null ? null : class_basename((string) $event->getAttribute('subject_type')),
+            subjectId: $event->getAttribute('subject_id'),
+            requestId: $event->getAttribute('request_id'),
         );
     }
 
