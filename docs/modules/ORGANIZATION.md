@@ -119,6 +119,8 @@ appears as structure only; it is never authority (ADR 0076 §10-§11).
 
 **Who reads it (ORG.4, ADR 0076 §30):**
 - the Platform Admin (root) and the Platform Auditor read the Registry;
+  since ORG.6 (ADR 0076 §32) the Auditor also reads each School's module
+  entitlement state there, read-only;
 - the Platform Manager reads it and onboards Schools: create into
   `provisioning`, then set the bootstrap administrator while provisioning;
 - activation and every later lifecycle change stay with the Platform Admin;
@@ -149,4 +151,4 @@ School setting, a role, a navigation toggle or a commercial plan.
   API, services and background work. It deletes nothing, and enabling
   again restores access with the same roles.
 - **School administrators** see only the effect; they have no entitlement
-  control.
+  control. The Platform Auditor sees the state read-only (ORG.6).

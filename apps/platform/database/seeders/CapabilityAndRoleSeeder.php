@@ -991,7 +991,9 @@ class CapabilityAndRoleSeeder extends Seeder
             // ledger. Granted and revoked by a Platform Super Admin through
             // PlatformRoleGovernanceService. ORG.4 (ADR 0076 §8, §30): plus
             // read-only oversight of the School Registry and School Groups --
-            // still never a mutation, elevation or School capability.
+            // still never a mutation, elevation or School capability. ORG.6
+            // (ADR 0076 §32): plus the School module entitlement state (view
+            // only; never .manage).
             'platform_auditor' => [
                 'name' => 'Platform Auditor',
                 'scope' => 'platform',
@@ -1000,6 +1002,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'platform.audit.view',
                     'platform.schools.view',
                     'platform.school_groups.view',
+                    'platform.school_entitlements.view',
                 ],
             ],
             // ORG.4 (ADR 0076 §7, §30): routine School onboarding -- create a

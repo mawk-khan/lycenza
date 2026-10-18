@@ -93,7 +93,7 @@ class DemoDataBuilderTest extends TestCase
         $this->assertSame([], $memberships('group.admin@example.test'));
         $this->assertSame([], $memberships('platform.auditor@example.test'));
         // ORG.4 (ADR 0076 §7-§8): the Auditor reads; the Manager onboards; neither holds School authority.
-        $this->assertEqualsCanonicalizing(['platform.audit.view', 'platform.schools.view', 'platform.school_groups.view'], $resolver->platformCapabilities($this->user('platform.auditor@example.test')));
+        $this->assertEqualsCanonicalizing(['platform.audit.view', 'platform.schools.view', 'platform.school_groups.view', 'platform.school_entitlements.view'], $resolver->platformCapabilities($this->user('platform.auditor@example.test')));
         $this->assertSame([], $memberships('platform.manager@example.test'));
         $this->assertEqualsCanonicalizing(['platform.schools.view', 'platform.school_groups.view', 'platform.schools.onboard', 'platform.school_entitlements.view', 'platform.school_entitlements.manage'], $resolver->platformCapabilities($this->user('platform.manager@example.test')));
         $this->assertSame([$school->id], $memberships('school.admin@example.test'));

@@ -6,6 +6,9 @@
 // ORG.3 (ADR 0076 §9.2): the School Registry overview -- non-business
 // metadata only. Recent platform governance events appear only through
 // the platform audit review; the School's own audit ledger never does.
+// ORG.5/ORG.6 (ADR 0076 §31-§32): the Modules section shows current
+// entitlement state to every holder of the view capability; enable/disable
+// links appear only for the manage capability.
 import {
     administratorLabels,
     checkLabels,

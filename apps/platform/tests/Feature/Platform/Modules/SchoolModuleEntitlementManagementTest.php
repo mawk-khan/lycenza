@@ -225,7 +225,7 @@ class SchoolModuleEntitlementManagementTest extends TestCase
         $this->assertFalse($this->state($school, 'library'));
 
         $this->actingAs($auditor)->get("/app/platform/schools/{$school->id}")->assertOk()->assertInertia(fn (AssertableInertia $p) => $p
-            ->where('modules', null)->where('canManageModules', false));
+            ->has('modules', count(ModuleCatalogue::keys()))->where('canManageModules', false));
         $this->actingAs($auditor)->get("/app/platform/schools/{$school->id}/modules/library/enable")->assertForbidden();
         $this->change($auditor, $school, 'library', 'enable')->assertForbidden();
         $this->assertFalse($this->state($school, 'library'));

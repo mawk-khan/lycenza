@@ -82,7 +82,7 @@ class PlatformRoleGovernanceMfaTest extends TestCase
 
         $this->assertSame($root->id, $grant->granted_by_user_id);
         $this->assertSame(1, $this->activeGrants($person));
-        $this->assertEqualsCanonicalizing(['platform.audit.view', 'platform.schools.view', 'platform.school_groups.view'], app(CapabilityResolver::class)->platformCapabilities($person));
+        $this->assertEqualsCanonicalizing(['platform.audit.view', 'platform.schools.view', 'platform.school_groups.view', 'platform.school_entitlements.view'], app(CapabilityResolver::class)->platformCapabilities($person));
         $this->assertSame([], $this->denials($root));
     }
 
@@ -160,7 +160,7 @@ class PlatformRoleGovernanceMfaTest extends TestCase
             ->assertSessionHasErrors('mfa_code');
 
         $this->assertNull($grant->fresh()->revoked_at);
-        $this->assertEqualsCanonicalizing(['platform.audit.view', 'platform.schools.view', 'platform.school_groups.view'], app(CapabilityResolver::class)->platformCapabilities($person));
+        $this->assertEqualsCanonicalizing(['platform.audit.view', 'platform.schools.view', 'platform.school_groups.view', 'platform.school_entitlements.view'], app(CapabilityResolver::class)->platformCapabilities($person));
         $this->assertSame(0, PlatformAuditEvent::query()->where('event_type', 'platform.role_grant.revoked')->count());
 
         $this->governance()->revoke($this->request(['mfa_code' => $this->freshCode($root)]), $root, $grant);

@@ -66,7 +66,7 @@ class PlatformRoleGovernanceTest extends TestCase
         $grant = $this->grantAs($root, 'AUDITOR.PERSON@example.test', 'platform_auditor');
 
         $this->assertSame($root->id, $grant->granted_by_user_id);
-        $this->assertEqualsCanonicalizing(['platform.audit.view', 'platform.schools.view', 'platform.school_groups.view'], $resolver->platformCapabilities($person), 'The grant takes effect at once (cache forgotten).');
+        $this->assertEqualsCanonicalizing(['platform.audit.view', 'platform.schools.view', 'platform.school_groups.view', 'platform.school_entitlements.view'], $resolver->platformCapabilities($person), 'The grant takes effect at once (cache forgotten).');
         $granted = PlatformAuditEvent::query()->where('event_type', 'platform.role_grant.granted')->firstOrFail();
         $this->assertEquals(['user_id' => $person->id, 'role_key' => 'platform_auditor'], $granted->metadata);
         $this->assertSame($grant->id, $granted->subject_id);
@@ -250,10 +250,10 @@ class PlatformRoleGovernanceTest extends TestCase
         $group = $this->createGroup([$school]);
         $resolver = app(CapabilityResolver::class);
 
-        $this->assertEqualsCanonicalizing(['platform.audit.view', 'platform.schools.view', 'platform.school_groups.view'], $resolver->platformCapabilities($auditor));
+        $this->assertEqualsCanonicalizing(['platform.audit.view', 'platform.schools.view', 'platform.school_groups.view', 'platform.school_entitlements.view'], $resolver->platformCapabilities($auditor));
         $this->assertSame([], $resolver->schoolCapabilities($auditor, $school));
         $this->assertSame([], $resolver->groupCapabilities($auditor, $group));
-        $this->assertEqualsCanonicalizing(['platform.audit.view', 'platform.schools.view', 'platform.school_groups.view'], Role::query()->where('key', 'platform_auditor')->firstOrFail()->capabilities()->pluck('key')->all());
+        $this->assertEqualsCanonicalizing(['platform.audit.view', 'platform.schools.view', 'platform.school_groups.view', 'platform.school_entitlements.view'], Role::query()->where('key', 'platform_auditor')->firstOrFail()->capabilities()->pluck('key')->all());
 
         $this->enrollActiveMfaFactor($auditor);
         // ORG.4 (ADR 0076 §8): read-only Registry and Group views; no change anywhere.

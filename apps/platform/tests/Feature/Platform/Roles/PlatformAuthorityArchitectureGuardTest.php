@@ -33,7 +33,7 @@ class PlatformAuthorityArchitectureGuardTest extends TestCase
 
         $caps = fn (string $role) => DB::table('role_capabilities')->join('roles', 'roles.id', '=', 'role_capabilities.role_id')
             ->where('roles.key', $role)->pluck('capability_key')->all();
-        $this->assertEqualsCanonicalizing(['platform.audit.view', 'platform.schools.view', 'platform.school_groups.view'], $caps('platform_auditor'));
+        $this->assertEqualsCanonicalizing(['platform.audit.view', 'platform.schools.view', 'platform.school_groups.view', 'platform.school_entitlements.view'], $caps('platform_auditor'));
         $this->assertEqualsCanonicalizing(['platform.schools.view', 'platform.school_groups.view', 'platform.schools.onboard', 'platform.school_entitlements.view', 'platform.school_entitlements.manage'], $caps('platform_manager'));
 
         $holders = fn (string $capability) => DB::table('role_capabilities')->join('roles', 'roles.id', '=', 'role_capabilities.role_id')
@@ -44,9 +44,9 @@ class PlatformAuthorityArchitectureGuardTest extends TestCase
         $this->assertEqualsCanonicalizing(['platform_auditor', 'platform_super_admin'], $holders('platform.audit.view'));
         $this->assertEqualsCanonicalizing(['platform_manager', 'platform_super_admin'], $holders('platform.schools.onboard'));
         // ORG.5 (ADR 0076 §31): entitlement management -- root and Manager, never the Auditor.
-        foreach (['platform.school_entitlements.view', 'platform.school_entitlements.manage'] as $entitlement) {
-            $this->assertEqualsCanonicalizing(['platform_manager', 'platform_super_admin'], $holders($entitlement));
-        }
+        // ORG.6 (§32): the Auditor reads entitlement state (view only).
+        $this->assertEqualsCanonicalizing(['platform_manager', 'platform_super_admin'], $holders('platform.school_entitlements.manage'));
+        $this->assertEqualsCanonicalizing(['platform_auditor', 'platform_manager', 'platform_super_admin'], $holders('platform.school_entitlements.view'));
     }
 
     #[Test]

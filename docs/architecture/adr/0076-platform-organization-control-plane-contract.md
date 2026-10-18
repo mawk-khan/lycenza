@@ -19,8 +19,12 @@
   existing Schools backfilled, new Schools core-only, CapabilityResolver
   intersection, execution-time guard on optional-module background work,
   `platform.school_entitlements.view/.manage` for root and Manager, the
-  dead `students.processing_authorizations` flag retired.** ORG.6 and every
-  later ORG phase need separate, explicit owner authorization.
+  dead `students.processing_authorizations` flag retired. ORG.6 PLATFORM
+  AUDITOR CONFIGURATION OVERSIGHT IMPLEMENTED (2026-10-18, §32): the Auditor
+  also holds the existing `platform.school_entitlements.view` and reads each
+  School's module state on the Registry overview; no new capability, route,
+  table or migration.** ORG.7 and every later ORG phase need separate,
+  explicit owner authorization.
 - Date: 2026-10-17
 - Programme: **ORG — Platform & Organization Foundation**
   (`MASTER-ROADMAP.md`, post-foundation programme 11).
@@ -1830,7 +1834,8 @@ no cycle, and no core module depending on an optional one.
 - **Capabilities.** `platform.school_entitlements.view` / `.manage`
   (namespace `platform`) are held by root and `platform_manager` only.
   The scope trigger keeps them off every School, Group and Guardian role.
-  `platform_auditor` is not extended (ORG.6).
+  `platform_auditor` was not extended in ORG.5. (Superseded in part by
+  §32: ORG.6 gives it `.view`, never `.manage`.)
 - **Order** (no code is spent on a static refusal):
   1. account enabled, then `.manage`;
   2. a known module, then not core;
@@ -1995,3 +2000,107 @@ no cycle, and no core module depending on an optional one.
 Recorded in the ORG.5 completion report: the targeted suites, the
 rollback proof of both migrations, the security review and the
 exact-SHA CI regression.
+
+## 32. ORG.6 — Platform Auditor configuration oversight (implemented, 2026-10-18)
+
+Owner authorization: ORG.6 only, under owner decisions D1–D8. Baseline
+`origin/main` = `7ec816fc` (ORG.5). ORG.7 and later phases were not
+started.
+
+### 32.1 Catalogue (`CapabilityAndRoleSeeder`, code-owned)
+
+- **`platform_auditor`** holds exactly: `platform.audit.view`,
+  `platform.schools.view`, `platform.school_groups.view` and (new in
+  ORG.6) the existing `platform.school_entitlements.view`.
+- **New capabilities:** none. **New routes, tables or migrations:** none.
+- **Never held by the Auditor:**
+  - `platform.school_entitlements.manage`;
+  - onboarding, lifecycle and root-reserved keys;
+  - Group governance and elevation;
+  - `platform.operations.view` and `platform.feature_flags.*`;
+  - any School, Group or Guardian capability.
+- **Materialization.** Role capabilities are synced by the idempotent
+  `CapabilityAndRoleSeeder`, which runs through `DatabaseSeeder` in every
+  environment (PRODUCTION-RELEASE.md). A grant names a role, never a
+  capability, so existing Auditor grants pick up the new capability with
+  no data change.
+- **Unchanged:** Manager/Auditor exclusivity (service and
+  `trg_platform_role_assignments_separation`). The Manager keeps exactly
+  its ORG.5 set.
+
+### 32.2 Read model (reused, not forked)
+
+- **Same page for every persona.** The Auditor uses the ORG.3/ORG.5
+  School overview (`/app/platform/schools/{school}`). There is no new
+  page and no per-persona copy.
+  - The `modules` prop is the `SchoolModuleEntitlementService::overview()`
+    output, gated by the view capability: key, label, description, core
+    flag, enabled state, dependencies and dependants, from the code
+    catalogue plus `SchoolModuleEntitlements::optionalStates()` (one
+    School's RLS context, the caller's context restored).
+  - The enable/disable links render only for `.manage` (`canManageModules`).
+- **What the Auditor does not see:**
+  - the impact preview (grant counts, navigation), which is
+    mutation-workflow data on the `.manage`-gated review page;
+  - administrator identities;
+  - domain hostnames;
+  - School audit data;
+  - any business record.
+- **Configuration, not business data:**
+  - "Fees enabled" is configuration; the School's collections are not;
+  - "Payroll disabled" is configuration; payroll runs, salaries and
+    payslips are not;
+  - "Attendance enabled" is configuration; attendance records are not.
+
+  A test proves the overview reads none of 18 tenant business tables
+  (students, HR, payroll, attendance, marks, charges, payments, journals,
+  documents, communications, leave, `school_audit_events`).
+- **Assurance.** Viewing configuration and module state needs only an
+  ordinary session (D4). The overview's recent platform events stay
+  behind `platform.audit.view` plus current MFA assurance (D5); without
+  assurance the section reports `mfa`.
+- **History.** Entitlement history is the platform ledger, read only
+  through the platform audit review. There is no second history table.
+
+### 32.3 Persona matrix (pinned by `PlatformPersonaMatrixTest` and `PlatformAuditorConfigurationOversightTest`)
+
+| | Admin | Manager | Auditor |
+|---|---|---|---|
+| Registry and School overview | yes | yes | yes |
+| Module state view | yes | yes | yes |
+| Module enable/disable | yes | yes | no |
+| Create/onboard School | yes | yes | no |
+| Activate, suspend/resume, close/reopen | yes | no | no |
+| Platform-role governance | yes | no | no |
+| Platform audit review (current MFA) | yes | no | yes |
+| Elevation | yes | no | no |
+| School business data or School audit ledger | no | no | no |
+
+- **Direct requests are refused.** Every Auditor mutation request (module
+  review pages and POSTs, create, activate, suspend, close, bootstrap
+  administrator, role grants, Group governance, elevation) is refused,
+  **with a valid fresh MFA code**.
+- **The services refuse too.** They refuse the Auditor at the capability
+  step, and no code is consumed. A School administrator, a teacher and a
+  Guardian reach no platform page.
+
+### 32.4 Decisions and observations
+
+- **`platform.operations.view` stays ungranted (D8).** Its consumers are
+  unchanged since ORG.4: the internal JSON status endpoint, CLI commands
+  and the local-only MFA demo route. None is a persona surface.
+- **No noisy audit.** Viewing configuration writes no audit event, which
+  follows the Registry convention. The platform audit review itself is
+  still audited.
+- **Cost.**
+  - The Registry list is unchanged: no entitlement work per row, and the
+    query bound test still passes.
+  - The overview takes 23 statements, one of them the entitlement read.
+- **ORG.5 observations carried, not absorbed:**
+  - the Group curriculum-coverage report ignores entitlements;
+  - the HRX-L4 payroll attendance evidence;
+  - the email hand-off window;
+  - the bootstrap-administrator review race.
+- **Reference evidence.** No reference-workbook role maps to the Auditor
+  (§31.8).
+

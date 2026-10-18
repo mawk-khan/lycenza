@@ -1235,8 +1235,10 @@ once several modules copy it.
       `platform.school_entitlements.view`/`.manage`. Never add a
       lifecycle, role-grant, Group-governance, elevation, audit or School
       capability to it.
-    - **The Platform Auditor** reads the Registry, Groups and the platform
-      audit log, and changes nothing.
+    - **The Platform Auditor** reads the Registry (including each School's
+      module entitlement state, `platform.school_entitlements.view`, ORG.6
+      ADR 0076 §32), Groups and the platform audit log, and changes nothing.
+      Never `.manage`, `platform.operations.view` or a feature-flag key.
     - **Exclusivity:** one person never holds both runtime roles.
     - **Platform routes** need platform-mode `capability:` middleware or a
       verified `PlatformRouteCoverage` contract

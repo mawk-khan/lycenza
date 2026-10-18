@@ -53,7 +53,7 @@ class PlatformRoleAssignmentInvariantsTest extends TestCase
         LocalCatalogueFixtures::asOwner(fn () => DB::table('role_capabilities')->insert(['role_id' => $id, 'capability_key' => 'platform.schools.manage']));
         $this->assertRejected(fn () => LocalCatalogueFixtures::asOwner(fn () => DB::table('roles')->where('id', $id)->update(['runtime_assignable' => true])), 'root-reserved capability');
 
-        $this->assertEqualsCanonicalizing(['platform.audit.view', 'platform.schools.view', 'platform.school_groups.view'], DB::table('role_capabilities')->where('role_id', $this->roleId('platform_auditor'))->pluck('capability_key')->all());
+        $this->assertEqualsCanonicalizing(['platform.audit.view', 'platform.schools.view', 'platform.school_groups.view', 'platform.school_entitlements.view'], DB::table('role_capabilities')->where('role_id', $this->roleId('platform_auditor'))->pluck('capability_key')->all());
         $this->assertEqualsCanonicalizing(['platform.schools.view', 'platform.school_groups.view', 'platform.schools.onboard', 'platform.school_entitlements.view', 'platform.school_entitlements.manage'], DB::table('role_capabilities')->where('role_id', $this->roleId('platform_manager'))->pluck('capability_key')->all());
     }
 

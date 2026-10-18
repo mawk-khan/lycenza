@@ -755,8 +755,14 @@ ADR 0045.
 |---|---|---|---|---|---|---|---|
 | Platform Admin (`platform_super_admin`, root, out of band) | read | yes | yes | view + manage | yes | govern | yes (MFA) |
 | Platform Manager (`platform_manager`, runtime) | read | yes | **no** | view + manage | no | read | no |
-| Platform Auditor (`platform_auditor`, runtime) | read | no | no | **no** (ORG.6) | no | read | yes (MFA) |
+| Platform Auditor (`platform_auditor`, runtime) | read | no | no | **view only** (ORG.6) | no | read | yes (MFA) |
 
+- **Auditor configuration oversight (ORG.6, ADR 0076 §32).** The Auditor
+  reads each School's module state on the Registry overview through
+  `platform.school_entitlements.view`, with an ordinary session and no
+  fresh MFA. It never sees the impact preview, business data or the School
+  audit ledger. A valid MFA code never substitutes for the missing
+  `.manage`.
 - **One rule for onboarding vs lifecycle.** Onboarding never implies
   lifecycle control; `SchoolLifecycleAuthority::capabilitiesFor()` is that
   one per-operation rule.

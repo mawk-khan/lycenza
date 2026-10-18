@@ -267,7 +267,7 @@ final class DemoDataBuilder
             'granted_by_user_id' => $platformAdmin->id,
             'granted_at' => now(),
         ]);
-        $this->account('Platform Auditor', $auditor, '(none -- platform scope)', 'Read-only: the School Registry, School Groups and the platform audit log (needs MFA); changes nothing');
+        $this->account('Platform Auditor', $auditor, '(none -- platform scope)', 'Read-only: the School Registry (including each School module entitlement state), School Groups and the platform audit log (needs MFA); changes nothing');
 
         // ORG.4 (ADR 0076 §7): the Platform Manager onboards Schools (creates
         // them in provisioning, sets the bootstrap administrator) and reads

@@ -145,8 +145,10 @@ class PlatformSchoolAdminController extends Controller
                 'reopen' => $school->isClosed() && $canManage,
             ],
             // ORG.5 (ADR 0076 §31): module entitlements, shown under
-            // platform.school_entitlements.view; offered for change under
-            // .manage while the School is not closed. The service decides.
+            // platform.school_entitlements.view (root, Manager and, since
+            // ORG.6 §32, the Auditor -- current state only, no impact preview);
+            // offered for change under .manage while the School is not closed.
+            // The service decides.
             'modules' => $this->entitlements->canView($request->user()) ? $this->entitlements->overview($school) : null,
             'canManageModules' => ! $school->isClosed() && $this->entitlements->canManage($request->user()),
             'notice' => $request->session()->get('lifecycleNotice'),
