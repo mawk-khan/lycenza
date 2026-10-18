@@ -248,7 +248,7 @@ final class DemoDataBuilder
         // `platform.role_grant.provisioned` with method `demo_seed`.
         $platformAdmin = $this->user('Platform Admin (Demo)', 'platform.admin@example.test', PlatformRootProvisioningService::CONNECTION);
         app(PlatformRootProvisioningService::class)->provision($platformAdmin, 'demo_seed');
-        $this->account('Platform Super Admin', $platformAdmin, '(none -- platform scope)', 'Platform capabilities: School elevation (no School page opens), School Group governance, platform audit review, Platform Auditor grants');
+        $this->account('Platform Super Admin', $platformAdmin, '(none -- platform scope)', 'Platform capabilities: School Registry and lifecycle, School elevation (no School page opens), School Group governance, platform audit review, Platform Manager and Auditor grants');
 
         // Phase 0N.7 (ADR 0046): the one runtime-assignable platform role,
         // granted by the Platform Admin exactly as the Platform roles page
@@ -260,7 +260,20 @@ final class DemoDataBuilder
             'granted_by_user_id' => $platformAdmin->id,
             'granted_at' => now(),
         ]);
-        $this->account('Platform Auditor', $auditor, '(none -- platform scope)', 'platform.audit.view only: the platform audit log (needs MFA); nothing else');
+        $this->account('Platform Auditor', $auditor, '(none -- platform scope)', 'Read-only: the School Registry, School Groups and the platform audit log (needs MFA); changes nothing');
+
+        // ORG.4 (ADR 0076 §7): the Platform Manager onboards Schools (creates
+        // them in provisioning, sets the bootstrap administrator) and reads
+        // the Registry and Groups. Activation stays with the Platform Admin.
+        // Never the same person as the Auditor (§7.4).
+        $manager = $this->user('Platform Manager (Demo)', 'platform.manager@example.test');
+        PlatformRoleAssignment::query()->create([
+            'user_id' => $manager->id,
+            'role_id' => $this->role('platform_manager', 'platform')->id,
+            'granted_by_user_id' => $platformAdmin->id,
+            'granted_at' => now(),
+        ]);
+        $this->account('Platform Manager', $manager, '(none -- platform scope)', 'School Registry, School Groups (read), onboarding: create a School in provisioning and set its bootstrap administrator (needs MFA); cannot activate, suspend or close');
 
         $this->admin = $this->user('Asha Rao (School Admin)', 'school.admin@example.test');
         $this->assignSchoolRole($this->member($this->admin, $this->school), 'school_admin');

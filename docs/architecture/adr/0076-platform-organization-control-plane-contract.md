@@ -9,9 +9,12 @@
   fixed; no new capability or role. ORG.3 PLATFORM SCHOOL REGISTRY
   IMPLEMENTED (2026-10-18, §29): read model, search, filters, keyset
   pagination, derived readiness and warnings, School overview under
-  `platform.schools.view`; no new capability, role, table or migration.**
-  ORG.4 and every later ORG phase need separate, explicit owner
-  authorization.
+  `platform.schools.view`; no new capability, role, table or migration.
+  ORG.4 PLATFORM OPERATOR PERSONAS IMPLEMENTED (2026-10-18, §30): Platform
+  Manager (`platform_manager`) and `platform.schools.onboard`; Auditor reads
+  the Registry and Groups; Manager/Auditor exclusivity in service and
+  database; platform-route coverage guard.** ORG.5 and every later ORG
+  phase need separate, explicit owner authorization.
 - Date: 2026-10-17
 - Programme: **ORG — Platform & Organization Foundation**
   (`MASTER-ROADMAP.md`, post-foundation programme 11).
@@ -1517,3 +1520,150 @@ Owner authorization: ORG.3 only. Baseline `origin/main` = `c421796b`
     refused;
   - the overview shows its checks, with events gated on MFA;
   - the School Admin and the Platform Auditor get 403.
+
+## 30. ORG.4 — Platform operator personas and onboarding authority (implemented, 2026-10-18)
+
+Owner authorization: ORG.4 only. Baseline `origin/main` = `7efd14b8`
+(ORG.3). ORG.5 and later phases were not started.
+
+### 30.1 Persona matrix (pinned by `PlatformPersonaMatrixTest`)
+
+| | Platform Admin (`platform_super_admin`, root) | Platform Manager (`platform_manager`) | Platform Auditor (`platform_auditor`) | Any School role |
+|---|---|---|---|---|
+| Registry list and overview | yes | yes | yes | no |
+| Create a School (into `provisioning`) | yes | yes | no | no |
+| Bootstrap administrator while provisioning | yes | yes | no | no |
+| Activate, suspend, resume, close, reopen | yes | no | no | no |
+| Grant or revoke platform roles | yes | no | no | no |
+| School Groups | read and govern | read | read | no |
+| Platform audit review (current MFA) | yes | no | yes | no |
+| Elevation | yes | no | no | no |
+| School authority or tenant business data | no | no | no | own School only |
+
+### 30.2 Catalogue (`CapabilityAndRoleSeeder`, code-owned)
+
+- **New capability:** `platform.schools.onboard` (namespace `platform`;
+  not root-reserved). The `role_capabilities` scope trigger keeps it off
+  every School, Group and Guardian role (a raw-SQL test pins it).
+- **New role:** `platform_manager`, a runtime-assignable system platform
+  role holding exactly `platform.schools.view`,
+  `platform.school_groups.view` and `platform.schools.onboard`.
+- **Auditor:** `platform_auditor` gains `platform.schools.view` and
+  `platform.school_groups.view`, keeping `platform.audit.view`.
+  - This brings forward, at the owner's direction, the Registry and Group
+    reads §8 had placed in ORG.6.
+  - Entitlement views wait for ORG.5, and any other Auditor read model for
+    ORG.6.
+- **Root** gains `platform.schools.onboard`. `platform.schools.manage` and
+  `platform.role_grants.manage` stay root-reserved: the trigger is
+  unchanged, and tests prove neither runtime role can receive them.
+- **Not granted:**
+  - `platform.operations.view`: its consumers are the internal JSON
+    status endpoint, two CLI commands and the local MFA demo ping. None is
+    a persona read surface, so it is recorded and deferred;
+  - entitlement capabilities (ORG.5).
+
+### 30.3 Onboarding split
+
+- **The rule.** `SchoolLifecycleAuthority::capabilitiesFor()` is the one
+  per-operation rule:
+  - `Create` and `ReplaceBootstrapAdmin` accept onboard **or** manage;
+  - every status transition accepts manage alone.
+- **Where it lives.** CREATE stays in `SchoolLifecycleService` (CLAUDE.md
+  rule 86: the only School creator). There is no separate onboarding
+  service, because the split is a capability rule, not a new code path.
+- **Initial status.** A School always starts in `provisioning`. `status`
+  is not fillable (ORG.1A V-1), and submitted `status` or `closed_at`
+  fields are ignored (tested).
+- **Routes:**
+  - create and the bootstrap-admin review page:
+    `capability:platform.schools.onboard|platform.schools.manage,platform`
+    (the ORG.2 any-of floor);
+  - the lifecycle review page: `platform.schools.manage`;
+  - the POSTs are still service-authorized, and refusals are audited.
+- **Database.** The SR.1 grantor trigger's ADR 0047 bootstrap exception
+  now accepts an active platform grant carrying onboard as well as manage.
+  It is still limited to the `school_admin` role, a School in
+  `provisioning`, and an enabled grantor.
+  - Without this the Manager's bootstrap grant was refused, which tests
+    surfaced.
+  - `down()` restores the previous function verbatim.
+- **Order** (unchanged; a refusal never spends a code): account state →
+  the operation's capability → state checks → confirmation → enrolled
+  factor → fresh MFA re-verification. Tests prove a Manager's refused
+  activate, suspend, resume, close and reopen did not consume the code it
+  then used to create a School.
+- **Duplicates.** Duplicate slugs and codes are refused by the unique
+  constraints, and no second School is created.
+
+### 30.4 Manager / Auditor exclusivity (§7.4, ORG-C3)
+
+- **Service.** `PlatformRoleGovernanceService::EXCLUSIVE` refuses the
+  conflicting grant after the self-grant check and before the MFA code
+  (audited `role_conflict`).
+  - A racing grant refused by the database maps to the same outcome.
+- **Database.** Migration `2026_12_19_090000` adds
+  `trg_platform_role_assignments_separation`, a separate BEFORE INSERT
+  trigger.
+  - It takes a per-user advisory transaction lock and refuses an active
+    grant of one role while the other is active.
+  - It applies to runtime and out-of-band grants alike.
+- **Revocation.** Revoking one role makes the other grantable again.
+
+### 30.5 Pages
+
+- **Platform Roles:** one section per runtime role (Manager, Auditor) with
+  its grants, an explicit role choice on grant, and a fresh code for every
+  write. Platform Admin is described as root and never offered.
+- **Registry:**
+  - *Create a School* for onboard holders;
+  - lifecycle actions only for `platform.schools.manage`;
+  - the bootstrap-administrator action for onboard holders while
+    provisioning;
+  - a provisioning School shows *Only a Platform Admin can activate it* to
+    anyone without manage.
+- **Overview audit section.** The Manager does not hold
+  `platform.audit.view`, so the section shows "not part of your access".
+- **Registry cost.** Unchanged: one extra Gate check per page, no per-row
+  work.
+
+### 30.6 Platform-route coverage guard (the ORG.2 §28.7 follow-up)
+
+- **`PlatformRouteCoverageGuardTest`.** Every RouteUniverse category-A
+  route carries platform-mode `capability:` middleware or a
+  `PlatformRouteCoverage` entry (25 entries) verified by the same
+  `CoverageEvidence`.
+  - The entries include the real authority of Group-governance mutations,
+    whose route middleware is only a read floor.
+  - No platform route uses School-mode capability middleware.
+  - A probe route proves an uncovered platform route is caught.
+- **Recognized domain authorities** gained:
+  `PlatformRoleGovernanceService::requireCapability`,
+  `SchoolGroupGovernanceService::require` and
+  `GroupCurriculumCoverageReportService::authorizingGrant`.
+
+### 30.7 Demo, evidence and what stays out
+
+- **Demo persona.** `platform.manager@example.test` (Platform Manager,
+  granted by the demo Platform Admin) joins the DDEV demo.
+- **DDEV smoke (status codes):**
+  - Admin: Registry 200, create 200, suspend review 200, roles 200;
+  - Manager: Registry 200, create 200, suspend review 403, roles 403,
+    overview offers no lifecycle action;
+  - Auditor: Registry 200, create 403;
+  - School Admin: everything 403;
+  - the Roles page lists both runtime roles.
+- **Rollback proof (`/rollback-proof 1`):** the schema is identical after
+  rollback and re-apply (54 lines removed by the rollback), and
+  `platform:verify-database` reports `failed=0`.
+- **Not done here:** no module entitlements, Campus authority, School
+  capability for any platform role, impersonation or SIS change.
+- **Observation (security review, below the bar):** activation re-checks a
+  qualifying administrator under the School lock, but it does not pin the
+  identity shown on root's review page. A Manager who replaces the
+  bootstrap administrator between root's review and confirmation would
+  have the new person activated.
+  - The replacement is audited.
+  - §7.3.4 accepts the separation as a consequence, not a check.
+  - Pinning the reviewed administrator is a candidate hardening for a
+    later phase.

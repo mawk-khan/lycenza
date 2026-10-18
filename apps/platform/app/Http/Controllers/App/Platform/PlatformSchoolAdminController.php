@@ -9,6 +9,7 @@ use App\Domain\Platform\Application\Schools\SchoolBootstrapAdministrationService
 use App\Domain\Platform\Application\Schools\SchoolClosureReason;
 use App\Domain\Platform\Application\Schools\SchoolLifecycleAuthority;
 use App\Domain\Platform\Application\Schools\SchoolLifecycleDeniedException;
+use App\Domain\Platform\Application\Schools\SchoolLifecycleOperation;
 use App\Domain\Platform\Application\Schools\SchoolLifecycleService;
 use App\Domain\Platform\Application\Schools\SchoolSuspensionReason;
 use App\Http\Controllers\Controller;
@@ -40,7 +41,9 @@ use Inertia\Response;
  * shown only while `provisioning`. The recent platform governance events
  * appear only through the platform audit review (`platform.audit.view` +
  * current MFA assurance, one access event). Lifecycle pages and actions
- * keep `platform.schools.manage`; every change reaches the lifecycle
+ * keep `platform.schools.manage`, except the onboarding pages (create, and
+ * the bootstrap administrator while provisioning), which ORG.4 opens to
+ * `platform.schools.onboard` (the Platform Manager); every change reaches the lifecycle
  * services, which authorize, audit refusals and require explicit
  * confirmation plus a fresh MFA re-verification.
  */
@@ -92,7 +95,7 @@ class PlatformSchoolAdminController extends Controller
                 'groups' => SchoolGroup::query()->where('status', SchoolGroup::STATUS_ACTIVE)->orderBy('name')->get(['id', 'name'])
                     ->map(fn (SchoolGroup $g): array => ['id' => $g->id, 'name' => $g->name])->values(),
             ],
-            'canCreate' => $this->canManage($request),
+            'canCreate' => $this->canOnboard($request),
         ]);
     }
 
@@ -119,23 +122,26 @@ class PlatformSchoolAdminController extends Controller
     public function show(Request $request, School $school, SensitiveReadAssurance $assurance): Response
     {
         $canManage = $this->canManage($request);
+        $canOnboard = $this->canOnboard($request);
 
         return Inertia::render('App/Platform/Schools/Show', [
             'school' => $this->summary($school),
             'registry' => $this->registry->overview($school),
             'audit' => $this->auditSummary($request, $school, $assurance),
             'canManage' => $canManage,
+            'canOnboard' => $canOnboard,
             'bootstrapAdmins' => $this->bootstrapAdmins($school),
-            // Offered only to `platform.schools.manage`; the lifecycle services
-            // remain the authority for every change.
-            'actions' => array_map(fn (bool $offered): bool => $offered && $canManage, [
-                'activate' => $school->isProvisioning(),
-                'replaceBootstrapAdmin' => $school->isProvisioning(),
-                'suspend' => $school->isActive(),
-                'resume' => $school->isSuspended() && ! $school->isClosed(),
-                'close' => ($school->isActive() || $school->isSuspended()) && ! $school->isClosed(),
-                'reopen' => $school->isClosed(),
-            ]),
+            // Offered by the same per-operation rule the services apply (ORG.4):
+            // the bootstrap administrator to onboarding, every transition to
+            // `platform.schools.manage`. The services remain the authority.
+            'actions' => [
+                'activate' => $school->isProvisioning() && $canManage,
+                'replaceBootstrapAdmin' => $school->isProvisioning() && $canOnboard,
+                'suspend' => $school->isActive() && $canManage,
+                'resume' => $school->isSuspended() && ! $school->isClosed() && $canManage,
+                'close' => ($school->isActive() || $school->isSuspended()) && ! $school->isClosed() && $canManage,
+                'reopen' => $school->isClosed() && $canManage,
+            ],
             'notice' => $request->session()->get('lifecycleNotice'),
         ]);
     }
@@ -184,6 +190,15 @@ class PlatformSchoolAdminController extends Controller
     private function canManage(Request $request): bool
     {
         return Gate::forUser($request->user())->allows('capability', [SchoolLifecycleAuthority::CAPABILITY, null]);
+    }
+
+    /** ORG.4: the same any-of rule SchoolLifecycleAuthority applies to CREATE. */
+    private function canOnboard(Request $request): bool
+    {
+        $gate = Gate::forUser($request->user());
+
+        return collect(SchoolLifecycleAuthority::capabilitiesFor(SchoolLifecycleOperation::Create))
+            ->contains(fn (string $capability): bool => $gate->allows('capability', [$capability, null]));
     }
 
     /**

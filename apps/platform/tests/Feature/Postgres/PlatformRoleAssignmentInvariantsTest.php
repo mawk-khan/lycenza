@@ -25,9 +25,9 @@ class PlatformRoleAssignmentInvariantsTest extends TestCase
     }
 
     #[Test]
-    public function only_system_platform_non_root_roles_are_runtime_assignable_and_only_the_auditor_is(): void
+    public function only_system_platform_non_root_roles_are_runtime_assignable_and_only_the_auditor_and_manager_are(): void
     {
-        $this->assertSame(['platform_auditor'], DB::table('roles')->where('runtime_assignable', true)->pluck('key')->all());
+        $this->assertEqualsCanonicalizing(['platform_auditor', 'platform_manager'], DB::table('roles')->where('runtime_assignable', true)->pluck('key')->all());
 
         // The root role holds root-reserved capabilities, so the trigger
         // refuses it even before the CHECK constraint is evaluated.
@@ -40,9 +40,11 @@ class PlatformRoleAssignmentInvariantsTest extends TestCase
     #[Test]
     public function a_runtime_assignable_role_never_holds_a_root_reserved_capability(): void
     {
-        $auditor = $this->roleId('platform_auditor');
-        foreach (['platform.role_grants.manage', 'platform.schools.manage'] as $capability) {
-            $this->assertRejected(fn () => LocalCatalogueFixtures::asOwner(fn () => DB::table('role_capabilities')->insert(['role_id' => $auditor, 'capability_key' => $capability])), 'root-reserved capability');
+        foreach (['platform_auditor', 'platform_manager'] as $runtimeRole) {
+            $role = $this->roleId($runtimeRole);
+            foreach (['platform.role_grants.manage', 'platform.schools.manage'] as $capability) {
+                $this->assertRejected(fn () => LocalCatalogueFixtures::asOwner(fn () => DB::table('role_capabilities')->insert(['role_id' => $role, 'capability_key' => $capability])), 'root-reserved capability');
+            }
         }
 
         // Nor can a role already holding one be made runtime-assignable.
@@ -51,7 +53,8 @@ class PlatformRoleAssignmentInvariantsTest extends TestCase
         LocalCatalogueFixtures::asOwner(fn () => DB::table('role_capabilities')->insert(['role_id' => $id, 'capability_key' => 'platform.schools.manage']));
         $this->assertRejected(fn () => LocalCatalogueFixtures::asOwner(fn () => DB::table('roles')->where('id', $id)->update(['runtime_assignable' => true])), 'root-reserved capability');
 
-        $this->assertSame(['platform.audit.view'], DB::table('role_capabilities')->where('role_id', $this->roleId('platform_auditor'))->pluck('capability_key')->all());
+        $this->assertEqualsCanonicalizing(['platform.audit.view', 'platform.schools.view', 'platform.school_groups.view'], DB::table('role_capabilities')->where('role_id', $this->roleId('platform_auditor'))->pluck('capability_key')->all());
+        $this->assertEqualsCanonicalizing(['platform.schools.view', 'platform.school_groups.view', 'platform.schools.onboard'], DB::table('role_capabilities')->where('role_id', $this->roleId('platform_manager'))->pluck('capability_key')->all());
     }
 
     #[Test]

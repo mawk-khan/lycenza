@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\CapabilityResolver;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +19,8 @@ use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 /**
  * Phase 0N.7 (ADR 0046 sections 3, 4, 6): the ONLY runtime path that grants
  * or revokes a platform role -- and only a code-approved, runtime-
- * assignable, non-root one (v1: `platform_auditor`). The root role
+ * assignable, non-root one (`platform_auditor`; ORG.4 adds
+ * `platform_manager`, never together with the auditor). The root role
  * `platform_super_admin` is provisioned out of band and can be neither
  * granted nor revoked here; the database refuses it too
  * (trg_platform_role_assignments_governance), as it refuses self-grants
@@ -40,8 +42,18 @@ class PlatformRoleGovernanceService
 {
     public const CAPABILITY = 'platform.role_grants.manage';
 
-    /** The code allowlist of runtime-assignable platform roles (ADR 0046 §3). */
-    public const RUNTIME_ASSIGNABLE = ['platform_auditor'];
+    /** The code allowlist of runtime-assignable platform roles (ADR 0046 §3; ORG.4 adds the Manager). */
+    public const RUNTIME_ASSIGNABLE = ['platform_auditor', 'platform_manager'];
+
+    /**
+     * ORG.4 (ADR 0076 §7.4, ORG-C3): roles one person may never hold at the
+     * same time -- the auditor oversees the manager. Mirrored by
+     * trg_platform_role_assignments_separation (the authoritative backstop).
+     */
+    public const EXCLUSIVE = [
+        'platform_manager' => 'platform_auditor',
+        'platform_auditor' => 'platform_manager',
+    ];
 
     public function __construct(
         private readonly CapabilityResolver $capabilities,
@@ -57,6 +69,11 @@ class PlatformRoleGovernanceService
 
         if ($target->id === $actor->id) {
             $this->deny($actor, $target, 'self_grant', $roleKey, 'user', 'You cannot grant a platform role to yourself.');
+        }
+
+        // A static refusal, so it comes before a code is spent (ORG.1A order).
+        if ($this->holdsExclusiveRole($target, $role->key)) {
+            $this->deny($actor, $target, 'role_conflict', $roleKey, 'user', 'That person holds a platform role that cannot be combined with this one.');
         }
 
         $this->requireFreshMfa($request, $actor, $target, $role->key);
@@ -79,6 +96,13 @@ class PlatformRoleGovernanceService
             });
         } catch (UniqueConstraintViolationException) {
             $this->deny($actor, $target, 'already_granted', $roleKey, 'user', 'That person already holds this role.');
+        } catch (QueryException $e) {
+            // A racing grant of the exclusive role committed first: the
+            // separation trigger refused this one.
+            if (! str_contains($e->getMessage(), 'platform_role_separation')) {
+                throw $e;
+            }
+            $this->deny($actor, $target, 'role_conflict', $roleKey, 'user', 'That person holds a platform role that cannot be combined with this one.');
         }
 
         $this->capabilities->forgetCache($target);
@@ -171,6 +195,16 @@ class PlatformRoleGovernanceService
         }
 
         return $role;
+    }
+
+    private function holdsExclusiveRole(User $target, string $roleKey): bool
+    {
+        $exclusive = self::EXCLUSIVE[$roleKey] ?? null;
+
+        return $exclusive !== null && PlatformRoleAssignment::query()->active()
+            ->where('user_id', $target->id)
+            ->whereHas('role', fn ($query) => $query->where('key', $exclusive))
+            ->exists();
     }
 
     private function resolveTarget(string $identifier): User

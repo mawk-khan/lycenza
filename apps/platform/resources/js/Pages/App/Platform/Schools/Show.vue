@@ -53,6 +53,7 @@ interface Props {
         }[];
     };
     canManage: boolean;
+    canOnboard: boolean;
     bootstrapAdmins: { name: string; email: string }[];
     actions: {
         activate: boolean;
@@ -259,7 +260,15 @@ const notices: Record<string, string> = {
             </ul>
         </section>
 
-        <section v-if="canManage" class="mt-8" aria-labelledby="actions-heading">
+        <p
+            v-if="school.status === 'provisioning' && !canManage"
+            class="mt-8 rounded border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900"
+            data-testid="awaiting-activation"
+        >
+            This School is provisioning. Only a Platform Admin can activate it.
+        </p>
+
+        <section v-if="canManage || canOnboard" class="mt-8" aria-labelledby="actions-heading">
             <h2 id="actions-heading" class="text-sm font-medium text-slate-500">
                 Lifecycle actions
             </h2>
@@ -300,6 +309,7 @@ const notices: Record<string, string> = {
             <p
                 v-if="
                     !actions.activate &&
+                    !actions.replaceBootstrapAdmin &&
                     !actions.suspend &&
                     !actions.resume &&
                     !actions.close &&

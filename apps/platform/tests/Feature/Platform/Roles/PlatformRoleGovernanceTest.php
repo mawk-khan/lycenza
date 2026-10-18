@@ -66,7 +66,7 @@ class PlatformRoleGovernanceTest extends TestCase
         $grant = $this->grantAs($root, 'AUDITOR.PERSON@example.test', 'platform_auditor');
 
         $this->assertSame($root->id, $grant->granted_by_user_id);
-        $this->assertSame(['platform.audit.view'], $resolver->platformCapabilities($person), 'The grant takes effect at once (cache forgotten).');
+        $this->assertEqualsCanonicalizing(['platform.audit.view', 'platform.schools.view', 'platform.school_groups.view'], $resolver->platformCapabilities($person), 'The grant takes effect at once (cache forgotten).');
         $granted = PlatformAuditEvent::query()->where('event_type', 'platform.role_grant.granted')->firstOrFail();
         $this->assertEquals(['user_id' => $person->id, 'role_key' => 'platform_auditor'], $granted->metadata);
         $this->assertSame($grant->id, $granted->subject_id);
@@ -210,7 +210,7 @@ class PlatformRoleGovernanceTest extends TestCase
     }
 
     #[Test]
-    public function the_roles_page_offers_only_the_auditor_role_and_lists_runtime_grants(): void
+    public function the_roles_page_offers_only_the_runtime_roles_and_lists_their_grants(): void
     {
         $root = $this->platformAdmin();
         $person = $this->createUser(['email' => 'listed.auditor@example.test']);
@@ -219,16 +219,20 @@ class PlatformRoleGovernanceTest extends TestCase
         $response = $this->actingAs($root)->get('/app/platform/roles');
         $response->assertOk()->assertInertia(fn (AssertableInertia $p) => $p
             ->component('App/Platform/Roles')
-            ->where('role', ['key' => 'platform_auditor', 'name' => 'Platform Auditor'])
-            ->has('grants', 1)
-            ->where('grants.0.userEmail', 'listed.auditor@example.test')
+            ->where('roles.0.key', 'platform_manager')
+            ->where('roles.1.key', 'platform_auditor')
+            ->has('roles', 2)
+            ->has('roles.1.grants', 1)
+            ->where('roles.1.grants.0.userEmail', 'listed.auditor@example.test')
+            ->where('exclusive', ['platform_manager' => 'platform_auditor', 'platform_auditor' => 'platform_manager'])
         );
         $this->assertStringNotContainsString('platform_super_admin', $response->getContent());
 
-        // The page's POST grants the auditor role whatever a client sends.
+        // ORG.4: the page's POST names its role; the root role is refused and audited.
         $other = $this->createUser();
-        $this->post('/app/platform/roles/grants', ['user' => $other->email, 'role' => 'platform_super_admin', 'mfa_code' => $this->issueRecoveryCodes($root, 1)[0]])->assertRedirect();
-        $this->assertSame(['platform.audit.view'], app(CapabilityResolver::class)->platformCapabilities($other));
+        $this->post('/app/platform/roles/grants', ['user' => $other->email, 'role' => 'platform_super_admin', 'mfa_code' => $this->issueRecoveryCodes($root, 1)[0]])->assertSessionHasErrors('role');
+        $this->assertSame([], app(CapabilityResolver::class)->platformCapabilities($other));
+        $this->assertContainsEquals(['outcome_code' => 'role_not_assignable', 'role_key' => 'platform_super_admin'], $this->denials($root));
 
         $this->get('/app')->assertInertia(fn (AssertableInertia $p) => $p
             ->where('navigation', self::nav(shown: ['platform-audit-log']))
@@ -237,7 +241,7 @@ class PlatformRoleGovernanceTest extends TestCase
     }
 
     #[Test]
-    public function the_platform_auditor_holds_exactly_one_capability_and_no_other_power(): void
+    public function the_platform_auditor_reads_and_holds_no_other_power(): void
     {
         $root = $this->platformAdmin();
         $auditor = $this->createUser();
@@ -246,23 +250,25 @@ class PlatformRoleGovernanceTest extends TestCase
         $group = $this->createGroup([$school]);
         $resolver = app(CapabilityResolver::class);
 
-        $this->assertSame(['platform.audit.view'], $resolver->platformCapabilities($auditor));
+        $this->assertEqualsCanonicalizing(['platform.audit.view', 'platform.schools.view', 'platform.school_groups.view'], $resolver->platformCapabilities($auditor));
         $this->assertSame([], $resolver->schoolCapabilities($auditor, $school));
         $this->assertSame([], $resolver->groupCapabilities($auditor, $group));
-        $this->assertSame(['platform.audit.view'], Role::query()->where('key', 'platform_auditor')->firstOrFail()->capabilities()->pluck('key')->all());
+        $this->assertEqualsCanonicalizing(['platform.audit.view', 'platform.schools.view', 'platform.school_groups.view'], Role::query()->where('key', 'platform_auditor')->firstOrFail()->capabilities()->pluck('key')->all());
 
         $this->enrollActiveMfaFactor($auditor);
+        // ORG.4 (ADR 0076 §8): read-only Registry and Group views; no change anywhere.
         $this->actingAs($auditor)->get('/app')->assertOk()->assertInertia(fn (AssertableInertia $p) => $p
             ->where('activeSchool', null)
-            ->where('navigation', self::nav(shown: ['platform-audit-log']))
+            ->where('navigation', self::nav(shown: ['platform-audit-log', 'platform-schools', 'platform-groups']))
             ->where('navigation', self::nav(hidden: ['platform-roles']))
             ->where('platformElevation.canStart', false)
             ->where('navigation', self::nav(hidden: ['school-groups']))
-            ->where('navigation', self::nav(hidden: ['platform-groups']))
         );
         $this->get('/app/platform/elevation')->assertForbidden();
         $this->post('/app/platform/elevation/confirm', ['target' => $school->id, 'reason_code' => 'operational_support'])->assertForbidden();
-        $this->get('/app/platform/groups')->assertForbidden();
+        $this->get('/app/platform/groups')->assertOk()->assertInertia(fn (AssertableInertia $p) => $p->where('canManage', false));
+        $this->post('/app/platform/groups', ['name' => 'Auditor Trust', 'slug' => 'auditor-trust'])->assertForbidden();
+        $this->get('/app/platform/schools/create')->assertForbidden();
         $this->get("/app/groups/{$group->id}")->assertNotFound();
         $this->get('/app/platform/roles')->assertForbidden();
         $this->get('/app/students')->assertRedirect('/app');

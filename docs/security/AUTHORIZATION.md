@@ -749,6 +749,26 @@ ADR 0045.
   exist on it; no Compliance, Automation or AI cross-School access; no
   export. See ADR 0048.
 
+## Platform operator personas (ADR 0076 §30 — built in ORG.4)
+
+| Persona (role key) | Registry | Create / bootstrap admin (`platform.schools.onboard`) | Lifecycle (`platform.schools.manage`) | Platform roles | Groups | Audit review |
+|---|---|---|---|---|---|---|
+| Platform Admin (`platform_super_admin`, root, out of band) | read | yes | yes | yes | govern | yes (MFA) |
+| Platform Manager (`platform_manager`, runtime) | read | yes | **no** | no | read | no |
+| Platform Auditor (`platform_auditor`, runtime) | read | no | no | no | read | yes (MFA) |
+
+- **One rule for onboarding vs lifecycle.** Onboarding never implies
+  lifecycle control; `SchoolLifecycleAuthority::capabilitiesFor()` is that
+  one per-operation rule.
+- **No School authority.** No platform persona holds a School, Group or
+  Guardian capability, and none can elevate except root.
+- **Exclusivity.** One person never holds both runtime roles. The
+  governance service refuses it (`role_conflict`), and so does
+  `trg_platform_role_assignments_separation`.
+- **Every platform route** carries platform-mode `capability:` middleware
+  or a verified `PlatformRouteCoverage` contract
+  (`PlatformRouteCoverageGuardTest`, CLAUDE.md rule 99).
+
 ## Platform authority and platform audit review (ADR 0046 — built in Phase 0N.7)
 
 - `platform_super_admin` is the **root / bootstrap** role: provisioned

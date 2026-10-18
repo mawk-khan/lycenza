@@ -12,6 +12,11 @@
   Manager may onboard Schools into `provisioning` through a narrower,
   non-root-reserved capability. `platform.schools.manage` stays
   root-reserved. See "Amendment — ORG.1" at the end.
+- **Amended by ADR 0076 §30 (ORG.4, 2026-10-18):** the code allowlist of
+  runtime-assignable platform roles is now `platform_auditor` and
+  `platform_manager` (never both to one person). The Auditor also reads the
+  School Registry and School Groups. Root and the root-reserved
+  capabilities are unchanged.
 
 ## Context
 

@@ -3,6 +3,9 @@
 namespace Tests\Support\Authorization;
 
 use App\Domain\Identity\Application\Staff\StaffRoleCatalog;
+use App\Domain\Platform\Application\Groups\Reporting\GroupCurriculumCoverageReportService;
+use App\Domain\Platform\Application\Groups\SchoolGroupGovernanceService;
+use App\Domain\Platform\Application\Roles\PlatformRoleGovernanceService;
 use Illuminate\Routing\Route;
 use ReflectionClass;
 use ReflectionMethod;
@@ -34,11 +37,20 @@ final class CoverageEvidence
      */
     private const DOMAIN_AUTHORITIES = [
         StaffRoleCatalog::class => ['canView', 'canManageMembers', 'canManageRoles', 'canAdminister', 'requireIssuer', 'requireMemberManager', 'requireRoleManager'],
+        // ORG.4 (ADR 0076 §28.7 follow-up): the platform governance services'
+        // own capability checks (ADR 0045, ADR 0046).
+        PlatformRoleGovernanceService::class => ['requireCapability'],
+        SchoolGroupGovernanceService::class => ['require'],
+        // ADR 0048: Group-safe reporting needs an unrevoked group.reporting.view grant.
+        GroupCurriculumCoverageReportService::class => ['authorizingGrant'],
     ];
 
     /** @return list<string> */
     public static function problems(Route $route, Coverage $coverage): array
     {
+        if ($coverage->class === Coverage::SPECIAL) {
+            return self::specialProblems($coverage);
+        }
         $action = self::action($route);
         if ($action === null) {
             return ['is not a controller action, so its contract cannot be checked'];

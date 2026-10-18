@@ -115,7 +115,7 @@ class SchoolLifecycleTest extends TestCase
     }
 
     #[Test]
-    public function only_platform_schools_manage_reaches_the_surface_and_every_refusal_is_audited(): void
+    public function only_lifecycle_or_onboarding_authority_changes_anything_and_every_refusal_is_audited(): void
     {
         $school = $this->createSchool();
         $group = $this->createGroup([$school]);
@@ -129,10 +129,13 @@ class SchoolLifecycleTest extends TestCase
                 $this->enrollActiveMfaFactor($actor);
             }
             $this->actingAs($actor);
-            $this->get('/app/platform/schools')->assertForbidden();
+            // ORG.4 (ADR 0076 §8): the Auditor reads the Registry; nobody here changes anything.
+            $registry = $actor->is($auditor) ? 200 : 403;
+            $this->get('/app/platform/schools')->assertStatus($registry);
+            $this->get("/app/platform/schools/{$school->id}")->assertStatus($registry);
             $this->get('/app/platform/schools/create')->assertForbidden();
-            $this->get("/app/platform/schools/{$school->id}")->assertForbidden();
             $this->get("/app/platform/schools/{$school->id}/suspend")->assertForbidden();
+            $this->get("/app/platform/schools/{$school->id}/bootstrap-admin")->assertForbidden();
             $this->post('/app/platform/schools', ['name' => 'X', 'slug' => 'x-school', 'admin' => $target->email, 'confirmed' => '1', 'mfa_code' => '123456'])->assertForbidden();
             $this->post("/app/platform/schools/{$school->id}/suspend", ['reason_code' => 'security_incident', 'confirmed' => '1', 'mfa_code' => '123456'])->assertForbidden();
 
@@ -433,7 +436,8 @@ class SchoolLifecycleTest extends TestCase
         $this->assertStringNotContainsString('"from"', json_encode($log));
         $this->assertStringNotContainsString('membership_id', json_encode($log));
 
-        $this->get('/app/platform/schools')->assertForbidden();
+        // ORG.4 (ADR 0076 §8): read-only Registry access, never a change.
+        $this->get('/app/platform/schools')->assertOk();
         $this->post("/app/platform/schools/{$school->id}/suspend", ['reason_code' => 'security_incident', 'confirmed' => '1', 'mfa_code' => '123456'])->assertForbidden();
         $this->assertSame('active', $school->fresh()->status);
     }

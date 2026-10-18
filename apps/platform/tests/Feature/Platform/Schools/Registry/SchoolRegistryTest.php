@@ -92,30 +92,36 @@ class SchoolRegistryTest extends TestCase
     }
 
     #[Test]
-    public function the_platform_auditor_does_not_hold_the_registry_yet(): void
+    public function the_platform_auditor_reads_the_registry_and_changes_nothing(): void
     {
-        // Pinned as built: platform_auditor holds platform.audit.view only;
-        // ORG.4/ORG.6 own any Auditor read extension (ADR 0076 §8, §9.2).
+        // ORG.4 (ADR 0076 §8): read-only Registry oversight.
         $root = $this->platformAdmin();
         $auditor = $this->createUser();
         $this->assignPlatformRole($auditor, 'platform_auditor', $root);
         $school = $this->readySchool();
 
-        $this->actingAs($auditor)->get('/app/platform/schools')->assertForbidden();
-        $this->actingAs($auditor)->get("/app/platform/schools/{$school->id}")->assertForbidden();
+        $this->assertFalse($this->listPage($auditor)['canCreate']);
+        $this->actingAs($auditor)->get("/app/platform/schools/{$school->id}")->assertOk()
+            ->assertInertia(fn (AssertableInertia $p) => $p->where('canManage', false)->where('canOnboard', false)
+                ->where('actions', ['activate' => false, 'replaceBootstrapAdmin' => false, 'suspend' => false, 'resume' => false, 'close' => false, 'reopen' => false]));
+        $this->actingAs($auditor)->get('/app/platform/schools/create')->assertForbidden();
+        $this->actingAs($auditor)->get("/app/platform/schools/{$school->id}/suspend")->assertForbidden();
     }
 
     #[Test]
     public function platform_and_school_grants_never_merge(): void
     {
-        // A School Administrator who is also the platform Auditor still has no
-        // registry access: neither grant supplies platform.schools.view.
+        // A School Administrator who is also the platform Auditor reads the
+        // Registry through the platform grant only: no onboarding or lifecycle
+        // authority appears, and the School grant adds nothing platform-side.
         $root = $this->platformAdmin();
         [$dual, $school] = $this->createSchoolAdmin();
         $this->assignPlatformRole($dual, 'platform_auditor', $root);
 
-        $this->actingAs($dual)->get('/app/platform/schools')->assertForbidden();
-        $this->actingAs($dual)->get("/app/platform/schools/{$school->id}")->assertForbidden();
+        $this->assertFalse($this->listPage($dual)['canCreate']);
+        $this->actingAs($dual)->get("/app/platform/schools/{$school->id}")->assertOk()
+            ->assertInertia(fn (AssertableInertia $p) => $p->where('canManage', false)->where('canOnboard', false));
+        $this->actingAs($dual)->get('/app/platform/schools/create')->assertForbidden();
     }
 
     #[Test]
@@ -123,9 +129,9 @@ class SchoolRegistryTest extends TestCase
     {
         $root = $this->platformAdmin();
         $school = $this->readySchool();
-        // Simulates a future view-only operator (ORG.4) without inventing a role:
-        // platform.schools.manage is denied, platform.schools.view still holds.
-        Gate::before(fn (User $user, string $ability, array $arguments) => $ability === 'capability' && ($arguments[0] ?? null) === 'platform.schools.manage' ? false : null);
+        // A view-only operator without inventing a role: platform.schools.manage
+        // and platform.schools.onboard are denied, platform.schools.view holds.
+        Gate::before(fn (User $user, string $ability, array $arguments) => $ability === 'capability' && in_array($arguments[0] ?? null, ['platform.schools.manage', 'platform.schools.onboard'], true) ? false : null);
 
         $this->actingAs($root)->get("/app/platform/schools/{$school->id}")->assertOk()
             ->assertInertia(fn (AssertableInertia $p) => $p->where('canManage', false)->where('actions.suspend', false));

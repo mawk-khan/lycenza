@@ -394,18 +394,26 @@ Route::middleware('auth')->where(WebRouteParameters::uuidPatterns())->group(func
     // `provisioning`, activate, suspend, resume, and (E21.2F, E21-D11) close
     // and reopen. Context-neutral; no archive or delete route exists.
     // ORG.3 (ADR 0076 §9.2): the registry list and overview need
-    // platform.schools.view; the lifecycle pages need platform.schools.manage;
-    // the POSTs carry no capability middleware on purpose so a refusal
-    // reaches the service and is audited (platform.school.lifecycle_denied).
+    // platform.schools.view. ORG.4 (§7.2): the onboarding pages (create, and
+    // the bootstrap administrator while provisioning) need
+    // platform.schools.onboard (or .manage); every lifecycle review page needs
+    // platform.schools.manage. The POSTs carry no capability middleware on
+    // purpose so a refusal reaches the service, which applies the same
+    // per-operation rule (SchoolLifecycleAuthority::capabilitiesFor) and
+    // audits it (platform.school.lifecycle_denied).
     Route::prefix('app/platform/schools')->name('app.platform.schools.')->group(function (): void {
         Route::middleware('capability:platform.schools.view,platform')->group(function (): void {
             Route::get('/', [PlatformSchoolAdminController::class, 'index'])->name('index');
             Route::get('/{school}', [PlatformSchoolAdminController::class, 'show'])->whereUuid('school')->name('show');
         });
-        Route::middleware('capability:platform.schools.manage,platform')->group(function (): void {
+        Route::middleware('capability:platform.schools.onboard|platform.schools.manage,platform')->group(function (): void {
             Route::get('/create', [PlatformSchoolAdminController::class, 'create'])->name('create');
+            Route::get('/{school}/bootstrap-admin', [PlatformSchoolAdminController::class, 'review'])
+                ->whereUuid('school')->defaults('action', 'bootstrap-admin')->name('bootstrap-admin.review');
+        });
+        Route::middleware('capability:platform.schools.manage,platform')->group(function (): void {
             Route::get('/{school}/{action}', [PlatformSchoolAdminController::class, 'review'])
-                ->whereUuid('school')->whereIn('action', ['activate', 'suspend', 'resume', 'bootstrap-admin', 'close', 'reopen'])->name('review');
+                ->whereUuid('school')->whereIn('action', ['activate', 'suspend', 'resume', 'close', 'reopen'])->name('review');
         });
         Route::post('/', [PlatformSchoolAdminController::class, 'store'])
             ->middleware('throttle:platform-school-lifecycle')->name('store');

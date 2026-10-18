@@ -116,3 +116,10 @@ The platform's read view of every School (`/app/platform/schools`, under
 Never shown: students, guardians, staff HR, payroll, fees, ledger,
 payments, marks, attendance, documents or `school_audit_events`. Campus
 appears as structure only; it is never authority (ADR 0076 §10-§11).
+
+**Who reads it (ORG.4, ADR 0076 §30):**
+- the Platform Admin (root) and the Platform Auditor read the Registry;
+- the Platform Manager reads it and onboards Schools: create into
+  `provisioning`, then set the bootstrap administrator while provisioning;
+- activation and every later lifecycle change stay with the Platform Admin;
+- no School role ever reaches it.

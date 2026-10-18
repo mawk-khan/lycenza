@@ -82,7 +82,7 @@ class PlatformRoleGovernanceMfaTest extends TestCase
 
         $this->assertSame($root->id, $grant->granted_by_user_id);
         $this->assertSame(1, $this->activeGrants($person));
-        $this->assertSame(['platform.audit.view'], app(CapabilityResolver::class)->platformCapabilities($person));
+        $this->assertEqualsCanonicalizing(['platform.audit.view', 'platform.schools.view', 'platform.school_groups.view'], app(CapabilityResolver::class)->platformCapabilities($person));
         $this->assertSame([], $this->denials($root));
     }
 
@@ -97,7 +97,7 @@ class PlatformRoleGovernanceMfaTest extends TestCase
 
         // A session verified a moment ago is still not a fresh code.
         $this->actingAs($root)->withSession(['mfa_verified_at' => now()->toIso8601String()])
-            ->post('/app/platform/roles/grants', ['user' => $person->email])
+            ->post('/app/platform/roles/grants', ['user' => $person->email, 'role' => 'platform_auditor'])
             ->assertSessionHasErrors('mfa_code');
 
         $this->assertSame(0, PlatformRoleAssignment::query()->where('user_id', $person->id)->count());
@@ -160,7 +160,7 @@ class PlatformRoleGovernanceMfaTest extends TestCase
             ->assertSessionHasErrors('mfa_code');
 
         $this->assertNull($grant->fresh()->revoked_at);
-        $this->assertSame(['platform.audit.view'], app(CapabilityResolver::class)->platformCapabilities($person));
+        $this->assertEqualsCanonicalizing(['platform.audit.view', 'platform.schools.view', 'platform.school_groups.view'], app(CapabilityResolver::class)->platformCapabilities($person));
         $this->assertSame(0, PlatformAuditEvent::query()->where('event_type', 'platform.role_grant.revoked')->count());
 
         $this->governance()->revoke($this->request(['mfa_code' => $this->freshCode($root)]), $root, $grant);
@@ -176,7 +176,7 @@ class PlatformRoleGovernanceMfaTest extends TestCase
         $root = $this->platformAdmin();
         $person = $this->createUser();
 
-        $this->actingAs($root)->post('/app/platform/roles/grants', ['user' => $person->email, 'mfa_code' => $this->freshCode($root)])
+        $this->actingAs($root)->post('/app/platform/roles/grants', ['user' => $person->email, 'role' => 'platform_auditor', 'mfa_code' => $this->freshCode($root)])
             ->assertSessionHasNoErrors()->assertRedirect();
         $grant = PlatformRoleAssignment::query()->where('user_id', $person->id)->active()->firstOrFail();
 
@@ -199,7 +199,7 @@ class PlatformRoleGovernanceMfaTest extends TestCase
         $auditor = $this->createUser();
         $this->grantedAuditor($root, $auditor);
         $this->enrollActiveMfaFactor($auditor);
-        $this->actingAs($auditor)->post('/app/platform/roles/grants', ['user' => $person->email, 'mfa_code' => '123456'])->assertForbidden();
+        $this->actingAs($auditor)->post('/app/platform/roles/grants', ['user' => $person->email, 'role' => 'platform_auditor', 'mfa_code' => '123456'])->assertForbidden();
 
         $this->assertSame(0, PlatformRoleAssignment::query()->where('user_id', $person->id)->count());
         // The read-only Platform Auditor still reviews the audit log with current assurance -- no code.

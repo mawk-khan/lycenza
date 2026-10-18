@@ -254,9 +254,12 @@ class PlatformRootProvisioningTest extends TestCase
         }
         $this->assertSame(['DemoDataBuilder.php'], $seederWriters);
         $demo = (string) file_get_contents(database_path('seeders/Demo/DemoDataBuilder.php'));
-        $this->assertSame(1, substr_count($demo, 'PlatformRoleAssignment::query()->create('));
+        // ORG.4: the demo Auditor and the demo Manager, both granted by the Platform Admin.
+        $this->assertSame(2, substr_count($demo, 'PlatformRoleAssignment::query()->create('));
         $this->assertStringContainsString("->provision(\$platformAdmin, 'demo_seed')", $demo);
-        $this->assertMatchesRegularExpression("/PlatformRoleAssignment::query\\(\\)->create\\(\\[[^\\]]*'platform_auditor'[^\\]]*'granted_by_user_id' => \\\$platformAdmin->id/s", $demo);
+        foreach (['platform_auditor', 'platform_manager'] as $role) {
+            $this->assertMatchesRegularExpression("/PlatformRoleAssignment::query\\(\\)->create\\(\\[[^\\]]*'{$role}'[^\\]]*'granted_by_user_id' => \\\$platformAdmin->id/s", $demo);
+        }
 
         // The runtime governance service always names a grantor, so only the
         // console provisioner writes a grantor-less (out-of-band) grant.

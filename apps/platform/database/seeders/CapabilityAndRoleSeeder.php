@@ -26,6 +26,12 @@ class CapabilityAndRoleSeeder extends Seeder
         $capabilities = [
             ['key' => 'platform.schools.view', 'label' => 'View schools (platform)', 'namespace' => 'platform'],
             ['key' => 'platform.schools.manage', 'label' => 'Manage schools (platform)', 'namespace' => 'platform'],
+            // ORG.4 (ADR 0076 §7.2, §30): onboarding only -- create a School in
+            // `provisioning` and set or replace its bootstrap administrator
+            // while it is provisioning. Never activation or any other
+            // lifecycle change (those stay platform.schools.manage, root-
+            // reserved). Not root-reserved: the Platform Manager holds it.
+            ['key' => 'platform.schools.onboard', 'label' => 'Onboard Schools: create in provisioning and set the bootstrap administrator (platform)', 'namespace' => 'platform'],
             // Phase 0N.3 (ADR 0044): start a temporary, audited elevation into
             // ONE School's context. Grants no School capability; deliberately
             // separate from platform.schools.manage.
@@ -965,7 +971,7 @@ class CapabilityAndRoleSeeder extends Seeder
                 'name' => 'Platform Super Admin',
                 'scope' => 'platform',
                 'capabilities' => [
-                    'platform.schools.view', 'platform.schools.manage',
+                    'platform.schools.view', 'platform.schools.manage', 'platform.schools.onboard',
                     'platform.feature_flags.view', 'platform.feature_flags.manage',
                     'platform.operations.view',
                     'platform.users.mfa.reset',
@@ -977,15 +983,34 @@ class CapabilityAndRoleSeeder extends Seeder
                 ],
             ],
             // Phase 0N.7 (ADR 0046 section 5): review the platform audit
-            // ledger and nothing else. The only runtime-assignable role in
-            // v1 -- granted and revoked by a Platform Super Admin through
-            // PlatformRoleGovernanceService.
+            // ledger. Granted and revoked by a Platform Super Admin through
+            // PlatformRoleGovernanceService. ORG.4 (ADR 0076 §8, §30): plus
+            // read-only oversight of the School Registry and School Groups --
+            // still never a mutation, elevation or School capability.
             'platform_auditor' => [
                 'name' => 'Platform Auditor',
                 'scope' => 'platform',
                 'runtime_assignable' => true,
                 'capabilities' => [
                     'platform.audit.view',
+                    'platform.schools.view',
+                    'platform.school_groups.view',
+                ],
+            ],
+            // ORG.4 (ADR 0076 §7, §30): routine School onboarding -- create a
+            // School in `provisioning` and set its bootstrap administrator --
+            // plus Registry and Group read. Never lifecycle control, platform
+            // role or Group governance, elevation, audit review or any School
+            // capability. Never held together with platform_auditor (§7.4,
+            // trg_platform_role_assignments_separation).
+            'platform_manager' => [
+                'name' => 'Platform Manager',
+                'scope' => 'platform',
+                'runtime_assignable' => true,
+                'capabilities' => [
+                    'platform.schools.view',
+                    'platform.school_groups.view',
+                    'platform.schools.onboard',
                 ],
             ],
             // Phase 0N.5 (ADR 0045 section 4): the one Group-scope system

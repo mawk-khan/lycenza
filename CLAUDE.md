@@ -821,7 +821,9 @@ docs/roadmap             MASTER-ROADMAP.md
     role). Root arrives only through `platform:bootstrap-root` (first boot)
     or `platform:provision-root` (existing account) on the admin
     connection; tests use `createPlatformRoot()`. Only code-approved, runtime-assignable,
-    non-root roles are granted at runtime — v1 `platform_auditor` alone,
+    non-root roles are granted at runtime — `platform_auditor` and (ORG.4,
+    ADR 0076 §30) `platform_manager`, never both to one person (service +
+    `trg_platform_role_assignments_separation`) —
     through `PlatformRoleGovernanceService` and the root-reserved
     `platform.role_grants.manage` — never to or by oneself, with history
     kept (revocation, never deletion). Root-reserved capabilities
@@ -1220,3 +1222,21 @@ once several modules copy it.
     - **Never** add a capability, a wildcard, a GET exemption or a C5
       entry to make the guard pass. An unexpressible route is an
       architecture gap to report.
+
+99. **Platform onboarding is not lifecycle control (ADR 0076 §7, §30, ORG.4).**
+    - **The one per-operation rule** is
+      `SchoolLifecycleAuthority::capabilitiesFor()`: CREATE (always into
+      `provisioning`) and the bootstrap administrator while provisioning
+      accept `platform.schools.onboard` or `platform.schools.manage`.
+      Activate, suspend, resume, close and reopen accept
+      `platform.schools.manage` alone, which stays root-reserved.
+    - **The Platform Manager** (`platform_manager`, runtime-assignable)
+      holds exactly Registry view, Group view and onboard. Never add a
+      lifecycle, role-grant, Group-governance, elevation, audit or School
+      capability to it.
+    - **The Platform Auditor** reads the Registry, Groups and the platform
+      audit log, and changes nothing.
+    - **Exclusivity:** one person never holds both runtime roles.
+    - **Platform routes** need platform-mode `capability:` middleware or a
+      verified `PlatformRouteCoverage` contract
+      (`PlatformRouteCoverageGuardTest`).

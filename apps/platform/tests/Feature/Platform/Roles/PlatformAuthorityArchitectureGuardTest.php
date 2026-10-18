@@ -22,21 +22,27 @@ use Tests\TestCase;
 class PlatformAuthorityArchitectureGuardTest extends TestCase
 {
     #[Test]
-    public function the_only_runtime_assignable_role_is_the_auditor_with_exactly_one_capability(): void
+    public function the_runtime_assignable_roles_are_exactly_the_auditor_and_the_manager(): void
     {
-        $this->assertSame(['platform_auditor'], PlatformRoleGovernanceService::RUNTIME_ASSIGNABLE);
-        $this->assertSame(['platform_auditor'], DB::table('roles')->where('runtime_assignable', true)->pluck('key')->all());
-        $this->assertSame('platform_auditor', PlatformRoleAdminController::ROLE);
+        // ORG.4 (ADR 0076 §6-§8): two runtime roles, pinned capability sets, never root-equivalent.
+        $this->assertSame(['platform_auditor', 'platform_manager'], PlatformRoleGovernanceService::RUNTIME_ASSIGNABLE);
+        $this->assertEqualsCanonicalizing(['platform_auditor', 'platform_manager'], DB::table('roles')->where('runtime_assignable', true)->pluck('key')->all());
+        $this->assertSame(['platform_manager', 'platform_auditor'], array_keys(PlatformRoleAdminController::ROLES));
+        $this->assertSame(['platform_manager' => 'platform_auditor', 'platform_auditor' => 'platform_manager'], PlatformRoleGovernanceService::EXCLUSIVE);
         $this->assertFalse((bool) DB::table('roles')->where('key', 'platform_super_admin')->value('runtime_assignable'));
 
-        $auditorCaps = DB::table('role_capabilities')->join('roles', 'roles.id', '=', 'role_capabilities.role_id')
-            ->where('roles.key', 'platform_auditor')->pluck('capability_key')->all();
-        $this->assertSame(['platform.audit.view'], $auditorCaps);
+        $caps = fn (string $role) => DB::table('role_capabilities')->join('roles', 'roles.id', '=', 'role_capabilities.role_id')
+            ->where('roles.key', $role)->pluck('capability_key')->all();
+        $this->assertEqualsCanonicalizing(['platform.audit.view', 'platform.schools.view', 'platform.school_groups.view'], $caps('platform_auditor'));
+        $this->assertEqualsCanonicalizing(['platform.schools.view', 'platform.school_groups.view', 'platform.schools.onboard'], $caps('platform_manager'));
 
-        $this->assertSame(['platform_super_admin'], DB::table('role_capabilities')->join('roles', 'roles.id', '=', 'role_capabilities.role_id')
-            ->where('capability_key', 'platform.role_grants.manage')->pluck('roles.key')->all());
-        $this->assertEqualsCanonicalizing(['platform_auditor', 'platform_super_admin'], DB::table('role_capabilities')->join('roles', 'roles.id', '=', 'role_capabilities.role_id')
-            ->where('capability_key', 'platform.audit.view')->pluck('roles.key')->all());
+        $holders = fn (string $capability) => DB::table('role_capabilities')->join('roles', 'roles.id', '=', 'role_capabilities.role_id')
+            ->where('capability_key', $capability)->pluck('roles.key')->all();
+        foreach (['platform.role_grants.manage', 'platform.schools.manage', 'platform.schools.elevate', 'platform.school_groups.manage', 'platform.school_group_grants.manage', 'platform.users.mfa.reset'] as $rootOnly) {
+            $this->assertSame(['platform_super_admin'], $holders($rootOnly), "{$rootOnly} stays with root");
+        }
+        $this->assertEqualsCanonicalizing(['platform_auditor', 'platform_super_admin'], $holders('platform.audit.view'));
+        $this->assertEqualsCanonicalizing(['platform_manager', 'platform_super_admin'], $holders('platform.schools.onboard'));
     }
 
     #[Test]

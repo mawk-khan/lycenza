@@ -16,8 +16,8 @@ use Illuminate\Validation\ValidationException;
 /**
  * Phase 0N.9 (ADR 0047 sections 4, 5, 7, 13): the checks every School
  * lifecycle and bootstrap operation shares, in the order they run --
- * account not disabled -> `platform.schools.manage` (root-reserved; a
- * capability, never a role name) -> the operation's own state checks ->
+ * account not disabled -> the operation's capability (a capability, never a
+ * role name) -> the operation's own state checks ->
  * explicit confirmation -> an enrolled factor -> a fresh in-session MFA
  * re-verification. Security, authorization and state refusals are
  * audited once as `platform.school.lifecycle_denied` (operation +
@@ -27,7 +27,15 @@ use Illuminate\Validation\ValidationException;
  */
 class SchoolLifecycleAuthority
 {
+    /** Lifecycle control: activate, suspend, resume, close, reopen (root-reserved). */
     public const CAPABILITY = 'platform.schools.manage';
+
+    /**
+     * ORG.4 (ADR 0076 §7.2): onboarding only -- CREATE into `provisioning`
+     * and REPLACE the bootstrap administrator while provisioning. Never a
+     * lifecycle transition; root holds it as well as CAPABILITY.
+     */
+    public const ONBOARD_CAPABILITY = 'platform.schools.onboard';
 
     /** The capabilities that let a School administer itself after activation. */
     public const ADMINISTRATOR_CAPABILITIES = SchoolAdministrators::CAPABILITIES;
@@ -47,14 +55,46 @@ class SchoolLifecycleAuthority
             $this->deny($request, $actor, $operation, $school, 'actor_disabled', 403, 'school', 'This account cannot manage Schools.');
         }
 
-        if (! $this->capabilities->canPlatform($actor, self::CAPABILITY)) {
+        if (! $this->holdsAny($actor, self::capabilitiesFor($operation))) {
             $this->deny($request, $actor, $operation, $school, 'capability_missing', 403, 'school', 'This account cannot manage Schools.');
         }
+    }
+
+    /**
+     * ORG.4 (ADR 0076 §7.2): which capability authorizes which operation.
+     * Only the two onboarding operations accept the onboarding capability;
+     * every status transition needs platform.schools.manage alone.
+     *
+     * @return list<string>
+     */
+    public static function capabilitiesFor(SchoolLifecycleOperation $operation): array
+    {
+        return match ($operation) {
+            SchoolLifecycleOperation::Create, SchoolLifecycleOperation::ReplaceBootstrapAdmin => [self::ONBOARD_CAPABILITY, self::CAPABILITY],
+            default => [self::CAPABILITY],
+        };
     }
 
     public function canManage(User $actor): bool
     {
         return ! $actor->isDisabled() && $this->capabilities->canPlatform($actor, self::CAPABILITY);
+    }
+
+    public function canOnboard(User $actor): bool
+    {
+        return ! $actor->isDisabled() && $this->holdsAny($actor, self::capabilitiesFor(SchoolLifecycleOperation::Create));
+    }
+
+    /** @param  list<string>  $capabilities */
+    private function holdsAny(User $actor, array $capabilities): bool
+    {
+        foreach ($capabilities as $capability) {
+            if ($this->capabilities->canPlatform($actor, $capability)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function hasActiveFactor(User $actor): bool
