@@ -16,6 +16,14 @@ use Symfony\Component\HttpFoundation\Response;
  * second, literal ":platform" segment for a platform-scoped capability
  * check that must ignore School context entirely, e.g.
  * 'capability:platform.schools.manage,platform'.
+ *
+ * ORG.2 (ADR 0076 §28): `capability:a|b` passes when the actor holds AT
+ * LEAST ONE of the listed existing capabilities -- each checked through the
+ * same `capability` Gate, so this is a disjunction of existing checks, never
+ * a new rule (the AuthorizesCapability::authorizeAnyCapability() precedent).
+ * It is a route-level FLOOR for an action whose Application layer decides
+ * the exact capability per call (e.g. a classification tier), so that the
+ * request is authorized before `idempotent` can replay anything (rule 32).
  */
 class EnsureCapability
 {
@@ -28,9 +36,14 @@ class EnsureCapability
         }
 
         $school = $mode === 'platform' ? null : app(TenantContext::class)->school();
+        $gate = Gate::forUser($user);
 
-        Gate::forUser($user)->authorize('capability', [$capability, $school]);
+        foreach (explode('|', $capability) as $any) {
+            if ($gate->allows('capability', [$any, $school])) {
+                return $next($request);
+            }
+        }
 
-        return $next($request);
+        throw new AuthorizationException('This action is unauthorized.');
     }
 }

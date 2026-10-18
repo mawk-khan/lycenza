@@ -737,17 +737,21 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             // unconditional floor exists that could be safely enforced
             // at the route layer without risking a false rejection for
             // an actor who legitimately holds only the sensitive-tier
-            // capability. The Application-layer check remains the sole
+            // capability. The Application-layer check remains the
             // authority here, exactly like the Employee Profile
             // Workspace's own per-section tiered capabilities.
+            // ORG.2 (ADR 0076 §28, rule 32): the two `idempotent` routes
+            // carry the any-of FLOOR of both tier capabilities -- every
+            // actor who can succeed holds one -- so authorization runs
+            // before a stored response could ever be replayed.
             Route::post('/employees/{employee}/hr-document-records', [EmployeeDocumentController::class, 'store'])
-                ->middleware(['throttle:school-api-mutations', 'idempotent'])
+                ->middleware(['capability:hr.employees.documents.manage|hr.employees.sensitive.manage', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.employees.hr-document-records.store');
             Route::patch('/employees/{employee}/hr-document-records/{document}', [EmployeeDocumentController::class, 'update'])
                 ->middleware(['throttle:school-api-mutations'])
                 ->name('schools.employees.hr-document-records.update');
             Route::post('/employees/{employee}/hr-document-records/{document}/archive', [EmployeeDocumentController::class, 'archive'])
-                ->middleware(['throttle:school-api-mutations', 'idempotent'])
+                ->middleware(['capability:hr.employees.documents.manage|hr.employees.sensitive.manage', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.employees.hr-document-records.archive');
 
             Route::post('/employee-imports', [EmployeeImportController::class, 'store'])

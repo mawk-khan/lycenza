@@ -11,10 +11,10 @@ use App\Models\School;
 use App\Models\SchoolDomain;
 use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Auth\RendersCredentialJson;
-use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
@@ -42,7 +42,6 @@ class SchoolDomainController extends Controller
     public function __construct(
         private readonly SchoolDomainService $domains,
         private readonly FreshMfaRequirement $mfa,
-        private readonly CapabilityResolver $capabilities,
         private readonly TenantContext $context,
     ) {}
 
@@ -51,7 +50,7 @@ class SchoolDomainController extends Controller
         $user = $request->user();
         $school = $this->context->requireSchool();
 
-        if (! $this->capabilities->canInSchool($user, SchoolDomainService::CAPABILITY_VIEW, $school)) {
+        if (Gate::forUser($user)->denies('capability', [SchoolDomainService::CAPABILITY_VIEW, $school])) {
             throw new AccessDeniedHttpException('You cannot view this School\'s domains.');
         }
 
@@ -59,7 +58,7 @@ class SchoolDomainController extends Controller
             'enabled' => $this->domains->enabled(),
             'domains' => $this->domains->listFor($school, $user),
             'routing' => $this->domains->routingTarget(),
-            'canManage' => $this->capabilities->canInSchool($user, SchoolDomainService::CAPABILITY_MANAGE, $school),
+            'canManage' => Gate::forUser($user)->allows('capability', [SchoolDomainService::CAPABILITY_MANAGE, $school]),
             'hasMfaFactor' => $this->mfa->hasActiveFactor($user),
             'maxDomains' => SchoolDomainService::MAX_PER_SCHOOL,
         ])->toResponse($request);
@@ -143,7 +142,7 @@ class SchoolDomainController extends Controller
     {
         $school = $this->context->requireSchool();
 
-        if (! $this->capabilities->canInSchool($request->user(), SchoolDomainService::CAPABILITY_MANAGE, $school)) {
+        if (Gate::forUser($request->user())->denies('capability', [SchoolDomainService::CAPABILITY_MANAGE, $school])) {
             throw new AccessDeniedHttpException('You cannot manage this School\'s domains.');
         }
 

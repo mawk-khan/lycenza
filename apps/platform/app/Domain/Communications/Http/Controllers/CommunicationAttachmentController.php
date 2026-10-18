@@ -8,12 +8,14 @@ use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Domain\Communications\Infrastructure\CommunicationAttachment;
 use App\Domain\Communications\Infrastructure\CommunicationThread;
 use App\Http\Controllers\Controller;
+use App\Models\School;
+use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
-use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
@@ -43,11 +45,16 @@ class CommunicationAttachmentController extends Controller
     public function store(Request $request, TenantContext $context, CommunicationAttachmentService $service, string $announcement): RedirectResponse
     {
         $school = $context->requireSchool();
+        // ORG.2 (ADR 0076 §28): changing an announcement's attachments needs
+        // what editing the announcement needs (AnnouncementController::update):
+        // `communications.announce`, then its creator or communications.manage.
+        // Authorship alone is not authority -- an off-boarded creator who
+        // stays a Guardian member keeps an active membership (POR.1, §24.8).
+        $this->authorizeCapability('communications.announce', $school);
         $actor = $context->actor();
 
         $model = CommunicationAnnouncement::query()->findOrFail($announcement);
-        $canManage = app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
-        abort_unless($model->created_by_user_id === $actor->id || $canManage, 403);
+        $this->authorizeEditor($model, $actor, $school);
 
         $validated = $request->validate([
             'file' => ['required', 'file'],
@@ -65,11 +72,12 @@ class CommunicationAttachmentController extends Controller
     public function destroy(TenantContext $context, CommunicationAttachmentService $service, string $announcement, string $attachment): RedirectResponse
     {
         $school = $context->requireSchool();
+        // ORG.2: the same authority as store().
+        $this->authorizeCapability('communications.announce', $school);
         $actor = $context->actor();
 
         $model = CommunicationAnnouncement::query()->findOrFail($announcement);
-        $canManage = app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
-        abort_unless($model->created_by_user_id === $actor->id || $canManage, 403);
+        $this->authorizeEditor($model, $actor, $school);
 
         $attachmentModel = CommunicationAttachment::query()
             ->where('communication_announcement_id', $model->id)
@@ -135,6 +143,11 @@ class CommunicationAttachmentController extends Controller
         }
 
         return redirect("/app/communications/{$model->id}");
+    }
+
+    private function authorizeEditor(CommunicationAnnouncement $announcement, User $actor, School $school): void
+    {
+        abort_unless($announcement->created_by_user_id === $actor->id || Gate::forUser($actor)->allows('capability', ['communications.manage', $school]), 403);
     }
 
     private function isActiveParticipant(CommunicationThread $thread, string $userId): bool

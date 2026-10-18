@@ -25,6 +25,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -316,7 +317,7 @@ class CommunicationHubController extends Controller
         $model = CommunicationThread::query()->with(['participants.user:id,name'])->findOrFail($thread);
 
         $participant = $model->participants->first(fn (CommunicationThreadParticipant $p) => $p->user_id === $actor->id && $p->left_at === null);
-        $canManage = app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
+        $canManage = Gate::forUser($actor)->allows('capability', ['communications.manage', $school]);
 
         abort_unless($participant !== null || $canManage, 403);
 

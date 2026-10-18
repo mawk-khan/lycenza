@@ -7,12 +7,12 @@ use App\Models\School;
 use App\Support\Api\PartnerScopeRegistry;
 use App\Support\ApiClients\ApiClientService;
 use App\Support\Auth\Mfa\FreshMfaRequirement;
-use App\Support\Auth\Mfa\MfaChallengeService;
+use App\Support\Auth\Mfa\SensitiveReadAssurance;
 use App\Support\Auth\RendersCredentialJson;
-use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -37,29 +37,24 @@ class ApiClientController extends Controller
     public function __construct(
         private readonly ApiClientService $clients,
         private readonly FreshMfaRequirement $mfa,
-        private readonly CapabilityResolver $capabilities,
         private readonly TenantContext $context,
     ) {}
 
-    public function index(Request $request, MfaChallengeService $challenge): Response
+    public function index(Request $request, SensitiveReadAssurance $assurance): Response
     {
         $user = $request->user();
         $school = $this->context->requireSchool();
 
-        if (! $this->capabilities->canInSchool($user, ApiClientService::CAPABILITY_VIEW, $school)) {
+        if (Gate::forUser($user)->denies('capability', [ApiClientService::CAPABILITY_VIEW, $school])) {
             throw new AccessDeniedHttpException('You cannot view API clients in this School.');
         }
 
-        if (! $challenge->userHasActiveFactor($user) || ! $challenge->hasValidAssurance($request)) {
-            return Inertia::render('App/Platform/MfaRequired', [
-                'code' => $challenge->userHasActiveFactor($user) ? 'mfa_step_up_required' : 'mfa_required_not_enrolled',
-            ])->toResponse($request)->setStatusCode($challenge->userHasActiveFactor($user) ? 401 : 403);
-        }
+        $assurance->requireForPage($request);
 
         return Inertia::render('App/Integrations/ApiClients', [
             'clients' => $this->clients->listFor($school, $user),
             'scopes' => PartnerScopeRegistry::available(),
-            'canManage' => $this->capabilities->canInSchool($user, ApiClientService::CAPABILITY_MANAGE, $school),
+            'canManage' => Gate::forUser($user)->allows('capability', [ApiClientService::CAPABILITY_MANAGE, $school]),
             'defaultDays' => ApiClientService::DEFAULT_LIFETIME_DAYS,
             'maxDays' => ApiClientService::MAX_LIFETIME_DAYS,
             'overlapHours' => ApiClientService::ROTATION_OVERLAP_HOURS,
@@ -122,7 +117,7 @@ class ApiClientController extends Controller
     {
         $school = $this->context->requireSchool();
 
-        if (! $this->capabilities->canInSchool($request->user(), ApiClientService::CAPABILITY_MANAGE, $school)) {
+        if (Gate::forUser($request->user())->denies('capability', [ApiClientService::CAPABILITY_MANAGE, $school])) {
             throw new AccessDeniedHttpException('You cannot manage API clients in this School.');
         }
 

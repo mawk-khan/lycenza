@@ -1200,3 +1200,23 @@ once several modules copy it.
       would null `school_id`.
     - **A School-scoped reference to a platform row** that names a School
       (e.g. an elevation) uses a composite `(id, school_id)` key (rule 70).
+
+98. **Every School-facing route has a declared, machine-checked
+    authorization contract (ADR 0076 §28, ORG.2).**
+    - **A School route** (`school-context` or `school-membership`) carries
+      `capability:` middleware, or gets a
+      `tests/Support/Authorization/SchoolRouteCoverage.php` entry: C2
+      Gate, C3 service authority, C4 scoped authority plus base
+      capability, or C5 special. The entry's evidence must be visible in
+      the code.
+    - **Every other route** is classified by name in `RouteUniverse`.
+    - **School context or membership alone is never authorization.**
+    - **At the HTTP layer a capability refusal goes through the Gate,**
+      never a raw `CapabilityResolver` answer. Group `canInGroup()` and
+      `StaffRoleCatalog` are the named exceptions.
+    - **An `idempotent` route is authorized before the idempotency
+      guard** (route `capability:`, using the any-of `a|b` floor where the
+      service decides the exact tier).
+    - **Never** add a capability, a wildcard, a GET exemption or a C5
+      entry to make the guard pass. An unexpressible route is an
+      architecture gap to report.

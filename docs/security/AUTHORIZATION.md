@@ -94,10 +94,46 @@ This table is a design reference, not a list of implemented roles.
   succeeded once." An actor who has since been disabled, had their
   membership suspended, or lost the required capability cannot fetch a
   previously-stored successful response merely by knowing an old
-  `Idempotency-Key`.
+  `Idempotency-Key`. Since ORG.2 an `idempotent` route whose exact
+  capability is decided per call in its Application layer carries an
+  any-of route floor (`capability:a|b`), so authorization always runs
+  before the idempotency guard (ADR 0076 §28.6).
 - **Feature flags are never authorization** (Phase 0C): a feature flag
   gates rollout/visibility, never access control — checking a flag is
   never a substitute for `Gate::authorize('capability', ...)`.
+
+## Every School route has a declared authorization contract (ORG.2, ADR 0076 §28)
+
+- **The contract.** A School-facing route (`school-context` or
+  `school-membership`) is covered in one of two ways:
+  - its own `capability:` middleware (C1);
+  - an entry in `tests/Support/Authorization/SchoolRouteCoverage.php`:
+    - C2, a controller Gate;
+    - C3, an Application/Domain service authority;
+    - C4, a scoped authority (teacher ownership, acting employee,
+      Guardian scope, own membership, creator) plus its base capability;
+    - C5, context establishment, a one-time token or a legal-gated notice
+      page.
+- **Context is not authorization.** School context and membership prove
+  association only. They are never a contract on their own, on the web or
+  on the API.
+- **CI enforces it.** `AuthorizationCoverageGuardTest` fails CI for an
+  unclassified route, a School route with no contract, a stale or duplicate
+  entry, or an entry whose evidence (calls and capability keys, read from
+  the code) no longer holds.
+- **Runtime sweep.** `SchoolRouteRefusalSweepTest` requests every School
+  route as a capability-less member (403/404 only) and as another School's
+  administrator (never served).
+- **Refusals go through the Gate.** At the HTTP layer a capability refusal
+  uses `capability:`, `authorizeCapability()`, `Gate::authorize()` or a
+  `Gate::denies()` refusal, never a raw `CapabilityResolver` answer
+  (`HttpLayerResolverEnforcementGuardTest`). Reading the resolver to shape
+  a response (`canX` flags) is projection, not authorization.
+- **Exceptions:** Group capabilities (`canInGroup()`, rule 84) and domain
+  authorities with stronger semantics (`StaffRoleCatalog`).
+- **`capability:a|b`** passes when the actor holds at least one of the
+  listed existing capabilities, each checked through the same Gate. It is a
+  route floor for per-call tier decisions, never a new rule.
 
 ## Relationship to the AI agent model
 

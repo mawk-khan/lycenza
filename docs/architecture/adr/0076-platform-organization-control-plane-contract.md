@@ -3,7 +3,10 @@
 - Status: **Accepted. ORG.1 CONTRACT PUBLISHED (2026-10-17, documentation
   only). ORG.1A FOUNDATION HARDENING IMPLEMENTED (2026-10-18, §27): V-1 to
   V-5 closed; three rollback-proven migrations; no new capability, role,
-  route or Organization feature.** ORG.2 and every later ORG phase need
+  route or Organization feature. ORG.2 AUTHORIZATION COVERAGE GUARD
+  IMPLEMENTED (2026-10-18, §28): every School-facing route has a
+  machine-checked authorization contract; two authorization findings
+  fixed; no new capability or role.** ORG.3 and every later ORG phase need
   separate, explicit owner authorization.
 - Date: 2026-10-17
 - Programme: **ORG — Platform & Organization Foundation**
@@ -1180,3 +1183,186 @@ The composite same-School check is unchanged.
     candidate for a later hardening pass;
   - domain-evidence cascades (class E) remain retention-governed.
 - **Next:** ORG.2 (authorization coverage guard) needs owner authorization.
+
+## 28. ORG.2 — Authorization coverage guard (implemented, 2026-10-18)
+
+Owner authorization: ORG.2 only. Baseline `origin/main` = `b9380e0a`
+(ORG.1A). ORG.3 and later phases were not started.
+
+### 28.1 The School-route predicate
+
+A route is **School-facing** when it carries `school-context` (signed-in
+School web) or `school-membership` (School API), or it is one of the seven
+C5 routes listed by name in `SchoolRouteCoverage::special()`. That
+classification uses route middleware, not URL prefixes.
+
+Every other route is listed by name in `RouteUniverse::NON_SCHOOL` with its
+category and authority:
+- A, platform/Group: 33;
+- E, partner/internal service: 5;
+- F, authentication/account: 23;
+- H, public/non-School: 9.
+
+A route of any kind that is not classified fails CI. There is no prefix,
+wildcard or HTTP-verb exemption.
+
+### 28.2 Coverage classes
+
+School context or membership is never a contract. It proves the actor
+belongs to the School, not that they may perform the operation.
+
+| Class | Contract | Evidence the guard checks in code (comments ignored) |
+| --- | --- | --- |
+| C1 | the route's own `capability:` middleware | read from the route |
+| C2 | an unconditional `capability` Gate call in the action, or in a `$this->helper()` it calls unconditionally (`authorizeCapability()`, `authorizeAnyCapability()`, `Gate::authorize()`, `Gate::forUser()->authorize()`, a `Gate::denies()` refusal) | the keys are resolved from the code (literal, `Class::CONST`, `Class::staticCall('…')`) and must include the declared ones |
+| C3 | the action delegates to an Application/Domain or Support method that authorizes the actor | the action calls the method, and that method makes an `authorize*()`/Gate call within three hops, or is a listed domain authority (`StaffRoleCatalog`, which also refuses disabled Users and is deliberately not routed through the Gate) |
+| C4 | a scoped authority (teacher ownership, acting employee, Guardian scope, own membership, announcement creator), plus its base capability | the action calls the declared authority method; the base capability is C1 or checked like C2 |
+| C5 | context establishment, one-time token acceptance, a legal-gated notice page | governing ADR/invariant, reason and an existing test; at most 10 |
+
+Two flags make existing behaviour explicit:
+- **`validatesFirst()`** (44 routes) marks an action whose authority runs
+  after input validation, so an empty unauthorized request sees a
+  validation error first. That is existing behaviour, kept.
+- **`forEveryMember()`** (3 routes) marks routes every active member
+  passes by design: the actor's own email preference (show and update),
+  and the data-free statutory-payroll notice page.
+
+### 28.3 Implementation (test-owned, no runtime footprint)
+
+All of this lives in `tests/Support/Authorization/`:
+- **`Coverage`:** the value object.
+- **`SchoolRouteCoverage`:** 777 entries, one per non-C1 School route,
+  plus the scoped authority of owned surfaces that also carry C1.
+- **`RouteUniverse`:** the non-School classification.
+- **`SourceCalls` and `CoverageEvidence`:** the token-level evidence
+  checks.
+- **`CoverageGuard`:** the checks themselves.
+
+There is no database table and nothing is tenant-configurable.
+
+The tests are in `tests/Feature/Authorization/Coverage/`:
+- **`AuthorizationCoverageGuardTest`:**
+  - every route is classified exactly once;
+  - every School route has a contract;
+  - every entry names a real route, once;
+  - evidence holds;
+  - no patterns;
+  - declared and route-middleware keys exist in the catalogue as
+    School/Guardian keys;
+  - C5 stays small and governed;
+  - a `{school}` route is School-facing or platform-governed.
+- **`AuthorizationCoverageGuardSelfTest`:** probe routes, registered on
+  the test application only, prove the guard catches:
+  - a web or API route with only context/membership;
+  - an unclassified route;
+  - a stale, duplicate or wrong-key entry;
+  - a non-controller C3.
+- **`SchoolRouteRefusalSweepTest`:** requests every School route as a
+  capability-less member (403/404 only, except the flagged routes) and as
+  another School's administrator (never served). API requests use a
+  session actor, so the bearer-token scope gate does not mask the School
+  check.
+- **`RepresentativeRouteAuthorizationTest`:** allow, deny and cross-School
+  per enforcement style, plus the two findings below.
+- **`HttpLayerResolverEnforcementGuardTest`:** HTTP-layer code never
+  refuses on a raw `CapabilityResolver` answer.
+
+### 28.4 Counts at publication
+
+- **Routes:** 1,267 registered; 1,197 School-facing (644 web, 547 API, 6
+  context/token routes, plus the statutory notice page, which is a web
+  route); 70 non-School.
+- **By class:**
+  - C1: 422;
+  - C2: 605;
+  - C3: 85;
+  - C4: 78 (52 of them also carry C1);
+  - C5: 7.
+- **Reporting categories:** the availability-gated surfaces (portal, marks,
+  teacher attendance API; 27 routes) are all C1 behind their availability
+  middleware.
+- **Unclassified School routes:** 0.
+
+### 28.5 Gate normalization (class C → Gate)
+
+Direct `CapabilityResolver` use in the HTTP layer was classified:
+- **A** — resolver internals;
+- **B** — domain authority: `StaffRoleCatalog`, Group `canInGroup()` (rule
+  84), and the internal AI authorization oracle (ADR 0023);
+- **C** — HTTP refusals on a raw resolver answer;
+- **D** — response projection (`canX` flags, optional sub-sections).
+
+Every class C site now refuses through the Gate, with identical status and
+message:
+- **`SchoolDomainController`** (view and manage) and
+  **`ApiClientController`** (view and manage): `Gate::forUser()->denies()`,
+  keeping the same `AccessDeniedHttpException` messages. Neither
+  controller uses the resolver any more.
+- **`ApiClientController`'s inline MFA assurance** is replaced by
+  `SensitiveReadAssurance::requireForPage()`, the same checks and the same
+  401/403 `MfaRequired` page.
+- **Communications** (the announcement show, update, publish, cancel,
+  schedule and approval actions, the thread show, and attachments): the
+  `communications.manage` half of each "creator/participant or manager"
+  check uses `Gate::allows()`.
+
+Class D projection is unchanged. Domain and service resolver use outside
+the HTTP layer is retained (Application services authorize through
+`authorizeCapabilityFor()`, the Gate).
+
+### 28.6 Findings fixed (deny-side only; no valid access lost)
+
+1. **Rule 32 (idempotent replay).** `POST
+   …/employees/{employee}/hr-document-records` and `…/{document}/archive`
+   carried `idempotent` with no route capability, because the service picks
+   the tier capability per call. A stored success could therefore be
+   replayed to an actor who had since lost the capability.
+   - **Fix:** `capability:` now accepts an any-of form (`a|b`, each checked
+     through the same Gate, like `authorizeAnyCapability()`). Both routes
+     carry the floor
+     `hr.employees.documents.manage|hr.employees.sensitive.manage`.
+   - **Effect:** every actor who can succeed holds one of the two, so the
+     request is authorized before the idempotency guard runs. The tier
+     check in `EmployeeDocumentService` is unchanged.
+2. **Authorship without authority.** Announcement attachment upload and
+   removal needed only "creator or `communications.manage`", while editing
+   the announcement needs `communications.announce` as well. An off-boarded
+   creator who stays a Guardian member keeps an active membership (POR.1,
+   ADR 0070 §24.8) and could still change their draft's attachments.
+   - **Fix:** both actions now require `communications.announce` first, as
+     `AnnouncementController::update()` does.
+   - **Effect:** no system role loses access (only `school_admin` holds
+     `communications.manage`, and it also holds `communications.announce`).
+
+No other route changed behaviour. 403/404 privacy semantics, ownership,
+Guardian scope, self-service and payroll self-protection guards, legal
+gates, RLS and database triggers are untouched.
+
+### 28.7 Observations (recorded, not changed)
+
+- **Validation before authority.** 44 web actions, mostly Leave, staff
+  attendance, Payroll and statutory forms, validate input before their
+  service authorizes. `exists:` rules can therefore confirm, within the
+  same School only, that a record id exists.
+- **Record lookup before authority.** Some Payroll web actions resolve the
+  record (`findOrFail`) before the service authorizes: a same-School 404
+  versus 403.
+- **The statutory-payroll hub.** It renders a data-free notice page for
+  every member by design (E45; `StatutoryPayrollUiTest`,
+  `EmploymentChainProductionPathTest`). It is recorded as C5 rather than
+  changed.
+- **Not built:** a platform-route coverage guard (platform routes are
+  classified and reasoned in `RouteUniverse`, but carry no evidence check)
+  and an entry-point guard for jobs and commands. Both are future
+  hardening.
+- **DDEV-only failures.** Three host-classification tests fail only under
+  DDEV, because DDEV exports `APP_URL` and `phpunit.xml` does not force it.
+  The canonical CI run is the reference.
+
+### 28.8 Contributor rule
+
+A new School-facing route either carries `capability:` middleware or gets
+a `SchoolRouteCoverage` entry whose evidence the code shows. A new non-School
+route is classified in `RouteUniverse`. Otherwise CI fails (CLAUDE.md
+rule 98). Never add a capability, a wildcard or a C5 entry to make the
+guard pass. An unexpressible route is an architecture gap to report.

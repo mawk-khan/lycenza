@@ -37,6 +37,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -183,7 +184,7 @@ class AnnouncementController extends Controller
             ->with(['createdBy:id,name', 'requestedChannels', 'attachments', 'academicCohort.gradeLevel:id,name,code', 'academicCohort.section:id,name,code', 'academicCohort.academicYear:id,name', 'academicCohort.subjectOffering:id,subject_id,is_required', 'academicCohort.subjectOffering.subject:id,name,code'])
             ->findOrFail($announcement);
 
-        $canManage = app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
+        $canManage = Gate::forUser($actor)->allows('capability', ['communications.manage', $school]);
         $isCreator = $model->created_by_user_id === $actor->id;
         // Phase 5B.2: a linked Guardian/Student's own login is a real
         // IN_APP recipient too, but the immutable AUDIENCE snapshot
@@ -325,7 +326,7 @@ class AnnouncementController extends Controller
         $actor = $context->actor();
 
         $model = CommunicationAnnouncement::query()->findOrFail($announcement);
-        $canManage = app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
+        $canManage = Gate::forUser($actor)->allows('capability', ['communications.manage', $school]);
         abort_unless($model->created_by_user_id === $actor->id || $canManage, 403);
 
         // Phase 5A.10 §12/§27: computed fresh for THIS actor on every
@@ -368,7 +369,7 @@ class AnnouncementController extends Controller
         $actor = $context->actor();
 
         $model = CommunicationAnnouncement::query()->findOrFail($announcement);
-        $canManage = app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
+        $canManage = Gate::forUser($actor)->allows('capability', ['communications.manage', $school]);
         abort_unless($model->created_by_user_id === $actor->id || $canManage, 403);
 
         // Phase 5A.10 §12/§21: PUBLISHING an already-Emergency draft is
@@ -420,7 +421,7 @@ class AnnouncementController extends Controller
         $actor = $context->actor();
 
         $model = CommunicationAnnouncement::query()->findOrFail($announcement);
-        $canManage = app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
+        $canManage = Gate::forUser($actor)->allows('capability', ['communications.manage', $school]);
         abort_unless($model->created_by_user_id === $actor->id || $canManage, 403);
 
         try {
@@ -449,7 +450,7 @@ class AnnouncementController extends Controller
         $actor = $context->actor();
 
         $model = CommunicationAnnouncement::query()->findOrFail($announcement);
-        $canManage = app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
+        $canManage = Gate::forUser($actor)->allows('capability', ['communications.manage', $school]);
         abort_unless($model->created_by_user_id === $actor->id || $canManage, 403);
 
         try {
@@ -473,7 +474,7 @@ class AnnouncementController extends Controller
         $actor = $context->actor();
 
         $model = CommunicationAnnouncement::query()->findOrFail($announcement);
-        $canManage = app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
+        $canManage = Gate::forUser($actor)->allows('capability', ['communications.manage', $school]);
         abort_unless($model->created_by_user_id === $actor->id || $canManage, 403);
 
         try {
@@ -503,7 +504,7 @@ class AnnouncementController extends Controller
         $actor = $context->actor();
 
         $model = CommunicationAnnouncement::query()->findOrFail($announcement);
-        $canManage = app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
+        $canManage = Gate::forUser($actor)->allows('capability', ['communications.manage', $school]);
         abort_unless($model->created_by_user_id === $actor->id || $canManage, 403);
 
         $validated = $request->validate(['scheduled_at' => ['required', 'string']]);
