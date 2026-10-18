@@ -1919,7 +1919,78 @@ no cycle, and no core module depending on an optional one.
     it.
   - They are never repurposed for entitlements.
 
-### 31.8 Evidence
+### 31.8 Reference permissions workbook (ORG.9 primary evidence)
+
+- **The file.** The owner supplied `Menu_Permissions_Master.xlsx`
+  (SHA-256 `96cf8596efaf3d7689b994e9ae1c62e66e3d2701047e22f78298ac69bb32b47a`).
+  It holds 19 consolidated "Manage Menus" exports in three role-group
+  sheets: Corporate, Branch - Main and Branch - Principal Set.
+  - 2,963 rows (1,596 unique menu paths, 88 flagged sensitive) across 7
+    module groups and 52 reference modules.
+  - It is held by the owner, not committed, and retained as primary
+    evidence for ORG.9.
+- **How it was used.** Only to check that the catalogue covers the
+  reference functional families.
+  - No capability, role, grant, template, menu setting or Campus scope was
+    derived from its Yes/No cells.
+  - No reference module name became a Lycenza module id.
+  - The four layers stay distinct: reference menu visibility ≠ Lycenza
+    module entitlement ≠ Lycenza capability ≠ Lycenza scope and ownership.
+
+| Reference group (modules) | Lycenza modules today | Not built in Lycenza (ORG.9 candidates, no module created) |
+|---|---|---|
+| Organisation, SIS & Operations: Organisation, SIS, Admissions, Transport, Hostel, Inventory, Library, Certificates, Achievements, Login Statistics, Mentors, Learner Profile, Appointments and call logs | `organization`, `identity_access`, `academic_structure`, `student_records` (core); `admissions`, `transport`, `hostel`, `inventory`, `library`, `attendance`, `timetable`, `visitor` | certificates and TC, ID cards, achievements, learner profile and discipline, mentors, PTM, login statistics, appointments and call logs, student contracts and quotas, emergency exits, meals |
+| Gradebook & Exams: CBSE/State, Cambridge, IB, ICSE, Higher Ed, Pre School, Exam Cell, ECA and PET | `examinations` (development; marks production-refused) | board-specific gradebooks, report-card publishing, exam cell, ECA/PET, health, pre-school assessment, competitive exams |
+| Finance: Finance, Expenses Management, Budget, Finance Intelligence, School Store | `finance` (ledger, accounts, periods), `fees` (setup, charges, concessions, late fees, payments) | expense and petty-cash vouchers, budgets, bank reconciliation, revenue intelligence, school store (Lycenza's canteen is not a store), scholarships |
+| HR: HR, Staff Wall | `staff_records` (core), `leave`, `staff_attendance`, `payroll` | biometric attendance, exit clearance and NOC, staff tasks, staff wall and meetings |
+| Communication: Announcements, Email, SMS, WhatsApp, Voice Calls, Notifications, Diary, Calendar, Student Wall, Activities and Photo Gallery | `communications` (announcements, conversations, templates, in-app and email); `guardian_portal` | SMS, WhatsApp, voice, diary, calendar, walls, photo gallery |
+| Academics / LMS: Assignments, Content Management, Teaching Plan, Subjects Management, Online Exams, Objective Exams, Online Classes, NEP HPC, Learning Taxonomy, Reflections, Baseline Analysis, Class Room Observation | `lms` (content, assignments), `curriculum` (syllabus, delivery), `academic_structure` (subjects) | lesson plans and planners, question banks and online/objective exams, online classes, NEP HPC, taxonomy diagnostics, reflections, classroom observation |
+| Digital Document Library | `documents` (core infrastructure; access decided by the owning record) | a separate document-library product surface |
+
+- **Boundaries the reference crosses** (recorded; the catalogue is
+  unchanged by evidence):
+  - **Attendance without a timetable.** The reference takes daily
+    attendance with no timetable. Lycenza's registers are bound to
+    `TimetableEntry`/`TimetablePeriod`, so `attendance → timetable` stays
+    a real dependency. Daily (non-period) attendance is a parity question.
+  - **Fees inside other modules.** The reference keeps fee screens inside
+    other modules (transport fee, hostel fee, library fee receipt,
+    admission/registration offline payments, examination fees). In
+    Lycenza those are Fees capabilities reached through the ADR 0067
+    seams: Library depends on Fees; Transport, Hostel and Admissions do
+    not.
+  - **Payroll postings.** The reference posts payroll from Expenses
+    Management. Lycenza Payroll posts through Finance (`payroll → finance`).
+  - **Platform administration.** The reference's Organisation module mixes
+    School setup with platform administration (admin users, merchant
+    registration, invoices, KYC, support tickets). In Lycenza these split
+    into core `organization` / `identity_access` and the platform plane,
+    or are out of scope (billing).
+- **Sensitive reference functions for ORG.8 (approvals) and ORG.9
+  (parity), noted only:**
+  - fee concession approval and settings;
+  - fee refunds and bulk refunds;
+  - deleting or adjusting fee payments;
+  - fee unassign and bulk unassign;
+  - offline-payment approval;
+  - bank reconciliation;
+  - cash-deposit, petty-cash and journal-voucher approvals and opening
+    balances;
+  - report-card and remarks publish settings (every board);
+  - transfer-certificate generation;
+  - student inactivate/reactivate approvals and bulk branch transfer;
+  - password resets and admin/staff user management, security settings;
+  - staff-attendance modification and deletion;
+  - payroll month settings and payroll posting;
+  - leave approval;
+  - deleting online-exam results.
+
+  Lycenza already models several of these as separate capabilities,
+  maker/checker or correction contracts (concessions FEE.3, payment
+  corrections UAT-C3, Leave approval HRX.2, staff-attendance corrections
+  HRX.3). The rest are unbuilt.
+
+### 31.9 Evidence
 
 Recorded in the ORG.5 completion report: the targeted suites, the
 rollback proof of both migrations, the security review and the
