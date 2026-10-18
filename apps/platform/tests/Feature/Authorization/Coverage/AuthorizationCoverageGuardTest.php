@@ -52,6 +52,12 @@ class AuthorizationCoverageGuardTest extends TestCase
     }
 
     #[Test]
+    public function every_whole_school_floor_on_an_adopted_key_is_a_declared_operation(): void
+    {
+        $this->assertSame([], $this->guard()->adoptedWholeSchool(), "A Campus-adopted key is checked School-wide only on a declared whole-School-only operation (CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS, ADR 0076 §36):\n");
+    }
+
+    #[Test]
     public function declarations_are_exact_identities_never_patterns(): void
     {
         $keys = [...array_map(fn (Coverage $c) => $c->route, SchoolRouteCoverage::entries()), ...array_keys(RouteUniverse::NON_SCHOOL)];

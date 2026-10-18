@@ -5,9 +5,12 @@ namespace App\Domain\Timetable\Application;
 use App\Domain\AcademicStructure\Infrastructure\Room;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
+use App\Domain\Campuses\Application\ActiveCampus;
 use App\Domain\HR\Infrastructure\Employee;
+use App\Domain\Timetable\Application\Exceptions\CampusNotAvailableException;
 use App\Domain\Timetable\Application\Exceptions\RequiredSubjectOfferingOnlyException;
 use App\Domain\Timetable\Application\Exceptions\RoomAlreadyScheduledException;
+use App\Domain\Timetable\Application\Exceptions\RoomCampusMismatchException;
 use App\Domain\Timetable\Application\Exceptions\RoomNotAvailableException;
 use App\Domain\Timetable\Application\Exceptions\SectionAlreadyScheduledException;
 use App\Domain\Timetable\Application\Exceptions\SectionNotAvailableException;
@@ -106,6 +109,7 @@ class TimetableScheduleService
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly TenantLock $locks,
+        private readonly ActiveCampus $activeCampus,
     ) {}
 
     /**
@@ -130,6 +134,7 @@ class TimetableScheduleService
 
         return $this->context->withSchool($school, fn () => $this->withPeriodsLock($school, fn () => $this->guarded(fn () => DB::transaction(function () use ($school, $subjectOffering, $section, $teacher, $room, $period, $dayOfWeek, $context, $actor) {
             $this->assertPeriodSchedulable($period);
+            $this->assertCampusSchedulable($school, $context['campus_id']);
 
             $entry = TimetableEntry::query()->create([
                 'school_id' => $school->id,
@@ -181,6 +186,7 @@ class TimetableScheduleService
 
         return $this->context->withSchool($school, fn () => $this->withPeriodsLock($school, fn () => $this->guarded(fn () => DB::transaction(function () use ($school, $entry, $subjectOffering, $section, $teacher, $room, $period, $dayOfWeek, $context, $actor) {
             $this->assertPeriodSchedulable($period);
+            $this->assertCampusSchedulable($school, $context['campus_id']);
 
             $entry->update([
                 'academic_year_id' => $context['academic_year_id'],
@@ -251,6 +257,7 @@ class TimetableScheduleService
 
             return $this->withPeriodsLock($school, fn () => $this->guarded(fn () => DB::transaction(function () use ($school, $entry, $period, $actor) {
                 $this->assertPeriodSchedulable($period);
+                $this->assertCampusSchedulable($school, $entry->campus_id);
 
                 $entry->update(['status' => 'active']);
 
@@ -308,6 +315,24 @@ class TimetableScheduleService
         if ($room !== null && ! $room->isActive()) {
             throw new RoomNotAvailableException;
         }
+
+        // ORG.7D-0 R1: the entry's Campus is its Offering's (deriveContext());
+        // a Room from another Campus is never schedulable for it.
+        if ($room !== null && $room->campus_id !== $subjectOffering->campus_id) {
+            throw new RoomCampusMismatchException;
+        }
+    }
+
+    /**
+     * ORG.7D-0 R5 (ADR 0076 §36): nothing new is scheduled on an inactive
+     * Campus. Runs inside the transaction, so the Campus row is share-locked
+     * until commit (ActiveCampus). Data validity only -- never authority.
+     */
+    private function assertCampusSchedulable(School $school, string $campusId): void
+    {
+        if ($this->activeCampus->find($school, $campusId) === null) {
+            throw new CampusNotAvailableException;
+        }
     }
 
     /**
@@ -359,9 +384,9 @@ class TimetableScheduleService
     }
 
     /**
-     * Translates a caught unique-constraint violation into the matching
-     * typed domain exception by constraint name -- never lets a raw
-     * PostgreSQL message reach a caller. Any OTHER QueryException (a
+     * Translates a caught unique-constraint (or, ORG.7D-0, Room-Campus FK)
+     * violation into the matching typed domain exception by constraint
+     * name -- never lets a raw PostgreSQL message reach a caller. Any OTHER QueryException (a
      * bug, or a constraint this class does not know how to translate)
      * is deliberately rethrown unchanged rather than swallowed.
      *
@@ -382,6 +407,10 @@ class TimetableScheduleService
 
             if ($this->violatesConstraint($e, 'timetable_entries_room_slot_unique')) {
                 throw new RoomAlreadyScheduledException;
+            }
+
+            if ($this->violatesConstraint($e, 'timetable_entries_room_campus_fk')) {
+                throw new RoomCampusMismatchException;
             }
 
             throw $e;

@@ -42,9 +42,9 @@ use Illuminate\Support\Collection;
  *
  * The four context predicates are intentional defense-in-depth. A
  * StudentEnrollment's `section_id` already implies its AcademicYear/
- * Campus/GradeLevel, but that consistency is application-enforced by
- * StudentEnrollmentService rather than structurally guaranteed (see
- * `create_student_enrollments_table`'s own docblock). Matching all
+ * Campus/GradeLevel. That consistency was application-enforced by
+ * StudentEnrollmentService until ORG.7D-0 (ADR 0076 §36), which made it
+ * structural (`student_enrollments_section_context_fk`). Matching all
  * five columns means an internally inconsistent row is simply excluded
  * rather than silently admitted into permanent Attendance history --
  * and it makes this query's result set exactly what Attendance's

@@ -841,3 +841,13 @@ Canteen orders, their lines and stock consumptions are Finance evidence and
 follow D8 (`platform:finance-retention-prune`, E21.3A2) only; no other
 retention path names them (guard). Outlets, items and requirements are
 tenant-lifetime configuration.
+
+## Student picker authority (ORG.7D-0, 2026-10-18, ADR 0076 §36)
+
+The order-entry Student picker needs `canteen.orders.manage` on the web
+AND on the API (`/api/v1/.../canteen-orders/search/students`, previously
+`canteen.orders.view`). A read-only order viewer keeps listing and opening
+orders. The response (`id`, `studentNumber`, `firstName`, `lastName`;
+active Students only) is unchanged. No new capability; no Campus
+semantics. The Item search is unchanged (`canteen.orders.view` on the
+API).

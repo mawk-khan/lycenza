@@ -1649,8 +1649,9 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/canteen-orders', [CanteenOrderController::class, 'store'])
                 ->middleware(['capability:canteen.orders.manage', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.canteen-orders.store');
+            // ORG.7D-0 R3: the order-entry Student picker needs orders.manage, as on the web.
             Route::get('/canteen-orders/search/students', [CanteenOrderController::class, 'searchStudents'])
-                ->middleware('capability:canteen.orders.view')
+                ->middleware('capability:canteen.orders.manage')
                 ->name('schools.canteen-orders.search-students');
             Route::get('/canteen-orders/search/items', [CanteenOrderController::class, 'searchItems'])
                 ->middleware('capability:canteen.orders.view')

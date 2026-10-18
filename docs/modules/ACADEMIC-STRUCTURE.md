@@ -324,3 +324,13 @@ assignment) is left as an explicit gap for that future module to fill
 
 Both are presentation only. They decide nothing about what a write
 accepts.
+
+## Active-Campus writes (ORG.7D-0, 2026-10-18, ADR 0076 §36)
+
+A new Section or Subject Offering needs an ACTIVE Campus of the School.
+`ActiveCampus` checks it inside the create transaction and returns a
+`campus_id` field error, 422; another School's Campus stays a 404.
+Existing Sections and Offerings on a Campus that later becomes inactive
+are kept and stay editable. Room creation is unchanged (not in the
+ORG.7D-0 scope). Since ORG.7D-0 a Room's Campus is also pinned by every
+Timetable entry that uses it.

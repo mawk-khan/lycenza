@@ -719,3 +719,14 @@ intent the conversion recorded.
 conversion (ADR 0067 D7), and a test pins that.
 
 Production stays gated by E21/E32 (ADR 0058).
+
+## Active-Campus applications (ORG.7D-0, 2026-10-18, ADR 0076 §36)
+
+`AdmissionApplicationService::create()` refuses an inactive Campus
+(`campus_id`: "Choose an active Campus of this School.", 422), through
+`ActiveCampus` inside its transaction. Existing applications on a Campus
+that later becomes inactive are kept.
+
+No Campus authority is added. Applicant visibility, Guardian search,
+conversion and the Admissions capabilities are unchanged. The future
+Campus contract is recorded in ADR 0076 §35.4 and §36 (D0-8).

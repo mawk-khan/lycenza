@@ -7,6 +7,7 @@ use App\Domain\AcademicStructure\Events\SectionCreated;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Section;
+use App\Domain\Campuses\Application\ActiveCampus;
 use App\Models\Campus;
 use App\Models\School;
 use App\Models\User;
@@ -36,6 +37,7 @@ class SectionAdministrationService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly ActiveCampus $activeCampus,
     ) {}
 
     /** @param  array<string, mixed>  $input */
@@ -62,6 +64,9 @@ class SectionAdministrationService
             $assertUnique();
 
             return $this->writeUnique(fn (): Section => DB::transaction(function () use ($school, $year, $validated, $actor): Section {
+                // ORG.7D-0 R5: no new Section on an inactive Campus.
+                $this->activeCampus->require($school, $validated['campus_id']);
+
                 $section = Section::query()->create([
                     ...$validated,
                     'school_id' => $school->id,

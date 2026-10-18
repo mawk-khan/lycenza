@@ -52,6 +52,25 @@ final class CampusScopeCatalogue
         'inventory.stock.manage' => 'inventory',
     ];
 
+    /**
+     * ORG.7D-0 (ADR 0076 §36): declared WHOLE-SCHOOL-ONLY operations of an
+     * adopted capability -- exact route name => the adopted key and why the
+     * operation stays School-wide (e.g. a directory, an import, a
+     * conversion). Such a route carries the ordinary whole-School floor
+     * `capability:<key>` -- the `capability` Gate, which never counts a Campus
+     * grant -- so a Campus-only holder can never enter it.
+     *
+     * Exact route names only: no pattern, no controller or namespace. A
+     * whole-School floor on an adopted key anywhere else, and a stale or
+     * malformed declaration, fail CI (CoverageGuard::adoptedWholeSchool()).
+     * A controller-level whole-School check of an adopted key is still never
+     * allowed (CampusScopeAdoptionArchitectureTest): the declaration is
+     * expressed as the route floor, where the guard can see it.
+     *
+     * @var array<string, array{capability: string, reason: string}>
+     */
+    public const WHOLE_SCHOOL_OPERATIONS = [];
+
     public static function isAdopted(string $capability): bool
     {
         return isset(self::ADOPTED[$capability]);

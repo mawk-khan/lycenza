@@ -2820,3 +2820,25 @@ The exit date is that `ends_on`. Every other state is unresolved and kept.
   the placement once the Student is eligible; one converted into ANOTHER
   Student still does. Every composition is
   `App\Support\Retention\StudentRetention`.
+
+## Enrollment ↔ Section integrity (ORG.7D-0, 2026-10-18, ADR 0076 §36)
+
+- **The database ties every enrollment to its Section's context.**
+  `student_enrollments_section_context_fk` binds `(section_id, school_id,
+  academic_year_id, campus_id, grade_level_id)` to `sections_context_unique`.
+  - Before this, only `StudentEnrollmentService::createEnrollmentRow()`
+    kept Campus, Year and Grade consistent with the Section.
+  - Now any write, including a raw UPDATE, must keep them consistent.
+  - A Section's Campus, Year or Grade cannot change under its enrollments.
+- **Placement writes are unchanged.** `enroll()` and `transferPlacement()`
+  (through `createEnrollmentRow()`) remain the only placement writers.
+  Rollover and Admissions conversion go through them. Other writers change
+  only status, end date or rollover bookkeeping, never placement.
+- **Nothing here is Student Campus authority:**
+  - no `campus_id` on `students`;
+  - no current-Campus column;
+  - no change to Student visibility, search or transfer authority.
+
+  The current operational Campus stays the application rule of ADR 0076
+  §35.2 (the active enrollment in the School's active year). It is
+  recorded, not built.

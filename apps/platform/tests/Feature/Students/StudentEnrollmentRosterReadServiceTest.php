@@ -6,6 +6,8 @@ use App\Domain\Students\Application\Exceptions\AmbiguousHistoricalEnrollmentExce
 use App\Domain\Students\Application\StudentEnrollmentRosterReadService;
 use App\Domain\Students\Application\StudentEnrollmentService;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Feature\Attendance\Concerns\CreatesAttendanceFixtures;
 use Tests\TestCase;
@@ -133,29 +135,37 @@ class StudentEnrollmentRosterReadServiceTest extends TestCase
         }
     }
 
+    /**
+     * The roster still excludes a row whose denormalized context disagrees
+     * with its Section (fail closed). Since ORG.7D-0 (ADR 0076 §36) the
+     * database refuses such a row outright
+     * (`student_enrollments_section_context_fk`), so it cannot exist even by
+     * bypassing StudentEnrollmentService.
+     */
     #[Test]
-    public function a_row_whose_denormalized_context_disagrees_with_its_section_is_excluded(): void
+    public function a_row_whose_denormalized_context_disagrees_with_its_section_cannot_exist(): void
     {
         $w = $this->attendanceWorld();
         $good = $this->enrollStudent($w['section'], '1', '2026-06-01');
         $otherCampus = $this->createCampus($w['school'], ['code' => 'C2']);
-
-        // An internally inconsistent row (its campus_id disagrees with
-        // its Section's). Only reachable by bypassing
-        // StudentEnrollmentService -- the roster fails CLOSED rather
-        // than importing the inconsistency into Attendance history.
         $student = $this->createStudentFor($w['school']);
-        $this->inSchool($w['school'], fn () => StudentEnrollment::query()->create([
-            'school_id' => $w['school']->id,
-            'student_id' => $student->id,
-            'academic_year_id' => $w['year']->id,
-            'campus_id' => $otherCampus->id,
-            'grade_level_id' => $w['grade']->id,
-            'section_id' => $w['section']->id,
-            'roll_number' => '77',
-            'status' => 'active',
-            'starts_on' => '2026-06-01',
-        ]));
+
+        try {
+            $this->inSchool($w['school'], fn () => DB::transaction(fn () => StudentEnrollment::query()->create([
+                'school_id' => $w['school']->id,
+                'student_id' => $student->id,
+                'academic_year_id' => $w['year']->id,
+                'campus_id' => $otherCampus->id,
+                'grade_level_id' => $w['grade']->id,
+                'section_id' => $w['section']->id,
+                'roll_number' => '77',
+                'status' => 'active',
+                'starts_on' => '2026-06-01',
+            ])));
+            $this->fail('An enrollment disagreeing with its Section was stored.');
+        } catch (QueryException $e) {
+            $this->assertStringContainsString('student_enrollments_section_context_fk', $e->getMessage());
+        }
 
         $this->assertSame([$good->id], $this->roster($w, self::MONDAY));
     }

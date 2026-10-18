@@ -816,6 +816,52 @@ whole-School supersedes. A selected or current Campus
   module entitlement, teacher ownership, `GuardianStudentScope`, HR and
   payroll self-protection, legal gates, MFA.
 
+### Contributor rules for Campus adoption (ORG.7D-0, ADR 0076 §36)
+
+- **Whole-School-only operation of an adopted key.** A domain may keep an
+  operation School-wide (a directory, an import, a conversion) while the
+  rest of its capability family is Campus-adopted. Declare that exact route
+  in `CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS` (capability + reason)
+  and give it the ordinary floor `capability:<key>`. That floor is the
+  `capability` Gate, which a Campus grant never satisfies.
+  `CoverageGuard::adoptedWholeSchool()` fails CI for:
+  - an undeclared whole-School floor on an adopted key;
+  - an any-of floor on an adopted key;
+  - a stale, pattern, unadopted or unreasoned declaration;
+  - a declaration without its floor, or with a Campus floor or C6 contract.
+
+  A controller-level whole-School check of an adopted key is still never
+  allowed.
+- **Report the impact of every adoption.** Adding a key to
+  `CampusScopeCatalogue::ADOPTED` makes existing Campus-scoped grants of
+  every template that holds it newly effective (intended).
+  `CampusAdoptionImpactTest` pins which system templates hold adopted keys
+  and which are Campus-scopable; the adoption phase updates it and reports:
+  - the new keys;
+  - the templates that hold them;
+  - the Campus-scoped grants that gain them.
+
+  High-risk families need recorded owner approval: sensitive HR, payroll,
+  finance, approvals, and access or School administration. Marks are not
+  adoptable.
+- **Conflicts never cross a Campus boundary.** When a School-wide
+  uniqueness rule (one active Visit, a gate-pass number, a room or teacher
+  slot, a bed, a seat, a Library loan) collides with a record outside a
+  Campus-scoped actor's scope, the actor gets one generic
+  conflict/unavailable refusal. It never names another Campus, record,
+  location or person. Whole-School actors keep the specific messages
+  already contracted. The uniqueness rule itself is never weakened to
+  per-Campus for concealment.
+- **Data validity is not authority.** `ActiveCampus` (exists, same School,
+  active) gates new work on a Campus. It never decides who may act there.
+- **Purpose lookups are minimal (recorded for later phases):**
+  - Students: `id`, `displayName`, `studentNumber`, filtered server-side;
+  - Employees: `id`, `displayName` (`employeeNumber` only where a workflow
+    proves the need).
+
+  Never contact, Guardian, Section, date-of-birth, pay, attendance or
+  document fields.
+
 ## School module entitlements (ADR 0076 §12, §31 — built in ORG.5)
 
 **Effective School capability = granted capability ∩ capabilities of the

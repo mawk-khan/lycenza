@@ -9,6 +9,7 @@ use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Subject;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
+use App\Domain\Campuses\Application\ActiveCampus;
 use App\Models\Campus;
 use App\Models\School;
 use App\Models\User;
@@ -54,6 +55,7 @@ class SubjectOfferingService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly ActiveCampus $activeCampus,
     ) {}
 
     /**
@@ -103,6 +105,9 @@ class SubjectOfferingService
             $assertUnique();
 
             return $this->writeUnique(fn (): SubjectOffering => DB::transaction(function () use ($school, $year, $validated, $actor): SubjectOffering {
+                // ORG.7D-0 R5: no new Offering on an inactive Campus.
+                $this->activeCampus->require($school, $validated['campus_id']);
+
                 $offering = SubjectOffering::query()->create([
                     ...$validated,
                     // Explicit default (matching the migration's DB-level

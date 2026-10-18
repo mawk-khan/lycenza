@@ -135,6 +135,29 @@ final class CoverageEvidence
         return $keys;
     }
 
+    /**
+     * ORG.7D-0: the route's whole-School `capability:` floors, each as its
+     * list of any-of keys. EnsureCapability treats every mode other than
+     * `campus` and `platform` (none, or an unknown one) as the whole-School
+     * `capability` Gate, so this does too.
+     *
+     * @return list<list<string>>
+     */
+    public static function wholeSchoolRouteFloors(Route $route): array
+    {
+        $floors = [];
+        foreach ($route->gatherMiddleware() as $middleware) {
+            if (is_string($middleware) && str_starts_with($middleware, 'capability:')) {
+                $parts = explode(',', substr($middleware, strlen('capability:')));
+                if (! in_array($parts[1] ?? null, ['campus', 'platform'], true)) {
+                    $floors[] = explode('|', $parts[0]);
+                }
+            }
+        }
+
+        return $floors;
+    }
+
     /** @return list<string> the capability keys of the route's own `capability:` middleware */
     public static function routeCapabilities(Route $route): array
     {

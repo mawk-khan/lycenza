@@ -5,6 +5,7 @@ namespace App\Domain\HR\Application;
 use App\Domain\HR\Application\Exceptions\AssignmentCampusMismatchException;
 use App\Domain\HR\Application\Exceptions\AssignmentDepartmentCampusScopeMismatchException;
 use App\Domain\HR\Application\Exceptions\AssignmentDepartmentMismatchException;
+use App\Domain\HR\Application\Exceptions\AssignmentInactiveCampusException;
 use App\Domain\HR\Application\Exceptions\AssignmentInactiveDepartmentException;
 use App\Domain\HR\Application\Exceptions\AssignmentInactivePositionException;
 use App\Domain\HR\Application\Exceptions\AssignmentOutsideEmploymentRangeException;
@@ -263,6 +264,7 @@ class EmployeeImportService
             $e instanceof EmploymentOverlapException => ['employment_starts_on', 'employment_conflict', 'This Employee already has an overlapping Employment record.'],
             $e instanceof AssignmentInactivePositionException => ['position_code', 'reference_not_found', 'The referenced Position is not active.'],
             $e instanceof AssignmentInactiveDepartmentException => ['department_code', 'reference_not_found', 'The referenced Department is not active.'],
+            $e instanceof AssignmentInactiveCampusException => ['campus_code', 'reference_not_found', 'The referenced Campus is not active.'],
             $e instanceof AssignmentOutsideEmploymentRangeException => ['assignment_starts_on', 'assignment_conflict', 'The Assignment dates fall outside the Employment date range.'],
             $e instanceof AssignmentDepartmentCampusScopeMismatchException => ['department_code', 'assignment_conflict', 'The referenced Department is not compatible with the referenced Campus.'],
             $e instanceof AssignmentCampusMismatchException,

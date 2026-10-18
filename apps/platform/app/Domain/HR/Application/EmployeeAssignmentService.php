@@ -2,9 +2,11 @@
 
 namespace App\Domain\HR\Application;
 
+use App\Domain\Campuses\Application\ActiveCampus;
 use App\Domain\HR\Application\Exceptions\AssignmentCampusMismatchException;
 use App\Domain\HR\Application\Exceptions\AssignmentDepartmentCampusScopeMismatchException;
 use App\Domain\HR\Application\Exceptions\AssignmentDepartmentMismatchException;
+use App\Domain\HR\Application\Exceptions\AssignmentInactiveCampusException;
 use App\Domain\HR\Application\Exceptions\AssignmentInactiveDepartmentException;
 use App\Domain\HR\Application\Exceptions\AssignmentInactivePositionException;
 use App\Domain\HR\Application\Exceptions\AssignmentOutsideEmploymentRangeException;
@@ -50,6 +52,7 @@ class EmployeeAssignmentService
         private readonly TenantContext $context,
         private readonly AssignmentClosureCascade $closureCascade,
         private readonly HrSelfAdministrationGuard $selfAdministration,
+        private readonly ActiveCampus $activeCampus,
     ) {}
 
     /**
@@ -87,6 +90,11 @@ class EmployeeAssignmentService
             return DB::transaction(function () use ($school, $employment, $position, $campus, $department, $startsOn, $endsOn, $actor) {
                 // SR.4 (ADR 0071 §26.2): never your own assignments.
                 $this->selfAdministration->refuseOwnEmployee($actor, $employment->employee_id, 'assignment.create');
+
+                // ORG.7D-0 R5: no new Assignment on an inactive Campus.
+                if ($campus !== null && $this->activeCampus->find($school, $campus->id) === null) {
+                    throw new AssignmentInactiveCampusException($campus->id);
+                }
 
                 $assignment = EmployeeAssignment::query()->create([
                     'school_id' => $school->id,

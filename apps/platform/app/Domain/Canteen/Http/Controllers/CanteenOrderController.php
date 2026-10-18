@@ -132,10 +132,15 @@ class CanteenOrderController extends Controller
      * picker -- read-only, mirrors
      * App\Http\Controllers\App\Finance\ChargeController::searchStudents()
      * exactly.
+     *
+     * ORG.7D-0 R3 (ADR 0076 §36): it serves order ENTRY, so it needs
+     * `canteen.orders.manage` -- the same authority as the web picker
+     * (App\Http\Controllers\App\Canteen\CanteenOrderController). A
+     * read-only order viewer never needs the School-wide Student picker.
      */
     public function searchStudents(Request $request, School $school): JsonResponse
     {
-        $this->authorizeCapability('canteen.orders.view', $school);
+        $this->authorizeCapability('canteen.orders.manage', $school);
 
         $validated = $request->validate([
             'q' => ['required', 'string', 'min:2', 'max:255'],

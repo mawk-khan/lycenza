@@ -9,6 +9,7 @@ use App\Domain\Admissions\Application\Exceptions\InvalidAdmissionApplicationTran
 use App\Domain\Admissions\Application\Exceptions\OpenAdmissionApplicationExistsException;
 use App\Domain\Admissions\Infrastructure\AdmissionApplication;
 use App\Domain\Admissions\Infrastructure\Applicant;
+use App\Domain\Campuses\Application\ActiveCampus;
 use App\Models\Campus;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
@@ -74,6 +75,7 @@ class AdmissionApplicationService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly ActiveCampus $activeCampus,
     ) {}
 
     /**
@@ -97,6 +99,9 @@ class AdmissionApplicationService
         return $this->context->withSchool($applicant->school, function () use ($applicant, $academicYear, $campus, $gradeLevel, $actor) {
             try {
                 return DB::transaction(function () use ($applicant, $academicYear, $campus, $gradeLevel, $actor) {
+                    // ORG.7D-0 R5: no new application on an inactive Campus.
+                    $this->activeCampus->require($applicant->school_id, $campus->id);
+
                     $application = AdmissionApplication::query()->create([
                         'school_id' => $applicant->school_id,
                         'applicant_id' => $applicant->id,

@@ -34,7 +34,10 @@
   recorded decision points; no new capability adopted. ORG.7C ACADEMIC & SIS
   CAMPUS DEPENDENCY AUDIT DONE (2026-10-18, §35, read-only): proposed
   Student, HR and Admissions Campus contracts, capability matrix, defects
-  found (not fixed), recommended sequence.** The next ORG phase needs
+  found (not fixed), recommended sequence. ORG.7D-0 CAMPUS PREREQUISITE
+  HARDENING IMPLEMENTED (2026-10-18, §36): Room and enrollment Campus bound
+  in the database, active-Campus writes, Canteen picker authority,
+  whole-School-only operation form; no Campus capability adopted.** The next ORG phase needs
   separate, explicit owner authorization.
 - Date: 2026-10-17
 - Programme: **ORG — Platform & Organization Foundation**
@@ -2615,3 +2618,162 @@ contract. Proposed order:
 5. **ORG.7D-4 — full SIS adoption** (profile and enrollment operations,
    dual-scope transfer, conversion), then Fees and Payments on
    charge-year attribution. The ledger stays whole-School.
+
+## 36. ORG.7D-0 — Campus authority prerequisite hardening (as built, 2026-10-18)
+
+Owner authorization: R1, R2, R3 and R5 of §35.7, the whole-School-only
+operation form, and the decisions below. Nothing else. Baseline
+`origin/main` = `62985528`.
+
+**Owner decisions (frozen).**
+
+- **D0-1 Student identity:** School-wide; `students` gains no Campus. The
+  operational Campus is the active enrollment in the School's active
+  year. Historical rows grant no current authority.
+- **D0-2 No current enrollment:** no operational Campus. Campus-scoped
+  staff gain nothing; whole-School authority follows existing domain
+  rules.
+- **D0-3 Transfer:** a named operation, never a `campus_id` edit. It needs
+  whole-School authority, or authority over both the source and
+  destination Campus. Not built.
+- **D0-4 Student purpose lookups:** `id`, `displayName`, `studentNumber`,
+  with eligibility filtered server-side. Never date of birth, Guardian,
+  Section, contact or profile fields.
+- **D0-5 Employee Campus:** the union of CURRENT assignments, where
+  current means all of:
+  - an active Employee;
+  - employment active or in its notice period on the School-local date;
+  - an assignment covering that date;
+  - an active Campus.
+
+  No current assignment means whole-School only; an ended assignment
+  confers nothing. Not built.
+- **D0-6 Minimal Employee lookup:** `id`, `displayName`. `employeeNumber`
+  only where a workflow proves the need. Never email, phone, salary,
+  attendance, sensitive, document or note fields. The Visitor host lookup
+  stays `id` + `displayName`.
+- **D0-7 Sensitive HR stays whole-School in the first HR Campus release:**
+  personal and sensitive records, sensitive qualifications, documents,
+  notes, payroll-sensitive records, account link/unlink, archive/restore,
+  imports, and employment/security administration.
+- **D0-8 Admissions:**
+  - the application is Campus-bound; applicant identity is School-wide;
+  - a Campus actor sees an applicant only through an authorized
+    application;
+  - the directory and Guardian search stay whole-School (or
+    purpose-limited);
+  - conversion stays whole-School until the Student foundation.
+- **D0-9 Cross-Campus uniqueness disclosure:** School-wide constraints are
+  preserved. A Campus-scoped actor gets one generic conflict/unavailable
+  refusal that never names another Campus, record, location or person.
+  Whole-School actors keep the messages already contracted. Uniqueness is
+  never weakened to per-Campus for concealment.
+- **D0-10 Future adoption:** an existing Campus grant may become newly
+  effective when a family is adopted (intended). Every adoption phase
+  reports the new keys, the templates that hold them, and the
+  Campus-scoped grants that gain them. High-risk families need owner
+  approval. Marks are not authorized for adoption.
+
+**36.1 R1 — Timetable Room Campus.**
+- **Precondition.** Zero entries referenced another Campus's Room, in each
+  of: DDEV development (150 entries with a Room), DDEV test and isolated
+  test.
+- **Migration** `2026_12_22_090000`: `rooms_campus_context_unique (id,
+  school_id, campus_id)` plus `timetable_entries_room_campus_fk (room_id,
+  school_id, campus_id) → rooms (id, school_id, campus_id)`, RESTRICT.
+  - MATCH SIMPLE leaves a Room-less entry valid.
+  - The School-only `timetable_entries_room_fk` is kept.
+  - A referenced Room cannot change Campus.
+- **Service.** `TimetableScheduleService` refuses a Room whose Campus is
+  not the Offering's (`TIMETABLE_ROOM_CAMPUS_MISMATCH`, 422) and
+  translates the FK name.
+
+**36.2 R2 — Enrollment ↔ Section.**
+- **Precondition.** Zero rows with a mismatched School, Campus, Year or
+  Grade, zero dangling and zero NULL Sections: DDEV development (36
+  enrollments), DDEV test (0), isolated test (20).
+- **Migration** `2026_12_22_090100`:
+  `student_enrollments_section_context_fk (section_id, school_id,
+  academic_year_id, campus_id, grade_level_id) → sections_context_unique`,
+  RESTRICT. The School-only Section key is kept.
+- **Effect.** A raw UPDATE of a placement column, and moving a Section's
+  Campus, Year or Grade under its enrollments, are refused.
+- **Placement audit.** `createEnrollmentRow()` (through `enroll()` and
+  `transferPlacement()`, used by rollover and conversion) is the only
+  placement writer. Every other writer changes status, end date or
+  rollover bookkeeping only.
+- **Freeze trigger.** No placement freeze trigger was added: the FK already
+  makes every placement update consistent, and freezing is a SIS decision.
+- **Scope.** No Student authorization, search, UI, API, resolver or
+  transfer change.
+
+**36.3 R3 — Canteen Student picker.** The API search now needs
+`canteen.orders.manage` (route floor and controller), as on the web.
+Viewers keep reading orders. The Item search is unchanged
+(`canteen.orders.view` on the API, `.manage` on the web): Items are not
+personal data, and that asymmetry was not in scope.
+
+**36.4 R5 — Active-Campus writes.**
+- **`App\Domain\Campuses\Application\ActiveCampus`** (exists, same
+  School, active, share-locked in the caller's transaction) is the one
+  validator. It is never authority.
+- **Used by:**
+  - Section create and Subject Offering create (`campus_id` field error;
+    another School's Campus stays a 404);
+  - Timetable create, update and activate (`TIMETABLE_CAMPUS_NOT_AVAILABLE`);
+  - admission application create (`campus_id` field error);
+  - employee assignment create (`HR_ASSIGNMENT_INACTIVE_CAMPUS`; the import
+    uses the same path and reports "The referenced Campus is not active").
+- **Unchanged:**
+  - Section and Offering updates, which never select a Campus;
+  - reactivating a Section or Offering on an inactive Campus;
+  - Room create (not in the list; recorded);
+  - inactive-Campus records, which are kept and stay maintainable
+    (Timetable deactivate, assignment end).
+- **No trigger:** "active" is mutable state in another row, so the guard
+  is the service plus `ActiveCampusWriteTest`'s architecture assertion.
+
+**36.5 Whole-School-only operation of an adopted key.**
+- **The declaration:** `CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS`
+  (exact route name → capability + reason; empty today). The route carries
+  the ordinary `capability:<key>` floor, i.e. the `capability` Gate, which
+  a Campus grant never satisfies.
+- **The guard:** `CoverageGuard::adoptedWholeSchool()`, run by
+  `AuthorizationCoverageGuardTest`, checks every registered route, not only
+  School-facing ones (ResolveSchoolContext runs on the whole web and API
+  groups). It reads an unknown `capability:` mode as the whole-School Gate,
+  exactly as EnsureCapability does. It fails CI for:
+  - an undeclared or any-of whole-School floor on an adopted key;
+  - a stale, pattern, unadopted or unreasoned declaration;
+  - a declaration without its floor, or with a Campus floor or C6 entry.
+- **Unchanged:** the controller-level ban on whole-School checks of
+  adopted keys (`CampusScopeAdoptionArchitectureTest`). Route floors moved
+  from a source scan to the registered-route check.
+- **Self-test:** `WholeSchoolOperationOfAdoptedKeyTest` covers the guard
+  findings, plus a Campus-only holder refused (403) and a whole-School
+  holder admitted on a declared probe.
+- **Security review** (ORG.7D-0): no HIGH or MEDIUM findings. Its LOW notes
+  on unknown modes, non-School-facing routes and the import message were
+  closed above. Reactivation on an inactive Campus stays recorded in §36.7.
+
+**36.6 Adoption impact contract.** `CampusAdoptionImpactTest` pins:
+- the system School templates holding adopted keys (front_office,
+  principal, school_admin, stores_officer);
+- the Campus-scopable ones (front_office, principal, stores_officer);
+- the high-risk family list with an empty owner-approved set;
+- a ban on marks.
+
+Any adoption fails it until reported. This resolves R6 for now: the
+impact is reported and marks are deferred.
+
+**36.7 Out of scope (recorded).**
+- R4 (HR dates, open dated assignments);
+- R6 beyond the impact contract;
+- R7 domain refactors;
+- R8 hygiene;
+- Room create on an inactive Campus;
+- Section and Offering reactivation on an inactive Campus.
+
+No capability, role, route, Campus adoption, SIS, HR or Admissions
+authority change. Two rollback-proven migrations. The ORG.7A grant-history
+rollback contract is unchanged.

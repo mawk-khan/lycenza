@@ -15,9 +15,12 @@ use Tests\TestCase;
  * - Every adopted capability is a real School capability of a declared
  *   domain with its NULL-Campus / inactive-Campus / lookup policy, and is
  *   never ORG-C2 whole-School authority.
- * - An adopted capability is never checked with the whole-School Gate or a
- *   whole-School `capability:` floor anywhere (that would silently ignore
- *   Campus grants) -- only through authorizeCampusScope / `,campus`.
+ * - An adopted capability is never checked with the whole-School Gate in
+ *   application code (that would silently ignore Campus grants) -- only
+ *   through authorizeCampusScope / `,campus`. A whole-School `capability:`
+ *   ROUTE floor on an adopted key is allowed only on a declared
+ *   whole-School-only operation (ORG.7D-0, ADR 0076 §36): the registered
+ *   route list is checked by CoverageGuard::adoptedWholeSchool().
  * - The adopted domains' controllers never query their Campus-bound models
  *   directly: the predicate lives in the domain access class.
  * - Campus scope is computed only by CampusScopeResolver, and
@@ -65,10 +68,13 @@ class CampusScopeAdoptionArchitectureTest extends TestCase
         $offenders = [];
         foreach (Finder::create()->files()->in([app_path(), base_path('routes')])->name('*.php') as $file) {
             $source = $file->getContents();
+            // Route floors are checked on the registered routes instead
+            // (declared whole-School-only operations, ORG.7D-0).
+            $routeFile = str_starts_with($file->getRealPath(), base_path('routes'));
             foreach (CampusScopeCatalogue::capabilities() as $capability) {
                 $quoted = preg_quote($capability, '/');
                 if (preg_match("/authorizeCapability(For)?\\(\\s*(\\\$[a-z]+,\\s*)?'{$quoted}'/", $source)
-                    || preg_match("/'capability:{$quoted}'/", $source)
+                    || (! $routeFile && preg_match("/'capability:{$quoted}'/", $source))
                     || preg_match("/->canInSchool\\([^)]*'{$quoted}'/", $source)) {
                     $offenders[] = $file->getRelativePathname()." checks {$capability} School-wide only";
                 }

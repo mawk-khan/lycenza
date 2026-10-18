@@ -1308,4 +1308,23 @@ once several modules copy it.
      - **Refusals look the same in and out of scope.** A Campus-scoped
        actor's refusal never differs between an in-scope and an
        out-of-scope conflict, and never names another Campus, record or
-       state (the Visitor check-in standard, ORG.7B §34).
+       state (the Visitor check-in standard, ORG.7B §34). Never weaken a
+       School-wide uniqueness rule to per-Campus to hide a conflict.
+     - **Whole-School-only operations of an adopted key are declared**
+       (ORG.7D-0, §36): an exact route in
+       `CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS` (capability +
+       reason) with the ordinary `capability:<key>` floor. Anything else
+       fails `CoverageGuard::adoptedWholeSchool()`.
+     - **Every adoption reports its impact:**
+       - the new keys, the templates holding them, and the Campus grants
+         that gain them (`CampusAdoptionImpactTest`);
+       - high-risk families need owner approval;
+       - marks are not adoptable.
+     - **Derived Campus is relationally bound; new work needs an active
+       Campus.**
+       - A child's Campus is pinned to its parent by a composite FK
+         (Timetable Room, enrollment ↔ Section).
+       - Writes placing new work on a Campus use `ActiveCampus`, which is
+         data validity, never authority.
+       - Neither says which enrollment is current, and `students` has no
+         Campus.

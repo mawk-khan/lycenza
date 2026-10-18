@@ -16,11 +16,11 @@ not only the target design.
   campus-scoped tables, but Campus is **not** a separate isolation
   boundary — staff scoped to a School may legitimately need
   cross-campus visibility within that one School. Campus is the
-  canonical "Branch" (ADR 0076 §10). **Today Campus is data only:** no
-  grant is Campus-scoped, and `TenantContext::campus()` is never set by a
-  request and is never authority. ADR 0076 §11 contracts an optional,
-  additive Campus scope on School role assignments (NULL = whole School)
-  for ORG.7. It does not change RLS or tenant context.
+  canonical "Branch" (ADR 0076 §10). Since ORG.7A a School role
+  assignment may be scoped to one Campus (NULL = whole School), for
+  adopted domains only; see "Campus is a scope, not a tenant" below. It
+  does not change RLS or tenant context, and `TenantContext::campus()` is
+  never authority.
 - **School Group / Trust** = a grouping entity *above* the tenant
   boundary. A group admin's cross-school access is an explicit,
   granted, audited elevation (see `docs/security/AUTHORIZATION.md`),
@@ -429,6 +429,22 @@ context is set exactly as for a first dispatch (rule 21).
 - **Adopted domains filter in SQL.** Rows are filtered before they are
   returned, through their domain access class. Nothing is filtered in PHP
   after a School-wide query.
+- **Derived Campus is relationally bound (ORG.7D-0, §36).** A row whose
+  Campus comes from a parent is tied to that parent's Campus by a
+  composite foreign key: Section, Subject Offering, teaching assignment,
+  Timetable entry (its Section, its Offering and, since ORG.7D-0, its
+  Room) and enrollment (since ORG.7D-0, its Section). A parent's Campus
+  cannot change under its children.
+- **Relational consistency is not "current".** The database proves an
+  enrollment matches its Section. It never says which enrollment is a
+  Student's current one; that stays an application rule (the active
+  enrollment in the School's active year, ADR 0076 §35.2). `students` has
+  no Campus.
+- **New work needs an active Campus.** Section, Subject Offering,
+  Timetable entry, admission application and employee assignment writes
+  validate their Campus through `ActiveCampus` (exists, same School,
+  active). This is data validity, never authorization. Rows already on an
+  inactive Campus are kept.
 
 ## What is NOT yet implemented (Phase 0B honesty note)
 

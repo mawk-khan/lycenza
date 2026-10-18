@@ -4091,3 +4091,17 @@ employment is active or in notice, never the same Employee or yourself.
 **Rules:** `ReportingHierarchyService::setManager()` still decides (same
 School, not the same Employee, no cycle, never your own reporting line),
 and its refusals read without identifiers.
+
+## Active-Campus assignments (ORG.7D-0, 2026-10-18, ADR 0076 §36)
+
+`EmployeeAssignmentService::create()` refuses a new Assignment on an
+inactive Campus (`HR_ASSIGNMENT_INACTIVE_CAMPUS`, 422), through
+`ActiveCampus` inside its transaction. The Employee import uses the same
+path. An Assignment without a Campus is unaffected. Existing Assignments
+on a Campus that later becomes inactive are kept and can still be ended.
+
+No HR Campus authority is added. The future contract (Campus = the union
+of current assignments; sensitive HR whole-School; minimal Employee lookup
+`id` + `displayName`) is recorded in ADR 0076 §35.3 and §36 (D0-5–D0-7).
+R4 (UTC "current" dates, dated assignments left open at employment end)
+stays deferred.

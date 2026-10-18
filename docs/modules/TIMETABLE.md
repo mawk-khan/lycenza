@@ -545,3 +545,20 @@ Periods, rooms and other reusable configuration are not year-bound and stay.
 A current or future year is never eligible.
 
 Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md` §5.8).
+
+## Campus integrity (ORG.7D-0, 2026-10-18, ADR 0076 §36)
+
+- **A Room is on its entry's Campus.** The Campus comes from the Subject
+  Offering (`deriveContext()`).
+  - `TimetableScheduleService` refuses a Room from another Campus or
+    School (`TIMETABLE_ROOM_CAMPUS_MISMATCH`, 422).
+  - `timetable_entries_room_campus_fk` (`(room_id, school_id, campus_id)`
+    → `rooms_campus_context_unique`) is the backstop; a Room-less entry is
+    unaffected.
+  - A referenced Room cannot change Campus.
+- **Nothing new on an inactive Campus.** Create, update and re-activation
+  re-check the entry's Campus through `ActiveCampus`, inside the
+  transaction (`TIMETABLE_CAMPUS_NOT_AVAILABLE`, 422). Existing entries
+  are kept, and can still be deactivated.
+- **No Campus authority.** Timetable is not Campus-adopted
+  (`timetable.schedule.*` stays whole-School until ORG.7D-1).

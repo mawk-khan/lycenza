@@ -2,6 +2,7 @@
 
 namespace Tests\Support\Authorization;
 
+use App\Support\Authorization\Campus\CampusScopeCatalogue;
 use Illuminate\Routing\Route;
 
 /**
@@ -14,8 +15,13 @@ final class CoverageGuard
     /**
      * @param  list<Route>  $routes
      * @param  list<Coverage>  $entries
+     * @param  array<string, array{capability: string, reason: string}>|null  $wholeSchoolOperations  defaults to CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS
      */
-    public function __construct(private readonly array $routes, private readonly array $entries) {}
+    public function __construct(
+        private readonly array $routes,
+        private readonly array $entries,
+        private readonly ?array $wholeSchoolOperations = null,
+    ) {}
 
     /** @return array<string, Coverage> */
     public function byRoute(): array
@@ -119,6 +125,70 @@ final class CoverageGuard
             }
             if ($entry->everyMember && ! in_array($entry->class, [Coverage::OWNED, Coverage::SPECIAL], true)) {
                 $problems[] = "[{$entry->route}] only C4/C5 may be open to every member";
+            }
+        }
+
+        return $problems;
+    }
+
+    /**
+     * ORG.7D-0 (ADR 0076 §36): a whole-School `capability:` floor on a
+     * Campus-adopted key is allowed only on a declared whole-School-only
+     * operation (CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS), and every
+     * declaration is an exact, School-facing route that carries exactly that
+     * ordinary floor -- the `capability` Gate, which a Campus grant never
+     * satisfies -- with a reason, and no Campus floor or C6 contract.
+     *
+     * @return list<string>
+     */
+    public function adoptedWholeSchool(): array
+    {
+        $declared = $this->wholeSchoolOperations ?? CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS;
+        $entries = $this->byRoute();
+        $routes = [];
+        foreach ($this->routes as $route) {
+            $routes[RouteUniverse::key($route)] = $route;
+        }
+
+        // Every registered route, School-facing or not: ResolveSchoolContext
+        // runs on the whole web and API groups, so a whole-School floor
+        // works on any of them.
+        $problems = [];
+        foreach ($routes as $key => $route) {
+            foreach (CoverageEvidence::wholeSchoolRouteFloors($route) as $floor) {
+                foreach (CampusScopeCatalogue::adoptedAmong($floor) as $capability) {
+                    if (($declared[$key]['capability'] ?? null) !== $capability || count($floor) !== 1) {
+                        $problems[] = $this->describe($route)." checks Campus-adopted [{$capability}] with a whole-School floor but is not a declared whole-School-only operation";
+                    }
+                }
+            }
+        }
+
+        foreach ($declared as $key => $declaration) {
+            $capability = $declaration['capability'];
+            $route = $routes[$key] ?? null;
+            if (preg_match('/[*?]|\.$|^\s|\s$/', $key) === 1) {
+                $problems[] = "[{$key}] whole-School-only operation looks like a pattern; declare exact routes";
+            }
+            if ($route === null) {
+                $problems[] = "[{$key}] whole-School-only operation is not a registered route";
+
+                continue;
+            }
+            if (! $this->isSchoolFacing($route)) {
+                $problems[] = "[{$key}] whole-School-only operation is not a School-facing route";
+            }
+            if (! CampusScopeCatalogue::isAdopted($capability)) {
+                $problems[] = "[{$key}] whole-School-only operation names [{$capability}], which is not Campus-adopted";
+            }
+            if (trim($declaration['reason']) === '') {
+                $problems[] = "[{$key}] whole-School-only operation needs its reason";
+            }
+            if (! in_array("capability:{$capability}", $route->gatherMiddleware(), true)) {
+                $problems[] = "[{$key}] whole-School-only operation does not carry its ordinary `capability:{$capability}` floor";
+            }
+            if (CoverageEvidence::campusRouteCapabilities($route) !== [] || ($entries[$key] ?? null)?->class === Coverage::CAMPUS) {
+                $problems[] = "[{$key}] whole-School-only operation also carries a Campus floor or C6 contract";
             }
         }
 

@@ -362,15 +362,20 @@ class CanteenOrderApiTest extends TestCase
         }
     }
 
+    /**
+     * ORG.7D-0 R3 (ADR 0076 §36): the Student picker serves order entry, so
+     * it needs `canteen.orders.manage` (as on the web); the Item search is
+     * unchanged. CanteenStudentPickerAuthorityTest pins web/API agreement.
+     */
     #[Test]
-    public function orders_view_alone_is_sufficient_for_the_search_endpoints(): void
+    public function orders_view_alone_reaches_the_item_search_but_not_the_student_picker(): void
     {
         $school = $this->createSchool();
         $this->createStudent($school, ['first_name' => 'Ananya']);
         $user = $this->createUserWithCapabilities($school, ['canteen.orders.view']);
+        $client = $this->withHeader('Authorization', 'Bearer '.$this->token($user));
 
-        $this->withHeader('Authorization', 'Bearer '.$this->token($user))
-            ->getJson("/api/v1/schools/{$school->id}/canteen-orders/search/students?q=Ana")
-            ->assertOk();
+        $client->getJson("/api/v1/schools/{$school->id}/canteen-orders/search/students?q=Ana")->assertForbidden();
+        $client->getJson("/api/v1/schools/{$school->id}/canteen-orders/search/items?q=te")->assertOk();
     }
 }
