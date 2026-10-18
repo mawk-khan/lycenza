@@ -19,6 +19,7 @@ use App\Support\Money\Money;
 use App\Support\Portal\PortalUnavailableException;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\LocalCatalogueFixtures;
+use Database\Factories\SchoolFactory;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -279,6 +280,38 @@ class GuardianFeePortalTest extends TestCase
         $this->app['env'] = 'production';
         $this->get($this->url($w['a']->id))->assertForbidden()->assertSee(PortalUnavailableException::MESSAGE);
         $this->app['env'] = 'testing';
+    }
+
+    #[Test]
+    public function the_fee_view_needs_the_portal_and_fees_modules_and_an_entitlement_never_opens_production(): void
+    {
+        // ORG.5 (ADR 0076 §31, ORG-C5): portal.fees.view requires BOTH modules.
+        $w = $this->world();
+        $user = $w['g']['user'];
+        $resolver = app(CapabilityResolver::class);
+        $this->asGuardian($user, $w['school'])->get($this->url($w['a']->id))->assertOk();
+
+        SchoolFactory::setOptionalModules($w['school'], false, ['fees', 'library', 'canteen']);
+        $capabilities = $resolver->schoolCapabilities($user, $w['school']);
+        $this->assertNotContains('portal.fees.view', $capabilities);
+        $this->assertContains('portal.communications.view', $capabilities, 'Other portal views keep their own modules.');
+        $this->get($this->url($w['a']->id))->assertForbidden();
+
+        SchoolFactory::setOptionalModules($w['school'], true, ['fees']);
+        $this->get($this->url($w['a']->id))->assertOk();
+
+        SchoolFactory::setOptionalModules($w['school'], false, ['guardian_portal']);
+        $this->assertSame([], array_values(array_filter($resolver->schoolCapabilities($user, $w['school']), fn (string $c) => str_starts_with($c, 'portal.'))));
+        $this->get($this->url($w['a']->id))->assertForbidden();
+
+        // Entitled to everything, production still refuses (POR-L1).
+        SchoolFactory::setOptionalModules($w['school'], true, ['guardian_portal']);
+        $this->app['env'] = 'production';
+        try {
+            $this->get($this->url($w['a']->id))->assertForbidden()->assertSee(PortalUnavailableException::MESSAGE);
+        } finally {
+            $this->app['env'] = 'testing';
+        }
     }
 
     #[Test]

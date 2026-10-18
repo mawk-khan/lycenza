@@ -63,6 +63,18 @@ interface Props {
         close: boolean;
         reopen: boolean;
     };
+    modules:
+        | {
+              key: string;
+              label: string;
+              description: string;
+              core: boolean;
+              enabled: boolean;
+              dependsOn: string[];
+              dependents: string[];
+          }[]
+        | null;
+    canManageModules: boolean;
     notice: string | null;
 }
 
@@ -76,6 +88,8 @@ const notices: Record<string, string> = {
     'bootstrap-admin': 'Bootstrap School Administrator replaced.',
     close: 'School closed. Nothing was deleted.',
     reopen: 'School reopened.',
+    'module-enable': 'Module enabled.',
+    'module-disable': 'Module access disabled. Nothing was deleted.',
 };
 </script>
 
@@ -256,6 +270,43 @@ const notices: Record<string, string> = {
                 <li v-for="e in audit.entries" :key="e.id">
                     <span class="font-mono text-xs text-slate-500">{{ e.occurredAt }}</span>
                     {{ e.eventType }}
+                </li>
+            </ul>
+        </section>
+
+        <section v-if="modules" class="mt-8" aria-labelledby="modules-heading">
+            <h2 id="modules-heading" class="text-sm font-medium text-slate-500">Modules</h2>
+            <p class="mt-1 text-xs text-slate-500">
+                Core modules are always available. Disabling an optional module removes access only;
+                nothing is deleted.
+            </p>
+            <ul class="mt-2 divide-y divide-slate-100 text-sm" data-testid="school-modules">
+                <li
+                    v-for="m in modules"
+                    :key="m.key"
+                    class="flex flex-wrap items-center justify-between gap-2 py-1.5"
+                    :data-module="m.key"
+                >
+                    <span>
+                        <span class="font-medium">{{ m.label }}</span>
+                        <span v-if="m.core" class="ml-2 text-xs text-slate-500">Core</span>
+                        <span
+                            v-else
+                            class="ml-2 rounded px-1.5 py-0.5 text-xs"
+                            :class="
+                                m.enabled
+                                    ? 'bg-emerald-50 text-emerald-800'
+                                    : 'bg-slate-100 text-slate-600'
+                            "
+                            >{{ m.enabled ? 'Enabled' : 'Disabled' }}</span
+                        >
+                    </span>
+                    <a
+                        v-if="canManageModules && !m.core"
+                        class="underline"
+                        :href="`/app/platform/schools/${school.id}/modules/${m.key}/${m.enabled ? 'disable' : 'enable'}`"
+                        >{{ m.enabled ? 'Disable access…' : 'Enable…' }}</a
+                    >
                 </li>
             </ul>
         </section>

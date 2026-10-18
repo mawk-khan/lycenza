@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Domain\Automation\Application\AutomationExecutionService;
+use App\Domain\Platform\Application\Modules\ExecutesModuleWork;
 use App\Models\School;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Bus\Queueable;
@@ -23,7 +24,7 @@ use Illuminate\Queue\SerializesModels;
  * Duplicate or concurrent dispatch is harmless: the service's lease claim
  * lets only one worker act.
  */
-class RunAutomationExecutionJob implements ShouldQueue
+class RunAutomationExecutionJob implements ExecutesModuleWork, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -35,6 +36,12 @@ class RunAutomationExecutionJob implements ShouldQueue
         public readonly string $schoolId,
         public readonly string $executionId,
     ) {}
+
+    /** ORG.5: re-checked at execution by AutomationExecutionService::evaluate() (ModuleExecutionGuard). */
+    public static function executesModule(): string
+    {
+        return 'automation';
+    }
 
     public function handle(AutomationExecutionService $service, TenantContext $context): void
     {

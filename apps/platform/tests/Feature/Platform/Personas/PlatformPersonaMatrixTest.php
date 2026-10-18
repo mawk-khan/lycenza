@@ -139,7 +139,7 @@ class PlatformPersonaMatrixTest extends TestCase
         $group = $this->createGroup([$school]);
         $resolver = app(CapabilityResolver::class);
 
-        $this->assertEqualsCanonicalizing(['platform.schools.view', 'platform.school_groups.view', 'platform.schools.onboard'], $resolver->platformCapabilities($manager));
+        $this->assertEqualsCanonicalizing(['platform.schools.view', 'platform.school_groups.view', 'platform.schools.onboard', 'platform.school_entitlements.view', 'platform.school_entitlements.manage'], $resolver->platformCapabilities($manager));
         $this->assertSame([], $resolver->schoolCapabilities($manager, $school));
         $this->assertSame([], $resolver->groupCapabilities($manager, $group));
 
@@ -322,9 +322,11 @@ class PlatformPersonaMatrixTest extends TestCase
     public function the_onboarding_capability_never_reaches_a_school_or_group_role(): void
     {
         foreach (['school_admin', 'group_admin'] as $role) {
-            $this->assertDatabaseRefuses(fn () => DB::connection('pgsql_admin')->table('role_capabilities')->insert([
-                'role_id' => $this->roleId($role), 'capability_key' => 'platform.schools.onboard',
-            ]));
+            foreach (['platform.schools.onboard', 'platform.school_entitlements.manage'] as $capability) {
+                $this->assertDatabaseRefuses(fn () => DB::connection('pgsql_admin')->table('role_capabilities')->insert([
+                    'role_id' => $this->roleId($role), 'capability_key' => $capability,
+                ]));
+            }
         }
         $this->assertSame('platform', DB::table('capabilities')->where('key', 'platform.schools.onboard')->value('namespace'));
     }

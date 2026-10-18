@@ -120,6 +120,6 @@ final class SchoolAdministrators
     {
         $this->capabilities->forgetCache($user, $school);
 
-        return array_diff(self::CAPABILITIES, $this->capabilities->schoolCapabilities($user, $school)) === [];
+        return array_diff(self::CAPABILITIES, $this->capabilities->schoolCapabilitiesAmong($user, $school, self::CAPABILITIES)) === [];
     }
 }

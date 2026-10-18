@@ -7,6 +7,8 @@ use App\Domain\Communications\Application\Policy\CommunicationDeliveryTimingPoli
 use App\Domain\Communications\Domain\CommunicationChannel;
 use App\Domain\Communications\Infrastructure\CommunicationDelivery;
 use App\Domain\Communications\Infrastructure\CommunicationDeliveryAttempt;
+use App\Domain\Platform\Application\Modules\ExecutesModuleWork;
+use App\Domain\Platform\Application\Modules\ModuleExecutionGuard;
 use App\Models\School;
 use App\Support\Observability\MetricsRecorder;
 use App\Support\Tenancy\SchoolOperationalGuard;
@@ -44,7 +46,7 @@ use Illuminate\Support\Facades\DB;
  * new path (it always succeeds with `delivered`), so this checkpoint's
  * only NEW runtime behavior belongs to `email`.
  */
-class ProcessCommunicationDeliveryJob implements ShouldQueue
+class ProcessCommunicationDeliveryJob implements ExecutesModuleWork, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -56,6 +58,11 @@ class ProcessCommunicationDeliveryJob implements ShouldQueue
         public readonly string $schoolId,
         public readonly string $deliveryId,
     ) {}
+
+    public static function executesModule(): string
+    {
+        return 'communications';
+    }
 
     public function handle(CommunicationChannelRegistry $registry, TenantContext $context, CommunicationDeliveryTimingPolicyService $timingPolicy): void
     {
@@ -75,7 +82,7 @@ class ProcessCommunicationDeliveryJob implements ShouldQueue
 
     private function process(CommunicationChannelRegistry $registry, CommunicationDeliveryTimingPolicyService $timingPolicy, School $school): void
     {
-        $delivery = $this->claim();
+        $delivery = $this->claim($school);
 
         if ($delivery === null) {
             return;
@@ -200,14 +207,14 @@ class ProcessCommunicationDeliveryJob implements ShouldQueue
      * worker (unexpired lease) or already terminal yields 0 affected
      * rows and this method returns null.
      */
-    private function claim(): ?CommunicationDelivery
+    private function claim(School $school): ?CommunicationDelivery
     {
         // Phase 0N.9 (ADR 0047 section 8): the School must be active when
         // the delivery is claimed -- read FOR SHARE in the claim's own
         // transaction, so a suspension either commits first (this
         // delivery is deferred) or waits for the claim (in-flight work).
         // The provider call runs after commit, never under the lock.
-        return DB::transaction(function (): ?CommunicationDelivery {
+        return DB::transaction(function () use ($school): ?CommunicationDelivery {
             $claimable = CommunicationDelivery::query()
                 ->where('id', $this->deliveryId)
                 ->whereIn('status', ['pending', 'queued'])
@@ -221,6 +228,15 @@ class ProcessCommunicationDeliveryJob implements ShouldQueue
                 // `queued`, due again at once; the redispatcher skips
                 // non-active Schools, so it resumes only after RESUME.
                 $claimable->update(['status' => 'queued', 'next_attempt_at' => now(), 'processing_lease_expires_at' => null]);
+
+                return null;
+            }
+
+            // ORG.5 (ADR 0076 §12.7(3)): Communications no longer entitled
+            // when the delivery runs -- terminal `cancelled`, never retried and
+            // never sent later because it was queued while enabled.
+            if (! app(ModuleExecutionGuard::class)->allows($school, self::executesModule())) {
+                $claimable->update(['status' => 'cancelled', 'failure_code' => 'module_not_entitled', 'next_attempt_at' => null, 'processing_lease_expires_at' => null]);
 
                 return null;
             }

@@ -15,6 +15,7 @@ use App\Domain\Fees\Infrastructure\FeeStructureInstallment;
 use App\Domain\Fees\Infrastructure\FeeStructureLine;
 use App\Domain\Finance\Application\LedgerAccountSummary;
 use App\Domain\Finance\Application\LedgerService;
+use App\Domain\Platform\Application\Modules\ModuleExecutionGuard;
 use App\Domain\Students\Application\StudentEnrollmentFeeTargetReadService;
 use App\Models\School;
 use App\Models\User;
@@ -140,6 +141,12 @@ class FeeAssessmentItemExecutor
         }
 
         if (! $this->operational->holdOperational($school->id)) {
+            return 'paused';
+        }
+
+        // ORG.5 (ADR 0076 §31): a School no longer entitled to Fees pauses
+        // the run -- checked here, inside the item transaction, at execution.
+        if (! app(ModuleExecutionGuard::class)->allows($school, 'fees')) {
             return 'paused';
         }
 

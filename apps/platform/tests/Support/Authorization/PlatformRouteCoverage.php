@@ -5,6 +5,7 @@ namespace Tests\Support\Authorization;
 use App\Domain\Platform\Application\Elevation\SchoolElevationService;
 use App\Domain\Platform\Application\Groups\Reporting\GroupCurriculumCoverageReportService;
 use App\Domain\Platform\Application\Groups\SchoolGroupGovernanceService;
+use App\Domain\Platform\Application\Modules\SchoolModuleEntitlementService;
 use App\Domain\Platform\Application\Roles\PlatformRoleGovernanceService;
 use App\Domain\Platform\Application\Schools\SchoolLifecycleService;
 use App\Support\Authorization\CapabilityResolver;
@@ -47,6 +48,9 @@ final class PlatformRouteCoverage
             // School onboarding and lifecycle (ADR 0047, ADR 0076 §7.2).
             Coverage::service('app.platform.schools.store', SchoolLifecycleService::class, 'create'),
             Coverage::service('app.platform.schools.perform', SchoolLifecycleService::class, 'activate'),
+
+            // School module entitlements (ADR 0076 §31): the service authorizes .manage.
+            Coverage::service('app.platform.schools.modules.perform', SchoolModuleEntitlementService::class, 'enable'),
 
             // Group governance: the route floor is view; the service requires manage.
             Coverage::service('app.platform.groups.store', SchoolGroupGovernanceService::class, 'create'),

@@ -2,6 +2,8 @@
 
 namespace App\Support\Events\Consumers;
 
+use App\Domain\Platform\Application\Modules\ExecutesModuleWork;
+use App\Domain\Platform\Application\Modules\ModuleExecutionGuard;
 use App\Jobs\DeliverWebhookJob;
 use App\Models\DomainEventOutbox;
 use App\Models\WebhookEndpoint;
@@ -27,9 +29,14 @@ use Illuminate\Support\Facades\DB;
  * asynchronously, outside this consumer's (and the original business
  * transaction's) execution.
  */
-class WebhookFanoutConsumer implements EventConsumer
+class WebhookFanoutConsumer implements EventConsumer, ExecutesModuleWork
 {
     public function __construct(private readonly WebhookEventRegistry $registry) {}
+
+    public static function executesModule(): string
+    {
+        return 'integrations';
+    }
 
     public function name(): string
     {
@@ -48,6 +55,12 @@ class WebhookFanoutConsumer implements EventConsumer
     public function handle(DomainEventOutbox $event): void
     {
         if ($event->school_id === null) {
+            return;
+        }
+
+        // ORG.5 (ADR 0076 §31): a School not entitled to Integrations gets
+        // no new delivery; the event is acknowledged without effect.
+        if (! app(ModuleExecutionGuard::class)->allows($event->school_id, self::executesModule())) {
             return;
         }
 

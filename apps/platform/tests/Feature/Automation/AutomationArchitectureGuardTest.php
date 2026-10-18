@@ -22,6 +22,9 @@ class AutomationArchitectureGuardTest extends TestCase
     /** The only App\ classes Automation may import outside its own namespace. */
     private const ALLOWED_FOREIGN_IMPORTS = [
         'App\\Jobs\\RunAutomationExecutionJob',
+        // ORG.5 (ADR 0076 §31): the execution-time module entitlement check.
+        'App\\Domain\\Platform\\Application\\Modules\\ExecutesModuleWork',
+        'App\\Domain\\Platform\\Application\\Modules\\ModuleExecutionGuard',
         'App\\Models\\DomainEventOutbox',
         'App\\Models\\School',
         'App\\Models\\User',

@@ -2,6 +2,8 @@
 
 namespace App\Jobs;
 
+use App\Domain\Platform\Application\Modules\ExecutesModuleWork;
+use App\Domain\Platform\Application\Modules\ModuleExecutionGuard;
 use App\Models\DomainEventOutbox;
 use App\Models\School;
 use App\Models\WebhookDelivery;
@@ -57,7 +59,7 @@ use Illuminate\Support\Facades\Log;
  * the DNS-rebinding window (see SsrfSafeUrlValidator's docblock).
  * Redirects are never followed automatically (section 33).
  */
-class DeliverWebhookJob implements ShouldQueue
+class DeliverWebhookJob implements ExecutesModuleWork, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -69,6 +71,11 @@ class DeliverWebhookJob implements ShouldQueue
         public readonly string $schoolId,
         public readonly string $deliveryId,
     ) {}
+
+    public static function executesModule(): string
+    {
+        return 'integrations';
+    }
 
     public function handle(SsrfSafeUrlValidator $ssrf, WebhookSigner $signer, TenantContext $context): void
     {
@@ -91,6 +98,14 @@ class DeliverWebhookJob implements ShouldQueue
         $delivery = $this->claim();
 
         if ($delivery === null) {
+            return;
+        }
+
+        // ORG.5 (ADR 0076 §12.7(3)): Integrations no longer entitled when the
+        // delivery runs -- terminal `abandoned`, no HTTP call, no retry.
+        if (! app(ModuleExecutionGuard::class)->allows($this->schoolId, self::executesModule())) {
+            $this->abandon($delivery, 'module_not_entitled');
+
             return;
         }
 

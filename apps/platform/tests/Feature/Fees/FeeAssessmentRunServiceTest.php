@@ -25,6 +25,7 @@ use App\Jobs\ExecuteFeeAssessmentRunJob;
 use App\Models\DomainEventOutbox;
 use App\Models\SchoolAuditEvent;
 use App\Support\Tenancy\TenantContext;
+use Database\Factories\SchoolFactory;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -500,6 +501,41 @@ class FeeAssessmentRunServiceTest extends TestCase
         $this->assertSame(['pending'], $this->items($w, $run)->pluck('execution_status')->unique()->values()->all());
         $this->assertSame(1, $this->auditCount($w['school'], 'fee_assessment_run.paused'));
         $this->assertCount(0, $this->charges($w));
+    }
+
+    #[Test]
+    public function a_school_no_longer_entitled_to_fees_pauses_the_run_and_cannot_resume_it(): void
+    {
+        $w = $this->assessmentWorld();
+        $this->enroll($w);
+        $run = $this->previewedRun($w);
+        Queue::fake();
+        $this->runs()->execute($w['school'], $run->id, $w['actor']);
+
+        // ORG.5 (ADR 0076 §31): the module is disabled after the run was queued.
+        SchoolFactory::setOptionalModules($w['school'], false, ['fees', 'library', 'canteen']);
+        app(TenantContext::class)->withSchool($w['school'], fn () => (new ExecuteFeeAssessmentRunJob($run->id))->handle(app(FeeAssessmentItemExecutor::class), $this->runs()));
+
+        $this->assertSame('executing', $this->inSchool($w['school'], fn () => $run->refresh()->status));
+        $this->assertSame(['pending'], $this->items($w, $run)->pluck('execution_status')->unique()->values()->all());
+        $this->assertCount(0, $this->charges($w));
+        $paused = $this->inSchool($w['school'], fn () => SchoolAuditEvent::query()->where('event_type', 'fee_assessment_run.paused')->sole());
+        $this->assertSame('module_not_entitled', $paused->metadata['reason']);
+        Queue::assertPushed(ExecuteFeeAssessmentRunJob::class, 1);
+
+        // Resuming needs a Fees capability, which resolves to nothing now.
+        try {
+            $this->runs()->resume($w['school'], $run->id, $w['actor']);
+            $this->fail('Resume must be refused while Fees is not entitled.');
+        } catch (AuthorizationException) {
+        }
+
+        // Enabled again: the same staff resume it with their unchanged roles.
+        SchoolFactory::setOptionalModules($w['school'], true, ['fees']);
+        $this->runs()->resume($w['school'], $run->id, $w['actor']);
+        app(TenantContext::class)->withSchool($w['school'], fn () => (new ExecuteFeeAssessmentRunJob($run->id))->handle(app(FeeAssessmentItemExecutor::class), $this->runs()));
+        $this->assertSame('completed', $this->inSchool($w['school'], fn () => $run->refresh()->status));
+        $this->assertCount(1, $this->charges($w));
     }
 
     // --- financial correctness -------------------------------------------------------------------

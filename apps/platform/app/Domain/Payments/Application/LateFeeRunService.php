@@ -291,13 +291,13 @@ class LateFeeRunService
         }));
     }
 
-    /** Trusted (the job): a suspended School paused an executing run. Nothing else changes. */
-    public function recordPaused(School $school, string $runId): void
+    /** Trusted (the job): a suspended School, or one no longer entitled to Fees (ORG.5), paused an executing run. Nothing else changes. */
+    public function recordPaused(School $school, string $runId, string $reason = 'school_not_operational'): void
     {
-        $this->context->withSchool($school, function () use ($school, $runId) {
+        $this->context->withSchool($school, function () use ($school, $runId, $reason) {
             $run = LateFeeRun::query()->where('school_id', $school->id)->find($runId);
             if ($run !== null && $run->status === LateFeeRun::STATUS_EXECUTING) {
-                $this->audit->school($school, 'late_fee_run.paused', subject: $run, metadata: ['runId' => $run->id, 'reason' => 'school_not_operational']);
+                $this->audit->school($school, 'late_fee_run.paused', subject: $run, metadata: ['runId' => $run->id, 'reason' => $reason]);
             }
         });
     }

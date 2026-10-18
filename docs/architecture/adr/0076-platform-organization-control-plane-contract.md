@@ -13,8 +13,14 @@
   ORG.4 PLATFORM OPERATOR PERSONAS IMPLEMENTED (2026-10-18, §30): Platform
   Manager (`platform_manager`) and `platform.schools.onboard`; Auditor reads
   the Registry and Groups; Manager/Auditor exclusivity in service and
-  database; platform-route coverage guard.** ORG.5 and every later ORG
-  phase need separate, explicit owner authorization.
+  database; platform-route coverage guard. ORG.5 SCHOOL MODULE
+  ENTITLEMENTS IMPLEMENTED (2026-10-18, §31): code-owned catalogue (7 core,
+  22 optional), `school_module_entitlements` (FORCE RLS, no DELETE),
+  existing Schools backfilled, new Schools core-only, CapabilityResolver
+  intersection, execution-time guard on optional-module background work,
+  `platform.school_entitlements.view/.manage` for root and Manager, the
+  dead `students.processing_authorizations` flag retired.** ORG.6 and every
+  later ORG phase need separate, explicit owner authorization.
 - Date: 2026-10-17
 - Programme: **ORG — Platform & Organization Foundation**
   (`MASTER-ROADMAP.md`, post-foundation programme 11).
@@ -1667,3 +1673,254 @@ Owner authorization: ORG.4 only. Baseline `origin/main` = `7efd14b8`
   - §7.3.4 accepts the separation as a consequence, not a check.
   - Pinning the reviewed administrator is a candidate hardening for a
     later phase.
+
+## 31. ORG.5 — School module entitlements (implemented, 2026-10-18)
+
+Owner authorization: ORG.5 only, under owner decisions D1–D11 (below).
+Baseline `origin/main` = `5d7ebef8` (ORG.4). ORG.6 and later phases were
+not started.
+
+Owner decisions applied:
+- **D1/D2:** existing Schools keep every current optional module.
+- **D3:** core is never disableable.
+- **D4:** a new School starts core-only. This supersedes the §22.4
+  recommendation of a general-availability default.
+- **D5:** activation needs no optional module.
+- **D6:** root and Manager manage; the Auditor is not extended.
+- **D7:** platform ledger only.
+- **D8:** flags stay distinct.
+- **D9/D10:** disable deletes nothing; re-enable restores.
+- **D11:** no billing.
+
+### 31.1 Catalogue (`App\Domain\Platform\Application\Modules\ModuleCatalogue`)
+
+Code-owned (no table). Stable snake-case keys, each with a label, the
+core flag, dependencies, capability prefixes and a description. Two
+additional diagnostics fields:
+- `ASYNC_MODULES`: the modules with background entry points;
+- `RESTRICTIONS`: the legal and environment gates that stay authoritative.
+
+**Core (7, §14, never stored, never disableable):**
+- `identity_access`
+- `organization`
+- `academic_structure` (with `teaching.assignments.*`)
+- `student_records` (Students, enrollments, the processing-authorization
+  registry and Guardian identity/relationships: one family)
+- `staff_records` (the HR employee foundation)
+- `compliance_audit`
+- `documents` (infrastructure; no capability of its own; access is
+  decided by the owning record)
+
+**Optional (22):** `admissions`, `timetable`, `attendance`, `curriculum`
+(Syllabus and Curriculum Delivery), `lms`, `examinations`, `finance`,
+`fees` (fee setup, charges, concessions, late fees, payments),
+`leave`, `staff_attendance`, `payroll`, `library`, `transport`,
+`hostel`, `inventory`, `canteen`, `visitor`, `communications`,
+`guardian_portal`, `analytics`, `automation`, `integrations`.
+
+**Mapping (ORG-C5):**
+- **Rule.** The longest matching prefix wins. Four explicit multi-module
+  rules apply: `portal.communications.view` / `.reply` →
+  `guardian_portal` + `communications`; `portal.attendance.view` →
+  `guardian_portal` + `attendance`; `portal.fees.view` →
+  `guardian_portal` + `fees`. A capability is effective only when every
+  required module is available.
+- **Coverage.** Every `school` and `guardian` capability in the
+  catalogue is mapped; platform and Group capabilities are not
+  (`ModuleCatalogueArchitectureTest`).
+- **Guardian Portal.** It has no dependency on Communications: the
+  portal's children and profile views need no Communications. Only the
+  views that show another module's data require that module.
+
+**Dependencies (real code/product dependencies only):**
+- `attendance` → `timetable` (registers are taken against the schedule);
+- `fees` → `finance` (charges and payments post to the ledger);
+- `staff_attendance` → `leave` (DOMAIN-MAP);
+- `payroll` → `finance` (payroll posts journals);
+- `library` → `fees` (fines are Fees charges);
+- `canteen` → `inventory`, `fees` (orders issue stock and charge);
+- `analytics` → `curriculum` (the only report is curriculum coverage).
+
+Transport, Hostel and Admissions work without Fees: their fee seams
+(ADR 0067) write inert intents. This is recorded rather than made a
+dependency, so that disabling Fees never strands an operational module.
+
+The architecture test proves: no unknown dependency, no self-dependency,
+no cycle, and no core module depending on an optional one.
+
+### 31.2 Persistence (`school_module_entitlements`, migration `2026_12_20_090000`)
+
+- **Columns:** `id`, `school_id` (FK `schools`, cascade: tenant-lifetime
+  configuration, not history), `module_key`, `enabled`, `reason_code`,
+  `changed_at` and timestamps.
+- **Constraints:**
+  - `UNIQUE (school_id, module_key)`;
+  - a CHECK admitting exactly the 22 optional keys (literal in the
+    migration, never imported; the architecture test pins it to the
+    catalogue);
+  - a CHECK on the closed reason codes (`pre_org5_backfill`,
+    `onboarding_configuration`, `school_request`, `platform_policy`,
+    `operational_correction`).
+- **Tenancy and privileges:** FORCE RLS (`TenantRls::enable`), and DELETE
+  revoked from the runtime role (`TenantRls::revokeDelete`).
+- **What it never holds:** prices, plans, seats, invoices or commerce
+  data.
+- **Retention:** catalogued in `school_configuration` (tenant lifetime).
+- **Unknown or core keys** can never be written. Had one existed, it
+  would grant nothing: the reader keeps only catalogue optional keys.
+
+### 31.3 Backfill, new-School default and cutover
+
+- **Backfill (same migration, same transaction).** One `enabled = true`
+  row per (existing School, optional module), reason `pre_org5_backfill`.
+  The rule is purely backward compatibility (every School could reach
+  every optional module before ORG.5); it says nothing about licensing.
+  Legal and environment gates are unchanged.
+- **New Schools.** A missing row means **disabled**, so a School created
+  by `SchoolLifecycleService` after the migration is core-only with no
+  extra write. Root- and Manager-created Schools are identical, and no
+  creation field can opt in (tested).
+- **Cutover proof.** The supported workflow migrates first (on the admin
+  connection) and then rolls the application out.
+  - Between the two, old code reads no entitlement, so nothing changes.
+  - A School that old code creates in that window has no rows. New code
+    treats it as core-only, which is exactly the D4 default for a School
+    created after ORG.5.
+  - New code without the table fails closed: the reader errors and grants
+    nothing. It never treats a missing table as "everything".
+  - There is no window in which an existing School loses a module.
+- **Fixtures.** `SchoolFactory` enables every optional module after
+  creating a School (it models an existing School), and
+  `withCoreModulesOnly()` models a new one. The demo builder enables
+  every optional module for both demo Schools.
+
+### 31.4 Resolution and enforcement
+
+- **`SchoolModuleEntitlements`** is the one reader.
+  - Core modules plus enabled optional rows, read inside the target
+    School's TenantContext (prior context restored).
+  - `entitledModules()` is cached for 60 s per School
+    (`school:{id}:entitled-modules`) and forgotten after commit, so a
+    change is immediate for every user.
+  - `isEnabledFresh()` is uncached; background work uses it.
+- **`CapabilityResolver::schoolCapabilities()`** returns the cached
+  grants intersected in memory with the entitled set (one cached lookup
+  per request, never a query per capability).
+  - Group and platform resolution are unchanged.
+  - Every Gate, `capability:` middleware, `AuthorizesCapability` call and
+    navigation projection inherits it.
+  - Proven end to end on web, API, a service (`FeeAssessmentRunService`
+    resume), navigation, the Guardian portal (`portal.fees.view`) and
+    teacher ownership (`TeacherAttendanceAccess`: entitlement AND
+    capability AND ActingEmployee/ownership).
+- **Legal gates stay higher.** With every module enabled, production
+  still refuses the portal (tested).
+- **Role grants.** §12.6 freezes no refusal rule, so none was added.
+  - `RoleGrantAuthority` reads held capabilities from the database, as
+    before.
+  - A grant made while a module is disabled commits and confers nothing
+    until it is enabled (tested).
+- **Group-safe reporting.** The Group-safe curriculum-coverage report
+  (ADR 0048) reads Analytics under `group.reporting.view` and does not
+  consult the member School's entitlements. Recorded for ORG.6 review,
+  not changed.
+
+### 31.5 Management (`SchoolModuleEntitlementService`, the only writer)
+
+- **Capabilities.** `platform.school_entitlements.view` / `.manage`
+  (namespace `platform`) are held by root and `platform_manager` only.
+  The scope trigger keeps them off every School, Group and Guardian role.
+  `platform_auditor` is not extended (ORG.6).
+- **Order** (no code is spent on a static refusal):
+  1. account enabled, then `.manage`;
+  2. a known module, then not core;
+  3. the School not closed (409);
+  4. a closed reason;
+  5. a real change ("already enabled/disabled" is a validation error, not
+     audited);
+  6. dependencies;
+  7. confirmation;
+  8. an enrolled factor;
+  9. a fresh code (`MfaReverificationService`).
+- **The transaction.** The School row FOR SHARE plus
+  `pg_advisory_xact_lock('school_entitlements:<id>')`; state, closure and
+  dependencies are re-read; the row is upserted inside the School's
+  TenantContext and the platform event recorded; the cache is forgotten
+  after commit.
+- **Events.** `platform.school_entitlement.enabled` / `.disabled`
+  (metadata: `module_key`, `from`, `to`, `reason_code`, and for a disable
+  `affected_capabilities` and `affected_active_grants` counts) and
+  `.denied` (`outcome_code`, plus `module_key` when it is a real module).
+  Never a School audit event.
+- **Impact preview** (advisory; re-computed when the change executes):
+  dependants still enabled, the number of capabilities that stop taking
+  effect, active grants carrying one, and navigation entries hidden. No
+  names.
+- **Lifecycle.** Allowed for provisioning, active and suspended Schools;
+  refused for a closed one. Never a lifecycle change.
+- **Pages.** The School overview gains a *Modules* section (view
+  capability): core shown as always available, optional with
+  *Enable…* / *Disable access…*.
+  - `/app/platform/schools/{school}/modules/{module}/{enable|disable}` is
+    the review page (`.manage` middleware): reason, confirmation, code,
+    and for a disable the impact and "nothing is deleted".
+  - The POST is service-authorized.
+  - Both routes are classified in `RouteUniverse`; the POST is a
+    `PlatformRouteCoverage` C3 entry
+    (`SchoolModuleEntitlementService::requireManage` is a recognized
+    domain authority).
+
+### 31.6 Background work (`ExecutesModuleWork`, `ModuleExecutionGuard`)
+
+| Entry point | Module | Outcome when not entitled at execution |
+|---|---|---|
+| `ProcessCommunicationDeliveryJob` | communications | delivery `cancelled`, `failure_code = module_not_entitled`, no attempt, never redispatched |
+| `communications:publish-scheduled` | communications | the School is skipped; announcements stay `scheduled` (held), published normally once enabled |
+| `WebhookFanoutConsumer` | integrations | no delivery row; the event is acknowledged (outbox evidence kept) |
+| `DeliverWebhookJob` | integrations | delivery `abandoned` (reason `module_not_entitled`), no HTTP call |
+| `AutomationTriggerConsumer` | automation | no execution; the event is acknowledged |
+| `RunAutomationExecutionJob` → `AutomationExecutionService` | automation | execution `skipped`, `automation_module_not_entitled` (terminal) |
+| `ExecuteFeeAssessmentRunJob`, `ExecuteLateFeeRunJob` → item executors | fees | run paused (no item changes, no re-dispatch), audited with reason `module_not_entitled`; resuming needs a Fees capability, which resolves to nothing until the module is enabled |
+
+- **Semantics.** Work queued while a module was enabled never performs
+  that module's effect after it is disabled. Every outcome is the
+  substrate's own terminal or held state, and none retries.
+- **Guard placement.** The guard runs inside that School's TenantContext
+  and never reads another School.
+- **Exempt (core or infrastructure, listed with reasons in
+  `AsyncModuleContractArchitectureTest`):** the email layer, domain
+  checks, account recovery, the outbox substrate, the audit ping, the
+  worker canary and the School-setting notice consumer.
+- **Not module work.** Redispatch commands only redispatch the guarded
+  jobs. Retention, holds and maintenance continue (the ADR 0047 §9
+  principle).
+- **Recorded, not changed:** Payroll's HRX evidence read of
+  StaffAttendance does not consult the StaffAttendance entitlement (inert
+  until HRX-L4); Transport, Hostel and Admissions fee intents are written
+  while Fees is disabled and stay inert.
+
+### 31.7 Feature flags (§13)
+
+- **`automation.rules`** is kept as an operational rollout switch layered
+  on the `automation` entitlement. Execution needs both; neither creates
+  or overrides the other (tested in both directions).
+- **`students.processing_authorizations`** is retired by migration
+  `2026_12_20_090100`.
+  - It was seeded but never read (ADR 0038 drift note); its override rows
+    cascade.
+  - `down()` restores the catalogue row; inert overrides are not
+    recreated.
+  - The `students.processing_authorizations.*` capabilities are
+    untouched.
+- **`platform.feature_flags.view` / `.manage`** stay **reserved and
+  non-authoritative**: held by root only, read by no code, with no
+  surface.
+  - Retiring them is a catalogue release, deferred because nothing forces
+    it.
+  - They are never repurposed for entitlements.
+
+### 31.8 Evidence
+
+Recorded in the ORG.5 completion report: the targeted suites, the
+rollback proof of both migrations, the security review and the
+exact-SHA CI regression.

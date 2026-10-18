@@ -3,56 +3,44 @@
 namespace Tests\Feature\Students\ProcessingAuthorization;
 
 use App\Models\FeatureFlag;
-use App\Models\FeatureFlagSchoolOverride;
 use App\Support\FeatureFlags\FeatureFlagResolver;
-use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
+use Symfony\Component\Finder\Finder;
 use Tests\Feature\Students\ProcessingAuthorization\Concerns\CreatesProcessingAuthorizationFixtures;
 use Tests\TestCase;
 
 /**
- * Phase 0H.4D-P2 §42 -- default-off School feature flag, using the
- * existing FeatureFlagResolver infrastructure (never a substitute for
- * capability/mfa authorization -- see the resolver's own docblock).
+ * Phase 0H.4D-P2 §42 seeded a default-off `students.processing_authorizations`
+ * flag that no code ever read (ADR 0038 drift note). ORG.5 (ADR 0076 §13,
+ * §31) retired it: the registry stays gated by its capabilities plus MFA,
+ * and its availability is the core `student_records` module.
  */
 class ProcessingAuthorizationFeatureFlagTest extends TestCase
 {
     use CreatesProcessingAuthorizationFixtures;
 
     #[Test]
-    public function the_flag_exists_in_the_catalog_default_off(): void
+    public function the_dead_flag_is_retired_and_its_capabilities_remain(): void
     {
-        $flag = FeatureFlag::query()->find('students.processing_authorizations');
+        $this->assertNull(FeatureFlag::query()->find('students.processing_authorizations'));
+        $this->assertFalse(app(FeatureFlagResolver::class)->isEnabledForSchool('students.processing_authorizations', $this->createSchool()));
 
-        $this->assertNotNull($flag);
-        $this->assertFalse($flag->default_enabled);
+        $this->assertSame(
+            ['students.processing_authorizations.manage', 'students.processing_authorizations.view'],
+            DB::table('capabilities')->where('key', 'like', 'students.processing_authorizations.%')->orderBy('key')->pluck('key')->all(),
+        );
     }
 
     #[Test]
-    public function a_school_with_no_override_is_disabled(): void
+    public function no_application_code_reads_the_retired_flag(): void
     {
-        $school = $this->createSchool();
-        $resolver = app(FeatureFlagResolver::class);
-
-        $this->assertFalse($resolver->isEnabledForSchool('students.processing_authorizations', $school));
-    }
-
-    #[Test]
-    public function a_school_with_an_enabled_override_is_enabled(): void
-    {
-        // A separate School from the "no override" test above --
-        // FeatureFlagResolver caches per (School, flag) for 60s
-        // (TenantCache), so reusing the same School across both
-        // assertions in one test would read a stale cached value.
-        $school = $this->createSchool();
-        $resolver = app(FeatureFlagResolver::class);
-
-        app(TenantContext::class)->withSchool($school, fn () => FeatureFlagSchoolOverride::query()->create([
-            'school_id' => $school->id,
-            'feature_flag_key' => 'students.processing_authorizations',
-            'enabled' => true,
-        ]));
-
-        $this->assertTrue($resolver->isEnabledForSchool('students.processing_authorizations', $school));
+        foreach (Finder::create()->files()->in([app_path(), resource_path('js')]) as $file) {
+            $this->assertDoesNotMatchRegularExpression(
+                "/isEnabledForSchool\\(\\s*'students\\.processing_authorizations'/",
+                $file->getContents(),
+                $file->getRelativePathname().' reads the retired flag',
+            );
+        }
     }
 }

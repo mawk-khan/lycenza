@@ -5,6 +5,7 @@ namespace Tests\Support\Authorization;
 use App\Domain\Identity\Application\Staff\StaffRoleCatalog;
 use App\Domain\Platform\Application\Groups\Reporting\GroupCurriculumCoverageReportService;
 use App\Domain\Platform\Application\Groups\SchoolGroupGovernanceService;
+use App\Domain\Platform\Application\Modules\SchoolModuleEntitlementService;
 use App\Domain\Platform\Application\Roles\PlatformRoleGovernanceService;
 use Illuminate\Routing\Route;
 use ReflectionClass;
@@ -43,6 +44,8 @@ final class CoverageEvidence
         SchoolGroupGovernanceService::class => ['require'],
         // ADR 0048: Group-safe reporting needs an unrevoked group.reporting.view grant.
         GroupCurriculumCoverageReportService::class => ['authorizingGrant'],
+        // ORG.5 (ADR 0076 §31): platform.school_entitlements.manage, audited when refused.
+        SchoolModuleEntitlementService::class => ['requireManage'],
     ];
 
     /** @return list<string> */

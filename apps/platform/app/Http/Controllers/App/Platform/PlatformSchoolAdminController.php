@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\App\Platform;
 
 use App\Domain\Platform\Application\Audit\PlatformAuditLogReviewService;
+use App\Domain\Platform\Application\Modules\SchoolModuleEntitlementService;
 use App\Domain\Platform\Application\Schools\Registry\SchoolRegistryFilters;
 use App\Domain\Platform\Application\Schools\Registry\SchoolRegistryReadService;
 use App\Domain\Platform\Application\Schools\SchoolBootstrapAdministrationService;
@@ -57,6 +58,7 @@ class PlatformSchoolAdminController extends Controller
         private readonly SchoolLifecycleAuthority $authority,
         private readonly SchoolRegistryReadService $registry,
         private readonly PlatformAuditLogReviewService $audit,
+        private readonly SchoolModuleEntitlementService $entitlements,
     ) {}
 
     public function index(Request $request): Response
@@ -142,6 +144,11 @@ class PlatformSchoolAdminController extends Controller
                 'close' => ($school->isActive() || $school->isSuspended()) && ! $school->isClosed() && $canManage,
                 'reopen' => $school->isClosed() && $canManage,
             ],
+            // ORG.5 (ADR 0076 §31): module entitlements, shown under
+            // platform.school_entitlements.view; offered for change under
+            // .manage while the School is not closed. The service decides.
+            'modules' => $this->entitlements->canView($request->user()) ? $this->entitlements->overview($school) : null,
+            'canManageModules' => ! $school->isClosed() && $this->entitlements->canManage($request->user()),
             'notice' => $request->session()->get('lifecycleNotice'),
         ]);
     }

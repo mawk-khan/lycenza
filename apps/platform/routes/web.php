@@ -117,6 +117,7 @@ use App\Http\Controllers\App\Payroll\Statutory\StatutoryExportController as Stat
 use App\Http\Controllers\App\Platform\PlatformAuditLogController;
 use App\Http\Controllers\App\Platform\PlatformRoleAdminController;
 use App\Http\Controllers\App\Platform\PlatformSchoolAdminController;
+use App\Http\Controllers\App\Platform\PlatformSchoolModuleController;
 use App\Http\Controllers\App\Platform\SchoolElevationController;
 use App\Http\Controllers\App\Platform\SchoolGroupAdminController;
 use App\Http\Controllers\App\Portal\GuardianAttendanceController;
@@ -420,6 +421,17 @@ Route::middleware('auth')->where(WebRouteParameters::uuidPatterns())->group(func
         Route::post('/{school}/{action}', [PlatformSchoolAdminController::class, 'perform'])
             ->whereUuid('school')->whereIn('action', ['activate', 'suspend', 'resume', 'bootstrap-admin', 'close', 'reopen'])
             ->middleware('throttle:platform-school-lifecycle')->name('perform');
+
+        // ORG.5 (ADR 0076 §31): one optional module for one School. The
+        // review page needs platform.school_entitlements.manage; the POST
+        // carries no capability middleware so the service authorizes and
+        // audits a refusal (platform.school_entitlement.denied).
+        Route::get('/{school}/modules/{module}/{action}', [PlatformSchoolModuleController::class, 'review'])
+            ->whereUuid('school')->where('module', '[a-z_]{1,64}')->whereIn('action', ['enable', 'disable'])
+            ->middleware('capability:platform.school_entitlements.manage,platform')->name('modules.review');
+        Route::post('/{school}/modules/{module}/{action}', [PlatformSchoolModuleController::class, 'perform'])
+            ->whereUuid('school')->where('module', '[a-z_]{1,64}')->whereIn('action', ['enable', 'disable'])
+            ->middleware('throttle:platform-school-lifecycle')->name('modules.perform');
     });
 
     // Phase 0N.5 (ADR 0045 sections 9, 12): the Group Admin surface -- the

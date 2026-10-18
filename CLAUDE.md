@@ -1231,7 +1231,8 @@ once several modules copy it.
       Activate, suspend, resume, close and reopen accept
       `platform.schools.manage` alone, which stays root-reserved.
     - **The Platform Manager** (`platform_manager`, runtime-assignable)
-      holds exactly Registry view, Group view and onboard. Never add a
+      holds exactly Registry view, Group view, onboard and (since ORG.5)
+      `platform.school_entitlements.view`/`.manage`. Never add a
       lifecycle, role-grant, Group-governance, elevation, audit or School
       capability to it.
     - **The Platform Auditor** reads the Registry, Groups and the platform
@@ -1240,3 +1241,36 @@ once several modules copy it.
     - **Platform routes** need platform-mode `capability:` middleware or a
       verified `PlatformRouteCoverage` contract
       (`PlatformRouteCoverageGuardTest`).
+
+100. **School module entitlements intersect capabilities, and every School
+     capability and optional-module async entry point is classified (ADR
+     0076 §12, §31, ORG.5).**
+     - **One catalogue:**
+       `App\Domain\Platform\Application\Modules\ModuleCatalogue` (code,
+       never a table).
+       - Every `school` and `guardian` capability maps to at least one
+         module (`ModuleCatalogueArchitectureTest`). A new capability
+         without a module fails CI.
+       - A `portal.*` view needs the portal AND its source module.
+     - **One writer:** `SchoolModuleEntitlementService`, under
+       `platform.school_entitlements.manage` (root and Platform Manager),
+       with fresh MFA, a closed reason, explicit confirmation and
+       dependency checks, audited on the platform ledger only.
+       - Core modules are never stored or disabled.
+       - A closed School is refused.
+     - **One reader:** `SchoolModuleEntitlements`. A missing row means
+       disabled. The resolver reads under the target School's RLS and is
+       forgotten on commit.
+       - `CapabilityResolver::schoolCapabilities()` intersects with it.
+         Never filter by module anywhere else, and never let an
+         entitlement open a legal or environment gate.
+     - **Disabling removes access only:** never data, grants, files or
+       configuration. Re-enabling restores the effect.
+     - **Background work:** a queued job or outbox consumer that performs
+       an optional module's effect implements `ExecutesModuleWork`, and its
+       execution point asks `ModuleExecutionGuard` (uncached) when it runs,
+       ending in the substrate's terminal outcome, never a retry loop.
+       Core and infrastructure work is listed as exempt, with a reason, in
+       `AsyncModuleContractArchitectureTest`.
+     - **No billing:** entitlements are availability, never billing,
+       plans or pricing.

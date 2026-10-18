@@ -751,11 +751,11 @@ ADR 0045.
 
 ## Platform operator personas (ADR 0076 §30 — built in ORG.4)
 
-| Persona (role key) | Registry | Create / bootstrap admin (`platform.schools.onboard`) | Lifecycle (`platform.schools.manage`) | Platform roles | Groups | Audit review |
-|---|---|---|---|---|---|---|
-| Platform Admin (`platform_super_admin`, root, out of band) | read | yes | yes | yes | govern | yes (MFA) |
-| Platform Manager (`platform_manager`, runtime) | read | yes | **no** | no | read | no |
-| Platform Auditor (`platform_auditor`, runtime) | read | no | no | no | read | yes (MFA) |
+| Persona (role key) | Registry | Create / bootstrap admin (`platform.schools.onboard`) | Lifecycle (`platform.schools.manage`) | Module entitlements (ORG.5) | Platform roles | Groups | Audit review |
+|---|---|---|---|---|---|---|---|
+| Platform Admin (`platform_super_admin`, root, out of band) | read | yes | yes | view + manage | yes | govern | yes (MFA) |
+| Platform Manager (`platform_manager`, runtime) | read | yes | **no** | view + manage | no | read | no |
+| Platform Auditor (`platform_auditor`, runtime) | read | no | no | **no** (ORG.6) | no | read | yes (MFA) |
 
 - **One rule for onboarding vs lifecycle.** Onboarding never implies
   lifecycle control; `SchoolLifecycleAuthority::capabilitiesFor()` is that
@@ -768,6 +768,59 @@ ADR 0045.
 - **Every platform route** carries platform-mode `capability:` middleware
   or a verified `PlatformRouteCoverage` contract
   (`PlatformRouteCoverageGuardTest`, CLAUDE.md rule 99).
+
+## School module entitlements (ADR 0076 §12, §31 — built in ORG.5)
+
+**Effective School capability = granted capability ∩ capabilities of the
+School's entitled modules**, below every higher gate and above every
+scope, ownership and assurance check:
+
+    lifecycle / legal / environment gates
+      AND module entitlement
+      AND capability grant
+      AND School / ownership / Guardian scope
+      AND request assurance (MFA)
+
+- **Catalogue.** `ModuleCatalogue` is code-owned. It has seven core
+  modules (always available, never stored, never disableable) and 22
+  optional ones.
+  - Every `school` and `guardian` capability maps to a module, by longest
+    prefix or an explicit multi-module rule.
+  - `portal.fees.view`, `portal.attendance.view` and
+    `portal.communications.*` need the Guardian Portal AND their source
+    module.
+  - Platform and Group capabilities are outside the model and unchanged.
+- **Resolver.** `CapabilityResolver::schoolCapabilities()` intersects the
+  (cached) grants with `SchoolModuleEntitlements::entitledModules()`
+  (cached ≤ 60 s per School, forgotten the moment a change commits). So
+  every Gate call, `capability:` middleware, `AuthorizesCapability` check
+  and navigation entry inherits it. Nothing else filters by module.
+- **Writes.** `SchoolModuleEntitlementService` is the only writer. It
+  needs `platform.school_entitlements.manage` (root and Platform Manager),
+  a closed reason, explicit confirmation and a fresh MFA code.
+  - Order: capability → known optional module → School not closed → real
+    change → dependencies → confirmation → enrolled factor → code.
+  - Then one transaction holding the School row FOR SHARE and a per-School
+    advisory lock, with everything re-checked.
+  - Refusals are audited (`platform.school_entitlement.denied`).
+  - No School actor and no School audit event is involved.
+- **Disable is access only.** No data, grant, file or configuration is
+  touched; re-enabling restores the grants' effect. Role grants are not
+  refused for a disabled module (no new grant semantics): the
+  intersection makes them confer nothing.
+- **Legal gates stay higher.** `PortalAvailability`,
+  `StudentMarkAvailability` and the teacher-attendance production gate
+  refuse whatever the entitlement (tested for the portal).
+- **Background work** re-checks at execution (`ModuleExecutionGuard`,
+  uncached):
+  - communications deliveries end `cancelled` / `module_not_entitled`;
+  - webhook deliveries end `abandoned`;
+  - automation executions end `skipped` / `automation_module_not_entitled`;
+  - fee and late-fee runs pause;
+  - the automation and webhook-fanout consumers create nothing;
+  - scheduled announcements are held.
+- **`automation.rules`** stays a separate rollout flag: Automation needs
+  the entitlement AND the flag.
 
 ## Platform authority and platform audit review (ADR 0046 — built in Phase 0N.7)
 

@@ -7,6 +7,8 @@ use App\Domain\Automation\Infrastructure\AutomationExecution;
 use App\Domain\Automation\Infrastructure\AutomationExecutionAttempt;
 use App\Domain\Automation\Infrastructure\AutomationReviewItem;
 use App\Domain\Automation\Infrastructure\AutomationRuleInstance;
+use App\Domain\Platform\Application\Modules\ModuleExecutionGuard;
+use App\Jobs\RunAutomationExecutionJob;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Observability\MetricsRecorder;
@@ -109,6 +111,13 @@ class AutomationExecutionService
         // this transaction, so a suspension and the effect serialize.
         if (! $this->lifecycle->holdOperational($school->id)) {
             return [AutomationExecution::STATUS_SKIPPED, 'school_suspended'];
+        }
+
+        // ORG.5 (ADR 0076 §31): a School no longer entitled to Automation
+        // gets no effect -- terminal `skipped`, never retried. The
+        // `automation.rules` flag below stays a separate, additional gate.
+        if (! app(ModuleExecutionGuard::class)->allows($school, RunAutomationExecutionJob::executesModule())) {
+            return [AutomationExecution::STATUS_SKIPPED, 'automation_module_not_entitled'];
         }
 
         $instance = AutomationRuleInstance::query()->whereKey($execution->rule_instance_id)->lockForUpdate()->first();

@@ -75,6 +75,8 @@ final class RouteUniverse
         'app.platform.schools.store' => [self::PLATFORM, 'SchoolLifecycleService authorizes platform.schools.onboard or .manage + fresh MFA (ADR 0047, ADR 0076 §7.2)'],
         'app.platform.schools.show' => [self::PLATFORM, 'capability:platform.schools.view,platform -- the Registry overview; audit events via the platform audit review (ADR 0076 §9.2)'],
         'app.platform.schools.review' => [self::PLATFORM, 'capability:platform.schools.manage,platform -- lifecycle transitions only (ADR 0047, ADR 0076 §7.2)'],
+        'app.platform.schools.modules.review' => [self::PLATFORM, 'capability:platform.school_entitlements.manage,platform -- one optional module for one School (ADR 0076 §31)'],
+        'app.platform.schools.modules.perform' => [self::PLATFORM, 'SchoolModuleEntitlementService authorizes platform.school_entitlements.manage + fresh MFA, audits refusals (ADR 0076 §31)'],
         'app.platform.schools.perform' => [self::PLATFORM, 'SchoolLifecycleService authorizes per operation: transitions need platform.schools.manage, bootstrap replacement onboard or manage; fresh MFA (ADR 0076 §7.2)'],
         'app.groups.index' => [self::PLATFORM, 'Group scope: CapabilityResolver::groupsWith() (ADR 0045, rule 84)'],
         'app.groups.show' => [self::PLATFORM, 'Group scope: canInGroup(group.schools.view), else 404 (ADR 0045)'],

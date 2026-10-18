@@ -6,6 +6,8 @@ use App\Domain\Automation\Application\Catalog\AutomationRuleCatalog;
 use App\Domain\Automation\Application\Catalog\AutomationRuleType;
 use App\Domain\Automation\Infrastructure\AutomationExecution;
 use App\Domain\Automation\Infrastructure\AutomationRuleInstance;
+use App\Domain\Platform\Application\Modules\ExecutesModuleWork;
+use App\Domain\Platform\Application\Modules\ModuleExecutionGuard;
 use App\Jobs\RunAutomationExecutionJob;
 use App\Models\DomainEventOutbox;
 use App\Models\School;
@@ -31,7 +33,7 @@ use Illuminate\Support\Facades\Log;
  * execution row's UNIQUE(school, rule instance, trigger key) makes a
  * duplicate delivery of the same event a no-op even without the receipt.
  */
-class AutomationTriggerConsumer implements EventConsumer
+class AutomationTriggerConsumer implements EventConsumer, ExecutesModuleWork
 {
     public const NAME = 'automation-trigger';
 
@@ -50,6 +52,11 @@ class AutomationTriggerConsumer implements EventConsumer
     public function name(): string
     {
         return self::NAME;
+    }
+
+    public static function executesModule(): string
+    {
+        return 'automation';
     }
 
     public function handles(string $eventType): bool
@@ -74,6 +81,12 @@ class AutomationTriggerConsumer implements EventConsumer
         // Phase 0N.9 (ADR 0047 section 8): no new execution for a School
         // that is not active; the outbox row stays recorded as dispatched.
         if ($school === null || ! $school->isActive() || ! app(AutomationFeatureGate::class)->isEnabledFor($school)) {
+            return;
+        }
+
+        // ORG.5 (ADR 0076 §31): no new execution for a School not entitled
+        // to Automation; the event is acknowledged without effect.
+        if (! app(ModuleExecutionGuard::class)->allows($school, self::executesModule())) {
             return;
         }
 

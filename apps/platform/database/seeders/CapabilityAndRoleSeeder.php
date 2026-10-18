@@ -32,6 +32,10 @@ class CapabilityAndRoleSeeder extends Seeder
             // lifecycle change (those stay platform.schools.manage, root-
             // reserved). Not root-reserved: the Platform Manager holds it.
             ['key' => 'platform.schools.onboard', 'label' => 'Onboard Schools: create in provisioning and set the bootstrap administrator (platform)', 'namespace' => 'platform'],
+            // ORG.5 (ADR 0076 §12.6, §31): which optional modules a School may
+            // use. Never a School capability; never root-reserved.
+            ['key' => 'platform.school_entitlements.view', 'label' => 'View the module entitlements of Schools (platform)', 'namespace' => 'platform'],
+            ['key' => 'platform.school_entitlements.manage', 'label' => 'Enable or disable optional modules for a School (platform)', 'namespace' => 'platform'],
             // Phase 0N.3 (ADR 0044): start a temporary, audited elevation into
             // ONE School's context. Grants no School capability; deliberately
             // separate from platform.schools.manage.
@@ -972,6 +976,7 @@ class CapabilityAndRoleSeeder extends Seeder
                 'scope' => 'platform',
                 'capabilities' => [
                     'platform.schools.view', 'platform.schools.manage', 'platform.schools.onboard',
+                    'platform.school_entitlements.view', 'platform.school_entitlements.manage',
                     'platform.feature_flags.view', 'platform.feature_flags.manage',
                     'platform.operations.view',
                     'platform.users.mfa.reset',
@@ -1011,6 +1016,9 @@ class CapabilityAndRoleSeeder extends Seeder
                     'platform.schools.view',
                     'platform.school_groups.view',
                     'platform.schools.onboard',
+                    // ORG.5 (ADR 0076 §7.2): non-core module entitlements.
+                    'platform.school_entitlements.view',
+                    'platform.school_entitlements.manage',
                 ],
             ],
             // Phase 0N.5 (ADR 0045 section 4): the one Group-scope system

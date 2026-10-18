@@ -2,6 +2,8 @@
 
 namespace App\Support\Authorization;
 
+use App\Domain\Platform\Application\Modules\ModuleCatalogue;
+use App\Domain\Platform\Application\Modules\SchoolModuleEntitlements;
 use App\Models\GroupRoleAssignment;
 use App\Models\MembershipRoleAssignment;
 use App\Models\School;
@@ -39,7 +41,10 @@ class CapabilityResolver
 {
     private const CACHE_TTL_SECONDS = 60;
 
-    public function __construct(private readonly TenantContext $context) {}
+    public function __construct(
+        private readonly TenantContext $context,
+        private readonly SchoolModuleEntitlements $entitlements,
+    ) {}
 
     /**
      * @return array<int, string>
@@ -74,6 +79,67 @@ class CapabilityResolver
             return [];
         }
 
+        return $this->entitled($school, $this->grantedSchoolCapabilities($actor, $school));
+    }
+
+    /**
+     * The subset of $capabilities the actor effectively holds in the School
+     * -- exactly `array_intersect($capabilities, schoolCapabilities())`, but
+     * a check of core-module capabilities alone needs no entitlement lookup
+     * (ORG.5; e.g. SchoolAdministrators, read per School by the registry).
+     *
+     * @param  list<string>  $capabilities
+     * @return array<int, string>
+     */
+    public function schoolCapabilitiesAmong(User $actor, School $school, array $capabilities): array
+    {
+        if ($actor->isDisabled()) {
+            return [];
+        }
+
+        return $this->entitled($school, array_values(array_intersect($this->grantedSchoolCapabilities($actor, $school), $capabilities)));
+    }
+
+    /**
+     * ORG.5 (ADR 0076 §12.1, §12.7): effective = granted ∩ the capabilities
+     * of the School's entitled modules. The grant set stays cached per user;
+     * the entitled module set is cached per School and forgotten the moment
+     * an entitlement changes, and is read only when a capability needs an
+     * optional module (core modules are always available); the intersection
+     * is computed here, in memory, on every call -- no query per capability.
+     * A capability whose module mapping is missing is unavailable (fail
+     * closed).
+     *
+     * @param  array<int, string>  $granted
+     * @return array<int, string>
+     */
+    private function entitled(School $school, array $granted): array
+    {
+        $modules = null;
+
+        return array_values(array_filter($granted, function (string $capability) use ($school, &$modules): bool {
+            $required = ModuleCatalogue::modulesFor($capability);
+            if ($required === []) {
+                return false;
+            }
+            $optional = array_filter($required, fn (string $module): bool => ! ModuleCatalogue::isCore($module));
+            if ($optional === []) {
+                return true;
+            }
+            $modules ??= $this->entitlements->entitledModules($school);
+
+            return array_diff($optional, $modules) === [];
+        }));
+    }
+
+    /**
+     * The capabilities the actor's active grants give in the School, before
+     * module entitlements are applied (cached 60 s per School and user).
+     *
+     * @return array<int, string>
+     */
+    private function grantedSchoolCapabilities(User $actor, School $school): array
+    {
         return Cache::remember(
             "school:{$school->id}:capabilities:user:{$actor->id}",
             self::CACHE_TTL_SECONDS,

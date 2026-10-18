@@ -10,6 +10,7 @@ use App\Domain\Payments\Events\LateFeeAssessed;
 use App\Domain\Payments\Infrastructure\LateFeeAssessment;
 use App\Domain\Payments\Infrastructure\LateFeeRun;
 use App\Domain\Payments\Infrastructure\LateFeeRunItem;
+use App\Domain\Platform\Application\Modules\ModuleExecutionGuard;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
@@ -107,6 +108,12 @@ class LateFeeItemExecutor
         }
 
         if (! $this->operational->holdOperational($school->id)) {
+            return 'paused';
+        }
+
+        // ORG.5 (ADR 0076 §31): a School no longer entitled to Fees pauses
+        // the run -- checked here, inside the item transaction, at execution.
+        if (! app(ModuleExecutionGuard::class)->allows($school, 'fees')) {
             return 'paused';
         }
 

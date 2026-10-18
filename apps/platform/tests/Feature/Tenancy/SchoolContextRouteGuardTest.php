@@ -84,6 +84,8 @@ class SchoolContextRouteGuardTest extends TestCase
         'app.platform.schools.review',
         'app.platform.schools.bootstrap-admin.review', // ORG.4: onboarding, platform scope
         'app.platform.schools.perform',
+        'app.platform.schools.modules.review',     // ORG.5: module entitlements,
+        'app.platform.schools.modules.perform',    // platform scope (ADR 0076 §31)
     ];
 
     #[Test]

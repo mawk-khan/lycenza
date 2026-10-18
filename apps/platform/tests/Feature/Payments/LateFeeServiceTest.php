@@ -22,7 +22,9 @@ use App\Domain\Payments\Domain\LateFeeCalculation;
 use App\Domain\Payments\Infrastructure\LateFeeRun;
 use App\Domain\Payments\Infrastructure\LateFeeRunItem;
 use App\Jobs\ExecuteLateFeeRunJob;
+use App\Models\SchoolAuditEvent;
 use App\Support\Money\Money;
+use Database\Factories\SchoolFactory;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -449,5 +451,28 @@ class LateFeeServiceTest extends TestCase
         DB::table('schools')->where('id', $w['school']->id)->update(['status' => 'active']);
         $this->inSchool($w['school'], fn () => new ExecuteLateFeeRunJob($run->id))->handle(app(LateFeeItemExecutor::class), $this->lateRuns());
         $this->assertCount(1, $this->lateFees($w), 'Staff resume after reactivation.');
+    }
+
+    #[Test]
+    public function a_school_no_longer_entitled_to_fees_pauses_the_run_without_changing_anything(): void
+    {
+        $w = $this->lateFeeWorld();
+        $rule = $this->activeRule($w);
+        Queue::fake();
+        $run = $this->previewedLateRun($w, $rule);
+        $this->lateRuns()->execute($w['school'], $run->id, $w['actor']);
+
+        // ORG.5 (ADR 0076 §31): Fees disabled after the run was queued.
+        SchoolFactory::setOptionalModules($w['school'], false, ['fees', 'library', 'canteen']);
+        $this->inSchool($w['school'], fn () => new ExecuteLateFeeRunJob($run->id))->handle(app(LateFeeItemExecutor::class), $this->lateRuns());
+
+        $this->assertSame('pending', $this->lateItems($w, $run)->sole()->execution_status);
+        $this->assertCount(0, $this->lateFees($w));
+        $this->assertSame(1, $this->auditCount($w['school'], 'late_fee_run.paused'));
+        $this->assertSame('module_not_entitled', $this->inSchool($w['school'], fn () => SchoolAuditEvent::query()->where('event_type', 'late_fee_run.paused')->sole()->metadata['reason']));
+
+        SchoolFactory::setOptionalModules($w['school'], true, ['fees']);
+        $this->inSchool($w['school'], fn () => new ExecuteLateFeeRunJob($run->id))->handle(app(LateFeeItemExecutor::class), $this->lateRuns());
+        $this->assertCount(1, $this->lateFees($w), 'Runs once entitled again.');
     }
 }

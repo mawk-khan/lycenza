@@ -123,3 +123,30 @@ appears as structure only; it is never authority (ADR 0076 §10-§11).
   `provisioning`, then set the bootstrap administrator while provisioning;
 - activation and every later lifecycle change stay with the Platform Admin;
 - no School role ever reaches it.
+
+## School module entitlements (ORG.5, ADR 0076 §12, §31)
+
+Which product modules a School may use is platform configuration, never a
+School setting, a role, a navigation toggle or a commercial plan.
+
+- **Core modules** are always available and are never stored or
+  disableable: Identity & Access, Organization (this module), Academic
+  Structure, Student Records (Students and Guardians, one family), Staff
+  Records, Compliance & Audit, and Documents.
+- **Optional modules** (22) are enabled or disabled per School by the
+  Platform Admin or Platform Manager on the School overview (*Modules*),
+  with a reason, confirmation and a fresh MFA code.
+  - Dependencies are enforced, and nothing cascades.
+  - A closed School cannot be changed.
+- **Storage.** `school_module_entitlements` holds one row per (School,
+  optional module).
+  - It is under FORCE RLS; the runtime role may not DELETE.
+  - A missing row means disabled.
+  - Existing Schools were backfilled with every optional module enabled.
+    A School onboarded after ORG.5 starts core-only.
+- **Activation and readiness** never require an optional module.
+- **Disabling** hides and refuses the module everywhere: navigation, web,
+  API, services and background work. It deletes nothing, and enabling
+  again restores access with the same roles.
+- **School administrators** see only the effect; they have no entitlement
+  control.

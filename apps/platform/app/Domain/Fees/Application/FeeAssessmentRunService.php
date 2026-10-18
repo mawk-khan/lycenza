@@ -487,16 +487,16 @@ class FeeAssessmentRunService
         });
     }
 
-    /** Trusted (called by the job): a suspended School paused an executing run. Nothing else changes. */
-    public function recordPaused(School $school, string $runId): void
+    /** Trusted (called by the job): a suspended School, or one no longer entitled to Fees (ORG.5), paused an executing run. Nothing else changes. */
+    public function recordPaused(School $school, string $runId, string $reason = 'school_not_operational'): void
     {
-        $this->context->withSchool($school, function () use ($school, $runId) {
+        $this->context->withSchool($school, function () use ($school, $runId, $reason) {
             $run = FeeAssessmentRun::query()->where('school_id', $school->id)->find($runId);
 
             if ($run !== null && $run->status === FeeAssessmentRun::STATUS_EXECUTING) {
                 $this->audit->school($school, 'fee_assessment_run.paused', subject: $run, metadata: [
                     'runId' => $run->id,
-                    'reason' => 'school_not_operational',
+                    'reason' => $reason,
                 ]);
             }
         });

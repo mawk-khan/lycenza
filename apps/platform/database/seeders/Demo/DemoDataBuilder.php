@@ -47,6 +47,7 @@ use App\Models\User;
 use App\Support\FeatureFlags\FeatureFlagResolver;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\LocalCatalogueFixtures;
+use Database\Factories\SchoolFactory;
 use Illuminate\Support\Str;
 
 /**
@@ -234,6 +235,12 @@ final class DemoDataBuilder
             'country_code' => 'IN',
         ]);
 
+        // ORG.5 (ADR 0076 §31): the demo Schools stand for existing Schools --
+        // every optional module enabled, as the entitlement backfill does.
+        // (A School created through onboarding starts with core modules only.)
+        SchoolFactory::setOptionalModules($this->school, true);
+        SchoolFactory::setOptionalModules($this->secondSchool, true);
+
         $this->campus = $this->inSchool(fn () => Campus::query()->create([
             'school_id' => $this->school->id,
             'name' => 'Main Campus',
@@ -273,7 +280,7 @@ final class DemoDataBuilder
             'granted_by_user_id' => $platformAdmin->id,
             'granted_at' => now(),
         ]);
-        $this->account('Platform Manager', $manager, '(none -- platform scope)', 'School Registry, School Groups (read), onboarding: create a School in provisioning and set its bootstrap administrator (needs MFA); cannot activate, suspend or close');
+        $this->account('Platform Manager', $manager, '(none -- platform scope)', 'School Registry, School Groups (read), onboarding: create a School in provisioning and set its bootstrap administrator, and enable or disable optional School modules (needs MFA); cannot activate, suspend or close');
 
         $this->admin = $this->user('Asha Rao (School Admin)', 'school.admin@example.test');
         $this->assignSchoolRole($this->member($this->admin, $this->school), 'school_admin');

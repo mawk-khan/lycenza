@@ -188,6 +188,8 @@ final class TenantRetentionCatalog
         ]],
         'school_configuration' => [self::TENANT_LIFETIME, 'School configuration and platform governance', [
             'school_settings', 'school_domains', 'feature_flag_school_overrides', 'school_group_members', 'platform_idempotency_demo_counters',
+            // ORG.5 (ADR 0076 §12.5): platform-governed module entitlement state.
+            'school_module_entitlements',
         ]],
     ];
 

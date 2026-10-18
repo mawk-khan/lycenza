@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Domain\Communications\Application\AnnouncementService;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
+use App\Domain\Platform\Application\Modules\ModuleExecutionGuard;
 use App\Models\School;
 use App\Support\Observability\ErrorReporter;
 use App\Support\Observability\SafeException;
@@ -50,9 +51,14 @@ class PublishScheduledAnnouncements extends Command
         try {
             // Phase 0N.9 (ADR 0047 section 8): a non-active School's due
             // announcements stay `scheduled` (held) and are published by a
-            // normal run after RESUME -- nothing is replayed.
+            // normal run after RESUME -- nothing is replayed. ORG.5 (ADR 0076
+            // §31): the same holds for a School no longer entitled to
+            // Communications, until the module is enabled again.
             School::query()->where('status', SchoolStatus::Active->value)->orderBy('id')->chunk(100, function ($schools) use ($announcements, $batchSize, &$totalPublished, &$totalFailed): void {
                 foreach ($schools as $school) {
+                    if (! app(ModuleExecutionGuard::class)->allows($school, 'communications')) {
+                        continue;
+                    }
                     app(TenantContext::class)->withSchool($school, function () use ($announcements, $school, $batchSize, &$totalPublished, &$totalFailed): void {
                         [$published, $failed] = $this->publishDueForSchool($announcements, $school, $batchSize);
                         $totalPublished += $published;
