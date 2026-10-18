@@ -178,14 +178,19 @@ final class LocalCatalogueFixtures
         self::asOwner(fn () => DB::table('role_capabilities')->insert(['role_id' => $role->id, 'capability_key' => $capability]));
     }
 
-    /** A fixture grant written below the administrative boundary (no assigning User). */
-    public static function grantRole(SchoolMembership $membership, Role $role): MembershipRoleAssignment
+    /**
+     * A fixture grant written below the administrative boundary (no assigning
+     * User). ORG.7A: `$campusId` NULL = whole School, else that one Campus
+     * (the scope trigger still applies).
+     */
+    public static function grantRole(SchoolMembership $membership, Role $role, ?string $campusId = null): MembershipRoleAssignment
     {
         $grant = app(TenantContext::class)->withSchool($membership->school, fn () => self::asOwner(
             fn () => MembershipRoleAssignment::query()->create([
                 'school_id' => $membership->school_id,
                 'school_membership_id' => $membership->id,
                 'role_id' => $role->id,
+                'campus_id' => $campusId,
             ]),
         ));
 

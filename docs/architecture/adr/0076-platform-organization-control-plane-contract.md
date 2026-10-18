@@ -23,8 +23,12 @@
   AUDITOR CONFIGURATION OVERSIGHT IMPLEMENTED (2026-10-18, §32): the Auditor
   also holds the existing `platform.school_entitlements.view` and reads each
   School's module state on the Registry overview; no new capability, route,
-  table or migration.** ORG.7 and every later ORG phase need separate,
-  explicit owner authorization.
+  table or migration. ORG.7A CAMPUS AUTHORITY FOUNDATION IMPLEMENTED
+  (2026-10-18, §33): optional `campus_id` scope on School role assignments
+  (NULL = whole School, unchanged), scope-aware resolver path, Campus scope
+  adopted for Visitor visits and Inventory stock; Hostel, Transport and
+  Library deferred (Student lookup needs the SIS wave).** ORG.7B and every
+  later ORG phase need separate, explicit owner authorization.
 - Date: 2026-10-17
 - Programme: **ORG — Platform & Organization Foundation**
   (`MASTER-ROADMAP.md`, post-foundation programme 11).
@@ -2103,3 +2107,162 @@ started.
   - the bootstrap-administrator review race.
 - **Reference evidence.** No reference-workbook role maps to the Auditor
   (§31.8).
+
+## 33. ORG.7A — Campus authority foundation (implemented, 2026-10-18)
+
+Owner authorization: ORG.7A only (owner decisions D1–D10: Campus is the
+Branch; role ≠ scope; NULL = whole School forever; one Campus per
+assignment; whole-School supersedes; union of Campuses; scope is additive;
+School stays the tenant; a selected Campus is never authority; fail closed
+until adoption). Baseline `origin/main` = `09e699e0` (ORG.6). ORG.7B was
+not started.
+
+**The model:**
+
+    School = tenant (RLS)
+    Campus = an authorization scope inside it, never a tenant
+    assignment campus_id NULL = the whole School
+    a selected or current Campus = never authority
+
+### 33.1 Storage (migration `2026_12_21_090000`)
+
+- **Column.** `membership_role_assignments.campus_id` is nullable, with a
+  composite foreign key `(campus_id, school_id) → campuses(id, school_id)`
+  ON DELETE RESTRICT, so grant history outlives any Campus.
+- **No reinterpretation.** No existing row changes: every pre-ORG.7A grant
+  keeps NULL and its meaning.
+- **One active grant per (membership, role, scope).** Two partial unique
+  indexes enforce it:
+  - `membership_role_assignments_one_active` covers the whole-School scope
+    (`campus_id IS NULL`);
+  - `membership_role_assignments_one_active_campus` covers each Campus.
+
+  History stays. Whole School plus Campus A plus Campus B is permitted.
+- **Triggers:**
+  - the scope trigger admits a Campus only on a `school`-scope role that
+    carries no access administration (`school.members.manage`,
+    `school.roles.manage`, `school.roles.grant.*`), and only an ACTIVE
+    Campus of the same School for a new grant, read FOR SHARE so a
+    concurrent inactivation serializes;
+  - these Campus checks run when a grant is created only, so a revocation
+    is never refused;
+  - the history trigger makes the Campus immutable;
+  - the grantor trigger counts only the issuer's whole-School grants.
+- **Rollback.** `down()` restores the three functions and the single index
+  verbatim. It refuses while any Campus-scoped grant row exists, revoked history
+  included, so it is effectively one-way once Campus grants have been used: a temporary
+  CHECK is validated against every row regardless of RLS, so no narrow
+  grant is ever silently widened.
+
+### 33.2 Resolution
+
+- **Whole-School paths read whole-School grants only.**
+  `CapabilityResolver::schoolCapabilities()`, `can()`, the `capability`
+  Gate, `capability:` middleware and `RoleGrantAuthority::held()` read
+  only `campus_id IS NULL` grants. A Campus grant never satisfies a
+  whole-School check, in any domain, adopted or not.
+- **Campus grants have their own reader.**
+  `CapabilityResolver::campusCapabilities()` maps each ACTIVE Campus to
+  the ADOPTED capabilities of the actor's active Campus grants, under the
+  same gates (enabled User, active membership, module entitlement).
+  - The grant map is cached with, and forgotten by, the School capability
+    cache.
+  - Campus status is re-read on every call.
+- **`CampusScopeResolver::scopeFor(actor, capability, School)`** returns a
+  `CampusScope`:
+  - the whole School, when the capability is held whole-School;
+  - a set of active Campuses, when it is adopted and held through Campus
+    grants;
+  - none, otherwise.
+
+  `CampusScope::restrict()` applies the scope in SQL (`campus_id IN (…)`;
+  NULL excluded); `covers()` checks one record. Nothing else constructs a
+  scope.
+- **Entry versus record authority.** The `campus-capability` Gate,
+  `capability:x,campus` middleware and the `AuthorizesCampusScope` trait
+  are ENTRY only ("held somewhere"). The action must then apply the scope
+  through its domain access class.
+- **Navigation.** `NavigationBuilder` unions in the adopted capabilities
+  held in any active Campus: visibility only.
+
+### 33.3 Adoption (`CampusScopeCatalogue`, code-owned)
+
+| Domain | Adopted | Records | School-wide (NULL Campus) | Inactive Campus | Shared lookups |
+|---|---|---|---|---|---|
+| Visitor | `visitor.visits.view`, `.manage` | `visitor_visits.campus_id` NOT NULL | none exist | grant confers nothing; whole-School holders keep all | check-in Visitor search (active, id/name/phone) and host Employee search (active, names); the directory `visitor.directory.*` stays School-only |
+| Inventory | `inventory.stock.view`, `.manage` | via the Location's Campus | School-wide stores are whole-School only | grant confers nothing | active Item catalogue lookup; `inventory.directory.*` stays School-only; a movement is shown only when every Location it touches is in scope; a transfer needs both ends |
+
+- **Access classes.** `VisitorVisitAccess` and `InventoryStockAccess` are
+  the only places these records are queried or targeted.
+  - Lists are filtered in SQL.
+  - A record outside the scope is 404, the same concealment as another
+    School's record.
+  - A request-supplied Campus or Location outside the scope is 404 and
+    nothing is written.
+  - Whole-School behaviour is unchanged.
+- **Fixed in passing.** The stock Location search's ungrouped `orWhere`
+  is now grouped inside the scoped query.
+- **Deferred:**
+  - **Hostel, Transport and Library.** Each assigns or lends to Students
+    through a whole-School Student search. A Campus-safe Student lookup
+    needs the Student-Campus semantics reserved for the SIS wave (§11.7),
+    so they wait until then (or for an owner decision on a narrow
+    lookup).
+  - **Canteen, HR, Fees, Admissions, Attendance, Exams, LMS and SIS** are
+    later waves by instruction.
+- **No async adoption.** No adopted domain has background work, so there
+  is no job context change.
+
+### 33.4 Granting
+
+- **Where.** Settings → Staff accounts grants a role for **Entire School**
+  or **one active Campus**.
+  - A role is Campus-scopable when it is a `school` role with no access
+    administration and at least one adopted capability
+    (`StaffRoleCatalog::campusScopable()`). Otherwise the scoped grant
+    would confer nothing, which is refused like an empty role.
+  - `school_admin` is never scopable.
+  - `principal` is scopable: it holds only view access keys, which a
+    Campus grant does not confer.
+- **Who.** Unchanged: whole-School `school.roles.manage` plus coverage
+  (`RoleGrantAuthority`), fresh MFA, the School access lock. The Campus is
+  read FOR SHARE inside the transaction.
+- **Refusals:** `role_not_campus_scopable`, `campus_unavailable` (another
+  School's Campus, an unknown or inactive one), `role_already_granted` for
+  the same scope.
+- **Revoke** names the scope (no `campus_id` = the entire-School grant).
+- **Audit.** `school.membership.role_assigned` / `.role_revoked` carry
+  `campusId` (identifier only) for a scoped grant.
+- **Not scopable:** invitations and reactivation stay whole-School.
+- **The page.** It lists each grant separately with its scope and shows,
+  for a Campus scope, which product areas apply. Other permissions of the
+  role stay unavailable from that grant until their area adopts Campus
+  scope.
+
+### 33.5 Coverage (C6)
+
+- **New class C6 (Campus-aware).** It is declared through `Coverage::campus()`
+  (key, access class, method) or `campusLookup()` (key, reason).
+- **Evidence.** CoverageEvidence proves three things:
+  - the key is adopted;
+  - the action unconditionally calls `authorizeCampusScope()` with it;
+  - the action calls the declared access method.
+- **Floor routes.** A route with a `capability:x,campus` floor fails CI
+  without a C6 entry, and the guard self-tests both cases.
+- **Architecture.** `CampusScopeAdoptionArchitectureTest` pins three rules:
+  - adopted keys are real non-whole-School capabilities of declared
+    domains with complete policies;
+  - an adopted key is never checked with the whole-School Gate or floor;
+  - the adopted controllers never query their models directly, build a
+    CampusScope or read a context Campus.
+
+### 33.6 Unchanged
+
+- Platform roles and personas: no Campus column; platform authority stays
+  separate.
+- Guardian grants are never scopable (trigger), and `GuardianStudentScope`
+  is untouched.
+- Teacher ownership is unchanged.
+- Module entitlements stay per School and are applied before Campus scope.
+- SIS is unchanged, and LC-5–LC-10 remain paused.
+- Group authority is unchanged.

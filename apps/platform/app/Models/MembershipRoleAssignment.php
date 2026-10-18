@@ -20,6 +20,7 @@ use Illuminate\Support\Carbon;
  * @property string $school_id
  * @property string $school_membership_id
  * @property string $role_id
+ * @property string|null $campus_id ORG.7A: NULL = the whole School
  * @property string|null $assigned_by_user_id
  * @property Carbon|null $assigned_at
  * @property string|null $revoked_by_user_id
@@ -48,7 +49,8 @@ class MembershipRoleAssignment extends Model
     /** POR.1 (ADR 0070 §9): Guardian portal authority removed with the Guardian account link. */
     public const REASON_GUARDIAN_LINK_REVOKED = 'guardian_link_revoked';
 
-    protected $fillable = ['school_id', 'school_membership_id', 'role_id', 'assigned_by_user_id', 'assigned_at'];
+    /** ORG.7A (ADR 0076 §11.2): `campus_id` NULL = whole School; set = exactly that one Campus. */
+    protected $fillable = ['school_id', 'school_membership_id', 'role_id', 'campus_id', 'assigned_by_user_id', 'assigned_at'];
 
     protected function casts(): array
     {
@@ -59,6 +61,12 @@ class MembershipRoleAssignment extends Model
     public function membership(): BelongsTo
     {
         return $this->belongsTo(SchoolMembership::class, 'school_membership_id');
+    }
+
+    /** @return BelongsTo<Campus, $this> ORG.7A: the scope (null = the whole School) */
+    public function campus(): BelongsTo
+    {
+        return $this->belongsTo(Campus::class);
     }
 
     /** @return BelongsTo<Role, $this> */

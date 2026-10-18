@@ -35,6 +35,9 @@ final class StaffAccountException extends RuntimeException
         'account_unavailable' => 'That account cannot be reactivated here.',
         'role_already_granted' => 'That role is already granted.',
         'role_not_granted' => 'That role is not currently granted.',
+        // ORG.7A (ADR 0076 §11.3-§11.6): Campus-scoped grants.
+        'role_not_campus_scopable' => 'That role can only be granted for the entire School.',
+        'campus_unavailable' => 'Choose an active Campus of this School.',
         'last_administrator' => 'This would leave the School without an administrator who can manage staff. Add or keep another administrator first.',
     ];
 

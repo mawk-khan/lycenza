@@ -8,6 +8,7 @@ use App\Domain\Identity\Application\Staff\StaffAccountException;
 use App\Domain\Identity\Application\Staff\StaffInvitationService;
 use App\Domain\Identity\Application\Staff\StaffRoleCatalog;
 use App\Http\Controllers\Controller;
+use App\Models\Campus;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Auth\Mfa\FreshMfaRequirement;
@@ -72,6 +73,9 @@ class StaffAccountController extends Controller
         return Inertia::render('App/StaffAccounts/Index', [
             ...$this->directory->for($school, withRoles: $canViewRoles),
             'roleCatalog' => $canViewRoles ? $this->roles->catalogFor($user, $school) : [],
+            // ORG.7A: the active Campuses a role may be scoped to (names only).
+            'campuses' => $canViewRoles ? $this->context->withSchool($school, fn () => Campus::query()->where('status', 'active')->orderBy('name')->get(['id', 'name'])
+                ->map(fn (Campus $c): array => ['id' => $c->id, 'name' => $c->name])->values()->all()) : [],
             'canViewRoles' => $canViewRoles,
             'canInvite' => $this->roles->canAdminister($user, $school),
             'canManageMembers' => $this->roles->canManageMembers($user, $school),
@@ -136,8 +140,9 @@ class StaffAccountController extends Controller
     public function grantRole(Request $request, string $membership): JsonResponse
     {
         return $this->staffJson($request, [StaffRoleCatalog::ROLES], function (School $school, User $user) use ($request, $membership): array {
-            $validated = $request->validate(['role' => ['required', 'string', 'max:100']]);
-            $this->access->grantRole($school, $user, $membership, $validated['role']);
+            // ORG.7A: an optional Campus -- absent means the entire School.
+            $validated = $request->validate(['role' => ['required', 'string', 'max:100'], 'campus_id' => ['nullable', 'uuid']]);
+            $this->access->grantRole($school, $user, $membership, $validated['role'], $validated['campus_id'] ?? null);
 
             return ['granted' => true];
         });
@@ -145,8 +150,9 @@ class StaffAccountController extends Controller
 
     public function revokeRole(Request $request, string $membership, string $role): JsonResponse
     {
-        return $this->staffJson($request, [StaffRoleCatalog::ROLES], function (School $school, User $user) use ($membership, $role): array {
-            $this->access->revokeRole($school, $user, $membership, $role);
+        return $this->staffJson($request, [StaffRoleCatalog::ROLES], function (School $school, User $user) use ($request, $membership, $role): array {
+            $validated = $request->validate(['campus_id' => ['nullable', 'uuid']]);
+            $this->access->revokeRole($school, $user, $membership, $role, $validated['campus_id'] ?? null);
 
             return ['revoked' => true];
         });

@@ -700,3 +700,20 @@ Inventory balances and stock movements are tenant-lifetime School operations
 without personal data (E21.2G O5): no E21 mechanism expires them (pinned by
 `ResidualRetentionArchitectureGuardTest`). Canteen stock consumptions follow
 their orders under Finance (D8).
+
+## Campus scope (ORG.7A, ADR 0076 §33)
+
+- **Adopted:** `inventory.stock.view` and `.manage`, decided by the
+  Location's Campus.
+  - A Location with no Campus is a School-wide store: whole-School scope
+    only.
+  - Balances are shown when their Location is in scope.
+  - Movements are shown only when every Location they touch is in scope.
+  - A transfer needs scope over both Locations.
+  - An out-of-scope Location is 404.
+- **Not adopted:** the Item and Location directory (`inventory.directory.*`)
+  stays School-only. The active Item lookup on the stock pages is the
+  declared shared lookup.
+- **One access class.** All reads and targets go through
+  `App\Domain\Inventory\Application\InventoryStockAccess`. Canteen's
+  system stock issue (`issueMany`) is unchanged; Canteen is not adopted.

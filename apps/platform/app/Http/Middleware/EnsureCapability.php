@@ -24,6 +24,11 @@ use Symfony\Component\HttpFoundation\Response;
  * It is a route-level FLOOR for an action whose Application layer decides
  * the exact capability per call (e.g. a classification tier), so that the
  * request is authorized before `idempotent` can replay anything (rule 32).
+ *
+ * ORG.7A (ADR 0076 §33): `capability:x,campus` is the ENTRY floor of a
+ * Campus-adopted route -- `x` held School-wide or in at least one active
+ * Campus (the `campus-capability` Gate). It is never record authority: the
+ * action applies the actor's CampusScope before it reads or writes a record.
  */
 class EnsureCapability
 {
@@ -38,8 +43,10 @@ class EnsureCapability
         $school = $mode === 'platform' ? null : app(TenantContext::class)->school();
         $gate = Gate::forUser($user);
 
+        $ability = $mode === 'campus' ? 'campus-capability' : 'capability';
+
         foreach (explode('|', $capability) as $any) {
-            if ($gate->allows('capability', [$any, $school])) {
+            if ($gate->allows($ability, [$any, $school])) {
                 return $next($request);
             }
         }

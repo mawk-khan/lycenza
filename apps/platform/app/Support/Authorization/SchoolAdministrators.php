@@ -110,6 +110,7 @@ final class SchoolAdministrators
         return $this->context->withSchool($school, fn (): array => MembershipRoleAssignment::query()
             ->active()
             ->where('school_id', $school->id)
+            ->whereNull('campus_id') // ORG.7A: administrators are whole-School grants only
             ->whereHas('role.capabilities', fn ($query) => $query->where('capabilities.key', self::CAPABILITIES[0]))
             ->distinct()
             ->pluck('school_membership_id')

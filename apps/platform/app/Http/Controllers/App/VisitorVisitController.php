@@ -7,13 +7,13 @@ use App\Domain\Visitor\Application\Exceptions\HostEmployeeNotEligibleException;
 use App\Domain\Visitor\Application\Exceptions\VisitAlreadyCheckedOutException;
 use App\Domain\Visitor\Application\Exceptions\VisitorAlreadyCheckedInException;
 use App\Domain\Visitor\Application\Exceptions\VisitorNotEligibleException;
+use App\Domain\Visitor\Application\VisitorVisitAccess;
 use App\Domain\Visitor\Application\VisitorVisitService;
 use App\Domain\Visitor\Infrastructure\Visitor;
 use App\Domain\Visitor\Infrastructure\VisitorVisit;
 use App\Http\Controllers\Controller;
-use App\Models\Campus;
-use App\Support\Authorization\AuthorizesCapability;
-use App\Support\Authorization\CapabilityResolver;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Authorization\Campus\CampusScopeResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -34,21 +34,28 @@ use Inertia\Response;
  * authorization mistake," verbatim the same discipline
  * App\Http\Controllers\App\TransportStudentAssignmentController
  * already established.
+ *
+ * ORG.7A (ADR 0076 §33): `visitor.visits.*` are Campus-adopted -- every
+ * action resolves the actor's CampusScope and goes through
+ * VisitorVisitAccess. The two check-in lookups below (active Visitors of the
+ * School-wide directory; active host Employees, names only) are the declared
+ * shared lookups of a Campus-scoped `visitor.visits.manage` holder
+ * (CampusScopeCatalogue::DOMAINS['visitor']).
  */
 class VisitorVisitController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
-    public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities): Response
+    public function index(Request $request, TenantContext $context, CampusScopeResolver $scopes, VisitorVisitAccess $access): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('visitor.visits.view', $school);
+        $scope = $this->authorizeCampusScope('visitor.visits.view', $school);
 
         $validated = $request->validate([
             'status' => ['sometimes', Rule::in(['checked_in', 'checked_out'])],
         ]);
 
-        $visits = VisitorVisit::query()
+        $visits = $access->visits($scope)
             ->with(['visitor', 'campus', 'hostEmployee'])
             ->where('status', $validated['status'] ?? 'checked_in')
             ->orderByDesc('checked_in_at')
@@ -58,26 +65,24 @@ class VisitorVisitController extends Controller
         return Inertia::render('App/Visitor/Visits/Index', [
             'visits' => $visits->through(fn (VisitorVisit $v) => $this->present($v)),
             'filters' => ['status' => $validated['status'] ?? 'checked_in'],
-            'canManage' => $capabilities->canInSchool($context->actor(), 'visitor.visits.manage', $school),
+            'canManage' => ! $scopes->scopeFor($context->actor(), 'visitor.visits.manage', $school)->isNone(),
         ]);
     }
 
-    public function create(TenantContext $context): Response
+    public function create(TenantContext $context, VisitorVisitAccess $access): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('visitor.visits.manage', $school);
+        $scope = $this->authorizeCampusScope('visitor.visits.manage', $school);
 
         return Inertia::render('App/Visitor/Visits/Create', [
-            'campuses' => Campus::query()->orderBy('name')->get()
-                ->map(fn (Campus $c) => ['id' => $c->id, 'name' => $c->name])
-                ->all(),
+            'campuses' => $access->campusesForNewVisit($scope),
         ]);
     }
 
     public function searchVisitors(Request $request, TenantContext $context): JsonResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('visitor.visits.manage', $school);
+        $this->authorizeCampusScope('visitor.visits.manage', $school);
 
         $term = (string) $request->query('q', '');
 
@@ -98,7 +103,7 @@ class VisitorVisitController extends Controller
     public function searchHosts(Request $request, TenantContext $context): JsonResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('visitor.visits.manage', $school);
+        $this->authorizeCampusScope('visitor.visits.manage', $school);
 
         $term = (string) $request->query('q', '');
 
@@ -114,10 +119,10 @@ class VisitorVisitController extends Controller
         ])->all()]);
     }
 
-    public function store(Request $request, TenantContext $context, VisitorVisitService $service): RedirectResponse
+    public function store(Request $request, TenantContext $context, VisitorVisitService $service, VisitorVisitAccess $access): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('visitor.visits.manage', $school);
+        $scope = $this->authorizeCampusScope('visitor.visits.manage', $school);
 
         $validated = $request->validate([
             'visitor_id' => ['required', 'string'],
@@ -131,7 +136,7 @@ class VisitorVisitController extends Controller
         ]);
 
         $visitor = Visitor::query()->findOrFail($validated['visitor_id']);
-        $campus = Campus::query()->findOrFail($validated['campus_id']);
+        $campus = $access->campusForNewVisit($scope, $validated['campus_id']);
         $host = isset($validated['host_employee_id']) ? Employee::query()->findOrFail($validated['host_employee_id']) : null;
 
         try {
@@ -145,12 +150,12 @@ class VisitorVisitController extends Controller
         return redirect('/app/visitor/visits')->with('flash', 'Visitor checked in.');
     }
 
-    public function end(TenantContext $context, VisitorVisitService $service, string $visitorVisit): RedirectResponse
+    public function end(TenantContext $context, VisitorVisitService $service, VisitorVisitAccess $access, string $visitorVisit): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('visitor.visits.manage', $school);
+        $scope = $this->authorizeCampusScope('visitor.visits.manage', $school);
 
-        $model = VisitorVisit::query()->findOrFail($visitorVisit);
+        $model = $access->visit($scope, $visitorVisit);
 
         try {
             $service->checkOut($model, $context->actor());

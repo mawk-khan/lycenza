@@ -2,14 +2,14 @@
 
 namespace App\Domain\Inventory\Http\Controllers;
 
+use App\Domain\Inventory\Application\InventoryStockAccess;
 use App\Domain\Inventory\Application\InventoryStockService;
 use App\Domain\Inventory\Infrastructure\InventoryItem;
-use App\Domain\Inventory\Infrastructure\InventoryLocation;
 use App\Domain\Inventory\Infrastructure\InventoryStockBalance;
 use App\Domain\Inventory\Infrastructure\StockMovement;
 use App\Http\Controllers\Controller;
 use App\Models\School;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -23,21 +23,25 @@ use Illuminate\Validation\Rule;
  * generic `POST /stock-movements`). `receive`/`issue`/`transfer` carry
  * the `idempotent` middleware in routes/api.php; `index`/`movements`
  * do not (reads).
+ *
+ * ORG.7A (ADR 0076 §33): `inventory.stock.*` are Campus-adopted. Each action
+ * resolves the actor's CampusScope (route floor `capability:...,campus`) and
+ * reads or targets stock only through InventoryStockAccess.
  */
 class InventoryStockController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
-    public function index(Request $request, School $school): JsonResponse
+    public function index(Request $request, School $school, InventoryStockAccess $access): JsonResponse
     {
-        $this->authorizeCapability('inventory.stock.view', $school);
+        $scope = $this->authorizeCampusScope('inventory.stock.view', $school);
 
         $validated = $request->validate([
             'inventory_item_id' => ['sometimes', 'string'],
             'inventory_location_id' => ['sometimes', 'string'],
         ]);
 
-        $query = InventoryStockBalance::query()->with(['item', 'location'])->orderBy('id');
+        $query = $access->balances($scope)->with(['item', 'location'])->orderBy('id');
 
         if (isset($validated['inventory_item_id'])) {
             $query->where('inventory_item_id', $validated['inventory_item_id']);
@@ -59,9 +63,9 @@ class InventoryStockController extends Controller
         ]);
     }
 
-    public function movements(Request $request, School $school): JsonResponse
+    public function movements(Request $request, School $school, InventoryStockAccess $access): JsonResponse
     {
-        $this->authorizeCapability('inventory.stock.view', $school);
+        $scope = $this->authorizeCampusScope('inventory.stock.view', $school);
 
         $validated = $request->validate([
             'inventory_item_id' => ['sometimes', 'string'],
@@ -69,7 +73,7 @@ class InventoryStockController extends Controller
             'movement_type' => ['sometimes', Rule::in(['receipt', 'issue', 'transfer'])],
         ]);
 
-        $query = StockMovement::query()->with(['item', 'fromLocation', 'toLocation'])->orderByDesc('occurred_at');
+        $query = $access->movements($scope)->with(['item', 'fromLocation', 'toLocation'])->orderByDesc('occurred_at');
 
         if (isset($validated['inventory_item_id'])) {
             $query->where('inventory_item_id', $validated['inventory_item_id']);
@@ -97,37 +101,37 @@ class InventoryStockController extends Controller
         ]);
     }
 
-    public function receive(Request $request, School $school, InventoryStockService $service): JsonResponse
+    public function receive(Request $request, School $school, InventoryStockService $service, InventoryStockAccess $access): JsonResponse
     {
-        $this->authorizeCapability('inventory.stock.manage', $school);
+        $scope = $this->authorizeCampusScope('inventory.stock.manage', $school);
 
         $validated = $this->validateMutation($request);
 
         $item = InventoryItem::query()->findOrFail($validated['inventory_item_id']);
-        $location = InventoryLocation::query()->findOrFail($validated['inventory_location_id']);
+        $location = $access->location($scope, $validated['inventory_location_id']);
 
         $movement = $service->receive($item, $location, $validated['quantity'], $request->user());
 
         return response()->json(['data' => $this->presentMovement($movement->load(['item', 'toLocation']))], 201);
     }
 
-    public function issue(Request $request, School $school, InventoryStockService $service): JsonResponse
+    public function issue(Request $request, School $school, InventoryStockService $service, InventoryStockAccess $access): JsonResponse
     {
-        $this->authorizeCapability('inventory.stock.manage', $school);
+        $scope = $this->authorizeCampusScope('inventory.stock.manage', $school);
 
         $validated = $this->validateMutation($request);
 
         $item = InventoryItem::query()->findOrFail($validated['inventory_item_id']);
-        $location = InventoryLocation::query()->findOrFail($validated['inventory_location_id']);
+        $location = $access->location($scope, $validated['inventory_location_id']);
 
         $movement = $service->issue($item, $location, $validated['quantity'], $request->user());
 
         return response()->json(['data' => $this->presentMovement($movement->load(['item', 'fromLocation']))], 201);
     }
 
-    public function transfer(Request $request, School $school, InventoryStockService $service): JsonResponse
+    public function transfer(Request $request, School $school, InventoryStockService $service, InventoryStockAccess $access): JsonResponse
     {
-        $this->authorizeCapability('inventory.stock.manage', $school);
+        $scope = $this->authorizeCampusScope('inventory.stock.manage', $school);
 
         $validated = $request->validate([
             'inventory_item_id' => ['required', 'string'],
@@ -137,8 +141,8 @@ class InventoryStockController extends Controller
         ]);
 
         $item = InventoryItem::query()->findOrFail($validated['inventory_item_id']);
-        $from = InventoryLocation::query()->findOrFail($validated['from_location_id']);
-        $to = InventoryLocation::query()->findOrFail($validated['to_location_id']);
+        $from = $access->location($scope, $validated['from_location_id']);
+        $to = $access->location($scope, $validated['to_location_id']);
 
         $movement = $service->transfer($item, $from, $to, $validated['quantity'], $request->user());
 

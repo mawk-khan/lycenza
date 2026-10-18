@@ -7,14 +7,15 @@ use App\Domain\Inventory\Application\Exceptions\InvalidQuantityException;
 use App\Domain\Inventory\Application\Exceptions\ItemNotAvailableException;
 use App\Domain\Inventory\Application\Exceptions\LocationNotAvailableException;
 use App\Domain\Inventory\Application\Exceptions\SameLocationTransferException;
+use App\Domain\Inventory\Application\InventoryStockAccess;
 use App\Domain\Inventory\Application\InventoryStockService;
 use App\Domain\Inventory\Infrastructure\InventoryItem;
 use App\Domain\Inventory\Infrastructure\InventoryLocation;
 use App\Domain\Inventory\Infrastructure\InventoryStockBalance;
 use App\Domain\Inventory\Infrastructure\StockMovement;
 use App\Http\Controllers\Controller;
-use App\Support\Authorization\AuthorizesCapability;
-use App\Support\Authorization\CapabilityResolver;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Authorization\Campus\CampusScopeResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -34,20 +35,20 @@ use Inertia\Response;
  */
 class InventoryStockController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
-    public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities): Response
+    public function index(Request $request, TenantContext $context, CampusScopeResolver $scopes, InventoryStockAccess $access): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('inventory.stock.view', $school);
+        $scope = $this->authorizeCampusScope('inventory.stock.view', $school);
 
-        $balances = InventoryStockBalance::query()
+        $balances = $access->balances($scope)
             ->with(['item', 'location'])
             ->orderBy('id')
             ->paginate(20, ['*'], 'balancesPage')
             ->withQueryString();
 
-        $movements = StockMovement::query()
+        $movements = $access->movements($scope)
             ->with(['item', 'fromLocation', 'toLocation'])
             ->orderByDesc('occurred_at')
             ->paginate(20, ['*'], 'movementsPage')
@@ -56,14 +57,14 @@ class InventoryStockController extends Controller
         return Inertia::render('App/Inventory/Stock/Index', [
             'balances' => $balances->through(fn (InventoryStockBalance $b) => $this->presentBalance($b)),
             'movements' => $movements->through(fn (StockMovement $m) => $this->presentMovement($m)),
-            'canManage' => $capabilities->canInSchool($context->actor(), 'inventory.stock.manage', $school),
+            'canManage' => ! $scopes->scopeFor($context->actor(), 'inventory.stock.manage', $school)->isNone(),
         ]);
     }
 
     public function createReceive(TenantContext $context): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('inventory.stock.manage', $school);
+        $this->authorizeCampusScope('inventory.stock.manage', $school);
 
         return Inertia::render('App/Inventory/Stock/Receive');
     }
@@ -71,7 +72,7 @@ class InventoryStockController extends Controller
     public function createIssue(TenantContext $context): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('inventory.stock.manage', $school);
+        $this->authorizeCampusScope('inventory.stock.manage', $school);
 
         return Inertia::render('App/Inventory/Stock/Issue');
     }
@@ -79,7 +80,7 @@ class InventoryStockController extends Controller
     public function createTransfer(TenantContext $context): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('inventory.stock.manage', $school);
+        $this->authorizeCampusScope('inventory.stock.manage', $school);
 
         return Inertia::render('App/Inventory/Stock/Transfer');
     }
@@ -87,7 +88,7 @@ class InventoryStockController extends Controller
     public function searchItems(Request $request, TenantContext $context): JsonResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('inventory.stock.manage', $school);
+        $this->authorizeCampusScope('inventory.stock.manage', $school);
 
         $term = (string) $request->query('q', '');
 
@@ -105,18 +106,14 @@ class InventoryStockController extends Controller
         ])->all()]);
     }
 
-    public function searchLocations(Request $request, TenantContext $context): JsonResponse
+    public function searchLocations(Request $request, TenantContext $context, InventoryStockAccess $access): JsonResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('inventory.stock.manage', $school);
+        $scope = $this->authorizeCampusScope('inventory.stock.manage', $school);
 
         $term = (string) $request->query('q', '');
 
-        $locations = InventoryLocation::query()
-            ->where('status', 'active')
-            ->when($term !== '', fn ($q) => $q->where('code', 'ilike', "%{$term}%")->orWhere('name', 'ilike', "%{$term}%"))
-            ->limit(10)
-            ->get();
+        $locations = $access->searchLocations($scope, $term)->limit(10)->get();
 
         return response()->json(['data' => $locations->map(fn (InventoryLocation $l) => [
             'id' => $l->id,
@@ -125,15 +122,15 @@ class InventoryStockController extends Controller
         ])->all()]);
     }
 
-    public function storeReceive(Request $request, TenantContext $context, InventoryStockService $service): RedirectResponse
+    public function storeReceive(Request $request, TenantContext $context, InventoryStockService $service, InventoryStockAccess $access): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('inventory.stock.manage', $school);
+        $scope = $this->authorizeCampusScope('inventory.stock.manage', $school);
 
         $validated = $this->validateMutation($request);
 
         $item = InventoryItem::query()->findOrFail($validated['inventory_item_id']);
-        $location = InventoryLocation::query()->findOrFail($validated['inventory_location_id']);
+        $location = $access->location($scope, $validated['inventory_location_id']);
 
         try {
             $service->receive($item, $location, $validated['quantity'], $context->actor());
@@ -146,15 +143,15 @@ class InventoryStockController extends Controller
         return redirect('/app/inventory-stock')->with('flash', 'Stock received.');
     }
 
-    public function storeIssue(Request $request, TenantContext $context, InventoryStockService $service): RedirectResponse
+    public function storeIssue(Request $request, TenantContext $context, InventoryStockService $service, InventoryStockAccess $access): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('inventory.stock.manage', $school);
+        $scope = $this->authorizeCampusScope('inventory.stock.manage', $school);
 
         $validated = $this->validateMutation($request);
 
         $item = InventoryItem::query()->findOrFail($validated['inventory_item_id']);
-        $location = InventoryLocation::query()->findOrFail($validated['inventory_location_id']);
+        $location = $access->location($scope, $validated['inventory_location_id']);
 
         try {
             $service->issue($item, $location, $validated['quantity'], $context->actor());
@@ -167,10 +164,10 @@ class InventoryStockController extends Controller
         return redirect('/app/inventory-stock')->with('flash', 'Stock issued.');
     }
 
-    public function storeTransfer(Request $request, TenantContext $context, InventoryStockService $service): RedirectResponse
+    public function storeTransfer(Request $request, TenantContext $context, InventoryStockService $service, InventoryStockAccess $access): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('inventory.stock.manage', $school);
+        $scope = $this->authorizeCampusScope('inventory.stock.manage', $school);
 
         $validated = $request->validate([
             'inventory_item_id' => ['required', 'string'],
@@ -180,8 +177,8 @@ class InventoryStockController extends Controller
         ]);
 
         $item = InventoryItem::query()->findOrFail($validated['inventory_item_id']);
-        $from = InventoryLocation::query()->findOrFail($validated['from_location_id']);
-        $to = InventoryLocation::query()->findOrFail($validated['to_location_id']);
+        $from = $access->location($scope, $validated['from_location_id']);
+        $to = $access->location($scope, $validated['to_location_id']);
 
         try {
             $service->transfer($item, $from, $to, $validated['quantity'], $context->actor());

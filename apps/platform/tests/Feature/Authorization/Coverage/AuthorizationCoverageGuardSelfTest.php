@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Authorization\Coverage;
 
+use App\Domain\Visitor\Application\VisitorVisitAccess;
 use App\Http\Controllers\App\Domains\SchoolDomainController;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Route;
@@ -78,5 +79,21 @@ class AuthorizationCoverageGuardSelfTest extends TestCase
         Route::middleware(['web', 'auth', 'school-context'])->get('/app/__org2-closure', fn () => 'probe')->name('org2.probe.closure');
         $evidence = implode("\n", $this->guard([Coverage::service('org2.probe.closure', SchoolRouteCoverage::class, 'entries')])->evidence());
         $this->assertStringContainsString('[org2.probe.closure] C3 is not a controller action', $evidence);
+    }
+
+    #[Test]
+    public function a_campus_floor_alone_is_never_a_contract_and_c6_evidence_is_checked(): void
+    {
+        // ORG.7A: `capability:x,campus` is an entry floor only -- it needs a C6 entry.
+        Route::middleware(['web', 'auth', 'school-context', 'capability:visitor.visits.view,campus'])->get('/app/__org7a-floor', fn () => 'probe')->name('org7a.probe.floor');
+        $this->assertStringContainsString('[org7a.probe.floor] has a `capability:...,campus` floor but no C6 Campus contract', implode("\n", $this->guard()->uncovered()));
+
+        // A C6 entry on an unadopted capability, on an action that resolves no
+        // CampusScope and never calls its access method, is caught from the code.
+        Route::middleware(['web', 'auth', 'school-context'])->get('/app/__org7a-wrong', [SchoolDomainController::class, 'index'])->name('org7a.probe.wrong');
+        $evidence = implode("\n", $this->guard([Coverage::campus('org7a.probe.wrong', 'students.view', VisitorVisitAccess::class, 'visits')])->evidence());
+        $this->assertStringContainsString('[org7a.probe.wrong] C6 names [students.view], which is not adopted for Campus scope', $evidence);
+        $this->assertStringContainsString("C6 does not resolve the actor's CampusScope for [students.view]", $evidence);
+        $this->assertStringContainsString('[org7a.probe.wrong] C6 never calls visits() of VisitorVisitAccess', $evidence);
     }
 }

@@ -3,13 +3,13 @@
 namespace App\Domain\Visitor\Http\Controllers;
 
 use App\Domain\HR\Infrastructure\Employee;
+use App\Domain\Visitor\Application\VisitorVisitAccess;
 use App\Domain\Visitor\Application\VisitorVisitService;
 use App\Domain\Visitor\Infrastructure\Visitor;
 use App\Domain\Visitor\Infrastructure\VisitorVisit;
 use App\Http\Controllers\Controller;
-use App\Models\Campus;
 use App\Models\School;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -23,21 +23,27 @@ use Illuminate\Validation\Rule;
  * this endpoint delegates to. `end()` (check-out) deliberately does
  * NOT carry idempotency -- see docs/modules/VISITOR.md "Check-out
  * idempotency decision".
+ *
+ * ORG.7A (ADR 0076 §33): `visitor.visits.*` are Campus-adopted. Each action
+ * resolves the actor's CampusScope (AuthorizesCampusScope; the route floor is
+ * `capability:...,campus`) and reads or targets Visits only through
+ * VisitorVisitAccess: lists are restricted in SQL, a Visit outside the scope
+ * is 404, and a new Visit's Campus must be in scope.
  */
 class VisitorVisitController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
-    public function index(Request $request, School $school): JsonResponse
+    public function index(Request $request, School $school, VisitorVisitAccess $access): JsonResponse
     {
-        $this->authorizeCapability('visitor.visits.view', $school);
+        $scope = $this->authorizeCampusScope('visitor.visits.view', $school);
 
         $validated = $request->validate([
             'status' => ['sometimes', Rule::in(['checked_in', 'checked_out'])],
             'visitor_id' => ['sometimes', 'string'],
         ]);
 
-        $query = VisitorVisit::query()
+        $query = $access->visits($scope)
             ->with(['visitor', 'campus', 'hostEmployee'])
             ->orderByDesc('checked_in_at');
 
@@ -59,9 +65,9 @@ class VisitorVisitController extends Controller
         ]);
     }
 
-    public function store(Request $request, School $school, VisitorVisitService $service): JsonResponse
+    public function store(Request $request, School $school, VisitorVisitService $service, VisitorVisitAccess $access): JsonResponse
     {
-        $this->authorizeCapability('visitor.visits.manage', $school);
+        $scope = $this->authorizeCampusScope('visitor.visits.manage', $school);
 
         $validated = $request->validate([
             'visitor_id' => ['required', 'string'],
@@ -75,7 +81,7 @@ class VisitorVisitController extends Controller
         ]);
 
         $visitor = Visitor::query()->findOrFail($validated['visitor_id']);
-        $campus = Campus::query()->findOrFail($validated['campus_id']);
+        $campus = $access->campusForNewVisit($scope, $validated['campus_id']);
         $host = isset($validated['host_employee_id']) ? Employee::query()->findOrFail($validated['host_employee_id']) : null;
 
         $visit = $service->checkIn($visitor, $campus, $host, $validated['purpose'], $validated['gate_pass_number'] ?? null, $request->user());
@@ -83,20 +89,20 @@ class VisitorVisitController extends Controller
         return response()->json(['data' => $this->present($visit->load(['visitor', 'campus', 'hostEmployee']))], 201);
     }
 
-    public function show(School $school, string $visitorVisit): JsonResponse
+    public function show(School $school, string $visitorVisit, VisitorVisitAccess $access): JsonResponse
     {
-        $this->authorizeCapability('visitor.visits.view', $school);
+        $scope = $this->authorizeCampusScope('visitor.visits.view', $school);
 
-        $model = VisitorVisit::query()->with(['visitor', 'campus', 'hostEmployee'])->findOrFail($visitorVisit);
+        $model = $access->visit($scope, $visitorVisit)->load(['visitor', 'campus', 'hostEmployee']);
 
         return response()->json(['data' => $this->present($model)]);
     }
 
-    public function end(Request $request, School $school, string $visitorVisit, VisitorVisitService $service): JsonResponse
+    public function end(Request $request, School $school, string $visitorVisit, VisitorVisitService $service, VisitorVisitAccess $access): JsonResponse
     {
-        $this->authorizeCapability('visitor.visits.manage', $school);
+        $scope = $this->authorizeCampusScope('visitor.visits.manage', $school);
 
-        $model = VisitorVisit::query()->findOrFail($visitorVisit);
+        $model = $access->visit($scope, $visitorVisit);
 
         $visit = $service->checkOut($model, $request->user());
 

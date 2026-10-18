@@ -775,6 +775,40 @@ ADR 0045.
   or a verified `PlatformRouteCoverage` contract
   (`PlatformRouteCoverageGuardTest`, CLAUDE.md rule 99).
 
+## Campus-scoped role assignments (ADR 0076 §11, §33 — built in ORG.7A)
+
+**School is the tenant; Campus is an authorization scope inside it, never
+a tenant.** A School role assignment's `campus_id` NULL means the whole
+School (every existing grant, forever). A Campus id means that one ACTIVE
+Campus only, and only for capabilities whose domain has adopted Campus
+scope (`CampusScopeCatalogue`). Several Campuses are several grants, and
+whole-School supersedes. A selected or current Campus
+(`TenantContext::campus()`) is never authority.
+
+- **Whole-School checks never see a Campus grant.** That covers the
+  `capability` Gate, `can()`, `schoolCapabilities()`, `capability:`
+  middleware, grant authority and the last-administrator count, in any
+  domain.
+- **Adopted actions:**
+  - entry goes through `authorizeCampusScope()` or
+    `capability:x,campus` ("held somewhere");
+  - every record is then read or targeted through the domain access class
+    with the returned `CampusScope`: SQL `campus_id IN (…)`, NULL-Campus
+    records whole-School only, out of scope = 404;
+  - route coverage class C6 proves both.
+- **Adopted in ORG.7A:** `visitor.visits.*` and `inventory.stock.*`.
+  Every other capability of a Campus-scoped role confers nothing from that
+  grant.
+- **Granting:**
+  - whole-School administrators only (unchanged authority and MFA);
+  - one active Campus of the same School (composite foreign key, trigger);
+  - never `school_admin` or any role carrying access administration;
+  - never a Guardian or platform role;
+  - audited with `campusId`.
+- **Every other gate still applies:** enabled user, active membership,
+  module entitlement, teacher ownership, `GuardianStudentScope`, HR and
+  payroll self-protection, legal gates, MFA.
+
 ## School module entitlements (ADR 0076 §12, §31 — built in ORG.5)
 
 **Effective School capability = granted capability ∩ capabilities of the

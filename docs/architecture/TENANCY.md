@@ -414,6 +414,22 @@ database and a local `APP_URL` (`environment_not_separated`). Queue
 recovery re-dispatches jobs whose payload carries the School id, so tenant
 context is set exactly as for a first dispatch (rule 21).
 
+## Campus is a scope, not a tenant (ADR 0076 §10-§11, §33 — ORG.7A)
+
+- **School remains the only tenant.** RLS, `TenantContext` and cache, log
+  and path namespacing stay School-level.
+- **Campus scope is application authorization.** A School role assignment
+  may carry one `campus_id`, structurally of the same School (composite
+  foreign key; the assignment table keeps School RLS). NULL means the whole
+  School.
+- **Context is not authority.** `TenantContext::campus()` stays an
+  optional working context (job replay, UI filtering). It is never
+  consulted for authorization, and a Campus filter chosen by a user is
+  intersected with the scope, never added to it.
+- **Adopted domains filter in SQL.** Rows are filtered before they are
+  returned, through their domain access class. Nothing is filtered in PHP
+  after a School-wide query.
+
 ## What is NOT yet implemented (Phase 0B honesty note)
 
 Real School/Campus/membership/role data model, RLS, application-layer

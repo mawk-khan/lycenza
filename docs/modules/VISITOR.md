@@ -550,3 +550,18 @@ visitor per transaction; the visitor goes only with its last visit, so a
 returning visitor keeps its identity. A visit never checked out is reported
 unresolved and kept (no checkout is ever inferred). Host references go with
 the visit. Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md` §5.9).
+
+## Campus scope (ORG.7A, ADR 0076 §33)
+
+- **Adopted:** `visitor.visits.view` and `.manage`. A Campus-scoped holder
+  lists, opens, checks in and checks out Visits of their active Campuses
+  only.
+  - Another Campus's Visit is 404.
+  - A request naming another Campus is 404 and writes nothing.
+  - Every Visit has a Campus, so there is no School-wide Visit.
+- **Not adopted:** the Visitor directory (`visitor.directory.*`) stays
+  School-only.
+- **Shared lookups.** The check-in lookups (active Visitors: id, name,
+  phone; active host Employees: names) answer a Campus-scoped holder.
+- **One access class.** All reads and targets go through
+  `App\Domain\Visitor\Application\VisitorVisitAccess`.

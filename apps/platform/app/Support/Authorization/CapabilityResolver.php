@@ -4,12 +4,14 @@ namespace App\Support\Authorization;
 
 use App\Domain\Platform\Application\Modules\ModuleCatalogue;
 use App\Domain\Platform\Application\Modules\SchoolModuleEntitlements;
+use App\Models\Campus;
 use App\Models\GroupRoleAssignment;
 use App\Models\MembershipRoleAssignment;
 use App\Models\School;
 use App\Models\SchoolGroup;
 use App\Models\SchoolMembership;
 use App\Models\User;
+use App\Support\Authorization\Campus\CampusScopeCatalogue;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -165,6 +167,11 @@ class CapabilityResolver
                         // Revoked grants are history, never authority
                         // (Phase 0O.12B, ADR 0059 owner amendment).
                         ->active()
+                        // ORG.7A (ADR 0076 §11.3): whole-School grants only.
+                        // A Campus-scoped grant NEVER satisfies a School-wide
+                        // check -- it is reachable only through
+                        // campusCapabilities() / CampusScopeResolver.
+                        ->whereNull('campus_id')
                         ->with('role.capabilities')
                         ->get()
                         ->flatMap(fn ($assignment) => $assignment->role->capabilities->pluck('key'))
@@ -174,6 +181,87 @@ class CapabilityResolver
                 );
             },
         );
+    }
+
+    /**
+     * ORG.7A (ADR 0076 §11.3, §11.6, §33): the actor's Campus-scoped
+     * authority in the School -- ACTIVE Campus id => the ADOPTED capabilities
+     * (CampusScopeCatalogue) its active Campus-scoped grants carry, module
+     * entitlements applied. Nothing for a disabled account or a membership
+     * that is not active. A Campus that is inactive confers nothing (no new
+     * work, and for the ORG.7A domains no reads either). Read only by
+     * CampusScopeResolver; never merged into schoolCapabilities().
+     *
+     * The grant map is cached with the School capability cache (same TTL,
+     * same forgetCache()); the Campus status is re-read on every call, so an
+     * inactivation takes effect at once.
+     *
+     * @return array<string, list<string>>
+     */
+    public function campusCapabilities(User $actor, School $school): array
+    {
+        if ($actor->isDisabled()) {
+            return [];
+        }
+
+        /** @var array<string, list<string>> $grants */
+        $grants = Cache::remember(
+            self::campusCacheKey($actor, $school),
+            self::CACHE_TTL_SECONDS,
+            function () use ($actor, $school): array {
+                $membership = SchoolMembership::query()
+                    ->where('user_id', $actor->id)
+                    ->where('school_id', $school->id)
+                    ->active()
+                    ->first();
+
+                if ($membership === null) {
+                    return [];
+                }
+
+                return $this->context->withSchool($school, function () use ($membership): array {
+                    $map = [];
+                    $assignments = MembershipRoleAssignment::query()
+                        ->where('school_membership_id', $membership->id)
+                        ->active()
+                        ->whereNotNull('campus_id')
+                        ->with('role.capabilities')
+                        ->get();
+                    foreach ($assignments as $assignment) {
+                        $keys = CampusScopeCatalogue::adoptedAmong($assignment->role->capabilities->pluck('key')->all());
+                        $map[$assignment->campus_id] = array_values(array_unique([...($map[$assignment->campus_id] ?? []), ...$keys]));
+                    }
+
+                    return array_filter($map);
+                });
+            },
+        );
+
+        if ($grants === []) {
+            return [];
+        }
+
+        $active = $this->context->withSchool($school, fn (): array => Campus::query()
+            ->where('school_id', $school->id)
+            ->whereIn('id', array_keys($grants))
+            ->where('status', 'active')
+            ->pluck('id')
+            ->all());
+
+        $result = [];
+        foreach ($active as $campusId) {
+            $entitled = $this->entitled($school, $grants[$campusId] ?? []);
+            if ($entitled !== []) {
+                $result[$campusId] = $entitled;
+            }
+        }
+
+        return $result;
+    }
+
+    private static function campusCacheKey(User $actor, School $school): string
+    {
+        return "school:{$school->id}:campus-capabilities:user:{$actor->id}";
     }
 
     /**
@@ -306,6 +394,7 @@ class CapabilityResolver
         Cache::forget("platform:capabilities:user:{$actor->id}");
         if ($school !== null) {
             Cache::forget("school:{$school->id}:capabilities:user:{$actor->id}");
+            Cache::forget(self::campusCacheKey($actor, $school));
         }
     }
 }

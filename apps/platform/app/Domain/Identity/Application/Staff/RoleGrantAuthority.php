@@ -97,7 +97,7 @@ final class RoleGrantAuthority
 
     /**
      * The issuer's capabilities in $school from their ACTIVE membership's
-     * active `school`-scope grants, or null when they have no authority there
+     * active whole-School `school`-scope grants, or null when they have no authority there
      * at all (disabled, or no active membership in this School).
      *
      * @return list<string>|null
@@ -133,6 +133,9 @@ final class RoleGrantAuthority
                 ->join('role_capabilities as rc', 'rc.role_id', '=', 'a.role_id')
                 ->where('a.school_membership_id', $membership->id)
                 ->whereNull('a.revoked_at')
+                // ORG.7A (ADR 0076 §11.4): grant authority is whole-School
+                // only; a Campus-scoped grant of the issuer never counts.
+                ->whereNull('a.campus_id')
                 ->distinct()
                 ->pluck('rc.capability_key')
                 ->all();

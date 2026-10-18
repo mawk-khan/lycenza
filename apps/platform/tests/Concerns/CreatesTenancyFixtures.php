@@ -114,11 +114,11 @@ trait CreatesTenancyFixtures
      * write theirs through the local/testing seam, below the administrative
      * boundary, inside the test's transaction.
      */
-    protected function assignSchoolRole(SchoolMembership $membership, string $roleKey): MembershipRoleAssignment
+    protected function assignSchoolRole(SchoolMembership $membership, string $roleKey, ?string $campusId = null): MembershipRoleAssignment
     {
         $role = Role::query()->where('key', $roleKey)->where('scope', 'school')->firstOrFail();
 
-        return LocalCatalogueFixtures::grantRole($membership, $role);
+        return LocalCatalogueFixtures::grantRole($membership, $role, $campusId);
     }
 
     /**

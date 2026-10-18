@@ -1182,12 +1182,12 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/visitor-visits', [VisitorVisitController::class, 'index'])
                 ->name('schools.visitor-visits.index');
             Route::post('/visitor-visits', [VisitorVisitController::class, 'store'])
-                ->middleware(['capability:visitor.visits.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->middleware(['capability:visitor.visits.manage,campus', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.visitor-visits.store');
             Route::get('/visitor-visits/{visitorVisit}', [VisitorVisitController::class, 'show'])
                 ->name('schools.visitor-visits.show');
             Route::post('/visitor-visits/{visitorVisit}/end', [VisitorVisitController::class, 'end'])
-                ->middleware(['capability:visitor.visits.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:visitor.visits.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.visitor-visits.end');
 
             // Phase 0G.6: Finance/Fees/Payments HTTP transport -- thin
@@ -1576,13 +1576,13 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/inventory-stock/movements', [InventoryStockController::class, 'movements'])
                 ->name('schools.inventory-stock.movements');
             Route::post('/inventory-stock/receive', [InventoryStockController::class, 'receive'])
-                ->middleware(['capability:inventory.stock.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->middleware(['capability:inventory.stock.manage,campus', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.inventory-stock.receive');
             Route::post('/inventory-stock/issue', [InventoryStockController::class, 'issue'])
-                ->middleware(['capability:inventory.stock.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->middleware(['capability:inventory.stock.manage,campus', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.inventory-stock.issue');
             Route::post('/inventory-stock/transfer', [InventoryStockController::class, 'transfer'])
-                ->middleware(['capability:inventory.stock.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->middleware(['capability:inventory.stock.manage,campus', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.inventory-stock.transfer');
 
             // Phase 10F: Canteen (Outlet/Item/recipe directory, billing

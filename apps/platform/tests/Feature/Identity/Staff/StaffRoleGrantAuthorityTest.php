@@ -687,9 +687,9 @@ class StaffRoleGrantAuthorityTest extends TestCase
             ->where('canViewRoles', true)
             ->where('roleCatalog', fn ($catalog) => collect($catalog)->pluck('key')->sort()->values()->all() === self::SR3_CATALOGUE
                 && collect($catalog)->every(fn ($role) => $role['grantable'] === false
-                    && array_keys($role) === ['key', 'name', 'grantable', 'group', 'groupLabel', 'purpose', 'addOn', 'sensitivity']
+                    && array_keys($role) === ['key', 'name', 'grantable', 'campusScopable', 'campusAreas', 'group', 'groupLabel', 'purpose', 'addOn', 'sensitivity']
                     && ! str_contains(json_encode($role), 'school.') && ! str_contains(json_encode($role), 'hr.')))
-            ->where('staff', fn ($staff) => collect($staff)->contains(fn ($member) => $member['membershipId'] === $target->id && $member['roles'] === [['key' => 'staff_self_service', 'name' => 'Staff Self-Service']])));
+            ->where('staff', fn ($staff) => collect($staff)->contains(fn ($member) => $member['membershipId'] === $target->id && $member['roles'] === [['key' => 'staff_self_service', 'name' => 'Staff Self-Service', 'campusId' => null, 'campusName' => null, 'campusActive' => null]])));
 
         $this->staffPost($viewer, $school, "/members/{$target->id}/roles", ['role' => 'teacher'])->assertForbidden();
         $this->staffPost($viewer, $school, "/members/{$target->id}/roles/staff_self_service/revoke")->assertForbidden();

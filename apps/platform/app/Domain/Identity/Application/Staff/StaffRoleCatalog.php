@@ -5,6 +5,8 @@ namespace App\Domain\Identity\Application\Staff;
 use App\Models\Role;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Authorization\Campus\CampusScopeCatalogue;
+use App\Support\Authorization\CapabilityClasses;
 use App\Support\Authorization\CapabilityResolver;
 use Illuminate\Support\Collection;
 
@@ -117,6 +119,11 @@ final class StaffRoleCatalog
                     'key' => $role->key,
                     'name' => $role->name,
                     'grantable' => $decisions[$role->id]->allowed(),
+                    // ORG.7A (ADR 0076 §11.3-§11.4): may this role be granted
+                    // for one Campus, and which of its capabilities would
+                    // then apply -- product areas, never permission keys.
+                    'campusScopable' => self::campusScopable($role),
+                    'campusAreas' => CampusScopeCatalogue::areasOf($role->capabilities->pluck('key')->all()),
                     'group' => $presentation['group'],
                     'groupLabel' => $presentation['groupLabel'],
                     'purpose' => $presentation['purpose'],
@@ -146,6 +153,31 @@ final class StaffRoleCatalog
      *
      * @throws StaffAccountException
      */
+    /**
+     * ORG.7A (ADR 0076 §11.3, §11.4): a role may be Campus-scoped only when it
+     * is a school-scope role carrying NO access administration
+     * (school.members.manage, school.roles.manage, the grant rights of
+     * CapabilityClasses, ORG-C2 -- e.g. the School administrator; view-only keys are allowed
+     * and simply not conferred) and at least one capability adopted for
+     * Campus scope
+     * (otherwise the scoped grant would confer nothing, which is refused like
+     * an empty role). The database scope trigger enforces the first part.
+     */
+    public static function campusScopable(Role $role): bool
+    {
+        if ($role->scope !== Role::SCOPE_SCHOOL) {
+            return false;
+        }
+        $keys = $role->capabilities->pluck('key')->all();
+        foreach ($keys as $key) {
+            if (in_array($key, [self::MEMBERS, self::ROLES, ...CapabilityClasses::GRANT_RIGHT_KEYS], true)) {
+                return false;
+            }
+        }
+
+        return CampusScopeCatalogue::adoptedAmong($keys) !== [];
+    }
+
     public function resolve(array $roleKeys): array
     {
         $keys = array_values(array_unique(array_filter($roleKeys, fn ($k) => is_string($k) && $k !== '')));

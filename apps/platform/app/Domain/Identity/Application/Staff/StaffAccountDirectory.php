@@ -37,7 +37,7 @@ final class StaffAccountDirectory
             $grants = MembershipRoleAssignment::query()
                 ->where('school_id', $school->id)
                 ->staff()
-                ->with('role')
+                ->with(['role', 'campus'])
                 ->get()
                 ->groupBy('school_membership_id');
 
@@ -59,7 +59,15 @@ final class StaffAccountDirectory
                     // E21.4: a minimized former member shows as "Former user", with no address.
                     'email' => $m->user?->publicEmail(),
                     'status' => $m->status,
-                    'roles' => $withRoles ? $active->map(fn (MembershipRoleAssignment $g) => ['key' => $g->role->key, 'name' => $g->role->name])->sortBy('name')->values()->all() : [],
+                    // ORG.7A: one entry per grant -- a role held for the entire
+                    // School and for Campuses shows as separate grants.
+                    'roles' => $withRoles ? $active->map(fn (MembershipRoleAssignment $g) => [
+                        'key' => $g->role->key,
+                        'name' => $g->role->name,
+                        'campusId' => $g->campus_id,
+                        'campusName' => $g->campus?->name,
+                        'campusActive' => $g->campus === null ? null : $g->campus->status === 'active',
+                    ])->sortBy(fn (array $r) => [$r['name'], $r['campusName'] ?? ''])->values()->all() : [],
                     'joinedAt' => $m->joined_at?->toIso8601String(),
                 ];
             })->all();

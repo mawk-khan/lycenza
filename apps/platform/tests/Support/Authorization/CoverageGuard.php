@@ -53,8 +53,13 @@ final class CoverageGuard
             if (! $this->isSchoolFacing($route)) {
                 continue;
             }
-            if (CoverageEvidence::routeCapabilities($route) === [] && ! isset($entries[RouteUniverse::key($route)])) {
+            $entry = $entries[RouteUniverse::key($route)] ?? null;
+            if (CoverageEvidence::routeCapabilities($route) === [] && $entry === null) {
                 $problems[] = $this->describe($route).' has no authorization contract';
+            }
+            // ORG.7A: a Campus entry floor is never record authority.
+            if (CoverageEvidence::campusRouteCapabilities($route) !== [] && $entry?->class !== Coverage::CAMPUS) {
+                $problems[] = $this->describe($route).' has a `capability:...,campus` floor but no C6 Campus contract';
             }
         }
 

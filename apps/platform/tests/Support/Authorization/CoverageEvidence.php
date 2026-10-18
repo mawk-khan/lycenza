@@ -7,6 +7,7 @@ use App\Domain\Platform\Application\Groups\Reporting\GroupCurriculumCoverageRepo
 use App\Domain\Platform\Application\Groups\SchoolGroupGovernanceService;
 use App\Domain\Platform\Application\Modules\SchoolModuleEntitlementService;
 use App\Domain\Platform\Application\Roles\PlatformRoleGovernanceService;
+use App\Support\Authorization\Campus\CampusScopeCatalogue;
 use Illuminate\Routing\Route;
 use ReflectionClass;
 use ReflectionMethod;
@@ -26,7 +27,11 @@ use ReflectionNamedType;
  *       (an authorize*() / Gate call within three hops of its own code);
  *   C4: the action calls the declared authority method (and gates on the
  *       declared base capability, if any);
- *   C5: governing invariant, reason and an existing evidence test.
+ *   C5: governing invariant, reason and an existing evidence test;
+ *   C6: the key is Campus-adopted, the action unconditionally calls
+ *       authorizeCampusScope() with it, and calls the declared domain access
+ *       method (or, for a declared shared lookup, gives its reason); a
+ *       `capability:...,campus` route floor names the same key.
  */
 final class CoverageEvidence
 {
@@ -69,8 +74,65 @@ final class CoverageEvidence
                     : self::gateProblems($action, $coverage->capabilities)),
             ],
             Coverage::SPECIAL => self::specialProblems($coverage),
+            Coverage::CAMPUS => self::campusProblems($route, $action, $coverage),
             default => ["unknown coverage class {$coverage->class}"],
         };
+    }
+
+    /** @return list<string> */
+    private static function campusProblems(Route $route, ReflectionMethod $action, Coverage $coverage): array
+    {
+        $key = $coverage->capabilities[0] ?? '';
+        $problems = [];
+        if (! CampusScopeCatalogue::isAdopted($key)) {
+            $problems[] = "names [{$key}], which is not adopted for Campus scope (CampusScopeCatalogue)";
+        }
+        if (! in_array($key, self::campusKeys($action), true)) {
+            $problems[] = "does not resolve the actor's CampusScope for [{$key}] unconditionally (authorizeCampusScope)";
+        }
+        if ($coverage->authorities !== []) {
+            $problems = [...$problems, ...self::authorityProblems($action, $coverage)];
+        } elseif (trim((string) $coverage->reason) === '') {
+            $problems[] = 'a Campus shared lookup needs its reason';
+        }
+        foreach (self::campusRouteCapabilities($route) as $floor) {
+            if ($floor !== $key) {
+                $problems[] = "route floor capability:{$floor},campus differs from the declared [{$key}]";
+            }
+        }
+
+        return $problems;
+    }
+
+    /** @return list<string> keys the action passes to authorizeCampusScope() / authorizeCampusScopeFor() unconditionally */
+    private static function campusKeys(ReflectionMethod $action): array
+    {
+        $class = $action->getDeclaringClass();
+        $keys = [];
+        foreach (SourceCalls::of($action) as $call) {
+            if ($call['unconditional'] && $call['receiver'] === '$this' && in_array($call['name'], ['authorizeCampusScope', 'authorizeCampusScopeFor'], true)) {
+                $args = self::splitTopLevel($call['args']);
+                $keys = [...$keys, ...self::resolve($call['name'] === 'authorizeCampusScopeFor' ? ($args[1] ?? '') : ($args[0] ?? ''), $class)];
+            }
+        }
+
+        return array_values(array_unique($keys));
+    }
+
+    /** @return list<string> the keys of the route's `capability:x,campus` middleware (ORG.7A entry floor) */
+    public static function campusRouteCapabilities(Route $route): array
+    {
+        $keys = [];
+        foreach ($route->gatherMiddleware() as $middleware) {
+            if (is_string($middleware) && str_starts_with($middleware, 'capability:')) {
+                $parts = explode(',', substr($middleware, strlen('capability:')));
+                if (($parts[1] ?? null) === 'campus') {
+                    $keys[] = $parts[0];
+                }
+            }
+        }
+
+        return $keys;
     }
 
     /** @return list<string> the capability keys of the route's own `capability:` middleware */

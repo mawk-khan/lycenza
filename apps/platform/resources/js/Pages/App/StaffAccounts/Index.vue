@@ -22,6 +22,18 @@ interface RoleOption {
     purpose: string | null;
     addOn: boolean;
     sensitivity: string[];
+    // ORG.7A (ADR 0076 §11): whether the role may be granted for one Campus,
+    // and which of its permissions apply from such a grant.
+    campusScopable: boolean;
+    campusAreas: string[];
+}
+
+interface Grant {
+    key: string;
+    name: string;
+    campusId: string | null;
+    campusName: string | null;
+    campusActive: boolean | null;
 }
 
 interface StaffMember {
@@ -30,7 +42,7 @@ interface StaffMember {
     name: string | null;
     email: string | null;
     status: string;
-    roles: { key: string; name: string }[];
+    roles: Grant[];
     joinedAt: string | null;
 }
 
@@ -47,6 +59,7 @@ const props = defineProps<{
     staff: StaffMember[];
     invitations: Invitation[];
     roleCatalog: RoleOption[];
+    campuses: { id: string; name: string }[];
     // SR.2 (ADR 0071 §10.4): role assignments are shown only with school.roles.view.
     canViewRoles: boolean;
     canInvite: boolean;
@@ -64,6 +77,8 @@ const busy = ref(false);
 const inviteEmail = ref('');
 const inviteRoles = ref<string[]>([]);
 const grantChoice = reactive<Record<string, string>>({});
+// ORG.7A: '' = the entire School; otherwise one active Campus id.
+const grantScope = reactive<Record<string, string>>({});
 const reactivateRoles = reactive<Record<string, string[]>>({});
 
 const grantable = computed(() => props.roleCatalog.filter((r) => r.grantable));
@@ -165,19 +180,38 @@ function reactivate(member: StaffMember) {
     );
 }
 
+function chosenRole(member: StaffMember): RoleOption | undefined {
+    return props.roleCatalog.find((r) => r.key === grantChoice[member.membershipId]);
+}
+
 function grantRole(member: StaffMember) {
+    const campusId = chosenRole(member)?.campusScopable
+        ? grantScope[member.membershipId] || null
+        : null;
     return run(
         () =>
             postJson(`/app/settings/staff/members/${member.membershipId}/roles`, {
                 role: grantChoice[member.membershipId] ?? '',
+                campus_id: campusId,
                 mfa_code: code.value,
             }),
         'Role granted.',
     );
 }
 
-function revokeRole(member: StaffMember, role: { key: string; name: string }) {
-    if (!confirm(`Revoke the ${role.name} role from ${member.name ?? 'this person'}?`)) {
+function scopeLabel(role: Grant): string {
+    if (role.campusId === null) {
+        return 'Entire School';
+    }
+    return `${role.campusName ?? 'Campus'}${role.campusActive === false ? ' (inactive Campus)' : ''}`;
+}
+
+function revokeRole(member: StaffMember, role: Grant) {
+    if (
+        !confirm(
+            `Revoke the ${role.name} role (${scopeLabel(role)}) from ${member.name ?? 'this person'}?`,
+        )
+    ) {
         return;
     }
     return run(
@@ -185,10 +219,11 @@ function revokeRole(member: StaffMember, role: { key: string; name: string }) {
             postJson(
                 `/app/settings/staff/members/${member.membershipId}/roles/${role.key}/revoke`,
                 {
+                    campus_id: role.campusId,
                     mfa_code: code.value,
                 },
             ),
-        `${role.name} was revoked.`,
+        `${role.name} (${scopeLabel(role)}) was revoked.`,
     );
 }
 
@@ -388,10 +423,11 @@ function isSelf(member: StaffMember): boolean {
                         <span v-if="member.roles.length === 0" class="text-slate-600">No role</span>
                         <span
                             v-for="role in member.roles"
-                            :key="role.key"
+                            :key="`${role.key}:${role.campusId ?? 'school'}`"
                             class="rounded bg-slate-100 px-2 py-0.5"
+                            data-testid="staff-grant"
                         >
-                            {{ role.name }}
+                            {{ role.name }} — {{ scopeLabel(role) }}
                             <button
                                 v-if="canManageRoles && !isSelf(member)"
                                 class="ml-1 underline disabled:opacity-50"
@@ -416,12 +452,32 @@ function isSelf(member: StaffMember): boolean {
                                 <option value="">Add a role…</option>
                                 <option
                                     v-for="role in grantable.filter(
-                                        (r) => !member.roles.some((m) => m.key === r.key),
+                                        (r) =>
+                                            r.campusScopable ||
+                                            !member.roles.some(
+                                                (m) => m.key === r.key && m.campusId === null,
+                                            ),
                                     )"
                                     :key="role.key"
                                     :value="role.key"
                                 >
                                     {{ role.name }}
+                                </option>
+                            </select>
+                            <select
+                                v-if="chosenRole(member)?.campusScopable && campuses.length"
+                                :value="grantScope[member.membershipId] ?? ''"
+                                class="rounded border border-slate-300 px-2 py-1"
+                                aria-label="Scope"
+                                @change="
+                                    grantScope[member.membershipId] = (
+                                        $event.target as HTMLSelectElement
+                                    ).value
+                                "
+                            >
+                                <option value="">Entire School</option>
+                                <option v-for="c in campuses" :key="c.id" :value="c.id">
+                                    {{ c.name }}
                                 </option>
                             </select>
                             <button
@@ -431,6 +487,20 @@ function isSelf(member: StaffMember): boolean {
                             >
                                 Grant
                             </button>
+                            <p
+                                v-if="
+                                    chosenRole(member)?.campusScopable &&
+                                    grantScope[member.membershipId]
+                                "
+                                class="basis-full text-xs text-slate-600"
+                                data-testid="campus-scope-note"
+                            >
+                                Campus scope currently applies only to product areas that support
+                                Campus-restricted access ({{
+                                    chosenRole(member)?.campusAreas.join(', ')
+                                }}). Other permissions in this role remain unavailable from this
+                                scoped grant until their area adopts Campus scope.
+                            </p>
                         </template>
                     </div>
                 </li>

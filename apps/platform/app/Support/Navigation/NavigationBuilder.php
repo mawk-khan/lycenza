@@ -5,6 +5,7 @@ namespace App\Support\Navigation;
 use App\Domain\Identity\Application\Portal\ActingGuardianResolver;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Authorization\Campus\CampusScopeResolver;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Domains\HostClassification;
 use App\Support\Portal\PortalAvailability;
@@ -112,7 +113,15 @@ final class NavigationBuilder
      */
     public function visibleEntries(User $user, ?School $school, bool $schoolHost): array
     {
-        $schoolCapabilities = $school !== null ? $this->capabilities->schoolCapabilities($user, $school) : [];
+        // ORG.7A (ADR 0076 §11.7): an adopted capability held in at least one
+        // active Campus also shows its entry. Visibility only -- every page
+        // re-applies the actor's CampusScope, and nothing here authorizes.
+        $schoolCapabilities = $school !== null
+            ? array_values(array_unique([
+                ...$this->capabilities->schoolCapabilities($user, $school),
+                ...app(CampusScopeResolver::class)->heldInAnyCampus($user, $school),
+            ]))
+            : [];
         $platformCapabilities = $schoolHost ? [] : $this->capabilities->platformCapabilities($user);
         $guardianAvailable = null;
 

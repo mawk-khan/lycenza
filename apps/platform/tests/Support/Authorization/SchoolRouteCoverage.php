@@ -20,6 +20,7 @@ use App\Domain\Identity\Application\Portal\ActingGuardianResolver;
 use App\Domain\Identity\Application\Staff\StaffAccessService;
 use App\Domain\Identity\Application\Staff\StaffInvitationService;
 use App\Domain\Identity\Application\Staff\StaffRoleCatalog;
+use App\Domain\Inventory\Application\InventoryStockAccess;
 use App\Domain\Leave\Application\LeaveLedgerService;
 use App\Domain\Leave\Application\LeavePolicyAssignmentService;
 use App\Domain\Leave\Application\LeavePolicyService;
@@ -50,6 +51,7 @@ use App\Domain\Payroll\Statutory\Application\Export\StatutoryEsiContributionWork
 use App\Domain\Payroll\Statutory\Application\Export\StatutoryTdsDraftStatementExportService;
 use App\Domain\StaffAttendance\Application\StaffAttendanceReadService;
 use App\Domain\StaffAttendance\Application\StaffAttendanceService;
+use App\Domain\Visitor\Application\VisitorVisitAccess;
 use Tests\Feature\Api\V1\SchoolContextTest;
 use Tests\Feature\App\StatutoryPayrollUiTest;
 use Tests\Feature\Identity\InvitationAcceptanceHubTest;
@@ -242,8 +244,10 @@ final class SchoolRouteCoverage
             Coverage::gate('api.v1.schools.visitors.show', 'visitor.directory.view'),
 
             // Domain\Visitor\Http\Controllers\VisitorVisitController
-            Coverage::gate('api.v1.schools.visitor-visits.index', 'visitor.visits.view'),
-            Coverage::gate('api.v1.schools.visitor-visits.show', 'visitor.visits.view'),
+            Coverage::campus('api.v1.schools.visitor-visits.index', 'visitor.visits.view', VisitorVisitAccess::class, 'visits'),
+            Coverage::campus('api.v1.schools.visitor-visits.show', 'visitor.visits.view', VisitorVisitAccess::class, 'visit'),
+            Coverage::campus('api.v1.schools.visitor-visits.store', 'visitor.visits.manage', VisitorVisitAccess::class, 'campusForNewVisit'),
+            Coverage::campus('api.v1.schools.visitor-visits.end', 'visitor.visits.manage', VisitorVisitAccess::class, 'visit'),
 
             // Domain\Hostel\Http\Controllers\HostelController
             Coverage::gate('api.v1.schools.hostels.index', 'hostel.directory.view'),
@@ -273,8 +277,11 @@ final class SchoolRouteCoverage
             Coverage::gate('api.v1.schools.inventory-locations.show', 'inventory.directory.view'),
 
             // Domain\Inventory\Http\Controllers\InventoryStockController
-            Coverage::gate('api.v1.schools.inventory-stock.index', 'inventory.stock.view'),
-            Coverage::gate('api.v1.schools.inventory-stock.movements', 'inventory.stock.view'),
+            Coverage::campus('api.v1.schools.inventory-stock.index', 'inventory.stock.view', InventoryStockAccess::class, 'balances'),
+            Coverage::campus('api.v1.schools.inventory-stock.movements', 'inventory.stock.view', InventoryStockAccess::class, 'movements'),
+            Coverage::campus('api.v1.schools.inventory-stock.receive', 'inventory.stock.manage', InventoryStockAccess::class, 'location'),
+            Coverage::campus('api.v1.schools.inventory-stock.issue', 'inventory.stock.manage', InventoryStockAccess::class, 'location'),
+            Coverage::campus('api.v1.schools.inventory-stock.transfer', 'inventory.stock.manage', InventoryStockAccess::class, 'location'),
 
             // Domain\Canteen\Http\Controllers\CanteenOutletController
             Coverage::gate('api.v1.schools.canteen-outlets.index', 'canteen.directory.view'),
@@ -738,12 +745,12 @@ final class SchoolRouteCoverage
             Coverage::gate('app.visitor.directory.update', 'visitor.directory.manage'),
 
             // Http\Controllers\App\VisitorVisitController
-            Coverage::gate('app.visitor.visits.index', 'visitor.visits.view'),
-            Coverage::gate('app.visitor.visits.create', 'visitor.visits.manage'),
-            Coverage::gate('app.visitor.visits.search-visitors', 'visitor.visits.manage'),
-            Coverage::gate('app.visitor.visits.search-hosts', 'visitor.visits.manage'),
-            Coverage::gate('app.visitor.visits.store', 'visitor.visits.manage'),
-            Coverage::gate('app.visitor.visits.end', 'visitor.visits.manage'),
+            Coverage::campus('app.visitor.visits.index', 'visitor.visits.view', VisitorVisitAccess::class, 'visits'),
+            Coverage::campus('app.visitor.visits.create', 'visitor.visits.manage', VisitorVisitAccess::class, 'campusesForNewVisit'),
+            Coverage::campusLookup('app.visitor.visits.search-visitors', 'visitor.visits.manage', 'Check-in lookup of the School-wide Visitor directory (CampusScopeCatalogue::DOMAINS visitor sharedLookups).'),
+            Coverage::campusLookup('app.visitor.visits.search-hosts', 'visitor.visits.manage', 'Check-in lookup of active host Employees, names only (CampusScopeCatalogue::DOMAINS visitor sharedLookups).'),
+            Coverage::campus('app.visitor.visits.store', 'visitor.visits.manage', VisitorVisitAccess::class, 'campusForNewVisit'),
+            Coverage::campus('app.visitor.visits.end', 'visitor.visits.manage', VisitorVisitAccess::class, 'visit'),
 
             // Http\Controllers\App\Finance\FinanceController
             Coverage::gate('app.finance.index', ['finance.ledger.view', 'finance.charges.view', 'finance.payments.view', 'finance.payments.record', 'finance.fee_structures.view', 'finance.fee_concessions.view']),
@@ -990,15 +997,15 @@ final class SchoolRouteCoverage
             Coverage::gate('app.inventory-locations.update', 'inventory.directory.manage'),
 
             // Http\Controllers\App\InventoryStockController
-            Coverage::gate('app.inventory-stock.index', 'inventory.stock.view'),
-            Coverage::gate('app.inventory-stock.receive.create', 'inventory.stock.manage'),
-            Coverage::gate('app.inventory-stock.receive.store', 'inventory.stock.manage'),
-            Coverage::gate('app.inventory-stock.issue.create', 'inventory.stock.manage'),
-            Coverage::gate('app.inventory-stock.issue.store', 'inventory.stock.manage'),
-            Coverage::gate('app.inventory-stock.transfer.create', 'inventory.stock.manage'),
-            Coverage::gate('app.inventory-stock.transfer.store', 'inventory.stock.manage'),
-            Coverage::gate('app.inventory-stock.search-items', 'inventory.stock.manage'),
-            Coverage::gate('app.inventory-stock.search-locations', 'inventory.stock.manage'),
+            Coverage::campus('app.inventory-stock.index', 'inventory.stock.view', InventoryStockAccess::class, 'balances'),
+            Coverage::campusLookup('app.inventory-stock.receive.create', 'inventory.stock.manage', 'Data-free form page; Locations come from the scoped search (search-locations).'),
+            Coverage::campus('app.inventory-stock.receive.store', 'inventory.stock.manage', InventoryStockAccess::class, 'location'),
+            Coverage::campusLookup('app.inventory-stock.issue.create', 'inventory.stock.manage', 'Data-free form page; Locations come from the scoped search (search-locations).'),
+            Coverage::campus('app.inventory-stock.issue.store', 'inventory.stock.manage', InventoryStockAccess::class, 'location'),
+            Coverage::campusLookup('app.inventory-stock.transfer.create', 'inventory.stock.manage', 'Data-free form page; Locations come from the scoped search (search-locations).'),
+            Coverage::campus('app.inventory-stock.transfer.store', 'inventory.stock.manage', InventoryStockAccess::class, 'location'),
+            Coverage::campusLookup('app.inventory-stock.search-items', 'inventory.stock.manage', 'Lookup of the School-wide Item catalogue (CampusScopeCatalogue::DOMAINS inventory sharedLookups).'),
+            Coverage::campus('app.inventory-stock.search-locations', 'inventory.stock.manage', InventoryStockAccess::class, 'searchLocations'),
 
             // Http\Controllers\App\Canteen\CanteenOutletController
             Coverage::gate('app.canteen-outlets.index', 'canteen.directory.view'),

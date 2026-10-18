@@ -4,6 +4,7 @@ namespace App\Domain\Identity\Application\Staff;
 
 use App\Domain\Identity\Application\Portal\ActingGuardianResolver;
 use App\Domain\Identity\Application\SchoolAccessLock;
+use App\Models\Campus;
 use App\Models\MembershipRoleAssignment;
 use App\Models\Role;
 use App\Models\School;
@@ -15,6 +16,7 @@ use App\Support\Authorization\SchoolAdministrators;
 use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * Phase 0O.12B (ADR 0059 owner amendment): a School's staff access
@@ -197,21 +199,44 @@ final class StaffAccessService
     /**
      * @throws StaffAccountException
      */
-    public function grantRole(School $school, User $actor, string $membershipId, string $roleKey): void
+    /**
+     * ORG.7A (ADR 0076 §11): `$campusId` NULL grants the role for the entire
+     * School (as every grant before ORG.7A); a Campus id grants it for that
+     * ONE active Campus of this School only -- for a Campus-scopable role
+     * (StaffRoleCatalog::campusScopable()). Who may grant is unchanged and
+     * whole-School only (RoleGrantAuthority).
+     *
+     * @throws StaffAccountException
+     */
+    public function grantRole(School $school, User $actor, string $membershipId, string $roleKey, ?string $campusId = null): void
     {
         [$role] = $this->roles->resolve([$roleKey]);
         $refusal = ['stage' => 'grant', 'schoolMembershipId' => $membershipId, 'roleKey' => $role->key];
 
-        $this->run($school, $actor, [StaffRoleCatalog::ROLES], function () use ($school, $actor, $membershipId, $role, $refusal): User {
+        $this->run($school, $actor, [StaffRoleCatalog::ROLES], function () use ($school, $actor, $membershipId, $role, $refusal, $campusId): User {
             $membership = $this->lockStaffMembership($school, $actor, $membershipId, $refusal);
 
             if ($membership->status !== SchoolMembership::STATUS_ACTIVE) {
                 throw new StaffAccountException('not_active');
             }
 
+            if ($campusId !== null) {
+                if (! StaffRoleCatalog::campusScopable($role)) {
+                    throw new StaffAccountException('role_not_campus_scopable');
+                }
+                // FOR SHARE: a concurrent inactivation serializes with the grant.
+                $campus = Str::isUuid($campusId)
+                    ? Campus::query()->where('school_id', $school->id)->whereKey($campusId)->sharedLock()->first()
+                    : null;
+                if ($campus === null || $campus->status !== 'active') {
+                    throw new StaffAccountException('campus_unavailable');
+                }
+            }
+
             $already = MembershipRoleAssignment::query()
                 ->where('school_membership_id', $membership->id)
                 ->where('role_id', $role->id)
+                ->when($campusId === null, fn ($q) => $q->whereNull('campus_id'), fn ($q) => $q->where('campus_id', $campusId))
                 ->active()
                 ->exists();
 
@@ -220,7 +245,7 @@ final class StaffAccessService
             }
 
             $decision = $this->decideGrant($school, $actor, $membership, $role, 'grant');
-            $this->grant($school, $actor, $membership, $role, $decision, 'grant');
+            $this->grant($school, $actor, $membership, $role, $decision, 'grant', $campusId);
 
             return $membership->user;
         }, $refusal);
@@ -229,16 +254,27 @@ final class StaffAccessService
     /**
      * @throws StaffAccountException
      */
-    public function revokeRole(School $school, User $actor, string $membershipId, string $roleKey): void
+    /**
+     * ORG.7A: `$campusId` names WHICH grant of the role -- NULL the
+     * entire-School grant, a Campus id that Campus's grant.
+     *
+     * @throws StaffAccountException
+     */
+    public function revokeRole(School $school, User $actor, string $membershipId, string $roleKey, ?string $campusId = null): void
     {
         $refusal = ['stage' => 'revoke', 'schoolMembershipId' => $membershipId, 'roleKey' => $roleKey];
 
-        $this->run($school, $actor, [StaffRoleCatalog::ROLES], function () use ($school, $actor, $membershipId, $roleKey, $refusal): User {
+        $this->run($school, $actor, [StaffRoleCatalog::ROLES], function () use ($school, $actor, $membershipId, $roleKey, $refusal, $campusId): User {
             $membership = $this->lockStaffMembership($school, $actor, $membershipId, $refusal);
+
+            if ($campusId !== null && ! Str::isUuid($campusId)) {
+                throw new StaffAccountException('role_not_granted');
+            }
 
             $grant = MembershipRoleAssignment::query()
                 ->where('school_membership_id', $membership->id)
                 ->whereIn('role_id', Role::query()->where('key', $roleKey)->where('scope', 'school')->select('id'))
+                ->when($campusId === null, fn ($q) => $q->whereNull('campus_id'), fn ($q) => $q->where('campus_id', $campusId))
                 ->active()
                 ->lockForUpdate()
                 ->first();
@@ -385,23 +421,26 @@ final class StaffAccessService
         return $decision;
     }
 
-    private function grant(School $school, User $actor, SchoolMembership $membership, Role $role, RoleGrantDecision $decision, string $stage): void
+    private function grant(School $school, User $actor, SchoolMembership $membership, Role $role, RoleGrantDecision $decision, string $stage, ?string $campusId = null): void
     {
         $grant = RoleGrantAuthority::backstopped(fn () => MembershipRoleAssignment::query()->create([
             'school_id' => $school->id,
             'school_membership_id' => $membership->id,
             'role_id' => $role->id,
+            'campus_id' => $campusId,
             'assigned_by_user_id' => $actor->id,
             'assigned_at' => now(),
         ]), ['stage' => $stage, 'schoolMembershipId' => $membership->id, 'roleKey' => $role->key]);
 
         // SR.2 (ADR 0071 §13): a grant made through a grant right records the
         // rights used and the classes they covered; an ordinary grant stays lightweight.
-        $this->audit->school($school, self::ROLE_ASSIGNED, actor: $actor, subject: $grant, metadata: [
+        // ORG.7A (ADR 0076 §11.6): a Campus-scoped grant records its Campus id.
+        $this->audit->school($school, self::ROLE_ASSIGNED, actor: $actor, subject: $grant, metadata: array_filter([
             'schoolMembershipId' => $membership->id,
             'roleKey' => $role->key,
+            'campusId' => $campusId,
             ...$decision->grantMetadata(),
-        ]);
+        ], fn ($value) => $value !== null));
     }
 
     /**
@@ -464,10 +503,11 @@ final class StaffAccessService
             'revocation_reason' => $reason,
         ])->save();
 
-        $this->audit->school($school, self::ROLE_REVOKED, actor: $actor, subject: $grant, metadata: [
+        $this->audit->school($school, self::ROLE_REVOKED, actor: $actor, subject: $grant, metadata: array_filter([
             'schoolMembershipId' => $membership->id,
             'roleKey' => $grant->role?->key,
+            'campusId' => $grant->campus_id,
             'reason' => $reason,
-        ]);
+        ], fn ($value) => $value !== null));
     }
 }

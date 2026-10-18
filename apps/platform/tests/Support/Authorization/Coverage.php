@@ -19,6 +19,16 @@ namespace Tests\Support\Authorization;
  *   C5 special()  -- context establishment / token acceptance: ordinary
  *                    School capability coverage cannot apply. Needs the
  *                    governing ADR/invariant, the reason and a test.
+ *   C6 campus()   -- ORG.7A (ADR 0076 §33): a Campus-adopted action. The key
+ *                    is adopted (CampusScopeCatalogue), the action resolves
+ *                    the actor's CampusScope unconditionally
+ *                    (authorizeCampusScope -- ENTRY: held somewhere), AND
+ *                    calls the domain access method that applies the scope
+ *                    to every record it reads or targets. campusLookup() is
+ *                    the declared shared lookup with no record of its own
+ *                    Campus (CampusScopeCatalogue::DOMAINS sharedLookups).
+ *                    A route with `capability:...,campus` middleware needs a
+ *                    C6 entry: that floor is never record authority.
  *
  * Evidence is checked mechanically by CoverageEvidence against the code,
  * never against comments.
@@ -32,6 +42,8 @@ final class Coverage
     public const OWNED = 'C4';
 
     public const SPECIAL = 'C5';
+
+    public const CAMPUS = 'C6';
 
     /**
      * @param  list<string>  $capabilities  keys the action itself must gate on (C2, and C4's base capability)
@@ -69,6 +81,18 @@ final class Coverage
     public static function owned(string $route, string $authority, string $method, string $scope, string|array $capabilities = []): self
     {
         return new self($route, self::OWNED, capabilities: (array) $capabilities, authorities: [[$authority, $method]], scope: $scope);
+    }
+
+    /** @param  class-string  $access  the domain class whose method applies the CampusScope */
+    public static function campus(string $route, string $capability, string $access, string $method): self
+    {
+        return new self($route, self::CAMPUS, capabilities: [$capability], authorities: [[$access, $method]]);
+    }
+
+    /** A shared lookup of a Campus-adopted surface (no record with its own Campus). */
+    public static function campusLookup(string $route, string $capability, string $reason): self
+    {
+        return new self($route, self::CAMPUS, capabilities: [$capability], reason: $reason);
     }
 
     /** @param  class-string  $evidence  the test class that proves the contract */

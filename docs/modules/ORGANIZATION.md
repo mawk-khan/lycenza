@@ -152,3 +152,18 @@ School setting, a role, a navigation toggle or a commercial plan.
   again restores access with the same roles.
 - **School administrators** see only the effect; they have no entitlement
   control. The Platform Auditor sees the state read-only (ORG.6).
+
+## Campus-scoped staff access (ORG.7A, ADR 0076 §11, §33)
+
+- **Scope on grants.** A School role may be granted for the entire School
+  (the meaning of every grant before ORG.7A) or for one active Campus.
+  Several Campuses are several grants.
+- **Effect.** A Campus grant works only in product areas that have adopted
+  Campus scope: today Visitor visits and Inventory stock. Its other
+  permissions stay unavailable from that grant until their area adopts
+  Campus scope.
+- **Only whole-School administrators grant.** Staff access, School
+  settings and configuration are never Campus-scoped, and the School
+  administrator role is never Campus-scoped.
+- **Inactivating a Campus** deletes and revokes nothing. Its scoped grants
+  confer no work until it is reactivated, and new grants cannot target it.

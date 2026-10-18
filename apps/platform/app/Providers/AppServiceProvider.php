@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Support\Ai\AiContextTokenService;
 use App\Support\Api\ApiScope;
 use App\Support\ApiClients\PartnerCredentialAuthenticator;
+use App\Support\Authorization\Campus\CampusScopeResolver;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Configuration\EnvironmentPolicy;
 use App\Support\Configuration\ProductionConfigurationException;
@@ -186,6 +187,14 @@ class AppServiceProvider extends ServiceProvider
         // or the AuthorizesCapability controller trait's authorizeCapability().
         Gate::define('capability', function (User $user, string $capability, ?School $school = null) {
             return app(CapabilityResolver::class)->can($user, $capability, $school);
+        });
+
+        // ORG.7A (ADR 0076 §11.7, §33): ENTRY to a Campus-adopted surface --
+        // the capability held School-wide or in at least one active Campus.
+        // Never record authority: the action must then apply the actor's
+        // CampusScope (AuthorizesCampusScope) before touching a record.
+        Gate::define('campus-capability', function (User $user, string $capability, ?School $school = null) {
+            return $school !== null && ! app(CampusScopeResolver::class)->scopeFor($user, $capability, $school)->isNone();
         });
 
         // Transactional outbox (ADR 0025, docs/architecture/EVENTS.md):

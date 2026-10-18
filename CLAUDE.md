@@ -1276,3 +1276,32 @@ once several modules copy it.
        `AsyncModuleContractArchitectureTest`.
      - **No billing:** entitlements are availability, never billing,
        plans or pricing.
+
+101. **Campus is an authorization scope, never a tenant, and it is
+     fail-closed until a domain adopts it (ADR 0076 §11, §33, ORG.7A).**
+     - **NULL means the whole School.** A School role assignment's
+       `campus_id` NULL = the whole School, forever. Never reinterpret an
+       existing grant. A Campus id = that one active Campus of the same
+       School.
+     - **Whole-School paths never count a Campus grant.** The `capability`
+       Gate, `can()`, `schoolCapabilities()`, `capability:` middleware,
+       `RoleGrantAuthority` and the grantor trigger read whole-School
+       grants only.
+     - **Campus authority has one path:**
+       - `CampusScopeResolver` returns a `CampusScope`, and an adopted
+         action enters through `authorizeCampusScope()` or
+         `capability:x,campus`;
+       - it then applies the scope in SQL through its domain access class:
+         out of scope = 404, NULL-Campus records whole-School only;
+       - it gets a C6 coverage entry.
+     - **Adoption is declared.** A capability is Campus-adopted only in
+       `CampusScopeCatalogue`, with its domain's NULL-Campus,
+       inactive-Campus and shared-lookup policy
+       (`CampusScopeAdoptionArchitectureTest`). Never check an adopted key
+       with the whole-School Gate.
+     - **Never Campus-scoped:** access administration, School
+       configuration, `school_admin`, Guardian and platform roles. Only
+       whole-School administrators grant Campus scope.
+     - **Never authority:** a context or selected Campus
+       (`TenantContext::campus()`). It is a filter, intersected with the
+       scope.
