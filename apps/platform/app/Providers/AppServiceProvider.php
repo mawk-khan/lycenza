@@ -194,7 +194,7 @@ class AppServiceProvider extends ServiceProvider
         // Never record authority: the action must then apply the actor's
         // CampusScope (AuthorizesCampusScope) before touching a record.
         Gate::define('campus-capability', function (User $user, string $capability, ?School $school = null) {
-            return $school !== null && ! app(CampusScopeResolver::class)->scopeFor($user, $capability, $school)->isNone();
+            return $school !== null && ! app(CampusScopeResolver::class)->campusScope($user, $capability, $school)->isNone();
         });
 
         // Transactional outbox (ADR 0025, docs/architecture/EVENTS.md):

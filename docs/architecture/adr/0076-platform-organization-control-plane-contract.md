@@ -2168,7 +2168,7 @@ not started.
   - The grant map is cached with, and forgotten by, the School capability
     cache.
   - Campus status is re-read on every call.
-- **`CampusScopeResolver::scopeFor(actor, capability, School)`** returns a
+- **`CampusScopeResolver::campusScope(actor, capability, School)`** returns a
   `CampusScope`:
   - the whole School, when the capability is held whole-School;
   - a set of active Campuses, when it is adopted and held through Campus

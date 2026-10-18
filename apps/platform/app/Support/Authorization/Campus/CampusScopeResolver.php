@@ -21,7 +21,7 @@ class CampusScopeResolver
 {
     public function __construct(private readonly CapabilityResolver $capabilities) {}
 
-    public function scopeFor(User $actor, string $capability, School $school): CampusScope
+    public function campusScope(User $actor, string $capability, School $school): CampusScope
     {
         if ($this->capabilities->canInSchool($actor, $capability, $school)) {
             return CampusScope::wholeSchool();
@@ -43,7 +43,7 @@ class CampusScopeResolver
     /**
      * Navigation only (ADR 0076 §11.7): the adopted capabilities the actor
      * holds in at least one active Campus. NEVER authorization by itself --
-     * every destination re-checks with scopeFor().
+     * every destination re-checks with campusScope().
      *
      * @return list<string>
      */

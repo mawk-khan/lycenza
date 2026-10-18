@@ -57,7 +57,7 @@ class InventoryStockController extends Controller
         return Inertia::render('App/Inventory/Stock/Index', [
             'balances' => $balances->through(fn (InventoryStockBalance $b) => $this->presentBalance($b)),
             'movements' => $movements->through(fn (StockMovement $m) => $this->presentMovement($m)),
-            'canManage' => ! $scopes->scopeFor($context->actor(), 'inventory.stock.manage', $school)->isNone(),
+            'canManage' => ! $scopes->campusScope($context->actor(), 'inventory.stock.manage', $school)->isNone(),
         ]);
     }
 

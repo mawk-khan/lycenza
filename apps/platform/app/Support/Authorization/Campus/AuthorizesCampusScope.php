@@ -26,7 +26,7 @@ trait AuthorizesCampusScope
         /** @var User $user the Gate refuses a guest */
         $user = auth()->user();
 
-        return app(CampusScopeResolver::class)->scopeFor($user, $capability, $school);
+        return app(CampusScopeResolver::class)->campusScope($user, $capability, $school);
     }
 
     /** For an Application service called with an explicit actor (tests, jobs). */
@@ -34,6 +34,6 @@ trait AuthorizesCampusScope
     {
         Gate::forUser($actor)->authorize('campus-capability', [$capability, $school]);
 
-        return app(CampusScopeResolver::class)->scopeFor($actor, $capability, $school);
+        return app(CampusScopeResolver::class)->campusScope($actor, $capability, $school);
     }
 }

@@ -55,11 +55,11 @@ class CampusScopedRoleGrantTest extends TestCase
         $this->staffPost($admin, $school, "/members/{$membership->id}/roles", ['role' => 'front_office', 'campus_id' => $campus->id])->assertUnprocessable();
         $this->staffPost($admin, $school, "/members/{$membership->id}/roles/front_office/revoke")->assertOk();
         $this->assertContains(['key' => 'front_office', 'campusId' => $campus->id], $this->grants($membership));
-        $this->assertSame([$campus->id], app(CampusScopeResolver::class)->scopeFor($staff, 'visitor.visits.view', $school)->campusIds());
+        $this->assertSame([$campus->id], app(CampusScopeResolver::class)->campusScope($staff, 'visitor.visits.view', $school)->campusIds());
 
         $this->staffPost($admin, $school, "/members/{$membership->id}/roles/front_office/revoke", ['campus_id' => $campus->id])->assertOk();
         $this->assertSame([['key' => 'teacher', 'campusId' => null]], $this->grants($membership));
-        $this->assertTrue(app(CampusScopeResolver::class)->scopeFor($staff, 'visitor.visits.view', $school)->isNone());
+        $this->assertTrue(app(CampusScopeResolver::class)->campusScope($staff, 'visitor.visits.view', $school)->isNone());
 
         // Audit carries the Campus id (identifier only) on the scoped events.
         $assigned = $this->audits($school, 'school.membership.role_assigned');

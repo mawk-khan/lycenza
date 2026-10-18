@@ -51,7 +51,7 @@ class CampusScopeResolutionTest extends TestCase
 
     private function scope(User $user, string $capability = 'visitor.visits.view')
     {
-        return app(CampusScopeResolver::class)->scopeFor($user, $capability, $this->school);
+        return app(CampusScopeResolver::class)->campusScope($user, $capability, $this->school);
     }
 
     #[Test]

@@ -65,7 +65,7 @@ class VisitorVisitController extends Controller
         return Inertia::render('App/Visitor/Visits/Index', [
             'visits' => $visits->through(fn (VisitorVisit $v) => $this->present($v)),
             'filters' => ['status' => $validated['status'] ?? 'checked_in'],
-            'canManage' => ! $scopes->scopeFor($context->actor(), 'visitor.visits.manage', $school)->isNone(),
+            'canManage' => ! $scopes->campusScope($context->actor(), 'visitor.visits.manage', $school)->isNone(),
         ]);
     }
 

@@ -142,10 +142,26 @@ class CapabilityResolver
      */
     private function grantedSchoolCapabilities(User $actor, School $school): array
     {
+        return $this->grants($actor, $school)['school'];
+    }
+
+    /**
+     * The actor's active grants in the School, read ONCE and cached 60 s
+     * (`school:{id}:grants:user:{uid}` -- a new key for the new shape, so a
+     * pre-ORG.7A cache entry is never misread): the whole-School capabilities
+     * and, separately, the ADOPTED capabilities of each Campus-scoped grant
+     * (ORG.7A, ADR 0076 §11.3). The two halves are never merged: only
+     * 'school' feeds schoolCapabilities()/can(); 'campus' is read only by
+     * campusCapabilities().
+     *
+     * @return array{school: list<string>, campus: array<string, list<string>>}
+     */
+    private function grants(User $actor, School $school): array
+    {
         return Cache::remember(
-            "school:{$school->id}:capabilities:user:{$actor->id}",
+            "school:{$school->id}:grants:user:{$actor->id}",
             self::CACHE_TTL_SECONDS,
-            function () use ($actor, $school) {
+            function () use ($actor, $school): array {
                 $membership = SchoolMembership::query()
                     ->where('user_id', $actor->id)
                     ->where('school_id', $school->id)
@@ -153,32 +169,42 @@ class CapabilityResolver
                     ->first();
 
                 if ($membership === null) {
-                    return [];
+                    return ['school' => [], 'campus' => []];
                 }
 
                 // MembershipRoleAssignment is RLS-protected: read it
                 // authoritatively for $school regardless of whatever
                 // ambient TenantContext the caller currently has. See
                 // TenantContext::withSchool()'s docblock.
-                return $this->context->withSchool(
+                $assignments = $this->context->withSchool(
                     $school,
                     fn () => MembershipRoleAssignment::query()
                         ->where('school_membership_id', $membership->id)
                         // Revoked grants are history, never authority
                         // (Phase 0O.12B, ADR 0059 owner amendment).
                         ->active()
-                        // ORG.7A (ADR 0076 §11.3): whole-School grants only.
-                        // A Campus-scoped grant NEVER satisfies a School-wide
-                        // check -- it is reachable only through
-                        // campusCapabilities() / CampusScopeResolver.
-                        ->whereNull('campus_id')
                         ->with('role.capabilities')
-                        ->get()
-                        ->flatMap(fn ($assignment) => $assignment->role->capabilities->pluck('key'))
-                        ->unique()
-                        ->values()
-                        ->all(),
+                        ->get(),
                 );
+
+                $wholeSchool = [];
+                $campus = [];
+                foreach ($assignments as $assignment) {
+                    $keys = $assignment->role->capabilities->pluck('key')->all();
+                    if ($assignment->campus_id === null) {
+                        array_push($wholeSchool, ...$keys);
+
+                        continue;
+                    }
+                    // ORG.7A: a Campus-scoped grant NEVER feeds a whole-School
+                    // check -- only its adopted capabilities, for that Campus.
+                    $adopted = CampusScopeCatalogue::adoptedAmong($keys);
+                    if ($adopted !== []) {
+                        $campus[$assignment->campus_id] = array_values(array_unique([...($campus[$assignment->campus_id] ?? []), ...$adopted]));
+                    }
+                }
+
+                return ['school' => array_values(array_unique($wholeSchool)), 'campus' => $campus];
             },
         );
     }
@@ -192,9 +218,10 @@ class CapabilityResolver
      * work, and for the ORG.7A domains no reads either). Read only by
      * CampusScopeResolver; never merged into schoolCapabilities().
      *
-     * The grant map is cached with the School capability cache (same TTL,
-     * same forgetCache()); the Campus status is re-read on every call, so an
-     * inactivation takes effect at once.
+     * The grants come from the same cached read as the whole-School
+     * capabilities (so an actor without Campus grants costs nothing extra);
+     * the Campus status is re-read on every call, so an inactivation takes
+     * effect at once.
      *
      * @return array<string, list<string>>
      */
@@ -204,39 +231,7 @@ class CapabilityResolver
             return [];
         }
 
-        /** @var array<string, list<string>> $grants */
-        $grants = Cache::remember(
-            self::campusCacheKey($actor, $school),
-            self::CACHE_TTL_SECONDS,
-            function () use ($actor, $school): array {
-                $membership = SchoolMembership::query()
-                    ->where('user_id', $actor->id)
-                    ->where('school_id', $school->id)
-                    ->active()
-                    ->first();
-
-                if ($membership === null) {
-                    return [];
-                }
-
-                return $this->context->withSchool($school, function () use ($membership): array {
-                    $map = [];
-                    $assignments = MembershipRoleAssignment::query()
-                        ->where('school_membership_id', $membership->id)
-                        ->active()
-                        ->whereNotNull('campus_id')
-                        ->with('role.capabilities')
-                        ->get();
-                    foreach ($assignments as $assignment) {
-                        $keys = CampusScopeCatalogue::adoptedAmong($assignment->role->capabilities->pluck('key')->all());
-                        $map[$assignment->campus_id] = array_values(array_unique([...($map[$assignment->campus_id] ?? []), ...$keys]));
-                    }
-
-                    return array_filter($map);
-                });
-            },
-        );
-
+        $grants = $this->grants($actor, $school)['campus'];
         if ($grants === []) {
             return [];
         }
@@ -257,11 +252,6 @@ class CapabilityResolver
         }
 
         return $result;
-    }
-
-    private static function campusCacheKey(User $actor, School $school): string
-    {
-        return "school:{$school->id}:campus-capabilities:user:{$actor->id}";
     }
 
     /**
@@ -393,8 +383,8 @@ class CapabilityResolver
     {
         Cache::forget("platform:capabilities:user:{$actor->id}");
         if ($school !== null) {
-            Cache::forget("school:{$school->id}:capabilities:user:{$actor->id}");
-            Cache::forget(self::campusCacheKey($actor, $school));
+            Cache::forget("school:{$school->id}:grants:user:{$actor->id}");
+            Cache::forget("school:{$school->id}:capabilities:user:{$actor->id}"); // the pre-ORG.7A key
         }
     }
 }
