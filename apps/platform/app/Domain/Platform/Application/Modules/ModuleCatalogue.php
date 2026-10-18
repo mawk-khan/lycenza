@@ -95,7 +95,7 @@ final class ModuleCatalogue
      */
     public const RESTRICTIONS = [
         'guardian_portal' => 'Production-refused until POR-L1 (PortalAvailability, ADR 0070).',
-        'examinations' => 'StudentMark entry is production-refused (StudentMarkAvailability, ADR 0068 §27).',
+        'examinations' => 'Mark entry is production-refused in code (ADR 0068 §27).',
         'attendance' => 'Teacher attendance in production needs the TCH-L1 conditions (ADR 0063 §42).',
         'automation' => 'Also behind the automation.rules feature flag; both are required.',
     ];

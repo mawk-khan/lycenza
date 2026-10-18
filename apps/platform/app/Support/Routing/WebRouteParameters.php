@@ -25,9 +25,10 @@ final class WebRouteParameters
 
     /** Parameters that are not UUIDs, each with its own route-level rule or controller check. */
     public const NOT_UUID = [
-        'action',          // platform School lifecycle action (whereIn)
+        'action',          // platform School lifecycle / module action (whereIn)
         'check',           // Data Health check code (controller 404; must not 404 before school-context)
         'identifierType',  // statutory identifier type
+        'module',          // ORG.5 module key (where [a-z_]{1,64}; the service refuses unknown keys)
         'role',            // role key (where)
         'ruleType',        // Automation rule type key
         'selector',        // account-recovery / activation selector (where)
