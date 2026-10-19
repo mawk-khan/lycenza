@@ -2842,3 +2842,29 @@ The exit date is that `ends_on`. Every other state is unresolved and kept.
   The current operational Campus stays the application rule of ADR 0076
   §35.2 (the active enrollment in the School's active year). It is
   recorded, not built.
+
+## Current placement and operational Campus (ORG.7D-2, 2026-10-19, ADR 0076 §38)
+
+- **Student identity is School-wide.** `students` has no Campus, and the
+  architecture guard pins it. The Campus belongs to the Enrollment.
+- **Current placement:** the `active` Enrollment in the School's `active`
+  AcademicYear.
+  - It is defined once, by
+    `StudentEnrollmentReadService::constrainToCurrentPlacement()`, and
+    `currentFor()`, `currentForMany()` and `currentStudentIdsIn()` use it.
+  - It is never the newest row or the latest year.
+- **Operational Campus** (`StudentOperationalCampusResolver`): the current
+  placement's Campus, only while the Student and the Campus are both
+  active. Otherwise there is none, though the placement is still reported
+  as context.
+  - It is data, never authority.
+  - Switching the active year changes it with no Enrollment written.
+- **History is not current.** Year-specific, as-of, roster and
+  finance-attribution readers stay separate (see ADR 0076 §38.3), and
+  written records keep their stored Campus.
+- **Purpose lookup** (`StudentPurposeLookup`): internal infrastructure for
+  an already-authorized domain.
+  - Input: a resolved `CampusScope`. Output: `id`, `displayName` and
+    `studentNumber` only.
+  - It needs no `students.view` and has no route.
+  - No consuming domain uses it yet.

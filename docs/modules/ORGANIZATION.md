@@ -185,3 +185,9 @@ School setting, a role, a navigation toggle or a commercial plan.
       teaching assignments).
   - **Navigation gap (owner decision):** a Campus-only Principal reaches
     an Examination's papers by link, not from the Examinations list.
+- **ORG.7D-2 (ADR 0076 §38)** added the Student Campus foundation behind
+  the scenes. A Student's current Campus is their current-year class's
+  Campus, and future Campus-scoped areas (Library, Hostel, Transport,
+  Canteen, Admissions) will pick Students only from their staff's Campuses.
+  None of those areas uses it yet. A Campus grant still gives no access to
+  Student profiles. Exam papers will get their own Campus-safe hub later.

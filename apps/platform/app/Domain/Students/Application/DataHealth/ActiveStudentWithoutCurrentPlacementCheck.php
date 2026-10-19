@@ -3,6 +3,7 @@
 namespace App\Domain\Students\Application\DataHealth;
 
 use App\Domain\AcademicStructure\Application\CurrentAcademicYearResolver;
+use App\Domain\Students\Application\StudentEnrollmentReadService;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\School;
 use App\Support\DataHealth\DataHealthCheck;
@@ -26,7 +27,10 @@ class ActiveStudentWithoutCurrentPlacementCheck implements DataHealthCheck
 {
     use PresentsStudentFindings;
 
-    public function __construct(private readonly CurrentAcademicYearResolver $years) {}
+    public function __construct(
+        private readonly CurrentAcademicYearResolver $years,
+        private readonly StudentEnrollmentReadService $placements,
+    ) {}
 
     public function definition(): D
     {
@@ -79,7 +83,7 @@ class ActiveStudentWithoutCurrentPlacementCheck implements DataHealthCheck
         return Student::query()
             ->where('school_id', $school->id)
             ->where('status', 'active')
-            ->whereDoesntHave('enrollments', fn ($q) => $q->where('school_id', $school->id)
-                ->where('academic_year_id', $yearId)->where('status', 'active'));
+            // ORG.7D-2: the canonical current-placement rule, not a copy of it.
+            ->whereDoesntHave('enrollments', fn ($q) => $this->placements->constrainToCurrentPlacement($q->where('school_id', $school->id), $yearId));
     }
 }

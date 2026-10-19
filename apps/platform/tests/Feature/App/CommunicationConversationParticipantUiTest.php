@@ -163,7 +163,8 @@ class CommunicationConversationParticipantUiTest extends TestCase
         $this->createConversationPolicy($school, ['allow_student_conversations' => true]);
         $actor = $this->createUserWithCapabilities($school, ['communications.send', 'communications.conversations.students']);
         $student = $this->createStudent($school, ['first_name' => 'Sara', 'last_name' => 'Khan']);
-        $year = $this->createAcademicYear($school);
+        // ORG.7D-2: "current" is the active Enrollment in the School's ACTIVE year.
+        $year = $this->createAcademicYear($school, ['status' => 'active']);
         $campus = $this->createCampus($school);
         $gradeLevel = $this->createGradeLevel($school, ['name' => 'Grade 5']);
         $section = $this->createSection($year, $campus, $gradeLevel, ['name' => 'A']);

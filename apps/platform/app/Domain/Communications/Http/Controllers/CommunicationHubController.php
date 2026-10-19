@@ -16,6 +16,7 @@ use App\Domain\Communications\Infrastructure\CommunicationThread;
 use App\Domain\Communications\Infrastructure\CommunicationThreadParticipant;
 use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Domain\Identity\Application\AccountLinkService;
+use App\Domain\Students\Application\StudentEnrollmentReadService;
 use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Models\SchoolMembership;
@@ -218,9 +219,12 @@ class CommunicationHubController extends Controller
      * enrollment history, and never any field beyond Grade/Section name
      * (brief §25 -- a narrow DTO, not a Student model serialization).
      * `accountLinked` mirrors searchGuardianParticipants()'s identical
-     * reasoning.
+     * reasoning. ORG.7D-2 (ADR 0076 §38): "current" is the Students-owned
+     * current placement (the active Enrollment in the School's active
+     * AcademicYear) -- before, any active row of any year was taken, which
+     * after a rollover could label a Student with last year's class.
      */
-    public function searchStudentParticipants(Request $request, TenantContext $context, AccountLinkService $accountLinks): JsonResponse
+    public function searchStudentParticipants(Request $request, TenantContext $context, AccountLinkService $accountLinks, StudentEnrollmentReadService $placements): JsonResponse
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('communications.conversations.students', $school);
@@ -234,18 +238,16 @@ class CommunicationHubController extends Controller
                 ->where(fn ($query) => $query
                     ->whereRaw("(first_name || ' ' || coalesce(last_name, '')) ilike ?", ["%{$q}%"])
                     ->orWhere('student_number', 'ilike', "%{$q}%")))
-            ->with(['enrollments' => fn ($query) => $query
-                ->where('status', 'active')
-                ->with(['gradeLevel:id,name', 'section:id,name'])])
             ->orderBy('first_name')
             ->limit(20)
             ->get(['id', 'first_name', 'last_name', 'student_number']);
 
         $links = $accountLinks->activeLinksForStudents($school, $students->pluck('id')->all());
+        $current = $placements->currentForMany($school, $students->pluck('id')->map(fn ($id) => (string) $id)->all());
 
         return response()->json([
-            'students' => $students->map(function (Student $s) use ($links) {
-                $enrollment = $s->enrollments->first();
+            'students' => $students->map(function (Student $s) use ($links, $current) {
+                $enrollment = $current->get($s->id);
 
                 return [
                     'id' => $s->id,

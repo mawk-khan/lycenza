@@ -7,7 +7,9 @@ use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Models\School;
+use Illuminate\Contracts\Database\Query\Builder as QueryBuilder;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
@@ -38,10 +40,37 @@ use Illuminate\Database\Eloquent\Collection;
  * Never mutates state -- no "fix stale placement while reading," no
  * automatic status completion, no automatic rollover, no lazy roll-
  * number correction. Reads are reads.
+ *
+ * ORG.7D-2 (ADR 0076 §38): THE definition of a CURRENT placement is
+ * constrainToCurrentPlacement() -- the `active` Enrollment in the School's
+ * `active` AcademicYear (at most one per Student: the
+ * `student_enrollments_one_active_per_student_year` partial unique index;
+ * at most one active year per School: `academic_years_one_active_per_school`).
+ * Never the newest row, the latest year or a request Campus. The operational
+ * Campus built on it lives in StudentOperationalCampusResolver. Year-
+ * specific, as-of-date, roster and finance-attribution readers are
+ * deliberately separate (campusAttribution(), the roster and fee-target
+ * readers) and never substituted for "current".
  */
 class StudentEnrollmentReadService
 {
     public function __construct(private readonly CurrentAcademicYearResolver $academicYearResolver) {}
+
+    /**
+     * ORG.7D-2: the single SQL definition of a current placement for the
+     * given (the School's active) AcademicYear. Every "current enrollment"
+     * read -- here, in StudentOperationalCampusResolver and in the Data Health
+     * placement check -- goes through it.
+     *
+     * @template TQuery of Builder|QueryBuilder
+     *
+     * @param  TQuery  $enrollments  a student_enrollments query
+     * @return TQuery
+     */
+    public function constrainToCurrentPlacement(Builder|QueryBuilder $enrollments, string $academicYearId, string $table = 'student_enrollments'): Builder|QueryBuilder
+    {
+        return $enrollments->where("{$table}.academic_year_id", $academicYearId)->where("{$table}.status", 'active');
+    }
 
     /**
      * The `active` Enrollment for a Student within one AcademicYear --
@@ -60,11 +89,9 @@ class StudentEnrollmentReadService
             return null;
         }
 
-        return StudentEnrollment::query()
+        return $this->constrainToCurrentPlacement(StudentEnrollment::query(), $academicYear->id)
             ->with(['academicYear', 'campus', 'gradeLevel', 'section'])
             ->where('student_id', $student->id)
-            ->where('academic_year_id', $academicYear->id)
-            ->where('status', 'active')
             ->first();
     }
 
@@ -88,13 +115,33 @@ class StudentEnrollmentReadService
             return new Collection;
         }
 
-        return StudentEnrollment::query()
+        return $this->constrainToCurrentPlacement(StudentEnrollment::query(), $academicYear->id)
             ->with(['gradeLevel', 'section', 'campus'])
             ->whereIn('student_id', $studentIds)
-            ->where('academic_year_id', $academicYear->id)
-            ->where('status', 'active')
             ->get()
             ->keyBy('student_id');
+    }
+
+    /**
+     * ORG.7D-2: the Students currently placed in a Grade Level and/or
+     * Section -- current placement only (constrainToCurrentPlacement()), for
+     * a consumer's "in this class now" filter (e.g. Outstanding fees), so it
+     * never reads Enrollments itself. Null when the School has no active
+     * AcademicYear (no current placement exists). Authorization-neutral.
+     *
+     * @return list<string>|null
+     */
+    public function currentStudentIdsIn(School $school, ?string $gradeLevelId, ?string $sectionId): ?array
+    {
+        $academicYear = $this->academicYearResolver->tryResolve($school);
+        if ($academicYear === null) {
+            return null;
+        }
+
+        return $this->constrainToCurrentPlacement(StudentEnrollment::query(), $academicYear->id)
+            ->when($gradeLevelId !== null, fn ($q) => $q->where('grade_level_id', $gradeLevelId))
+            ->when($sectionId !== null, fn ($q) => $q->where('section_id', $sectionId))
+            ->pluck('student_id')->map(fn ($id) => (string) $id)->values()->all();
     }
 
     /**

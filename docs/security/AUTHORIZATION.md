@@ -855,6 +855,16 @@ whole-School supersedes. A selected or current Campus
   High-risk families need recorded owner approval: sensitive HR, payroll,
   finance, approvals, and access or School administration. Marks are not
   adoptable.
+- **Student Campus (ORG.7D-2, ADR 0076 §38).**
+  - **Identity:** a Student is School-wide.
+  - **Operational Campus:** the active-year placement's active Campus
+    (`StudentOperationalCampusResolver`). It is data, never authority.
+  - **Lookup:** a domain that needs to pick Students for a Campus-scoped
+    purpose calls `StudentPurposeLookup` with ITS OWN resolved
+    `CampusScope`, getting back `id`, `displayName` and `studentNumber`.
+    That lookup is never `students.view`; there is no generic Campus
+    Student search or directory.
+  - **Profiles:** Student profile access is not Campus-scoped.
 - **A whole-School hub that also opens on an adopted key**
   (ORG.7D-1, e.g. Data health) is declared in
   `CampusScopeCatalogue::WHOLE_SCHOOL_HUBS`. Only its own controller may

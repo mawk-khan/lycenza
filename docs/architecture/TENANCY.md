@@ -446,6 +446,11 @@ context is set exactly as for a first dispatch (rule 21).
   (exists, same School, active). A Section or Subject Offering on an
   inactive Campus is never reactivated. This is data validity, never
   authorization. Rows already on an inactive Campus are kept.
+- **A Student's Campus is derived, never stored (ORG.7D-2).** `students`
+  stays School-scoped with no Campus. The operational Campus is the
+  current placement's (active Enrollment in the School's single active
+  year, on an active Campus), resolved per call inside the School's
+  context (ADR 0076 §38).
 - **History keeps the Campus it was written on (ORG.7D-1).** An attendance
   register, a curriculum delivery and an examination paper store their
   Campus, FK-bound to their parents. Authority over them follows that

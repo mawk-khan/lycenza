@@ -212,6 +212,27 @@ class CommunicationConversationParticipantHubTest extends TestCase
         $this->get('/app/communications/participants/search/students')->assertForbidden();
     }
 
+    #[Test]
+    public function the_student_search_labels_the_current_placement_never_another_years(): void
+    {
+        // ORG.7D-2 (ADR 0076 §38): after a rollover a Student has an active row
+        // in last year AND this year; the label is this (the active) year's.
+        $school = $this->createSchool();
+        $campus = $this->createCampus($school);
+        $grade = $this->createGradeLevel($school, ['name' => 'Grade 6']);
+        $last = $this->createAcademicYear($school, ['code' => 'L2526', 'name' => '2025-26', 'status' => 'closed', 'starts_on' => '2025-06-01', 'ends_on' => '2026-03-31']);
+        $this->createAcademicYear($school, ['code' => 'D2728', 'name' => '2027-28', 'status' => 'draft', 'starts_on' => '2027-06-01', 'ends_on' => '2028-03-31']);
+        $now = $this->createAcademicYear($school, ['code' => 'N2627', 'name' => '2026-27', 'status' => 'active', 'starts_on' => '2026-06-01', 'ends_on' => '2027-03-31']);
+        $student = $this->createStudent($school, ['first_name' => 'Rollover', 'status' => 'active']);
+        $this->createStudentEnrollment($student, $this->createSection($last, $campus, $grade, ['name' => 'Old', 'code' => 'OLD']), ['status' => 'active']);
+        $this->createStudentEnrollment($student, $this->createSection($now, $campus, $grade, ['name' => 'Now', 'code' => 'NOW']), ['status' => 'active']);
+        $actor = $this->createUserWithCapabilities($school, ['communications.conversations.students']);
+        $this->activate($actor, $school);
+
+        $this->getJson('/app/communications/participants/search/students?q=Rollover')->assertOk()
+            ->assertJsonPath('students.0.gradeSectionLabel', 'Grade 6 - Now');
+    }
+
     // --- Privacy ---------------------------------------------------------------
 
     #[Test]

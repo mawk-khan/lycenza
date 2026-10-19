@@ -11,7 +11,6 @@ use App\Domain\Payments\Application\Collections\OutstandingFeesReadService;
 use App\Domain\Students\Application\StudentEnrollmentReadService;
 use App\Domain\Students\Application\StudentSearch;
 use App\Domain\Students\Infrastructure\Student;
-use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Support\Authorization\AuthorizesCapability;
@@ -74,13 +73,13 @@ class OutstandingFeesController extends Controller
                 ->tap(fn ($q) => StudentSearch::anyField($q, $search))
                 ->pluck('id')->map(fn ($id) => (string) $id)->all();
         }
+        // The Section filter's options are the active year's Sections.
         $activeYear = AcademicYear::query()->where('status', 'active')->first();
-        if (($gradeId !== null || $sectionId !== null) && $activeYear !== null) {
-            $inClass = StudentEnrollment::query()
-                ->where('academic_year_id', $activeYear->id)->where('status', 'active')
-                ->when($gradeId !== null, fn ($q) => $q->where('grade_level_id', $gradeId))
-                ->when($sectionId !== null, fn ($q) => $q->where('section_id', $sectionId))
-                ->pluck('student_id')->map(fn ($id) => (string) $id)->all();
+        // ORG.7D-2 (ADR 0076 §38): "in this class now" is the Students-owned
+        // current placement (unchanged rule; no active year = no filter, as
+        // before). Charge Campus stays charge-year attribution below.
+        $inClass = $gradeId !== null || $sectionId !== null ? $placements->currentStudentIdsIn($school, $gradeId, $sectionId) : null;
+        if ($inClass !== null) {
             $studentIds = $studentIds === null ? $inClass : array_values(array_intersect($studentIds, $inClass));
         }
 

@@ -2945,3 +2945,162 @@ Accepted residuals (LOW, declared):
   never cross a Campus.
 - **Moved classes.** A class moved onto an in-scope Campus shows its
   earlier register as already taken.
+
+## 38. ORG.7D-2 — Student Campus foundation (as built, 2026-10-19)
+
+Owner authorization: ORG.7D-2 only (decisions D2-1 to D2-10). Baseline
+`origin/main` = `0188caec` (ORG.7D-1). No consuming domain was
+Campus-adopted, no SIS feature changed, and LC-5–LC-10 remain paused.
+
+    Student identity       = School-wide (no Campus on `students`)
+    operational Campus     = the current active-year placement's active Campus
+    historical Campus      != current Campus
+    Campus Student lookup  != students.view
+
+**38.1 The canonical rule.**
+- **Current placement.** The single SQL definition is
+  `StudentEnrollmentReadService::constrainToCurrentPlacement()`: the
+  `active` Enrollment in the School's `active` AcademicYear.
+  - `currentFor()` and `currentForMany()` use it, and so does every new
+    reader.
+  - Never the newest row, the latest or last-active year, an Enrollment's
+    own year, or a request or selected Campus.
+- **Operational Campus.** `StudentOperationalCampusResolver` (Students)
+  returns a `StudentOperationalCampus` value that keeps two facts apart:
+  - `hasCurrentPlacement()`: the current placement exists;
+  - `operationalCampusId()`: that placement's Campus, only while BOTH the
+    Student and the Campus are `active`.
+- **Data, never authority.** One query for many Students; fresh on every
+  call (no cache); inside the target School's `TenantContext`.
+- **Integrity it relies on (database-enforced, pinned):**
+  - `academic_years_one_active_per_school`: at most one active year;
+  - `student_enrollments_one_active_per_student_year`: at most one current
+    placement;
+  - `student_enrollments_section_context_fk` (ORG.7D-0): the placement's
+    Campus is its Section's.
+  - Zero violations exist in DDEV development and test data.
+- **Unchanged.** The status columns still have no CHECK (R8 recorded); the
+  resolver treats only the exact value `active` as active.
+
+**38.2 Behaviour pinned (`StudentOperationalCampusTest`).**
+- **Active year decides:**
+  - a prior-year placement never decides the current Campus;
+  - a draft/future-year placement never does either;
+  - "latest year" is not current.
+- **Year switch.** Switching the School's active year moves the current
+  Campus with no Enrollment rewritten.
+- **No active year:** no current Campus and no lookup candidates.
+- **Leaver:** the placement is kept as context, but there is no
+  operational Campus.
+- **Inactive Campus:** the placement is kept, the Campus is not
+  operational, and it is eligible again on reactivation.
+- **Finance attribution.** `campusAttribution()` (charge-year attribution)
+  is separate and still answers for a leaver.
+
+**38.3 Readers.** Inventory and outcome:
+- **Current placement (A):**
+  - `currentFor()` and `currentForMany()` stay canonical.
+  - **Normalized:**
+    - the Communication Hub Student picker label took any active row of
+      any year, so after a rollover it could show last year's class; it now
+      uses `currentForMany()`;
+    - Outstanding fees' "in this class now" filter queried Enrollments in a
+      Finance controller; it now uses `currentStudentIdsIn()`, with the same
+      rule;
+    - the Data Health "active Student without current placement" check
+      re-implemented the rule; it now uses the predicate.
+- **Year-specific (B), retained:**
+  - Fees target `currentForYear()` and run candidates;
+  - Elective candidate and transfer readers;
+  - `SubjectOfferingRosterReadService`;
+  - the Communications Grade/Section audience resolvers (a named cohort);
+  - rollover and closed-year services;
+  - Data Health closed-year and inactive-Section checks.
+- **As-of date (C), retained:** `SubjectOfferingEligibilityReadService`.
+- **Finance attribution (D), retained:** `campusAttribution()`.
+- **Roster (E), retained:** `StudentEnrollmentRosterReadService::membersAsOf()`.
+- **Year-scoped history, retained:** the Guardian attendance view (this
+  year's records, joined by the record's own Enrollment).
+
+**38.4 Guard (`StudentCampusFoundationArchitectureTest`).**
+- **One definition.** A class that resolves the active AcademicYear and
+  reads Enrollments must use `constrainToCurrentPlacement()`, or be a
+  declared year-scoped history reader.
+- **Outside Students,** only ten declared readers touch Enrollment
+  storage, each with a non-"current" reason. Comments are stripped before
+  matching.
+- **Identity.** `students` has no `campus_id`, `current_campus_id` or
+  `operational_campus_id`.
+- **No exposure.** No route or controller references the lookup or the
+  resolver.
+- **DTO.** The lookup DTO is exactly `id`, `displayName`, `studentNumber`.
+
+**38.5 Purpose-limited lookup.** `StudentPurposeLookup::search(School,
+CampusScope, term, limit)` is application infrastructure only.
+- **Caller flow:** domain capability → `CampusScopeResolver` for that
+  capability → the resolved `CampusScope` → lookup. Only the resolver builds
+  a `CampusScope`, so a request Campus id cannot select candidates.
+- **Candidates.** Current operational Students only, filtered in SQL in one
+  bounded query (at most 50) with each Student at most once:
+  - whole School: any operational Campus;
+  - Campus set: operational Campus in the set;
+  - none, or no active year: nothing.
+- **Search:** name words and Student number only, through
+  `StudentSearch::anyField()` (LIKE escaped).
+- **Result:** `StudentLookupCandidate` (`id`, `displayName`,
+  `studentNumber`), deterministically ordered.
+- **Exposure:** no HTTP route, and no generic Campus Student directory or
+  UI.
+- **Query plan:** it uses `student_enrollments_one_active_per_student_year`
+  and the Campus index. No new index and no migration.
+
+**38.6 Unchanged.**
+- `students.*` and `enrollments.*` capabilities and role templates (a
+  principal granted for one Campus still gets no Student or Enrollment
+  access; pinned).
+- `TeachingOwnership` and `GuardianStudentScope`.
+- Fees and Payments semantics, charge-year attribution and every
+  historical record's stored Campus.
+- **Jobs:** none implement current Student Campus. A future job resolves at
+  execution time and never carries a resolved Campus as authority.
+
+**38.7 Owner decisions recorded.**
+- **Exam papers.** A Campus-scoped `examinations.papers.view` holder is
+  NOT shown the whole-School Examination list. The future UX is a
+  dedicated Campus-safe Exam Papers hub filtered by paper Campus authority
+  (academic UX follow-up). The gap stays open.
+- **Accepted LOW residuals:**
+  - School-wide teacher/room slot uniqueness can reveal a generic
+    "unavailable";
+  - historical Attendance uniqueness can reveal that a register exists
+    after a class moved Campuses.
+  - Campus-scoped responses stay generic and never disclose another
+    Campus, record id, location or out-of-scope person.
+
+**38.8 Security review (ORG.7D-2).** Independent adversarial review: no
+HIGH finding. Findings fixed before publication:
+- **MEDIUM — latent hydration hazard.** `restrictToOperationalCampus()`
+  added joins without fixing the select, so a future `select *` caller
+  could have hydrated Students with Campus columns. It is now an EXISTS
+  predicate (no join); a `select *` test pins that real Student rows come
+  back.
+- **LOW–MEDIUM — guard false negatives.** The patterns now also catch:
+  - `StudentEnrollment::where/find/...`;
+  - `->enrollments` property access;
+  - string relation loads (`with/load/whereHas('enrollments...')`);
+  - `AcademicYear::where('status','active')`.
+  - Lookup/resolver use is now refused anywhere outside Students, not only
+    in HTTP layers.
+  - A self-test proves the patterns match the pre-ORG.7D-2 ad-hoc readers.
+- **LOW — docblocks.** They now name the real guard
+  (`StudentCampusFoundationArchitectureTest`) and the
+  `CampusScopeAdoptionArchitectureTest` rule that app code never builds a
+  `CampusScope` itself.
+
+Recorded, not changed:
+- `currentForMany()` and `currentStudentIdsIn()` rely on the caller's
+  ambient TenantContext like the rest of the read service; a mismatch
+  fails closed.
+- The Communication Hub search's unescaped LIKE stays R8.
+- `CampusScope`'s public constructors predate ORG.7D-2 and are guarded
+  only by that architecture rule.
