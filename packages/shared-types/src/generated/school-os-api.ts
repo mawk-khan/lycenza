@@ -27523,7 +27523,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Student not eligible/already resident, or the Bed is not available/already occupied (HOSTEL_STUDENT_NOT_ELIGIBLE / HOSTEL_STUDENT_ALREADY_RESIDENT / HOSTEL_BED_NOT_AVAILABLE / HOSTEL_BED_ALREADY_OCCUPIED). */
+            /** @description Student not eligible/already resident, or the Bed is not available/already occupied (HOSTEL_STUDENT_NOT_ELIGIBLE / HOSTEL_STUDENT_ALREADY_RESIDENT / HOSTEL_BED_NOT_AVAILABLE / HOSTEL_BED_ALREADY_OCCUPIED). For a Campus-scoped actor (ORG.7D-3, ADR 0076 §39) every Student refusal -- unknown, ineligible, not current on the Bed's Campus, already resident -- is the one generic HOSTEL_RESIDENCY_UNAVAILABLE. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -28753,7 +28753,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description CANTEEN_STUDENT_NOT_FOUND, CANTEEN_OUTLET_NOT_FOUND, or CANTEEN_ITEM_NOT_FOUND. */
+            /** @description CANTEEN_STUDENT_NOT_FOUND, CANTEEN_OUTLET_NOT_FOUND, or CANTEEN_ITEM_NOT_FOUND. For a Campus-scoped actor (ORG.7D-3, ADR 0076 §39) an Outlet outside their Campuses (or School-wide) is CANTEEN_OUTLET_NOT_FOUND, and a Student not current on the Outlet's Campus is CANTEEN_STUDENT_NOT_FOUND, identical to an unknown id. */
             404: {
                 headers: {
                     [name: string]: unknown;

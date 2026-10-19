@@ -90,7 +90,7 @@ class HostelController extends Controller
     {
         $this->authorizeCapability('hostel.directory.manage', $school);
 
-        $model = Hostel::query()->findOrFail($hostel);
+        Hostel::query()->findOrFail($hostel);
 
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
@@ -102,14 +102,31 @@ class HostelController extends Controller
             $this->assertCampusBelongsToSchool($school, $validated['campus_id']);
         }
 
-        $before = $model->only(array_keys($validated));
-        $model->update($validated);
+        $model = DB::transaction(function () use ($school, $hostel, $validated, $request) {
+            // ORG.7D-3 (ADR 0076 §39): a Hostel's Campus is the Campus of every
+            // Room, Bed and residency in it, so it cannot change once the Hostel
+            // has Rooms -- history keeps the Campus it was recorded on. The row
+            // lock serializes this check against Room creation, which takes the
+            // Hostel row FOR SHARE.
+            $model = Hostel::query()->lockForUpdate()->findOrFail($hostel);
+            $campusChanges = array_key_exists('campus_id', $validated) && $validated['campus_id'] !== $model->campus_id;
+            if ($campusChanges && $model->rooms()->exists()) {
+                throw ValidationException::withMessages(['campus_id' => ['A Hostel\'s Campus cannot change once it has Rooms.']]);
+            }
 
-        app(AuditRecorder::class)->school($school, 'hostel.updated', actor: $request->user(), subject: $model, metadata: [
-            'hostelId' => $model->id,
-            'statusBefore' => $before['status'] ?? null,
-            'statusAfter' => $validated['status'] ?? null,
-        ]);
+            $before = $model->only(['status', 'campus_id']);
+            $model->update($validated);
+
+            app(AuditRecorder::class)->school($school, 'hostel.updated', actor: $request->user(), subject: $model, metadata: [
+                'hostelId' => $model->id,
+                'statusBefore' => $before['status'],
+                'statusAfter' => $validated['status'] ?? null,
+                'campusBefore' => $campusChanges ? $before['campus_id'] : null,
+                'campusAfter' => $campusChanges ? $validated['campus_id'] : null,
+            ]);
+
+            return $model;
+        });
 
         return response()->json(['data' => $this->present($model->refresh())]);
     }

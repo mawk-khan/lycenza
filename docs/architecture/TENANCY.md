@@ -455,6 +455,12 @@ context is set exactly as for a first dispatch (rule 21).
   register, a curriculum delivery and an examination paper store their
   Campus, FK-bound to their parents. Authority over them follows that
   stored Campus, never a current one (ADR 0076 §37.5).
+- **Operational Campus is a write-time check, never stored authority
+  (ORG.7D-3).** A Hostel residency or Canteen order placed by a
+  Campus-scoped actor re-checks the Student's current operational Campus
+  inside the write. The record keeps its Hostel's or Outlet's Campus; it
+  never copies a Student Campus. A Hostel's Campus cannot change once it
+  has Rooms (ADR 0076 §39.2).
 
 ## What is NOT yet implemented (Phase 0B honesty note)
 

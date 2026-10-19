@@ -61,6 +61,8 @@ class HostelRoomController extends Controller
         ]);
 
         $room = DB::transaction(function () use ($school, $hostelModel, $validated, $request) {
+            // ORG.7D-3: FOR SHARE on the Hostel serializes against a Campus change.
+            Hostel::query()->whereKey($hostelModel->id)->sharedLock()->firstOrFail();
             $room = HostelRoom::query()->create([
                 ...$validated,
                 'school_id' => $school->id,

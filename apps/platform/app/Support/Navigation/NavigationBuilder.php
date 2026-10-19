@@ -162,12 +162,17 @@ final class NavigationBuilder
         return $visible;
     }
 
-    /** ORG.7D-1: every capability the entry names is Campus-adopted. */
+    /**
+     * ORG.7D-1: every capability the entry names is Campus-adopted -- and
+     * (ORG.7D-3) its destination is not a declared whole-School-only
+     * operation, which a Campus grant can never open.
+     */
     private function campusAware(NavigationEntry $entry): bool
     {
         $named = [...$entry->all, ...$entry->any];
 
-        return $named !== [] && CampusScopeCatalogue::adoptedAmong($named) === $named;
+        return $named !== [] && CampusScopeCatalogue::adoptedAmong($named) === $named
+            && ! array_key_exists($entry->routeName, CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS);
     }
 
     /** @param  list<string>  $held */

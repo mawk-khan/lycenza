@@ -54,6 +54,17 @@ final class StudentOperationalCampusResolver
     }
 
     /**
+     * ORG.7D-3 (ADR 0076 §39): the write-time re-check a consuming domain runs
+     * before creating NEW operational work for a Student on a Campus -- true
+     * only while the Student is a current operational candidate ON that
+     * Campus, resolved now, never from an earlier picker answer.
+     */
+    public function isOperationalOn(School $school, string $studentId, string $campusId): bool
+    {
+        return $this->for($school, $studentId)->operationalCampusId() === $campusId;
+    }
+
+    /**
      * One query for every Student given, whatever their enrollment history.
      * A Student of another School (or an unknown id) is absent.
      *

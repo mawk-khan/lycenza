@@ -136,18 +136,29 @@ class StudentCampusFoundationArchitectureTest extends TestCase
         }
     }
 
+    /**
+     * ORG.7D-3 (ADR 0076 §39): the declared consumers -- each a domain access
+     * class or write guard behind its OWN Campus-adopted capability. Never a
+     * route, a controller or a generic Student endpoint.
+     */
+    private const CONSUMERS = [
+        'app/Domain/Hostel/Application/HostelResidencyAccess.php',
+        'app/Domain/Hostel/Application/HostelResidencyCampusGuard.php',
+        'app/Domain/Canteen/Application/CanteenOrderAccess.php',
+        'app/Domain/Canteen/Application/CanteenOrderCampusGuard.php',
+    ];
+
     #[Test]
     public function the_purpose_lookup_is_internal_and_minimal(): void
     {
-        // ORG.7D-2 adopts no consumer: nothing outside Students (no route,
+        // Nothing outside Students and the declared domain consumers (no route,
         // controller or other module) references the lookup or the resolver.
-        // A consuming domain's own authorized endpoint adds itself here later.
         foreach ($this->sources('routes', 'app') as $path => $code) {
-            if (str_starts_with($path, 'app/Domain/Students/')) {
+            if (str_starts_with($path, 'app/Domain/Students/') || in_array($path, self::CONSUMERS, true)) {
                 continue;
             }
             foreach (['StudentPurposeLookup', 'StudentOperationalCampusResolver', 'restrictToOperationalCampus'] as $class) {
-                $this->assertStringNotContainsString($class, $code, "{$path} uses {$class}: ORG.7D-2 creates no Student lookup endpoint or consumer (D2-8, §32).");
+                $this->assertStringNotContainsString($class, $code, "{$path} uses {$class}: only a declared domain access class or guard may consume the Student lookup (D2-8; ADR 0076 §39).");
             }
         }
 

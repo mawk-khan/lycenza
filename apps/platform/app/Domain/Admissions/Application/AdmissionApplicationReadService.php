@@ -3,6 +3,7 @@
 namespace App\Domain\Admissions\Application;
 
 use App\Domain\Admissions\Infrastructure\AdmissionApplication;
+use App\Support\Authorization\Campus\CampusScope;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 /**
@@ -14,8 +15,8 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
  * App\Domain\Students\Application\EnrollmentRolloverReadService's
  * exact shape: plain array `$filters`, `LengthAwarePaginator` return,
  * no DTOs/Resources, authorization-neutral (no `User`/`Gate` here -- a
- * future controller calls `authorizeCapability('admissions.view', ...)`
- * before ever reaching this class, root CLAUDE.md rule 24/this
+ * controller authorizes `admissions.view` (ORG.7D-3: through its Campus
+ * scope, AdmissionApplicationAccess) before ever reaching this class, root CLAUDE.md rule 24/this
  * checkpoint's item 32). Relies entirely on the ambient SchoolScope/
  * RLS already active on `admission_applications` -- never calls
  * `TenantContext::withSchool()` itself, matching both precedents'
@@ -65,9 +66,13 @@ class AdmissionApplicationReadService
      * `campus`/`gradeLevel` -- never Guardian/contact/converted-Student
      * relations, which stay `detail()`-only.
      *
+     * ORG.7D-3 (ADR 0076 §39): a $scope restricts the list, in SQL, to the
+     * applications of the actor's Campuses; a request `campus_id` filter then
+     * only narrows. Null keeps the whole-School list unchanged.
+     *
      * @param  array{status?: string, academic_year_id?: string, campus_id?: string, grade_level_id?: string, applicant_name?: string}  $filters
      */
-    public function directory(array $filters = [], int $perPage = self::DEFAULT_PER_PAGE): LengthAwarePaginator
+    public function directory(array $filters = [], int $perPage = self::DEFAULT_PER_PAGE, ?CampusScope $scope = null): LengthAwarePaginator
     {
         $perPage = max(1, min($perPage, self::MAX_PER_PAGE));
 
@@ -83,6 +88,7 @@ class AdmissionApplicationReadService
             ])
             ->orderByDesc('created_at')
             ->orderByDesc('id');
+        $scope?->restrict($query);
 
         if (isset($filters['status']) && in_array($filters['status'], self::KNOWN_STATUSES, true)) {
             $query->where('status', $filters['status']);
@@ -97,7 +103,8 @@ class AdmissionApplicationReadService
             $query->where('grade_level_id', $filters['grade_level_id']);
         }
         if (isset($filters['applicant_name']) && $filters['applicant_name'] !== '') {
-            $term = '%'.$filters['applicant_name'].'%';
+            // ORG.7D-3 (R8): LIKE wildcards in the input are literal.
+            $term = '%'.addcslashes($filters['applicant_name'], '%_\\').'%';
             $query->whereHas('applicant', fn ($q) => $q->where('first_name', 'ilike', $term)->orWhere('last_name', 'ilike', $term));
         }
 
@@ -122,10 +129,12 @@ class AdmissionApplicationReadService
      * (this checkpoint's item 22, proven directly by Phase 1D.2/1D.3's
      * own leakage tests and re-proven here).
      */
-    public function detail(string $applicationId): ?AdmissionApplication
+    public function detail(string $applicationId, ?CampusScope $scope = null): ?AdmissionApplication
     {
-        return AdmissionApplication::query()
-            ->with(['applicant', 'academicYear', 'campus', 'gradeLevel', 'convertedStudent', 'convertedStudentEnrollment'])
-            ->find($applicationId);
+        $query = AdmissionApplication::query()
+            ->with(['applicant', 'academicYear', 'campus', 'gradeLevel', 'convertedStudent', 'convertedStudentEnrollment']);
+
+        // ORG.7D-3: outside the actor's Campus scope resolves to null (404).
+        return ($scope === null ? $query : $scope->restrict($query))->find($applicationId);
     }
 }

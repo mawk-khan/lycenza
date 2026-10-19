@@ -368,14 +368,16 @@ class CanteenOrderApiTest extends TestCase
      * unchanged. CanteenStudentPickerAuthorityTest pins web/API agreement.
      */
     #[Test]
-    public function orders_view_alone_reaches_the_item_search_but_not_the_student_picker(): void
+    public function orders_view_alone_reaches_neither_order_entry_picker(): void
     {
+        // ORG.7D-3 (owner decision): both pickers serve order ENTRY, so both
+        // need canteen.orders.manage, on the API exactly as on the web.
         $school = $this->createSchool();
         $this->createStudent($school, ['first_name' => 'Ananya']);
         $user = $this->createUserWithCapabilities($school, ['canteen.orders.view']);
         $client = $this->withHeader('Authorization', 'Bearer '.$this->token($user));
 
         $client->getJson("/api/v1/schools/{$school->id}/canteen-orders/search/students?q=Ana")->assertForbidden();
-        $client->getJson("/api/v1/schools/{$school->id}/canteen-orders/search/items?q=te")->assertOk();
+        $client->getJson("/api/v1/schools/{$school->id}/canteen-orders/search/items?q=te")->assertForbidden();
     }
 }

@@ -68,7 +68,8 @@ class HostelFeeController extends Controller
 
     public function carryForward(Request $request, School $school, HostelFeeSelectionService $service): JsonResponse
     {
-        $this->authorizeCapability('hostel.residency.manage', $school);
+        // ORG.7D-3: authorized by the route's whole-School `capability:hostel.residency.manage`
+        // floor (a declared whole-School-only operation of a Campus-adopted key).
 
         $validated = $request->validate([
             'academic_year_id' => ['required', 'uuid'],
@@ -88,7 +89,7 @@ class HostelFeeController extends Controller
 
     public function residencyFeeSelections(School $school, string $hostelResidencyAssignment): JsonResponse
     {
-        $this->authorizeCapability('hostel.residency.view', $school);
+        // ORG.7D-3: authorized by the route's whole-School `capability:hostel.residency.view` floor.
 
         $residency = HostelResidencyAssignment::query()->findOrFail($hostelResidencyAssignment);
         $links = HostelFeeSelection::query()

@@ -5,6 +5,7 @@ namespace Tests\Feature\Authorization\Campus;
 use App\Domain\Identity\Application\Staff\StaffRoleCatalog;
 use App\Models\Role;
 use App\Support\Authorization\Campus\CampusScopeCatalogue;
+use App\Support\Authorization\CapabilityClasses;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -30,17 +31,26 @@ class CampusAdoptionImpactTest extends TestCase
      * curriculum.delivery.view/.manage, D1-E lms.content/.assignments
      * view/manage, D1-F examinations.papers.view/.manage -- only principal
      * is Campus-scopable; the teacher role's *.teacher keys and every
-     * examinations.marks.* key are not adopted).
+     * examinations.marks.* key are not adopted). ORG.7D-3: hostel_warden,
+     * principal and school_admin gain hostel.residency.view/.manage, and
+     * hostel_warden becomes Campus-scopable; canteen_operator, principal
+     * and school_admin gain canteen.orders.view/.manage, and canteen_operator
+     * becomes Campus-scopable; admissions_officer, principal and
+     * school_admin gain admissions.view/.manage (pre-conversion only), and
+     * admissions_officer becomes Campus-scopable.
      */
     private const HOLDERS = [
+        'admissions_officer' => ['admissions.manage', 'admissions.view'],
+        'canteen_operator' => ['canteen.orders.manage', 'canteen.orders.view'],
         'front_office' => ['visitor.visits.manage', 'visitor.visits.view'],
-        'principal' => ['attendance.manage', 'attendance.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'examinations.papers.manage', 'examinations.papers.view', 'inventory.stock.manage', 'inventory.stock.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'visitor.visits.manage', 'visitor.visits.view'],
-        'school_admin' => ['attendance.manage', 'attendance.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'examinations.papers.manage', 'examinations.papers.view', 'inventory.stock.manage', 'inventory.stock.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'visitor.visits.manage', 'visitor.visits.view'],
+        'hostel_warden' => ['hostel.residency.manage', 'hostel.residency.view'],
+        'principal' => ['admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'examinations.papers.manage', 'examinations.papers.view', 'hostel.residency.manage', 'hostel.residency.view', 'inventory.stock.manage', 'inventory.stock.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'visitor.visits.manage', 'visitor.visits.view'],
+        'school_admin' => ['admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'examinations.papers.manage', 'examinations.papers.view', 'hostel.residency.manage', 'hostel.residency.view', 'inventory.stock.manage', 'inventory.stock.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'visitor.visits.manage', 'visitor.visits.view'],
         'stores_officer' => ['inventory.stock.manage', 'inventory.stock.view'],
     ];
 
     /** The templates a whole-School administrator may grant for one Campus. */
-    private const CAMPUS_SCOPABLE = ['front_office', 'principal', 'stores_officer'];
+    private const CAMPUS_SCOPABLE = ['admissions_officer', 'canteen_operator', 'front_office', 'hostel_warden', 'principal', 'stores_officer'];
 
     /** Families that need an explicit owner approval (recorded here, by key) before adoption. */
     private const HIGH_RISK = [
@@ -48,8 +58,15 @@ class CampusAdoptionImpactTest extends TestCase
         'hr.employees.qualifications.', 'payroll.', 'finance.', 'school.', 'integrations.', 'capabilities.',
     ];
 
-    /** Owner-approved high-risk adoptions (none yet). */
-    private const OWNER_APPROVED_HIGH_RISK = [];
+    /** Capability classes (CapabilityClasses) that make an adopted key high-risk wherever its prefix is. */
+    private const HIGH_RISK_CLASSES = ['authority', 'financial'];
+
+    /**
+     * Owner-approved high-risk adoptions. ORG.7D-3 (ADR 0076 §39.3): the owner
+     * authorized Canteen order adoption; fulfilment's charge is Canteen's
+     * bounded side effect and confers no Fees, Payments or ledger authority.
+     */
+    private const OWNER_APPROVED_HIGH_RISK = ['canteen.orders.manage', 'canteen.orders.view'];
 
     /**
      * ORG.7D-1 (ADR 0076 §37, D1-3, D1-10, D1-6): never adoptable in this
@@ -61,8 +78,9 @@ class CampusAdoptionImpactTest extends TestCase
         'examinations.marks.', 'examinations.results.', 'examinations.report_cards.', 'results.', 'report_cards.', 'gradebook.',
         // School-wide academic configuration (D1-3, §9, §20).
         'academics.', 'syllabus.', 'timetable.periods.', 'examinations.definitions.', 'examinations.grade_scales.', 'school.campuses.',
-        // Student / SIS (ORG.7D-2).
-        'students.', 'enrollments.', 'guardians.', 'admissions.',
+        // Student / SIS (ORG.7D-2). Admissions PRE-CONVERSION was authorized
+        // by ORG.7D-3 (conversion and Applicant identity stay whole-School).
+        'students.', 'enrollments.', 'guardians.',
     ];
 
     #[Test]
@@ -94,7 +112,7 @@ class CampusAdoptionImpactTest extends TestCase
                 $this->assertStringStartsNotWith($prefix, $capability, "{$capability} belongs to a family ORG.7D-1 keeps whole-School or out of Campus scope (ADR 0076 §37).");
             }
             $this->assertStringEndsNotWith('.teacher', $capability, 'Teacher keys stay TeachingOwnership-scoped; a Campus scope never replaces ownership (D1-6).');
-            $highRisk = str_ends_with($capability, '.approve');
+            $highRisk = str_ends_with($capability, '.approve') || array_intersect(CapabilityClasses::of($capability), self::HIGH_RISK_CLASSES) !== [];
             foreach (self::HIGH_RISK as $prefix) {
                 $highRisk = $highRisk || str_starts_with($capability, $prefix);
             }

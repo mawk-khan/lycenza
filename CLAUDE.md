@@ -1340,3 +1340,9 @@ once several modules copy it.
          data validity, never authority.
        - Neither says which enrollment is current, and `students` has no
          Campus.
+     - **Picking a Student for a Campus purpose** (ORG.7D-3, §39): domain
+       capability → `CampusScopeResolver` → `StudentPurposeLookup` with that
+       scope (`id`, `displayName`, `studentNumber`), never `students.view`
+       or a generic Campus Student search. Every write re-checks, at write
+       time, that the Student is operational on the target Campus, and
+       refuses generically. A whole-School actor keeps the existing path.

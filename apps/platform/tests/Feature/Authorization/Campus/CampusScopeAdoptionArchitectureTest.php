@@ -68,6 +68,21 @@ class CampusScopeAdoptionArchitectureTest extends TestCase
             'controllers' => ['app/Domain/Examinations/Http/Controllers/ExaminationPaperController.php', 'app/Http/Controllers/App/Examinations/ExaminationPaperController.php'],
             'models' => ['ExaminationPaper::query(', 'SubjectOffering::query('],
         ],
+        'hostel' => [
+            'access' => 'app/Domain/Hostel/Application/HostelResidencyAccess.php',
+            'controllers' => ['app/Domain/Hostel/Http/Controllers/HostelResidencyAssignmentController.php', 'app/Http/Controllers/App/HostelResidencyController.php'],
+            'models' => ['HostelResidencyAssignment::query(', 'HostelBed::query(', 'Student::query('],
+        ],
+        'canteen' => [
+            'access' => 'app/Domain/Canteen/Application/CanteenOrderAccess.php',
+            'controllers' => ['app/Domain/Canteen/Http/Controllers/CanteenOrderController.php', 'app/Http/Controllers/App/Canteen/CanteenOrderController.php'],
+            'models' => ['CanteenOrder::query(', 'CanteenOutlet::query(', 'Student::query('],
+        ],
+        'admissions' => [
+            'access' => 'app/Domain/Admissions/Application/AdmissionApplicationAccess.php',
+            'controllers' => ['app/Domain/Admissions/Http/Controllers/AdmissionApplicationController.php', 'app/Http/Controllers/App/AdmissionApplicationController.php'],
+            'models' => ['AdmissionApplication::query('],
+        ],
     ];
 
     #[Test]
@@ -177,5 +192,36 @@ class CampusScopeAdoptionArchitectureTest extends TestCase
                 $this->assertDoesNotMatchRegularExpression('/->campus\(\)|campusId\(\)/', (string) file_get_contents(base_path($file)), "{$file} reads a context Campus");
             }
         }
+    }
+
+    /**
+     * ORG.7D-3 (ADR 0076 §39): a Student-placing write service takes its Campus
+     * write guard as an optional parameter (null = the whole-School path), so a
+     * caller that omits it would skip the Campus write check. Every call in app
+     * code passes the access class's writeGuard() explicitly.
+     */
+    #[Test]
+    public function every_student_placing_write_passes_its_campus_write_guard(): void
+    {
+        $services = [
+            'HostelResidencyService' => ['assign'],
+            'CanteenOrderService' => ['place', 'fulfill', 'cancel'],
+        ];
+        $calls = 0;
+        foreach (Finder::create()->files()->in(app_path())->name('*.php') as $file) {
+            $path = $file->getRelativePathname();
+            $source = $file->getContents();
+            foreach ($services as $service => $methods) {
+                if (str_ends_with($path, "/{$service}.php") || ! str_contains($source, $service)) {
+                    continue;
+                }
+                preg_match_all('/->('.implode('|', $methods).')\((?:[^;]*?)\);/s', $source, $matches);
+                foreach ($matches[0] as $call) {
+                    $calls++;
+                    $this->assertStringContainsString('writeGuard(', $call, "{$path} calls {$service} without its Campus write guard: {$call}");
+                }
+            }
+        }
+        $this->assertGreaterThanOrEqual(8, $calls, 'the scan found the adopted write calls');
     }
 }

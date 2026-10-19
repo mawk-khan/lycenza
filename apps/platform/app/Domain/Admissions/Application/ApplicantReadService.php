@@ -53,7 +53,8 @@ class ApplicantReadService
             ->orderBy('id');
 
         if ($name !== null && $name !== '') {
-            $term = '%'.$name.'%';
+            // ORG.7D-3 (R8): LIKE wildcards in the input are literal.
+            $term = '%'.addcslashes($name, '%_\\').'%';
             $query->where(fn ($q) => $q->where('first_name', 'ilike', $term)->orWhere('last_name', 'ilike', $term));
         }
 

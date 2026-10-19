@@ -5,6 +5,7 @@ namespace App\Domain\Hostel\Application;
 use App\Domain\Hostel\Application\Exceptions\BedAlreadyOccupiedException;
 use App\Domain\Hostel\Application\Exceptions\BedNotAvailableException;
 use App\Domain\Hostel\Application\Exceptions\ConcurrentResidencyConflictException;
+use App\Domain\Hostel\Application\Exceptions\HostelResidencyUnavailableException;
 use App\Domain\Hostel\Application\Exceptions\ResidencyAlreadyEndedException;
 use App\Domain\Hostel\Application\Exceptions\StudentAlreadyResidentException;
 use App\Domain\Hostel\Application\Exceptions\StudentNotEligibleException;
@@ -51,10 +52,10 @@ class HostelResidencyService
      * under real two-process concurrency in
      * tests/Feature/Hostel/HostelResidencyConcurrencyTest.php.
      */
-    public function assign(Student $student, HostelBed $bed, ?User $actor = null): HostelResidencyAssignment
+    public function assign(Student $student, HostelBed $bed, ?User $actor = null, ?HostelResidencyCampusGuard $guard = null): HostelResidencyAssignment
     {
         if (! $student->isActive()) {
-            throw new StudentNotEligibleException;
+            throw $guard !== null ? new HostelResidencyUnavailableException : new StudentNotEligibleException;
         }
 
         if (! $bed->isAvailableForAssignment()) {
@@ -62,7 +63,7 @@ class HostelResidencyService
         }
 
         try {
-            return DB::transaction(function () use ($student, $bed, $actor) {
+            return DB::transaction(function () use ($student, $bed, $actor, $guard) {
                 $lockedStudent = Student::query()
                     ->where('id', $student->id)
                     ->lockForUpdate()
@@ -73,13 +74,19 @@ class HostelResidencyService
                     ->lockForUpdate()
                     ->firstOrFail();
 
+                // ORG.7D-3 (ADR 0076 §39): a Campus-scoped actor's Campus and
+                // current-Student check, at write time, under these locks.
+                $guard?->beforeAssign($lockedStudent, $lockedBed);
+
                 if (
                     HostelResidencyAssignment::query()
                         ->where('student_id', $lockedStudent->id)
                         ->where('status', 'active')
                         ->exists()
                 ) {
-                    throw new StudentAlreadyResidentException;
+                    // A Campus-scoped actor never learns that (or where) the
+                    // Student already lives -- it may be another Campus.
+                    throw $guard !== null ? new HostelResidencyUnavailableException : new StudentAlreadyResidentException;
                 }
 
                 if (
@@ -113,7 +120,7 @@ class HostelResidencyService
                 return $assignment;
             });
         } catch (UniqueConstraintViolationException) {
-            throw new ConcurrentResidencyConflictException;
+            throw $guard !== null ? new HostelResidencyUnavailableException : new ConcurrentResidencyConflictException;
         }
     }
 

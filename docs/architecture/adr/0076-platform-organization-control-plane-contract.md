@@ -3104,3 +3104,228 @@ Recorded, not changed:
 - The Communication Hub search's unescaped LIKE stays R8.
 - `CampusScope`'s public constructors predate ORG.7D-2 and are guarded
   only by that architecture rule.
+
+## 39. ORG.7D-3 — Student-dependent operational Campus adoption (as built, 2026-10-19)
+
+Owner authorization: ORG.7D-3 only. Baseline `origin/main` = `6b1e3da4`
+(ORG.7D-2). Each candidate domain was adopted or deferred on its own.
+- **Adopted:** Hostel residency, Canteen orders, Admissions before
+  conversion (partially: lists, pages and lifecycle).
+- **Deferred:** Transport, Library.
+- **Untouched:** HR, Fees, Payments, full SIS and LC-5–LC-10. No new
+  capability, role template change or migration.
+
+    domain capability → CampusScopeResolver → CampusScope → domain Access (SQL restrict)
+    Student picker     = StudentPurposeLookup (current operational Students only)
+    every write        = re-checks the Student's CURRENT operational Campus at write time
+    whole-School actor = the pre-ORG.7D-3 path, unchanged (no guard object)
+
+**39.1 Search hygiene (R8, done first).** Every touched LIKE search now
+escapes `%`, `_` and `\` (`addcslashes($term, '%_\\')`):
+- the Applicant directory name and the application list's applicant name;
+- the Admissions Guardian search;
+- the Canteen order item searches (web and API);
+- the Canteen Outlet location and Item stock-item searches (the `orWhere` is
+  now grouped);
+- the Hostel bed search;
+- the Communication Hub Student search (R8 from §38.8, same semantics).
+
+The Library copy search was not touched (Library deferred) and stays R8.
+
+**39.2 Hostel residency (adopted: `hostel.residency.view`, `.manage`).**
+- **Campus source.** A residency takes its Campus from its Hostel
+  (`hostels.campus_id` NOT NULL). Room and Bed carry no Campus column; they
+  reach the Hostel by `(id, school_id)` foreign keys, so the Campus is bound
+  only through the Hostel row. `HostelResidencyAccess` restricts residencies and beds by
+  Hostel Campus in SQL; out of scope = 404.
+- **Integrity added.** A Hostel's Campus can no longer change once the
+  Hostel has Rooms ("A Hostel's Campus cannot change once it has Rooms.",
+  422). Without this, editing the Hostel would silently move every existing
+  bed and residency to another Campus scope.
+  - The check runs under a row lock on the Hostel, and both Room-creation
+    paths take that row `FOR SHARE`.
+  - The `hostel.updated` audit records `campusBefore` and `campusAfter`.
+  - This is application-enforced only. No trigger was added, because no
+    migration was needed for integrity at this point (recorded).
+- **Picker.** Whole-School actors keep the pre-existing active-Student
+  search (limit 10, LIKE escaped). A Campus-scoped actor gets
+  `StudentPurposeLookup` with their resolved scope. The HTTP row is
+  `{id, studentNumber, name}`, where `name` carries the lookup DTO's
+  `displayName` under the UI's existing field.
+- **Write rule (v1).** `HostelResidencyCampusGuard::beforeAssign()` runs
+  inside `HostelResidencyService::assign()` after the row locks:
+  - the bed's Hostel Campus must be in scope (else 404);
+  - the Student must be operational on THAT Campus
+    (`StudentOperationalCampusResolver::isOperationalOn()`).
+  - A Campus-scoped actor therefore places a Student only in a Hostel of
+    the Student's current Campus.
+  - Unknown, inactive, other-Campus, already-resident and lost-race
+    Students all get the one generic 422
+    `HOSTEL_RESIDENCY_UNAVAILABLE` ("This Student cannot be given a
+    residency here right now.").
+  - Ending a residency checks the residency's own scope only.
+- **Declared whole-School operations:** Hostel fee intent (web), the
+  residency fee selections (API) and both carry-forwards. These are
+  Fees-linked and School-wide. They have ordinary `capability:` floors, and
+  their literal controller checks were removed.
+- **Directory unchanged.** The Hostel/Room/Bed directory
+  (`hostel.directory.*`) stays whole-School configuration.
+
+**39.3 Canteen orders (adopted: `canteen.orders.view`, `.manage`).**
+- **Campus source.** An order's Campus is its Outlet's
+  (`canteen_outlets.campus_id`, fixed after creation). A NULL-Campus
+  (School-wide) Outlet and its orders are whole-School only.
+  `CanteenOrderAccess` restricts outlets, orders and the order form's Outlet
+  list.
+- **Picker.** Same shape as Hostel: the whole-School path is unchanged,
+  and a Campus-scoped actor gets the purpose lookup. The web and API rows
+  are `{id, studentNumber, name}` (previously `firstName`/`lastName`
+  split; `Orders/Create.vue` was updated). The Hostel row shape is
+  unchanged.
+- **Owner decision applied.** The Item picker (web and API) needs
+  `canteen.orders.manage`. `orders.view` alone reaches neither order-entry
+  picker; previously the API Item search accepted `.view`.
+- **Write rule.** `CanteenOrderCampusGuard::beforePlace()` runs before the
+  lookups and again inside the placement transaction:
+  - the Outlet must be in scope, else `CANTEEN_OUTLET_NOT_FOUND`;
+  - the Student must be operational on the Outlet's Campus, else
+    `CANTEEN_STUDENT_NOT_FOUND`, byte-identical to an unknown id;
+  - fulfil and cancel check the order's Outlet scope only
+    (`CANTEEN_ORDER_NOT_FOUND`).
+- **Side effects stay Canteen's own:**
+  - fulfilment issues stock from the Outlet's location, which is FK-bound
+    to the Outlet's Campus;
+  - fulfilment creates the charge as a bounded side effect.
+  - Neither needs `inventory.*` or `fees.*` (pinned).
+- **Directory unchanged.** The Outlet/Item directory and billing settings
+  stay whole-School configuration.
+
+**39.4 Admissions before conversion (adopted: `admissions.view`,
+`.manage`).**
+- **Campus source.** An application's Campus
+  (`admission_applications.campus_id` NOT NULL, set at creation, never
+  changed by any path). Applicants have no Campus.
+- **Campus-aware actions:**
+  - the application list: web and API;
+  - the application page and API detail;
+  - submit, accept, reject and withdraw: web and API.
+  - Implementation: `AdmissionApplicationAccess` plus a `CampusScope`
+    parameter on `AdmissionApplicationReadService::directory()`/`detail()`.
+  - The Campus filter only narrows, and the Campus option list shows only
+    in-scope Campuses. An out-of-scope application is 404 and unchanged.
+- **Application page for a Campus-scoped viewer:**
+  - `canConvert` is false (conversion needs `admissions.manage` for the
+    whole School);
+  - there is no Applicant link (`canViewApplicants`);
+  - `feePanel` is null (fee provenance is whole-School);
+  - `compatibleSections` is empty;
+  - `canManage` follows the manage scope covering the application's
+    Campus.
+- **Declared whole-School operations (20: 11 web, 9 API).** These have
+  ordinary floors, and their literal controller checks and the
+  `AuthorizesCapability` trait were removed:
+  - the Applicant directory, page and create;
+  - an Applicant's application history (it spans Campuses);
+  - starting an application (there is no atomic Applicant-plus-application
+    path, so a Campus-only officer cannot start one: recorded gap);
+  - both Guardian searches (the contact lookup is an identity oracle);
+  - conversion to Student (SIS);
+  - the admission fee head and fee provenance.
+- **Navigation.** `NavigationBuilder` now shows a Campus-held key only on
+  entries whose destination is not a declared whole-School operation.
+- **Not used:** `StudentPurposeLookup`. An Applicant is not yet a Student.
+
+**39.5 Deferred.**
+- **Transport.**
+  - NULL-Campus shared routes are the documented common case, and
+    web-created routes and vehicles are always NULL Campus;
+  - nothing checks route/vehicle Campus consistency;
+  - cross-Campus riding is undefined.
+  - Adoption needs an owner policy for shared routes and a consistency
+    constraint first.
+- **Library.**
+  - loans carry no Campus;
+  - a copy's `campus_id` is nullable and mutable while on loan;
+  - cross-Campus lending is undefined.
+  - Adoption needs a loan-Campus rule and copy-Campus immutability while on
+    loan. The copy search stays R8.
+
+**39.6 Impact (`CampusAdoptionImpactTest`).**
+- **New Campus-scopable templates:** `hostel_warden`, `canteen_operator`,
+  `admissions_officer`.
+- **Templates gaining adopted keys:** `principal` and `school_admin` gain
+  `admissions.*`, `canteen.orders.*` and `hostel.residency.*`.
+  - `school_admin` is never Campus-scopable.
+  - `admissions.` left the prohibited-prefix list.
+- **Existing Campus grants gaining keys:** zero. There are no active
+  Campus-scoped grants in the DDEV development or test databases
+  (re-verified 2026-10-19), and the production inventory is a deployment
+  check.
+- **High-risk adoption.** Canteen orders are `financial`-classed:
+  fulfilment assesses a Charge. The owner authorized their adoption (ORG.7D-3
+  prompt), and it is recorded in `OWNER_APPROVED_HIGH_RISK`.
+  - The impact test now also treats any adopted key of the `financial` or
+    `authority` class as high-risk, not only the key prefixes.
+  - Fulfilment's charge confers no Fees, Payments or ledger authority.
+  - No other high-risk family is adopted: marks, HR and Student identity
+    stay out.
+
+**39.7 Guards.**
+- `CampusScopeAdoptionArchitectureTest` covers the three new domains.
+- `CoverageGuard` checks the C6 entries (Hostel web/API, 8 web + 7 API
+  Canteen, 6 web + 6 API Admissions) and the 24 declared operations.
+- `StudentCampusFoundationArchitectureTest` allowlists exactly the Hostel
+  and Canteen access and guard classes as purpose-lookup/resolver
+  consumers.
+- New tests: `HostelCampusScopeTest`, `CanteenCampusScopeTest` and
+  `AdmissionsCampusScopeTest`. They cover allow and deny cases, generic
+  refusals, write-time re-checks, module-disabled and inactive-Campus
+  behaviour, and the unchanged whole-School path.
+- No queued job or outbox consumer in these domains reads Campus authority.
+
+**39.8 Security review (ORG.7D-3).** Independent adversarial review: no
+HIGH or MEDIUM finding. LOW findings fixed before publication:
+- **Hostel Campus change race.** The rooms check and the update now run in
+  one transaction, under a row lock serialized against Room creation, and
+  the Campus change is audited (39.2).
+- **Canteen fulfil/cancel error body.** A whole-School actor's unknown order
+  had turned into a generic 404. The service now resolves the order again,
+  so every actor gets `CANTEEN_ORDER_NOT_FOUND`, with a web form error as
+  before. A Campus actor's out-of-scope order gets the same code from the
+  write guard, identical to an unknown id.
+- **OpenAPI.** The Hostel store 422 and the Canteen store 404 descriptions
+  now document the Campus-scoped generic refusals.
+- **Omitted write guard.** The guard parameter is optional (null = the
+  whole-School path). `CampusScopeAdoptionArchitectureTest` now fails any
+  app call to `HostelResidencyService::assign` or
+  `CanteenOrderService::place/fulfill/cancel` that does not pass
+  `writeGuard()`.
+- **Remaining unescaped searches.** The LIKE searches in the touched files
+  are now escaped: the Canteen Item and Outlet directories, and the
+  Communication Hub conversation, member and Guardian searches.
+- **High-risk accounting.** See 39.6.
+
+Recorded, not changed:
+- **Admissions Campus immutability.** §35.4 proposed a trigger for an
+  application's Campus "at adoption". It was not added: no code path
+  updates `admission_applications.campus_id`. This is a recorded deviation,
+  to be revisited if an edit path is ever built.
+- **Idempotency fingerprints after deploy.** Moving a floor to
+  `capability:x,campus` adds the actor's Campus authority to the
+  idempotency fingerprint, for whole-School actors too. A key stored before
+  deployment and retried afterwards gets `IDEMPOTENCY_KEY_CONFLICT` rather
+  than a replay, for the retention window only. Affected routes: Admissions
+  submit/accept/reject/withdraw, Hostel residency store and Canteen order
+  store (release note).
+- **Write-time read without a lock.** The write-time
+  `isOperationalOn()` reads the placement without locking it. A transfer
+  committing in the same instant can interleave (accepted LOW).
+- **Residency inference.** A Campus warden can infer that an offered
+  Student already lives in some Hostel when assignment is refused (never
+  which one). Accepted LOW, consistent with the generic-refusal standard.
+- **Converted ids.** The application page still carries the bare converted
+  Student/Enrollment ids for converted applications. This is the
+  pre-existing ids-only boundary; the Student profile itself stays 403.
+- **UI-only `canManage`.** On the Hostel and Canteen pages it means
+  "manage held for some Campus", so an action button can show for a record
+  whose action answers 404.

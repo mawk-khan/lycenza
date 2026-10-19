@@ -490,3 +490,14 @@ this.
 
 **Unchanged:** stored `due_at` (end of the School day), overdue status
 and fines.
+
+## Campus scope deferred (ORG.7D-3, 2026-10-19, ADR 0076 §39.5)
+
+Library is NOT Campus-adopted. Reasons:
+- loans carry no Campus;
+- a Copy's Campus is nullable and can change while it is on loan;
+- cross-Campus lending is undefined.
+
+Adoption needs a loan-Campus rule and Copy-Campus immutability while on
+loan. The Copy search's unescaped LIKE stays recorded (R8). A Campus grant
+confers nothing here.

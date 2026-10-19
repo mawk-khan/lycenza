@@ -6,6 +6,7 @@ use App\Domain\AcademicStructure\Application\AcademicYearChoices;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Section;
+use App\Domain\Admissions\Application\AdmissionApplicationAccess;
 use App\Domain\Admissions\Application\AdmissionApplicationReadService;
 use App\Domain\Admissions\Application\AdmissionApplicationService;
 use App\Domain\Admissions\Application\AdmissionConversionService;
@@ -34,8 +35,9 @@ use App\Domain\Students\Application\Exceptions\InvalidEnrollmentRollNumberExcept
 use App\Http\Controllers\App\Fees\OperationalFeePanels;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
-use App\Support\Authorization\AuthorizesCapability;
-use App\Support\Authorization\CapabilityResolver;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Authorization\Campus\CampusScope;
+use App\Support\Authorization\Campus\CampusScopeResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
@@ -80,16 +82,23 @@ use InvalidArgumentException;
  * findCandidatesBySchool()), gated only by admissions.manage -- see
  * docs/admissions/PHASE-1D-6-ADMINISTRATIVE-UI.md.
  */
+/**
+ * ORG.7D-3 (ADR 0076 §39): the PRE-CONVERSION application list, detail and
+ * lifecycle are Campus-adopted (AdmissionApplicationAccess; out of scope =
+ * 404). Starting an application, both Guardian searches and conversion are
+ * declared whole-School-only operations, authorized by their routes'
+ * ordinary `capability:` floors (CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS).
+ */
 class AdmissionApplicationController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
     // --- Directory ------------------------------------------------------
 
-    public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities, AdmissionApplicationReadService $reads): Response
+    public function index(Request $request, TenantContext $context, CampusScopeResolver $scopes, AdmissionApplicationAccess $access): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('admissions.view', $school);
+        $scope = $this->authorizeCampusScope('admissions.view', $school);
 
         $validated = $request->validate([
             'status' => ['sometimes', Rule::in(['draft', 'submitted', 'accepted', 'rejected', 'withdrawn', 'converted'])],
@@ -100,7 +109,7 @@ class AdmissionApplicationController extends Controller
         ]);
 
         /** @var LengthAwarePaginator<int, AdmissionApplication> $paginator */
-        $paginator = $reads->directory($validated, 20)->withQueryString();
+        $paginator = $access->directory($scope, $validated, 20)->withQueryString();
 
         return Inertia::render('App/Admissions/Index', [
             'applications' => $paginator->through(fn (AdmissionApplication $a) => $this->presentSummary($a)),
@@ -112,9 +121,11 @@ class AdmissionApplicationController extends Controller
                 'applicant_name' => $validated['applicant_name'] ?? '',
             ],
             'academicYears' => $this->academicYearOptions(),
-            'campuses' => $this->campusOptions(),
+            'campuses' => $access->campusOptions($scope),
             'gradeLevels' => $this->gradeLevelOptions(),
-            'canManage' => $capabilities->canInSchool($context->actor(), 'admissions.manage', $school),
+            'canManage' => ! $scopes->campusScope($context->actor(), 'admissions.manage', $school)->isNone(),
+            // ORG.7D-3: the Applicant directory stays whole-School.
+            'canViewApplicants' => $scope->isWholeSchool(),
         ]);
     }
 
@@ -123,7 +134,8 @@ class AdmissionApplicationController extends Controller
     public function create(TenantContext $context, string $applicant): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('admissions.manage', $school);
+        // ORG.7D-3: a declared whole-School-only operation -- authorized by
+        // the route's ordinary `capability:admissions.manage` floor.
 
         $applicantModel = Applicant::query()->findOrFail($applicant);
 
@@ -141,7 +153,7 @@ class AdmissionApplicationController extends Controller
     public function store(Request $request, TenantContext $context, AdmissionApplicationService $service, string $applicant): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('admissions.manage', $school);
+        // ORG.7D-3: authorized by the route's whole-School `capability:admissions.manage` floor.
 
         $applicantModel = Applicant::query()->findOrFail($applicant);
 
@@ -170,29 +182,34 @@ class AdmissionApplicationController extends Controller
 
     // --- Directory / detail -----------------------------------------------
 
-    public function show(TenantContext $context, CapabilityResolver $capabilities, AdmissionApplicationReadService $reads, string $admissionApplication): Response
+    public function show(TenantContext $context, CampusScopeResolver $scopes, AdmissionApplicationAccess $access, string $admissionApplication): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('admissions.view', $school);
+        $scope = $this->authorizeCampusScope('admissions.view', $school);
 
-        $model = $reads->detail($admissionApplication);
-        abort_if($model === null, 404);
+        $model = $access->detail($scope, $admissionApplication);
 
-        $canManage = $capabilities->canInSchool($context->actor(), 'admissions.manage', $school);
+        $manage = $scopes->campusScope($context->actor(), 'admissions.manage', $school);
+        $canManage = $manage->covers($model->campus_id);
+        // ORG.7D-3: conversion, the Applicant page and fee provenance stay whole-School.
+        $canConvert = $manage->isWholeSchool();
 
         return Inertia::render('App/Admissions/Show', [
             'application' => $this->presentDetail($model),
             'canManage' => $canManage,
-            'canViewStudents' => $capabilities->canInSchool($context->actor(), 'students.view', $school),
+            'canConvert' => $canConvert,
+            'canViewApplicants' => $scope->isWholeSchool(),
+            'canViewStudents' => ! $scopes->campusScope($context->actor(), 'students.view', $school)->isNone(),
             // Only the accepted state ever needs a Section picker -- a
             // UI convenience only (AdmissionConversionService remains
             // authoritative regardless), matching
             // StudentEnrollmentController::sectionOptions()'s
             // `onlyEligible` convenience-filtering precedent.
-            'compatibleSections' => ($canManage && $model->status === 'accepted') ? $this->compatibleSectionOptions($model) : [],
+            'compatibleSections' => ($canConvert && $model->status === 'accepted') ? $this->compatibleSectionOptions($model) : [],
             // SWC.3 (ADR 0073 section 19): the School's admission fee head and,
             // once converted, the fee intent the conversion recorded (OPF.3).
-            'feePanel' => app(OperationalFeePanels::class)->admissionApplication($school, $model),
+            // ORG.7D-3: Fees-linked, so whole-School viewers only.
+            'feePanel' => $scope->isWholeSchool() ? app(OperationalFeePanels::class)->admissionApplication($school, $model) : null,
         ]);
     }
 
@@ -200,26 +217,34 @@ class AdmissionApplicationController extends Controller
 
     public function submit(TenantContext $context, AdmissionApplicationService $service, string $admissionApplication): RedirectResponse
     {
-        return $this->transition($context, $admissionApplication, fn (AdmissionApplication $a) => $service->submit($a, $context->actor()));
+        $scope = $this->authorizeCampusScope('admissions.manage', $context->requireSchool());
+
+        return $this->transition($scope, $admissionApplication, fn (AdmissionApplication $a) => $service->submit($a, $context->actor()));
     }
 
     public function accept(Request $request, TenantContext $context, AdmissionApplicationService $service, string $admissionApplication): RedirectResponse
     {
         $validated = $request->validate(['decision_note' => ['sometimes', 'nullable', 'string', 'max:1000']]);
 
-        return $this->transition($context, $admissionApplication, fn (AdmissionApplication $a) => $service->accept($a, $validated['decision_note'] ?? null, $context->actor()));
+        $scope = $this->authorizeCampusScope('admissions.manage', $context->requireSchool());
+
+        return $this->transition($scope, $admissionApplication, fn (AdmissionApplication $a) => $service->accept($a, $validated['decision_note'] ?? null, $context->actor()));
     }
 
     public function reject(Request $request, TenantContext $context, AdmissionApplicationService $service, string $admissionApplication): RedirectResponse
     {
         $validated = $request->validate(['decision_note' => ['sometimes', 'nullable', 'string', 'max:1000']]);
 
-        return $this->transition($context, $admissionApplication, fn (AdmissionApplication $a) => $service->reject($a, $validated['decision_note'] ?? null, $context->actor()));
+        $scope = $this->authorizeCampusScope('admissions.manage', $context->requireSchool());
+
+        return $this->transition($scope, $admissionApplication, fn (AdmissionApplication $a) => $service->reject($a, $validated['decision_note'] ?? null, $context->actor()));
     }
 
     public function withdraw(TenantContext $context, AdmissionApplicationService $service, string $admissionApplication): RedirectResponse
     {
-        return $this->transition($context, $admissionApplication, fn (AdmissionApplication $a) => $service->withdraw($a, $context->actor()));
+        $scope = $this->authorizeCampusScope('admissions.manage', $context->requireSchool());
+
+        return $this->transition($scope, $admissionApplication, fn (AdmissionApplication $a) => $service->withdraw($a, $context->actor()));
     }
 
     /**
@@ -234,12 +259,10 @@ class AdmissionApplicationController extends Controller
      *
      * @param  callable(AdmissionApplication): AdmissionApplication  $apply
      */
-    private function transition(TenantContext $context, string $admissionApplication, callable $apply): RedirectResponse
+    private function transition(CampusScope $scope, string $admissionApplication, callable $apply): RedirectResponse
     {
-        $school = $context->requireSchool();
-        $this->authorizeCapability('admissions.manage', $school);
-
-        $model = AdmissionApplication::query()->findOrFail($admissionApplication);
+        // ORG.7D-3: each action resolved the actor's Campus scope first.
+        $model = app(AdmissionApplicationAccess::class)->application($scope, $admissionApplication);
 
         try {
             $apply($model);
@@ -255,9 +278,11 @@ class AdmissionApplicationController extends Controller
     public function convert(Request $request, TenantContext $context, AdmissionConversionService $service, string $admissionApplication): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('admissions.manage', $school);
+        // ORG.7D-3: conversion is a declared whole-School-only operation --
+        // authorized by the route's ordinary `capability:admissions.manage` floor.
 
-        $model = AdmissionApplication::query()->findOrFail($admissionApplication);
+        $model = app(AdmissionApplicationReadService::class)->detail($admissionApplication);
+        abort_if($model === null, 404);
 
         $validated = $request->validate([
             'student_number' => ['required', 'string', 'max:255'],
@@ -358,11 +383,12 @@ class AdmissionApplicationController extends Controller
     public function searchGuardians(Request $request, TenantContext $context): JsonResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('admissions.manage', $school);
+        // ORG.7D-3: authorized by the route's whole-School `capability:admissions.manage` floor.
 
         $validated = $request->validate(['q' => ['required', 'string', 'min:2', 'max:255']]);
 
-        $term = '%'.$validated['q'].'%';
+        // ORG.7D-3 (R8): LIKE wildcards in the input are literal.
+        $term = '%'.addcslashes($validated['q'], '%_\\').'%';
         $guardians = Guardian::query()
             ->where(fn ($q) => $q->where('first_name', 'ilike', $term)->orWhere('last_name', 'ilike', $term))
             ->orderBy('first_name')
@@ -377,7 +403,7 @@ class AdmissionApplicationController extends Controller
     public function candidateGuardians(Request $request, TenantContext $context, GuardianContactService $service): JsonResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('admissions.manage', $school);
+        // ORG.7D-3: authorized by the route's whole-School `capability:admissions.manage` floor.
 
         $validated = $request->validate([
             'type' => ['required', Rule::enum(ContactType::class)],

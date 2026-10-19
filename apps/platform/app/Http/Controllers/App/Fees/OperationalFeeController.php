@@ -146,7 +146,8 @@ class OperationalFeeController extends Controller
     public function hostelFees(Request $request, TenantContext $context): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('hostel.residency.view', $school);
+        // ORG.7D-3: authorized by the route's whole-School `capability:hostel.residency.view`
+        // floor (a declared whole-School-only operation of a Campus-adopted key).
 
         $residencies = HostelResidencyAssignment::query()
             ->with(['student', 'bed.room.hostel'])
@@ -176,7 +177,7 @@ class OperationalFeeController extends Controller
     public function hostelCarryForward(Request $request, TenantContext $context, HostelFeeSelectionService $hostels): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('hostel.residency.manage', $school);
+        // ORG.7D-3: authorized by the route's whole-School `capability:hostel.residency.manage` floor.
 
         $validated = $request->validate(['academic_year_id' => ['required', 'uuid']]);
         $totals = $this->withFormErrors('academic_year_id', fn () => $hostels->carryForward($school, $validated['academic_year_id'], $context->actor()));
@@ -190,7 +191,8 @@ class OperationalFeeController extends Controller
     public function admissionFeeHead(TenantContext $context, AdmissionFeeSelectionService $admissions): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('admissions.view', $school);
+        // ORG.7D-3: a declared whole-School-only operation -- authorized by the
+        // route's ordinary `capability:admissions.view` floor (ADR 0076 §39).
         $canManage = $this->can($school, 'admissions.manage');
 
         return Inertia::render('App/Admissions/FeeHead', [
@@ -203,7 +205,8 @@ class OperationalFeeController extends Controller
     public function updateAdmissionFeeHead(Request $request, TenantContext $context, AdmissionFeeSelectionService $admissions): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('admissions.manage', $school);
+        // ORG.7D-3: a declared whole-School-only operation -- authorized by the
+        // route's ordinary `capability:admissions.manage` floor (ADR 0076 §39).
 
         $validated = $request->validate(['fee_head_id' => ['present', 'nullable', 'uuid']]);
         $this->withFormErrors('fee_head_id', fn () => $admissions->setFeeHead($school, $validated['fee_head_id'], $context->actor()));

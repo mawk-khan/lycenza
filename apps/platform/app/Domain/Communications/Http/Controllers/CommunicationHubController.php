@@ -73,9 +73,10 @@ class CommunicationHubController extends Controller
             ->with(['createdBy:id,name', 'participants' => fn ($q) => $q->whereNull('left_at')->with('user:id,name')]);
 
         if ($search !== '') {
-            $query->where(fn ($q) => $q->where('subject', 'ilike', "%{$search}%")
+            $like = '%'.addcslashes($search, '%_\\').'%';
+            $query->where(fn ($q) => $q->where('subject', 'ilike', $like)
                 ->orWhereHas('participants', fn ($q2) => $q2->whereNull('left_at')
-                    ->whereHas('user', fn ($q3) => $q3->where('name', 'ilike', "%{$search}%"))));
+                    ->whereHas('user', fn ($q3) => $q3->where('name', 'ilike', $like))));
         }
 
         $threads = $query->orderByDesc('last_activity_at')->paginate(20)->withQueryString();
@@ -144,7 +145,7 @@ class CommunicationHubController extends Controller
             ->where('school_id', $school->id)
             ->active()
             ->where('user_id', '!=', $actor->id)
-            ->whereHas('user', fn ($query) => $q === '' ? $query : $query->where('name', 'ilike', "%{$q}%"))
+            ->whereHas('user', fn ($query) => $q === '' ? $query : $query->where('name', 'ilike', '%'.addcslashes($q, '%_\\').'%'))
             ->with('user:id,name')
             ->orderBy('user_id')
             ->limit(20)
@@ -189,7 +190,7 @@ class CommunicationHubController extends Controller
             ->where('school_id', $school->id)
             ->where('status', 'active')
             ->when($q !== '', fn ($query) => $query
-                ->whereRaw("(first_name || ' ' || coalesce(last_name, '')) ilike ?", ["%{$q}%"]))
+                ->whereRaw("(first_name || ' ' || coalesce(last_name, '')) ilike ?", ['%'.addcslashes($q, '%_\\').'%']))
             ->with(['students' => fn ($query) => $query
                 ->where('status', 'active')
                 ->where(fn ($q2) => $q2
@@ -236,8 +237,9 @@ class CommunicationHubController extends Controller
             ->where('status', 'active')
             ->when($q !== '', fn ($query) => $query
                 ->where(fn ($query) => $query
-                    ->whereRaw("(first_name || ' ' || coalesce(last_name, '')) ilike ?", ["%{$q}%"])
-                    ->orWhere('student_number', 'ilike', "%{$q}%")))
+                    // ORG.7D-3 (R8): same matching as before, with LIKE wildcards literal.
+                    ->whereRaw("(first_name || ' ' || coalesce(last_name, '')) ilike ?", ['%'.addcslashes($q, '%_\\').'%'])
+                    ->orWhere('student_number', 'ilike', '%'.addcslashes($q, '%_\\').'%')))
             ->orderBy('first_name')
             ->limit(20)
             ->get(['id', 'first_name', 'last_name', 'student_number']);

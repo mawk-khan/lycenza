@@ -960,13 +960,16 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             // lifecycle/conversion actions.
 
             Route::get('/applicants', [ApplicantController::class, 'index'])
+                ->middleware('capability:admissions.view')
                 ->name('schools.applicants.index');
             Route::post('/applicants', [ApplicantController::class, 'store'])
                 ->middleware(['capability:admissions.manage', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.applicants.store');
             Route::get('/applicants/{applicant}', [ApplicantController::class, 'show'])
+                ->middleware('capability:admissions.view')
                 ->name('schools.applicants.show');
             Route::get('/applicants/{applicant}/applications', [ApplicantController::class, 'applications'])
+                ->middleware('capability:admissions.view')
                 ->name('schools.applicants.applications.index');
 
             Route::get('/admission-applications', [AdmissionApplicationController::class, 'index'])
@@ -978,16 +981,16 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->name('schools.admission-applications.show');
 
             Route::post('/admission-applications/{admissionApplication}/submit', [AdmissionApplicationController::class, 'submit'])
-                ->middleware(['capability:admissions.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->middleware(['capability:admissions.manage,campus', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.admission-applications.submit');
             Route::post('/admission-applications/{admissionApplication}/accept', [AdmissionApplicationController::class, 'accept'])
-                ->middleware(['capability:admissions.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->middleware(['capability:admissions.manage,campus', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.admission-applications.accept');
             Route::post('/admission-applications/{admissionApplication}/reject', [AdmissionApplicationController::class, 'reject'])
-                ->middleware(['capability:admissions.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->middleware(['capability:admissions.manage,campus', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.admission-applications.reject');
             Route::post('/admission-applications/{admissionApplication}/withdraw', [AdmissionApplicationController::class, 'withdraw'])
-                ->middleware(['capability:admissions.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->middleware(['capability:admissions.manage,campus', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.admission-applications.withdraw');
 
             // Highest-stakes Admissions mutation (creates Student +
@@ -1007,11 +1010,13 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             // recorded fee intent. The intent itself is recorded only by
             // the conversion above; there is no separate fee mutation.
             Route::get('/admission-fee-head', [AdmissionFeeController::class, 'showFeeHead'])
+                ->middleware('capability:admissions.view')
                 ->name('schools.admission-fee-head.show');
             Route::put('/admission-fee-head', [AdmissionFeeController::class, 'updateFeeHead'])
                 ->middleware(['capability:admissions.manage', 'throttle:school-api-mutations'])
                 ->name('schools.admission-fee-head.update');
             Route::get('/admission-applications/{admissionApplication}/fee-selection', [AdmissionFeeController::class, 'applicationFeeSelection'])
+                ->middleware('capability:admissions.view')
                 ->name('schools.admission-applications.fee-selection.show');
 
             // --- Phase 10A: Library catalogue (Title/Copy) and
@@ -1509,12 +1514,12 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/hostel-residency-assignments', [HostelResidencyAssignmentController::class, 'index'])
                 ->name('schools.hostel-residency-assignments.index');
             Route::post('/hostel-residency-assignments', [HostelResidencyAssignmentController::class, 'store'])
-                ->middleware(['capability:hostel.residency.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->middleware(['capability:hostel.residency.manage,campus', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.hostel-residency-assignments.store');
             Route::get('/hostel-residency-assignments/{hostelResidencyAssignment}', [HostelResidencyAssignmentController::class, 'show'])
                 ->name('schools.hostel-residency-assignments.show');
             Route::post('/hostel-residency-assignments/{hostelResidencyAssignment}/end', [HostelResidencyAssignmentController::class, 'end'])
-                ->middleware(['capability:hostel.residency.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:hostel.residency.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.hostel-residency-assignments.end');
 
             // --- OPF.2 (ADR 0067 §15): Hostel fee integration. Hostel
@@ -1532,7 +1537,10 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::put('/hostel-rooms/{hostelRoom}/fee-head', [HostelFeeController::class, 'updateRoomFeeHead'])
                 ->middleware(['capability:hostel.directory.manage', 'throttle:school-api-mutations'])
                 ->name('schools.hostel-rooms.fee-head.update');
+            // ORG.7D-3: a declared whole-School-only operation of the
+            // Campus-adopted key (CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS).
             Route::get('/hostel-residency-assignments/{hostelResidencyAssignment}/fee-selections', [HostelFeeController::class, 'residencyFeeSelections'])
+                ->middleware('capability:hostel.residency.view')
                 ->name('schools.hostel-residency-assignments.fee-selections.index');
             Route::post('/hostel-fee-selections/carry-forward', [HostelFeeController::class, 'carryForward'])
                 ->middleware(['capability:hostel.residency.manage', 'throttle:school-api-mutations', 'idempotent'])
@@ -1644,26 +1652,28 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->name('schools.canteen-billing-configuration.ledger-accounts');
 
             Route::get('/canteen-orders', [CanteenOrderController::class, 'index'])
-                ->middleware('capability:canteen.orders.view')
+                ->middleware('capability:canteen.orders.view,campus')
                 ->name('schools.canteen-orders.index');
             Route::post('/canteen-orders', [CanteenOrderController::class, 'store'])
-                ->middleware(['capability:canteen.orders.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->middleware(['capability:canteen.orders.manage,campus', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.canteen-orders.store');
             // ORG.7D-0 R3: the order-entry Student picker needs orders.manage, as on the web.
             Route::get('/canteen-orders/search/students', [CanteenOrderController::class, 'searchStudents'])
-                ->middleware('capability:canteen.orders.manage')
+                ->middleware('capability:canteen.orders.manage,campus')
                 ->name('schools.canteen-orders.search-students');
+            // ORG.7D-3 (owner decision): the order-entry menu picker needs
+            // orders.manage, exactly like the web picker.
             Route::get('/canteen-orders/search/items', [CanteenOrderController::class, 'searchItems'])
-                ->middleware('capability:canteen.orders.view')
+                ->middleware('capability:canteen.orders.manage,campus')
                 ->name('schools.canteen-orders.search-items');
             Route::get('/canteen-orders/{canteenOrder}', [CanteenOrderController::class, 'show'])
-                ->middleware('capability:canteen.orders.view')
+                ->middleware('capability:canteen.orders.view,campus')
                 ->name('schools.canteen-orders.show');
             Route::post('/canteen-orders/{canteenOrder}/fulfill', [CanteenOrderController::class, 'fulfill'])
-                ->middleware(['capability:canteen.orders.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->middleware(['capability:canteen.orders.manage,campus', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.canteen-orders.fulfill');
             Route::post('/canteen-orders/{canteenOrder}/cancel', [CanteenOrderController::class, 'cancel'])
-                ->middleware(['capability:canteen.orders.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:canteen.orders.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.canteen-orders.cancel');
 
             // Phase 0H: Timetable (Period catalogue + weekly schedule

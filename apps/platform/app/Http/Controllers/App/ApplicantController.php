@@ -7,8 +7,7 @@ use App\Domain\Admissions\Application\ApplicantService;
 use App\Domain\Admissions\Infrastructure\AdmissionApplication;
 use App\Domain\Admissions\Infrastructure\Applicant;
 use App\Http\Controllers\Controller;
-use App\Support\Authorization\AuthorizesCapability;
-use App\Support\Authorization\CapabilityResolver;
+use App\Support\Authorization\Campus\CampusScopeResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -29,12 +28,11 @@ use Inertia\Response;
  */
 class ApplicantController extends Controller
 {
-    use AuthorizesCapability;
-
-    public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities, ApplicantReadService $reads): Response
+    public function index(Request $request, TenantContext $context, CampusScopeResolver $scopes, ApplicantReadService $reads): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('admissions.view', $school);
+        // ORG.7D-3: a declared whole-School-only operation -- authorized by the
+        // route's ordinary `capability:admissions.view` floor (ADR 0076 §39).
 
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
@@ -53,14 +51,15 @@ class ApplicantController extends Controller
             'filters' => [
                 'name' => $validated['name'] ?? '',
             ],
-            'canManage' => $capabilities->canInSchool($context->actor(), 'admissions.manage', $school),
+            'canManage' => $scopes->campusScope($context->actor(), 'admissions.manage', $school)->isWholeSchool(),
         ]);
     }
 
     public function create(TenantContext $context): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('admissions.manage', $school);
+        // ORG.7D-3: a declared whole-School-only operation -- authorized by the
+        // route's ordinary `capability:admissions.manage` floor (ADR 0076 §39).
 
         return Inertia::render('App/Admissions/Applicants/Create');
     }
@@ -68,7 +67,8 @@ class ApplicantController extends Controller
     public function store(Request $request, TenantContext $context, ApplicantService $service): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('admissions.manage', $school);
+        // ORG.7D-3: a declared whole-School-only operation -- authorized by the
+        // route's ordinary `capability:admissions.manage` floor (ADR 0076 §39).
 
         $validated = $request->validate([
             'first_name' => ['required', 'string', 'max:255'],
@@ -82,10 +82,11 @@ class ApplicantController extends Controller
         return redirect("/app/admissions/applicants/{$applicant->id}");
     }
 
-    public function show(TenantContext $context, CapabilityResolver $capabilities, ApplicantReadService $reads, string $applicant): Response
+    public function show(TenantContext $context, CampusScopeResolver $scopes, ApplicantReadService $reads, string $applicant): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('admissions.view', $school);
+        // ORG.7D-3: a declared whole-School-only operation -- authorized by the
+        // route's ordinary `capability:admissions.view` floor (ADR 0076 §39).
 
         $model = $reads->detail($applicant);
         abort_if($model === null, 404);
@@ -95,7 +96,7 @@ class ApplicantController extends Controller
         return Inertia::render('App/Admissions/Applicants/Show', [
             'applicant' => $this->presentDetail($model),
             'applications' => $history->map(fn (AdmissionApplication $a) => $this->presentApplicationSummary($a))->values()->all(),
-            'canManage' => $capabilities->canInSchool($context->actor(), 'admissions.manage', $school),
+            'canManage' => $scopes->campusScope($context->actor(), 'admissions.manage', $school)->isWholeSchool(),
         ]);
     }
 

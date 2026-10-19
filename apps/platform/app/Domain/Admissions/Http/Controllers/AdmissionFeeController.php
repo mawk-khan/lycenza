@@ -7,7 +7,6 @@ use App\Domain\Admissions\Infrastructure\AdmissionApplication;
 use App\Domain\Admissions\Infrastructure\AdmissionFeeSelection;
 use App\Http\Controllers\Controller;
 use App\Models\School;
-use App\Support\Authorization\AuthorizesCapability;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -20,18 +19,18 @@ use Illuminate\Http\Request;
  */
 class AdmissionFeeController extends Controller
 {
-    use AuthorizesCapability;
-
     public function showFeeHead(School $school, AdmissionFeeSelectionService $service): JsonResponse
     {
-        $this->authorizeCapability('admissions.view', $school);
+        // ORG.7D-3: a declared whole-School-only operation -- authorized by the
+        // route's ordinary `capability:admissions.view` floor (ADR 0076 §39).
 
         return response()->json(['data' => $service->feeHead($school)]);
     }
 
     public function updateFeeHead(Request $request, School $school, AdmissionFeeSelectionService $service): JsonResponse
     {
-        $this->authorizeCapability('admissions.manage', $school);
+        // ORG.7D-3: a declared whole-School-only operation -- authorized by the
+        // route's ordinary `capability:admissions.manage` floor (ADR 0076 §39).
 
         $validated = $request->validate([
             'fee_head_id' => ['present', 'nullable', 'uuid'],
@@ -44,7 +43,8 @@ class AdmissionFeeController extends Controller
 
     public function applicationFeeSelection(School $school, string $admissionApplication): JsonResponse
     {
-        $this->authorizeCapability('admissions.view', $school);
+        // ORG.7D-3: a declared whole-School-only operation -- authorized by the
+        // route's ordinary `capability:admissions.view` floor (ADR 0076 §39).
 
         $application = AdmissionApplication::query()->findOrFail($admissionApplication);
         $link = AdmissionFeeSelection::query()->where('admission_application_id', $application->id)->first();

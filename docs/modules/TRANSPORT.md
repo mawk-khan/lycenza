@@ -615,3 +615,14 @@ Both pages use the same `TransportFeeSelectionService` as `/api/v1`.
 
 **Fee intent is not a charge.** Finance creates charges when it assesses
 fees. Production stays gated by E21/E30 (ADR 0058).
+
+## Campus scope deferred (ORG.7D-3, 2026-10-19, ADR 0076 §39.5)
+
+Transport is NOT Campus-adopted. Reasons:
+- NULL-Campus shared Routes are the common case, and web-created Routes and
+  Vehicles always have no Campus;
+- nothing checks Route/Vehicle Campus consistency;
+- whether a Student may ride another Campus's Route is undefined.
+
+Adoption needs an owner policy for shared Routes and a consistency rule
+first. A Campus grant confers nothing here.

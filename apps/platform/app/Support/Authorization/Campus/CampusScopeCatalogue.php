@@ -68,6 +68,24 @@ final class CampusScopeCatalogue
             'inactiveCampus' => 'A grant on an inactive Campus confers nothing; whole-School holders keep every paper.',
             'sharedLookups' => 'The paper page reads its parent Examination (code, name, window, status: School-wide configuration) as context only; the Examination list stays whole-School, so a Campus-only holder reaches a paper page by its Examination\'s link or the API, not from navigation (recorded for an owner decision, ADR 0076 §37). Offerings are offered and accepted only within scope. Marks and results (examinations.marks.*) are not Campus-adopted.',
         ],
+        'hostel' => [
+            'label' => 'Hostel residency',
+            'nullCampus' => 'None: every Hostel has a Campus (hostels.campus_id NOT NULL); its Rooms, Beds and residencies reach it by composite foreign keys, and it cannot change once the Hostel has Rooms. The Hostel/Room/Bed directory (hostel.directory.*) stays whole-School configuration.',
+            'inactiveCampus' => 'A grant on an inactive Campus confers nothing; an inactive Campus has no current operational Students, so no new residency is offered or written for it by a Campus-scoped actor.',
+            'sharedLookups' => 'ORG.7D-3: the resident picker is the Students-owned purpose lookup, given the actor\'s scope (current operational Students only: id, displayName, studentNumber). v1: a Campus-scoped actor places a Student only in a Hostel of the Student\'s CURRENT operational Campus, re-checked at write time; "already resident" and a lost race are one generic refusal (HOSTEL_RESIDENCY_UNAVAILABLE). Hostel fee intent pages and carry-forward stay whole-School (declared operations).',
+        ],
+        'canteen' => [
+            'label' => 'Canteen orders',
+            'nullCampus' => 'An order takes its Outlet\'s Campus (canteen_outlets.campus_id, fixed after creation). A School-wide (NULL-Campus) Outlet and its orders are whole-School only. The Outlet/Item directory and billing settings (canteen.directory.*, canteen.settings.*) stay whole-School configuration.',
+            'inactiveCampus' => 'A grant on an inactive Campus confers nothing; an inactive Campus has no current operational Students, so a Campus-scoped actor places no new order there.',
+            'sharedLookups' => 'ORG.7D-3: the Student picker is the Students-owned purpose lookup with the actor\'s scope (current operational Students: id, studentNumber, name); a Campus-scoped order needs a current operational Student OF the Outlet\'s Campus, re-checked when placed. The menu picker is the School-wide Item catalogue (code, name, price). Fulfilment issues stock from the Outlet\'s own location (FK-bound to its Campus) and creates the charge as Canteen\'s bounded side effect: no Inventory or Fees authority.',
+        ],
+        'admissions' => [
+            'label' => 'Admission applications (before conversion)',
+            'nullCampus' => 'None: every application has a Campus (admission_applications.campus_id NOT NULL, set at creation, never changed by any code path). An Applicant has no Campus and is reached by a Campus-scoped actor only through an in-scope application.',
+            'inactiveCampus' => 'A grant on an inactive Campus confers nothing; whole-School holders keep every application.',
+            'sharedLookups' => 'None. Whole-School only (declared operations): the Applicant directory, page and create, starting an application (it needs the Applicant page), both Guardian searches (name, and the contact lookup), conversion to Student, and the admission fee head and fee provenance. The application page shows a Campus-scoped viewer no Applicant link, conversion form or fee panel. The Student purpose lookup is not used: an applicant is not yet a Student.',
+        ],
     ];
 
     /**
@@ -92,6 +110,12 @@ final class CampusScopeCatalogue
         'lms.assignments.manage' => 'lms',
         'examinations.papers.view' => 'examination_papers',
         'examinations.papers.manage' => 'examination_papers',
+        'hostel.residency.view' => 'hostel',
+        'hostel.residency.manage' => 'hostel',
+        'canteen.orders.view' => 'canteen',
+        'canteen.orders.manage' => 'canteen',
+        'admissions.view' => 'admissions',
+        'admissions.manage' => 'admissions',
     ];
 
     /**
@@ -111,7 +135,35 @@ final class CampusScopeCatalogue
      *
      * @var array<string, array{capability: string, reason: string}>
      */
-    public const WHOLE_SCHOOL_OPERATIONS = [];
+    public const WHOLE_SCHOOL_OPERATIONS = [
+        // ORG.7D-3 (ADR 0076 §39): Hostel fee intent is a School-wide view over
+        // every residency, and carry-forward walks them all.
+        'app.hostel-residency.fees' => ['capability' => 'hostel.residency.view', 'reason' => 'Hostel fee intent across every residency of the School (Fees-linked, School-wide).'],
+        'app.hostel-residency.fees.carry-forward' => ['capability' => 'hostel.residency.manage', 'reason' => 'Next-year fee carry-forward walks every active residency of the School.'],
+        'api.v1.schools.hostel-residency-assignments.fee-selections.index' => ['capability' => 'hostel.residency.view', 'reason' => 'A residency\'s recorded fee intent (Fees-linked).'],
+        'api.v1.schools.hostel-fee-selections.carry-forward' => ['capability' => 'hostel.residency.manage', 'reason' => 'Next-year fee carry-forward walks every active residency of the School.'],
+        // ORG.7D-3 (ADR 0076 §39): Admissions whole-School-only operations.
+        'app.admissions.fee-head' => ['capability' => 'admissions.view', 'reason' => 'The School\'s admission fee head (Fees configuration).'],
+        'app.admissions.fee-head.update' => ['capability' => 'admissions.manage', 'reason' => 'The School\'s admission fee head (Fees configuration).'],
+        'app.admissions.applicants.index' => ['capability' => 'admissions.view', 'reason' => 'The School-wide Applicant directory: Applicants have no Campus.'],
+        'app.admissions.applicants.create' => ['capability' => 'admissions.manage', 'reason' => 'Applicant identity is School-wide; there is no atomic applicant-plus-application path yet.'],
+        'app.admissions.applicants.store' => ['capability' => 'admissions.manage', 'reason' => 'Applicant identity is School-wide; there is no atomic applicant-plus-application path yet.'],
+        'app.admissions.applicants.show' => ['capability' => 'admissions.view', 'reason' => 'The Applicant page lists applications on every Campus.'],
+        'app.admissions.applicants.applications.create' => ['capability' => 'admissions.manage', 'reason' => 'Starting an application is reached from the whole-School Applicant page.'],
+        'app.admissions.applicants.applications.store' => ['capability' => 'admissions.manage', 'reason' => 'Starting an application is reached from the whole-School Applicant page.'],
+        'app.admissions.guardians.search' => ['capability' => 'admissions.manage', 'reason' => 'School-wide Guardian name search (conversion form).'],
+        'app.admissions.guardians.candidates' => ['capability' => 'admissions.manage', 'reason' => 'School-wide Guardian contact lookup (a contact-to-identity oracle; conversion form).'],
+        'app.admissions.convert' => ['capability' => 'admissions.manage', 'reason' => 'Conversion creates the Student, Guardian and enrollment (SIS): whole-School until the full SIS wave.'],
+        'api.v1.schools.applicants.index' => ['capability' => 'admissions.view', 'reason' => 'The School-wide Applicant directory: Applicants have no Campus.'],
+        'api.v1.schools.applicants.store' => ['capability' => 'admissions.manage', 'reason' => 'Applicant identity is School-wide.'],
+        'api.v1.schools.applicants.show' => ['capability' => 'admissions.view', 'reason' => 'Applicant identity is School-wide.'],
+        'api.v1.schools.applicants.applications.index' => ['capability' => 'admissions.view', 'reason' => 'An Applicant\'s application history spans every Campus.'],
+        'api.v1.schools.admission-applications.store' => ['capability' => 'admissions.manage', 'reason' => 'Starting an application needs the whole-School Applicant identity.'],
+        'api.v1.schools.admission-applications.convert' => ['capability' => 'admissions.manage', 'reason' => 'Conversion creates the Student, Guardian and enrollment (SIS): whole-School until the full SIS wave.'],
+        'api.v1.schools.admission-fee-head.show' => ['capability' => 'admissions.view', 'reason' => 'The School\'s admission fee head (Fees configuration).'],
+        'api.v1.schools.admission-fee-head.update' => ['capability' => 'admissions.manage', 'reason' => 'The School\'s admission fee head (Fees configuration).'],
+        'api.v1.schools.admission-applications.fee-selection.show' => ['capability' => 'admissions.view', 'reason' => 'Recorded admission fee intent (Fees-linked provenance).'],
+    ];
 
     /**
      * ORG.7D-1 (ADR 0076 §37): navigation hubs (StaffNavigation::HUBS) that

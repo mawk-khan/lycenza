@@ -2,12 +2,14 @@
 
 namespace Tests\Support\Authorization;
 
+use App\Domain\Admissions\Application\AdmissionApplicationAccess;
 use App\Domain\Analytics\Application\AnalyticsReadGate;
 use App\Domain\Attendance\Application\AttendanceAdministrationAccess;
 use App\Domain\Attendance\Application\AttendanceExceptionReadService;
 use App\Domain\Attendance\Application\TeacherAttendanceAccess;
 use App\Domain\Automation\Application\AutomationReadService;
 use App\Domain\Automation\Application\AutomationRuleService;
+use App\Domain\Canteen\Application\CanteenOrderAccess;
 use App\Domain\Communications\Http\Controllers\CommunicationAttachmentController;
 use App\Domain\Communications\Http\Controllers\CommunicationPreferenceController;
 use App\Domain\Compliance\Application\AuditLogReviewService;
@@ -17,6 +19,7 @@ use App\Domain\Documents\Application\DocumentListingService;
 use App\Domain\Documents\Application\DocumentReadService;
 use App\Domain\Documents\Application\DocumentService;
 use App\Domain\Examinations\Application\ExaminationPaperAccess;
+use App\Domain\Hostel\Application\HostelResidencyAccess;
 use App\Domain\HR\Application\EmployeeDirectoryService;
 use App\Domain\HR\Application\EmployeeProfileWorkspaceService;
 use App\Domain\HR\Http\Support\HighlySensitiveDocumentStepUp;
@@ -195,17 +198,12 @@ final class SchoolRouteCoverage
             Coverage::service('api.v1.schools.documents.archive', DocumentService::class, 'archive'),
 
             // Domain\Admissions\Http\Controllers\ApplicantController
-            Coverage::gate('api.v1.schools.applicants.index', 'admissions.view'),
-            Coverage::gate('api.v1.schools.applicants.show', 'admissions.view'),
-            Coverage::gate('api.v1.schools.applicants.applications.index', 'admissions.view'),
 
             // Domain\Admissions\Http\Controllers\AdmissionApplicationController
-            Coverage::gate('api.v1.schools.admission-applications.index', 'admissions.view'),
-            Coverage::gate('api.v1.schools.admission-applications.show', 'admissions.view'),
+            Coverage::campus('api.v1.schools.admission-applications.index', 'admissions.view', AdmissionApplicationAccess::class, 'directory'),
+            Coverage::campus('api.v1.schools.admission-applications.show', 'admissions.view', AdmissionApplicationAccess::class, 'detail'),
 
             // Domain\Admissions\Http\Controllers\AdmissionFeeController
-            Coverage::gate('api.v1.schools.admission-fee-head.show', 'admissions.view'),
-            Coverage::gate('api.v1.schools.admission-applications.fee-selection.show', 'admissions.view'),
 
             // Domain\Library\Http\Controllers\LibraryTitleController
             Coverage::gate('api.v1.schools.library-titles.index', 'library.catalogue.view'),
@@ -266,13 +264,15 @@ final class SchoolRouteCoverage
             Coverage::gate('api.v1.schools.hostel-rooms.hostel-beds.index', 'hostel.directory.view'),
 
             // Domain\Hostel\Http\Controllers\HostelResidencyAssignmentController
-            Coverage::gate('api.v1.schools.hostel-residency-assignments.index', 'hostel.residency.view'),
-            Coverage::gate('api.v1.schools.hostel-residency-assignments.show', 'hostel.residency.view'),
+            // ORG.7D-3 (ADR 0076 §39): Hostel residency is Campus-adopted.
+            Coverage::campus('api.v1.schools.hostel-residency-assignments.index', 'hostel.residency.view', HostelResidencyAccess::class, 'residencies'),
+            Coverage::campus('api.v1.schools.hostel-residency-assignments.store', 'hostel.residency.manage', HostelResidencyAccess::class, 'writeGuard'),
+            Coverage::campus('api.v1.schools.hostel-residency-assignments.end', 'hostel.residency.manage', HostelResidencyAccess::class, 'residency'),
+            Coverage::campus('api.v1.schools.hostel-residency-assignments.show', 'hostel.residency.view', HostelResidencyAccess::class, 'residency'),
 
             // Domain\Hostel\Http\Controllers\HostelFeeController
             Coverage::gate('api.v1.schools.hostels.fee-head.show', 'hostel.directory.view'),
             Coverage::gate('api.v1.schools.hostel-rooms.fee-head.show', 'hostel.directory.view'),
-            Coverage::gate('api.v1.schools.hostel-residency-assignments.fee-selections.index', 'hostel.residency.view'),
 
             // Domain\Inventory\Http\Controllers\InventoryItemController
             Coverage::gate('api.v1.schools.inventory-items.index', 'inventory.directory.view'),
@@ -660,29 +660,23 @@ final class SchoolRouteCoverage
             Coverage::gate('app.subject-enrollments.transfer-targets', 'academics.subjects.manage'),
 
             // Http\Controllers\App\AdmissionApplicationController
-            Coverage::gate('app.admissions.index', 'admissions.view'),
+            // ORG.7D-3 (ADR 0076 §39): pre-conversion Admissions is Campus-adopted.
+            Coverage::campus('app.admissions.index', 'admissions.view', AdmissionApplicationAccess::class, 'directory'),
+            Coverage::campus('api.v1.schools.admission-applications.submit', 'admissions.manage', AdmissionApplicationAccess::class, 'application'),
+            Coverage::campus('api.v1.schools.admission-applications.accept', 'admissions.manage', AdmissionApplicationAccess::class, 'application'),
+            Coverage::campus('api.v1.schools.admission-applications.reject', 'admissions.manage', AdmissionApplicationAccess::class, 'application'),
+            Coverage::campus('api.v1.schools.admission-applications.withdraw', 'admissions.manage', AdmissionApplicationAccess::class, 'application'),
 
             // Http\Controllers\App\Fees\OperationalFeeController
-            Coverage::gate('app.admissions.fee-head', 'admissions.view'),
-            Coverage::gate('app.admissions.fee-head.update', 'admissions.manage'),
 
             // Http\Controllers\App\ApplicantController
-            Coverage::gate('app.admissions.applicants.index', 'admissions.view'),
-            Coverage::gate('app.admissions.applicants.create', 'admissions.manage'),
-            Coverage::gate('app.admissions.applicants.store', 'admissions.manage'),
-            Coverage::gate('app.admissions.applicants.show', 'admissions.view'),
 
             // Http\Controllers\App\AdmissionApplicationController
-            Coverage::gate('app.admissions.applicants.applications.create', 'admissions.manage'),
-            Coverage::gate('app.admissions.applicants.applications.store', 'admissions.manage'),
-            Coverage::gate('app.admissions.guardians.search', 'admissions.manage'),
-            Coverage::gate('app.admissions.guardians.candidates', 'admissions.manage'),
-            Coverage::gate('app.admissions.show', 'admissions.view'),
-            Coverage::gate('app.admissions.submit', 'admissions.manage'),
-            Coverage::gate('app.admissions.accept', 'admissions.manage'),
-            Coverage::gate('app.admissions.reject', 'admissions.manage'),
-            Coverage::gate('app.admissions.withdraw', 'admissions.manage'),
-            Coverage::gate('app.admissions.convert', 'admissions.manage'),
+            Coverage::campus('app.admissions.show', 'admissions.view', AdmissionApplicationAccess::class, 'detail'),
+            Coverage::campus('app.admissions.submit', 'admissions.manage', AdmissionApplicationAccess::class, 'application'),
+            Coverage::campus('app.admissions.accept', 'admissions.manage', AdmissionApplicationAccess::class, 'application'),
+            Coverage::campus('app.admissions.reject', 'admissions.manage', AdmissionApplicationAccess::class, 'application'),
+            Coverage::campus('app.admissions.withdraw', 'admissions.manage', AdmissionApplicationAccess::class, 'application'),
 
             // Http\Controllers\App\LibraryCatalogueController
             Coverage::gate('app.library.titles.index', 'library.catalogue.view'),
@@ -977,18 +971,16 @@ final class SchoolRouteCoverage
             Coverage::gate('app.hostel-beds.update', 'hostel.directory.manage'),
 
             // Http\Controllers\App\HostelResidencyController
-            Coverage::gate('app.hostel-residency.index', 'hostel.residency.view'),
-            Coverage::gate('app.hostel-residency.create', 'hostel.residency.manage'),
-            Coverage::gate('app.hostel-residency.search-students', 'hostel.residency.manage'),
-            Coverage::gate('app.hostel-residency.search-beds', 'hostel.residency.manage'),
+            Coverage::campus('app.hostel-residency.index', 'hostel.residency.view', HostelResidencyAccess::class, 'residencies'),
+            Coverage::campusLookup('app.hostel-residency.create', 'hostel.residency.manage', 'Data-free form page; Students and Beds come from the scoped searches.'),
+            Coverage::campus('app.hostel-residency.search-students', 'hostel.residency.manage', HostelResidencyAccess::class, 'residentCandidates'),
+            Coverage::campus('app.hostel-residency.search-beds', 'hostel.residency.manage', HostelResidencyAccess::class, 'beds'),
 
             // Http\Controllers\App\Fees\OperationalFeeController
-            Coverage::gate('app.hostel-residency.fees', 'hostel.residency.view'),
-            Coverage::gate('app.hostel-residency.fees.carry-forward', 'hostel.residency.manage'),
 
             // Http\Controllers\App\HostelResidencyController
-            Coverage::gate('app.hostel-residency.store', 'hostel.residency.manage'),
-            Coverage::gate('app.hostel-residency.end', 'hostel.residency.manage'),
+            Coverage::campus('app.hostel-residency.store', 'hostel.residency.manage', HostelResidencyAccess::class, 'writeGuard'),
+            Coverage::campus('app.hostel-residency.end', 'hostel.residency.manage', HostelResidencyAccess::class, 'residency'),
 
             // Http\Controllers\App\InventoryItemController
             Coverage::gate('app.inventory-items.index', 'inventory.directory.view'),
@@ -1035,14 +1027,22 @@ final class SchoolRouteCoverage
             Coverage::gate('app.canteen-settings.update', 'canteen.settings.manage'),
 
             // Http\Controllers\App\Canteen\CanteenOrderController
-            Coverage::gate('app.canteen-orders.index', 'canteen.orders.view'),
-            Coverage::gate('app.canteen-orders.create', 'canteen.orders.manage'),
-            Coverage::gate('app.canteen-orders.search-students', 'canteen.orders.manage'),
-            Coverage::gate('app.canteen-orders.search-items', 'canteen.orders.manage'),
-            Coverage::gate('app.canteen-orders.store', 'canteen.orders.manage'),
-            Coverage::gate('app.canteen-orders.show', 'canteen.orders.view'),
-            Coverage::gate('app.canteen-orders.fulfill', 'canteen.orders.manage'),
-            Coverage::gate('app.canteen-orders.cancel', 'canteen.orders.manage'),
+            // ORG.7D-3 (ADR 0076 §39): Canteen orders are Campus-adopted (by the Outlet's Campus).
+            Coverage::campus('app.canteen-orders.index', 'canteen.orders.view', CanteenOrderAccess::class, 'orders'),
+            Coverage::campus('app.canteen-orders.create', 'canteen.orders.manage', CanteenOrderAccess::class, 'outlets'),
+            Coverage::campus('app.canteen-orders.search-students', 'canteen.orders.manage', CanteenOrderAccess::class, 'studentCandidates'),
+            Coverage::campusLookup('app.canteen-orders.search-items', 'canteen.orders.manage', 'The order form\'s menu picker: the School-wide Item catalogue (code, name, price; not personal data).'),
+            Coverage::campus('app.canteen-orders.store', 'canteen.orders.manage', CanteenOrderAccess::class, 'writeGuard'),
+            Coverage::campus('app.canteen-orders.show', 'canteen.orders.view', CanteenOrderAccess::class, 'order'),
+            Coverage::campus('app.canteen-orders.fulfill', 'canteen.orders.manage', CanteenOrderAccess::class, 'writeGuard'),
+            Coverage::campus('app.canteen-orders.cancel', 'canteen.orders.manage', CanteenOrderAccess::class, 'writeGuard'),
+            Coverage::campus('api.v1.schools.canteen-orders.index', 'canteen.orders.view', CanteenOrderAccess::class, 'orders'),
+            Coverage::campus('api.v1.schools.canteen-orders.store', 'canteen.orders.manage', CanteenOrderAccess::class, 'writeGuard'),
+            Coverage::campus('api.v1.schools.canteen-orders.search-students', 'canteen.orders.manage', CanteenOrderAccess::class, 'studentCandidates'),
+            Coverage::campusLookup('api.v1.schools.canteen-orders.search-items', 'canteen.orders.manage', 'The order form\'s menu picker: the School-wide Item catalogue (code, name, price; not personal data).'),
+            Coverage::campus('api.v1.schools.canteen-orders.show', 'canteen.orders.view', CanteenOrderAccess::class, 'order'),
+            Coverage::campus('api.v1.schools.canteen-orders.fulfill', 'canteen.orders.manage', CanteenOrderAccess::class, 'writeGuard'),
+            Coverage::campus('api.v1.schools.canteen-orders.cancel', 'canteen.orders.manage', CanteenOrderAccess::class, 'writeGuard'),
 
             // Http\Controllers\App\Timetable\TimetablePeriodController
             Coverage::gate('app.timetable-periods.index', 'timetable.periods.view'),

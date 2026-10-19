@@ -49,7 +49,7 @@ class CanteenStudentPickerAuthorityTest extends TestCase
     }
 
     #[Test]
-    public function the_picker_response_is_unchanged_and_school_isolated(): void
+    public function the_picker_response_is_minimal_and_school_isolated(): void
     {
         $school = $this->createSchool();
         $other = $this->createSchool();
@@ -58,7 +58,8 @@ class CanteenStudentPickerAuthorityTest extends TestCase
         $user = $this->createUserWithCapabilities($school, ['canteen.orders.manage']);
 
         $rows = $this->api($user)->getJson("/api/v1/schools/{$school->id}/canteen-orders/search/students?q=Ananya")->assertOk()->json('data');
-        $this->assertSame([['id' => $mine->id, 'studentNumber' => $mine->student_number, 'firstName' => 'Ananya', 'lastName' => $mine->last_name]], $rows);
+        // ORG.7D-3 (ADR 0076 §39, D2-7): the minimal identity -- one display name.
+        $this->assertSame([['id' => $mine->id, 'studentNumber' => $mine->student_number, 'name' => trim('Ananya '.$mine->last_name)]], $rows);
 
         // Another School's path is refused before the picker runs (not a member: 404, as before).
         $this->api($user)->getJson("/api/v1/schools/{$other->id}/canteen-orders/search/students?q=Ananya")->assertNotFound();

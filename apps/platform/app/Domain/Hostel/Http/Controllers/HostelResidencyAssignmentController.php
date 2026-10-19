@@ -2,13 +2,12 @@
 
 namespace App\Domain\Hostel\Http\Controllers;
 
+use App\Domain\Hostel\Application\HostelResidencyAccess;
 use App\Domain\Hostel\Application\HostelResidencyService;
-use App\Domain\Hostel\Infrastructure\HostelBed;
 use App\Domain\Hostel\Infrastructure\HostelResidencyAssignment;
-use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Models\School;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -22,21 +21,26 @@ use Illuminate\Validation\Rule;
  * guarantee this endpoint delegates to. `end()` deliberately does NOT
  * carry idempotency -- see docs/modules/HOSTEL.md "Idempotency
  * decisions".
+ *
+ * ORG.7D-3 (ADR 0076 §39): `hostel.residency.*` are Campus-adopted -- every
+ * action goes through HostelResidencyAccess (out of scope = 404); a
+ * Campus-scoped assignment runs HostelResidencyCampusGuard. A request
+ * `student_id` filter only narrows.
  */
 class HostelResidencyAssignmentController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
-    public function index(Request $request, School $school): JsonResponse
+    public function index(Request $request, School $school, HostelResidencyAccess $access): JsonResponse
     {
-        $this->authorizeCapability('hostel.residency.view', $school);
+        $scope = $this->authorizeCampusScope('hostel.residency.view', $school);
 
         $validated = $request->validate([
             'status' => ['sometimes', Rule::in(['active', 'ended'])],
             'student_id' => ['sometimes', 'string'],
         ]);
 
-        $query = HostelResidencyAssignment::query()
+        $query = $access->residencies($scope)
             ->with(['student', 'bed.room.hostel'])
             ->orderByDesc('starts_on');
 
@@ -58,37 +62,37 @@ class HostelResidencyAssignmentController extends Controller
         ]);
     }
 
-    public function store(Request $request, School $school, HostelResidencyService $service): JsonResponse
+    public function store(Request $request, School $school, HostelResidencyService $service, HostelResidencyAccess $access): JsonResponse
     {
-        $this->authorizeCapability('hostel.residency.manage', $school);
+        $scope = $this->authorizeCampusScope('hostel.residency.manage', $school);
 
         $validated = $request->validate([
             'student_id' => ['required', 'string'],
             'hostel_bed_id' => ['required', 'string'],
         ]);
 
-        $student = Student::query()->findOrFail($validated['student_id']);
-        $bed = HostelBed::query()->findOrFail($validated['hostel_bed_id']);
+        $bed = $access->bed($scope, $validated['hostel_bed_id']);
+        $student = $access->residentStudent($scope, $validated['student_id']);
 
-        $assignment = $service->assign($student, $bed, $request->user());
+        $assignment = $service->assign($student, $bed, $request->user(), $access->writeGuard($school, $scope));
 
         return response()->json(['data' => $this->present($assignment->load(['student', 'bed.room.hostel']))], 201);
     }
 
-    public function show(School $school, string $hostelResidencyAssignment): JsonResponse
+    public function show(School $school, string $hostelResidencyAssignment, HostelResidencyAccess $access): JsonResponse
     {
-        $this->authorizeCapability('hostel.residency.view', $school);
+        $scope = $this->authorizeCampusScope('hostel.residency.view', $school);
 
-        $model = HostelResidencyAssignment::query()->with(['student', 'bed.room.hostel'])->findOrFail($hostelResidencyAssignment);
+        $model = $access->residency($scope, $hostelResidencyAssignment)->load(['student', 'bed.room.hostel']);
 
         return response()->json(['data' => $this->present($model)]);
     }
 
-    public function end(Request $request, School $school, string $hostelResidencyAssignment, HostelResidencyService $service): JsonResponse
+    public function end(Request $request, School $school, string $hostelResidencyAssignment, HostelResidencyService $service, HostelResidencyAccess $access): JsonResponse
     {
-        $this->authorizeCapability('hostel.residency.manage', $school);
+        $scope = $this->authorizeCampusScope('hostel.residency.manage', $school);
 
-        $model = HostelResidencyAssignment::query()->findOrFail($hostelResidencyAssignment);
+        $model = $access->residency($scope, $hostelResidencyAssignment);
 
         $assignment = $service->end($model, $request->user());
 

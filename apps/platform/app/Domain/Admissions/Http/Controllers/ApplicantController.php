@@ -11,7 +11,6 @@ use App\Domain\Admissions\Infrastructure\Applicant;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Models\School;
-use App\Support\Authorization\AuthorizesCapability;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -24,18 +23,17 @@ use Illuminate\Http\Request;
  * App\Domain\Admissions\Application\ApplicantReadService (Phase 1D.4).
  * No search/query logic is duplicated here.
  *
- * `$this->authorizeCapability(...)` runs on every action, deliberately
- * redundant with the `capability:` route middleware already applied to
- * mutation routes in routes/api.php (defense in depth, matching every
- * other administrative controller in this codebase).
+ * ORG.7D-3 (ADR 0076 §39): every action here is a declared whole-School-
+ * only operation of the Campus-adopted admissions keys, authorized by its
+ * route's ordinary `capability:admissions.*` floor (routes/api.php) -- the
+ * Applicant directory and page list applications on every Campus.
  */
 class ApplicantController extends Controller
 {
-    use AuthorizesCapability;
-
     public function index(Request $request, School $school, ApplicantReadService $reads): JsonResponse
     {
-        $this->authorizeCapability('admissions.view', $school);
+        // ORG.7D-3: a declared whole-School-only operation -- authorized by the
+        // route's ordinary `capability:admissions.view` floor (ADR 0076 §39).
 
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
@@ -56,7 +54,8 @@ class ApplicantController extends Controller
 
     public function show(School $school, string $applicant, ApplicantReadService $reads): JsonResponse
     {
-        $this->authorizeCapability('admissions.view', $school);
+        // ORG.7D-3: a declared whole-School-only operation -- authorized by the
+        // route's ordinary `capability:admissions.view` floor (ADR 0076 §39).
 
         $model = $reads->detail($applicant);
         abort_if($model === null, 404);
@@ -66,7 +65,8 @@ class ApplicantController extends Controller
 
     public function store(Request $request, School $school, ApplicantService $service): JsonResponse
     {
-        $this->authorizeCapability('admissions.manage', $school);
+        // ORG.7D-3: a declared whole-School-only operation -- authorized by the
+        // route's ordinary `capability:admissions.manage` floor (ADR 0076 §39).
 
         $validated = $request->validate([
             'first_name' => ['required', 'string', 'max:255'],
@@ -89,7 +89,8 @@ class ApplicantController extends Controller
      */
     public function applications(School $school, string $applicant, ApplicantReadService $reads): JsonResponse
     {
-        $this->authorizeCapability('admissions.view', $school);
+        // ORG.7D-3: a declared whole-School-only operation -- authorized by the
+        // route's ordinary `capability:admissions.view` floor (ADR 0076 §39).
 
         $model = $reads->detail($applicant);
         abort_if($model === null, 404);

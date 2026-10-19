@@ -81,8 +81,12 @@ class CanteenOrderService
         private readonly AuditRecorder $audit,
     ) {}
 
-    public function place(School $school, PlaceCanteenOrderData $data, ?User $actor = null): CanteenOrderResult
+    public function place(School $school, PlaceCanteenOrderData $data, ?User $actor = null, ?CanteenOrderCampusGuard $guard = null): CanteenOrderResult
     {
+        // ORG.7D-3 (ADR 0076 §39): a Campus-scoped actor's Outlet and current-
+        // Student check runs first, so nothing below discloses another Campus.
+        $guard?->beforePlace($data->studentId, $data->outletId);
+
         $student = Student::query()->where('school_id', $school->id)->find($data->studentId);
         if ($student === null) {
             throw new CanteenStudentNotFoundException($data->studentId);
@@ -132,7 +136,10 @@ class CanteenOrderService
             }
         }
 
-        return DB::transaction(function () use ($school, $student, $outlet, $data, $items, $actor) {
+        return DB::transaction(function () use ($school, $student, $outlet, $data, $items, $actor, $guard) {
+            // ...and again at write time.
+            $guard?->beforePlace($data->studentId, $data->outletId);
+
             $lineRows = [];
             $totalAmount = '0.00';
 
@@ -192,14 +199,15 @@ class CanteenOrderService
         });
     }
 
-    public function fulfill(School $school, string $orderId, ?User $actor = null): CanteenOrderResult
+    public function fulfill(School $school, string $orderId, ?User $actor = null, ?CanteenOrderCampusGuard $guard = null): CanteenOrderResult
     {
-        return DB::transaction(function () use ($school, $orderId, $actor) {
+        return DB::transaction(function () use ($school, $orderId, $actor, $guard) {
             $order = CanteenOrder::query()->where('school_id', $school->id)->lockForUpdate()->find($orderId);
 
             if ($order === null) {
                 throw new CanteenOrderNotFoundException($orderId);
             }
+            $guard?->beforeChange($order);
 
             if ($order->isFulfilled()) {
                 throw new CanteenOrderAlreadyFulfilledException($order->id);
@@ -298,14 +306,15 @@ class CanteenOrderService
         });
     }
 
-    public function cancel(School $school, string $orderId, ?User $actor = null): CanteenOrderResult
+    public function cancel(School $school, string $orderId, ?User $actor = null, ?CanteenOrderCampusGuard $guard = null): CanteenOrderResult
     {
-        return DB::transaction(function () use ($school, $orderId, $actor) {
+        return DB::transaction(function () use ($school, $orderId, $actor, $guard) {
             $order = CanteenOrder::query()->where('school_id', $school->id)->lockForUpdate()->find($orderId);
 
             if ($order === null) {
                 throw new CanteenOrderNotFoundException($orderId);
             }
+            $guard?->beforeChange($order);
 
             if ($order->isCancelled()) {
                 throw new CanteenOrderAlreadyCancelledException($order->id);

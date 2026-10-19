@@ -42,7 +42,7 @@ class CanteenItemController extends Controller
         $query = CanteenItem::query()->where('status', 'active')->orderBy('code');
 
         if (isset($validated['search'])) {
-            $term = '%'.$validated['search'].'%';
+            $term = '%'.addcslashes($validated['search'], '%_\\').'%';
             $query->where(fn ($q) => $q->where('code', 'ilike', $term)->orWhere('name', 'ilike', $term));
         }
 
@@ -150,7 +150,9 @@ class CanteenItemController extends Controller
 
         $items = InventoryItem::query()
             ->where('status', 'active')
-            ->when($term !== '', fn ($q) => $q->where('code', 'ilike', "%{$term}%")->orWhere('name', 'ilike', "%{$term}%"))
+            // ORG.7D-3: the name match is grouped with the code match, so it can
+            // no longer bypass the active-only filter; wildcards are literal (R8).
+            ->when($term !== '', fn ($q) => $q->where(fn ($w) => $w->where('code', 'ilike', '%'.addcslashes($term, '%_\\').'%')->orWhere('name', 'ilike', '%'.addcslashes($term, '%_\\').'%')))
             ->limit(10)
             ->get();
 

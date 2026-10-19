@@ -50,6 +50,8 @@ interface Props {
     campuses: Ref[];
     gradeLevels: Ref[];
     canManage: boolean;
+    // ORG.7D-3: the Applicant directory and fee head stay whole-School.
+    canViewApplicants: boolean;
 }
 
 const props = defineProps<Props>();
@@ -110,12 +112,14 @@ const hasFilters =
                     Admission Applications across your School.
                 </p>
             </div>
-            <a href="/app/admissions/fee-head" class="text-sm font-medium underline"
-                >Admission fee</a
-            >
-            <a href="/app/admissions/applicants" class="text-sm font-medium underline"
-                >Applicants</a
-            >
+            <template v-if="props.canViewApplicants">
+                <a href="/app/admissions/fee-head" class="text-sm font-medium underline"
+                    >Admission fee</a
+                >
+                <a href="/app/admissions/applicants" class="text-sm font-medium underline"
+                    >Applicants</a
+                >
+            </template>
         </div>
 
         <form class="mt-6 flex flex-wrap items-end gap-3" @submit.prevent="applyFilters">
@@ -215,7 +219,11 @@ const hasFilters =
                         <td class="py-3">
                             <a
                                 class="font-medium underline"
-                                :href="`/app/admissions/applicants/${a.applicant.id}`"
+                                :href="
+                                    props.canViewApplicants
+                                        ? `/app/admissions/applicants/${a.applicant.id}`
+                                        : `/app/admissions/${a.id}`
+                                "
                                 >{{ applicantName_(a.applicant) }}</a
                             >
                         </td>

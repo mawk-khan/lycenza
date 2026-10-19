@@ -10,11 +10,11 @@ interface OutletOption {
     name: string;
 }
 
+// ORG.7D-3: the picker answers the minimal identity (id, number, display name).
 interface StudentCandidate {
     id: string;
     studentNumber: string;
-    firstName: string;
-    lastName: string | null;
+    name: string;
 }
 
 interface CanteenItemOption {
@@ -52,7 +52,7 @@ const studentResults = ref<StudentCandidate[]>([]);
 let studentDebounce: ReturnType<typeof setTimeout> | undefined;
 
 function candidateName(s: StudentCandidate): string {
-    return [s.firstName, s.lastName].filter(Boolean).join(' ');
+    return s.name;
 }
 
 watch(studentQuery, (value) => {

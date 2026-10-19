@@ -2,16 +2,17 @@
 
 namespace App\Domain\Canteen\Http\Controllers;
 
+use App\Domain\Canteen\Application\CanteenOrderAccess;
 use App\Domain\Canteen\Application\CanteenOrderLineData;
 use App\Domain\Canteen\Application\CanteenOrderService;
 use App\Domain\Canteen\Application\PlaceCanteenOrderData;
 use App\Domain\Canteen\Infrastructure\CanteenItem;
 use App\Domain\Canteen\Infrastructure\CanteenOrder;
-use App\Domain\Students\Application\StudentSearch;
+use App\Domain\Students\Application\StudentLookupCandidate;
 use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Models\School;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -30,13 +31,18 @@ use Illuminate\Validation\Rule;
  * this is a deliberate transport-layer minimization, not an
  * authorization difference.
  */
+/**
+ * ORG.7D-3 (ADR 0076 §39): `canteen.orders.*` are Campus-adopted -- see
+ * App\Http\Controllers\App\Canteen\CanteenOrderController. A request
+ * `student_id`/`outlet_id` filter only narrows.
+ */
 class CanteenOrderController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
-    public function index(Request $request, School $school): JsonResponse
+    public function index(Request $request, School $school, CanteenOrderAccess $access): JsonResponse
     {
-        $this->authorizeCapability('canteen.orders.view', $school);
+        $scope = $this->authorizeCampusScope('canteen.orders.view', $school);
 
         $validated = $request->validate([
             'status' => ['sometimes', Rule::in(['pending', 'fulfilled', 'cancelled'])],
@@ -44,7 +50,7 @@ class CanteenOrderController extends Controller
             'outlet_id' => ['sometimes', 'uuid'],
         ]);
 
-        $query = CanteenOrder::query()->orderByDesc('placed_at');
+        $query = $access->orders($scope)->orderByDesc('placed_at');
 
         if (isset($validated['status'])) {
             $query->where('status', $validated['status']);
@@ -68,18 +74,18 @@ class CanteenOrderController extends Controller
         ]);
     }
 
-    public function show(School $school, string $canteenOrder): JsonResponse
+    public function show(School $school, string $canteenOrder, CanteenOrderAccess $access): JsonResponse
     {
-        $this->authorizeCapability('canteen.orders.view', $school);
+        $scope = $this->authorizeCampusScope('canteen.orders.view', $school);
 
-        $order = CanteenOrder::query()->with('lines')->findOrFail($canteenOrder);
+        $order = $access->order($scope, $canteenOrder)->load('lines');
 
         return response()->json(['data' => $this->presentDetail($order)]);
     }
 
-    public function store(Request $request, School $school, CanteenOrderService $service): JsonResponse
+    public function store(Request $request, School $school, CanteenOrderService $service, CanteenOrderAccess $access): JsonResponse
     {
-        $this->authorizeCapability('canteen.orders.manage', $school);
+        $scope = $this->authorizeCampusScope('canteen.orders.manage', $school);
 
         $validated = $request->validate([
             'student_id' => ['required', 'uuid'],
@@ -98,31 +104,31 @@ class CanteenOrderController extends Controller
             studentId: $validated['student_id'],
             outletId: $validated['outlet_id'],
             lines: $lines,
-        ), $request->user());
+        ), $request->user(), $access->writeGuard($school, $scope));
 
-        $order = CanteenOrder::query()->with('lines')->findOrFail($result->orderId);
+        $order = $access->order($scope, $result->orderId)->load('lines');
 
         return response()->json(['data' => $this->presentDetail($order)], 201);
     }
 
-    public function fulfill(Request $request, School $school, string $canteenOrder, CanteenOrderService $service): JsonResponse
+    public function fulfill(Request $request, School $school, string $canteenOrder, CanteenOrderService $service, CanteenOrderAccess $access): JsonResponse
     {
-        $this->authorizeCapability('canteen.orders.manage', $school);
+        $scope = $this->authorizeCampusScope('canteen.orders.manage', $school);
 
-        $service->fulfill($school, $canteenOrder, $request->user());
+        $service->fulfill($school, $canteenOrder, $request->user(), $access->writeGuard($school, $scope));
 
-        $order = CanteenOrder::query()->with('lines')->findOrFail($canteenOrder);
+        $order = $access->order($scope, $canteenOrder)->load('lines');
 
         return response()->json(['data' => $this->presentDetail($order)]);
     }
 
-    public function cancel(Request $request, School $school, string $canteenOrder, CanteenOrderService $service): JsonResponse
+    public function cancel(Request $request, School $school, string $canteenOrder, CanteenOrderService $service, CanteenOrderAccess $access): JsonResponse
     {
-        $this->authorizeCapability('canteen.orders.manage', $school);
+        $scope = $this->authorizeCampusScope('canteen.orders.manage', $school);
 
-        $service->cancel($school, $canteenOrder, $request->user());
+        $service->cancel($school, $canteenOrder, $request->user(), $access->writeGuard($school, $scope));
 
-        $order = CanteenOrder::query()->with('lines')->findOrFail($canteenOrder);
+        $order = $access->order($scope, $canteenOrder)->load('lines');
 
         return response()->json(['data' => $this->presentDetail($order)]);
     }
@@ -138,38 +144,31 @@ class CanteenOrderController extends Controller
      * (App\Http\Controllers\App\Canteen\CanteenOrderController). A
      * read-only order viewer never needs the School-wide Student picker.
      */
-    public function searchStudents(Request $request, School $school): JsonResponse
+    public function searchStudents(Request $request, School $school, CanteenOrderAccess $access): JsonResponse
     {
-        $this->authorizeCapability('canteen.orders.manage', $school);
+        $scope = $this->authorizeCampusScope('canteen.orders.manage', $school);
 
         $validated = $request->validate([
             'q' => ['required', 'string', 'min:2', 'max:255'],
         ]);
 
-        $students = Student::query()
-            ->where('status', 'active')
-            ->tap(fn ($q) => StudentSearch::anyField($q, $validated['q']))
-            ->orderBy('first_name')
-            ->limit(10)
-            ->get();
-
         return response()->json([
-            'data' => $students->map(fn (Student $s) => [
-                'id' => $s->id,
-                'studentNumber' => $s->student_number,
-                'firstName' => $s->first_name,
-                'lastName' => $s->last_name,
-            ])->all(),
+            'data' => array_map(fn (StudentLookupCandidate $c) => [
+                'id' => $c->id,
+                'studentNumber' => $c->studentNumber,
+                'name' => $c->displayName,
+            ], $access->studentCandidates($school, $scope, $validated['q'])),
         ]);
     }
 
     /**
      * Same-School active CanteenItem search for the placement form's
-     * menu picker.
+     * menu picker. ORG.7D-3 (owner decision): it serves order ENTRY, so it
+     * needs `canteen.orders.manage`, exactly like the web picker.
      */
     public function searchItems(Request $request, School $school): JsonResponse
     {
-        $this->authorizeCapability('canteen.orders.view', $school);
+        $this->authorizeCampusScope('canteen.orders.manage', $school);
 
         $validated = $request->validate([
             'q' => ['sometimes', 'string', 'max:255'],
@@ -178,7 +177,8 @@ class CanteenOrderController extends Controller
         $query = CanteenItem::query()->where('status', 'active')->orderBy('code');
 
         if (isset($validated['q']) && trim($validated['q']) !== '') {
-            $term = '%'.$validated['q'].'%';
+            // ORG.7D-3 (R8): LIKE wildcards in the input are literal.
+            $term = '%'.addcslashes($validated['q'], '%_\\').'%';
             $query->where(fn ($q) => $q->where('code', 'ilike', $term)->orWhere('name', 'ilike', $term));
         }
 

@@ -191,3 +191,19 @@ School setting, a role, a navigation toggle or a commercial plan.
   Canteen, Admissions) will pick Students only from their staff's Campuses.
   None of those areas uses it yet. A Campus grant still gives no access to
   Student profiles. Exam papers will get their own Campus-safe hub later.
+- **ORG.7D-3 (ADR 0076 §39)** brought Campus scope to three areas:
+  - **Hostel residencies:** a Campus-only warden places only that Campus's
+    current Students, in that Campus's Hostels.
+  - **Canteen orders:** only that Campus's Outlets and current Students.
+  - **Admission applications (before conversion):** the list, the
+    application page and submit/accept/reject/withdraw, for that Campus's
+    applications.
+
+  Still whole-School:
+  - Applicant records and starting an application;
+  - conversion to Student and admission fees;
+  - Hostel fee intent and carry-forward;
+  - the Hostel, Canteen and Outlet set-up pages.
+
+  Transport and Library wait for owner rules on shared routes and
+  cross-Campus lending.

@@ -811,6 +811,23 @@ whole-School supersedes. A selected or current Campus
   The bell schedule, Academic Structure, the syllabus catalogue, the
   Examination itself, grade scales, marks, Data Health and every
   `*.teacher` key stay whole-School or ownership-scoped.
+- **Adopted in ORG.7D-3 (§39), the Student-dependent operational wave:**
+  - `hostel.residency.view/.manage` (by the Hostel's Campus);
+  - `canteen.orders.view/.manage` (by the Outlet's Campus; NULL-Campus
+    Outlets whole-School only);
+  - `admissions.view/.manage` for applications before conversion (by the
+    application's Campus).
+
+  Writes that place a Student re-check, at write time, that the Student is
+  operational on the target Campus, and refuse generically
+  (`HOSTEL_RESIDENCY_UNAVAILABLE`; `CANTEEN_STUDENT_NOT_FOUND`, identical to
+  an unknown id). The following are declared whole-School operations:
+  - Applicant identity, starting an application, Guardian searches,
+    conversion and admission fee configuration;
+  - Hostel fee intent and carry-forward.
+
+  Transport and Library are deferred. The Canteen Item picker needs
+  `canteen.orders.manage` (web and API).
 - **Refusals look the same.** A Campus-scoped actor's refusals do not
   differ between an in-scope and an out-of-scope conflict (Visitor
   check-in: one generic refusal; the School-wide one-active-Visit rule
@@ -865,6 +882,9 @@ whole-School supersedes. A selected or current Campus
     That lookup is never `students.view`; there is no generic Campus
     Student search or directory.
   - **Profiles:** Student profile access is not Campus-scoped.
+  - **Consumers (ORG.7D-3):** only the Hostel and Canteen access and guard
+    classes (allowlisted in `StudentCampusFoundationArchitectureTest`).
+    A whole-School actor keeps the domain's existing picker query.
 - **A whole-School hub that also opens on an adopted key**
   (ORG.7D-1, e.g. Data health) is declared in
   `CampusScopeCatalogue::WHOLE_SCHOOL_HUBS`. Only its own controller may

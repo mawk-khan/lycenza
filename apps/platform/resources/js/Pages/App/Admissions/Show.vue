@@ -48,7 +48,11 @@ interface Props {
         updatedAt: string;
     };
     canManage: boolean;
-    // SWC.3: the School's admission fee head and this application's fee intent.
+    // ORG.7D-3: conversion and the Applicant page are whole-School only.
+    canConvert: boolean;
+    canViewApplicants: boolean;
+    // SWC.3: the School's admission fee head and this application's fee intent
+    // (ORG.7D-3: null for a Campus-scoped viewer).
     feePanel: {
         configured: { id: string; code: string; name: string; active?: boolean } | null;
         intent: {
@@ -57,7 +61,7 @@ interface Props {
             selectionOutcome: string;
             recordedAt: string | null;
         } | null;
-    };
+    } | null;
     canViewStudents: boolean;
     compatibleSections: SectionOption[];
 }
@@ -289,10 +293,12 @@ function switchToLinkExisting(g: GuardianCandidate): void {
             <div>
                 <h1 class="text-xl font-semibold">
                     <a
+                        v-if="props.canViewApplicants"
                         class="underline"
                         :href="`/app/admissions/applicants/${application.applicant.id}`"
                         >{{ applicantName() }}</a
                     >
+                    <span v-else>{{ applicantName() }}</span>
                 </h1>
                 <p class="mt-1 text-sm text-slate-500">
                     {{ application.gradeLevel.name }} · {{ application.campus.name }} ·
@@ -407,7 +413,7 @@ function switchToLinkExisting(g: GuardianCandidate): void {
 
         <!-- Conversion -->
         <section
-            v-if="canManage && application.status === 'accepted'"
+            v-if="canConvert && application.status === 'accepted'"
             class="mt-8 rounded border border-slate-200 p-4"
         >
             <h2 class="text-sm font-medium text-slate-500">Convert to Student</h2>
@@ -714,6 +720,7 @@ function switchToLinkExisting(g: GuardianCandidate): void {
             </form>
         </section>
         <AdmissionFeePanel
+            v-if="props.feePanel"
             :panel="props.feePanel"
             :converted="props.application.status === 'converted'"
         />

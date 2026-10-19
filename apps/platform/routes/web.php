@@ -1041,36 +1041,40 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
     // BEFORE the '/{admissionApplication}' wildcard below, same
     // reasoning as the Communications group's 'announcements'/
     // 'templates' literal-segment routes.
+    // ORG.7D-3 (ADR 0076 §39): the application list, detail and lifecycle are
+    // Campus-adopted (checked in the controller); every route below carrying a
+    // `capability:admissions.*` floor is a declared whole-School-only operation
+    // (CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS).
     Route::prefix('app/admissions')->name('app.admissions.')->group(function (): void {
         Route::get('/', [AdmissionApplicationController::class, 'index'])->name('index');
         // SWC.3 (ADR 0073 section 19): the School's admission fee head (OPF.3).
         // Registered before `/{admissionApplication}` so it is never captured.
-        Route::get('/fee-head', [OperationalFeeController::class, 'admissionFeeHead'])->name('fee-head');
-        Route::put('/fee-head', [OperationalFeeController::class, 'updateAdmissionFeeHead'])->name('fee-head.update');
+        Route::get('/fee-head', [OperationalFeeController::class, 'admissionFeeHead'])->middleware('capability:admissions.view')->name('fee-head');
+        Route::put('/fee-head', [OperationalFeeController::class, 'updateAdmissionFeeHead'])->middleware('capability:admissions.manage')->name('fee-head.update');
 
         Route::prefix('applicants')->name('applicants.')->group(function (): void {
-            Route::get('/', [ApplicantController::class, 'index'])->name('index');
-            Route::get('/create', [ApplicantController::class, 'create'])->name('create');
-            Route::post('/', [ApplicantController::class, 'store'])->name('store');
-            Route::get('/{applicant}', [ApplicantController::class, 'show'])->name('show');
+            Route::get('/', [ApplicantController::class, 'index'])->middleware('capability:admissions.view')->name('index');
+            Route::get('/create', [ApplicantController::class, 'create'])->middleware('capability:admissions.manage')->name('create');
+            Route::post('/', [ApplicantController::class, 'store'])->middleware('capability:admissions.manage')->name('store');
+            Route::get('/{applicant}', [ApplicantController::class, 'show'])->middleware('capability:admissions.view')->name('show');
 
-            Route::get('/{applicant}/applications/create', [AdmissionApplicationController::class, 'create'])->name('applications.create');
-            Route::post('/{applicant}/applications', [AdmissionApplicationController::class, 'store'])->name('applications.store');
+            Route::get('/{applicant}/applications/create', [AdmissionApplicationController::class, 'create'])->middleware('capability:admissions.manage')->name('applications.create');
+            Route::post('/{applicant}/applications', [AdmissionApplicationController::class, 'store'])->middleware('capability:admissions.manage')->name('applications.store');
         });
 
         // Guardian-picker adapter for the conversion form's "link
         // existing Guardian" mode -- see AdmissionApplicationController's
         // class docblock for why this is a narrow new pair rather than
         // reusing /app/students/{student}/guardians/search|candidates.
-        Route::get('/guardians/search', [AdmissionApplicationController::class, 'searchGuardians'])->name('guardians.search');
-        Route::get('/guardians/candidates', [AdmissionApplicationController::class, 'candidateGuardians'])->name('guardians.candidates');
+        Route::get('/guardians/search', [AdmissionApplicationController::class, 'searchGuardians'])->middleware('capability:admissions.manage')->name('guardians.search');
+        Route::get('/guardians/candidates', [AdmissionApplicationController::class, 'candidateGuardians'])->middleware('capability:admissions.manage')->name('guardians.candidates');
 
         Route::get('/{admissionApplication}', [AdmissionApplicationController::class, 'show'])->name('show');
         Route::post('/{admissionApplication}/submit', [AdmissionApplicationController::class, 'submit'])->name('submit');
         Route::post('/{admissionApplication}/accept', [AdmissionApplicationController::class, 'accept'])->name('accept');
         Route::post('/{admissionApplication}/reject', [AdmissionApplicationController::class, 'reject'])->name('reject');
         Route::post('/{admissionApplication}/withdraw', [AdmissionApplicationController::class, 'withdraw'])->name('withdraw');
-        Route::post('/{admissionApplication}/convert', [AdmissionApplicationController::class, 'convert'])->name('convert');
+        Route::post('/{admissionApplication}/convert', [AdmissionApplicationController::class, 'convert'])->middleware('capability:admissions.manage')->name('convert');
     });
 
     // Phase 10A: Library catalogue + circulation administrative UI.
@@ -1444,8 +1448,10 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::get('/search/students', [HostelResidencyController::class, 'searchStudents'])->name('search-students');
         Route::get('/search/beds', [HostelResidencyController::class, 'searchBeds'])->name('search-beds');
         // SWC.3 (ADR 0073 section 19.3): Hostel fee intent and next-year carry-forward (OPF.2).
-        Route::get('/fees', [OperationalFeeController::class, 'hostelFees'])->name('fees');
-        Route::post('/fees/carry-forward', [OperationalFeeController::class, 'hostelCarryForward'])->name('fees.carry-forward');
+        // ORG.7D-3: declared whole-School-only operations of the Campus-adopted
+        // residency keys (CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS).
+        Route::get('/fees', [OperationalFeeController::class, 'hostelFees'])->middleware('capability:hostel.residency.view')->name('fees');
+        Route::post('/fees/carry-forward', [OperationalFeeController::class, 'hostelCarryForward'])->middleware('capability:hostel.residency.manage')->name('fees.carry-forward');
         Route::post('/', [HostelResidencyController::class, 'store'])->name('store');
         Route::post('/{hostelResidencyAssignment}/end', [HostelResidencyController::class, 'end'])->name('end');
     });

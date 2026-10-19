@@ -851,3 +851,23 @@ orders. The response (`id`, `studentNumber`, `firstName`, `lastName`;
 active Students only) is unchanged. No new capability; no Campus
 semantics. The Item search is unchanged (`canteen.orders.view` on the
 API).
+
+## Campus-scoped orders (ORG.7D-3, 2026-10-19, ADR 0076 §39.3)
+
+`canteen.orders.view/.manage` are Campus-adopted, by the Outlet's Campus.
+- **Campus-scoped holder:**
+  - lists, opens, fulfils and cancels only their Campuses' Outlets' orders
+    (`CANTEEN_ORDER_NOT_FOUND` otherwise);
+  - is offered only those Outlets;
+  - places an order only for a current operational Student of the Outlet's
+    Campus, re-checked inside the placement transaction;
+  - `CANTEEN_STUDENT_NOT_FOUND` is identical to an unknown id.
+- **School-wide (NULL-Campus) Outlets** and their orders are whole-School
+  only.
+- **Pickers:**
+  - the Student picker returns `{id, studentNumber, name}` (web and API);
+  - the Item picker needs `canteen.orders.manage` on both surfaces (owner
+    decision).
+- **Unchanged:** fulfilment's stock issue (the Outlet's own location) and
+  charge stay Canteen's bounded side effects, with no Inventory or Fees
+  authority. Outlets, Items and billing settings stay whole-School.

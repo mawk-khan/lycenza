@@ -5,6 +5,7 @@ namespace App\Domain\Admissions\Http\Controllers;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Section;
+use App\Domain\Admissions\Application\AdmissionApplicationAccess;
 use App\Domain\Admissions\Application\AdmissionApplicationReadService;
 use App\Domain\Admissions\Application\AdmissionApplicationService;
 use App\Domain\Admissions\Application\AdmissionConversionResult;
@@ -21,7 +22,7 @@ use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Models\School;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -65,13 +66,14 @@ use InvalidArgumentException;
  */
 class AdmissionApplicationController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
     // --- Directory / detail --------------------------------------------
 
-    public function index(Request $request, School $school, AdmissionApplicationReadService $reads): JsonResponse
+    public function index(Request $request, School $school, AdmissionApplicationAccess $access): JsonResponse
     {
-        $this->authorizeCapability('admissions.view', $school);
+        // ORG.7D-3 (ADR 0076 §39): Campus-adopted; a `campus_id` filter only narrows.
+        $scope = $this->authorizeCampusScope('admissions.view', $school);
 
         $validated = $request->validate([
             'status' => ['sometimes', Rule::in(['draft', 'submitted', 'accepted', 'rejected', 'withdrawn', 'converted'])],
@@ -85,7 +87,7 @@ class AdmissionApplicationController extends Controller
         $perPage = $validated['per_page'] ?? 25;
         $filters = collect($validated)->except('per_page')->all();
 
-        $paginator = $reads->directory($filters, $perPage);
+        $paginator = $access->directory($scope, $filters, $perPage);
 
         return response()->json([
             'data' => collect($paginator->items())->map(fn (AdmissionApplication $a) => $this->presentSummary($a))->all(),
@@ -97,12 +99,11 @@ class AdmissionApplicationController extends Controller
         ]);
     }
 
-    public function show(School $school, string $admissionApplication, AdmissionApplicationReadService $reads): JsonResponse
+    public function show(School $school, string $admissionApplication, AdmissionApplicationAccess $access): JsonResponse
     {
-        $this->authorizeCapability('admissions.view', $school);
+        $scope = $this->authorizeCampusScope('admissions.view', $school);
 
-        $model = $reads->detail($admissionApplication);
-        abort_if($model === null, 404);
+        $model = $access->detail($scope, $admissionApplication);
 
         return response()->json(['data' => $this->presentDetail($model)]);
     }
@@ -121,7 +122,8 @@ class AdmissionApplicationController extends Controller
      */
     public function store(Request $request, School $school, AdmissionApplicationService $service): JsonResponse
     {
-        $this->authorizeCapability('admissions.manage', $school);
+        // ORG.7D-3: a declared whole-School-only operation -- authorized by the
+        // route's ordinary `capability:admissions.manage` floor (ADR 0076 §39).
 
         $validated = $request->validate([
             'applicant_id' => ['required', 'uuid', Rule::exists('applicants', 'id')->where('school_id', $school->id)],
@@ -147,11 +149,11 @@ class AdmissionApplicationController extends Controller
      * `PATCH { status }` (root CLAUDE.md's illegal-transition-bypass
      * concern -- the state machine owns its own transitions).
      */
-    public function submit(Request $request, School $school, string $admissionApplication, AdmissionApplicationService $service): JsonResponse
+    public function submit(Request $request, School $school, string $admissionApplication, AdmissionApplicationService $service, AdmissionApplicationAccess $access): JsonResponse
     {
-        $this->authorizeCapability('admissions.manage', $school);
+        $scope = $this->authorizeCampusScope('admissions.manage', $school);
 
-        $model = AdmissionApplication::query()->findOrFail($admissionApplication);
+        $model = $access->application($scope, $admissionApplication);
 
         $updated = $service->submit($model, $request->user());
 
@@ -162,11 +164,11 @@ class AdmissionApplicationController extends Controller
      * `submitted` -> `accepted`. Never triggers conversion -- accept
      * and convert remain distinct commands (`ADMISSIONS.md` §7).
      */
-    public function accept(Request $request, School $school, string $admissionApplication, AdmissionApplicationService $service): JsonResponse
+    public function accept(Request $request, School $school, string $admissionApplication, AdmissionApplicationService $service, AdmissionApplicationAccess $access): JsonResponse
     {
-        $this->authorizeCapability('admissions.manage', $school);
+        $scope = $this->authorizeCampusScope('admissions.manage', $school);
 
-        $model = AdmissionApplication::query()->findOrFail($admissionApplication);
+        $model = $access->application($scope, $admissionApplication);
 
         $validated = $request->validate(['decision_note' => ['sometimes', 'nullable', 'string', 'max:1000']]);
 
@@ -179,11 +181,11 @@ class AdmissionApplicationController extends Controller
      * `submitted` -> `rejected`. No hard delete -- terminal history is
      * always preserved.
      */
-    public function reject(Request $request, School $school, string $admissionApplication, AdmissionApplicationService $service): JsonResponse
+    public function reject(Request $request, School $school, string $admissionApplication, AdmissionApplicationService $service, AdmissionApplicationAccess $access): JsonResponse
     {
-        $this->authorizeCapability('admissions.manage', $school);
+        $scope = $this->authorizeCampusScope('admissions.manage', $school);
 
-        $model = AdmissionApplication::query()->findOrFail($admissionApplication);
+        $model = $access->application($scope, $admissionApplication);
 
         $validated = $request->validate(['decision_note' => ['sometimes', 'nullable', 'string', 'max:1000']]);
 
@@ -198,11 +200,11 @@ class AdmissionApplicationController extends Controller
      * never touches it, preserving an accepted application's decision
      * note unchanged (`ADMISSIONS.md` §6).
      */
-    public function withdraw(Request $request, School $school, string $admissionApplication, AdmissionApplicationService $service): JsonResponse
+    public function withdraw(Request $request, School $school, string $admissionApplication, AdmissionApplicationService $service, AdmissionApplicationAccess $access): JsonResponse
     {
-        $this->authorizeCapability('admissions.manage', $school);
+        $scope = $this->authorizeCampusScope('admissions.manage', $school);
 
-        $model = AdmissionApplication::query()->findOrFail($admissionApplication);
+        $model = $access->application($scope, $admissionApplication);
 
         $updated = $service->withdraw($model, $request->user());
 
@@ -236,11 +238,12 @@ class AdmissionApplicationController extends Controller
      * normalization logic lives here; `GuardianContactService` remains
      * the sole authority, exactly like `GuardianContactController::store()`.
      */
-    public function convert(Request $request, School $school, string $admissionApplication, AdmissionConversionService $service): JsonResponse
+    public function convert(Request $request, School $school, string $admissionApplication, AdmissionConversionService $service, AdmissionApplicationReadService $reads): JsonResponse
     {
-        $this->authorizeCapability('admissions.manage', $school);
-
-        $model = AdmissionApplication::query()->findOrFail($admissionApplication);
+        // ORG.7D-3: a declared whole-School-only operation -- authorized by the
+        // route's ordinary `capability:admissions.manage` floor (ADR 0076 §39).
+        $model = $reads->detail($admissionApplication);
+        abort_if($model === null, 404);
 
         $validated = $request->validate([
             'student_number' => ['required', 'string', 'max:255'],

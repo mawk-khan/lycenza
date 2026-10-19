@@ -730,3 +730,24 @@ that later becomes inactive are kept.
 No Campus authority is added. Applicant visibility, Guardian search,
 conversion and the Admissions capabilities are unchanged. The future
 Campus contract is recorded in ADR 0076 §35.4 and §36 (D0-8).
+
+## Campus-scoped applications (ORG.7D-3, 2026-10-19, ADR 0076 §39.4)
+
+`admissions.view/.manage` are Campus-adopted for applications BEFORE
+conversion, by the application's Campus.
+- **What a Campus-scoped officer can do:**
+  - list only their Campuses' applications (the Campus filter only
+    narrows);
+  - open them, and submit, accept, reject or withdraw them, on web and API;
+  - anything else is 404 and unchanged.
+- **What their application page omits:** the Applicant link, the
+  conversion form, compatible Sections and the fee panel.
+- **Still whole-School** (20 declared operations):
+  - the Applicant directory, page, create and application history;
+  - starting an application (no atomic Applicant-plus-application path
+    exists, so a Campus-only officer cannot start one: recorded gap);
+  - both Guardian searches;
+  - conversion to Student;
+  - the admission fee head and fee provenance.
+- **Search hygiene:** the Applicant and Guardian searches now escape LIKE
+  wildcards.

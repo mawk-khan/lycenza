@@ -2867,4 +2867,5 @@ The exit date is that `ends_on`. Every other state is unresolved and kept.
   - Input: a resolved `CampusScope`. Output: `id`, `displayName` and
     `studentNumber` only.
   - It needs no `students.view` and has no route.
-  - No consuming domain uses it yet.
+  - Consumers since ORG.7D-3 (ADR 0076 §39): the Hostel residency and
+    Canteen order pickers and write guards, for Campus-scoped actors only.

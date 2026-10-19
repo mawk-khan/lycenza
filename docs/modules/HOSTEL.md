@@ -622,3 +622,21 @@ confirmation and is idempotent (§19.3).
 
 These pages use the same `HostelFeeSelectionService` as `/api/v1`.
 Production stays gated by E21/E31 (ADR 0058).
+
+## Campus-scoped residencies (ORG.7D-3, 2026-10-19, ADR 0076 §39.2)
+
+`hostel.residency.view/.manage` are Campus-adopted, by the Hostel's Campus.
+- **Campus-scoped holder:**
+  - sees and ends only residencies in their Campuses' Hostels; anything
+    else is 404;
+  - picks residents through the Students purpose lookup (current
+    operational Students of their Campuses: id, number, name);
+  - places a Student only in a Hostel of the Student's CURRENT operational
+    Campus, re-checked inside the assignment after the row locks.
+  - Every refusal is the generic 422 `HOSTEL_RESIDENCY_UNAVAILABLE`.
+- **Whole-School holders** are unchanged.
+- **Integrity:** a Hostel's Campus cannot change once it has Rooms (422).
+- **Still whole-School** (declared operations):
+  - Hostel fee intent (web) and the residency fee selections (API);
+  - both carry-forwards;
+  - the Hostel/Room/Bed directory.
