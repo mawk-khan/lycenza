@@ -3329,3 +3329,12 @@ Recorded, not changed:
 - **UI-only `canManage`.** On the Hostel and Canteen pages it means
   "manage held for some Campus", so an action button can show for a record
   whose action answers 404.
+
+**39.9 CI Larastan memory.** The first ORG.7D-3 candidate (`53bea7fd`,
+run 39254278558) passed all four test shards and the coverage proof. Its
+Larastan step failed with a parallel-worker crash ("Child process error
+(exit code 255)") at `--memory-limit=512M`, the same transient as
+ORG.7D-1. As the owner pre-authorized in ORG.7D-2, the CI Larastan step
+alone now runs at 768M (`.github/workflows/ci.yml`). The local gate
+(CLAUDE.md, the publish-gate skill) stays 512M and passes. No analysis
+level, baseline or path set changed.

@@ -170,8 +170,11 @@ jobs:
           npm run build
       - name: Pint (formatting)
         run: docker compose -p school-os -f docker-compose.yml -f "$SAFE_TEST_COMPOSE_OVERRIDE" run --rm --no-deps -T platform vendor/bin/pint --test
+      # ORG.7D-3 (ADR 0076 §39.9): 768M, CI only, owner-authorized after a
+      # second parallel-worker crash at 512M (ORG.7D-1, ORG.7D-3). The local
+      # documented gate stays 512M.
       - name: Larastan (static analysis)
-        run: docker compose -p school-os -f docker-compose.yml -f "$SAFE_TEST_COMPOSE_OVERRIDE" run --rm --no-deps -T platform vendor/bin/phpstan analyse --memory-limit=512M --no-progress
+        run: docker compose -p school-os -f docker-compose.yml -f "$SAFE_TEST_COMPOSE_OVERRIDE" run --rm --no-deps -T platform vendor/bin/phpstan analyse --memory-limit=768M --no-progress
 
   # E03.1 (ADR 0072 sections 9, 11): the canonical runner itself. The suite
   # runs exactly as a developer's `bin/safe-test` runs it -- the same Compose
