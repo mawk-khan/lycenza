@@ -1358,3 +1358,10 @@ once several modules copy it.
        its copy's Campus at checkout (immutable), and a Transport route's
        Campus is fixed once used. Scoped returns, ends and history follow
        the stored Campus, never the Student's current one.
+     - **An Employee's operational Campus set comes only from
+       `CurrentEmployeeAssignments`** (ORG.7E-0, §42): the union of current
+       assignments' active Campuses on the School-local date
+       (`SchoolTimezone::today()`), with an `active`/`notice_period`
+       employment. Primary status never limits it. Never add
+       `employees.campus_id`, a UTC "today" or another ad-hoc currency
+       reader (`HrCurrentAssignmentArchitectureTest`).

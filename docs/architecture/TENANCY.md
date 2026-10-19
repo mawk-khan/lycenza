@@ -467,6 +467,10 @@ context is set exactly as for a first dispatch (rule 21).
   Transport route's Campus is fixed once it has a stop, a rider or a
   vehicle assignment, checked under the route lock that every dependent
   writer shares (ADR 0076 §41).
+- **An Employee's Campus is derived, never stored (ORG.7E-0).** `employees`
+  stays School-scoped with no Campus. The operational Campus set is the
+  union of current assignments' active Campuses on the School-local date,
+  resolved per call inside the School's context (ADR 0076 §42).
 
 ## What is NOT yet implemented (Phase 0B honesty note)
 

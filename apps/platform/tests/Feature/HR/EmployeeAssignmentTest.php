@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\HR;
 
+use App\Domain\HR\Application\CurrentEmployeeAssignments;
 use App\Domain\HR\Application\DepartmentService;
 use App\Domain\HR\Application\EmployeeAssignmentService;
 use App\Domain\HR\Application\Exceptions\AssignmentCampusMismatchException;
@@ -12,6 +13,7 @@ use App\Domain\HR\Application\Exceptions\AssignmentInactivePositionException;
 use App\Domain\HR\Application\Exceptions\AssignmentOutsideEmploymentRangeException;
 use App\Domain\HR\Application\Exceptions\AssignmentPositionMismatchException;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
+use App\Models\School;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -84,6 +86,12 @@ class EmployeeAssignmentTest extends TestCase
         $this->assertSame($position->id, $fresh->position->id);
     }
 
+    /** ORG.7E-0: "current" is CurrentEmployeeAssignments on the School's date (the model helper is gone). */
+    private function isCurrent(School $school, EmployeeAssignment $assignment): bool
+    {
+        return app(TenantContext::class)->withSchool($school, fn () => app(CurrentEmployeeAssignments::class)->current($school)->whereKey($assignment->id)->exists());
+    }
+
     #[Test]
     public function is_current_is_true_for_an_open_assignment_that_has_already_started(): void
     {
@@ -93,7 +101,7 @@ class EmployeeAssignmentTest extends TestCase
         $position = $this->createPosition($school);
         $assignment = $this->createEmployeeAssignment($employment, $position, ['starts_on' => now()->subYear()->toDateString(), 'ends_on' => null]);
 
-        $this->assertTrue($assignment->isCurrent());
+        $this->assertTrue($this->isCurrent($school, $assignment));
     }
 
     #[Test]
@@ -105,7 +113,7 @@ class EmployeeAssignmentTest extends TestCase
         $position = $this->createPosition($school);
         $assignment = $this->createEmployeeAssignment($employment, $position, ['starts_on' => now()->addMonth()->toDateString(), 'ends_on' => null]);
 
-        $this->assertFalse($assignment->isCurrent());
+        $this->assertFalse($this->isCurrent($school, $assignment));
     }
 
     #[Test]
@@ -120,7 +128,7 @@ class EmployeeAssignmentTest extends TestCase
             'ends_on' => now()->subYear()->toDateString(),
         ]);
 
-        $this->assertFalse($assignment->isCurrent());
+        $this->assertFalse($this->isCurrent($school, $assignment));
     }
 
     // --- Cross-School composite FK rejection (database layer) ---------------

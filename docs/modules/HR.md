@@ -4105,3 +4105,24 @@ of current assignments; sensitive HR whole-School; minimal Employee lookup
 `id` + `displayName`) is recorded in ADR 0076 §35.3 and §36 (D0-5–D0-7).
 R4 (UTC "current" dates, dated assignments left open at employment end)
 stays deferred.
+
+## Current Employee placement (ORG.7E-0, 2026-10-19, ADR 0076 §42)
+
+`App\Domain\HR\Application\CurrentEmployeeAssignments` is the one
+definition of an operationally current assignment.
+- **A current assignment needs all of:**
+  - an active Employee;
+  - an `active` or `notice_period` employment covering the School-local
+    date (`SchoolTimezone::today()`);
+  - an assignment covering that date.
+- **Campus set.** An Employee's operational Campuses are the union of the
+  active Campuses of those assignments: none, one or several.
+- **Primary assignment** remains the display summary only.
+- **What confers nothing:** ended or scheduled-end (terminal) employment,
+  future or ended assignments, and inactive Campuses. History is never
+  rewritten to make this true.
+- **Directory Campus filter.** It now answers operational Campus
+  membership: a secondary assignment counts.
+- **Dates.** The Directory, the Profile and separation now judge "today" on
+  the School's calendar.
+- **No HR capability is Campus-adopted yet:** ORG.7E-1 needs owner approval.

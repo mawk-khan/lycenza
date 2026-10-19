@@ -20,8 +20,8 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
-use Illuminate\Support\Carbon;
 
 /**
  * Phase 8A.9 -- the sole read path for the Employee Profile Workspace
@@ -144,7 +144,8 @@ class EmployeeProfileWorkspaceService
             return null;
         }
 
-        $today = Carbon::today()->toDateString();
+        // ORG.7E-0: the School's own calendar date (the primary placement is a display summary).
+        $today = SchoolTimezone::today($school);
 
         $personalDetail = EmployeePersonalDetail::query()
             ->where('school_id', $school->id)

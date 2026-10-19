@@ -842,6 +842,14 @@ whole-School supersedes. A selected or current Campus
   Check-in fines and rider fee intent are owner-approved bounded side
   effects (`CampusAdoptionImpactTest::OWNER_APPROVED_SIDE_EFFECTS`), never
   Fees authority.
+- **HR (ORG.7E-0, §42): not adopted.** An Employee's operational Campus set
+  comes only from `CurrentEmployeeAssignments`, the union of current
+  assignments on the School-local date. It is data, never authority, and no
+  `hr.*` key is in `CampusScopeCatalogue` (pinned).
+  - Sensitive HR (personal, qualifications, documents, notes, sensitive)
+    and identity/lifecycle actions stay whole-School.
+  - ORG.7E-1 candidates: `hr.employees.view`, the core-field part of
+    `hr.employees.manage`, and `hr.employees.assignments.*`.
 - **Refusals look the same.** A Campus-scoped actor's refusals do not
   differ between an in-scope and an out-of-scope conflict (Visitor
   check-in: one generic refusal; the School-wide one-active-Visit rule

@@ -227,3 +227,9 @@ School setting, a role, a navigation toggle or a commercial plan.
   - School-wide (no-Campus) books and routes.
 
   Administrators can now give a book copy or a route a Campus from the web.
+- **ORG.7E-0 (ADR 0076 §42)** set one rule for which Campuses a staff
+  member works at today. It is every current assignment on an open Campus,
+  judged on the School's own calendar date, and nobody whose employment has
+  ended. The staff directory's Campus filter now finds people who work on
+  more than one Campus. Campus grants still give no HR access; that is the
+  next, separately approved step.

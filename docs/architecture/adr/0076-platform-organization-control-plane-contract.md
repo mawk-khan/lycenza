@@ -3983,3 +3983,332 @@ HIGH finding.
   untouched here) once deadlocked inside its own fixture setup in 7 local
   runs, then passed 6 more times. It is recorded as a local flake; the
   exact-SHA CI run is canonical.
+
+## 42. ORG.7E-0 — HR Campus foundation: canonical current Employee placement (as built, 2026-10-19)
+
+Owner authorization: ORG.7E-0 only, decisions D-E0-1 to D-E0-12. Baseline
+`origin/main` = `96382fb7` (ORG.7D-5).
+- **Built:** one canonical definition of an Employee's operationally
+  current assignments and Campus set, on the School-local date. The R4
+  consumers were normalized onto it.
+- **Designed, not built:** the HR Campus access layer.
+- **Unchanged:** no HR capability is Campus-adopted (pinned), and
+  `CampusScopeCatalogue` is unchanged. No migration, no capability, no role
+  change, no `employees.campus_id`.
+
+    Employee identity             = School-wide (employees has no Campus)
+    current assignment            = active Employee + employment active|notice_period covering D
+                                    + assignment covering D          (D = SchoolTimezone::today)
+    operational Campus set        = union of the non-NULL, active Campuses of current assignments
+    primary                       = display summary only, never a limit on the Campus set
+
+**42.1 Schema reality (re-audited).**
+- **`employees`:** no Campus; `record_status` is `active|archived`.
+- **`employment_records`:**
+  - `status` is `draft|pre_joining|active|notice_period|separated|terminated|retired|deceased`;
+  - `starts_on` is a date, and `ends_on` is a nullable inclusive date;
+  - overlap is application-only.
+- **`employee_assignments`:**
+  - reached only through `employment_record_id`; no status column;
+  - `campus_id` nullable (NULL = School-wide);
+  - `is_primary`; `starts_on` and `ends_on` are dates;
+  - the partial unique index `employee_assignments_one_primary_open_per_employment`
+    covers only `ends_on IS NULL`;
+  - no overlap constraint; single-column indexes only.
+- **History.** No HR record freezes an assignment or a Campus. Leave,
+  staff attendance, payroll, compensation and statutory records key on the
+  employment. Teaching assignments carry the Offering's Campus.
+- **RLS:** forced on all three tables.
+
+**42.2 Employment lifecycle.**
+- **Operational:** `EmploymentRecord::AUTHORIZATION_ELIGIBLE_STATUSES`
+  (`active`, `notice_period`). This is the list ActingEmployee already
+  uses.
+- **Not operational:** `pre_joining` and `draft` (not yet employed), and
+  every terminal status.
+- **Notice period** has no own field: it is `notice_period` with a future
+  `ends_on`.
+- **Transitions.** None are modelled. `notice_period` and `pre_joining`
+  are written only by API create, and `end()` writes a terminal status at
+  once even for a future `ends_on`.
+  - The canonical rule therefore excludes a scheduled-end (terminal)
+    employment from today. Date-only readers used to show it as current.
+- **No new lifecycle states.**
+
+**42.3 Inventory of "current" readers: 21 in `app/`, not 5.**
+
+| # | Reader | Answers | Class | Outcome |
+|---|---|---|---|---|
+| 1 | `EmployeeAssignment::isCurrent()` | assignment dates, UTC | A | **removed** (no production caller; 3 tests now use the resolver) |
+| 2 | Directory Campus filter | primary assignment, UTC, no status | A | **normalized**: canonical union (`whereOperationalOnCampuses`) |
+| 2b | Directory Department/Position filters | primary placement | display filter | School-local date; declared |
+| 3, 4 | Directory row: current employment and primary placement | display summary | G (display) | School-local date; declared |
+| 5, 8 | Directory and Profile manager projection | live pointer | E | unchanged (manager readers are not modified) |
+| 6, 7 | Profile current employment and primary placement | display summary | G (display) | School-local date; declared |
+| 9 | `ReportingLine` | the reporting line on the caller's date | E | unchanged; declared |
+| 10 | `EmployeePickerReadService::managerCandidates` | manager candidates, School-local | E | unchanged; declared (ORG.7E-1 scopes it) |
+| 11–13 | `setPrimary` demotion, employment-end clip, closure cascade | "open" = `ends_on IS NULL` | G (write mechanics) | unchanged |
+| 14 | `ActingEmployeeResolver` | acting identity, School-local | A (identity) | unchanged |
+| 15–16 | `EmploymentCoverage` | planned-or-current employment (leave) | F | unchanged |
+| 17–18 | `EmploymentCoverage::holdRecordAttendable`, `EmploymentRoster` | staff-attendance date | D | unchanged |
+| 19 | `LeavePageSupport` employment picker | status only | G | unchanged |
+| 20 | `EmployeeLifecycleService::separate` future-date guard | UTC "today" | G | **normalized**: School-local date |
+| 21 | `EmployeeRetentionEligibility` | retention | G | unchanged |
+| (ref) | `PayrollRunService` | payroll period | C | unchanged |
+
+**42.4 The canonical resolver (`App\Domain\HR\Application\CurrentEmployeeAssignments`).**
+- **Methods:**
+  - `current(School, ?date)`: the current-assignment query;
+  - `constrainToCurrent(query, date, alias)`: the one predicate;
+  - `campusSets(School, ids, ?date)`: one query for many Employees;
+  - `campusesFor(School, id, ?date)`;
+  - `whereOperationalOnCampuses(Builder<Employee>, School, campusIds, ?date)`:
+    an EXISTS predicate, ready for ORG.7E-1.
+- **The date is School-local:** `SchoolTimezone::today()`, a new one-line
+  shared form of the existing `CarbonImmutable::now(resolve())` idiom. Other
+  copies of the idiom are unchanged. No global clock redesign.
+- **Behaviour pinned (`CurrentEmployeeAssignmentsTest`):**
+  - multi-Campus union; primary plays no part; NULL-Campus assignments are
+    current but place nowhere;
+  - no assignment gives an empty set;
+  - terminal, `pre_joining` and `draft` employments (even with date-open
+    assignments) give nothing; notice period counts until its end;
+  - future and ended assignments are excluded, with inclusive bounds;
+  - archived Employees give nothing;
+  - inactive Campus excluded, and restored on reactivation with no rewrite;
+  - the School-local date beats UTC both ways around midnight IST;
+  - SQL restriction of an Employee query;
+  - another School's Employee or Campus never participates;
+  - one query for many Employees.
+- **Consumers pinned (`HrCurrentPlacementConsumersTest`):**
+  - the Directory Campus filter (secondary Campus counts; a terminal or
+    not-yet-started employment does not; an inactive Campus places nobody);
+  - separation's School-local "future" guard.
+- **Pinned: no HR capability is Campus-adopted.** A `principal@Campus`
+  grant confers no HR capability and gets 403 on the directory.
+
+**42.5 Architecture guard (`HrCurrentAssignmentArchitectureTest`).**
+- **Declared readers only.** A class reading employee assignments with its
+  own "covers the date" predicate must be the resolver or a declared reader
+  with a stated question (the display summaries, `ReportingLine`, manager
+  candidates). A declaration that no longer matches fails, and a pattern
+  self-test proves the guard catches what it is meant to.
+- **No UTC "today".** HR code never uses `Carbon::today()`, `today()` or
+  `now()->toDateString()`.
+- **No date-only model helper** (`isCurrent()` is gone).
+- **The resolver itself:** it uses the pinned employment-status list and
+  `SchoolTimezone::today()`, and never `is_primary`. No controller consumes
+  it in ORG.7E-0.
+- **HR is not adopted:** no `hr.*` key in `CampusScopeCatalogue`.
+
+**42.6 Capability classification (from the data each action reads or
+writes).**
+- **CAMPUS_OPERATIONAL_CANDIDATE:**
+  - `hr.employees.view`: the Directory projection only — id, number,
+    display name, position, department, Campus, manager; no personal
+    tables. One service, so this is the cleanest adoption.
+  - `hr.employees.assignments.view`: employment and assignment history.
+    It has no route of its own; it is a Profile tier behind
+    `hr.employees.personal.view`.
+  - `hr.employees.manage`: create and update of core fields only (name,
+    work email, work phone).
+  - `hr.employees.assignments.manage`: the highest risk. It defines the
+    scope, cascades into teaching ownership, and is checked through the
+    whole-School Gate in `TeachingAssignmentService::CAPABILITY_EMPLOYMENT_END`
+    and `ElectiveTeachingAssignmentService`.
+- **WHOLE_SCHOOL_SENSITIVE (D-E0-8):**
+  - `hr.employees.personal.*`, `.qualifications.*`, `.documents.*`,
+    `.notes.*`, `.sensitive.*` (already on the impact test's HIGH_RISK
+    list);
+  - the identity and lifecycle half of `hr.employees.manage`: account
+    link/unlink and account search, archive/restore, and import (declared
+    whole-School operations in ORG.7E-1).
+- **CONFIGURATION (D-E0-9):** `hr.departments.*`, `hr.positions.*`,
+  `hr.categories.*`, `hr.leave.configure`.
+- **OTHER, School-only:** `hr.leave.view/.manage` and
+  `hr.staff_attendance.view/.manage` (§11.7; both feed Payroll).
+- **SELF_SERVICE:** `hr.leave.self`, `hr.staff_attendance.self`,
+  `payroll.payslips.self` (owned scope).
+- **Relationship-scoped:** `hr.leave.approve` (ReportingLine).
+- **PAYROLL:** all `payroll.*`; Payroll has no Campus.
+- **HISTORICAL/COMPLIANCE:** no dedicated key (the timeline sits behind
+  `personal.view`).
+
+**42.7 Boundaries.**
+- **Self-service** stays relationship-based. `HrSelfAdministrationGuard`
+  and `ActingEmployeeResolver` are unchanged and run alongside any future
+  scope.
+- **Reporting-manager authority** applies only to leave (`hr.leave.approve`
+  + ActingEmployee + `holdManagerOf`). Campus scope never substitutes for
+  it. A future combination is an intersection (capability AND scope AND
+  relationship).
+  - Open owner decisions: whether a Campus-only principal still approves
+    through the relationship, and cross-Campus managers.
+- **Staff attendance, leave and payroll** remain separate, School-only
+  modules. The ORG.5 entitlements are intact.
+
+**42.8 Frozen contracts for ORG.7E-1.**
+- **HR Campus access layer** (designed, unused): `HrEmployeeAccess`.
+  - `restrictEmployeeQuery(Builder, CampusScope)` delegates to
+    `whereOperationalOnCampuses(scope campus ids)`; whole-School leaves
+    it unchanged.
+  - `coversEmployee(CampusScope, employeeId)` is the same predicate for one
+    row; out of scope = 404.
+  - `authorizedCampusSet(...)` is the scope's Campus ids.
+  - A Campus actor reaches an Employee only when the Employee has at least
+    one current assignment in scope. Unassigned Employees are whole-School
+    only.
+- **Onboarding (D-E0-10).** Today `EmployeeService::create` makes only the
+  Employee; Employment and Assignment are separate requests. The only
+  atomic paths are `EmployeeImportService::importRow` and the API rehire.
+  ORG.7E-1 needs one named service, in one transaction:
+  - Employee + Employment (`active`) + first current Assignment on an
+    in-scope active Campus (ActiveCampus);
+  - core fields only;
+  - no account link (that stays whole-School);
+  - the self-administration guard applied.
+- **No capture (D-E0-12).** Assignment creation for an existing Employee
+  requires `coversEmployee` BEFORE the write (the Employee is already in
+  scope through another current assignment), plus the destination Campus in
+  scope. It is otherwise refused generically. Distinctions:
+  - an ordinary in-scope update;
+  - onboarding (the named atomic path);
+  - a move (below);
+  - whole-School administration (unchanged).
+- **Move (D-E0-11).** A named service action (end the source assignment,
+  create the destination one), never a `campus_id` update (no update path
+  exists). For a Campus actor it needs scope over BOTH Campuses. Not built.
+- **Write targets (security review M1, frozen).** Coverage is a union, so
+  reaching an Employee is not enough for every write. For a Campus-scoped
+  actor:
+  - a per-assignment write (end, set primary, set manager) needs the TARGET
+    assignment's own Campus in scope; a NULL-Campus assignment is
+    whole-School only;
+  - an employment-level write (create employment, end, separate) and an
+    edit of School-wide identity fields (`full_name`, `work_email`,
+    `work_phone`) need EVERY current assignment of the Employee in scope,
+    or whole-School authority. A minor secondary assignment never lets one
+    Campus end a person's employment, or its teaching ownership, on another
+    Campus.
+  - Rehire is whole-School: a separated Employee has no current
+    assignment, so a Campus rehire would capture any former Employee.
+    Changing that needs an owner decision.
+- **Write-path gaps** (assignment create/end do not lock the employment;
+  `end()` has no validation; `setPrimary` accepts non-current targets).
+  These are recorded for ORG.7E-1, where they gain Campus meaning; they
+  were not changed here.
+- **Minimal Employee lookup (frozen):** `id` and `displayName`.
+  `employeeNumber` only where a consuming workflow needs it. Never phone,
+  email, address, salary, attendance, documents, notes, qualifications or
+  account data. No Campus Employee directory.
+- **Visitor host lookup** (`app.visitor.visits.search-hosts`): School-wide,
+  `record_status = 'active'`, id and fullName. It is unchanged here (its
+  School-wide contract is intentional; ORG.7A).
+  - Recorded for a later decision: restricting it to hosts current on the
+    visit's Campus, excluding separated Employees, and escaping its LIKE.
+  - The Transport driver and Timetable teacher lookups are likewise
+    School-wide by contract.
+- **Historical HR** follows each record's own keys. Nothing is
+  re-attributed from today's Campus, and timeline and history views stay
+  whole-School in the first release.
+
+**42.9 Impact (for ORG.7E-1).**
+- **`principal`** (already Campus-scopable) holds `hr.employees.view` and
+  `.manage`. Every `principal@Campus` grant would gain the Campus HR
+  directory and core create/update on adoption.
+- **`hr_officer`** (23 non-sensitive `hr.*` keys, no access
+  administration) becomes Campus-scopable the moment any of its keys is
+  adopted.
+- **`school_admin`** is never scopable.
+- **Existing Campus grants:** 0 active in DDEV.
+- **Recommended:** add `hr.employees.assignments.manage` to the impact
+  test's HIGH_RISK list at adoption.
+- **Route impact:**
+  - **Campus-aware candidates:**
+    - `api.v1.schools.employees.index` and `app.hr.employees.index`
+      (the service);
+    - create/store/edit/update (web and API: direct `findOrFail` then the
+      service);
+    - employment-records and assignments store/end/set-primary/set-manager/
+      manager-candidates and rehire (web and API).
+  - **Whole-School declarations:** archive/restore, account link/unlink and
+    search, and imports (web and API).
+  - **The profile** (`app.hr.employees.show`, API show/activity) is
+    blocked by its `personal.view` entry gate and needs an operational
+    profile entry.
+  - **The HR hub** (`app.hr.index`) needs a WHOLE_SCHOOL_HUBS entry or a
+    Campus-aware hub.
+  - **Pattern:** 32 of the 37 HR controllers query models directly, so the
+    access layer is the prerequisite.
+- **Async:** no HR, leave or staff-attendance jobs; import is synchronous;
+  the retention commands are whole-School. Nothing changes.
+
+**42.10 Data, performance, tenancy.**
+- **DDEV:** 12 active Employees, 12 active open employments, and 12
+  primary open assignments, all on the one active Campus. Zero invariant
+  violations, but no multi-Campus, notice, future or ended cases exist, so
+  the fixtures in 42.4 prove them.
+- **`EXPLAIN`** of the Campus-set query: one statement, index-driven on
+  `school_id` (bitmap and index scans), with no per-Employee query.
+  - No index was added: there is no plan evidence at this size.
+  - Candidates when data grows: `employee_assignments (school_id,
+    campus_id)`, `(employment_record_id, starts_on)` and
+    `employment_records (school_id, status)`.
+- **Tenancy:** every predicate carries `school_id`, and the resolver runs
+  in `TenantContext::withSchool`. Another School's Employee or Campus never
+  participates (tested). It uses the runtime connection with no
+  `BYPASSRLS`.
+
+**42.11 Unchanged.**
+- Self-service, the reporting line, staff attendance, leave and payroll.
+- Student/SIS, Fees/Payments and every Campus-adopted domain.
+- LC-5–LC-10 stay paused.
+
+**42.12 Security review (ORG.7E-0).** Independent adversarial review: no
+HIGH finding and no MEDIUM code finding.
+- **Verified:**
+  - the generated SQL groups correctly, and the employment EXISTS
+    correlates to the assignment's own employment;
+  - intersection and union semantics; every lifecycle edge;
+  - inclusive bounds; archived Employees; inactive and NULL Campuses;
+  - cross-School Campuses are impossible (composite FK plus explicit
+    joins);
+  - the Directory Campus filter stays a non-oracle;
+  - the tenancy predicates;
+  - whole-School HR, self-service, reporting line, leave, staff attendance
+    and payroll unchanged.
+- **MEDIUM (contract) — frozen in 42.8 as the write-target rules.** Without
+  them, a future Campus actor could act through a secondary assignment on
+  another Campus's assignments or employment, or capture a former Employee
+  via rehire.
+- **Fixed — LOW:**
+  - resolver ids are lower-cased and UUID-checked (`campusesFor` with an
+    upper-case id, and a non-UUID Campus id, failed or 500'd);
+  - separation compares normalized calendar dates, not raw input strings;
+  - the guard now also catches raw `starts_on <=` / `ends_on >=`,
+    `whereBetween`, `CURRENT_DATE`, relation-based assignment reads,
+    `Date::today()`, `today('…')`, `now()->format()`,
+    `Carbon::now()->startOfDay()` and `date('Y-m-d')`; its dead `routes/`
+    branch was removed;
+  - the Directory test now proves the local date with a School-today start.
+- **Recorded, accepted:**
+  - **Combined filters match different rows.** A combined Campus +
+    Department/Position filter tests different rows (any current assignment
+    vs the primary placement); this is display vs operational, and is
+    documented.
+  - **Small new inference channel.** Directory holders can now learn a
+    secondary current Campus through the filter: low-sensitivity
+    operational data.
+  - **Directory behaviour changes.** Archived Employees no longer match a
+    Campus filter, and an inactive Campus filter returns nobody. Both match
+    the contract.
+  - **Silent UTC fallback.** `SchoolTimezone::resolve()` still falls back
+    to UTC silently for an unreadable timezone (pre-existing; full models
+    are passed).
+  - **Display summary across Campuses.** The primary-placement display
+    summary may name another Campus and its manager. ORG.7E-1 decides the
+    projection for a Campus actor reaching an Employee through a secondary
+    assignment.
+  - **Stale docblock.** A docblock in the `employee_assignments` migration
+    still mentions the removed `isCurrent()`; shipped migrations are not
+    edited.

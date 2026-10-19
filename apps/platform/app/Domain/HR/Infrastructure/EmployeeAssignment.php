@@ -20,7 +20,8 @@ use Illuminate\Support\Carbon;
  *
  * No `status` column: docs/modules/HR.md's state responsibility matrix
  * is explicit that Assignment status is derived from `starts_on`/
- * `ends_on`, never stored -- see `isCurrent()` below.
+ * `ends_on`, never stored -- operationally current is
+ * App\Domain\HR\Application\CurrentEmployeeAssignments (ORG.7E-0).
  *
  * `manager_assignment_id` (Phase 8A.5, docs/modules/HR.md "Reporting
  * hierarchy strategy") -- nullable, self-referencing, same-School
@@ -111,24 +112,12 @@ class EmployeeAssignment extends Model
      * All Assignments reporting to this one -- both historical and
      * current. Filter to `->whereNull('ends_on')` for "current direct
      * reports" (docs/modules/HR.md's own "current" definition applies
-     * to the reporting Assignment's own dates, same as `isCurrent()`).
+     * to the reporting Assignment's own dates, same as CurrentEmployeeAssignments' assignment-date rule).
      *
      * @return HasMany<EmployeeAssignment, $this>
      */
     public function directReports(): HasMany
     {
         return $this->hasMany(self::class, 'manager_assignment_id');
-    }
-
-    /**
-     * docs/modules/HR.md: "'current' = starts_on <= today <= (ends_on
-     * OR infinity)" -- computed, never stored.
-     */
-    public function isCurrent(): bool
-    {
-        $today = Carbon::today();
-
-        return $this->starts_on->lessThanOrEqualTo($today)
-            && ($this->ends_on === null || $this->ends_on->greaterThanOrEqualTo($today));
     }
 }

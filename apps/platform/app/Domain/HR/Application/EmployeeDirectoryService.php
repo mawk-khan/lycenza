@@ -11,9 +11,9 @@ use App\Models\Campus;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 /**
@@ -33,12 +33,12 @@ use Illuminate\Support\Collection;
  * placement (Position/Department/Campus/manager) is derived fresh, per
  * request, from the Employee's CURRENTLY EFFECTIVE EmploymentRecord and
  * primary EmployeeAssignment -- "current" meaning `starts_on <= today
- * <= (ends_on OR infinity)`, the exact temporal rule
- * `EmployeeAssignment::isCurrent()`/HR.md's lifecycle matrix already
- * establish, applied here to EmploymentRecord as well (which has no
- * `isCurrent()` helper of its own -- `EmploymentRecord::isOpen()`
- * alone is insufficient: a future-dated open-ended Employment is
- * "open" but not yet "current").
+ * <= (ends_on OR infinity)` on the School's own calendar date
+ * (SchoolTimezone::today(), ORG.7E-0; never the UTC date). That primary
+ * placement is the row's DISPLAY summary; the Campus FILTER answers
+ * operational Campus membership through the one canonical resolver
+ * (CurrentEmployeeAssignments: every current assignment counts, not only
+ * the primary, and ended employment and inactive Campuses confer nothing).
  *
  * Runs entirely under the caller's already-established
  * `TenantContext`/RLS -- no privileged/admin database connection, and
@@ -73,6 +73,7 @@ class EmployeeDirectoryService
 
     public function __construct(
         private readonly TenantContext $context,
+        private readonly CurrentEmployeeAssignments $current,
     ) {}
 
     /**
@@ -91,7 +92,7 @@ class EmployeeDirectoryService
 
     private function runSearch(School $school, EmployeeDirectoryQuery $query): LengthAwarePaginator
     {
-        $today = Carbon::today()->toDateString();
+        $today = SchoolTimezone::today($school);
 
         $employeeQuery = Employee::query()
             ->where('school_id', $school->id)
@@ -103,8 +104,11 @@ class EmployeeDirectoryService
                         ->orWhere('full_name', 'ilike', '%'.$needle.'%');
                 });
             })
+            // ORG.7E-0: the Campus filter is operational Campus membership --
+            // any current assignment on that active Campus (the canonical rule).
+            ->when($query->campusId !== null, fn ($q) => $this->current->whereOperationalOnCampuses($q, $school, [(string) $query->campusId], $today))
             ->when(
-                $query->campusId !== null || $query->departmentId !== null || $query->positionId !== null,
+                $query->departmentId !== null || $query->positionId !== null,
                 fn ($q) => $q->whereExists(function ($sub) use ($school, $query, $today) {
                     $sub->selectRaw('1')
                         ->from('employee_assignments as ea')
@@ -116,7 +120,6 @@ class EmployeeDirectoryService
                         ->where(fn ($w) => $w->whereNull('ea.ends_on')->orWhere('ea.ends_on', '>=', $today))
                         ->where('er.starts_on', '<=', $today)
                         ->where(fn ($w) => $w->whereNull('er.ends_on')->orWhere('er.ends_on', '>=', $today))
-                        ->when($query->campusId !== null, fn ($w) => $w->where('ea.campus_id', $query->campusId))
                         ->when($query->departmentId !== null, fn ($w) => $w->where('ea.department_id', $query->departmentId))
                         ->when($query->positionId !== null, fn ($w) => $w->where('ea.position_id', $query->positionId));
                 }),

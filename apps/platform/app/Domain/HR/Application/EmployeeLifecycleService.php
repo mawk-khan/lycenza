@@ -12,8 +12,9 @@ use App\Domain\HR\Infrastructure\Position;
 use App\Models\Campus;
 use App\Models\User;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
-use Illuminate\Support\Carbon;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -68,7 +69,10 @@ class EmployeeLifecycleService
         $school = $employment->school;
         $this->authorizeCapabilityFor($actor, 'hr.employees.assignments.manage', $school);
 
-        $today = Carbon::today()->toDateString();
+        // ORG.7E-0: "future" on the School's own calendar date, never the UTC date.
+        $today = SchoolTimezone::today($school);
+        // Compared as calendar dates, never raw input strings (security review, ORG.7E-0).
+        $endsOn = CarbonImmutable::parse($endsOn)->toDateString();
         if ($endsOn > $today) {
             throw new InvalidEmploymentEffectiveDateException($employment->id, $endsOn, 'future_dated');
         }

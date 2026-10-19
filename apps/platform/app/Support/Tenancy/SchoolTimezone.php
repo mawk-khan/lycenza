@@ -3,6 +3,7 @@
 namespace App\Support\Tenancy;
 
 use App\Models\School;
+use Carbon\CarbonImmutable;
 use DateTimeZone;
 use Illuminate\Support\Facades\DB;
 
@@ -50,6 +51,17 @@ final class SchoolTimezone
         }
 
         return DB::selectOne('SELECT 1 AS ok FROM pg_timezone_names WHERE name = ?', [$timezone]) !== null;
+    }
+
+    /**
+     * ORG.7E-0 (ADR 0076 §42): the School's own calendar date (Y-m-d) now --
+     * the date "current" HR placement is judged on, never the UTC or server
+     * date. The one shared form of the `CarbonImmutable::now(resolve())`
+     * idiom for new readers.
+     */
+    public static function today(School $school): string
+    {
+        return CarbonImmutable::now(self::resolve($school))->toDateString();
     }
 
     public static function resolve(School $school): DateTimeZone
