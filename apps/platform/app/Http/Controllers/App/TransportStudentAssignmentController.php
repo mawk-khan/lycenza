@@ -112,7 +112,7 @@ class TransportStudentAssignmentController extends Controller
         $school = $context->requireSchool();
         $scope = $this->authorizeCampusScope('transport.assignments.manage', $school);
 
-        $route = $access->route($scope, $transportRoute);
+        $route = $access->scopedRoute($scope, $transportRoute);
 
         $stops = $route->stops()->where('status', 'active')->orderBy('sequence')->get();
 
@@ -135,7 +135,7 @@ class TransportStudentAssignmentController extends Controller
             'dropoff_stop_id' => ['nullable', 'string'],
         ]);
 
-        $route = $access->route($scope, $validated['route_id']);
+        $route = $access->scopedRoute($scope, $validated['route_id']);
         $pickupStop = isset($validated['pickup_stop_id']) ? $access->stop($scope, $validated['pickup_stop_id']) : null;
         $dropoffStop = isset($validated['dropoff_stop_id']) ? $access->stop($scope, $validated['dropoff_stop_id']) : null;
 

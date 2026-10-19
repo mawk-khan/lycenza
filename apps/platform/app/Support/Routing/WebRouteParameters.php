@@ -45,7 +45,7 @@ final class WebRouteParameters
         'examinationPaper', 'experience', 'feeHead', 'feeStructure', 'gradeBand', 'gradeLevel', 'gradeScale',
         'grant', 'guardian', 'hostel', 'hostelBed', 'hostelResidencyAssignment', 'hostelRoom', 'inventoryItem',
         'inventoryLocation', 'invitation', 'item', 'journalEntry', 'learningContent', 'leavePolicy',
-        'leavePolicyAssignment', 'leaveRequest', 'leaveType', 'ledgerAccount', 'libraryFine', 'libraryLoan',
+        'leavePolicyAssignment', 'leaveRequest', 'leaveType', 'ledgerAccount', 'libraryCopy', 'libraryFine', 'libraryLoan',
         'libraryTitle', 'line', 'mapping', 'membership', 'note', 'payment', 'payrollPeriod', 'payrollRun',
         'period', 'position', 'qualification', 'relationship', 'requirement', 'rollover', 'room', 'rule', 'run',
         'salaryComponent', 'salaryStructure', 'school', 'schoolGroup', 'section', 'selection',

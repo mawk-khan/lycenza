@@ -43,7 +43,7 @@ final class TransportRiderAccess
         return $scope->restrict(TransportRoute::query(), 'transport_routes.campus_id');
     }
 
-    public function route(CampusScope $scope, string $id): TransportRoute
+    public function scopedRoute(CampusScope $scope, string $id): TransportRoute
     {
         $found = Str::isUuid($id) ? $this->routes($scope)->find($id) : null;
 

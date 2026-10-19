@@ -103,7 +103,7 @@ class TransportRouteController extends Controller
         $school = $context->requireSchool();
         $scope = $this->authorizeCampusScope('transport.routes.view', $school);
 
-        $route = $access->route($scope, $transportRoute)->load(['stops' => fn ($q) => $q->orderBy('sequence'), 'campus']);
+        $route = $access->scopedRoute($scope, $transportRoute)->load(['stops' => fn ($q) => $q->orderBy('sequence'), 'campus']);
         $canManage = $capabilities->canInSchool($context->actor(), 'transport.routes.manage', $school);
 
         return Inertia::render('App/Transport/Routes/Show', [

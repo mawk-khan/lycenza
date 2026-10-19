@@ -79,7 +79,7 @@ class TransportRouteController extends Controller
     {
         $scope = $this->authorizeCampusScope('transport.routes.view', $school);
 
-        $model = $access->route($scope, $transportRoute)->load('stops');
+        $model = $access->scopedRoute($scope, $transportRoute)->load('stops');
 
         return response()->json(['data' => $this->present($model)]);
     }

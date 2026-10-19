@@ -228,10 +228,10 @@ final class SchoolRouteCoverage
 
             // Domain\Transport\Http\Controllers\TransportRouteController
             Coverage::campus('api.v1.schools.transport-routes.index', 'transport.routes.view', TransportRiderAccess::class, 'routes'),
-            Coverage::campus('api.v1.schools.transport-routes.show', 'transport.routes.view', TransportRiderAccess::class, 'route'),
+            Coverage::campus('api.v1.schools.transport-routes.show', 'transport.routes.view', TransportRiderAccess::class, 'scopedRoute'),
 
             // Domain\Transport\Http\Controllers\TransportStopController
-            Coverage::campus('api.v1.schools.transport-routes.stops.index', 'transport.routes.view', TransportRiderAccess::class, 'route'),
+            Coverage::campus('api.v1.schools.transport-routes.stops.index', 'transport.routes.view', TransportRiderAccess::class, 'scopedRoute'),
 
             // Domain\Transport\Http\Controllers\TransportVehicleController
             Coverage::gate('api.v1.schools.transport-vehicles.index', 'transport.vehicles.view'),
@@ -710,7 +710,7 @@ final class SchoolRouteCoverage
             Coverage::campus('app.transport.routes.index', 'transport.routes.view', TransportRiderAccess::class, 'routes'),
             Coverage::gate('app.transport.routes.create', 'transport.routes.manage'),
             Coverage::gate('app.transport.routes.store', 'transport.routes.manage'),
-            Coverage::campus('app.transport.routes.show', 'transport.routes.view', TransportRiderAccess::class, 'route'),
+            Coverage::campus('app.transport.routes.show', 'transport.routes.view', TransportRiderAccess::class, 'scopedRoute'),
             Coverage::gate('app.transport.routes.update', 'transport.routes.manage'),
             Coverage::gate('app.transport.routes.stops.store', 'transport.routes.manage'),
 
@@ -739,7 +739,7 @@ final class SchoolRouteCoverage
             Coverage::campusLookup('app.transport.assignments.create', 'transport.assignments.manage', 'Data-free form page; Students, routes and stops come from the scoped searches.'),
             Coverage::campus('app.transport.assignments.search-students', 'transport.assignments.manage', TransportRiderAccess::class, 'riderCandidates'),
             Coverage::campus('app.transport.assignments.search-routes', 'transport.assignments.manage', TransportRiderAccess::class, 'routes'),
-            Coverage::campus('app.transport.assignments.route-stops', 'transport.assignments.manage', TransportRiderAccess::class, 'route'),
+            Coverage::campus('app.transport.assignments.route-stops', 'transport.assignments.manage', TransportRiderAccess::class, 'scopedRoute'),
             Coverage::campus('app.transport.assignments.store', 'transport.assignments.manage', TransportRiderAccess::class, 'writeGuard'),
             Coverage::campus('app.transport.assignments.end', 'transport.assignments.manage', TransportRiderAccess::class, 'writeGuard'),
 

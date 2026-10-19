@@ -30,7 +30,7 @@ class TransportStopController extends Controller
     {
         $scope = $this->authorizeCampusScope('transport.routes.view', $school);
 
-        $route = $access->route($scope, $transportRoute);
+        $route = $access->scopedRoute($scope, $transportRoute);
 
         $query = $route->stops()->orderBy('sequence');
 
