@@ -5,17 +5,19 @@ namespace App\Http\Controllers\App;
 use App\Domain\Library\Application\Exceptions\ConcurrentCheckoutConflictException;
 use App\Domain\Library\Application\Exceptions\CopyNotAvailableException;
 use App\Domain\Library\Application\Exceptions\DueDateBeforeCheckoutException;
+use App\Domain\Library\Application\Exceptions\LibraryCheckoutUnavailableException;
 use App\Domain\Library\Application\Exceptions\LoanAlreadyReturnedException;
 use App\Domain\Library\Application\Exceptions\StudentNotEligibleException;
+use App\Domain\Library\Application\LibraryCirculationAccess;
 use App\Domain\Library\Application\LibraryLoanService;
 use App\Domain\Library\Infrastructure\LibraryCopy;
 use App\Domain\Library\Infrastructure\LibraryFine;
 use App\Domain\Library\Infrastructure\LibraryLoan;
-use App\Domain\Students\Application\StudentSearch;
-use App\Domain\Students\Infrastructure\Student;
+use App\Domain\Students\Application\StudentLookupCandidate;
 use App\Http\Controllers\Controller;
 use App\Models\School;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Authorization\Campus\CampusScopeResolver;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
@@ -43,12 +45,13 @@ use Inertia\Response;
  */
 class LibraryCirculationController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
-    public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities): Response
+    public function index(Request $request, TenantContext $context, CampusScopeResolver $scopes, LibraryCirculationAccess $access): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('library.circulation.view', $school);
+        // ORG.7D-5 (ADR 0076 §41): loans by their frozen Campus, in SQL.
+        $scope = $this->authorizeCampusScope('library.circulation.view', $school);
 
         // SWC.5 (ADR 0073 section 20.2): returned loans are listable too --
         // the same `status` filter `/api/v1` already offers under this same
@@ -58,7 +61,7 @@ class LibraryCirculationController extends Controller
         $validated = $request->validate(['status' => ['sometimes', Rule::in(['active', 'returned'])]]);
         $status = $validated['status'] ?? 'active';
 
-        $loans = LibraryLoan::query()
+        $loans = $access->loans($scope)
             ->with(['copy.title', 'student'])
             ->where('status', $status)
             ->when($status === 'active', fn ($q) => $q->orderBy('due_at'), fn ($q) => $q->orderByDesc('checked_in_at'))
@@ -69,14 +72,14 @@ class LibraryCirculationController extends Controller
         return Inertia::render('App/Library/Circulation/Index', [
             'loans' => $loans->through(fn (LibraryLoan $l) => $this->presentLoan($l, SchoolTimezone::resolve($school))),
             'status' => $status,
-            'canManage' => $capabilities->canInSchool($context->actor(), 'library.circulation.manage', $school),
+            'canManage' => ! $scopes->campusScope($context->actor(), 'library.circulation.manage', $school)->isNone(),
         ]);
     }
 
     public function create(TenantContext $context): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('library.circulation.manage', $school);
+        $this->authorizeCampusScope('library.circulation.manage', $school);
 
         // UAT-LIB-01: the earliest due date the form offers is the School's today.
         return Inertia::render('App/Library/Circulation/Create', [
@@ -97,19 +100,22 @@ class LibraryCirculationController extends Controller
      * this endpoint. Gated on `.manage`, not `.view`, since both
      * search endpoints exist solely to feed the checkout form.
      */
-    public function searchAvailableCopies(Request $request, TenantContext $context): JsonResponse
+    public function searchAvailableCopies(Request $request, TenantContext $context, LibraryCirculationAccess $access): JsonResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('library.circulation.manage', $school);
+        // ORG.7D-5: a Campus-scoped librarian lends only their Campuses' Copies
+        // (never a School-shared, NULL-Campus one).
+        $scope = $this->authorizeCampusScope('library.circulation.manage', $school);
 
         $term = (string) $request->query('q', '');
+        $like = '%'.addcslashes($term, '%_\\').'%';
 
-        $copies = LibraryCopy::query()
+        $copies = $access->copies($scope)
             ->with('title')
             ->where('status', 'active')
             ->whereDoesntHave('activeLoan')
-            ->when($term !== '', fn ($q) => $q->where(fn ($w) => $w->where('code', 'ilike', "%{$term}%")
-                ->orWhereHas('title', fn ($t) => $t->where('title', 'ilike', "%{$term}%"))))
+            ->when($term !== '', fn ($q) => $q->where(fn ($w) => $w->where('code', 'ilike', $like)
+                ->orWhereHas('title', fn ($t) => $t->where('title', 'ilike', $like))))
             ->limit(10)
             ->get();
 
@@ -120,30 +126,26 @@ class LibraryCirculationController extends Controller
         ])->all()]);
     }
 
-    public function searchStudents(Request $request, TenantContext $context): JsonResponse
+    public function searchStudents(Request $request, TenantContext $context, LibraryCirculationAccess $access): JsonResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('library.circulation.manage', $school);
+        // ORG.7D-5: the borrower picker (StudentPurposeLookup for a Campus-scoped
+        // librarian) -- a candidate, never write authority.
+        $scope = $this->authorizeCampusScope('library.circulation.manage', $school);
 
         $term = (string) $request->query('q', '');
 
-        $students = Student::query()
-            ->where('status', 'active')
-            ->when(trim($term) !== '', fn ($q) => StudentSearch::anyField($q, $term))
-            ->limit(10)
-            ->get();
-
-        return response()->json(['data' => $students->map(fn (Student $s) => [
-            'id' => $s->id,
-            'studentNumber' => $s->student_number,
-            'name' => trim($s->first_name.' '.$s->last_name),
-        ])->all()]);
+        return response()->json(['data' => array_map(fn (StudentLookupCandidate $c) => [
+            'id' => $c->id,
+            'studentNumber' => $c->studentNumber,
+            'name' => $c->displayName,
+        ], $access->borrowerCandidates($school, $scope, $term))]);
     }
 
-    public function store(Request $request, TenantContext $context, LibraryLoanService $service): RedirectResponse
+    public function store(Request $request, TenantContext $context, LibraryLoanService $service, LibraryCirculationAccess $access): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('library.circulation.manage', $school);
+        $scope = $this->authorizeCampusScope('library.circulation.manage', $school);
 
         $validated = $request->validate([
             'library_copy_id' => ['required', 'string'],
@@ -151,11 +153,13 @@ class LibraryCirculationController extends Controller
             'due_at' => ['required', 'date'],
         ]);
 
-        $copy = LibraryCopy::query()->findOrFail($validated['library_copy_id']);
-        $student = Student::query()->findOrFail($validated['student_id']);
+        $copy = $access->copy($scope, $validated['library_copy_id']);
 
         try {
-            $service->checkout($copy, $student, self::dueAt($validated['due_at'], $school), $context->actor());
+            $student = $access->borrower($scope, $validated['student_id']);
+            $service->checkout($copy, $student, self::dueAt($validated['due_at'], $school), $context->actor(), $access->writeGuard($school, $scope));
+        } catch (LibraryCheckoutUnavailableException $e) {
+            throw ValidationException::withMessages(['library_copy_id' => [$e->getMessage()]]);
         } catch (DueDateBeforeCheckoutException $e) {
             throw ValidationException::withMessages(['due_at' => [$e->getMessage()]]);
         } catch (StudentNotEligibleException $e) {
@@ -167,21 +171,23 @@ class LibraryCirculationController extends Controller
         return redirect('/app/library/circulation')->with('flash', 'Item checked out.');
     }
 
-    public function checkIn(TenantContext $context, LibraryLoanService $service, string $libraryLoan): RedirectResponse
+    public function checkIn(TenantContext $context, CapabilityResolver $capabilities, LibraryLoanService $service, LibraryCirculationAccess $access, string $libraryLoan): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('library.circulation.manage', $school);
+        // ORG.7D-5: by the loan's frozen Campus (no cross-Campus return).
+        $scope = $this->authorizeCampusScope('library.circulation.manage', $school);
 
-        $loan = LibraryLoan::query()->findOrFail($libraryLoan);
+        $loan = $access->loan($scope, $libraryLoan);
 
         try {
-            $service->checkIn($loan, $context->actor());
+            $service->checkIn($loan, $context->actor(), $access->writeGuard($school, $scope));
         } catch (LoanAlreadyReturnedException $e) {
             throw ValidationException::withMessages(['library_loan' => [$e->getMessage()]]);
         }
 
         // SWC.3 (ADR 0073 section 19.5): when check-in assessed a fine, show it in its loan's context.
-        if (LibraryFine::query()->where('library_loan_id', $loan->id)->exists()) {
+        // ORG.7D-5: only a fines viewer learns that a fine was assessed.
+        if ($capabilities->canInSchool($context->actor(), 'library.fines.view', $school) && LibraryFine::query()->where('library_loan_id', $loan->id)->exists()) {
             return redirect()->route('app.library.circulation.show', $loan->id);
         }
 

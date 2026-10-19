@@ -828,6 +828,20 @@ whole-School supersedes. A selected or current Campus
 
   Transport and Library are deferred. The Canteen Item picker needs
   `canteen.orders.manage` (web and API).
+- **Adopted in ORG.7D-5 (§41):**
+  - `library.circulation.view/.manage`: a loan by its frozen Campus
+    (`library_loans.campus_id`), a lendable copy by its Campus;
+  - `transport.routes.view` and `transport.assignments.view/.manage`: by
+    the route's Campus, fixed once used.
+
+  NULL-Campus copies and routes are whole-School only. These stay
+  whole-School:
+  - the catalogue, fines, route/stop management and the fleet;
+  - Transport fee pages (declared).
+
+  Check-in fines and rider fee intent are owner-approved bounded side
+  effects (`CampusAdoptionImpactTest::OWNER_APPROVED_SIDE_EFFECTS`), never
+  Fees authority.
 - **Refusals look the same.** A Campus-scoped actor's refusals do not
   differ between an in-scope and an out-of-scope conflict (Visitor
   check-in: one generic refusal; the School-wide one-active-Visit rule
@@ -892,6 +906,9 @@ whole-School supersedes. A selected or current Campus
     Enrollment and the Campus, so a concurrent transfer, inactivation, year
     switch or Campus deactivation either waits or makes the write refuse.
     A picker answer is a candidate, never a token.
+  - **Consumers (ORG.7D-5):** the Library circulation and Transport rider
+    access classes and guards. Their services lock the Student FOR NO KEY
+    UPDATE, never FOR UPDATE (§40.5).
 - **A whole-School hub that also opens on an adopted key**
   (ORG.7D-1, e.g. Data health) is declared in
   `CampusScopeCatalogue::WHOLE_SCHOOL_HUBS`. Only its own controller may

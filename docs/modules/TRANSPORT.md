@@ -648,3 +648,22 @@ wave is frozen.
   - the scoped picker, generic refusals and the R8 searches.
 - **Owner decisions:** whether to adopt `routes.manage`, and the
   rider-fee side effect.
+
+## Campus-scoped routes and riders (ORG.7D-5, 2026-10-19, ADR 0076 §41)
+
+`transport.routes.view` and `transport.assignments.*` are Campus-adopted.
+Route and stop management (`transport.routes.manage`) and the fleet
+(`transport.vehicles.*`) stay whole-School.
+- **Route Campus.** A route serves one active Campus, or none (School-shared,
+  whole-School only). It is set on the web or API, and fixed once the route
+  has a stop, a rider or a vehicle assignment.
+- **Campus-scoped staff:**
+  - see only their Campuses' routes, stops and riders;
+  - assign only current Students of the route's Campus (proven under lock);
+  - every refusal is `TRANSPORT_ASSIGNMENT_UNAVAILABLE`;
+  - other Campuses' and shared routes are not found.
+- **Fees.** Rider fee intent is still recorded on assignment (owner-approved
+  bounded side effect). Transport fees, carry-forward, fee selections and
+  the route fee head stay whole-School.
+- **Fix.** The API fee head and fee-selection endpoints now resolve their
+  records inside the School context.

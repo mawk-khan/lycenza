@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\App;
 
+use App\Domain\Library\Application\LibraryCopyService;
 use App\Domain\Library\Infrastructure\LibraryCopy;
 use App\Domain\Library\Infrastructure\LibraryTitle;
 use App\Http\Controllers\Controller;
@@ -16,7 +17,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -47,7 +47,7 @@ class LibraryCatalogueController extends Controller
         $query = LibraryTitle::query()->where('status', 'active')->withCount('copies')->orderBy('title');
 
         if (isset($validated['search'])) {
-            $term = '%'.$validated['search'].'%';
+            $term = '%'.addcslashes($validated['search'], '%_\\').'%';
             $query->where(fn ($q) => $q->where('title', 'ilike', $term)->orWhere('author', 'ilike', $term));
         }
 
@@ -102,7 +102,7 @@ class LibraryCatalogueController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability('library.catalogue.view', $school);
 
-        $title = LibraryTitle::query()->with('copies.activeLoan.student')->findOrFail($libraryTitle);
+        $title = LibraryTitle::query()->with(['copies.activeLoan.student', 'copies.campus'])->findOrFail($libraryTitle);
 
         return Inertia::render('App/Library/Catalogue/Show', [
             'title' => [
@@ -117,6 +117,9 @@ class LibraryCatalogueController extends Controller
                 'code' => $c->code,
                 'status' => $c->status,
                 'available' => $c->isAvailable(),
+                // ORG.7D-5 (ADR 0076 §41): the Copy's Campus (none = School-shared).
+                'campusId' => $c->campus_id,
+                'campusName' => $c->campus?->name,
                 'activeLoan' => $c->activeLoan ? [
                     'id' => $c->activeLoan->id,
                     'studentName' => trim($c->activeLoan->student->first_name.' '.$c->activeLoan->student->last_name),
@@ -124,10 +127,11 @@ class LibraryCatalogueController extends Controller
                 ] : null,
             ])->all(),
             'canManage' => $capabilities->canInSchool($context->actor(), 'library.catalogue.manage', $school),
+            'campuses' => Campus::query()->where('status', 'active')->orderBy('name')->get(['id', 'name'])->map(fn (Campus $c) => ['id' => $c->id, 'name' => $c->name])->all(),
         ]);
     }
 
-    public function storeCopy(Request $request, TenantContext $context, string $libraryTitle): RedirectResponse
+    public function storeCopy(Request $request, TenantContext $context, LibraryCopyService $copies, string $libraryTitle): RedirectResponse
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('library.catalogue.manage', $school);
@@ -140,27 +144,27 @@ class LibraryCatalogueController extends Controller
             'campus_id' => ['nullable', 'string'],
         ]);
 
-        if (! empty($validated['campus_id']) && Campus::query()->where('id', $validated['campus_id'])->doesntExist()) {
-            throw ValidationException::withMessages(['campus_id' => ['This Campus does not belong to this School.']]);
-        }
-
-        $copy = DB::transaction(function () use ($school, $title, $validated, $context) {
-            $copy = LibraryCopy::query()->create([
-                'school_id' => $school->id,
-                'library_title_id' => $title->id,
-                'campus_id' => $validated['campus_id'] ?? null,
-                'code' => $validated['code'],
-                'status' => 'active',
-            ]);
-
-            app(AuditRecorder::class)->school($school, 'library.copy.created', actor: $context->actor(), subject: $copy, metadata: [
-                'libraryTitleId' => $title->id,
-                'code' => $copy->code,
-            ]);
-
-            return $copy;
-        });
+        // ORG.7D-5 (ADR 0076 §41): an active Campus of this School, or none (School-shared).
+        $copy = $copies->create($school, $title, $validated['code'], ($validated['campus_id'] ?? null) ?: null, $context->actor());
 
         return redirect("/app/library/titles/{$title->id}")->with('flash', "Copy {$copy->code} registered.");
+    }
+
+    /**
+     * ORG.7D-5 (ADR 0076 §41): move a Copy to another Campus (or make it
+     * School-shared) -- whole-School catalogue administration only, refused
+     * while the Copy is on loan (LibraryCopyService).
+     */
+    public function updateCopy(Request $request, TenantContext $context, LibraryCopyService $copies, string $libraryCopy): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('library.catalogue.manage', $school);
+
+        $copy = LibraryCopy::query()->findOrFail($libraryCopy);
+        $validated = $request->validate(['campus_id' => ['present', 'nullable', 'string']]);
+
+        $copies->update($school, $copy->id, ['campus_id' => ($validated['campus_id'] ?? null) ?: null], $context->actor());
+
+        return redirect("/app/library/titles/{$copy->library_title_id}")->with('flash', "Copy {$copy->code} updated.");
     }
 }

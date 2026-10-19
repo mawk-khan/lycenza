@@ -214,3 +214,16 @@ School setting, a role, a navigation toggle or a commercial plan.
   warden can never board another Campus's Student. Transport and Library
   rules are now written down for a later wave; neither area has Campus
   scope yet.
+- **ORG.7D-5 (ADR 0076 §41)** gave Campus scope to two more areas:
+  - **Library circulation:** a Campus-only librarian lends that Campus's
+    books to that Campus's current Students, and returns and sees loans by
+    the Campus where each was borrowed.
+  - **Transport:** a Campus-only coordinator sees that Campus's routes and
+    assigns that Campus's current Students to them.
+
+  Still whole-School:
+  - the Library catalogue and fines;
+  - route set-up, the vehicle fleet and Transport fees;
+  - School-wide (no-Campus) books and routes.
+
+  Administrators can now give a book copy or a route a Campus from the web.

@@ -37,6 +37,7 @@ use App\Domain\Leave\Application\LeaveTypeService;
 use App\Domain\Leave\Application\LeaveYearCloseService;
 use App\Domain\Leave\Application\LeaveYearService;
 use App\Domain\Leave\Application\StaffCalendarService;
+use App\Domain\Library\Application\LibraryCirculationAccess;
 use App\Domain\LMS\Application\LmsAdministrationAccess;
 use App\Domain\LMS\Application\TeacherAssignmentAccess;
 use App\Domain\LMS\Application\TeacherLearningContentAccess;
@@ -60,6 +61,7 @@ use App\Domain\Payroll\Statutory\Application\Export\StatutoryTdsDraftStatementEx
 use App\Domain\StaffAttendance\Application\StaffAttendanceReadService;
 use App\Domain\StaffAttendance\Application\StaffAttendanceService;
 use App\Domain\Timetable\Application\TimetableScheduleAccess;
+use App\Domain\Transport\Application\TransportRiderAccess;
 use App\Domain\Visitor\Application\VisitorVisitAccess;
 use Tests\Feature\Api\V1\SchoolContextTest;
 use Tests\Feature\App\StatutoryPayrollUiTest;
@@ -213,8 +215,11 @@ final class SchoolRouteCoverage
             Coverage::gate('api.v1.schools.library-titles.copies.index', 'library.catalogue.view'),
 
             // Domain\Library\Http\Controllers\LibraryLoanController
-            Coverage::gate('api.v1.schools.library-loans.index', 'library.circulation.view'),
-            Coverage::gate('api.v1.schools.library-loans.show', 'library.circulation.view'),
+            // ORG.7D-5 (ADR 0076 §41): Domain\Library\Http\Controllers\LibraryLoanController
+            Coverage::campus('api.v1.schools.library-loans.index', 'library.circulation.view', LibraryCirculationAccess::class, 'loans'),
+            Coverage::campus('api.v1.schools.library-loans.show', 'library.circulation.view', LibraryCirculationAccess::class, 'loan'),
+            Coverage::campus('api.v1.schools.library-loans.store', 'library.circulation.manage', LibraryCirculationAccess::class, 'writeGuard'),
+            Coverage::campus('api.v1.schools.library-loans.check-in', 'library.circulation.manage', LibraryCirculationAccess::class, 'writeGuard'),
 
             // Domain\Library\Http\Controllers\LibraryFineController
             Coverage::gate('api.v1.schools.library-fine-policy.show', 'library.fines.view'),
@@ -222,11 +227,11 @@ final class SchoolRouteCoverage
             Coverage::gate('api.v1.schools.library-loans.fine.show', 'library.fines.view'),
 
             // Domain\Transport\Http\Controllers\TransportRouteController
-            Coverage::gate('api.v1.schools.transport-routes.index', 'transport.routes.view'),
-            Coverage::gate('api.v1.schools.transport-routes.show', 'transport.routes.view'),
+            Coverage::campus('api.v1.schools.transport-routes.index', 'transport.routes.view', TransportRiderAccess::class, 'routes'),
+            Coverage::campus('api.v1.schools.transport-routes.show', 'transport.routes.view', TransportRiderAccess::class, 'route'),
 
             // Domain\Transport\Http\Controllers\TransportStopController
-            Coverage::gate('api.v1.schools.transport-routes.stops.index', 'transport.routes.view'),
+            Coverage::campus('api.v1.schools.transport-routes.stops.index', 'transport.routes.view', TransportRiderAccess::class, 'route'),
 
             // Domain\Transport\Http\Controllers\TransportVehicleController
             Coverage::gate('api.v1.schools.transport-vehicles.index', 'transport.vehicles.view'),
@@ -236,12 +241,12 @@ final class SchoolRouteCoverage
             Coverage::gate('api.v1.schools.transport-routes.assignments.index', 'transport.vehicles.view'),
 
             // Domain\Transport\Http\Controllers\TransportStudentAssignmentController
-            Coverage::gate('api.v1.schools.transport-student-assignments.index', 'transport.assignments.view'),
-            Coverage::gate('api.v1.schools.transport-student-assignments.show', 'transport.assignments.view'),
+            Coverage::campus('api.v1.schools.transport-student-assignments.index', 'transport.assignments.view', TransportRiderAccess::class, 'assignments'),
+            Coverage::campus('api.v1.schools.transport-student-assignments.store', 'transport.assignments.manage', TransportRiderAccess::class, 'writeGuard'),
+            Coverage::campus('api.v1.schools.transport-student-assignments.end', 'transport.assignments.manage', TransportRiderAccess::class, 'writeGuard'),
+            Coverage::campus('api.v1.schools.transport-student-assignments.show', 'transport.assignments.view', TransportRiderAccess::class, 'assignment'),
 
             // Domain\Transport\Http\Controllers\TransportFeeController
-            Coverage::gate('api.v1.schools.transport-routes.fee-head.show', 'transport.routes.view'),
-            Coverage::gate('api.v1.schools.transport-student-assignments.fee-selections.index', 'transport.assignments.view'),
 
             // Domain\Visitor\Http\Controllers\VisitorController
             Coverage::gate('api.v1.schools.visitors.index', 'visitor.directory.view'),
@@ -684,33 +689,33 @@ final class SchoolRouteCoverage
             Coverage::gate('app.library.titles.store', 'library.catalogue.manage'),
             Coverage::gate('app.library.titles.show', 'library.catalogue.view'),
             Coverage::gate('app.library.titles.copies.store', 'library.catalogue.manage'),
+            Coverage::gate('app.library.copies.update', 'library.catalogue.manage'),
 
             // Http\Controllers\App\LibraryCirculationController
-            Coverage::gate('app.library.circulation.index', 'library.circulation.view'),
-            Coverage::gate('app.library.circulation.create', 'library.circulation.manage'),
-            Coverage::gate('app.library.circulation.search-copies', 'library.circulation.manage'),
-            Coverage::gate('app.library.circulation.search-students', 'library.circulation.manage'),
-            Coverage::gate('app.library.circulation.store', 'library.circulation.manage'),
-            Coverage::gate('app.library.circulation.check-in', 'library.circulation.manage'),
+            // ORG.7D-5 (ADR 0076 §41): Http\Controllers\App\LibraryCirculationController
+            Coverage::campus('app.library.circulation.index', 'library.circulation.view', LibraryCirculationAccess::class, 'loans'),
+            Coverage::campusLookup('app.library.circulation.create', 'library.circulation.manage', 'Data-free form page; Copies and borrowers come from the scoped searches.'),
+            Coverage::campus('app.library.circulation.search-copies', 'library.circulation.manage', LibraryCirculationAccess::class, 'copies'),
+            Coverage::campus('app.library.circulation.search-students', 'library.circulation.manage', LibraryCirculationAccess::class, 'borrowerCandidates'),
+            Coverage::campus('app.library.circulation.store', 'library.circulation.manage', LibraryCirculationAccess::class, 'writeGuard'),
+            Coverage::campus('app.library.circulation.check-in', 'library.circulation.manage', LibraryCirculationAccess::class, 'writeGuard'),
 
             // Http\Controllers\App\Fees\LibraryFineWebController
-            Coverage::gate('app.library.circulation.show', 'library.circulation.view'),
+            Coverage::campus('app.library.circulation.show', 'library.circulation.view', LibraryCirculationAccess::class, 'loan'),
             Coverage::gate('app.library.fine-policy', 'library.fines.view'),
             Coverage::gate('app.library.fine-policy.publish', 'library.fines.manage'),
             Coverage::gate('app.library.fines.void', 'library.fines.void'),
 
             // Http\Controllers\App\TransportRouteController
-            Coverage::gate('app.transport.routes.index', 'transport.routes.view'),
+            Coverage::campus('app.transport.routes.index', 'transport.routes.view', TransportRiderAccess::class, 'routes'),
             Coverage::gate('app.transport.routes.create', 'transport.routes.manage'),
             Coverage::gate('app.transport.routes.store', 'transport.routes.manage'),
-            Coverage::gate('app.transport.routes.show', 'transport.routes.view'),
+            Coverage::campus('app.transport.routes.show', 'transport.routes.view', TransportRiderAccess::class, 'route'),
             Coverage::gate('app.transport.routes.update', 'transport.routes.manage'),
             Coverage::gate('app.transport.routes.stops.store', 'transport.routes.manage'),
 
             // Http\Controllers\App\Fees\OperationalFeeController
             Coverage::gate('app.transport.routes.fee-head.update', 'transport.routes.manage'),
-            Coverage::gate('app.transport.fees', 'transport.assignments.view'),
-            Coverage::gate('app.transport.fees.carry-forward', 'transport.assignments.manage'),
 
             // Http\Controllers\App\TransportRouteController
             Coverage::gate('app.transport.stops.update', 'transport.routes.manage'),
@@ -730,13 +735,13 @@ final class SchoolRouteCoverage
             Coverage::gate('app.transport.route-assignments.end', 'transport.vehicles.manage'),
 
             // Http\Controllers\App\TransportStudentAssignmentController
-            Coverage::gate('app.transport.assignments.index', 'transport.assignments.view'),
-            Coverage::gate('app.transport.assignments.create', 'transport.assignments.manage'),
-            Coverage::gate('app.transport.assignments.search-students', 'transport.assignments.manage'),
-            Coverage::gate('app.transport.assignments.search-routes', 'transport.assignments.manage'),
-            Coverage::gate('app.transport.assignments.route-stops', 'transport.assignments.manage'),
-            Coverage::gate('app.transport.assignments.store', 'transport.assignments.manage'),
-            Coverage::gate('app.transport.assignments.end', 'transport.assignments.manage'),
+            Coverage::campus('app.transport.assignments.index', 'transport.assignments.view', TransportRiderAccess::class, 'assignments'),
+            Coverage::campusLookup('app.transport.assignments.create', 'transport.assignments.manage', 'Data-free form page; Students, routes and stops come from the scoped searches.'),
+            Coverage::campus('app.transport.assignments.search-students', 'transport.assignments.manage', TransportRiderAccess::class, 'riderCandidates'),
+            Coverage::campus('app.transport.assignments.search-routes', 'transport.assignments.manage', TransportRiderAccess::class, 'routes'),
+            Coverage::campus('app.transport.assignments.route-stops', 'transport.assignments.manage', TransportRiderAccess::class, 'route'),
+            Coverage::campus('app.transport.assignments.store', 'transport.assignments.manage', TransportRiderAccess::class, 'writeGuard'),
+            Coverage::campus('app.transport.assignments.end', 'transport.assignments.manage', TransportRiderAccess::class, 'writeGuard'),
 
             // Http\Controllers\App\VisitorController
             Coverage::gate('app.visitor.directory.index', 'visitor.directory.view'),

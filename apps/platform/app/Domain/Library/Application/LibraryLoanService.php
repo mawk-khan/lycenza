@@ -5,6 +5,7 @@ namespace App\Domain\Library\Application;
 use App\Domain\Library\Application\Exceptions\ConcurrentCheckoutConflictException;
 use App\Domain\Library\Application\Exceptions\CopyNotAvailableException;
 use App\Domain\Library\Application\Exceptions\DueDateBeforeCheckoutException;
+use App\Domain\Library\Application\Exceptions\LibraryCheckoutUnavailableException;
 use App\Domain\Library\Application\Exceptions\LoanAlreadyReturnedException;
 use App\Domain\Library\Application\Exceptions\StudentNotEligibleException;
 use App\Domain\Library\Infrastructure\LibraryCopy;
@@ -53,25 +54,31 @@ class LibraryLoanService
      * violation (e.g. a future write path that does not take this
      * same lock) and a raw SQL error reaching the caller.
      */
-    public function checkout(LibraryCopy $copy, Student $student, Carbon $dueAt, ?User $actor = null): LibraryLoan
+    public function checkout(LibraryCopy $copy, Student $student, Carbon $dueAt, ?User $actor = null, ?LibraryCirculationCampusGuard $guard = null): LibraryLoan
     {
         if (! $student->isActive()) {
-            throw new StudentNotEligibleException;
+            throw $guard !== null ? new LibraryCheckoutUnavailableException : new StudentNotEligibleException;
         }
 
         try {
-            return DB::transaction(function () use ($copy, $student, $dueAt, $actor) {
+            return DB::transaction(function () use ($copy, $student, $dueAt, $actor, $guard) {
                 $lockedCopy = LibraryCopy::query()
                     ->where('id', $copy->id)
                     ->lockForUpdate()
                     ->firstOrFail();
 
+                // ORG.7D-5 (ADR 0076 §41): a Campus-scoped librarian's Copy Campus
+                // and current-Student proof, under the Copy lock (a concurrent
+                // Copy move waits, or has committed and is seen here), before
+                // anything about the Copy's state is revealed.
+                $guard?->beforeCheckout($lockedCopy, $student->id);
+
                 if (! $lockedCopy->isActive()) {
-                    throw new CopyNotAvailableException('this copy is inactive');
+                    throw $guard !== null ? new LibraryCheckoutUnavailableException : new CopyNotAvailableException('this copy is inactive');
                 }
 
                 if ($lockedCopy->loans()->where('status', 'active')->exists()) {
-                    throw new CopyNotAvailableException('it is already on loan');
+                    throw $guard !== null ? new LibraryCheckoutUnavailableException : new CopyNotAvailableException('it is already on loan');
                 }
 
                 $checkedOutAt = now();
@@ -86,6 +93,9 @@ class LibraryLoanService
                 $loan = LibraryLoan::query()->create([
                     'school_id' => $copy->school_id,
                     'library_copy_id' => $copy->id,
+                    // ORG.7D-5 (ADR 0076 §41): the loan's historical Campus is the
+                    // locked Copy's Campus now (library_loans_campus_guard agrees).
+                    'campus_id' => $lockedCopy->campus_id,
                     'student_id' => $student->id,
                     'status' => 'active',
                     'checked_out_at' => $checkedOutAt,
@@ -103,7 +113,7 @@ class LibraryLoanService
                 return $loan;
             });
         } catch (UniqueConstraintViolationException) {
-            throw new ConcurrentCheckoutConflictException;
+            throw $guard !== null ? new LibraryCheckoutUnavailableException : new ConcurrentCheckoutConflictException;
         }
     }
 
@@ -122,9 +132,13 @@ class LibraryLoanService
      * `library_loans_checkin_after_checkout_check`, which stays the
      * authority. Such a return is never overdue (`due_at >= checked_out_at`).
      */
-    public function checkIn(LibraryLoan $loan, ?User $actor = null): LibraryLoan
+    public function checkIn(LibraryLoan $loan, ?User $actor = null, ?LibraryCirculationCampusGuard $guard = null): LibraryLoan
     {
-        return DB::transaction(function () use ($loan, $actor) {
+        return DB::transaction(function () use ($loan, $actor, $guard) {
+            // ORG.7D-5 (ADR 0076 §41): a Campus-scoped return follows the loan's
+            // frozen Campus, never the borrower's or the Copy's current one.
+            $guard?->beforeCheckIn($loan);
+
             $checkedInAt = now()->max($loan->checked_out_at);
 
             $affected = LibraryLoan::query()

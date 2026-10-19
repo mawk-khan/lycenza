@@ -9,6 +9,7 @@ use App\Domain\Transport\Application\Exceptions\StopNotOnRouteException;
 use App\Domain\Transport\Application\Exceptions\StudentAlreadyAssignedException;
 use App\Domain\Transport\Application\Exceptions\StudentAssignmentAlreadyEndedException;
 use App\Domain\Transport\Application\Exceptions\StudentNotEligibleException;
+use App\Domain\Transport\Application\Exceptions\TransportAssignmentUnavailableException;
 use App\Domain\Transport\Infrastructure\TransportRoute;
 use App\Domain\Transport\Infrastructure\TransportStop;
 use App\Domain\Transport\Infrastructure\TransportStudentAssignment;
@@ -29,6 +30,15 @@ use Illuminate\Support\Facades\DB;
  */
 class TransportStudentAssignmentService
 {
+    /**
+     * ORG.7D-5 (ADR 0076 §40.5, §41): the Student row is locked FOR NO KEY
+     * UPDATE -- exclusive against another assignment and a Student update, but
+     * compatible with a concurrent enrollment INSERT's foreign-key KEY SHARE,
+     * so a Campus-scoped assignment waiting on the Enrollment never deadlocks
+     * against a transfer or rollover.
+     */
+    public const STUDENT_LOCK = 'for no key update';
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TransportFeeSelectionService $fees,
@@ -37,7 +47,7 @@ class TransportStudentAssignmentService
     /**
      * THE core invariant (checkpoint brief section 15): a Student must
      * never have two simultaneous active Transport assignments.
-     * `lockForUpdate()` on the Student row itself serializes any two
+     * The Student row lock (self::STUDENT_LOCK) serializes any two
      * concurrent assign() calls for the SAME Student before either
      * reaches the "already assigned" check -- the exact
      * LibraryLoanService::checkout() locking discipline applied to
@@ -54,29 +64,29 @@ class TransportStudentAssignmentService
         ?TransportStop $pickupStop,
         ?TransportStop $dropoffStop,
         ?User $actor = null,
+        ?TransportRiderCampusGuard $guard = null,
     ): TransportStudentAssignment {
+        $this->assertRouteAndStops($route, $pickupStop, $dropoffStop);
+
         if (! $student->isActive()) {
-            throw new StudentNotEligibleException;
-        }
-
-        if (! $route->isActive()) {
-            throw new RouteNotAvailableException;
-        }
-
-        if ($pickupStop !== null && $pickupStop->route_id !== $route->id) {
-            throw new StopNotOnRouteException;
-        }
-
-        if ($dropoffStop !== null && $dropoffStop->route_id !== $route->id) {
-            throw new StopNotOnRouteException;
+            throw $guard !== null ? new TransportAssignmentUnavailableException : new StudentNotEligibleException;
         }
 
         try {
-            return DB::transaction(function () use ($student, $route, $pickupStop, $dropoffStop, $actor) {
+            return DB::transaction(function () use ($student, $route, $pickupStop, $dropoffStop, $actor, $guard) {
                 $lockedStudent = Student::query()
                     ->where('id', $student->id)
-                    ->lockForUpdate()
+                    ->lock(self::STUDENT_LOCK)
                     ->firstOrFail();
+
+                // ORG.7D-5: the Route is share-locked, so its Campus (fixed once it
+                // has riders, TransportRouteService) cannot change under this write.
+                $lockedRoute = TransportRouteService::lockForDependent($route);
+                if (! $lockedRoute->isActive()) {
+                    throw new RouteNotAvailableException;
+                }
+                // A Campus-scoped actor's route Campus and current-Student proof.
+                $guard?->beforeAssign($lockedRoute, $lockedStudent->id);
 
                 if (
                     TransportStudentAssignment::query()
@@ -84,7 +94,7 @@ class TransportStudentAssignmentService
                         ->where('status', 'active')
                         ->exists()
                 ) {
-                    throw new StudentAlreadyAssignedException;
+                    throw $guard !== null ? new TransportAssignmentUnavailableException : new StudentAlreadyAssignedException;
                 }
 
                 $assignment = TransportStudentAssignment::query()->create([
@@ -111,7 +121,29 @@ class TransportStudentAssignmentService
                 return $assignment;
             });
         } catch (UniqueConstraintViolationException) {
-            throw new ConcurrentStudentAssignmentConflictException;
+            throw $guard !== null ? new TransportAssignmentUnavailableException : new ConcurrentStudentAssignmentConflictException;
+        }
+    }
+
+    /**
+     * ORG.7D-5 (ADR 0076 §41, security review): the route and stop checks,
+     * which never depend on the Student. They run first -- and a controller
+     * runs them before it resolves the named Student -- so a Campus-scoped
+     * actor cannot learn an out-of-scope Student's existence or state from
+     * which refusal comes back.
+     */
+    public function assertRouteAndStops(TransportRoute $route, ?TransportStop $pickupStop, ?TransportStop $dropoffStop): void
+    {
+        if (! $route->isActive()) {
+            throw new RouteNotAvailableException;
+        }
+
+        if ($pickupStop !== null && $pickupStop->route_id !== $route->id) {
+            throw new StopNotOnRouteException;
+        }
+
+        if ($dropoffStop !== null && $dropoffStop->route_id !== $route->id) {
+            throw new StopNotOnRouteException;
         }
     }
 
@@ -120,9 +152,12 @@ class TransportStudentAssignmentService
      * `$assignment->update(...)`), mirroring
      * LibraryLoanService::checkIn()'s same discipline.
      */
-    public function end(TransportStudentAssignment $assignment, ?User $actor = null): TransportStudentAssignment
+    public function end(TransportStudentAssignment $assignment, ?User $actor = null, ?TransportRiderCampusGuard $guard = null): TransportStudentAssignment
     {
-        return DB::transaction(function () use ($assignment, $actor) {
+        return DB::transaction(function () use ($assignment, $actor, $guard) {
+            // ORG.7D-5 (ADR 0076 §41): a Campus-scoped end follows the route's Campus.
+            $guard?->beforeEnd($assignment);
+
             $affected = TransportStudentAssignment::query()
                 ->where('id', $assignment->id)
                 ->where('status', 'active')

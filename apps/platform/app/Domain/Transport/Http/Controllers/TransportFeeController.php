@@ -22,29 +22,39 @@ class TransportFeeController extends Controller
 {
     use AuthorizesCapability;
 
-    public function showRouteFeeHead(School $school, TransportRoute $transportRoute, TransportFeeSelectionService $service): JsonResponse
+    /*
+     * ORG.7D-5: route ids are resolved here, inside the School context the
+     * `school-membership` middleware sets -- implicit route-model binding of a
+     * tenant model runs before that middleware and answered NOT FOUND for
+     * everyone once no ambient context was present (found by ORG.7D-5 tests).
+     */
+    public function showRouteFeeHead(School $school, string $transportRoute, TransportFeeSelectionService $service): JsonResponse
     {
-        $this->authorizeCapability('transport.routes.view', $school);
+        // ORG.7D-5 (ADR 0076 §41): a declared whole-School-only operation of a Campus-
+        // adopted key, authorized by the route's ordinary `capability:transport.routes.view` floor.
+        $route = TransportRoute::query()->findOrFail($transportRoute);
 
-        return response()->json(['data' => $service->routeFeeHead($transportRoute)]);
+        return response()->json(['data' => $service->routeFeeHead($route)]);
     }
 
-    public function updateRouteFeeHead(Request $request, School $school, TransportRoute $transportRoute, TransportFeeSelectionService $service): JsonResponse
+    public function updateRouteFeeHead(Request $request, School $school, string $transportRoute, TransportFeeSelectionService $service): JsonResponse
     {
         $this->authorizeCapability('transport.routes.manage', $school);
+        $route = TransportRoute::query()->findOrFail($transportRoute);
 
         $validated = $request->validate([
             'fee_head_id' => ['present', 'nullable', 'uuid'],
         ]);
 
-        $service->setRouteFeeHead($transportRoute, $validated['fee_head_id'], $request->user());
+        $service->setRouteFeeHead($route, $validated['fee_head_id'], $request->user());
 
-        return response()->json(['data' => $service->routeFeeHead($transportRoute)]);
+        return response()->json(['data' => $service->routeFeeHead($route)]);
     }
 
     public function carryForward(Request $request, School $school, TransportFeeSelectionService $service): JsonResponse
     {
-        $this->authorizeCapability('transport.assignments.manage', $school);
+        // ORG.7D-5 (ADR 0076 §41): a declared whole-School-only operation of a Campus-
+        // adopted key, authorized by the route's ordinary `capability:transport.assignments.manage` floor.
 
         $validated = $request->validate([
             'academic_year_id' => ['required', 'uuid'],
@@ -62,12 +72,14 @@ class TransportFeeController extends Controller
         ]]);
     }
 
-    public function assignmentFeeSelections(School $school, TransportStudentAssignment $transportStudentAssignment): JsonResponse
+    public function assignmentFeeSelections(School $school, string $transportStudentAssignment): JsonResponse
     {
-        $this->authorizeCapability('transport.assignments.view', $school);
+        // ORG.7D-5 (ADR 0076 §41): a declared whole-School-only operation of a Campus-
+        // adopted key, authorized by the route's ordinary `capability:transport.assignments.view` floor.
+        $assignment = TransportStudentAssignment::query()->findOrFail($transportStudentAssignment);
 
         $links = TransportFeeSelection::query()
-            ->where('transport_student_assignment_id', $transportStudentAssignment->id)
+            ->where('transport_student_assignment_id', $assignment->id)
             ->orderBy('created_at')->orderBy('id')->get();
 
         return response()->json(['data' => $links->map(fn (TransportFeeSelection $link) => [

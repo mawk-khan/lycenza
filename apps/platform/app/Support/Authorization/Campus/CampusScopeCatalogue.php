@@ -86,6 +86,18 @@ final class CampusScopeCatalogue
             'inactiveCampus' => 'A grant on an inactive Campus confers nothing; whole-School holders keep every application.',
             'sharedLookups' => 'None. Whole-School only (declared operations): the Applicant directory, page and create, starting an application (it needs the Applicant page), both Guardian searches (name, and the contact lookup), conversion to Student, and the admission fee head and fee provenance. The application page shows a Campus-scoped viewer no Applicant link, conversion form or fee panel. The Student purpose lookup is not used: an applicant is not yet a Student.',
         ],
+        'library' => [
+            'label' => 'Library circulation',
+            'nullCampus' => 'A School-shared (NULL-Campus) Copy, and every loan of one, is whole-School only. A loan keeps its Copy\'s Campus at checkout (library_loans.campus_id, immutable; library_loans_campus_guard), and a Copy on an active loan never changes Campus (library_copies_campus_move_guard). The catalogue (library.catalogue.*) -- titles, Copies and Copy moves -- and fines (library.fines.*) stay whole-School.',
+            'inactiveCampus' => 'A grant on an inactive Campus confers nothing; a Campus-scoped checkout or return on a Campus that deactivates concurrently waits for it or is refused (share-locked).',
+            'sharedLookups' => 'ORG.7D-5: the borrower picker is the Students-owned purpose lookup with the actor\'s scope (current operational Students: id, studentNumber, name); the copy picker lists only lendable Copies on Campuses in scope (code, title). A Campus-scoped checkout needs the Copy\'s Campus in scope and the borrower current on THAT Campus, proven under lock; every refusal is LIBRARY_CHECKOUT_UNAVAILABLE. Returns and history follow the loan\'s frozen Campus, never the borrower\'s current one. Check-in\'s overdue fine is Library\'s bounded side effect (owner-approved, no Fees authority).',
+        ],
+        'transport' => [
+            'label' => 'Transport routes and riders',
+            'nullCampus' => 'A School-shared (NULL-Campus) route is whole-School only: never listed, opened or given riders by a Campus-scoped actor. A route\'s Campus is an active Campus of the School or none, and is fixed once the route has a Stop, a rider or a vehicle/driver assignment (TransportRouteService, under the route row lock). Route and Stop management (transport.routes.manage) and the fleet (transport.vehicles.*) stay whole-School.',
+            'inactiveCampus' => 'A grant on an inactive Campus confers nothing; a Campus-scoped rider assignment or end on a Campus that deactivates concurrently waits for it or is refused (share-locked).',
+            'sharedLookups' => 'ORG.7D-5: the rider picker is the Students-owned purpose lookup with the actor\'s scope (current operational Students: id, studentNumber, name); the route and stop pickers list only Campus-bound routes in scope and their active stops (id, code/name, sequence). A Campus-scoped assignment needs the route Campus in scope and the Student current on THAT Campus, proven under lock; every refusal is TRANSPORT_ASSIGNMENT_UNAVAILABLE. Rider fee intent is Transport\'s bounded side effect (owner-approved, no Fees authority). Transport fees, fee selections, carry-forward and the route fee head stay whole-School (declared operations).',
+        ],
     ];
 
     /**
@@ -116,6 +128,11 @@ final class CampusScopeCatalogue
         'canteen.orders.manage' => 'canteen',
         'admissions.view' => 'admissions',
         'admissions.manage' => 'admissions',
+        'library.circulation.view' => 'library',
+        'library.circulation.manage' => 'library',
+        'transport.routes.view' => 'transport',
+        'transport.assignments.view' => 'transport',
+        'transport.assignments.manage' => 'transport',
     ];
 
     /**
@@ -162,6 +179,12 @@ final class CampusScopeCatalogue
         'api.v1.schools.admission-applications.convert' => ['capability' => 'admissions.manage', 'reason' => 'Conversion creates the Student, Guardian and enrollment (SIS): whole-School until the full SIS wave.'],
         'api.v1.schools.admission-fee-head.show' => ['capability' => 'admissions.view', 'reason' => 'The School\'s admission fee head (Fees configuration).'],
         'api.v1.schools.admission-fee-head.update' => ['capability' => 'admissions.manage', 'reason' => 'The School\'s admission fee head (Fees configuration).'],
+        // ORG.7D-5 (ADR 0076 §41): Transport fee configuration and intent stay whole-School.
+        'app.transport.fees' => ['capability' => 'transport.assignments.view', 'reason' => 'Transport fee intent across every rider of the School (Fees-linked, School-wide).'],
+        'app.transport.fees.carry-forward' => ['capability' => 'transport.assignments.manage', 'reason' => 'Next-year fee carry-forward walks every active rider of the School.'],
+        'api.v1.schools.transport-fee-selections.carry-forward' => ['capability' => 'transport.assignments.manage', 'reason' => 'Next-year fee carry-forward walks every active rider of the School.'],
+        'api.v1.schools.transport-student-assignments.fee-selections.index' => ['capability' => 'transport.assignments.view', 'reason' => 'A rider\'s recorded fee intent (Fees-linked).'],
+        'api.v1.schools.transport-routes.fee-head.show' => ['capability' => 'transport.routes.view', 'reason' => 'The route\'s fee head (Fees configuration).'],
         'api.v1.schools.admission-applications.fee-selection.show' => ['capability' => 'admissions.view', 'reason' => 'Recorded admission fee intent (Fees-linked provenance).'],
     ];
 

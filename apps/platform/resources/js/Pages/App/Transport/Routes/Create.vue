@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { useForm } from '@inertiajs/vue3';
 
+// ORG.7D-5: a route serves one active Campus, or none (School-shared).
+defineProps<{ campuses: { id: string; name: string }[] }>();
+
 const form = useForm({
     code: '',
     name: '',
     description: '',
+    campus_id: '',
 });
 
 function submit(): void {
@@ -59,6 +63,23 @@ function submit(): void {
                 ></textarea>
                 <p v-if="form.errors.description" class="mt-1 text-sm text-red-600">
                     {{ form.errors.description }}
+                </p>
+            </div>
+
+            <div>
+                <label class="block text-sm text-slate-600" for="campus">Campus</label>
+                <select
+                    id="campus"
+                    v-model="form.campus_id"
+                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                >
+                    <option value="">School-wide (shared by every Campus)</option>
+                    <option v-for="campus in campuses" :key="campus.id" :value="campus.id">
+                        {{ campus.name }}
+                    </option>
+                </select>
+                <p v-if="form.errors.campus_id" class="mt-1 text-sm text-red-600">
+                    {{ form.errors.campus_id }}
                 </p>
             </div>
 

@@ -824,6 +824,7 @@ trait CreatesTenancyFixtures
             fn () => LibraryLoan::factory()->create(array_merge([
                 'school_id' => $copy->school_id,
                 'library_copy_id' => $copy->id,
+                'campus_id' => $copy->campus_id,
                 'student_id' => $student->id,
             ], $attributes)),
         );
@@ -838,6 +839,7 @@ trait CreatesTenancyFixtures
             fn () => LibraryLoan::factory()->state(array_merge([
                 'school_id' => $copy->school_id,
                 'library_copy_id' => $copy->id,
+                'campus_id' => $copy->campus_id,
                 'student_id' => $student->id,
             ], $attributes))->returned()->create(),
         );

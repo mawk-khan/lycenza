@@ -2,16 +2,17 @@
 
 namespace App\Http\Controllers\App\Fees;
 
+use App\Domain\Library\Application\LibraryCirculationAccess;
 use App\Domain\Library\Application\LibraryFinePolicyService;
 use App\Domain\Library\Application\LibraryFineService;
 use App\Domain\Library\Infrastructure\LibraryFine;
 use App\Domain\Library\Infrastructure\LibraryFinePolicy;
 use App\Domain\Library\Infrastructure\LibraryFineVoid;
-use App\Domain\Library\Infrastructure\LibraryLoan;
 use App\Http\Controllers\App\Concerns\MapsDomainRefusals;
 use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
@@ -42,7 +43,7 @@ use Inertia\Response;
  */
 class LibraryFineWebController extends Controller
 {
-    use AuthorizesCapability, MapsDomainRefusals;
+    use AuthorizesCampusScope, AuthorizesCapability, MapsDomainRefusals;
 
     public function __construct(
         private readonly OperationalFeePanels $panels,
@@ -91,12 +92,13 @@ class LibraryFineWebController extends Controller
         return redirect()->route('app.library.fine-policy');
     }
 
-    public function loan(TenantContext $context, string $libraryLoan): Response
+    public function loan(TenantContext $context, LibraryCirculationAccess $access, string $libraryLoan): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('library.circulation.view', $school);
+        // ORG.7D-5 (ADR 0076 §41): a loan by its frozen Campus; out of scope = NOT FOUND.
+        $scope = $this->authorizeCampusScope('library.circulation.view', $school);
 
-        $loan = LibraryLoan::query()->with(['copy.title', 'student'])->findOrFail($libraryLoan);
+        $loan = $access->loan($scope, $libraryLoan)->load(['copy.title', 'student']);
         $canViewFines = $this->can($school, 'library.fines.view');
         $fine = $canViewFines ? LibraryFine::query()->where('library_loan_id', $loan->id)->first() : null;
 

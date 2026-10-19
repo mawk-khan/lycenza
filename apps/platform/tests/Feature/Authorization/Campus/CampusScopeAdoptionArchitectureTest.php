@@ -83,6 +83,16 @@ class CampusScopeAdoptionArchitectureTest extends TestCase
             'controllers' => ['app/Domain/Admissions/Http/Controllers/AdmissionApplicationController.php', 'app/Http/Controllers/App/AdmissionApplicationController.php'],
             'models' => ['AdmissionApplication::query('],
         ],
+        'library' => [
+            'access' => 'app/Domain/Library/Application/LibraryCirculationAccess.php',
+            'controllers' => ['app/Domain/Library/Http/Controllers/LibraryLoanController.php', 'app/Http/Controllers/App/LibraryCirculationController.php', 'app/Http/Controllers/App/Fees/LibraryFineWebController.php'],
+            'models' => ['LibraryLoan::query(', 'Student::query('],
+        ],
+        'transport' => [
+            'access' => 'app/Domain/Transport/Application/TransportRiderAccess.php',
+            'controllers' => ['app/Domain/Transport/Http/Controllers/TransportStudentAssignmentController.php', 'app/Http/Controllers/App/TransportStudentAssignmentController.php', 'app/Domain/Transport/Http/Controllers/TransportRouteController.php'],
+            'models' => ['TransportStudentAssignment::query(', 'Student::query('],
+        ],
     ];
 
     #[Test]
@@ -206,6 +216,8 @@ class CampusScopeAdoptionArchitectureTest extends TestCase
         $services = [
             'HostelResidencyService' => ['assign'],
             'CanteenOrderService' => ['place', 'fulfill', 'cancel'],
+            'LibraryLoanService' => ['checkout', 'checkIn'],
+            'TransportStudentAssignmentService' => ['assign', 'end'],
         ];
         $calls = 0;
         foreach (Finder::create()->files()->in(app_path())->name('*.php') as $file) {
@@ -222,6 +234,6 @@ class CampusScopeAdoptionArchitectureTest extends TestCase
                 }
             }
         }
-        $this->assertGreaterThanOrEqual(8, $calls, 'the scan found the adopted write calls');
+        $this->assertGreaterThanOrEqual(16, $calls, 'the scan found the adopted write calls');
     }
 }

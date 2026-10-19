@@ -2887,4 +2887,5 @@ operational Student of a Campus.
   deactivation.
 - **Advisory only:** `StudentOperationalCampusResolver` (now read-only) and
   `StudentPurposeLookup` are never write-time proof.
-- **Consumers:** the Hostel and Canteen Campus write guards.
+- **Consumers:** the Hostel, Canteen, Library circulation (ORG.7D-5) and
+  Transport rider Campus write guards.

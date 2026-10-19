@@ -150,6 +150,10 @@ class StudentCampusFoundationArchitectureTest extends TestCase
         'app/Domain/Hostel/Application/HostelResidencyCampusGuard.php',
         'app/Domain/Canteen/Application/CanteenOrderAccess.php',
         'app/Domain/Canteen/Application/CanteenOrderCampusGuard.php',
+        'app/Domain/Library/Application/LibraryCirculationAccess.php',
+        'app/Domain/Library/Application/LibraryCirculationCampusGuard.php',
+        'app/Domain/Transport/Application/TransportRiderAccess.php',
+        'app/Domain/Transport/Application/TransportRiderCampusGuard.php',
     ];
 
     #[Test]
@@ -177,6 +181,8 @@ class StudentCampusFoundationArchitectureTest extends TestCase
     private const WRITE_GUARDS = [
         'app/Domain/Hostel/Application/HostelResidencyCampusGuard.php',
         'app/Domain/Canteen/Application/CanteenOrderCampusGuard.php',
+        'app/Domain/Library/Application/LibraryCirculationCampusGuard.php',
+        'app/Domain/Transport/Application/TransportRiderCampusGuard.php',
     ];
 
     #[Test]
@@ -206,6 +212,8 @@ class StudentCampusFoundationArchitectureTest extends TestCase
         foreach ([
             'app/Domain/Hostel/Application/HostelResidencyService.php' => '/\$guard\?->beforeAssign\(/',
             'app/Domain/Canteen/Application/CanteenOrderService.php' => '/\$guard\?->(atPlacement|beforeChange)\(/',
+            'app/Domain/Library/Application/LibraryLoanService.php' => '/\$guard\?->(beforeCheckout|beforeCheckIn)\(/',
+            'app/Domain/Transport/Application/TransportStudentAssignmentService.php' => '/\$guard\?->(beforeAssign|beforeEnd)\(/',
         ] as $service => $call) {
             $code = $sources[$service];
             preg_match_all($call, $code, $matches, PREG_OFFSET_CAPTURE);
@@ -214,6 +222,10 @@ class StudentCampusFoundationArchitectureTest extends TestCase
                 $before = substr($code, 0, $offset);
                 $this->assertGreaterThan((int) strrpos($before, 'public function '), (int) strrpos($before, 'DB::transaction('), "{$service}: the guard call at offset {$offset} runs inside its method's DB::transaction");
             }
+            // ORG.7D-4 §40.5: an exclusive Student lock in a guarded write is FOR NO
+            // KEY UPDATE, never FOR UPDATE (which deadlocks against a transfer's
+            // enrollment insert while the guard waits on the Enrollment).
+            $this->assertDoesNotMatchRegularExpression('/Student::query\(\)[^;]*->lockForUpdate\(\)/s', $code, "{$service} locks the Student FOR UPDATE");
         }
 
         // The advisory resolver keeps no write-time answer; the assertion is one

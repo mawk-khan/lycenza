@@ -1051,15 +1051,18 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->middleware(['capability:library.catalogue.manage', 'throttle:school-api-mutations'])
                 ->name('schools.library-copies.update');
 
+            // ORG.7D-5 (ADR 0076 §41): Campus-adopted circulation (`,campus` floors).
             Route::get('/library-loans', [LibraryLoanController::class, 'index'])
+                ->middleware('capability:library.circulation.view,campus')
                 ->name('schools.library-loans.index');
             Route::post('/library-loans', [LibraryLoanController::class, 'store'])
-                ->middleware(['capability:library.circulation.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->middleware(['capability:library.circulation.manage,campus', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.library-loans.store');
             Route::get('/library-loans/{libraryLoan}', [LibraryLoanController::class, 'show'])
+                ->middleware('capability:library.circulation.view,campus')
                 ->name('schools.library-loans.show');
             Route::post('/library-loans/{libraryLoan}/check-in', [LibraryLoanController::class, 'checkIn'])
-                ->middleware(['capability:library.circulation.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:library.circulation.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.library-loans.check-in');
 
             // --- OPF.4 (ADR 0067 §17): Library overdue fines. A fine is
@@ -1096,18 +1099,22 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             // and both end() actions rely on their own unique-
             // constraint/conditional-update retry-safety, matching
             // Library's Title/Copy creation and checkIn() precedent.
+            // ORG.7D-5 (ADR 0076 §41): routes.view and assignments.* are Campus-adopted.
             Route::get('/transport-routes', [TransportRouteController::class, 'index'])
+                ->middleware('capability:transport.routes.view,campus')
                 ->name('schools.transport-routes.index');
             Route::post('/transport-routes', [TransportRouteController::class, 'store'])
                 ->middleware(['capability:transport.routes.manage', 'throttle:school-api-mutations'])
                 ->name('schools.transport-routes.store');
             Route::get('/transport-routes/{transportRoute}', [TransportRouteController::class, 'show'])
+                ->middleware('capability:transport.routes.view,campus')
                 ->name('schools.transport-routes.show');
             Route::patch('/transport-routes/{transportRoute}', [TransportRouteController::class, 'update'])
                 ->middleware(['capability:transport.routes.manage', 'throttle:school-api-mutations'])
                 ->name('schools.transport-routes.update');
 
             Route::get('/transport-routes/{transportRoute}/stops', [TransportStopController::class, 'index'])
+                ->middleware('capability:transport.routes.view,campus')
                 ->name('schools.transport-routes.stops.index');
             Route::post('/transport-routes/{transportRoute}/stops', [TransportStopController::class, 'store'])
                 ->middleware(['capability:transport.routes.manage', 'throttle:school-api-mutations'])
@@ -1137,26 +1144,31 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->name('schools.transport-route-assignments.end');
 
             Route::get('/transport-student-assignments', [TransportStudentAssignmentController::class, 'index'])
+                ->middleware('capability:transport.assignments.view,campus')
                 ->name('schools.transport-student-assignments.index');
             Route::post('/transport-student-assignments', [TransportStudentAssignmentController::class, 'store'])
-                ->middleware(['capability:transport.assignments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->middleware(['capability:transport.assignments.manage,campus', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.transport-student-assignments.store');
             Route::get('/transport-student-assignments/{transportStudentAssignment}', [TransportStudentAssignmentController::class, 'show'])
+                ->middleware('capability:transport.assignments.view,campus')
                 ->name('schools.transport-student-assignments.show');
             Route::post('/transport-student-assignments/{transportStudentAssignment}/end', [TransportStudentAssignmentController::class, 'end'])
-                ->middleware(['capability:transport.assignments.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:transport.assignments.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.transport-student-assignments.end');
 
             // --- OPF.1 (ADR 0067 §14): Transport fee integration. Transport
             // capabilities only -- the route -> fee head mapping (no amounts),
             // an assignment's recorded fee intent, and the explicit academic-
             // year carry-forward (idempotent by construction and by key).
+            // ORG.7D-5: the fee head, fee intent and carry-forward stay whole-School (declared).
             Route::get('/transport-routes/{transportRoute}/fee-head', [TransportFeeController::class, 'showRouteFeeHead'])
+                ->middleware('capability:transport.routes.view')
                 ->name('schools.transport-routes.fee-head.show');
             Route::put('/transport-routes/{transportRoute}/fee-head', [TransportFeeController::class, 'updateRouteFeeHead'])
                 ->middleware(['capability:transport.routes.manage', 'throttle:school-api-mutations'])
                 ->name('schools.transport-routes.fee-head.update');
             Route::get('/transport-student-assignments/{transportStudentAssignment}/fee-selections', [TransportFeeController::class, 'assignmentFeeSelections'])
+                ->middleware('capability:transport.assignments.view')
                 ->name('schools.transport-student-assignments.fee-selections.index');
             Route::post('/transport-fee-selections/carry-forward', [TransportFeeController::class, 'carryForward'])
                 ->middleware(['capability:transport.assignments.manage', 'throttle:school-api-mutations', 'idempotent'])

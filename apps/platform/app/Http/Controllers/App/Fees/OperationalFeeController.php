@@ -75,7 +75,8 @@ class OperationalFeeController extends Controller
     public function transportFees(Request $request, TenantContext $context): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('transport.assignments.view', $school);
+        // ORG.7D-5 (ADR 0076 §41): authorized by the route's whole-School `capability:transport.assignments.view`
+        // floor (a declared whole-School-only operation of a Campus-adopted key).
 
         $assignments = TransportStudentAssignment::query()
             ->with(['student', 'route'])
@@ -106,7 +107,8 @@ class OperationalFeeController extends Controller
     public function transportCarryForward(Request $request, TenantContext $context, TransportFeeSelectionService $transport): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('transport.assignments.manage', $school);
+        // ORG.7D-5 (ADR 0076 §41): authorized by the route's whole-School `capability:transport.assignments.manage`
+        // floor (a declared whole-School-only operation of a Campus-adopted key).
 
         $validated = $request->validate(['academic_year_id' => ['required', 'uuid']]);
         $totals = $this->withFormErrors('academic_year_id', fn () => $transport->carryForward($school, $validated['academic_year_id'], $context->actor()));

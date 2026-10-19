@@ -2,13 +2,12 @@
 
 namespace App\Domain\Library\Http\Controllers;
 
+use App\Domain\Library\Application\LibraryCirculationAccess;
 use App\Domain\Library\Application\LibraryLoanService;
-use App\Domain\Library\Infrastructure\LibraryCopy;
 use App\Domain\Library\Infrastructure\LibraryLoan;
-use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Models\School;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -20,21 +19,28 @@ use Illuminate\Validation\Rule;
  * flags for idempotency evaluation) carries the `idempotent`
  * middleware in routes/api.php -- see LibraryLoanService's docblock
  * for the concurrency guarantee this endpoint delegates to.
+ *
+ * ORG.7D-5 (ADR 0076 §41): `library.circulation.*` are Campus-adopted --
+ * every action resolves its CampusScope and reads or writes through
+ * LibraryCirculationAccess (a loan by its frozen Campus; out of scope =
+ * NOT FOUND); a Campus-scoped checkout is proven under lock
+ * (LibraryCirculationCampusGuard).
  */
 class LibraryLoanController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
-    public function index(Request $request, School $school): JsonResponse
+    public function index(Request $request, School $school, LibraryCirculationAccess $access): JsonResponse
     {
-        $this->authorizeCapability('library.circulation.view', $school);
+        $scope = $this->authorizeCampusScope('library.circulation.view', $school);
 
         $validated = $request->validate([
             'status' => ['sometimes', Rule::in(['active', 'returned'])],
             'student_id' => ['sometimes', 'string'],
         ]);
 
-        $query = LibraryLoan::query()->with(['copy.title', 'student'])->orderByDesc('checked_out_at');
+        // The student_id filter only narrows the scoped set.
+        $query = $access->loans($scope)->with(['copy.title', 'student'])->orderByDesc('checked_out_at');
 
         $query->where('status', $validated['status'] ?? 'active');
 
@@ -54,9 +60,9 @@ class LibraryLoanController extends Controller
         ]);
     }
 
-    public function store(Request $request, School $school, LibraryLoanService $service): JsonResponse
+    public function store(Request $request, School $school, LibraryLoanService $service, LibraryCirculationAccess $access): JsonResponse
     {
-        $this->authorizeCapability('library.circulation.manage', $school);
+        $scope = $this->authorizeCampusScope('library.circulation.manage', $school);
 
         $validated = $request->validate([
             'library_copy_id' => ['required', 'string'],
@@ -64,30 +70,30 @@ class LibraryLoanController extends Controller
             'due_at' => ['required', 'date'],
         ]);
 
-        $copy = LibraryCopy::query()->findOrFail($validated['library_copy_id']);
-        $student = Student::query()->findOrFail($validated['student_id']);
+        $copy = $access->copy($scope, $validated['library_copy_id']);
+        $student = $access->borrower($scope, $validated['student_id']);
 
-        $loan = $service->checkout($copy, $student, Carbon::parse($validated['due_at']), $request->user());
+        $loan = $service->checkout($copy, $student, Carbon::parse($validated['due_at']), $request->user(), $access->writeGuard($school, $scope));
 
         return response()->json(['data' => $this->present($loan->load(['copy.title', 'student']))], 201);
     }
 
-    public function show(School $school, string $libraryLoan): JsonResponse
+    public function show(School $school, string $libraryLoan, LibraryCirculationAccess $access): JsonResponse
     {
-        $this->authorizeCapability('library.circulation.view', $school);
+        $scope = $this->authorizeCampusScope('library.circulation.view', $school);
 
-        $model = LibraryLoan::query()->with(['copy.title', 'student'])->findOrFail($libraryLoan);
+        $model = $access->loan($scope, $libraryLoan)->load(['copy.title', 'student']);
 
         return response()->json(['data' => $this->present($model)]);
     }
 
-    public function checkIn(Request $request, School $school, string $libraryLoan, LibraryLoanService $service): JsonResponse
+    public function checkIn(Request $request, School $school, string $libraryLoan, LibraryLoanService $service, LibraryCirculationAccess $access): JsonResponse
     {
-        $this->authorizeCapability('library.circulation.manage', $school);
+        $scope = $this->authorizeCampusScope('library.circulation.manage', $school);
 
-        $model = LibraryLoan::query()->findOrFail($libraryLoan);
+        $model = $access->loan($scope, $libraryLoan);
 
-        $loan = $service->checkIn($model, $request->user());
+        $loan = $service->checkIn($model, $request->user(), $access->writeGuard($school, $scope));
 
         return response()->json(['data' => $this->present($loan->load(['copy.title', 'student']))]);
     }

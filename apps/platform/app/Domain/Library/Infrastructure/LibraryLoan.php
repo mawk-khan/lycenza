@@ -19,6 +19,7 @@ use Illuminate\Support\Carbon;
  * @property string $id
  * @property string $school_id
  * @property string $library_copy_id
+ * @property string|null $campus_id the Copy's Campus at checkout (ORG.7D-5, immutable)
  * @property string $student_id
  * @property string $status active|returned
  * @property Carbon $checked_out_at
@@ -31,7 +32,7 @@ class LibraryLoan extends Model
 
     protected $table = 'library_loans';
 
-    protected $fillable = ['school_id', 'library_copy_id', 'student_id', 'status', 'checked_out_at', 'due_at', 'checked_in_at'];
+    protected $fillable = ['school_id', 'library_copy_id', 'campus_id', 'student_id', 'status', 'checked_out_at', 'due_at', 'checked_in_at'];
 
     protected static function newFactory(): LibraryLoanFactory
     {

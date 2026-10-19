@@ -2,12 +2,15 @@
 
 namespace App\Domain\Transport\Http\Controllers;
 
+use App\Domain\Transport\Application\TransportRiderAccess;
+use App\Domain\Transport\Application\TransportRouteService;
 use App\Domain\Transport\Infrastructure\TransportRoute;
 use App\Domain\Transport\Infrastructure\TransportStop;
 use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -20,13 +23,14 @@ use Illuminate\Validation\Rule;
  */
 class TransportStopController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope, AuthorizesCapability;
 
-    public function index(Request $request, School $school, string $transportRoute): JsonResponse
+    /** ORG.7D-5 (ADR 0076 §41): a route's stops follow the route's Campus scope. */
+    public function index(Request $request, School $school, string $transportRoute, TransportRiderAccess $access): JsonResponse
     {
-        $this->authorizeCapability('transport.routes.view', $school);
+        $scope = $this->authorizeCampusScope('transport.routes.view', $school);
 
-        $route = TransportRoute::query()->findOrFail($transportRoute);
+        $route = $access->route($scope, $transportRoute);
 
         $query = $route->stops()->orderBy('sequence');
 
@@ -50,6 +54,8 @@ class TransportStopController extends Controller
         ]);
 
         $stop = DB::transaction(function () use ($school, $route, $validated, $request) {
+            // ORG.7D-5: a Stop fixes the Route's Campus; share-lock the Route first.
+            TransportRouteService::lockForDependent($route);
             $stop = TransportStop::query()->create([
                 ...$validated,
                 'school_id' => $school->id,

@@ -3746,3 +3746,240 @@ HIGH finding.
   `http://localhost:8000`. With `APP_URL=http://localhost:8000` all 159
   pass. This is environment-specific, pre-existing, and reported
   separately, not a D4 regression.
+
+## 41. ORG.7D-5 — Library and Transport Campus adoption (as built, 2026-10-19)
+
+Owner authorization: ORG.7D-5 only. Baseline `origin/main` = `5484ba2d`
+(ORG.7D-4). Both domains were adopted; neither was deferred.
+- **Library:** circulation only.
+- **Transport:** route viewing and rider assignments.
+- **Untouched:** HR, Fees/Payments, full SIS, marks and LC-5–LC-10.
+- **No new capability or role template change.** One migration (Library).
+
+    adopted (Library)    = library.circulation.view, library.circulation.manage
+    adopted (Transport)  = transport.routes.view, transport.assignments.view, transport.assignments.manage
+    whole-School         = library.catalogue.*, library.fines.*, transport.routes.manage, transport.vehicles.*
+    NULL Campus          = School-shared = whole-School authority only (never "every Campus")
+
+**41.1 Library data precondition (audited before the migration).** DDEV
+development database, every School:
+- 6 titles; 12 copies, all on a Campus, 0 NULL;
+- 4 active and 1 returned loan; 0 active loans on a NULL-Campus copy;
+- 0 copies updated after any of their loans' checkout;
+- 0 `library.copy.updated` audit events;
+- 0 cross-School loan/copy or copy/Campus mismatches.
+
+The backfill was unambiguous for every row.
+
+**41.2 Loan Campus (migration `2026_12_23_090000_freeze_library_loan_campus`).**
+- **Column:** `library_loans.campus_id` (uuid, nullable: a NULL-Campus
+  copy makes a NULL-Campus loan), with a composite FK `(campus_id,
+  school_id) → campuses` ON DELETE RESTRICT and an index
+  `(school_id, campus_id)`.
+- **Backfill:** from the loan's copy, only after an in-migration ambiguity
+  check. A copy updated after the checkout, or any `library.copy.updated`
+  event at or after it, aborts the whole migration with nothing changed
+  (owner remediation; never a guess).
+- **`library_loans_campus_guard`:**
+  - BEFORE INSERT: the Campus must equal the copy's, read FOR SHARE;
+  - BEFORE UPDATE: `campus_id` and `library_copy_id` never change.
+- **`library_copies_campus_move_guard`:** BEFORE UPDATE OF `campus_id`,
+  refused while the copy has an active loan.
+- **Not retention-tracked:** an immutable column can never re-record a
+  row.
+- **Proofs:**
+  - forward migration and backfill (5/5, 0 mismatches);
+  - raw PostgreSQL as `school_os_app` under RLS context (immutability,
+    move-on-loan, mismatched insert all refused; a move off loan allowed);
+  - rollback (column, FK, index, triggers and functions removed), then
+    reapply;
+  - `platform:verify-database` failed=0.
+
+**41.3 Library authority.**
+- **One copy writer.** `LibraryCopyService` creates and moves copies for
+  the whole-School catalogue on web and API. It applies ActiveCampus, takes
+  the copy row FOR UPDATE (the lock checkout takes), refuses a move while on
+  loan ("A Copy on loan cannot change Campus. Check it in first."), and
+  audits inside the transaction.
+- **Web catalogue.** It now sets a copy's Campus on create, moves it, and
+  shows it. The title search is LIKE-escaped.
+- **`LibraryCirculationAccess`.** Loans are restricted by
+  `library_loans.campus_id`; lendable copies by `library_copies.campus_id`
+  (NULL excluded for Campus actors). The borrower picker is
+  `StudentPurposeLookup` for Campus actors; whole-School actors keep the
+  existing picker.
+- **`LibraryCirculationCampusGuard`, checkout.** After the copy lock, the
+  copy's Campus must be set and in scope, and
+  `lockOperationalOn(copy Campus)` must hold. Every refusal (unknown,
+  inactive, unplaced or other-Campus Student, copy moved, on loan,
+  inactive, lost race) is 422 `LIBRARY_CHECKOUT_UNAVAILABLE`. An
+  out-of-scope or NULL copy is 404, like an unknown one.
+- **`LibraryCirculationCampusGuard`, check-in.** The loan's frozen Campus
+  must be in scope and active (ActiveCampus share lock), else 404. There is
+  no cross-Campus return.
+- **History** (lists, the loan page, API show) follows the loan's frozen
+  Campus. A Student transfer or a later copy move never re-attributes a
+  loan (tested).
+- **Fine side effect (owner-approved high-risk).** A Campus-scoped
+  check-in assesses the overdue fine through the unchanged
+  `LibraryFineService → FeeSourceChargeService` seam:
+  - the fine is tied to the loan and audited (`library.fine.assessed`,
+    actor = the librarian);
+  - no `fees.*`, `finance.*` or `library.fines.*` authority;
+  - the fine panel and the "fine assessed" redirect are shown only to a
+    whole-School fines viewer.
+  - `CampusAdoptionImpactTest::OWNER_APPROVED_SIDE_EFFECTS` records it and
+    proves no Campus-scopable holder also carries financial authority.
+- **Unchanged:** whole-School librarians, cross-Campus lending included.
+
+**41.4 Transport authority.**
+- **One route writer.** `TransportRouteService` creates and updates routes
+  for the whole-School `transport.routes.manage` on web and API:
+  - ActiveCampus applies (uuid, same School, active);
+  - the Campus is fixed once the route is used (a Stop, a rider or a
+    vehicle/driver assignment, any status, checked under the route row
+    lock: "A Route's Campus cannot change once it has Stops, riders or
+    vehicle assignments.").
+  - Every dependent writer share-locks the route first: Stop creation (web
+    and API), rider assignment, and route vehicle assignment (which already
+    locks it FOR UPDATE).
+- **Web route pages.** They now set, show and change a route's Campus. The
+  route and route-picker searches are LIKE-escaped.
+- **`TransportRiderAccess`.**
+  - Routes are restricted by `transport_routes.campus_id`; NULL routes are
+    excluded for Campus actors.
+  - Stops and riders are reached through their route; a stop id outside
+    the in-scope routes is 404.
+  - The rider picker is `StudentPurposeLookup`.
+  - The route page's fee head panel is shown to a whole-School viewer only.
+- **`TransportRiderCampusGuard`, assign.** It runs after the Student lock
+  and the route share lock: the route's Campus must be set and in scope,
+  and `lockOperationalOn(route Campus)` must hold. Every refusal (including
+  already-assigned and the race) is 422 `TRANSPORT_ASSIGNMENT_UNAVAILABLE`.
+- **`TransportRiderCampusGuard`, end.** The route's Campus must be in scope
+  and active, else 404.
+- **Lock mode.** The rider service's Student lock is now FOR NO KEY UPDATE
+  (`TransportStudentAssignmentService::STUDENT_LOCK`, the ORG.7D-4 §40.5
+  rule). The guard pins that no guarded service locks the Student FOR
+  UPDATE.
+- **Vehicles.** They stay a mixed, School-shared fleet, managed
+  whole-School (`transport.vehicles.*`, including daily operations).
+  Campus staff get no vehicle reference data: the v1 rider workflow does
+  not need it. No vehicle/route Campus consistency is invented.
+- **Stops.** They follow their route for visibility; stop management stays
+  `transport.routes.manage`.
+- **Rider fee side effect (owner-approved high-risk).** `assign()` records
+  the active-year fee intent through `TransportFeeSelectionService` in the
+  same transaction. That is bounded, audited, needs no Fees authority, and
+  keeps the existing year and enrollment attribution (never today's Student
+  Campus). It is recorded in `OWNER_APPROVED_SIDE_EFFECTS`.
+- **Declared whole-School operations (5):**
+  - web Transport fees and their carry-forward;
+  - the API carry-forward;
+  - a rider's fee selections;
+  - the route fee head.
+  - They have ordinary floors, and their literal controller checks were
+    removed.
+- **Defect found and fixed.** `TransportFeeController` bound tenant models
+  implicitly, and that binding runs before `school-membership` sets the
+  School context. With no ambient context (as in production), the fee head
+  and fee-selection API answered 404 for everyone; existing tests had passed
+  only through context leaking from fixtures. Ids are now resolved inside
+  the action, after authorization, and a regression test pins it.
+- **Historical semantics.** A rider record keeps its route, and the
+  route's Campus is now fixed once used. Existing DDEV rows: 1 route on a
+  Campus, 8 riders, all on the route's Campus (no ambiguity, nothing
+  backfilled).
+- **Unchanged:** whole-School actors, cross-Campus riding included.
+
+**41.5 Role impact (`CampusAdoptionImpactTest`).**
+- **Newly Campus-scopable templates:** `librarian` (circulation) and
+  `transport_coordinator` (routes.view and assignments.*).
+- **Templates gaining the adopted keys:** `principal` (already scopable)
+  and `school_admin` (never scopable).
+- **Existing Campus-scoped grants:** 0 in the DDEV development and test
+  databases (re-verified 2026-10-19).
+- **No role gains** `students.view`, `fees.*`, payments, finance or staff
+  access. `transport.routes.manage` stays ineffective from a Campus-only
+  grant.
+- **Snapshot change.** `CampusScopedRoleGrantTest` now uses `accountant`
+  as its "confers nothing for a Campus" example, because `librarian` is now
+  scopable.
+
+**41.6 Coverage and guards.**
+- **C6 entries:**
+  - Library: 4 API + 7 web (`create` is a data-free lookup page);
+  - Transport: 7 API + 9 web.
+- **Catalogue:** the `CampusScopeCatalogue` domains are `library` and
+  `transport`; `WHOLE_SCHOOL_OPERATIONS` now has 29 entries.
+- **`CampusScopeAdoptionArchitectureTest`:** the domain paths cover both
+  domains, and the write-guard pass assertion covers
+  `LibraryLoanService::checkout/checkIn` and
+  `TransportStudentAssignmentService::assign/end`.
+- **`StudentCampusFoundationArchitectureTest`:**
+  - the new access classes and guards are declared consumers and write
+    guards;
+  - each guard proof runs inside its service's transaction;
+  - no guarded service locks the Student FOR UPDATE.
+- **Navigation:** the Circulation, Routes and Student-assignments entries
+  become Campus-aware. Transport fees stays hidden from Campus actors (a
+  declared operation).
+
+**41.7 Concurrency (`StudentEligibilityConcurrencyTest`, real two-process,
+57 cases).**
+- **Library checkout and Transport rider assignment:** each against the six
+  state changes, in both orders (24 cases).
+- **Copy move vs checkout:**
+  - move first: the checkout sees the new Campus and is refused;
+  - checkout first: the move is refused, and the copy and loan keep
+    Campus A.
+- **Route Campus change vs rider:**
+  - change first: the rider sees the new Campus and is refused;
+  - rider first: the change is refused.
+- Plus the ORG.7D-4 Hostel and Canteen matrix.
+
+**41.8 Unchanged.**
+- Student profile authority (picker ids never open a profile; pinned).
+- GuardianStudentScope and TeachingOwnership.
+- `campusAttribution()` and financial Campus semantics.
+- Module entitlements stay higher-order (disable → 403; re-enable
+  restores; an inactive Campus confers nothing).
+- No per-Campus entitlement.
+
+**41.9 Security review (ORG.7D-5).** Independent adversarial review: no
+HIGH finding.
+- **Fixed before publication — MEDIUM, rider refusal oracle.**
+  `TransportStudentAssignmentService::assign()` checked the Student's
+  state before the route-active and stop-on-route checks, and the
+  controllers resolved the Student first. A Campus actor naming an inactive
+  in-scope route, or another in-scope route's stop, therefore got
+  `TRANSPORT_ROUTE_NOT_AVAILABLE` / `TRANSPORT_STOP_NOT_ON_ROUTE` for an
+  active Student anywhere, but the generic refusal for an unknown,
+  inactive or other-Campus one.
+  - Fix: the Student-independent checks are one method,
+    `assertRouteAndStops()`. It runs first in the service, and both
+    controllers call it before resolving the Student.
+  - Pinned by
+    `TransportCampusScopeTest::route_and_stop_refusals_never_depend_on_the_named_student`.
+  - Library already ran its copy-state and due-date checks after its guard.
+- **Fixed — LOW.** The new web Copy route (`app.library.copies.update`)
+  is `whereUuid`.
+- **Recorded, accepted:**
+  - **Idempotent replay after a scope shrink.** An actor who loses one
+    Campus but keeps another can replay a stored checkout or rider
+    response. This is the same accepted `,campus` + `idempotent` pattern as
+    Admissions, Visitor, Hostel and Inventory.
+  - **Non-UUID ids.** Ids on the Transport fee endpoints and the API
+    `student_id` filters answer a database 500, not a 404 (pre-existing; no
+    disclosure).
+  - **Route Campus immutability is application-enforced** under the route
+    lock that every dependent writer shares, with no trigger backstop (the
+    Hostel precedent).
+  - **`library_loans.student_id` is not trigger-frozen** (only the
+    runtime role can UPDATE; retention only deletes).
+  - **The backfill's ambiguity rule is deliberately over-conservative**
+    (any copy change after checkout aborts).
+- **Test environment.** `TransportFeeSelectionConcurrencyTest` (Fees code,
+  untouched here) once deadlocked inside its own fixture setup in 7 local
+  runs, then passed 6 more times. It is recorded as a local flake; the
+  exact-SHA CI run is canonical.

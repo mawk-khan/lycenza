@@ -1088,6 +1088,8 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::get('/{libraryTitle}', [LibraryCatalogueController::class, 'show'])->name('show');
         Route::post('/{libraryTitle}/copies', [LibraryCatalogueController::class, 'storeCopy'])->name('copies.store');
     });
+    // ORG.7D-5 (ADR 0076 §41): a Copy's Campus move (whole-School catalogue; refused while on loan).
+    Route::patch('app/library/copies/{libraryCopy}', [LibraryCatalogueController::class, 'updateCopy'])->whereUuid('libraryCopy')->name('app.library.copies.update');
 
     Route::prefix('app/library/circulation')->name('app.library.circulation.')->group(function (): void {
         Route::get('/', [LibraryCirculationController::class, 'index'])->name('index');
@@ -1123,8 +1125,9 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
     });
 
     // SWC.3 (ADR 0073 section 19.2): Transport fee intent and next-year carry-forward (OPF.1).
-    Route::get('app/transport/fees', [OperationalFeeController::class, 'transportFees'])->name('app.transport.fees');
-    Route::post('app/transport/fees/carry-forward', [OperationalFeeController::class, 'transportCarryForward'])->name('app.transport.fees.carry-forward');
+    // ORG.7D-5 (ADR 0076 §41): declared whole-School-only operations of Campus-adopted keys.
+    Route::get('app/transport/fees', [OperationalFeeController::class, 'transportFees'])->middleware('capability:transport.assignments.view')->name('app.transport.fees');
+    Route::post('app/transport/fees/carry-forward', [OperationalFeeController::class, 'transportCarryForward'])->middleware('capability:transport.assignments.manage')->name('app.transport.fees.carry-forward');
 
     Route::patch('app/transport/stops/{transportStop}', [TransportRouteController::class, 'updateStop'])
         ->name('app.transport.stops.update');

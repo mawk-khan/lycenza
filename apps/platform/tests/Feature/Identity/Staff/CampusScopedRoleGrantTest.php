@@ -96,7 +96,7 @@ class CampusScopedRoleGrantTest extends TestCase
         $this->staffPost($admin, $school, "/members/{$membership->id}/roles", ['role' => 'front_office', 'campus_id' => $inactive->id])->assertUnprocessable();
         $this->staffPost($admin, $school, "/members/{$membership->id}/roles", ['role' => 'school_admin', 'campus_id' => $campus->id])->assertUnprocessable()->assertJsonPath('error.message', 'That role can only be granted for the entire School.');
         // A role with no Campus-adopted capability would confer nothing for a Campus.
-        $this->staffPost($admin, $school, "/members/{$membership->id}/roles", ['role' => 'librarian', 'campus_id' => $campus->id])->assertUnprocessable();
+        $this->staffPost($admin, $school, "/members/{$membership->id}/roles", ['role' => 'accountant', 'campus_id' => $campus->id])->assertUnprocessable();
         $this->staffPost($admin, $school, "/members/{$membership->id}/roles", ['role' => 'front_office', 'campus_id' => 'not-a-uuid'])->assertUnprocessable();
         $this->assertSame([['key' => 'teacher', 'campusId' => null]], $this->grants($membership));
     }

@@ -11,10 +11,18 @@ use App\Domain\Canteen\Application\PlaceCanteenOrderData;
 use App\Domain\Hostel\Application\HostelResidencyAccess;
 use App\Domain\Hostel\Application\HostelResidencyService;
 use App\Domain\Hostel\Infrastructure\HostelBed;
+use App\Domain\Library\Application\LibraryCirculationAccess;
+use App\Domain\Library\Application\LibraryCopyService;
+use App\Domain\Library\Application\LibraryLoanService;
+use App\Domain\Library\Infrastructure\LibraryCopy;
 use App\Domain\Students\Application\StudentEnrollmentService;
 use App\Domain\Students\Application\StudentService;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
+use App\Domain\Transport\Application\TransportRiderAccess;
+use App\Domain\Transport\Application\TransportRouteService;
+use App\Domain\Transport\Application\TransportStudentAssignmentService;
+use App\Domain\Transport\Infrastructure\TransportRoute;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Authorization\Campus\CampusScopeResolver;
@@ -33,6 +41,10 @@ use Tests\Support\Concurrency\HeldTransaction;
 //   php student-eligibility-op.php canteen-fulfil <schoolId> <userId> <orderId>
 //   php student-eligibility-op.php canteen-cancel <schoolId> <userId> <orderId>
 //   php student-eligibility-op.php hostel-student-lock <schoolId> <studentId>
+//   php student-eligibility-op.php library-checkout <schoolId> <userId> <studentId> <copyId>
+//   php student-eligibility-op.php library-copy-move <schoolId> <adminUserId> <copyId> <campusId>
+//   php student-eligibility-op.php transport-assign <schoolId> <userId> <studentId> <routeId>
+//   php student-eligibility-op.php route-campus <schoolId> <adminUserId> <routeId> <campusId>
 //   php student-eligibility-op.php transfer <schoolId> <enrollmentId> <sectionId>
 //   php student-eligibility-op.php withdraw <schoolId> <enrollmentId>
 //   php student-eligibility-op.php student-inactivate <schoolId> <studentId>
@@ -81,6 +93,28 @@ try {
             case 'hostel-student-lock':
                 // Only the Student lock HostelResidencyService::assign() takes first.
                 Student::query()->whereKey($args[0])->lock(HostelResidencyService::STUDENT_LOCK)->firstOrFail();
+
+                return 'ok';
+            case 'library-checkout':
+                [$userId, $studentId, $copyId] = $args;
+                $guard = $app->make(LibraryCirculationAccess::class)->writeGuard($school, $scope($userId, 'library.circulation.manage'));
+                $app->make(LibraryLoanService::class)->checkout(LibraryCopy::query()->findOrFail($copyId), Student::query()->findOrFail($studentId), now()->addDays(7), User::query()->findOrFail($userId), $guard);
+
+                return 'ok';
+            case 'library-copy-move':
+                [$adminId, $copyId, $campusId] = $args;
+                $app->make(LibraryCopyService::class)->update($school, $copyId, ['campus_id' => $campusId], User::query()->findOrFail($adminId));
+
+                return 'ok';
+            case 'transport-assign':
+                [$userId, $studentId, $routeId] = $args;
+                $guard = $app->make(TransportRiderAccess::class)->writeGuard($school, $scope($userId, 'transport.assignments.manage'));
+                $app->make(TransportStudentAssignmentService::class)->assign(Student::query()->findOrFail($studentId), TransportRoute::query()->findOrFail($routeId), null, null, User::query()->findOrFail($userId), $guard);
+
+                return 'ok';
+            case 'route-campus':
+                [$adminId, $routeId, $campusId] = $args;
+                $app->make(TransportRouteService::class)->update($school, $routeId, ['campus_id' => $campusId], User::query()->findOrFail($adminId));
 
                 return 'ok';
             case 'withdraw':

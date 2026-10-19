@@ -2,21 +2,22 @@
 
 namespace App\Http\Controllers\App;
 
-use App\Domain\Students\Application\StudentSearch;
-use App\Domain\Students\Infrastructure\Student;
+use App\Domain\Students\Application\StudentLookupCandidate;
 use App\Domain\Transport\Application\Exceptions\ConcurrentStudentAssignmentConflictException;
 use App\Domain\Transport\Application\Exceptions\RouteNotAvailableException;
 use App\Domain\Transport\Application\Exceptions\StopNotOnRouteException;
 use App\Domain\Transport\Application\Exceptions\StudentAlreadyAssignedException;
 use App\Domain\Transport\Application\Exceptions\StudentAssignmentAlreadyEndedException;
 use App\Domain\Transport\Application\Exceptions\StudentNotEligibleException;
+use App\Domain\Transport\Application\Exceptions\TransportAssignmentUnavailableException;
+use App\Domain\Transport\Application\TransportRiderAccess;
 use App\Domain\Transport\Application\TransportStudentAssignmentService;
 use App\Domain\Transport\Infrastructure\TransportRoute;
 use App\Domain\Transport\Infrastructure\TransportStop;
 use App\Domain\Transport\Infrastructure\TransportStudentAssignment;
 use App\Http\Controllers\Controller;
-use App\Support\Authorization\AuthorizesCapability;
-use App\Support\Authorization\CapabilityResolver;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Authorization\Campus\CampusScopeResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -33,17 +34,24 @@ use Inertia\Response;
  * calls authorizeCapability() -- checkpoint brief: "Remember the Phase
  * 10A Library security issue discovered in its circulation search
  * endpoints. Do not repeat that authorization mistake."
+ *
+ * ORG.7D-5 (ADR 0076 §41): `transport.assignments.*` are Campus-adopted --
+ * every action resolves its CampusScope and goes through
+ * TransportRiderAccess: riders by their route's Campus, the route and stop
+ * pickers over Campus-bound routes in scope, the Student picker over current
+ * operational Students of those Campuses; a Campus-scoped assignment is
+ * proven under lock (TransportRiderCampusGuard).
  */
 class TransportStudentAssignmentController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
-    public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities): Response
+    public function index(Request $request, TenantContext $context, CampusScopeResolver $scopes, TransportRiderAccess $access): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('transport.assignments.view', $school);
+        $scope = $this->authorizeCampusScope('transport.assignments.view', $school);
 
-        $assignments = TransportStudentAssignment::query()
+        $assignments = $access->assignments($scope)
             ->with(['student', 'route', 'pickupStop', 'dropoffStop'])
             ->where('status', 'active')
             ->orderByDesc('starts_on')
@@ -51,49 +59,44 @@ class TransportStudentAssignmentController extends Controller
 
         return Inertia::render('App/Transport/Assignments/Index', [
             'assignments' => $assignments->through(fn (TransportStudentAssignment $a) => $this->present($a)),
-            'canManage' => $capabilities->canInSchool($context->actor(), 'transport.assignments.manage', $school),
+            'canManage' => ! $scopes->campusScope($context->actor(), 'transport.assignments.manage', $school)->isNone(),
         ]);
     }
 
     public function create(TenantContext $context): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('transport.assignments.manage', $school);
+        $this->authorizeCampusScope('transport.assignments.manage', $school);
 
         return Inertia::render('App/Transport/Assignments/Create');
     }
 
-    public function searchStudents(Request $request, TenantContext $context): JsonResponse
+    public function searchStudents(Request $request, TenantContext $context, TransportRiderAccess $access): JsonResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('transport.assignments.manage', $school);
+        $scope = $this->authorizeCampusScope('transport.assignments.manage', $school);
 
         $term = (string) $request->query('q', '');
 
-        $students = Student::query()
-            ->where('status', 'active')
-            ->when(trim($term) !== '', fn ($q) => StudentSearch::anyField($q, $term))
-            ->limit(10)
-            ->get();
-
-        return response()->json(['data' => $students->map(fn (Student $s) => [
-            'id' => $s->id,
-            'studentNumber' => $s->student_number,
-            'name' => trim($s->first_name.' '.$s->last_name),
-        ])->all()]);
+        return response()->json(['data' => array_map(fn (StudentLookupCandidate $c) => [
+            'id' => $c->id,
+            'studentNumber' => $c->studentNumber,
+            'name' => $c->displayName,
+        ], $access->riderCandidates($school, $scope, $term))]);
     }
 
-    public function searchRoutes(Request $request, TenantContext $context): JsonResponse
+    public function searchRoutes(Request $request, TenantContext $context, TransportRiderAccess $access): JsonResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('transport.assignments.manage', $school);
+        $scope = $this->authorizeCampusScope('transport.assignments.manage', $school);
 
         $term = (string) $request->query('q', '');
+        $like = '%'.addcslashes($term, '%_\\').'%';
 
-        $routes = TransportRoute::query()
+        $routes = $access->routes($scope)
             ->where('status', 'active')
-            ->when($term !== '', fn ($q) => $q->where(fn ($w) => $w->where('code', 'ilike', "%{$term}%")
-                ->orWhere('name', 'ilike', "%{$term}%")))
+            ->when($term !== '', fn ($q) => $q->where(fn ($w) => $w->where('code', 'ilike', $like)
+                ->orWhere('name', 'ilike', $like)))
             ->limit(10)
             ->get();
 
@@ -104,12 +107,12 @@ class TransportStudentAssignmentController extends Controller
         ])->all()]);
     }
 
-    public function routeStops(TenantContext $context, string $transportRoute): JsonResponse
+    public function routeStops(TenantContext $context, TransportRiderAccess $access, string $transportRoute): JsonResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('transport.assignments.manage', $school);
+        $scope = $this->authorizeCampusScope('transport.assignments.manage', $school);
 
-        $route = TransportRoute::query()->findOrFail($transportRoute);
+        $route = $access->route($scope, $transportRoute);
 
         $stops = $route->stops()->where('status', 'active')->orderBy('sequence')->get();
 
@@ -120,10 +123,10 @@ class TransportStudentAssignmentController extends Controller
         ])->all()]);
     }
 
-    public function store(Request $request, TenantContext $context, TransportStudentAssignmentService $service): RedirectResponse
+    public function store(Request $request, TenantContext $context, TransportStudentAssignmentService $service, TransportRiderAccess $access): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('transport.assignments.manage', $school);
+        $scope = $this->authorizeCampusScope('transport.assignments.manage', $school);
 
         $validated = $request->validate([
             'student_id' => ['required', 'string'],
@@ -132,13 +135,17 @@ class TransportStudentAssignmentController extends Controller
             'dropoff_stop_id' => ['nullable', 'string'],
         ]);
 
-        $student = Student::query()->findOrFail($validated['student_id']);
-        $route = TransportRoute::query()->findOrFail($validated['route_id']);
-        $pickupStop = isset($validated['pickup_stop_id']) ? TransportStop::query()->findOrFail($validated['pickup_stop_id']) : null;
-        $dropoffStop = isset($validated['dropoff_stop_id']) ? TransportStop::query()->findOrFail($validated['dropoff_stop_id']) : null;
+        $route = $access->route($scope, $validated['route_id']);
+        $pickupStop = isset($validated['pickup_stop_id']) ? $access->stop($scope, $validated['pickup_stop_id']) : null;
+        $dropoffStop = isset($validated['dropoff_stop_id']) ? $access->stop($scope, $validated['dropoff_stop_id']) : null;
 
         try {
-            $service->assign($student, $route, $pickupStop, $dropoffStop, $context->actor());
+            // Student-independent refusals first (never an out-of-scope Student oracle).
+            $service->assertRouteAndStops($route, $pickupStop, $dropoffStop);
+            $student = $access->rider($scope, $validated['student_id']);
+            $service->assign($student, $route, $pickupStop, $dropoffStop, $context->actor(), $access->writeGuard($school, $scope));
+        } catch (TransportAssignmentUnavailableException $e) {
+            throw ValidationException::withMessages(['student_id' => [$e->getMessage()]]);
         } catch (StudentNotEligibleException|StudentAlreadyAssignedException|ConcurrentStudentAssignmentConflictException $e) {
             throw ValidationException::withMessages(['student_id' => [$e->getMessage()]]);
         } catch (RouteNotAvailableException $e) {
@@ -150,15 +157,15 @@ class TransportStudentAssignmentController extends Controller
         return redirect('/app/transport/assignments')->with('flash', 'Student assigned to Transport.');
     }
 
-    public function end(TenantContext $context, TransportStudentAssignmentService $service, string $transportStudentAssignment): RedirectResponse
+    public function end(TenantContext $context, TransportStudentAssignmentService $service, TransportRiderAccess $access, string $transportStudentAssignment): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('transport.assignments.manage', $school);
+        $scope = $this->authorizeCampusScope('transport.assignments.manage', $school);
 
-        $model = TransportStudentAssignment::query()->findOrFail($transportStudentAssignment);
+        $model = $access->assignment($scope, $transportStudentAssignment);
 
         try {
-            $service->end($model, $context->actor());
+            $service->end($model, $context->actor(), $access->writeGuard($school, $scope));
         } catch (StudentAssignmentAlreadyEndedException $e) {
             throw ValidationException::withMessages(['transport_student_assignment' => [$e->getMessage()]]);
         }

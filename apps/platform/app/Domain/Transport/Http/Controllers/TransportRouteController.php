@@ -2,41 +2,46 @@
 
 namespace App\Domain\Transport\Http\Controllers;
 
+use App\Domain\Transport\Application\TransportRiderAccess;
+use App\Domain\Transport\Application\TransportRouteService;
 use App\Domain\Transport\Infrastructure\TransportRoute;
 use App\Http\Controllers\Controller;
-use App\Models\Campus;
 use App\Models\School;
-use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\NormalizesCodeInput;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 
 /**
  * Phase 10B -- Transport Route (+ Stop) administrative API. A short,
  * direct create-then-audit block inline in a controller action,
  * mirroring LibraryTitleController's established pattern for a
  * genuinely simple reference entity (CLAUDE.md rule 76's carve-out).
+ *
+ * ORG.7D-5 (ADR 0076 §41): `transport.routes.view` is Campus-adopted --
+ * index/show read through TransportRiderAccess (a Campus-scoped actor sees
+ * only Campus-bound routes in scope; a NULL-Campus route is whole-School
+ * only). Creating and changing a route (`transport.routes.manage`) stays
+ * whole-School, through TransportRouteService.
  */
 class TransportRouteController extends Controller
 {
-    use AuthorizesCapability, NormalizesCodeInput;
+    use AuthorizesCampusScope, AuthorizesCapability, NormalizesCodeInput;
 
-    public function index(Request $request, School $school): JsonResponse
+    public function index(Request $request, School $school, TransportRiderAccess $access): JsonResponse
     {
-        $this->authorizeCapability('transport.routes.view', $school);
+        $scope = $this->authorizeCampusScope('transport.routes.view', $school);
 
-        $query = TransportRoute::query()->orderBy('name');
+        $query = $access->routes($scope)->orderBy('name');
 
         if (! $request->boolean('include_inactive')) {
             $query->where('status', 'active');
         }
 
         if ($request->filled('search')) {
-            $term = '%'.$request->string('search').'%';
+            $term = '%'.addcslashes((string) $request->string('search'), '%_\\').'%';
             $query->where(fn ($q) => $q->where('name', 'ilike', $term)->orWhere('code', 'ilike', $term));
         }
 
@@ -52,7 +57,7 @@ class TransportRouteController extends Controller
         ]);
     }
 
-    public function store(Request $request, School $school): JsonResponse
+    public function store(Request $request, School $school, TransportRouteService $routes): JsonResponse
     {
         $this->authorizeCapability('transport.routes.manage', $school);
         $this->normalizeCodeInput($request);
@@ -64,36 +69,22 @@ class TransportRouteController extends Controller
             'campus_id' => ['nullable', 'string'],
         ]);
 
-        $this->assertCampusBelongsToSchool($school, $validated['campus_id'] ?? null);
-
-        $route = DB::transaction(function () use ($school, $validated, $request) {
-            $route = TransportRoute::query()->create([
-                ...$validated,
-                'school_id' => $school->id,
-                'status' => 'active',
-            ]);
-
-            app(AuditRecorder::class)->school($school, 'transport.route.created', actor: $request->user(), subject: $route, metadata: [
-                'code' => $route->code,
-                'name' => $route->name,
-            ]);
-
-            return $route;
-        });
+        // ORG.7D-5: an active Campus of this School, or none (School-shared).
+        $route = $routes->create($school, $validated, $request->user());
 
         return response()->json(['data' => $this->present($route)], 201);
     }
 
-    public function show(School $school, string $transportRoute): JsonResponse
+    public function show(School $school, string $transportRoute, TransportRiderAccess $access): JsonResponse
     {
-        $this->authorizeCapability('transport.routes.view', $school);
+        $scope = $this->authorizeCampusScope('transport.routes.view', $school);
 
-        $model = TransportRoute::query()->with('stops')->findOrFail($transportRoute);
+        $model = $access->route($scope, $transportRoute)->load('stops');
 
         return response()->json(['data' => $this->present($model)]);
     }
 
-    public function update(Request $request, School $school, string $transportRoute): JsonResponse
+    public function update(Request $request, School $school, string $transportRoute, TransportRouteService $routes): JsonResponse
     {
         $this->authorizeCapability('transport.routes.manage', $school);
 
@@ -106,30 +97,8 @@ class TransportRouteController extends Controller
             'status' => ['sometimes', Rule::in(['active', 'inactive'])],
         ]);
 
-        if (array_key_exists('campus_id', $validated)) {
-            $this->assertCampusBelongsToSchool($school, $validated['campus_id']);
-        }
-
-        $before = $model->only(array_keys($validated));
-        $model->update($validated);
-
-        app(AuditRecorder::class)->school($school, 'transport.route.updated', actor: $request->user(), subject: $model, metadata: [
-            'before' => $before,
-            'after' => $validated,
-        ]);
-
-        return response()->json(['data' => $this->present($model->refresh())]);
-    }
-
-    private function assertCampusBelongsToSchool(School $school, ?string $campusId): void
-    {
-        if ($campusId === null) {
-            return;
-        }
-
-        if (Campus::query()->where('id', $campusId)->doesntExist()) {
-            throw ValidationException::withMessages(['campus_id' => ['This Campus does not belong to this School.']]);
-        }
+        // ORG.7D-5: locked; the Campus is fixed once the route is used.
+        return response()->json(['data' => $this->present($routes->update($school, $model->id, $validated, $request->user()))]);
     }
 
     /**

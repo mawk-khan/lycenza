@@ -19,15 +19,19 @@ interface Props {
         name: string;
         description: string | null;
         status: 'active' | 'inactive';
+        campusId: string | null;
+        campusName: string | null;
     };
     stops: StopRow[];
     canManage: boolean;
-    // SWC.3: the route's OPF fee head.
+    // ORG.7D-5: active Campuses (whole-School route management only).
+    campuses: { id: string; name: string }[];
+    // SWC.3: the route's OPF fee head (ORG.7D-5: a whole-School viewer's only).
     feePanel: {
         feeHead: { id: string; code: string; name: string; active?: boolean } | null;
         options: Array<{ id: string; code: string; name: string }>;
         canManage: boolean;
-    };
+    } | null;
 }
 
 const props = defineProps<Props>();
@@ -50,6 +54,23 @@ function toggleStopStatus(stop: StopRow): void {
     });
 }
 
+const campusError = ref<string | null>(null);
+
+// ORG.7D-5: a route's Campus (none = School-shared), fixed once the route is used.
+function changeCampus(campusId: string): void {
+    campusError.value = null;
+    router.patch(
+        `/app/transport/routes/${props.route.id}`,
+        { campus_id: campusId === '' ? null : campusId },
+        {
+            preserveScroll: true,
+            onError: (errors) => {
+                campusError.value = errors.campus_id ?? null;
+            },
+        },
+    );
+}
+
 function toggleRouteStatus(): void {
     router.patch(`/app/transport/routes/${props.route.id}`, {
         status: props.route.status === 'active' ? 'inactive' : 'active',
@@ -65,6 +86,23 @@ function toggleRouteStatus(): void {
             <div>
                 <h1 class="text-xl font-semibold">{{ route.name }}</h1>
                 <p class="mt-1 text-sm text-slate-500">Code {{ route.code }}</p>
+                <p class="mt-1 text-sm text-slate-500">
+                    Campus:
+                    <select
+                        v-if="canManage"
+                        aria-label="Route Campus"
+                        :value="route.campusId ?? ''"
+                        class="rounded border border-slate-300 px-2 py-1 text-sm"
+                        @change="changeCampus(($event.target as HTMLSelectElement).value)"
+                    >
+                        <option value="">School-wide (shared)</option>
+                        <option v-for="campus in campuses" :key="campus.id" :value="campus.id">
+                            {{ campus.name }}
+                        </option>
+                    </select>
+                    <span v-else>{{ route.campusName ?? 'School-wide (shared)' }}</span>
+                </p>
+                <p v-if="campusError" class="mt-1 text-sm text-red-600">{{ campusError }}</p>
                 <p v-if="route.description" class="mt-1 text-xs text-slate-400">
                     {{ route.description }}
                 </p>
@@ -174,6 +212,7 @@ function toggleRouteStatus(): void {
             </tbody>
         </table>
         <FeeHeadPanel
+            v-if="props.feePanel"
             id="route-fee-head"
             title="Transport fee head"
             :action="`/app/transport/routes/${props.route.id}/fee-head`"

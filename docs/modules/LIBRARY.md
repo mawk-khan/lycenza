@@ -524,3 +524,23 @@ wave is frozen.
   - the copy-move policy;
   - a web Campus field;
   - cross-Campus returns.
+
+## Campus-scoped circulation (ORG.7D-5, 2026-10-19, ADR 0076 §41)
+
+`library.circulation.view/.manage` are Campus-adopted. The catalogue
+(`library.catalogue.*`) and fines (`library.fines.*`) stay whole-School.
+- **Loan Campus.** Every loan keeps its copy's Campus at checkout
+  (`library_loans.campus_id`, immutable, database-enforced). A copy on an
+  active loan cannot change Campus.
+- **Campus-scoped librarians** lend only their Campuses' copies, to current
+  Students of THAT Campus (proven under lock at checkout). They return and
+  see loans by the loan's own Campus, never the borrower's current one.
+  Every refusal is `LIBRARY_CHECKOUT_UNAVAILABLE`, and other Campuses'
+  records are not found.
+- **School-wide (no-Campus) copies** are whole-School only.
+- **Copy Campus administration.** Whole-School catalogue administrators set
+  and move a copy's Campus on the title page (refused while on loan, active
+  Campus only).
+- **Fines.** A Campus-scoped check-in still assesses the overdue fine
+  (owner-approved bounded side effect); the librarian gains no Fees or
+  fines authority.

@@ -25,6 +25,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\AssertsTenantRlsIsolation;
@@ -425,5 +426,38 @@ class LibraryFineTest extends TestCase
         // A cancelled charge (the fine voided) can never be named again.
         app(LibraryFineService::class)->void($w['school'], $fine->id, 'Returned before due', $w['finesOfficer']);
         $this->assertThrows(fn () => $insert([]), QueryException::class, "the charge is not this fine's Student, year, amount and fee head accounts");
+    }
+
+    /**
+     * ORG.7D-5 (ADR 0076 §41, owner decision): a Campus-scoped librarian's
+     * overdue check-in assesses the fine as Library's bounded, audited side
+     * effect -- the same FEE seam -- with no Fees, Finance or fines authority.
+     */
+    #[Test]
+    public function a_campus_scoped_check_in_assesses_the_overdue_fine_without_financial_authority(): void
+    {
+        $w = $this->world();
+        $this->publish($w);
+        $this->createStudentEnrollment($w['student'], $w['section'], ['status' => 'active']);
+        $librarian = $this->createUser();
+        $this->assignSchoolRole($this->createMembership($librarian, $w['school']), 'librarian', $w['campus']->id);
+        $api = fn () => $this->withHeader('Authorization', 'Bearer '.$librarian->createToken('test-device')->plainTextToken);
+
+        $this->travelTo(Carbon::parse('2026-07-01 10:00:00', 'UTC'));
+        $copy = $this->createLibraryCopy($w['title'], ['campus_id' => $w['campus']->id]);
+        $loanId = $api()->withHeader('Idempotency-Key', 'campus-fine-loan')->postJson("/api/v1/schools/{$w['school']->id}/library-loans", [
+            'library_copy_id' => $copy->id, 'student_id' => $w['student']->id, 'due_at' => '2026-07-08T10:00:00Z',
+        ])->assertCreated()->json('data.id');
+
+        $this->travelTo(Carbon::parse('2026-07-15 09:00:00', 'UTC'));
+        $api()->postJson("/api/v1/schools/{$w['school']->id}/library-loans/{$loanId}/check-in")->assertOk();
+
+        $fine = $this->fines($w)->sole();
+        $this->assertSame([$loanId, '25.00', $this->fineCharges($w)->sole()->id], [$fine->library_loan_id, $fine->amount, $fine->charge_id]);
+        $this->assertSame($librarian->id, $this->audits($w, 'library.fine.assessed')->sole()->actor_user_id);
+        foreach (['library.fines.view', 'finance.charges.view', 'finance.charges.manage', 'finance.payments.record', 'fees.charges.view'] as $capability) {
+            $this->assertFalse(Gate::forUser($librarian)->allows('capability', [$capability, $w['school']]), $capability);
+        }
+        $api()->getJson("/api/v1/schools/{$w['school']->id}/library-loans/{$loanId}/fine")->assertForbidden();
     }
 }

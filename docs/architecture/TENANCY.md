@@ -461,6 +461,12 @@ context is set exactly as for a first dispatch (rule 21).
   inside the write. The record keeps its Hostel's or Outlet's Campus; it
   never copies a Student Campus. A Hostel's Campus cannot change once it
   has Rooms (ADR 0076 §39.2).
+- **A loan keeps its checkout Campus; a used route keeps its Campus
+  (ORG.7D-5).** `library_loans.campus_id` is the copy's Campus at checkout
+  (database-enforced and immutable), and a copy on loan never moves. A
+  Transport route's Campus is fixed once it has a stop, a rider or a
+  vehicle assignment, checked under the route lock that every dependent
+  writer shares (ADR 0076 §41).
 
 ## What is NOT yet implemented (Phase 0B honesty note)
 

@@ -2,19 +2,16 @@
 
 namespace App\Domain\Library\Http\Controllers;
 
+use App\Domain\Library\Application\LibraryCopyService;
 use App\Domain\Library\Infrastructure\LibraryCopy;
 use App\Domain\Library\Infrastructure\LibraryTitle;
 use App\Http\Controllers\Controller;
-use App\Models\Campus;
 use App\Models\School;
-use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\NormalizesCodeInput;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 
 /**
  * Phase 10A -- Library catalogue (physical Copy) administrative API.
@@ -39,7 +36,7 @@ class LibraryCopyController extends Controller
         return response()->json(['data' => $query->get()->map(fn (LibraryCopy $c) => $this->present($c))->all()]);
     }
 
-    public function store(Request $request, School $school, string $libraryTitle): JsonResponse
+    public function store(Request $request, School $school, string $libraryTitle, LibraryCopyService $copies): JsonResponse
     {
         $this->authorizeCapability('library.catalogue.manage', $school);
         $this->normalizeCodeInput($request);
@@ -51,29 +48,13 @@ class LibraryCopyController extends Controller
             'campus_id' => ['nullable', 'string'],
         ]);
 
-        $this->assertCampusBelongsToSchool($school, $validated['campus_id'] ?? null);
-
-        $copy = DB::transaction(function () use ($school, $title, $validated, $request) {
-            $copy = LibraryCopy::query()->create([
-                'school_id' => $school->id,
-                'library_title_id' => $title->id,
-                'campus_id' => $validated['campus_id'] ?? null,
-                'code' => $validated['code'],
-                'status' => 'active',
-            ]);
-
-            app(AuditRecorder::class)->school($school, 'library.copy.created', actor: $request->user(), subject: $copy, metadata: [
-                'libraryTitleId' => $title->id,
-                'code' => $copy->code,
-            ]);
-
-            return $copy;
-        });
+        // ORG.7D-5 (ADR 0076 §41): an active Campus of this School, or none.
+        $copy = $copies->create($school, $title, $validated['code'], $validated['campus_id'] ?? null, $request->user());
 
         return response()->json(['data' => $this->present($copy)], 201);
     }
 
-    public function update(Request $request, School $school, string $libraryCopy): JsonResponse
+    public function update(Request $request, School $school, string $libraryCopy, LibraryCopyService $copies): JsonResponse
     {
         $this->authorizeCapability('library.catalogue.manage', $school);
 
@@ -84,30 +65,8 @@ class LibraryCopyController extends Controller
             'campus_id' => ['sometimes', 'nullable', 'string'],
         ]);
 
-        if (array_key_exists('campus_id', $validated)) {
-            $this->assertCampusBelongsToSchool($school, $validated['campus_id']);
-        }
-
-        $before = $model->only(array_keys($validated));
-        $model->update($validated);
-
-        app(AuditRecorder::class)->school($school, 'library.copy.updated', actor: $request->user(), subject: $model, metadata: [
-            'before' => $before,
-            'after' => $validated,
-        ]);
-
-        return response()->json(['data' => $this->present($model->refresh())]);
-    }
-
-    private function assertCampusBelongsToSchool(School $school, ?string $campusId): void
-    {
-        if ($campusId === null) {
-            return;
-        }
-
-        if (Campus::query()->where('id', $campusId)->doesntExist()) {
-            throw ValidationException::withMessages(['campus_id' => ['This Campus does not belong to this School.']]);
-        }
+        // ORG.7D-5 (ADR 0076 §41): locked, refused while on loan, audited in the same transaction.
+        return response()->json(['data' => $this->present($copies->update($school, $model->id, $validated, $request->user()))]);
     }
 
     /**

@@ -1351,3 +1351,10 @@ once several modules copy it.
        §40), inside the write transaction. It share-locks the active year,
        Student, current Enrollment and Campus until commit. A lookup answer
        or the unlocked resolver is never write-time proof.
+     - **A guarded write that also locks the Student exclusively uses FOR NO
+       KEY UPDATE, never FOR UPDATE** (ORG.7D-4 §40.5, ORG.7D-5): FOR UPDATE
+       deadlocks against a transfer's enrollment insert.
+     - **History keeps its Campus** (ORG.7D-5, §41): a Library loan stores
+       its copy's Campus at checkout (immutable), and a Transport route's
+       Campus is fixed once used. Scoped returns, ends and history follow
+       the stored Campus, never the Student's current one.

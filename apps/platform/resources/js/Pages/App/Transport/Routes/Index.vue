@@ -8,6 +8,7 @@ interface RouteRow {
     id: string;
     code: string;
     name: string;
+    campusName: string | null;
     stopsCount: number;
 }
 
@@ -101,6 +102,7 @@ watch(search, () => {
                     <tr class="border-b border-slate-200 text-xs text-slate-500">
                         <th scope="col" class="py-2 font-medium">Code</th>
                         <th scope="col" class="py-2 font-medium">Name</th>
+                        <th scope="col" class="py-2 font-medium">Campus</th>
                         <th scope="col" class="py-2 font-medium">Stops</th>
                         <th scope="col" class="py-2 font-medium">
                             <span class="sr-only">Actions</span>
@@ -115,6 +117,7 @@ watch(search, () => {
                                 route.name
                             }}</a>
                         </td>
+                        <td class="py-3 text-slate-600">{{ route.campusName ?? 'School-wide' }}</td>
                         <td class="py-3 text-slate-600">{{ route.stopsCount }}</td>
                         <td class="py-3 text-right">
                             <a class="text-sm underline" :href="`/app/transport/routes/${route.id}`"

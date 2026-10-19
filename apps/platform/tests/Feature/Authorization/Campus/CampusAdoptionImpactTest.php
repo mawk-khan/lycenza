@@ -44,13 +44,29 @@ class CampusAdoptionImpactTest extends TestCase
         'canteen_operator' => ['canteen.orders.manage', 'canteen.orders.view'],
         'front_office' => ['visitor.visits.manage', 'visitor.visits.view'],
         'hostel_warden' => ['hostel.residency.manage', 'hostel.residency.view'],
-        'principal' => ['admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'examinations.papers.manage', 'examinations.papers.view', 'hostel.residency.manage', 'hostel.residency.view', 'inventory.stock.manage', 'inventory.stock.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'visitor.visits.manage', 'visitor.visits.view'],
-        'school_admin' => ['admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'examinations.papers.manage', 'examinations.papers.view', 'hostel.residency.manage', 'hostel.residency.view', 'inventory.stock.manage', 'inventory.stock.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'visitor.visits.manage', 'visitor.visits.view'],
+        'librarian' => ['library.circulation.manage', 'library.circulation.view'],
+        'principal' => ['admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'examinations.papers.manage', 'examinations.papers.view', 'hostel.residency.manage', 'hostel.residency.view', 'inventory.stock.manage', 'inventory.stock.view', 'library.circulation.manage', 'library.circulation.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view', 'visitor.visits.manage', 'visitor.visits.view'],
+        'school_admin' => ['admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'examinations.papers.manage', 'examinations.papers.view', 'hostel.residency.manage', 'hostel.residency.view', 'inventory.stock.manage', 'inventory.stock.view', 'library.circulation.manage', 'library.circulation.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view', 'visitor.visits.manage', 'visitor.visits.view'],
         'stores_officer' => ['inventory.stock.manage', 'inventory.stock.view'],
+        'transport_coordinator' => ['transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view'],
     ];
 
     /** The templates a whole-School administrator may grant for one Campus. */
-    private const CAMPUS_SCOPABLE = ['admissions_officer', 'canteen_operator', 'front_office', 'hostel_warden', 'principal', 'stores_officer'];
+    private const CAMPUS_SCOPABLE = ['admissions_officer', 'canteen_operator', 'front_office', 'hostel_warden', 'librarian', 'principal', 'stores_officer', 'transport_coordinator'];
+
+    /**
+     * ORG.7D-5 (ADR 0076 §41, owner decisions): an authorized circulation or
+     * rider write may produce a bounded, audited financial effect through its
+     * own domain workflow -- approved as HIGH-RISK side effects, never as
+     * Fees, Payments or ledger authority.
+     */
+    private const OWNER_APPROVED_SIDE_EFFECTS = [
+        'library.circulation.manage' => 'Check-in assesses the overdue fine for that loan (LibraryFineService via FeeSourceChargeService).',
+        'transport.assignments.manage' => 'A rider assignment records the Transport fee intent for the active year (TransportFeeSelectionService); ending withdraws future intent only.',
+    ];
+
+    /** No Campus-scopable template holding an approved side-effect key may hold one of these. */
+    private const FINANCIAL_AUTHORITY_PREFIXES = ['fees.', 'finance.', 'payments.'];
 
     /** Families that need an explicit owner approval (recorded here, by key) before adoption. */
     private const HIGH_RISK = [
@@ -118,6 +134,26 @@ class CampusAdoptionImpactTest extends TestCase
             }
             if ($highRisk) {
                 $this->assertContains($capability, self::OWNER_APPROVED_HIGH_RISK, "{$capability} is a high-risk family: adoption needs an explicit owner approval recorded here.");
+            }
+        }
+    }
+
+    #[Test]
+    public function owner_approved_side_effects_are_adopted_and_confer_no_financial_authority(): void
+    {
+        $roles = Role::query()->where('scope', Role::SCOPE_SCHOOL)->where('is_system', true)->whereNull('retired_at')->with('capabilities')->get();
+        foreach (self::OWNER_APPROVED_SIDE_EFFECTS as $capability => $effect) {
+            $this->assertContains($capability, CampusScopeCatalogue::capabilities(), "{$capability}: {$effect}");
+            foreach ($roles as $role) {
+                $keys = $role->capabilities->pluck('key')->all();
+                if (! in_array($capability, $keys, true) || ! StaffRoleCatalog::campusScopable($role)) {
+                    continue;
+                }
+                foreach ($keys as $key) {
+                    foreach (self::FINANCIAL_AUTHORITY_PREFIXES as $prefix) {
+                        $this->assertStringStartsNotWith($prefix, $key, "{$role->key} is Campus-scopable with {$capability} and must not also carry financial authority ({$key}).");
+                    }
+                }
             }
         }
     }
