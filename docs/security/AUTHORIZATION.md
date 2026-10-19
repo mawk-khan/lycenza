@@ -885,6 +885,13 @@ whole-School supersedes. A selected or current Campus
   - **Consumers (ORG.7D-3):** only the Hostel and Canteen access and guard
     classes (allowlisted in `StudentCampusFoundationArchitectureTest`).
     A whole-School actor keeps the domain's existing picker query.
+  - **Write-time proof (ORG.7D-4, ADR 0076 §40):** a Campus write guard
+    proves eligibility only with
+    `StudentOperationalEligibility::lockOperationalOn()` inside its write
+    transaction. It share-locks the active year, the Student, the current
+    Enrollment and the Campus, so a concurrent transfer, inactivation, year
+    switch or Campus deactivation either waits or makes the write refuse.
+    A picker answer is a candidate, never a token.
 - **A whole-School hub that also opens on an adopted key**
   (ORG.7D-1, e.g. Data health) is declared in
   `CampusScopeCatalogue::WHOLE_SCHOOL_HUBS`. Only its own controller may

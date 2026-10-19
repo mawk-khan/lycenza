@@ -34,6 +34,10 @@ use Illuminate\Database\Query\JoinClause;
  * - Current, not historical: records already written keep the Campus
  *   stored on them; Finance's charge-year attribution
  *   (StudentEnrollmentReadService::campusAttribution()) stays separate.
+ * - Advisory, never a write-time proof: it reads without locks. A write that
+ *   creates NEW operational work for a Student on a Campus proves it with
+ *   StudentOperationalEligibility::lockOperationalOn() inside its own
+ *   transaction (ORG.7D-4, ADR 0076 §40).
  * - Fresh on every call (no cache), so an academic-year switch or a Campus
  *   (in)activation takes effect at once; a queued job resolves at execution
  *   time and never carries a resolved Campus as authority.
@@ -51,17 +55,6 @@ final class StudentOperationalCampusResolver
     public function for(School $school, string $studentId): StudentOperationalCampus
     {
         return $this->forMany($school, [$studentId])[$studentId] ?? StudentOperationalCampus::none($studentId);
-    }
-
-    /**
-     * ORG.7D-3 (ADR 0076 §39): the write-time re-check a consuming domain runs
-     * before creating NEW operational work for a Student on a Campus -- true
-     * only while the Student is a current operational candidate ON that
-     * Campus, resolved now, never from an earlier picker answer.
-     */
-    public function isOperationalOn(School $school, string $studentId, string $campusId): bool
-    {
-        return $this->for($school, $studentId)->operationalCampusId() === $campusId;
     }
 
     /**

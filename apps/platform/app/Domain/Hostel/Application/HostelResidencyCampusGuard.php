@@ -6,7 +6,7 @@ use App\Domain\Hostel\Application\Exceptions\HostelResidencyUnavailableException
 use App\Domain\Hostel\Infrastructure\Hostel;
 use App\Domain\Hostel\Infrastructure\HostelBed;
 use App\Domain\Hostel\Infrastructure\HostelRoom;
-use App\Domain\Students\Application\StudentOperationalCampusResolver;
+use App\Domain\Students\Application\StudentOperationalEligibility;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\School;
 use App\Support\Authorization\Campus\CampusScope;
@@ -19,9 +19,12 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
  *
  * - the Bed's Hostel Campus must be in the actor's scope (else NOT FOUND);
  * - the Student must be a current operational Student OF THAT Campus,
- *   resolved now (StudentOperationalCampusResolver::isOperationalOn()) --
- *   a Student who moved Campus, left, or lost their current placement since
- *   the picker answered is refused with one generic message.
+ *   proven under lock (StudentOperationalEligibility::lockOperationalOn(),
+ *   ORG.7D-4 §40) and held until the residency commits. A Student who
+ *   moved Campus, left, or lost their current placement since the picker
+ *   answered, or does so concurrently, is refused with one generic message.
+ *   No cross-Campus boarding exists for a Campus-scoped actor (owner
+ *   decision, ORG.7D-4).
  *
  * Built only by HostelResidencyAccess, from a resolved CampusScope.
  */
@@ -37,7 +40,7 @@ final class HostelResidencyCampusGuard
         if (! is_string($campusId) || ! $this->scope->covers($campusId)) {
             throw (new ModelNotFoundException)->setModel(HostelBed::class);
         }
-        if (! app(StudentOperationalCampusResolver::class)->isOperationalOn($this->school, $student->id, $campusId)) {
+        if (! app(StudentOperationalEligibility::class)->lockOperationalOn($this->school, $student->id, $campusId)) {
             throw new HostelResidencyUnavailableException;
         }
     }

@@ -29,6 +29,16 @@ use Illuminate\Support\Facades\DB;
  */
 class HostelResidencyService
 {
+    /**
+     * ORG.7D-4 (ADR 0076 §40.5): the Student row is locked FOR NO KEY UPDATE --
+     * exclusive against another assignment, a Student update and a share-lock
+     * eligibility check, but compatible with the FOR KEY SHARE a concurrent
+     * enrollment INSERT's foreign key takes. FOR UPDATE would deadlock a
+     * Campus-scoped assignment (Student lock, then Enrollment share) against a
+     * transfer or rollover (Enrollment lock, then the insert's Student key share).
+     */
+    public const STUDENT_LOCK = 'for no key update';
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly HostelFeeSelectionService $fees,
@@ -38,7 +48,7 @@ class HostelResidencyService
      * THE two core invariants (checkpoint brief sections 15-16): a Bed
      * must never have two simultaneous active residents, and a
      * Student must never have two simultaneous active residencies.
-     * `lockForUpdate()` locks the Student row FIRST, then the Bed row
+     * The Student row is locked FIRST (self::STUDENT_LOCK), then the Bed row
      * -- a deliberate, FIXED lock order (checkpoint brief section 21)
      * so two concurrent `assign()` calls can never deadlock against
      * each other, regardless of which Student/Bed pairing they race
@@ -66,7 +76,7 @@ class HostelResidencyService
             return DB::transaction(function () use ($student, $bed, $actor, $guard) {
                 $lockedStudent = Student::query()
                     ->where('id', $student->id)
-                    ->lockForUpdate()
+                    ->lock(self::STUDENT_LOCK)
                     ->firstOrFail();
 
                 $lockedBed = HostelBed::query()

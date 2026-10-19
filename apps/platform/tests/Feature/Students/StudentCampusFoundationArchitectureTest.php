@@ -3,9 +3,13 @@
 namespace Tests\Feature\Students;
 
 use App\Domain\Students\Application\StudentLookupCandidate;
+use App\Domain\Students\Application\StudentOperationalCampusResolver;
+use App\Domain\Students\Application\StudentOperationalEligibility;
 use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 use ReflectionClass;
+use ReflectionMethod;
+use ReflectionNamedType;
 use ReflectionProperty;
 use Symfony\Component\Finder\Finder;
 use Tests\TestCase;
@@ -157,12 +161,68 @@ class StudentCampusFoundationArchitectureTest extends TestCase
             if (str_starts_with($path, 'app/Domain/Students/') || in_array($path, self::CONSUMERS, true)) {
                 continue;
             }
-            foreach (['StudentPurposeLookup', 'StudentOperationalCampusResolver', 'restrictToOperationalCampus'] as $class) {
+            foreach (['StudentPurposeLookup', 'StudentOperationalCampusResolver', 'StudentOperationalEligibility', 'restrictToOperationalCampus'] as $class) {
                 $this->assertStringNotContainsString($class, $code, "{$path} uses {$class}: only a declared domain access class or guard may consume the Student lookup (D2-8; ADR 0076 §39).");
             }
         }
 
         $fields = array_map(fn (ReflectionProperty $p) => $p->getName(), (new ReflectionClass(StudentLookupCandidate::class))->getProperties(ReflectionProperty::IS_PUBLIC));
         $this->assertSame(['id', 'displayName', 'studentNumber'], $fields, 'The lookup DTO is exactly id, displayName, studentNumber (D2-7).');
+    }
+
+    /**
+     * ORG.7D-4 (ADR 0076 §40): the consumers' Campus write guards -- each the
+     * write-time proof for NEW operational work on a Student.
+     */
+    private const WRITE_GUARDS = [
+        'app/Domain/Hostel/Application/HostelResidencyCampusGuard.php',
+        'app/Domain/Canteen/Application/CanteenOrderCampusGuard.php',
+    ];
+
+    #[Test]
+    public function student_dependent_writes_prove_eligibility_only_under_lock(): void
+    {
+        $sources = $this->sources('app');
+
+        // A write guard proves eligibility with the locked assertion, never with
+        // a picker answer or an unlocked read.
+        foreach (self::WRITE_GUARDS as $guard) {
+            $this->assertArrayHasKey($guard, $sources);
+            $this->assertContains($guard, self::CONSUMERS);
+            $this->assertStringContainsString('StudentOperationalEligibility::class)->lockOperationalOn(', $sources[$guard], "{$guard} proves eligibility under lock");
+            foreach (['StudentPurposeLookup', 'StudentOperationalCampusResolver'] as $advisory) {
+                $this->assertStringNotContainsString($advisory, $sources[$guard], "{$guard} uses {$advisory}: a lookup or an unlocked read is never the write-time proof");
+            }
+        }
+        // ...and only a write guard calls it: never an access class, picker or route.
+        foreach ($sources as $path => $code) {
+            if (! str_starts_with($path, 'app/Domain/Students/') && str_contains($code, 'StudentOperationalEligibility')) {
+                $this->assertContains($path, self::WRITE_GUARDS, "{$path} is not a declared Campus write guard");
+            }
+        }
+
+        // Each proof runs inside its service method's own write transaction,
+        // never before it (a proof outside the transaction proves nothing).
+        foreach ([
+            'app/Domain/Hostel/Application/HostelResidencyService.php' => '/\$guard\?->beforeAssign\(/',
+            'app/Domain/Canteen/Application/CanteenOrderService.php' => '/\$guard\?->(atPlacement|beforeChange)\(/',
+        ] as $service => $call) {
+            $code = $sources[$service];
+            preg_match_all($call, $code, $matches, PREG_OFFSET_CAPTURE);
+            $this->assertNotEmpty($matches[0], "{$service} calls its write guard");
+            foreach ($matches[0] as [, $offset]) {
+                $before = substr($code, 0, $offset);
+                $this->assertGreaterThan((int) strrpos($before, 'public function '), (int) strrpos($before, 'DB::transaction('), "{$service}: the guard call at offset {$offset} runs inside its method's DB::transaction");
+            }
+        }
+
+        // The advisory resolver keeps no write-time answer; the assertion is one
+        // boolean method (never a model for downstream use).
+        $public = fn (string $class) => array_values(array_diff(array_map(fn (ReflectionMethod $m) => $m->getName(), (new ReflectionClass($class))->getMethods(ReflectionMethod::IS_PUBLIC)), ['__construct']));
+        $this->assertSame(['for', 'forMany', 'restrictToOperationalCampus'], $public(StudentOperationalCampusResolver::class));
+        $this->assertSame(['lockOperationalOn'], $public(StudentOperationalEligibility::class));
+        $return = (new ReflectionMethod(StudentOperationalEligibility::class, 'lockOperationalOn'))->getReturnType();
+        $this->assertInstanceOf(ReflectionNamedType::class, $return);
+        $this->assertSame('bool', $return->getName());
     }
 }

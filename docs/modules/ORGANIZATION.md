@@ -207,3 +207,10 @@ School setting, a role, a navigation toggle or a commercial plan.
 
   Transport and Library wait for owner rules on shared routes and
   cross-Campus lending.
+- **ORG.7D-4 (ADR 0076 §40)** made the Campus check on Hostel and Canteen
+  writes hold steady while the write commits. A Student moving class or
+  Campus, being made inactive, a new school year starting, or a Campus being
+  closed at the same moment can no longer slip past it. A Campus-only Hostel
+  warden can never board another Campus's Student. Transport and Library
+  rules are now written down for a later wave; neither area has Campus
+  scope yet.

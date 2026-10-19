@@ -3319,7 +3319,8 @@ Recorded, not changed:
   store (release note).
 - **Write-time read without a lock.** The write-time
   `isOperationalOn()` reads the placement without locking it. A transfer
-  committing in the same instant can interleave (accepted LOW).
+  committing in the same instant can interleave (accepted LOW). **Closed
+  by ORG.7D-4 (§40):** `lockOperationalOn()` replaced it.
 - **Residency inference.** A Campus warden can infer that an offered
   Student already lives in some Hostel when assignment is refused (never
   which one). Accepted LOW, consistent with the generic-refusal standard.
@@ -3338,3 +3339,410 @@ ORG.7D-1. As the owner pre-authorized in ORG.7D-2, the CI Larastan step
 alone now runs at 768M (`.github/workflows/ci.yml`). The local gate
 (CLAUDE.md, the publish-gate skill) stays 512M and passes. No analysis
 level, baseline or path set changed.
+
+## 40. ORG.7D-4 — Student eligibility transaction hardening; Transport and Library Campus contracts (as built, 2026-10-19)
+
+Owner authorization: ORG.7D-4 only. Baseline `origin/main` = `0ad4ce31`
+(ORG.7D-3).
+- **Implemented:** transaction-safe Student operational eligibility, its
+  architecture and concurrency tests, and these contracts.
+- **Not adopted:** Transport, Library, HR, Fees/Payments, full SIS.
+- **Unchanged:** `CampusScopeCatalogue`, every capability, every role
+  template. No migration.
+
+    picker answer (StudentPurposeLookup)    = advisory candidate, never proof
+    unlocked resolver (…CampusResolver)     = advisory read, never proof
+    write-time proof                        = StudentOperationalEligibility::lockOperationalOn()
+                                              inside the consuming write transaction
+
+**40.1 Owner decision frozen: no cross-Campus boarding.** A Campus-scoped
+Hostel actor may NOT board a Student whose current operational Campus
+differs from the Hostel's Campus. There is no exception for Campus-scoped
+staff. Whole-School Hostel actors keep their existing behaviour. This is no
+longer an open question.
+
+**40.2 The race closed.** ORG.7D-3's write guards re-checked eligibility
+with an unlocked read (`isOperationalOn()`). A concurrent writer could
+commit after that read and before the consuming write committed. Under
+READ COMMITTED a plain read never waits for an uncommitted change, so the
+write could commit on a stale answer. The writers involved:
+- a placement transfer, completion, withdrawal or cancellation;
+- a Student inactivation;
+- an academic-year activation or close;
+- a Campus deactivation.
+
+**40.3 State inventory: what decides eligibility.**
+
+| State | Row | Writer and its lock |
+|---|---|---|
+| active AcademicYear | `academic_years` (School's `active` row) | `AcademicYearService::activate()` locks the previous active row FOR UPDATE and updates it; `close()` updates it |
+| Student lifecycle | `students` row (`status`) | `StudentService::changeStatus()` / `update()`: plain UPDATE |
+| current placement | `student_enrollments` (the `active` row in the active year) | `StudentEnrollmentService` (transfer, complete, withdraw, cancel) and rollover item execution: Section FOR UPDATE, then Enrollment FOR UPDATE, then UPDATE; a transfer or rollover then INSERTs a new row, whose foreign keys take KEY SHARE on the Student, Campus, Section and year |
+| placement Campus | the Enrollment's `campus_id` (FK-bound to its Section, ORG.7D-0) | changes only through a transfer (a new row) |
+| Campus active | `campuses` row (`status`) | `CampusAdministrationService::update()`: plain UPDATE (ActiveCampus already share-locks it) |
+
+**40.4 The API.** `App\Domain\Students\Application\StudentOperationalEligibility::lockOperationalOn(School,
+studentId, campusId): bool`.
+- **Where it runs:** only inside a transaction (else `LogicException`),
+  inside the target School's TenantContext, with explicit `school_id`
+  predicates.
+- **Return:** a boolean only, never a model.
+- **What it is:** data validity, never authorization. The caller has
+  already authorized its capability and Campus scope, and passes the target
+  Campus (the Hostel's or the Outlet's).
+- **The lock set:** four single-row, primary or unique-index FOR SHARE
+  reads, in this fixed order:
+  1. the active year (`CurrentAcademicYearResolver::shareLockActiveId()`,
+     owned by AcademicStructure);
+  2. the Student, which must be `active`;
+  3. the current Enrollment (`constrainToCurrentPlacement()`), whose Campus
+     must be the target;
+  4. the Campus (`ActiveCampus::find()`, the existing ORG.7D-0 share lock;
+     no second Campus lock exists).
+- **Why FOR SHARE is enough:**
+  - FOR SHARE conflicts with every writer above. They UPDATE the row, or
+    take FOR UPDATE on it, so each waits for the consuming write to commit.
+    The order is then write, then state change.
+  - If the writer committed first, the consumer's FOR SHARE waits for it.
+    PostgreSQL then re-checks the row's new version against the predicate
+    (`status = 'active'`), so the answer is false. A row the writer
+    inserted (a transfer's new placement, a newly active year) is not in the
+    consumer's statement snapshot, so it is never guessed at. The order is
+    then state change, then a generic refusal.
+  - FOR SHARE is compatible with FOR SHARE and with FK KEY SHARE. Two
+    consumers never serialize against each other, and a transfer's inserts
+    are not blocked by it. Nothing School-wide is locked. FOR UPDATE was not
+    used because it would serialize consumers needlessly.
+- **New rows are safe.** A writer that only inserts can only create
+  eligibility, never remove it. Examples: a first enrollment for an
+  unplaced Student, or a new active year when none is active. A consumer
+  that answered false refused; there is no stale yes.
+
+**40.5 Lock ordering and deadlock safety.**
+- **Consumer order:** year → Student → Enrollment → Campus.
+  - Hostel first takes its own Student lock and Bed FOR UPDATE. Since
+    ORG.7D-4 the Student lock is FOR NO KEY UPDATE
+    (`HostelResidencyService::STUDENT_LOCK`). Re-locking its own row in
+    share mode is not an upgrade.
+  - Canteen takes share locks only.
+- **Writer orders:**
+  - activation: years only, plus an outbox insert;
+  - status change: the Student row only;
+  - placement writers and rollover: Section → Enrollment, then inserts.
+    The foreign keys' KEY SHARE is compatible with FOR SHARE and with FOR
+    NO KEY UPDATE, but not with FOR UPDATE;
+  - Campus update: the Campus row only.
+- **Why no cycle:**
+  - No writer waits for a row the consumer locks earlier in its order, and
+    no consumer upgrades a share lock it holds.
+  - A deadlock, if one ever occurred, would be detected by PostgreSQL and
+    surface as an error, never a silent commit. The race suite (40.7)
+    completes every ordering without one.
+- **No global School lock** was needed, and no advisory lock was added.
+- **The deadlock found and fixed (security review).** Hostel used to take
+  the Student row FOR UPDATE.
+  - With the new Enrollment share lock, a Campus-scoped assignment (holding
+    the Student, waiting on the Enrollment) and a transfer or rollover
+    (holding the Enrollment, its insert's FK waiting for KEY SHARE on the
+    Student) could deadlock. That failed closed with a 40P01 error, but it
+    was a new availability defect.
+  - The Student lock is now FOR NO KEY UPDATE. That mode is still exclusive
+    against another assignment, a Student UPDATE and a share-lock check, but
+    compatible with KEY SHARE. The transfer completes, and the resumed
+    assignment refuses.
+  - Taking eligibility before the Student lock was rejected: it would
+    upgrade share to exclusive on the same row.
+- **Negative controls:**
+  - With the Enrollment share lock removed, the Canteen transfer races fail
+    ("overlap not proven").
+  - With the Student lock back at FOR UPDATE, the deadlock regression test
+    fails, because the transfer blocks behind the Hostel lock.
+- **Which locks protect Hostel:** its Student lock still covers a Student
+  status change. The new Enrollment and year locks are what cover it against
+  a transfer, withdrawal, completion, cancellation or year switch.
+
+**40.6 Consumers migrated, no authorization change.**
+- **Hostel:** `HostelResidencyCampusGuard::beforeAssign()` calls
+  `lockOperationalOn(Hostel Campus)` after the Student and Bed locks.
+- **Canteen:**
+  - `CanteenOrderCampusGuard::beforePlace()` is the early refusal. It runs
+    before the service's unguarded lookups and uses the same locked check in
+    its own short transaction (savepoint).
+  - `atPlacement()` is the proof, run inside the placement transaction.
+  - `beforeChange()` (fulfil/cancel) now also requires the Outlet's Campus
+    to be active, share-locked through ActiveCampus. A grant on an inactive
+    Campus confers nothing, so a Campus deactivation serializes against a
+    Campus-scoped fulfilment.
+- **Unchanged:**
+  - public error codes and messages (`HOSTEL_RESIDENCY_UNAVAILABLE`,
+    `CANTEEN_STUDENT_NOT_FOUND`, `CANTEEN_ORDER_NOT_FOUND`);
+  - the generic refusals;
+  - the whole-School paths (no guard);
+  - Admissions (it consumes no Student).
+- **Removed:** `StudentOperationalCampusResolver::isOperationalOn()`. The
+  resolver is read-only and advisory.
+
+**40.7 Proofs.**
+- **`StudentEligibilityConcurrencyTest`:** two real OS processes. The
+  contender is positively observed blocked in `pg_stat_activity` before the
+  holder commits (`ForcesConcurrentOverlap`). Both serialization orders are
+  covered for each of transfer, withdrawal, Student inactivation,
+  academic-year activation, academic-year close and Campus deactivation (the
+  real `CampusAdministrationService` path), for Hostel residency and Canteen
+  orders (24 cases).
+  - **The year switch:** Y1 is active with the Student on Campus A, and Y2
+    places them on Campus B. A Campus A write either commits first (the
+    activation waits) or is refused. It never commits after the switch.
+- **Also in that file:**
+  - Canteen fulfilment against a Campus deactivation, and cancellation in
+    both orders;
+  - the deadlock regression: a transfer completes while the Hostel Student
+    lock is held, and the assignment then refuses;
+  - the outside-a-transaction refusal.
+- **`StudentOperationalEligibilityTest`:** every component of the rule
+  (inactive Student, no or ended placement, a draft-year placement,
+  inactive or reactivated Campus, no active year), other-School and
+  unknown ids, and the cost (exactly 4 `for share` / `limit 1` reads).
+- **`StudentCampusFoundationArchitectureTest`:**
+  - write guards call `lockOperationalOn` and never the lookup or the
+    resolver;
+  - each guard proof (`beforeAssign`, `atPlacement`, `beforeChange`) runs
+    inside its service method's `DB::transaction`;
+  - only declared write guards reference the assertion;
+  - the resolver keeps no write-time method;
+  - the assertion is one boolean method.
+
+**40.8 Cost.** These are representative Campus-scoped writes measured with
+the query log, before and after:
+- Hostel assignment: 22 → 24 queries.
+- Canteen order: 21 → 25 queries; the check runs twice (early refusal plus
+  proof).
+- Each check is 4 indexed single-row reads. There is no scan, no N+1 and no
+  School-wide lock.
+- The purpose lookup stays unlocked and bounded (at most 50 rows).
+
+**40.9 Transport Campus contract (frozen for the implementation wave; not
+adopted).** Evidence comes from a read-only audit of the schema, services,
+routes, catalogue and DDEV data.
+- **Schema reality:**
+  - `transport_routes.campus_id`: nullable, FK under MATCH SIMPLE, RESTRICT.
+  - `transport_vehicles.campus_id`: nullable, same FK form.
+  - `transport_stops`: route-owned, no Campus.
+  - `transport_route_assignments`: route ↔ vehicle ↔ driver history; one
+    active per route; no per-vehicle or per-driver uniqueness.
+  - `transport_student_assignments`: riders; no Campus; one active per
+    Student; stops FK-bound to the rider's route.
+  - Fee tables: route fee heads and append-only fee selections.
+  - No capacity enforcement, no settings, no async.
+- **Today:**
+  - web create cannot set any Campus, so every web route and vehicle is
+    NULL;
+  - the API sets and changes `campus_id` at any time, riders included,
+    validated as `string` with no ActiveCampus;
+  - nothing reads route Campus;
+  - nothing checks route/vehicle Campus consistency;
+  - the rider check is "Student active" only;
+  - the web Student picker is School-wide active Students; the API has
+    none.
+  - DDEV: 1 route and 2 vehicles, all on a Campus; 8 riders, all matching;
+    0 Campus grants.
+- **NULL route = School-shared = whole-School authority only.** A
+  Campus-scoped actor never manages, lists or assigns riders to a NULL
+  route. NULL never means "every Campus".
+- **A Campus-bound route's authority** is its `campus_id`, which must be in
+  the actor's Transport scope. Riders, stops and the route's assignments are
+  reached through the route.
+- **Rider rule (v1):**
+  - a Campus-scoped rider assignment requires the route Campus in scope;
+  - the Student must be operational on that route Campus, proven by
+    `lockOperationalOn(route Campus)` inside the assignment transaction;
+  - every refusal is one generic `TRANSPORT_ASSIGNMENT_UNAVAILABLE`. That
+    covers already-assigned (today 422), the race (409), not eligible,
+    other Campus and unknown.
+  - Whole-School actors are unchanged, cross-Campus riding included.
+  - A rider record is seen by the route's Campus, and history follows the
+    route.
+- **Prerequisite, history:** the route's Campus becomes immutable once it
+  has stops, riders or route assignments (the Hostel precedent, no
+  migration). Campus writes validate a uuid and use ActiveCampus. Without
+  this, rider history would follow a mutable route Campus.
+- **Vehicles are mixed:** nullable Campus, one vehicle may serve several
+  Campuses' routes, and nothing checks consistency.
+  - The fleet registry and the route ↔ vehicle/driver assignment
+    (`transport.vehicles.*`) stay whole-School in v1.
+  - Splitting daily operations from fleet configuration needs a new
+    capability, which is out of scope. That is an owner decision for a later
+    wave.
+  - Campus staff never mutate shared vehicles. In v1 they need no vehicle
+    reference data.
+- **Stops are route-owned:**
+  - read-only within an in-scope route (`id`, `name`, `sequence`);
+  - managed with the route.
+  - The stop update endpoint addresses a stop by id, so a future scoped
+    check goes stop → route → Campus.
+- **Conflicts:** only one-active-per-Student is School-wide. It becomes the
+  generic refusal for Campus actors and is never weakened. Code uniqueness
+  is accepted under rule 101.
+- **Proposed split:**
+  - Campus-adoptable: `transport.assignments.view/.manage` (riders) and
+    `transport.routes.view` (in-scope routes and their stops).
+  - Whole-School: `transport.vehicles.*`, `transport.routes.manage`
+    (adopting it is an owner option once route Campus is immutable; the
+    fee-head mapping stays a declared whole-School operation either way).
+  - Declared whole-School operations: Transport fees (web), both
+    carry-forwards, the fee-selections index and the fee-head show/update.
+  - Picker: `StudentPurposeLookup` under the resolved Transport scope,
+    returning `id`, `studentNumber` and `name` (displayName).
+  - Direct resources out of scope are 404, including the API `student_id`
+    filter. Async: none.
+- **Role impact:** `transport_coordinator`, `principal` and `school_admin`
+  hold all six keys.
+  - `principal` is already Campus-scopable.
+  - `transport_coordinator` becomes Campus-scopable on adoption.
+  - `school_admin` is never Campus-scopable.
+  - Existing Campus grants that gain keys: 0 in DDEV.
+- **Fees:** a rider assignment records FEE optional selections as a bounded
+  side effect under `transport.assignments.manage` (`children` class), like
+  Hostel. The fee amount follows the Student's enrollment Campus (FEE).
+  Owner to confirm that this side effect is not high-risk.
+- **Blockers before adoption:**
+  1. route Campus immutability, plus uuid validation and ActiveCampus;
+  2. a web Campus field on route create (else Campus staff see nothing);
+  3. generic refusal and 404 concealment;
+  4. the scoped picker;
+  5. the R8 searches (route, vehicle, operations, Employee and route picker
+     searches: 7 sites, recorded);
+  6. C6 conversion of the C2 entries;
+  7. the owner decisions on `routes.manage` adoption and the fee side
+     effect.
+- **Recorded, not fixed:**
+  - routes and vehicles can be deactivated while in use;
+  - the API accepts inactive stops;
+  - the driver lookup (`employee_number`, `full_name`) would need
+    shared-lookup approval if ever exposed to Campus staff.
+
+**40.10 Library Campus contract (frozen for the implementation wave; not
+adopted).**
+- **Schema reality:**
+  - `library_titles`: School-shared, no Campus.
+  - `library_copies.campus_id`: nullable, composite FK RESTRICT, no location
+    or shelf.
+  - `library_loans`: Student borrower only, no Campus snapshot, no actor;
+    one active loan per copy (partial unique); no borrower limit;
+    reservations, holds and lost/damaged flows do not exist.
+  - `library_fines`: overdue only, created at check-in through FEE's
+    authorization-neutral `FeeSourceChargeService`. The actor needs
+    `library.circulation.manage` only.
+  - No async; retention only.
+- **Today:**
+  - web copy create sends no Campus, so every browser copy is NULL;
+  - the only Campus move is API `PATCH /library-copies/{id}`, with no
+    transaction, no lock, no active-loan check and no ActiveCampus;
+  - copy create has no ActiveCampus either;
+  - circulation reads no Campus.
+  - DDEV: 12 copies, all on a Campus; 5 loans; 0 copy updates ever; 0
+    borrower/copy Campus mismatches; 0 fines.
+- **Identity versus physical copy:**
+  - Title = School-shared reference, never duplicated per Campus.
+  - Copy = operational Campus resource. NULL = School-shared = whole-School
+    authority only; NULL never means every Campus.
+  - Loan = a historical transaction with the copy's Campus at checkout.
+- **Historical loan Campus (mandatory):**
+  - loan access never follows the Student's current Campus or the copy's
+    later Campus;
+  - a later Student transfer or copy move never re-attributes an old loan;
+  - check-in is scoped by the loan's stored Campus.
+- **Lending rule (v1):** a Campus-scoped librarian lends only when all of
+  these hold:
+  - their scope covers Campus A;
+  - the copy's Campus is A;
+  - the borrower is operational on A, proven by `lockOperationalOn(A)`
+    inside the checkout transaction after the copy lock.
+  - There is no cross-Campus lending for Campus staff. Whole-School
+    librarians are unchanged.
+- **Picker:** `StudentPurposeLookup` under the resolved Library scope,
+  returning `id`, `studentNumber` and `name`; no `students.view`.
+- **Conflicts:** for Campus actors, one generic `LIBRARY_CHECKOUT_UNAVAILABLE`
+  covers out-of-scope copy, copy not available, unknown, inactive or
+  other-Campus Student, and the lost race. Today `COPY_NOT_AVAILABLE` and
+  `STUDENT_NOT_ELIGIBLE` are oracles. One-active-per-copy is preserved.
+- **Proposed split:**
+  - Campus-adoptable: `library.circulation.view/.manage`.
+  - Whole-School: `library.catalogue.*` (titles, copies, copy moves; the
+    title page shows active borrowers' names and School-wide copy counts,
+    so it stays whole-School) and `library.fines.*` (financial).
+  - The available-copy search becomes scoped and LIKE-escaped.
+- **Fee/fine boundary:** a Campus-scoped check-in assesses an overdue fine,
+  a bounded Library-origin side effect with no Fees authority. But
+  `library.circulation.*` is classed `children` only, so the class-aware
+  impact check would not flag it. Before adoption, record an owner approval
+  in `OWNER_APPROVED_HIGH_RISK`, or reclassify. Otherwise the check-in fine
+  path is deferred.
+- **Migration required before adoption (not authorized here):**
+  - `library_loans.campus_id`: uuid NULL, composite FK RESTRICT, indexed.
+  - A BEFORE INSERT trigger: equal to the copy's Campus, read FOR SHARE.
+  - Immutability of `campus_id` (and ideally `library_copy_id` and
+    `student_id`).
+  - A `library_copies` BEFORE UPDATE OF `campus_id` refusal while an active
+    loan exists, plus the same check in the application (transaction, copy
+    lock, audit inside it).
+  - Retention-anchor tracking of `campus_id`.
+  - ActiveCampus on copy create and move.
+- **Data precondition:** backfill each loan's Campus from its copy only
+  where no `library.copy.updated` Campus change and no copy `updated_at`
+  after checkout exists. DDEV: unambiguous for every row; there is no
+  production data. Any ambiguous row stops the migration for an owner
+  remediation decision. Ambiguous history is never rewritten.
+- **Role impact:**
+  - `librarian` (catalogue, circulation, `fines.view`) becomes
+    Campus-scopable on adoption;
+  - `principal` gains the circulation keys;
+  - `school_admin` is never Campus-scopable;
+  - `CampusScopedRoleGrantTest` pins the librarian as not scopable today.
+- **Owner decisions:**
+  1. copy-move policy (snapshot plus triggers recommended over composite-FK
+     pinning, which would freeze any copy with loan history);
+  2. a web Campus field for copies;
+  3. cross-Campus returns;
+  4. the fine approval or reclassification;
+  5. accepting that an unplaced Student cannot borrow from Campus staff.
+- **Recorded, not fixed:**
+  - the copy update's audit runs outside a transaction;
+  - non-uuid ids are validated as strings;
+  - the title and copy LIKE searches are unescaped (R8);
+  - adopting the circulation key on `POST /library-loans` changes its
+    idempotency fingerprint (release note).
+
+**40.11 Unchanged.**
+- `CampusScopeCatalogue`, capabilities and roles.
+- `campusAttribution()` and financial Campus semantics.
+- Student profile authority, TeachingOwnership and GuardianStudentScope.
+- HR (R4 not touched), Fees/Payments and SIS.
+- LC-5–LC-10 stay paused.
+
+**40.12 Security review (ORG.7D-4).** Independent adversarial review: no
+HIGH finding.
+- **Verified:** every writer of the four states; EvalPlanQual refusal when
+  the writer commits first; insert-only writers that can only create
+  eligibility; no cross-School locks; no picker used as proof; whole-School
+  paths and error codes unchanged.
+- **Fixed before publication:**
+  - **MEDIUM — Hostel deadlock.** A Hostel assignment could deadlock
+    against a transfer or rollover. Fixed by FOR NO KEY UPDATE, with a
+    regression test and a negative control (40.5).
+  - **LOW — test gaps.** Withdrawal and year close added (they are where the
+    new locks protect Hostel); cancellation raced in both orders; the real
+    Campus update path used; the in-transaction placement of every guard
+    proof pinned.
+- **Recorded, not changed:**
+  - Canteen fulfilment "write first" is not raced: it needs a full billing
+    fixture, and the lock is the same ActiveCampus share lock that the
+    cancellation races prove.
+  - The whole-School Hostel and Canteen paths still check `isActive()` on a
+    Student loaded before the transaction, as before ORG.7D-4. Out of scope.
+- **Environment note.** Under `ddev test`, 18 Identity tests (account
+  recovery and activation links, staff invitations) fail because DDEV
+  exports `APP_URL=https://lycenza.ddev.site` while the tests expect the CI
+  `http://localhost:8000`. With `APP_URL=http://localhost:8000` all 159
+  pass. This is environment-specific, pre-existing, and reported
+  separately, not a D4 regression.

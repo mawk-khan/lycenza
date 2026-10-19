@@ -38,6 +38,23 @@ class CurrentAcademicYearResolver
     }
 
     /**
+     * ORG.7D-4 (ADR 0076 §40): the active Academic Year's id, share-locked
+     * (FOR SHARE) until the caller's transaction ends -- for a write whose
+     * correctness depends on WHICH year is active. AcademicYearService's
+     * activate() and close() update that row, so they wait for the caller to
+     * commit. If one committed first, the active row no longer matches and
+     * this answers null; it never guesses a newer year from a stale snapshot.
+     * Must be called inside a transaction.
+     */
+    public function shareLockActiveId(School $school): ?string
+    {
+        return $this->context->withSchool(
+            $school,
+            fn () => AcademicYear::query()->where('school_id', $school->id)->where('status', 'active')->sharedLock()->value('id'),
+        );
+    }
+
+    /**
      * OPF.1 (ADR 0067 D8): a named Academic Year of this School that is
      * still open -- `draft` (being prepared) or `active` -- or null (unknown,
      * another School's, or `closed`). Same School-authoritative resolution.

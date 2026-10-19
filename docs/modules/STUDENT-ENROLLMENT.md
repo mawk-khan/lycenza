@@ -2869,3 +2869,22 @@ The exit date is that `ends_on`. Every other state is unresolved and kept.
   - It needs no `students.view` and has no route.
   - Consumers since ORG.7D-3 (ADR 0076 §39): the Hostel residency and
     Canteen order pickers and write guards, for Campus-scoped actors only.
+
+## Write-time operational eligibility (ORG.7D-4, 2026-10-19, ADR 0076 §40)
+
+`StudentOperationalEligibility::lockOperationalOn(School, studentId,
+campusId)` is the only write-time proof that a Student is a current
+operational Student of a Campus.
+- **Where:** it runs inside the consuming domain's write transaction and
+  returns a boolean.
+- **What it locks:** FOR SHARE, until commit, in this order: the School's
+  active AcademicYear (`CurrentAcademicYearResolver::shareLockActiveId()`),
+  the Student row, the current Enrollment row, and the Campus (ActiveCampus).
+- **Effect on writers:** each writer that can change the answer either waits
+  for the write to commit, or commits first and makes the write refuse. This
+  covers year activation or close, a Student status change, a placement
+  transfer, completion, withdrawal or cancellation, and a Campus
+  deactivation.
+- **Advisory only:** `StudentOperationalCampusResolver` (now read-only) and
+  `StudentPurposeLookup` are never write-time proof.
+- **Consumers:** the Hostel and Canteen Campus write guards.

@@ -871,3 +871,15 @@ API).
 - **Unchanged:** fulfilment's stock issue (the Outlet's own location) and
   charge stay Canteen's bounded side effects, with no Inventory or Fees
   authority. Outlets, Items and billing settings stay whole-School.
+
+## Locked eligibility (ORG.7D-4, 2026-10-19, ADR 0076 §40)
+
+A Campus-scoped order proves the Student under lock
+(`StudentOperationalEligibility::lockOperationalOn()`) inside the
+placement transaction. The early refusal before the service's lookups uses
+the same check.
+- **Fulfil and cancel:** a Campus-scoped fulfilment or cancellation also
+  requires the Outlet's Campus to be active (ActiveCampus share lock), so it
+  serializes against a Campus deactivation.
+- **Unchanged:** error codes (`CANTEEN_STUDENT_NOT_FOUND`,
+  `CANTEEN_ORDER_NOT_FOUND`) and the whole-School path.

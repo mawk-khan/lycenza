@@ -137,8 +137,8 @@ class CanteenOrderService
         }
 
         return DB::transaction(function () use ($school, $student, $outlet, $data, $items, $actor, $guard) {
-            // ...and again at write time.
-            $guard?->beforePlace($data->studentId, $data->outletId);
+            // ...and again at write time, under lock (ORG.7D-4, ADR 0076 §40).
+            $guard?->atPlacement($data->studentId, $data->outletId);
 
             $lineRows = [];
             $totalAmount = '0.00';

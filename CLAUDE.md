@@ -1346,3 +1346,8 @@ once several modules copy it.
        or a generic Campus Student search. Every write re-checks, at write
        time, that the Student is operational on the target Campus, and
        refuses generically. A whole-School actor keeps the existing path.
+     - **That write-time check is
+       `StudentOperationalEligibility::lockOperationalOn()`** (ORG.7D-4,
+       §40), inside the write transaction. It share-locks the active year,
+       Student, current Enrollment and Campus until commit. A lookup answer
+       or the unlocked resolver is never write-time proof.

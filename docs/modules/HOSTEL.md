@@ -640,3 +640,17 @@ Production stays gated by E21/E31 (ADR 0058).
   - Hostel fee intent (web) and the residency fee selections (API);
   - both carry-forwards;
   - the Hostel/Room/Bed directory.
+
+## Locked eligibility; no cross-Campus boarding (ORG.7D-4, 2026-10-19, ADR 0076 §40)
+
+- **Owner decision, frozen:** a Campus-scoped Hostel actor may not board a
+  Student whose current operational Campus differs from the Hostel's
+  Campus. Whole-School actors are unchanged.
+- **Write-time proof:** the assignment guard uses
+  `StudentOperationalEligibility::lockOperationalOn()` after the Student and
+  Bed locks. A concurrent transfer, inactivation, year switch or Campus
+  deactivation either waits or makes the assignment refuse with the same
+  generic `HOSTEL_RESIDENCY_UNAVAILABLE`.
+- **Student lock mode:** the assignment's Student lock is FOR NO KEY UPDATE
+  (`HostelResidencyService::STUDENT_LOCK`), so a concurrent transfer's
+  enrollment insert never deadlocks against it.

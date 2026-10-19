@@ -501,3 +501,26 @@ Library is NOT Campus-adopted. Reasons:
 Adoption needs a loan-Campus rule and Copy-Campus immutability while on
 loan. The Copy search's unescaped LIKE stays recorded (R8). A Campus grant
 confers nothing here.
+
+## Campus contract (ORG.7D-4, 2026-10-19, ADR 0076 §40.10)
+
+Library is still NOT Campus-adopted. The contract for the implementation
+wave is frozen.
+- **Titles and copies:** titles are School-shared. A copy is a Campus
+  resource, and a copy with no Campus is whole-School only.
+- **Loans:** a loan keeps the copy's Campus at checkout, so a migration is
+  required (`library_loans.campus_id`, a matching insert trigger and
+  immutability). A copy's Campus can no longer move while it is on loan.
+  Historical access never follows a Student's current Campus.
+- **Lending:** a Campus-scoped librarian lends only when their scope covers
+  the copy's Campus and the borrower is operational on that Campus, proven
+  under lock at checkout. Every refusal is one generic
+  `LIBRARY_CHECKOUT_UNAVAILABLE`.
+- **Adoptable keys:** only `library.circulation.*`. The catalogue and fines
+  stay whole-School.
+- **Owner decisions:**
+  - the check-in fine side effect needs a high-risk approval or
+    reclassification;
+  - the copy-move policy;
+  - a web Campus field;
+  - cross-Campus returns.

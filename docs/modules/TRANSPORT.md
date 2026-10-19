@@ -626,3 +626,25 @@ Transport is NOT Campus-adopted. Reasons:
 
 Adoption needs an owner policy for shared Routes and a consistency rule
 first. A Campus grant confers nothing here.
+
+## Campus contract (ORG.7D-4, 2026-10-19, ADR 0076 §40.9)
+
+Transport is still NOT Campus-adopted. The contract for the implementation
+wave is frozen.
+- **NULL Campus routes:** a route with no Campus is School-shared, with
+  whole-School authority only.
+- **Campus-bound routes:** the route's Campus decides authority over the
+  route, its stops and its riders.
+- **Riders:** a Campus-scoped rider assignment needs the Student operational
+  on the route's Campus, proven under lock at write time. Every refusal is
+  one generic `TRANSPORT_ASSIGNMENT_UNAVAILABLE`.
+- **Vehicles:** the fleet and route vehicle/driver assignment
+  (`transport.vehicles.*`) stay whole-School.
+- **Adoptable keys:** `transport.assignments.*` and `transport.routes.view`.
+- **Prerequisites:**
+  - route Campus becomes immutable once used;
+  - a web Campus field;
+  - uuid validation and ActiveCampus on Campus writes;
+  - the scoped picker, generic refusals and the R8 searches.
+- **Owner decisions:** whether to adopt `routes.manage`, and the
+  rider-fee side effect.
