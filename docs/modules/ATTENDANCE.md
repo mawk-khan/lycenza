@@ -777,3 +777,27 @@ no staff service is bypassed or reused.
   count; never a status).
 - **Dependencies:** Attendance now consumes Guardians (GuardianStudentScope)
   and Identity (ActingGuardian). Neither depends back on Attendance.
+
+## Campus-scoped administration (ORG.7D-1, 2026-10-19, ADR 0076 §37)
+
+- **Adopted:** `attendance.view` and `attendance.manage`: the register list
+  and detail, the exceptions list, class selection, the roster preview,
+  submission and correction.
+- **Not adopted:** `attendance.teacher`. My Attendance stays
+  TeachingOwnership-scoped, and a Campus grant of it confers nothing.
+- **Campus source:**
+  - a new register: the Campus of the timetable class it is taken for;
+  - a written register and its records: the Campus STORED when it was
+    written, FK-bound to Section, Offering and every record.
+
+  History keeps that Campus even when the class later moves. Corrections
+  follow it, so a current Campus grant never reaches another Campus's
+  registers.
+- **Access:** `AttendanceAdministrationAccess` is the one reader, filtering
+  in SQL with out of scope = 404.
+  - Writes pass `CampusAttendanceWriteGuard` through the existing
+    `AttendanceWriteGuard` hook. It runs before the locks and again if the
+    entry is repointed. A whole-School actor gets no guard.
+  - "Already submitted" is judged per in-scope class.
+- **Roster:** the Section's own (`StudentEnrollmentRosterReadService`).
+  There is no Student Campus resolution and no Student search.

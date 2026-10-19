@@ -3,13 +3,14 @@
 namespace App\Http\Controllers\App\Examinations;
 
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
+use App\Domain\Examinations\Application\ExaminationPaperAccess;
 use App\Domain\Examinations\Application\ExaminationPaperService;
 use App\Domain\Examinations\Application\Exceptions\ExaminationException;
 use App\Domain\Examinations\Infrastructure\Examination;
 use App\Domain\Examinations\Infrastructure\ExaminationPaper;
 use App\Http\Controllers\Controller;
-use App\Support\Authorization\AuthorizesCapability;
-use App\Support\Authorization\CapabilityResolver;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Authorization\Campus\CampusScopeResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -34,18 +35,24 @@ use Inertia\Response;
  * failures surface as ordinary form errors, the established Inertia
  * convention (App\Http\Controllers\App\Examinations\ExaminationController).
  */
+/**
+ * ORG.7D-1 (ADR 0076 §37): `examinations.papers.*` are Campus-adopted --
+ * papers and Offerings come only through ExaminationPaperAccess within the
+ * actor's CampusScope (out of scope = 404). The parent Examination is
+ * School-wide configuration shown as context.
+ */
 class ExaminationPaperController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
-    public function index(TenantContext $context, CapabilityResolver $capabilities, string $examination): Response
+    public function index(TenantContext $context, CampusScopeResolver $scopes, ExaminationPaperAccess $access, string $examination): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('examinations.papers.view', $school);
+        $scope = $this->authorizeCampusScope('examinations.papers.view', $school);
 
         $examinationModel = Examination::query()->findOrFail($examination);
 
-        $papers = ExaminationPaper::query()
+        $papers = $access->papers($scope)
             ->where('examination_id', $examinationModel->id)
             ->orderBy('scheduled_on')
             ->orderBy('starts_at')
@@ -55,7 +62,7 @@ class ExaminationPaperController extends Controller
         // SAME AcademicYear as the Examination, both required and
         // elective. The service independently enforces active-Offering
         // on write -- this filter only saves a round trip.
-        $subjectOfferings = SubjectOffering::query()
+        $subjectOfferings = $access->offerings($scope)
             ->where('academic_year_id', $examinationModel->academic_year_id)
             ->where('status', 'active')
             ->with(['campus', 'gradeLevel', 'subject'])
@@ -85,14 +92,14 @@ class ExaminationPaperController extends Controller
                 'status' => $p->status,
             ])->values()->all(),
             'statuses' => ExaminationPaper::STATUSES,
-            'canManage' => $capabilities->canInSchool($context->actor(), 'examinations.papers.manage', $school),
+            'canManage' => ! $scopes->campusScope($context->actor(), 'examinations.papers.manage', $school)->isNone(),
         ]);
     }
 
-    public function store(Request $request, TenantContext $context, string $examination, ExaminationPaperService $service): RedirectResponse
+    public function store(Request $request, TenantContext $context, string $examination, ExaminationPaperService $service, ExaminationPaperAccess $access): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('examinations.papers.manage', $school);
+        $scope = $this->authorizeCampusScope('examinations.papers.manage', $school);
 
         $examinationModel = Examination::query()->findOrFail($examination);
 
@@ -104,6 +111,9 @@ class ExaminationPaperController extends Controller
             'max_marks' => ['required', 'numeric', 'gt:0'],
             'status' => ['sometimes', Rule::in(ExaminationPaper::STATUSES)],
         ]);
+
+        // ORG.7D-1: the Offering must be within the actor's CampusScope.
+        $validated['subject_offering_id'] = $access->offering($scope, $validated['subject_offering_id'])->id;
 
         try {
             $service->create($school, $examinationModel, $validated, $request->user());
@@ -120,16 +130,16 @@ class ExaminationPaperController extends Controller
         string $examination,
         string $examinationPaper,
         ExaminationPaperService $service,
+        ExaminationPaperAccess $access,
     ): RedirectResponse {
         $school = $context->requireSchool();
-        $this->authorizeCapability('examinations.papers.manage', $school);
+        $scope = $this->authorizeCampusScope('examinations.papers.manage', $school);
 
-        // Scoped to the route's own Examination as well as the tenant --
-        // a Paper id belonging to a different Examination is a clean 404
-        // rather than a silent cross-Examination edit.
-        $model = ExaminationPaper::query()
-            ->where('examination_id', $examination)
-            ->findOrFail($examinationPaper);
+        // Scoped to the route's own Examination as well as the tenant and
+        // (ORG.7D-1) the actor's CampusScope -- a Paper id belonging to a
+        // different Examination or Campus is a clean 404 rather than a
+        // silent cross-Examination edit.
+        $model = $access->paperOf($scope, $examination, $examinationPaper);
 
         $validated = $request->validate([
             'scheduled_on' => ['sometimes', 'date_format:Y-m-d'],

@@ -2,12 +2,13 @@
 
 namespace App\Domain\Examinations\Http\Controllers;
 
+use App\Domain\Examinations\Application\ExaminationPaperAccess;
 use App\Domain\Examinations\Application\ExaminationPaperService;
 use App\Domain\Examinations\Infrastructure\Examination;
 use App\Domain\Examinations\Infrastructure\ExaminationPaper;
 use App\Http\Controllers\Controller;
 use App\Models\School;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -37,20 +38,26 @@ use Illuminate\Validation\Rule;
  * immutable thereafter -- PATCH's validated field set does not include
  * it, so an injection attempt is structurally inert.
  */
+/**
+ * ORG.7D-1 (ADR 0076 §37): `examinations.papers.*` are Campus-adopted --
+ * papers and the Offering a new paper is for are resolved only through
+ * ExaminationPaperAccess (out of scope = 404). The parent Examination is
+ * School-wide configuration read as context.
+ */
 class ExaminationPaperController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
-    public function index(School $school, string $examination): JsonResponse
+    public function index(School $school, string $examination, ExaminationPaperAccess $access): JsonResponse
     {
-        $this->authorizeCapability('examinations.papers.view', $school);
+        $scope = $this->authorizeCampusScope('examinations.papers.view', $school);
 
         // Resolved through the tenant-scoped query (SchoolScope + RLS),
         // so another School's Examination id is a clean 404 here rather
         // than an empty list that silently implies it exists.
         $examinationModel = Examination::query()->findOrFail($examination);
 
-        $papers = ExaminationPaper::query()
+        $papers = $access->papers($scope)
             ->where('examination_id', $examinationModel->id)
             ->orderBy('scheduled_on')
             ->orderBy('starts_at')
@@ -61,9 +68,9 @@ class ExaminationPaperController extends Controller
         ]);
     }
 
-    public function store(Request $request, School $school, string $examination, ExaminationPaperService $service): JsonResponse
+    public function store(Request $request, School $school, string $examination, ExaminationPaperService $service, ExaminationPaperAccess $access): JsonResponse
     {
-        $this->authorizeCapability('examinations.papers.manage', $school);
+        $scope = $this->authorizeCampusScope('examinations.papers.manage', $school);
 
         $examinationModel = Examination::query()->findOrFail($examination);
 
@@ -76,25 +83,27 @@ class ExaminationPaperController extends Controller
             'status' => ['sometimes', Rule::in(ExaminationPaper::STATUSES)],
         ]);
 
+        // ORG.7D-1: the Offering must be within the actor's CampusScope.
+        $validated['subject_offering_id'] = $access->offering($scope, $validated['subject_offering_id'])->id;
         $paper = $service->create($school, $examinationModel, $validated, $request->user());
 
         return response()->json(['data' => $this->present($paper)], 201);
     }
 
-    public function show(School $school, string $examinationPaper): JsonResponse
+    public function show(School $school, string $examinationPaper, ExaminationPaperAccess $access): JsonResponse
     {
-        $this->authorizeCapability('examinations.papers.view', $school);
+        $scope = $this->authorizeCampusScope('examinations.papers.view', $school);
 
-        $model = ExaminationPaper::query()->findOrFail($examinationPaper);
+        $model = $access->paper($scope, $examinationPaper);
 
         return response()->json(['data' => $this->present($model)]);
     }
 
-    public function update(Request $request, School $school, string $examinationPaper, ExaminationPaperService $service): JsonResponse
+    public function update(Request $request, School $school, string $examinationPaper, ExaminationPaperService $service, ExaminationPaperAccess $access): JsonResponse
     {
-        $this->authorizeCapability('examinations.papers.manage', $school);
+        $scope = $this->authorizeCampusScope('examinations.papers.manage', $school);
 
-        $model = ExaminationPaper::query()->findOrFail($examinationPaper);
+        $model = $access->paper($scope, $examinationPaper);
 
         $validated = $request->validate([
             'scheduled_on' => ['sometimes', 'date_format:Y-m-d'],

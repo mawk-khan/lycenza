@@ -800,6 +800,17 @@ whole-School supersedes. A selected or current Campus
   (§34) audited HR, Admissions, Communications, Fees, Payments and Canteen
   and deferred each one with recorded decision points; it adopted nothing
   new.
+- **Adopted in ORG.7D-1 (§37), the pre-SIS academic wave:**
+  - `timetable.schedule.view/.manage` (by the entry's Offering);
+  - `attendance.view/.manage` (a written register's stored Campus);
+  - `curriculum.delivery.view/.manage`;
+  - `lms.content.view/.manage` and `lms.assignments.view/.manage` (by the
+    owning Offering, LMS documents included);
+  - `examinations.papers.view/.manage`.
+
+  The bell schedule, Academic Structure, the syllabus catalogue, the
+  Examination itself, grade scales, marks, Data Health and every
+  `*.teacher` key stay whole-School or ownership-scoped.
 - **Refusals look the same.** A Campus-scoped actor's refusals do not
   differ between an in-scope and an out-of-scope conflict (Visitor
   check-in: one generic refusal; the School-wide one-active-Visit rule
@@ -844,6 +855,16 @@ whole-School supersedes. A selected or current Campus
   High-risk families need recorded owner approval: sensitive HR, payroll,
   finance, approvals, and access or School administration. Marks are not
   adoptable.
+- **A whole-School hub that also opens on an adopted key**
+  (ORG.7D-1, e.g. Data health) is declared in
+  `CampusScopeCatalogue::WHOLE_SCHOOL_HUBS`. Only its own controller may
+  check that key with the whole-School Gate. A C2 Gate contract naming an
+  adopted key anywhere else fails `CoverageGuard::adoptedWholeSchool()`,
+  and navigation shows a Campus-held key only on an entry whose every key
+  is adopted.
+- **Teacher keys are never Campus-adopted in place of ownership.** Campus
+  scope may only ever be an additional condition on a TeachingOwnership
+  path, never a replacement for it (ORG.7D-1 adopted none).
 - **Conflicts never cross a Campus boundary.** When a School-wide
   uniqueness rule (one active Visit, a gate-pass number, a room or teacher
   slot, a bed, a seat, a Library loan) collides with a record outside a

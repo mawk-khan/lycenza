@@ -3,16 +3,20 @@
 namespace Tests\Support\Authorization;
 
 use App\Domain\Analytics\Application\AnalyticsReadGate;
+use App\Domain\Attendance\Application\AttendanceAdministrationAccess;
+use App\Domain\Attendance\Application\AttendanceExceptionReadService;
 use App\Domain\Attendance\Application\TeacherAttendanceAccess;
 use App\Domain\Automation\Application\AutomationReadService;
 use App\Domain\Automation\Application\AutomationRuleService;
 use App\Domain\Communications\Http\Controllers\CommunicationAttachmentController;
 use App\Domain\Communications\Http\Controllers\CommunicationPreferenceController;
 use App\Domain\Compliance\Application\AuditLogReviewService;
+use App\Domain\CurriculumDelivery\Application\CurriculumDeliveryAccess;
 use App\Domain\CurriculumDelivery\Application\TeacherDeliveryAccess;
 use App\Domain\Documents\Application\DocumentListingService;
 use App\Domain\Documents\Application\DocumentReadService;
 use App\Domain\Documents\Application\DocumentService;
+use App\Domain\Examinations\Application\ExaminationPaperAccess;
 use App\Domain\HR\Application\EmployeeDirectoryService;
 use App\Domain\HR\Application\EmployeeProfileWorkspaceService;
 use App\Domain\HR\Http\Support\HighlySensitiveDocumentStepUp;
@@ -30,6 +34,7 @@ use App\Domain\Leave\Application\LeaveTypeService;
 use App\Domain\Leave\Application\LeaveYearCloseService;
 use App\Domain\Leave\Application\LeaveYearService;
 use App\Domain\Leave\Application\StaffCalendarService;
+use App\Domain\LMS\Application\LmsAdministrationAccess;
 use App\Domain\LMS\Application\TeacherAssignmentAccess;
 use App\Domain\LMS\Application\TeacherLearningContentAccess;
 use App\Domain\Payments\Application\PaymentCorrectionService;
@@ -51,6 +56,7 @@ use App\Domain\Payroll\Statutory\Application\Export\StatutoryEsiContributionWork
 use App\Domain\Payroll\Statutory\Application\Export\StatutoryTdsDraftStatementExportService;
 use App\Domain\StaffAttendance\Application\StaffAttendanceReadService;
 use App\Domain\StaffAttendance\Application\StaffAttendanceService;
+use App\Domain\Timetable\Application\TimetableScheduleAccess;
 use App\Domain\Visitor\Application\VisitorVisitAccess;
 use Tests\Feature\Api\V1\SchoolContextTest;
 use Tests\Feature\App\StatutoryPayrollUiTest;
@@ -1051,10 +1057,16 @@ final class SchoolRouteCoverage
             Coverage::gate('app.syllabus.update', 'syllabus.manage'),
 
             // Http\Controllers\App\CurriculumDelivery\CurriculumDeliveryController
-            Coverage::gate('app.syllabus-delivery.index', 'curriculum.delivery.view'),
-            Coverage::gate('app.syllabus-delivery.store', 'curriculum.delivery.manage'),
-            Coverage::gate('app.syllabus-delivery.update', 'curriculum.delivery.manage'),
-            Coverage::gate('app.syllabus-delivery.transition', 'curriculum.delivery.manage'),
+            // ORG.7D-1 (ADR 0076 §37): administrative Curriculum Delivery is Campus-adopted.
+            Coverage::campus('app.syllabus-delivery.index', 'curriculum.delivery.view', CurriculumDeliveryAccess::class, 'offerings'),
+            Coverage::campus('app.syllabus-delivery.store', 'curriculum.delivery.manage', CurriculumDeliveryAccess::class, 'writeGuard'),
+            Coverage::campus('app.syllabus-delivery.update', 'curriculum.delivery.manage', CurriculumDeliveryAccess::class, 'writeGuard'),
+            Coverage::campus('app.syllabus-delivery.transition', 'curriculum.delivery.manage', CurriculumDeliveryAccess::class, 'writeGuard'),
+            Coverage::campus('api.v1.schools.subject-offerings.curriculum-deliveries.index', 'curriculum.delivery.view', CurriculumDeliveryAccess::class, 'offering'),
+            Coverage::campus('api.v1.schools.subject-offerings.curriculum-deliveries.store', 'curriculum.delivery.manage', CurriculumDeliveryAccess::class, 'writeGuard'),
+            Coverage::campus('api.v1.schools.curriculum-deliveries.show', 'curriculum.delivery.view', CurriculumDeliveryAccess::class, 'delivery'),
+            Coverage::campus('api.v1.schools.curriculum-deliveries.update', 'curriculum.delivery.manage', CurriculumDeliveryAccess::class, 'writeGuard'),
+            Coverage::campus('api.v1.schools.curriculum-deliveries.transition', 'curriculum.delivery.manage', CurriculumDeliveryAccess::class, 'writeGuard'),
 
             // Http\Controllers\App\CurriculumDelivery\MyCurriculumDeliveryController
             Coverage::owned('app.my-curriculum-delivery.index', TeacherDeliveryAccess::class, 'scope', 'teaching ownership: the acting teacher\'s own contexts'),
@@ -1148,11 +1160,18 @@ final class SchoolRouteCoverage
             Coverage::owned('app.my-learning-content.archive', TeacherLearningContentAccess::class, 'guard', 'teaching ownership: the acting teacher\'s own offerings'),
 
             // Http\Controllers\App\LMS\LearningContentController
-            Coverage::gate('app.learning-content.index', 'lms.content.view'),
-            Coverage::gate('app.learning-content.store', 'lms.content.manage'),
-            Coverage::gate('app.learning-content.update', 'lms.content.manage'),
-            Coverage::gate('app.learning-content.publish', 'lms.content.manage'),
-            Coverage::gate('app.learning-content.archive', 'lms.content.manage'),
+            // ORG.7D-1 (ADR 0076 §37): administrative LMS is Campus-adopted (through the owning Offering).
+            Coverage::campus('app.learning-content.index', 'lms.content.view', LmsAdministrationAccess::class, 'offerings'),
+            Coverage::campus('app.learning-content.store', 'lms.content.manage', LmsAdministrationAccess::class, 'offering'),
+            Coverage::campus('app.learning-content.update', 'lms.content.manage', LmsAdministrationAccess::class, 'content'),
+            Coverage::campus('app.learning-content.publish', 'lms.content.manage', LmsAdministrationAccess::class, 'content'),
+            Coverage::campus('app.learning-content.archive', 'lms.content.manage', LmsAdministrationAccess::class, 'content'),
+            Coverage::campus('api.v1.schools.subject-offerings.learning-content.index', 'lms.content.view', LmsAdministrationAccess::class, 'offering'),
+            Coverage::campus('api.v1.schools.subject-offerings.learning-content.store', 'lms.content.manage', LmsAdministrationAccess::class, 'offering'),
+            Coverage::campus('api.v1.schools.learning-content.show', 'lms.content.view', LmsAdministrationAccess::class, 'content'),
+            Coverage::campus('api.v1.schools.learning-content.update', 'lms.content.manage', LmsAdministrationAccess::class, 'content'),
+            Coverage::campus('api.v1.schools.learning-content.publish', 'lms.content.manage', LmsAdministrationAccess::class, 'content'),
+            Coverage::campus('api.v1.schools.learning-content.archive', 'lms.content.manage', LmsAdministrationAccess::class, 'content'),
 
             // Http\Controllers\App\LMS\MyAssignmentController
             Coverage::owned('app.my-assignments.index', TeacherAssignmentAccess::class, 'scope', 'teaching ownership: the acting teacher\'s own offerings', 'lms.assignments.teacher'),
@@ -1162,11 +1181,17 @@ final class SchoolRouteCoverage
             Coverage::owned('app.my-assignments.close', TeacherAssignmentAccess::class, 'guard', 'teaching ownership: the acting teacher\'s own offerings'),
 
             // Http\Controllers\App\LMS\AssignmentController
-            Coverage::gate('app.assignments.index', 'lms.assignments.view'),
-            Coverage::gate('app.assignments.store', 'lms.assignments.manage'),
-            Coverage::gate('app.assignments.update', 'lms.assignments.manage'),
-            Coverage::gate('app.assignments.publish', 'lms.assignments.manage'),
-            Coverage::gate('app.assignments.close', 'lms.assignments.manage'),
+            Coverage::campus('app.assignments.index', 'lms.assignments.view', LmsAdministrationAccess::class, 'offerings'),
+            Coverage::campus('app.assignments.store', 'lms.assignments.manage', LmsAdministrationAccess::class, 'offering'),
+            Coverage::campus('app.assignments.update', 'lms.assignments.manage', LmsAdministrationAccess::class, 'assignment'),
+            Coverage::campus('app.assignments.publish', 'lms.assignments.manage', LmsAdministrationAccess::class, 'assignment'),
+            Coverage::campus('app.assignments.close', 'lms.assignments.manage', LmsAdministrationAccess::class, 'assignment'),
+            Coverage::campus('api.v1.schools.subject-offerings.assignments.index', 'lms.assignments.view', LmsAdministrationAccess::class, 'offering'),
+            Coverage::campus('api.v1.schools.subject-offerings.assignments.store', 'lms.assignments.manage', LmsAdministrationAccess::class, 'offering'),
+            Coverage::campus('api.v1.schools.assignments.show', 'lms.assignments.view', LmsAdministrationAccess::class, 'assignment'),
+            Coverage::campus('api.v1.schools.assignments.update', 'lms.assignments.manage', LmsAdministrationAccess::class, 'assignment'),
+            Coverage::campus('api.v1.schools.assignments.publish', 'lms.assignments.manage', LmsAdministrationAccess::class, 'assignment'),
+            Coverage::campus('api.v1.schools.assignments.close', 'lms.assignments.manage', LmsAdministrationAccess::class, 'assignment'),
 
             // Http\Controllers\App\Examinations\ExaminationController
             Coverage::gate('app.examinations.index', 'examinations.definitions.view'),
@@ -1174,9 +1199,14 @@ final class SchoolRouteCoverage
             Coverage::gate('app.examinations.update', 'examinations.definitions.manage'),
 
             // Http\Controllers\App\Examinations\ExaminationPaperController
-            Coverage::gate('app.examinations.papers.index', 'examinations.papers.view'),
-            Coverage::gate('app.examinations.papers.store', 'examinations.papers.manage'),
-            Coverage::gate('app.examinations.papers.update', 'examinations.papers.manage'),
+            // ORG.7D-1 (ADR 0076 §37): Examination Papers are Campus-adopted (marks are not).
+            Coverage::campus('app.examinations.papers.index', 'examinations.papers.view', ExaminationPaperAccess::class, 'papers'),
+            Coverage::campus('app.examinations.papers.store', 'examinations.papers.manage', ExaminationPaperAccess::class, 'offering'),
+            Coverage::campus('app.examinations.papers.update', 'examinations.papers.manage', ExaminationPaperAccess::class, 'paperOf'),
+            Coverage::campus('api.v1.schools.examinations.examination-papers.index', 'examinations.papers.view', ExaminationPaperAccess::class, 'papers'),
+            Coverage::campus('api.v1.schools.examinations.examination-papers.store', 'examinations.papers.manage', ExaminationPaperAccess::class, 'offering'),
+            Coverage::campus('api.v1.schools.examination-papers.show', 'examinations.papers.view', ExaminationPaperAccess::class, 'paper'),
+            Coverage::campus('api.v1.schools.examination-papers.update', 'examinations.papers.manage', ExaminationPaperAccess::class, 'paper'),
 
             // Http\Controllers\App\Examinations\GradeScaleController
             Coverage::gate('app.examinations.grade-scales.index', 'examinations.grade_scales.view'),
@@ -1187,17 +1217,24 @@ final class SchoolRouteCoverage
             Coverage::gate('app.examinations.grade-scales.bands.destroy', 'examinations.grade_scales.manage'),
 
             // Http\Controllers\App\Attendance\AttendanceController
-            Coverage::gate('app.attendance.index', 'attendance.view'),
-            Coverage::gate('app.attendance.take', 'attendance.manage'),
-            Coverage::gate('app.attendance.roster', 'attendance.manage'),
+            // ORG.7D-1 (ADR 0076 §37): administrative Attendance is Campus-adopted.
+            Coverage::campus('app.attendance.index', 'attendance.view', AttendanceAdministrationAccess::class, 'sessions'),
+            Coverage::campus('app.attendance.take', 'attendance.manage', AttendanceAdministrationAccess::class, 'entries'),
+            Coverage::campus('app.attendance.roster', 'attendance.manage', AttendanceAdministrationAccess::class, 'entry'),
 
             // Http\Controllers\App\Attendance\AttendanceExceptionController
-            Coverage::gate('app.attendance.exceptions', 'attendance.view'),
+            Coverage::campus('app.attendance.exceptions', 'attendance.view', AttendanceExceptionReadService::class, 'list'),
 
             // Http\Controllers\App\Attendance\AttendanceController
-            Coverage::gate('app.attendance.store', 'attendance.manage'),
-            Coverage::gate('app.attendance.show', 'attendance.view'),
-            Coverage::gate('app.attendance.correct', 'attendance.manage'),
+            Coverage::campus('app.attendance.store', 'attendance.manage', AttendanceAdministrationAccess::class, 'writeGuard'),
+            Coverage::campus('app.attendance.show', 'attendance.view', AttendanceAdministrationAccess::class, 'session'),
+            Coverage::campus('app.attendance.correct', 'attendance.manage', AttendanceAdministrationAccess::class, 'writeGuard'),
+            Coverage::campus('api.v1.schools.attendance-sessions.index', 'attendance.view', AttendanceAdministrationAccess::class, 'sessions'),
+            Coverage::campus('api.v1.schools.attendance-sessions.store', 'attendance.manage', AttendanceAdministrationAccess::class, 'writeGuard'),
+            Coverage::campus('api.v1.schools.attendance-sessions.scheduled-classes', 'attendance.manage', AttendanceAdministrationAccess::class, 'entries'),
+            Coverage::campus('api.v1.schools.attendance-sessions.roster-preview', 'attendance.manage', AttendanceAdministrationAccess::class, 'entry'),
+            Coverage::campus('api.v1.schools.attendance-sessions.show', 'attendance.view', AttendanceAdministrationAccess::class, 'session'),
+            Coverage::campus('api.v1.schools.attendance-records.correct', 'attendance.manage', AttendanceAdministrationAccess::class, 'writeGuard'),
 
             // Http\Controllers\App\Attendance\MyAttendanceController
             Coverage::owned('app.my-attendance.index', TeacherAttendanceAccess::class, 'scope', 'teaching ownership: the acting teacher\'s own sections'),
@@ -1207,18 +1244,31 @@ final class SchoolRouteCoverage
             Coverage::owned('app.my-attendance.correct', TeacherAttendanceAccess::class, 'guard', 'teaching ownership: the acting teacher\'s own sections'),
 
             // Http\Controllers\App\Timetable\TimetableEntryController
-            Coverage::gate('app.timetable-schedule.index', 'timetable.schedule.view'),
-            Coverage::gate('app.timetable-schedule.create', 'timetable.schedule.manage'),
-            Coverage::gate('app.timetable-schedule.search-subject-offerings', 'timetable.schedule.manage'),
-            Coverage::gate('app.timetable-schedule.search-sections', 'timetable.schedule.manage'),
-            Coverage::gate('app.timetable-schedule.search-teachers', 'timetable.schedule.manage'),
-            Coverage::gate('app.timetable-schedule.search-rooms', 'timetable.schedule.manage'),
+            // ORG.7D-1 (ADR 0076 §37): Timetable schedule is Campus-adopted.
+            Coverage::campus('app.timetable-schedule.index', 'timetable.schedule.view', TimetableScheduleAccess::class, 'entries'),
+            Coverage::campusLookup('app.timetable-schedule.create', 'timetable.schedule.manage', 'Data-free form page; Offerings, Sections and Rooms come from the scoped searches.'),
+            Coverage::campus('app.timetable-schedule.search-subject-offerings', 'timetable.schedule.manage', TimetableScheduleAccess::class, 'offerings'),
+            Coverage::campus('app.timetable-schedule.search-sections', 'timetable.schedule.manage', TimetableScheduleAccess::class, 'sections'),
+            Coverage::campusLookup('app.timetable-schedule.search-teachers', 'timetable.schedule.manage', 'The scheduling form\'s teacher lookup: active Employees, id and name only (CampusScopeCatalogue::DOMAINS timetable sharedLookups).'),
+            Coverage::campus('app.timetable-schedule.search-rooms', 'timetable.schedule.manage', TimetableScheduleAccess::class, 'rooms'),
             Coverage::gate('app.timetable-schedule.search-periods', 'timetable.periods.view'),
-            Coverage::gate('app.timetable-schedule.store', 'timetable.schedule.manage'),
-            Coverage::gate('app.timetable-schedule.edit', 'timetable.schedule.manage'),
-            Coverage::gate('app.timetable-schedule.update', 'timetable.schedule.manage'),
-            Coverage::gate('app.timetable-schedule.activate', 'timetable.schedule.manage'),
-            Coverage::gate('app.timetable-schedule.deactivate', 'timetable.schedule.manage'),
+            Coverage::campusLookup('app.timetable-schedule.search-schedule-periods', 'timetable.schedule.manage', 'The scheduling form\'s lookup of the School-wide bell schedule: active Periods (CampusScopeCatalogue::DOMAINS timetable sharedLookups).'),
+            Coverage::campus('app.timetable-schedule.store', 'timetable.schedule.manage', TimetableScheduleAccess::class, 'offering'),
+            Coverage::campus('app.timetable-schedule.edit', 'timetable.schedule.manage', TimetableScheduleAccess::class, 'entry'),
+            Coverage::campus('app.timetable-schedule.update', 'timetable.schedule.manage', TimetableScheduleAccess::class, 'entry'),
+            Coverage::campus('app.timetable-schedule.activate', 'timetable.schedule.manage', TimetableScheduleAccess::class, 'entry'),
+            Coverage::campus('app.timetable-schedule.deactivate', 'timetable.schedule.manage', TimetableScheduleAccess::class, 'entry'),
+            Coverage::campus('api.v1.schools.timetable-entries.index', 'timetable.schedule.view', TimetableScheduleAccess::class, 'entries'),
+            Coverage::campus('api.v1.schools.timetable-entries.store', 'timetable.schedule.manage', TimetableScheduleAccess::class, 'offering'),
+            Coverage::campus('api.v1.schools.timetable-entries.search-subject-offerings', 'timetable.schedule.manage', TimetableScheduleAccess::class, 'offerings'),
+            Coverage::campus('api.v1.schools.timetable-entries.search-sections', 'timetable.schedule.manage', TimetableScheduleAccess::class, 'sections'),
+            Coverage::campusLookup('api.v1.schools.timetable-entries.search-teachers', 'timetable.schedule.manage', 'The scheduling form\'s teacher lookup: active Employees, id and name only (CampusScopeCatalogue::DOMAINS timetable sharedLookups).'),
+            Coverage::campus('api.v1.schools.timetable-entries.search-rooms', 'timetable.schedule.manage', TimetableScheduleAccess::class, 'rooms'),
+            Coverage::campusLookup('api.v1.schools.timetable-entries.search-schedule-periods', 'timetable.schedule.manage', 'The scheduling form\'s lookup of the School-wide bell schedule: active Periods (CampusScopeCatalogue::DOMAINS timetable sharedLookups).'),
+            Coverage::campus('api.v1.schools.timetable-entries.show', 'timetable.schedule.view', TimetableScheduleAccess::class, 'entry'),
+            Coverage::campus('api.v1.schools.timetable-entries.update', 'timetable.schedule.manage', TimetableScheduleAccess::class, 'entry'),
+            Coverage::campus('api.v1.schools.timetable-entries.activate', 'timetable.schedule.manage', TimetableScheduleAccess::class, 'entry'),
+            Coverage::campus('api.v1.schools.timetable-entries.deactivate', 'timetable.schedule.manage', TimetableScheduleAccess::class, 'entry'),
 
             // Http\Controllers\App\Payroll\PayrollController
             Coverage::gate('app.payroll.index', ['payroll.structures.view', 'payroll.compensation.view', 'payroll.runs.view', 'payroll.periods.manage', 'payroll.accounting.manage']),

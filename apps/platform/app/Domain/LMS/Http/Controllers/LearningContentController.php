@@ -4,10 +4,11 @@ namespace App\Domain\LMS\Http\Controllers;
 
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\LMS\Application\LearningContentService;
+use App\Domain\LMS\Application\LmsAdministrationAccess;
 use App\Domain\LMS\Infrastructure\LearningContent;
 use App\Http\Controllers\Controller;
 use App\Models\School;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -33,15 +34,15 @@ use Illuminate\Http\Request;
  */
 class LearningContentController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
-    public function index(Request $request, School $school, string $subjectOffering): JsonResponse
+    public function index(Request $request, School $school, string $subjectOffering, LmsAdministrationAccess $access): JsonResponse
     {
-        $this->authorizeCapability('lms.content.view', $school);
+        $scope = $this->authorizeCampusScope('lms.content.view', $school);
 
-        $offering = SubjectOffering::query()->where('school_id', $school->id)->findOrFail($subjectOffering);
+        $offering = $access->offering($scope, $subjectOffering);
 
-        $content = LearningContent::query()
+        $content = $access->contents($scope)
             ->where('subject_offering_id', $offering->id)
             ->orderBy('sequence')
             ->orderBy('created_at')
@@ -52,9 +53,9 @@ class LearningContentController extends Controller
         ]);
     }
 
-    public function store(Request $request, School $school, string $subjectOffering, LearningContentService $service): JsonResponse
+    public function store(Request $request, School $school, string $subjectOffering, LearningContentService $service, LmsAdministrationAccess $access): JsonResponse
     {
-        $this->authorizeCapability('lms.content.manage', $school);
+        $scope = $this->authorizeCampusScope('lms.content.manage', $school);
 
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -62,25 +63,25 @@ class LearningContentController extends Controller
             'sequence' => ['sometimes', 'integer', 'min:0'],
         ]);
 
-        $content = $service->create($school, $subjectOffering, $validated, $request->user());
+        $content = $service->create($school, $access->offering($scope, $subjectOffering)->id, $validated, $request->user());
 
         return response()->json(['data' => $this->present($content)], 201);
     }
 
-    public function show(Request $request, School $school, string $learningContent): JsonResponse
+    public function show(Request $request, School $school, string $learningContent, LmsAdministrationAccess $access): JsonResponse
     {
-        $this->authorizeCapability('lms.content.view', $school);
+        $scope = $this->authorizeCampusScope('lms.content.view', $school);
 
-        $content = LearningContent::query()->where('school_id', $school->id)->findOrFail($learningContent);
+        $content = $access->content($scope, $learningContent);
 
         return response()->json(['data' => $this->present($content)]);
     }
 
-    public function update(Request $request, School $school, string $learningContent, LearningContentService $service): JsonResponse
+    public function update(Request $request, School $school, string $learningContent, LearningContentService $service, LmsAdministrationAccess $access): JsonResponse
     {
-        $this->authorizeCapability('lms.content.manage', $school);
+        $scope = $this->authorizeCampusScope('lms.content.manage', $school);
 
-        $content = LearningContent::query()->where('school_id', $school->id)->findOrFail($learningContent);
+        $content = $access->content($scope, $learningContent);
 
         $validated = $request->validate([
             'title' => ['sometimes', 'string', 'max:255'],
@@ -93,22 +94,22 @@ class LearningContentController extends Controller
         return response()->json(['data' => $this->present($updated)]);
     }
 
-    public function publish(Request $request, School $school, string $learningContent, LearningContentService $service): JsonResponse
+    public function publish(Request $request, School $school, string $learningContent, LearningContentService $service, LmsAdministrationAccess $access): JsonResponse
     {
-        $this->authorizeCapability('lms.content.manage', $school);
+        $scope = $this->authorizeCampusScope('lms.content.manage', $school);
 
-        $content = LearningContent::query()->where('school_id', $school->id)->findOrFail($learningContent);
+        $content = $access->content($scope, $learningContent);
 
         $updated = $service->publish($school, $content, $request->user());
 
         return response()->json(['data' => $this->present($updated)]);
     }
 
-    public function archive(Request $request, School $school, string $learningContent, LearningContentService $service): JsonResponse
+    public function archive(Request $request, School $school, string $learningContent, LearningContentService $service, LmsAdministrationAccess $access): JsonResponse
     {
-        $this->authorizeCapability('lms.content.manage', $school);
+        $scope = $this->authorizeCampusScope('lms.content.manage', $school);
 
-        $content = LearningContent::query()->where('school_id', $school->id)->findOrFail($learningContent);
+        $content = $access->content($scope, $learningContent);
 
         $updated = $service->archive($school, $content, $request->user());
 

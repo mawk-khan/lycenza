@@ -50,6 +50,8 @@ class SubjectOfferingService
      */
     public const array MUTABLE_FIELDS = ['is_required', 'sequence', 'weekly_periods_target', 'status'];
 
+    public const string INACTIVE_CAMPUS = 'This Subject Offering is on an inactive Campus and cannot be reactivated.';
+
     private const string DUPLICATE_OFFERING = 'This Subject is already offered for this Academic Year, Campus and Grade Level.';
 
     public function __construct(
@@ -162,6 +164,14 @@ class SubjectOfferingService
         return $this->context->withSchool($school, fn (): SubjectOffering => DB::transaction(function () use ($school, $subjectOfferingId, $attributes, $actor): SubjectOffering {
             $offering = SubjectOffering::query()->where('school_id', $school->id)->lockForUpdate()->findOrFail($subjectOfferingId);
             $before = $offering->only(array_keys($attributes));
+
+            // ORG.7D-1 D1-2 (ADR 0076 §37): reactivating puts the Offering
+            // back into operation, so its Campus must be active. Data
+            // validity only; an already-active Offering is unaffected.
+            if (($attributes['status'] ?? null) === 'active' && $offering->status !== 'active'
+                && $this->activeCampus->find($school, $offering->campus_id) === null) {
+                throw ValidationException::withMessages(['status' => [self::INACTIVE_CAMPUS]]);
+            }
 
             try {
                 $offering->update($attributes);

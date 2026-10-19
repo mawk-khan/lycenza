@@ -11340,7 +11340,12 @@ paths:
       summary: >
         Lists a School's TimetableEntry schedule (active by default,
         ordered by day_of_week then period_id). Fixed page size of 50.
-        Requires timetable.schedule.view.
+        Requires timetable.schedule.view. ORG.7D-1 (ADR 0076 section 37):
+        Campus-adopted -- a Campus-scoped holder sees only the classes of
+        their active Campuses, and every entry, Offering, Section and Room
+        outside that scope is 404 on every Timetable entry operation; a
+        Campus-scoped holder's slot collision is one generic 409
+        TIMETABLE_SLOT_UNAVAILABLE.
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { $ref: "#/components/parameters/IncludeInactive" }
@@ -11719,6 +11724,38 @@ paths:
           description: Missing/invalid bearer token.
         "403":
           description: Authenticated but lacking timetable.periods.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /schools/{schoolId}/timetable-entries/search/schedule-periods:
+    get:
+      operationId: searchTimetableSchedulePeriods
+      summary: >
+        ORG.7D-1 (ADR 0076 section 37): the Schedule form's own lookup of
+        the School-wide bell schedule -- the same active TimetablePeriods
+        and fields as search/periods, but gated by
+        timetable.schedule.manage held for the whole School OR for at
+        least one Campus (a declared Campus shared lookup), so a
+        Campus-scoped scheduler can pick a Period. The Period catalogue and
+        search/periods stay on timetable.periods.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: q, in: query, required: false, schema: { type: string, maxLength: 255 } }
+      responses:
+        "200":
+          description: OK. At most 20 results, no pagination.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/TimetablePeriodSummary" } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but holding timetable.schedule.manage neither School-wide nor in any active Campus.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }

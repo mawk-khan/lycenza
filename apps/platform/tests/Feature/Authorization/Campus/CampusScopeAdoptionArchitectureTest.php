@@ -3,8 +3,11 @@
 namespace Tests\Feature\Authorization\Campus;
 
 use App\Support\Authorization\Campus\CampusScopeCatalogue;
+use App\Support\Navigation\StaffNavigation;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\Attributes\Test;
+use ReflectionClass;
 use Symfony\Component\Finder\Finder;
 use Tests\TestCase;
 
@@ -40,6 +43,31 @@ class CampusScopeAdoptionArchitectureTest extends TestCase
             'controllers' => ['app/Domain/Inventory/Http/Controllers/InventoryStockController.php', 'app/Http/Controllers/App/InventoryStockController.php'],
             'models' => ['InventoryStockBalance::query(', 'StockMovement::query(', 'InventoryLocation::query('],
         ],
+        'timetable' => [
+            'access' => 'app/Domain/Timetable/Application/TimetableScheduleAccess.php',
+            'controllers' => ['app/Domain/Timetable/Http/Controllers/TimetableEntryController.php', 'app/Http/Controllers/App/Timetable/TimetableEntryController.php'],
+            'models' => ['TimetableEntry::query(', 'SubjectOffering::query(', 'Section::query(', 'Room::query('],
+        ],
+        'attendance' => [
+            'access' => 'app/Domain/Attendance/Application/AttendanceAdministrationAccess.php',
+            'controllers' => ['app/Domain/Attendance/Http/Controllers/AttendanceSessionController.php', 'app/Http/Controllers/App/Attendance/AttendanceController.php', 'app/Http/Controllers/App/Attendance/AttendanceExceptionController.php'],
+            'models' => ['AttendanceSession::query(', 'AttendanceRecord::query(', 'TimetableEntry::query('],
+        ],
+        'curriculum_delivery' => [
+            'access' => 'app/Domain/CurriculumDelivery/Application/CurriculumDeliveryAccess.php',
+            'controllers' => ['app/Domain/CurriculumDelivery/Http/Controllers/CurriculumDeliveryController.php', 'app/Http/Controllers/App/CurriculumDelivery/CurriculumDeliveryController.php'],
+            'models' => ['CurriculumDelivery::query(', 'SubjectOffering::query(', 'Section::query('],
+        ],
+        'lms' => [
+            'access' => 'app/Domain/LMS/Application/LmsAdministrationAccess.php',
+            'controllers' => ['app/Domain/LMS/Http/Controllers/LearningContentController.php', 'app/Domain/LMS/Http/Controllers/AssignmentController.php', 'app/Http/Controllers/App/LMS/LearningContentController.php', 'app/Http/Controllers/App/LMS/AssignmentController.php'],
+            'models' => ['LearningContent::query(', 'Assignment::query(', 'SubjectOffering::query('],
+        ],
+        'examination_papers' => [
+            'access' => 'app/Domain/Examinations/Application/ExaminationPaperAccess.php',
+            'controllers' => ['app/Domain/Examinations/Http/Controllers/ExaminationPaperController.php', 'app/Http/Controllers/App/Examinations/ExaminationPaperController.php'],
+            'models' => ['ExaminationPaper::query(', 'SubjectOffering::query('],
+        ],
     ];
 
     #[Test]
@@ -65,6 +93,7 @@ class CampusScopeAdoptionArchitectureTest extends TestCase
     #[Test]
     public function an_adopted_capability_is_never_checked_with_a_whole_school_gate(): void
     {
+        $hubExempt = $this->declaredWholeSchoolHubControllers();
         $offenders = [];
         foreach (Finder::create()->files()->in([app_path(), base_path('routes')])->name('*.php') as $file) {
             $source = $file->getContents();
@@ -72,6 +101,10 @@ class CampusScopeAdoptionArchitectureTest extends TestCase
             // (declared whole-School-only operations, ORG.7D-0).
             $routeFile = str_starts_with($file->getRealPath(), base_path('routes'));
             foreach (CampusScopeCatalogue::capabilities() as $capability) {
+                // ORG.7D-1: a declared whole-School hub's own controller, for its declared keys only.
+                if (in_array($capability, $hubExempt[$file->getRealPath()] ?? [], true)) {
+                    continue;
+                }
                 $quoted = preg_quote($capability, '/');
                 if (preg_match("/authorizeCapability(For)?\\(\\s*(\\\$[a-z]+,\\s*)?'{$quoted}'/", $source)
                     || (! $routeFile && preg_match("/'capability:{$quoted}'/", $source))
@@ -82,6 +115,35 @@ class CampusScopeAdoptionArchitectureTest extends TestCase
         }
 
         $this->assertSame([], $offenders, 'Use authorizeCampusScope() / `capability:x,campus` for an adopted capability.');
+    }
+
+    /**
+     * ORG.7D-1 (ADR 0076 §37): every declared whole-School hub is a real
+     * navigation hub whose requirement names the key, the key is adopted, the
+     * reason is given -- and only the hub's own index controller is exempt.
+     *
+     * @return array<string, list<string>> controller real path => exempt keys
+     */
+    private function declaredWholeSchoolHubControllers(): array
+    {
+        $exempt = [];
+        foreach (CampusScopeCatalogue::WHOLE_SCHOOL_HUBS as $hub => $keys) {
+            $entry = collect(StaffNavigation::entries())->firstWhere('key', $hub);
+            $this->assertNotNull($entry, "{$hub} is not a navigation entry");
+            $requirement = StaffNavigation::hubRequirement($hub);
+            $route = Route::getRoutes()->getByName($entry->routeName);
+            $this->assertNotNull($route, "{$hub}'s route {$entry->routeName} does not exist");
+            $controller = (new ReflectionClass(explode('@', $route->getActionName())[0]))->getFileName();
+            foreach ($keys as $capability => $reason) {
+                $this->assertTrue(CampusScopeCatalogue::isAdopted($capability), "{$hub} declares unadopted {$capability}");
+                $this->assertContains($capability, $requirement, "{$hub}'s requirement does not name {$capability}");
+                $this->assertNotSame('', trim($reason), "{$hub} declares {$capability} without a reason");
+                $this->assertNotSame(CampusScopeCatalogue::adoptedAmong($requirement), $requirement, "{$hub} opens on adopted keys only: it is Campus-aware, not a whole-School hub");
+                $exempt[(string) $controller][] = $capability;
+            }
+        }
+
+        return $exempt;
     }
 
     #[Test]

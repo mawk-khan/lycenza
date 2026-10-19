@@ -100,7 +100,7 @@ const offeringPicker = makePicker<SubjectOfferingOption>(
 const sectionPicker = makePicker<SectionOption>('/app/timetable-schedule/search/sections');
 const teacherPicker = makePicker<TeacherOption>('/app/timetable-schedule/search/teachers');
 const roomPicker = makePicker<RoomOption>('/app/timetable-schedule/search/rooms');
-const periodPicker = makePicker<PeriodOption>('/app/timetable-schedule/search/periods');
+const periodPicker = makePicker<PeriodOption>('/app/timetable-schedule/search/schedule-periods');
 
 function selectOffering(option: SubjectOfferingOption): void {
     form.subject_offering_id = option.id;

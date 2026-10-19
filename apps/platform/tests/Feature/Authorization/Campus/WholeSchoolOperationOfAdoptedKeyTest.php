@@ -4,10 +4,12 @@ namespace Tests\Feature\Authorization\Campus;
 
 use App\Models\School;
 use App\Models\User;
+use App\Support\Navigation\StaffNavigation;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Support\Authorization\Coverage;
 use Tests\Support\Authorization\CoverageGuard;
 use Tests\Support\Authorization\SchoolRouteCoverage;
 use Tests\TestCase;
@@ -101,6 +103,24 @@ class WholeSchoolOperationOfAdoptedKeyTest extends TestCase
         $this->assertStringContainsString('[org7d0.probe.*] whole-School-only operation looks like a pattern', $problems);
         $this->assertStringContainsString('[org7d0.probe.unadopted] whole-School-only operation names [students.view], which is not Campus-adopted', $problems);
         $this->assertStringContainsString('[org7d0.probe.unadopted] whole-School-only operation needs its reason', $problems);
+    }
+
+    #[Test]
+    public function a_whole_school_gate_contract_on_an_adopted_key_fails(): void
+    {
+        // ORG.7D-1 (ADR 0076 §37): the controller would check the key with
+        // the whole-School Gate -- possibly through a constant.
+        $this->probe('org7d1.probe.c2', 'school-membership');
+        $router = app(Router::class);
+        $router->getRoutes()->refreshNameLookups();
+        $guard = fn (Coverage $entry): string => implode("\n", (new CoverageGuard($router->getRoutes()->getRoutes(), [$entry], []))->adoptedWholeSchool());
+
+        $this->assertStringContainsString('[org7d1.probe.c2] declares a whole-School C2 contract on Campus-adopted [visitor.visits.view]', $guard(Coverage::gate('org7d1.probe.c2', 'visitor.visits.view')));
+        $this->assertStringNotContainsString('org7d1.probe.c2', $guard(Coverage::gate('org7d1.probe.c2', 'students.view')), 'an unadopted key is unaffected');
+        // A declared whole-School hub's exact any-of floor is the one exception -- a partial copy is not.
+        $hub = StaffNavigation::hubRequirement('data-health');
+        $this->assertStringNotContainsString('org7d1.probe.c2', $guard(Coverage::gate('org7d1.probe.c2', $hub)));
+        $this->assertStringContainsString('[org7d1.probe.c2] declares a whole-School C2 contract on Campus-adopted [timetable.schedule.view]', $guard(Coverage::gate('org7d1.probe.c2', ['timetable.schedule.view', 'students.view'])));
     }
 
     private function holder(School $school, ?string $campusId): User

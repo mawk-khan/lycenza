@@ -5,13 +5,15 @@ namespace App\Http\Controllers\App\CurriculumDelivery;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
+use App\Domain\CurriculumDelivery\Application\CurriculumDeliveryAccess;
 use App\Domain\CurriculumDelivery\Application\CurriculumDeliveryService;
 use App\Domain\CurriculumDelivery\Application\Exceptions\CurriculumDeliveryException;
 use App\Domain\CurriculumDelivery\Infrastructure\CurriculumDelivery;
 use App\Domain\Syllabus\Infrastructure\SyllabusUnit;
 use App\Http\Controllers\Controller;
-use App\Support\Authorization\AuthorizesCapability;
-use App\Support\Authorization\CapabilityResolver;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Authorization\Campus\CampusScope;
+use App\Support\Authorization\Campus\CampusScopeResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -55,15 +57,20 @@ use Inertia\Response;
  * Deliberately absent: Student roster, attendance entry, timetable
  * editing, marks/grading, lesson planner, files/resources/attachments,
  * teacher portal, and any Student- or Guardian-facing view.
+ *
+ * ORG.7D-1 (ADR 0076 §37): `curriculum.delivery.view`/`.manage` are
+ * Campus-adopted. Offerings, Sections, Units and deliveries come only
+ * through CurriculumDeliveryAccess within the actor's CampusScope (out of
+ * scope = 404), and the write service receives its Campus write guard.
  */
 class CurriculumDeliveryController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
-    public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities): Response
+    public function index(Request $request, TenantContext $context, CampusScopeResolver $scopes, CurriculumDeliveryAccess $access): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('curriculum.delivery.view', $school);
+        $scope = $this->authorizeCampusScope('curriculum.delivery.view', $school);
 
         $validated = $request->validate([
             'academic_year_id' => ['sometimes', 'uuid'],
@@ -74,7 +81,7 @@ class CurriculumDeliveryController extends Controller
         $academicYearId = $validated['academic_year_id']
             ?? AcademicYear::query()->where('school_id', $school->id)->where('status', 'active')->value('id');
 
-        $offerings = SubjectOffering::query()
+        $offerings = $access->offerings($scope)
             ->with(['subject', 'gradeLevel', 'campus'])
             ->when($academicYearId, fn ($q) => $q->where('academic_year_id', $academicYearId))
             ->where('status', 'active')
@@ -95,7 +102,7 @@ class CurriculumDeliveryController extends Controller
             // AcademicYear/Campus/GradeLevel context -- the same triple
             // the composite foreign keys pin structurally, so the page
             // can only offer combinations the database would accept.
-            $sections = Section::query()
+            $sections = $access->sections($scope)
                 ->where('academic_year_id', $selectedOffering->academic_year_id)
                 ->where('campus_id', $selectedOffering->campus_id)
                 ->where('grade_level_id', $selectedOffering->grade_level_id)
@@ -108,7 +115,7 @@ class CurriculumDeliveryController extends Controller
                 : null;
 
             if ($selectedSectionId !== null) {
-                $rows = $this->unitRows($selectedOffering, $selectedSectionId);
+                $rows = $this->unitRows($access, $scope, $selectedOffering, $selectedSectionId);
             }
         }
 
@@ -135,14 +142,14 @@ class CurriculumDeliveryController extends Controller
                 'sectionId' => $selectedSectionId ?? '',
             ],
             'rows' => $rows,
-            'canManage' => $capabilities->canInSchool($context->actor(), 'curriculum.delivery.manage', $school),
+            'canManage' => ! $scopes->campusScope($context->actor(), 'curriculum.delivery.manage', $school)->isNone(),
         ]);
     }
 
-    public function store(Request $request, TenantContext $context, CurriculumDeliveryService $service): RedirectResponse
+    public function store(Request $request, TenantContext $context, CurriculumDeliveryService $service, CurriculumDeliveryAccess $access): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('curriculum.delivery.manage', $school);
+        $scope = $this->authorizeCampusScope('curriculum.delivery.manage', $school);
 
         $validated = $request->validate([
             'subject_offering_id' => ['required', 'uuid'],
@@ -160,11 +167,12 @@ class CurriculumDeliveryController extends Controller
         try {
             $service->start(
                 $school,
-                $validated['subject_offering_id'],
-                $validated['section_id'],
-                $validated['syllabus_unit_id'],
+                $access->offering($scope, $validated['subject_offering_id'])->id,
+                $access->section($scope, $validated['section_id'])->id,
+                $access->unit($scope, $validated['syllabus_unit_id'])->id,
                 $validated['started_on'],
                 $request->user(),
+                $access->writeGuard($scope),
             );
         } catch (CurriculumDeliveryException $e) {
             throw ValidationException::withMessages(['started_on' => $e->getMessage()]);
@@ -178,9 +186,10 @@ class CurriculumDeliveryController extends Controller
         TenantContext $context,
         string $curriculumDelivery,
         CurriculumDeliveryService $service,
+        CurriculumDeliveryAccess $access,
     ): RedirectResponse {
         $school = $context->requireSchool();
-        $this->authorizeCapability('curriculum.delivery.manage', $school);
+        $scope = $this->authorizeCampusScope('curriculum.delivery.manage', $school);
 
         $validated = $request->validate([
             'started_on' => ['sometimes', 'date_format:Y-m-d'],
@@ -190,10 +199,11 @@ class CurriculumDeliveryController extends Controller
         try {
             $service->correctDates(
                 $school,
-                $curriculumDelivery,
+                $access->delivery($scope, $curriculumDelivery)->id,
                 $validated['started_on'] ?? null,
                 $validated['completed_on'] ?? null,
                 $request->user(),
+                $access->writeGuard($scope),
             );
         } catch (CurriculumDeliveryException $e) {
             throw ValidationException::withMessages(['started_on' => $e->getMessage()]);
@@ -207,9 +217,10 @@ class CurriculumDeliveryController extends Controller
         TenantContext $context,
         string $curriculumDelivery,
         CurriculumDeliveryService $service,
+        CurriculumDeliveryAccess $access,
     ): RedirectResponse {
         $school = $context->requireSchool();
-        $this->authorizeCapability('curriculum.delivery.manage', $school);
+        $scope = $this->authorizeCampusScope('curriculum.delivery.manage', $school);
 
         $validated = $request->validate([
             'expected_status' => ['required', Rule::in(CurriculumDelivery::STATUSES)],
@@ -220,11 +231,12 @@ class CurriculumDeliveryController extends Controller
         try {
             $service->transition(
                 $school,
-                $curriculumDelivery,
+                $access->delivery($scope, $curriculumDelivery)->id,
                 $validated['expected_status'],
                 $validated['new_status'],
                 $validated['completed_on'] ?? null,
                 $request->user(),
+                $access->writeGuard($scope),
             );
         } catch (CurriculumDeliveryException $e) {
             // Includes the compare-and-swap refusal: a stale tab gets a
@@ -243,7 +255,7 @@ class CurriculumDeliveryController extends Controller
      *
      * @return list<array<string, mixed>>
      */
-    private function unitRows(SubjectOffering $offering, string $sectionId): array
+    private function unitRows(CurriculumDeliveryAccess $access, CampusScope $scope, SubjectOffering $offering, string $sectionId): array
     {
         $units = SyllabusUnit::query()
             ->where('subject_offering_id', $offering->id)
@@ -255,7 +267,7 @@ class CurriculumDeliveryController extends Controller
         // Keyed as a plain array so "there is no delivery for this
         // unit" is an honest null rather than a Collection lookup whose
         // absent case has to be asserted about.
-        $deliveries = CurriculumDelivery::query()
+        $deliveries = $access->deliveries($scope)
             ->where('subject_offering_id', $offering->id)
             ->where('section_id', $sectionId)
             ->get()

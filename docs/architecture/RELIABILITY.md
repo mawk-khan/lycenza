@@ -102,6 +102,16 @@ request/correlation/trace IDs, the Authorization token, timestamps —
 transport noise that legitimately differs between two retries of the
 same logical request.
 
+**Campus-floored routes (ORG.7D-1, ADR 0076 §37.11):**
+- On a route with a `capability:x,campus` floor, the fingerprint also
+  includes the actor's CURRENT CampusScope for that key (whole School, or
+  the sorted active Campus ids).
+- That floor only proves the key is held somewhere, so a replay after the
+  scope changed (a Campus grant revoked, a Campus inactivated) is a 409
+  `IDEMPOTENCY_KEY_CONFLICT`. The stored response is never served to a
+  scope it was not written for (rule 32).
+- Every other route's fingerprint is unchanged.
+
 Canonicalization is JSON-object-key sorting only (recursive `ksort`):
 logically-equivalent payloads with different key ordering fingerprint
 identically; array/list order is preserved because it is semantically

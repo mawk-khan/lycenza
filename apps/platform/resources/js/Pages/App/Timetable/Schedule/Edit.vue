@@ -107,7 +107,7 @@ const roomPicker = makePicker<RoomOption>(
     props.entry.roomCode ? `${props.entry.roomCode} — ${props.entry.roomName ?? ''}` : '',
 );
 const periodPicker = makePicker<PeriodOption>(
-    '/app/timetable-schedule/search/periods',
+    '/app/timetable-schedule/search/schedule-periods',
     props.entry.periodCode
         ? `${props.entry.periodCode} (${props.entry.periodStartTime}–${props.entry.periodEndTime})`
         : '',

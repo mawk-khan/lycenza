@@ -2,12 +2,12 @@
 
 namespace App\Domain\CurriculumDelivery\Http\Controllers;
 
-use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
+use App\Domain\CurriculumDelivery\Application\CurriculumDeliveryAccess;
 use App\Domain\CurriculumDelivery\Application\CurriculumDeliveryService;
 use App\Domain\CurriculumDelivery\Infrastructure\CurriculumDelivery;
 use App\Http\Controllers\Controller;
 use App\Models\School;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -53,26 +53,33 @@ use Illuminate\Validation\Rule;
  * may introduce one, and the presented projection deliberately omits
  * the four structural integrity pins -- they are database correctness
  * machinery, not client data.
+ *
+ * ORG.7D-1 (ADR 0076 §37): `curriculum.delivery.view`/`.manage` are
+ * Campus-adopted. Every action resolves the actor's CampusScope; the
+ * Offering, Section, Syllabus Unit and delivery are resolved only through
+ * CurriculumDeliveryAccess (out of scope = 404), and the write service
+ * receives its Campus write guard.
  */
 class CurriculumDeliveryController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
-    public function index(Request $request, School $school, string $subjectOffering): JsonResponse
+    public function index(Request $request, School $school, string $subjectOffering, CurriculumDeliveryAccess $access): JsonResponse
     {
-        $this->authorizeCapability('curriculum.delivery.view', $school);
+        $scope = $this->authorizeCampusScope('curriculum.delivery.view', $school);
 
-        // Resolved through the tenant-scoped query (SchoolScope + RLS),
-        // so another School's Offering id is a clean 404 rather than an
-        // empty list that silently implies it exists.
-        $offering = SubjectOffering::query()->findOrFail($subjectOffering);
+        // Resolved through the tenant-scoped query (SchoolScope + RLS) and,
+        // ORG.7D-1, the actor's CampusScope, so another School's -- or an
+        // out-of-scope Campus's -- Offering id is a clean 404 rather than
+        // an empty list that silently implies it exists.
+        $offering = $access->offering($scope, $subjectOffering);
 
         $validated = $request->validate([
             'section_id' => ['sometimes', 'uuid'],
             'status' => ['sometimes', Rule::in(CurriculumDelivery::STATUSES)],
         ]);
 
-        $deliveries = CurriculumDelivery::query()
+        $deliveries = $access->deliveries($scope)
             // Ordered by the CATALOGUE's own teaching order, not by
             // anything stored here -- `syllabus_units.sequence` then
             // upper(code), the identical deterministic ordering the
@@ -101,10 +108,11 @@ class CurriculumDeliveryController extends Controller
         School $school,
         string $subjectOffering,
         CurriculumDeliveryService $service,
+        CurriculumDeliveryAccess $access,
     ): JsonResponse {
-        $this->authorizeCapability('curriculum.delivery.manage', $school);
+        $scope = $this->authorizeCampusScope('curriculum.delivery.manage', $school);
 
-        $offering = SubjectOffering::query()->findOrFail($subjectOffering);
+        $offering = $access->offering($scope, $subjectOffering);
 
         // Only the three facts a user actually chooses. The Offering is
         // the route's, and every structural pin is derived server-side
@@ -119,20 +127,21 @@ class CurriculumDeliveryController extends Controller
         $delivery = $service->start(
             $school,
             $offering->id,
-            $validated['section_id'],
-            $validated['syllabus_unit_id'],
+            $access->section($scope, $validated['section_id'])->id,
+            $access->unit($scope, $validated['syllabus_unit_id'])->id,
             $validated['started_on'],
             $request->user(),
+            $access->writeGuard($scope),
         );
 
         return response()->json(['data' => $this->present($delivery)], 201);
     }
 
-    public function show(School $school, string $curriculumDelivery): JsonResponse
+    public function show(School $school, string $curriculumDelivery, CurriculumDeliveryAccess $access): JsonResponse
     {
-        $this->authorizeCapability('curriculum.delivery.view', $school);
+        $scope = $this->authorizeCampusScope('curriculum.delivery.view', $school);
 
-        $delivery = CurriculumDelivery::query()->findOrFail($curriculumDelivery);
+        $delivery = $access->delivery($scope, $curriculumDelivery);
 
         return response()->json(['data' => $this->present($delivery)]);
     }
@@ -147,8 +156,9 @@ class CurriculumDeliveryController extends Controller
         School $school,
         string $curriculumDelivery,
         CurriculumDeliveryService $service,
+        CurriculumDeliveryAccess $access,
     ): JsonResponse {
-        $this->authorizeCapability('curriculum.delivery.manage', $school);
+        $scope = $this->authorizeCampusScope('curriculum.delivery.manage', $school);
 
         $validated = $request->validate([
             'started_on' => ['sometimes', 'date_format:Y-m-d'],
@@ -157,10 +167,11 @@ class CurriculumDeliveryController extends Controller
 
         $delivery = $service->correctDates(
             $school,
-            $curriculumDelivery,
+            $access->delivery($scope, $curriculumDelivery)->id,
             $validated['started_on'] ?? null,
             $validated['completed_on'] ?? null,
             $request->user(),
+            $access->writeGuard($scope),
         );
 
         return response()->json(['data' => $this->present($delivery)]);
@@ -171,8 +182,9 @@ class CurriculumDeliveryController extends Controller
         School $school,
         string $curriculumDelivery,
         CurriculumDeliveryService $service,
+        CurriculumDeliveryAccess $access,
     ): JsonResponse {
-        $this->authorizeCapability('curriculum.delivery.manage', $school);
+        $scope = $this->authorizeCampusScope('curriculum.delivery.manage', $school);
 
         $validated = $request->validate([
             'expected_status' => ['required', Rule::in(CurriculumDelivery::STATUSES)],
@@ -182,11 +194,12 @@ class CurriculumDeliveryController extends Controller
 
         $delivery = $service->transition(
             $school,
-            $curriculumDelivery,
+            $access->delivery($scope, $curriculumDelivery)->id,
             $validated['expected_status'],
             $validated['new_status'],
             $validated['completed_on'] ?? null,
             $request->user(),
+            $access->writeGuard($scope),
         );
 
         return response()->json(['data' => $this->present($delivery)]);

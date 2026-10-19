@@ -26,7 +26,14 @@ use Illuminate\Http\Request;
  */
 class RequestFingerprint
 {
-    public function compute(Request $request, string $routeAction, string $schoolId, string $actorType, string $actorId): string
+    /**
+     * ORG.7D-1 (ADR 0076 §37): $authority, when given, binds the actor's
+     * current authority (their CampusScope on a Campus-floored route) into
+     * the fingerprint, so a replay under a different scope is a key
+     * conflict -- never the stored response. Omitted (null), the fingerprint
+     * is exactly what it was before.
+     */
+    public function compute(Request $request, string $routeAction, string $schoolId, string $actorType, string $actorId, ?string $authority = null): string
     {
         $payload = [
             'method' => strtoupper($request->method()),
@@ -36,6 +43,9 @@ class RequestFingerprint
             'route_params' => $this->normalizedRouteParams($request),
             'body' => $this->canonicalize($this->jsonBody($request)),
         ];
+        if ($authority !== null) {
+            $payload['authority'] = $authority;
+        }
 
         return hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR));
     }

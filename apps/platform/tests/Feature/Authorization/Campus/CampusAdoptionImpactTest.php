@@ -23,11 +23,19 @@ use Tests\TestCase;
  */
 class CampusAdoptionImpactTest extends TestCase
 {
-    /** System School role template => the adopted keys it holds (ORG.7A/7B baseline). */
+    /**
+     * System School role template => the adopted keys it holds (ORG.7A/7B
+     * baseline; ORG.7D-1 D1-B: principal and school_admin gain
+     * timetable.schedule.view/.manage, D1-C attendance.view/.manage, D1-D
+     * curriculum.delivery.view/.manage, D1-E lms.content/.assignments
+     * view/manage, D1-F examinations.papers.view/.manage -- only principal
+     * is Campus-scopable; the teacher role's *.teacher keys and every
+     * examinations.marks.* key are not adopted).
+     */
     private const HOLDERS = [
         'front_office' => ['visitor.visits.manage', 'visitor.visits.view'],
-        'principal' => ['inventory.stock.manage', 'inventory.stock.view', 'visitor.visits.manage', 'visitor.visits.view'],
-        'school_admin' => ['inventory.stock.manage', 'inventory.stock.view', 'visitor.visits.manage', 'visitor.visits.view'],
+        'principal' => ['attendance.manage', 'attendance.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'examinations.papers.manage', 'examinations.papers.view', 'inventory.stock.manage', 'inventory.stock.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'visitor.visits.manage', 'visitor.visits.view'],
+        'school_admin' => ['attendance.manage', 'attendance.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'examinations.papers.manage', 'examinations.papers.view', 'inventory.stock.manage', 'inventory.stock.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'visitor.visits.manage', 'visitor.visits.view'],
         'stores_officer' => ['inventory.stock.manage', 'inventory.stock.view'],
     ];
 
@@ -42,6 +50,20 @@ class CampusAdoptionImpactTest extends TestCase
 
     /** Owner-approved high-risk adoptions (none yet). */
     private const OWNER_APPROVED_HIGH_RISK = [];
+
+    /**
+     * ORG.7D-1 (ADR 0076 §37, D1-3, D1-10, D1-6): never adoptable in this
+     * wave -- Student marks and results, School-wide academic
+     * configuration, and the owned teacher keys (TeachingOwnership-scoped).
+     */
+    private const PROHIBITED_PREFIXES = [
+        // Marks / results (D1-10): no prefix of these may be adopted.
+        'examinations.marks.', 'examinations.results.', 'examinations.report_cards.', 'results.', 'report_cards.', 'gradebook.',
+        // School-wide academic configuration (D1-3, §9, §20).
+        'academics.', 'syllabus.', 'timetable.periods.', 'examinations.definitions.', 'examinations.grade_scales.', 'school.campuses.',
+        // Student / SIS (ORG.7D-2).
+        'students.', 'enrollments.', 'guardians.', 'admissions.',
+    ];
 
     #[Test]
     public function the_role_templates_holding_adopted_keys_are_reported(): void
@@ -68,6 +90,10 @@ class CampusAdoptionImpactTest extends TestCase
     {
         foreach (CampusScopeCatalogue::capabilities() as $capability) {
             $this->assertStringStartsNotWith('examinations.marks.', $capability, 'Marks are not authorized for Campus adoption (D0-10).');
+            foreach (self::PROHIBITED_PREFIXES as $prefix) {
+                $this->assertStringStartsNotWith($prefix, $capability, "{$capability} belongs to a family ORG.7D-1 keeps whole-School or out of Campus scope (ADR 0076 §37).");
+            }
+            $this->assertStringEndsNotWith('.teacher', $capability, 'Teacher keys stay TeachingOwnership-scoped; a Campus scope never replaces ownership (D1-6).');
             $highRisk = str_ends_with($capability, '.approve');
             foreach (self::HIGH_RISK as $prefix) {
                 $highRisk = $highRisk || str_starts_with($capability, $prefix);

@@ -45,6 +45,10 @@ function changeCampus() {
 const campusName = computed(
     () => props.campuses.find((c) => c.id === props.selectedCampusId)?.name ?? '',
 );
+// ORG.7D-1: an inactive Campus takes no new Room (the service refuses it too).
+const campusActive = computed(
+    () => props.campuses.find((c) => c.id === props.selectedCampusId)?.status === 'active',
+);
 
 interface RoomForm {
     name: string;
@@ -235,12 +239,19 @@ function setStatus(room: Room, status: 'active' | 'inactive') {
                 </form>
             </section>
 
+            <p
+                v-if="props.canManage && props.selectedCampusId && !campusActive"
+                class="mt-8 text-sm text-slate-600"
+            >
+                {{ campusName }} is inactive, so it takes no new Rooms.
+            </p>
             <section
-                v-if="props.canManage && props.selectedCampusId"
+                v-else-if="props.canManage && props.selectedCampusId"
                 class="mt-8"
                 aria-labelledby="add-room-heading"
             >
                 <h2 id="add-room-heading" class="font-semibold">Add a Room to {{ campusName }}</h2>
+                <ErrorSummary :errors="create.errors" :fields="['campus_id']" />
                 <form class="mt-3 grid gap-3 sm:grid-cols-2" @submit.prevent="submitCreate">
                     <TextField
                         id="room-name"

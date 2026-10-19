@@ -21,19 +21,26 @@ trait AuthorizesCampusScope
     protected function authorizeCampusScope(string $capability, ?School $school = null): CampusScope
     {
         $school ??= app(TenantContext::class)->requireSchool();
-        Gate::authorize('campus-capability', [$capability, $school]);
-
-        /** @var User $user the Gate refuses a guest */
         $user = auth()->user();
+        // ORG.7D-1: the scope is resolved once. Only "none" goes through the
+        // `campus-capability` Gate, which then refuses exactly as before (a
+        // guest included); a held scope is what the Gate would have allowed.
+        $scope = $user instanceof User ? app(CampusScopeResolver::class)->campusScope($user, $capability, $school) : CampusScope::none();
+        if ($scope->isNone()) {
+            Gate::authorize('campus-capability', [$capability, $school]);
+        }
 
-        return app(CampusScopeResolver::class)->campusScope($user, $capability, $school);
+        return $scope;
     }
 
     /** For an Application service called with an explicit actor (tests, jobs). */
     protected function authorizeCampusScopeFor(User $actor, string $capability, School $school): CampusScope
     {
-        Gate::forUser($actor)->authorize('campus-capability', [$capability, $school]);
+        $scope = app(CampusScopeResolver::class)->campusScope($actor, $capability, $school);
+        if ($scope->isNone()) {
+            Gate::forUser($actor)->authorize('campus-capability', [$capability, $school]);
+        }
 
-        return app(CampusScopeResolver::class)->campusScope($actor, $capability, $school);
+        return $scope;
     }
 }

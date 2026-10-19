@@ -8,12 +8,15 @@ use App\Domain\AcademicStructure\Infrastructure\Room;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\HR\Infrastructure\Employee;
+use App\Domain\Timetable\Application\TimetableScheduleAccess;
 use App\Domain\Timetable\Application\TimetableScheduleService;
 use App\Domain\Timetable\Infrastructure\TimetableEntry;
 use App\Domain\Timetable\Infrastructure\TimetablePeriod;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\AuthorizesCapability;
-use App\Support\Authorization\CapabilityResolver;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Authorization\Campus\CampusScope;
+use App\Support\Authorization\Campus\CampusScopeResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -37,18 +40,27 @@ use Inertia\Response;
  * touches an Employee (teacher) projects ONLY `id`/`fullName` -- never
  * `work_email`/`work_phone`/any other HR field. There is no Student
  * roster anywhere in this data model.
+ *
+ * ORG.7D-1 (ADR 0076 §37): `timetable.schedule.*` are Campus-adopted. Every
+ * action resolves the actor's CampusScope and reads or targets entries,
+ * Offerings, Sections and Rooms only through TimetableScheduleAccess (out
+ * of scope = 404); the filter choices come from in-scope classes only. The
+ * teacher and bell-schedule lookups are the declared School-wide shared
+ * lookups (CampusScopeCatalogue::DOMAINS). `search/periods` stays on
+ * whole-School `timetable.periods.view`.
  */
 class TimetableEntryController extends Controller
 {
+    use AuthorizesCampusScope;
     use AuthorizesCapability;
 
     /** LC-2: the list's status filter. */
     private const STATUS_FILTERS = ['active', 'inactive', 'all'];
 
-    public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities): Response
+    public function index(Request $request, TenantContext $context, CampusScopeResolver $scopes, TimetableScheduleAccess $access): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('timetable.schedule.view', $school);
+        $scope = $this->authorizeCampusScope('timetable.schedule.view', $school);
 
         $validated = $request->validate([
             'section_id' => ['sometimes', 'uuid'],
@@ -65,7 +77,7 @@ class TimetableEntryController extends Controller
         $yearId = $validated['academic_year_id'] ?? $defaultYear?->id;
         $status = $validated['status'] ?? 'active';
 
-        $query = TimetableEntry::query()
+        $query = $access->entries($scope)
             ->with(['subjectOffering.subject', 'section.gradeLevel', 'teacher', 'room', 'period'])
             ->forAcademicYear($yearId)
             ->when($status !== 'all', fn ($q) => $q->where('status', $status))
@@ -89,10 +101,10 @@ class TimetableEntryController extends Controller
                 'academicYearId' => $yearId ?? '',
                 'status' => $status,
             ],
-            'filterOptions' => $this->filterOptions($school->id, $validated['section_id'] ?? null, $yearId, $status) + [
+            'filterOptions' => $this->filterOptions($access, $scope, $school->id, $validated['section_id'] ?? null, $yearId, $status) + [
                 'academicYears' => $years->map(fn (AcademicYear $y) => ['id' => $y->id, 'label' => "{$y->name} ({$y->status})"])->values()->all(),
             ],
-            'canManage' => $capabilities->canInSchool($context->actor(), 'timetable.schedule.manage', $school),
+            'canManage' => ! $scopes->campusScope($context->actor(), 'timetable.schedule.manage', $school)->isNone(),
         ]);
     }
 
@@ -104,17 +116,18 @@ class TimetableEntryController extends Controller
      * academic year, and following the status filter (inactive / all offer
      * the Sections and teachers of the classes that filter shows). Teachers narrow to the
      * chosen Section. The request contract (UUID section_id / teacher_id,
-     * unknown or foreign ids match nothing) is unchanged.
+     * unknown or foreign ids match nothing) is unchanged. ORG.7D-1: only the
+     * classes within the actor's CampusScope.
      *
      * @return array{sections: list<array{id: string, label: string}>, teachers: list<array{id: string, label: string}>}
      */
-    private function filterOptions(string $schoolId, ?string $sectionId, ?string $yearId, string $status): array
+    private function filterOptions(TimetableScheduleAccess $access, CampusScope $scope, string $schoolId, ?string $sectionId, ?string $yearId, string $status): array
     {
-        $scheduled = fn () => TimetableEntry::query()->where('school_id', $schoolId)->forAcademicYear($yearId)
+        $scheduled = fn () => $access->entries($scope)->where('school_id', $schoolId)->forAcademicYear($yearId)
             ->when($status !== 'all', fn ($q) => $q->where('status', $status));
 
         return [
-            'sections' => Section::query()->where('school_id', $schoolId)
+            'sections' => $access->sections($scope)->where('school_id', $schoolId)
                 ->whereIn('id', $scheduled()->select('section_id'))
                 ->with(['academicYear', 'gradeLevel'])->orderByRaw('upper(code)')->get()
                 // Section codes are unique only within a grade, so the label names
@@ -135,17 +148,17 @@ class TimetableEntryController extends Controller
     public function create(TenantContext $context): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('timetable.schedule.manage', $school);
+        $this->authorizeCampusScope('timetable.schedule.manage', $school);
 
         return Inertia::render('App/Timetable/Schedule/Create');
     }
 
-    public function store(Request $request, TenantContext $context, TimetableScheduleService $service): RedirectResponse
+    public function store(Request $request, TenantContext $context, TimetableScheduleService $service, TimetableScheduleAccess $access): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('timetable.schedule.manage', $school);
+        $scope = $this->authorizeCampusScope('timetable.schedule.manage', $school);
 
-        [$offering, $section, $teacher, $room, $period, $dayOfWeek] = $this->resolveEntryInput($request);
+        [$offering, $section, $teacher, $room, $period, $dayOfWeek] = $this->resolveEntryInput($request, $access, $scope);
 
         // LC-2: a clash or eligibility refusal reaches the page through the
         // LC-1 renderer (the layout's refusal banner). It used to be carried
@@ -161,23 +174,23 @@ class TimetableEntryController extends Controller
      * stays inactive and the page says why (WebDomainRefusalResponder).
      * Stays on the list the operator was looking at.
      */
-    public function activate(TenantContext $context, TimetableScheduleService $service, string $timetableEntry): RedirectResponse
+    public function activate(TenantContext $context, TimetableScheduleService $service, TimetableScheduleAccess $access, string $timetableEntry): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('timetable.schedule.manage', $school);
+        $scope = $this->authorizeCampusScope('timetable.schedule.manage', $school);
 
-        $entry = TimetableEntry::query()->findOrFail($timetableEntry);
+        $entry = $access->entry($scope, $timetableEntry);
         $service->activate($entry, $context->actor());
 
         return back()->with('flash', 'Class activated.');
     }
 
-    public function deactivate(TenantContext $context, TimetableScheduleService $service, string $timetableEntry): RedirectResponse
+    public function deactivate(TenantContext $context, TimetableScheduleService $service, TimetableScheduleAccess $access, string $timetableEntry): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('timetable.schedule.manage', $school);
+        $scope = $this->authorizeCampusScope('timetable.schedule.manage', $school);
 
-        $entry = TimetableEntry::query()->findOrFail($timetableEntry);
+        $entry = $access->entry($scope, $timetableEntry);
         $service->deactivate($entry, $context->actor());
 
         return back()->with('flash', 'Class deactivated.');
@@ -190,14 +203,13 @@ class TimetableEntryController extends Controller
      * this one). Same service and validation as creating one, scoped to the
      * class's own academic year; a collision is refused and nothing changes.
      */
-    public function edit(TenantContext $context, string $timetableEntry): Response
+    public function edit(TenantContext $context, TimetableScheduleAccess $access, string $timetableEntry): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('timetable.schedule.manage', $school);
+        $scope = $this->authorizeCampusScope('timetable.schedule.manage', $school);
 
-        $entry = TimetableEntry::query()
-            ->with(['subjectOffering.subject', 'subjectOffering.academicYear', 'section.gradeLevel', 'teacher', 'room', 'period'])
-            ->findOrFail($timetableEntry);
+        $entry = $access->entry($scope, $timetableEntry)
+            ->load(['subjectOffering.subject', 'subjectOffering.academicYear', 'section.gradeLevel', 'teacher', 'room', 'period']);
 
         return Inertia::render('App/Timetable/Schedule/Edit', [
             'entry' => $this->present($entry) + [
@@ -208,12 +220,12 @@ class TimetableEntryController extends Controller
         ]);
     }
 
-    public function update(Request $request, TenantContext $context, TimetableScheduleService $service, string $timetableEntry): RedirectResponse
+    public function update(Request $request, TenantContext $context, TimetableScheduleService $service, TimetableScheduleAccess $access, string $timetableEntry): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('timetable.schedule.manage', $school);
+        $scope = $this->authorizeCampusScope('timetable.schedule.manage', $school);
 
-        $entry = TimetableEntry::query()->findOrFail($timetableEntry);
+        $entry = $access->entry($scope, $timetableEntry);
         $validated = $request->validate([
             'teacher_id' => ['required', 'uuid'],
             'room_id' => ['sometimes', 'nullable', 'uuid'],
@@ -226,7 +238,7 @@ class TimetableEntryController extends Controller
             $entry->subjectOffering()->firstOrFail(),
             $entry->section()->firstOrFail(),
             Employee::query()->findOrFail($validated['teacher_id']),
-            isset($validated['room_id']) ? Room::query()->findOrFail($validated['room_id']) : null,
+            isset($validated['room_id']) ? $access->room($scope, $validated['room_id']) : null,
             TimetablePeriod::query()->findOrFail($validated['period_id']),
             (int) $validated['day_of_week'],
             $context->actor(),
@@ -245,14 +257,14 @@ class TimetableEntryController extends Controller
     // BEFORE running its query. Used only by Schedule/Create.vue's
     // pickers.
 
-    public function searchSubjectOfferings(Request $request, TenantContext $context): JsonResponse
+    public function searchSubjectOfferings(Request $request, TenantContext $context, TimetableScheduleAccess $access): JsonResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('timetable.schedule.manage', $school);
+        $scope = $this->authorizeCampusScope('timetable.schedule.manage', $school);
 
         $validated = $request->validate(['q' => ['sometimes', 'string', 'max:255']]);
 
-        $query = SubjectOffering::query()
+        $query = $access->offerings($scope)
             ->with(['subject', 'gradeLevel', 'campus', 'academicYear'])
             ->where('status', 'active')
             ->where('is_required', true);
@@ -274,13 +286,13 @@ class TimetableEntryController extends Controller
         ])->all()]);
     }
 
-    public function searchSections(Request $request, TenantContext $context): JsonResponse
+    public function searchSections(Request $request, TenantContext $context, TimetableScheduleAccess $access): JsonResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('timetable.schedule.manage', $school);
+        $scope = $this->authorizeCampusScope('timetable.schedule.manage', $school);
 
         $validated = $request->validate(['q' => ['sometimes', 'string', 'max:255']]);
-        $query = Section::query()->where('status', 'active')->with(['gradeLevel', 'academicYear'])->orderBy('code');
+        $query = $access->sections($scope)->where('status', 'active')->with(['gradeLevel', 'academicYear'])->orderBy('code');
 
         if (isset($validated['q']) && trim($validated['q']) !== '') {
             $term = '%'.$validated['q'].'%';
@@ -302,12 +314,12 @@ class TimetableEntryController extends Controller
 
     /**
      * Teacher lookup -- projects ONLY `id`/`fullName` (this class's own
-     * docblock).
+     * docblock). ORG.7D-1: a declared School-wide shared lookup.
      */
     public function searchTeachers(Request $request, TenantContext $context): JsonResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('timetable.schedule.manage', $school);
+        $this->authorizeCampusScope('timetable.schedule.manage', $school);
 
         $validated = $request->validate(['q' => ['sometimes', 'string', 'max:255']]);
         $query = Employee::query()->where('record_status', 'active')->orderBy('full_name');
@@ -325,13 +337,13 @@ class TimetableEntryController extends Controller
         ])->all()]);
     }
 
-    public function searchRooms(Request $request, TenantContext $context): JsonResponse
+    public function searchRooms(Request $request, TenantContext $context, TimetableScheduleAccess $access): JsonResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('timetable.schedule.manage', $school);
+        $scope = $this->authorizeCampusScope('timetable.schedule.manage', $school);
 
         $validated = $request->validate(['q' => ['sometimes', 'string', 'max:255']]);
-        $query = Room::query()->where('status', 'active')->orderBy('code');
+        $query = $access->rooms($scope)->where('status', 'active')->orderBy('code');
 
         if (isset($validated['q']) && trim($validated['q']) !== '') {
             $term = '%'.$validated['q'].'%';
@@ -359,6 +371,27 @@ class TimetableEntryController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability('timetable.periods.view', $school);
 
+        return $this->periodLookup($request);
+    }
+
+    /**
+     * ORG.7D-1 (ADR 0076 §37): the scheduling form's bell-schedule lookup,
+     * under the Campus-adopted `timetable.schedule.manage` -- a declared
+     * School-wide shared lookup, so a Campus-scoped scheduler can pick a
+     * Period (Schedule/Create.vue and Edit.vue use it). The Period catalogue
+     * stays whole-School configuration.
+     */
+    public function searchSchedulePeriods(Request $request, TenantContext $context): JsonResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCampusScope('timetable.schedule.manage', $school);
+
+        return $this->periodLookup($request);
+    }
+
+    /** Active Periods of the School-wide bell schedule: code, name and times only. */
+    private function periodLookup(Request $request): JsonResponse
+    {
         $validated = $request->validate(['q' => ['sometimes', 'string', 'max:255']]);
         $query = TimetablePeriod::query()->where('status', 'active')->orderBy('sort_order')->orderBy('code');
 
@@ -379,9 +412,13 @@ class TimetableEntryController extends Controller
     }
 
     /**
+     * ORG.7D-1: the Offering, Section and Room are resolved within the
+     * actor's CampusScope (out of scope = 404); the teacher and Period are
+     * School-wide.
+     *
      * @return array{0: SubjectOffering, 1: Section, 2: Employee, 3: ?Room, 4: TimetablePeriod, 5: int}
      */
-    private function resolveEntryInput(Request $request): array
+    private function resolveEntryInput(Request $request, TimetableScheduleAccess $access, CampusScope $scope): array
     {
         $validated = $request->validate([
             'subject_offering_id' => ['required', 'uuid'],
@@ -392,10 +429,10 @@ class TimetableEntryController extends Controller
             'day_of_week' => ['required', 'integer', 'between:1,7'],
         ]);
 
-        $offering = SubjectOffering::query()->findOrFail($validated['subject_offering_id']);
-        $section = Section::query()->findOrFail($validated['section_id']);
+        $offering = $access->offering($scope, $validated['subject_offering_id']);
+        $section = $access->section($scope, $validated['section_id']);
         $teacher = Employee::query()->findOrFail($validated['teacher_id']);
-        $room = isset($validated['room_id']) ? Room::query()->findOrFail($validated['room_id']) : null;
+        $room = isset($validated['room_id']) ? $access->room($scope, $validated['room_id']) : null;
         $period = TimetablePeriod::query()->findOrFail($validated['period_id']);
 
         return [$offering, $section, $teacher, $room, $period, (int) $validated['day_of_week']];

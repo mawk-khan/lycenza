@@ -34,6 +34,8 @@ class SectionAdministrationService
 
     private const string DUPLICATE_CODE = 'A Section with this code already exists for this Grade, Campus, and Academic Year.';
 
+    public const string INACTIVE_CAMPUS = 'This Section is on an inactive Campus and cannot be reactivated.';
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
@@ -107,6 +109,14 @@ class SectionAdministrationService
             $before = $section->only(array_keys($validated));
 
             $this->writeUnique(fn () => DB::transaction(function () use ($school, $section, $validated, $before, $actor): void {
+                // ORG.7D-1 D1-2 (ADR 0076 §37): reactivating puts the Section
+                // back into operation, so its Campus must be active. Data
+                // validity only; an already-active Section is unaffected.
+                if (($validated['status'] ?? null) === 'active' && $section->status !== 'active'
+                    && $this->activeCampus->find($school, $section->campus_id) === null) {
+                    throw ValidationException::withMessages(['status' => [self::INACTIVE_CAMPUS]]);
+                }
+
                 $section->update($validated);
 
                 $this->audit->school($school, 'section.updated', actor: $actor, subject: $section, metadata: [

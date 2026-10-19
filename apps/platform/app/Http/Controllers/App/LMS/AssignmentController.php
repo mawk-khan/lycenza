@@ -6,10 +6,11 @@ use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\LMS\Application\AssignmentService;
 use App\Domain\LMS\Application\Exceptions\LmsException;
+use App\Domain\LMS\Application\LmsAdministrationAccess;
 use App\Domain\LMS\Infrastructure\Assignment;
 use App\Http\Controllers\Controller;
-use App\Support\Authorization\AuthorizesCapability;
-use App\Support\Authorization\CapabilityResolver;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Authorization\Campus\CampusScopeResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,12 +34,12 @@ use Inertia\Response;
  */
 class AssignmentController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
-    public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities): Response
+    public function index(Request $request, TenantContext $context, CampusScopeResolver $scopes, LmsAdministrationAccess $access): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('lms.assignments.view', $school);
+        $scope = $this->authorizeCampusScope('lms.assignments.view', $school);
 
         $validated = $request->validate([
             'academic_year_id' => ['sometimes', 'uuid'],
@@ -48,7 +49,7 @@ class AssignmentController extends Controller
         $academicYearId = $validated['academic_year_id']
             ?? AcademicYear::query()->where('school_id', $school->id)->where('status', 'active')->value('id');
 
-        $offerings = SubjectOffering::query()
+        $offerings = $access->offerings($scope)
             ->with(['subject', 'gradeLevel', 'campus'])
             ->when($academicYearId, fn ($q) => $q->where('academic_year_id', $academicYearId))
             ->where('status', 'active')
@@ -58,7 +59,7 @@ class AssignmentController extends Controller
         $assignments = [];
 
         if ($selectedOfferingId !== null && $offerings->contains('id', $selectedOfferingId)) {
-            $assignments = Assignment::query()
+            $assignments = $access->assignments($scope)
                 ->where('subject_offering_id', $selectedOfferingId)
                 ->orderBy('due_on')
                 ->orderBy('created_at')
@@ -95,14 +96,14 @@ class AssignmentController extends Controller
             ],
             'assignments' => $assignments,
             'statuses' => Assignment::STATUSES,
-            'canManage' => $capabilities->canInSchool($context->actor(), 'lms.assignments.manage', $school),
+            'canManage' => ! $scopes->campusScope($context->actor(), 'lms.assignments.manage', $school)->isNone(),
         ]);
     }
 
-    public function store(Request $request, TenantContext $context, AssignmentService $service): RedirectResponse
+    public function store(Request $request, TenantContext $context, AssignmentService $service, LmsAdministrationAccess $access): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('lms.assignments.manage', $school);
+        $scope = $this->authorizeCampusScope('lms.assignments.manage', $school);
 
         $validated = $request->validate([
             'subject_offering_id' => ['required', 'uuid'],
@@ -112,7 +113,7 @@ class AssignmentController extends Controller
         ]);
 
         $offeringId = $validated['subject_offering_id'];
-        $offering = SubjectOffering::query()->where('school_id', $school->id)->findOrFail($offeringId);
+        $offering = $access->offering($scope, $offeringId);
 
         try {
             $service->create($school, $offeringId, [
@@ -132,12 +133,12 @@ class AssignmentController extends Controller
             ->with('status', 'Assignment created.');
     }
 
-    public function update(Request $request, TenantContext $context, AssignmentService $service, string $assignment): RedirectResponse
+    public function update(Request $request, TenantContext $context, AssignmentService $service, string $assignment, LmsAdministrationAccess $access): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('lms.assignments.manage', $school);
+        $scope = $this->authorizeCampusScope('lms.assignments.manage', $school);
 
-        $model = Assignment::query()->where('school_id', $school->id)->findOrFail($assignment);
+        $model = $access->assignment($scope, $assignment);
 
         $validated = $request->validate([
             'title' => ['sometimes', 'string', 'max:255'],
@@ -154,12 +155,12 @@ class AssignmentController extends Controller
         return $this->backToOffering($updated, 'Assignment updated.');
     }
 
-    public function publish(Request $request, TenantContext $context, AssignmentService $service, string $assignment): RedirectResponse
+    public function publish(Request $request, TenantContext $context, AssignmentService $service, string $assignment, LmsAdministrationAccess $access): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('lms.assignments.manage', $school);
+        $scope = $this->authorizeCampusScope('lms.assignments.manage', $school);
 
-        $model = Assignment::query()->where('school_id', $school->id)->findOrFail($assignment);
+        $model = $access->assignment($scope, $assignment);
 
         try {
             $updated = $service->publish($school, $model, $request->user());
@@ -170,12 +171,12 @@ class AssignmentController extends Controller
         return $this->backToOffering($updated, 'Assignment published.');
     }
 
-    public function close(Request $request, TenantContext $context, AssignmentService $service, string $assignment): RedirectResponse
+    public function close(Request $request, TenantContext $context, AssignmentService $service, string $assignment, LmsAdministrationAccess $access): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('lms.assignments.manage', $school);
+        $scope = $this->authorizeCampusScope('lms.assignments.manage', $school);
 
-        $model = Assignment::query()->where('school_id', $school->id)->findOrFail($assignment);
+        $model = $access->assignment($scope, $assignment);
 
         try {
             $updated = $service->close($school, $model, $request->user());
@@ -188,7 +189,7 @@ class AssignmentController extends Controller
 
     private function backToOffering(Assignment $assignment, string $status): RedirectResponse
     {
-        $offering = SubjectOffering::query()->find($assignment->subject_offering_id);
+        $offering = $assignment->subjectOffering;
 
         return redirect()
             ->route('app.assignments.index', [

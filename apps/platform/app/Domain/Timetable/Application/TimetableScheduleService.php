@@ -23,9 +23,11 @@ use App\Domain\Timetable\Infrastructure\TimetablePeriod;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Authorization\Campus\CampusScope;
 use App\Support\Concurrency\TenantLock;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
@@ -86,10 +88,19 @@ use Illuminate\Support\Facades\DB;
  * (`assertParentsSchedulable()`) have no equivalent
  * deactivate-blocked-by-active-reference guard on the other side, so
  * they are validated up front as before.
+ *
+ * ORG.7D-1 (ADR 0076 §37): `timetable.schedule.manage` is Campus-adopted.
+ * Every write resolves the actor's CampusScope here, and the Campus it
+ * touches -- the entry's current Campus and, on create/update, the
+ * Offering's -- must be within it, BEFORE any eligibility check, so nothing
+ * is revealed about another Campus's records. Out of scope is NOT FOUND,
+ * exactly like another School's record. A Campus-scoped actor's slot
+ * collision is one generic refusal (TimetableScheduleAccess::
+ * concealSlotConflict()). Whole-School behaviour is unchanged.
  */
 class TimetableScheduleService
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
     /**
      * MUST exactly match
@@ -110,6 +121,7 @@ class TimetableScheduleService
         private readonly TenantContext $context,
         private readonly TenantLock $locks,
         private readonly ActiveCampus $activeCampus,
+        private readonly TimetableScheduleAccess $access,
     ) {}
 
     /**
@@ -127,12 +139,13 @@ class TimetableScheduleService
         int $dayOfWeek,
         User $actor,
     ): TimetableEntry {
-        $this->authorizeCapabilityFor($actor, 'timetable.schedule.manage', $school);
+        $scope = $this->authorizeCampusScopeFor($actor, 'timetable.schedule.manage', $school);
+        $this->assertInScope($scope, $subjectOffering->campus_id, SubjectOffering::class, $subjectOffering->id);
 
         $this->assertParentsSchedulable($subjectOffering, $section, $teacher, $room);
         $context = $this->deriveContext($subjectOffering);
 
-        return $this->context->withSchool($school, fn () => $this->withPeriodsLock($school, fn () => $this->guarded(fn () => DB::transaction(function () use ($school, $subjectOffering, $section, $teacher, $room, $period, $dayOfWeek, $context, $actor) {
+        return $this->context->withSchool($school, fn () => $this->withPeriodsLock($school, fn () => $this->guarded($scope, fn () => DB::transaction(function () use ($school, $subjectOffering, $section, $teacher, $room, $period, $dayOfWeek, $context, $actor) {
             $this->assertPeriodSchedulable($period);
             $this->assertCampusSchedulable($school, $context['campus_id']);
 
@@ -179,12 +192,16 @@ class TimetableScheduleService
         User $actor,
     ): TimetableEntry {
         $school = $entry->school;
-        $this->authorizeCapabilityFor($actor, 'timetable.schedule.manage', $school);
+        $scope = $this->authorizeCampusScopeFor($actor, 'timetable.schedule.manage', $school);
+        // Both ends: the entry where it is now, and where the Offering puts it.
+        $this->assertInScope($scope, $entry->campus_id, TimetableEntry::class, $entry->id);
+        $this->assertInScope($scope, $subjectOffering->campus_id, SubjectOffering::class, $subjectOffering->id);
 
         $this->assertParentsSchedulable($subjectOffering, $section, $teacher, $room);
         $context = $this->deriveContext($subjectOffering);
 
-        return $this->context->withSchool($school, fn () => $this->withPeriodsLock($school, fn () => $this->guarded(fn () => DB::transaction(function () use ($school, $entry, $subjectOffering, $section, $teacher, $room, $period, $dayOfWeek, $context, $actor) {
+        return $this->context->withSchool($school, fn () => $this->withPeriodsLock($school, fn () => $this->guarded($scope, fn () => DB::transaction(function () use ($school, $entry, $subjectOffering, $section, $teacher, $room, $period, $dayOfWeek, $context, $actor, $scope) {
+            $this->holdInScope($scope, $entry);
             $this->assertPeriodSchedulable($period);
             $this->assertCampusSchedulable($school, $context['campus_id']);
 
@@ -219,9 +236,11 @@ class TimetableScheduleService
     public function deactivate(TimetableEntry $entry, User $actor): TimetableEntry
     {
         $school = $entry->school;
-        $this->authorizeCapabilityFor($actor, 'timetable.schedule.manage', $school);
+        $scope = $this->authorizeCampusScopeFor($actor, 'timetable.schedule.manage', $school);
+        $this->assertInScope($scope, $entry->campus_id, TimetableEntry::class, $entry->id);
 
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $entry, $actor) {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $entry, $actor, $scope) {
+            $this->holdInScope($scope, $entry);
             $entry->update(['status' => 'inactive']);
 
             $this->audit->school($school, 'timetable.entry.deactivated', actor: $actor, subject: $entry);
@@ -244,9 +263,10 @@ class TimetableScheduleService
     public function activate(TimetableEntry $entry, User $actor): TimetableEntry
     {
         $school = $entry->school;
-        $this->authorizeCapabilityFor($actor, 'timetable.schedule.manage', $school);
+        $scope = $this->authorizeCampusScopeFor($actor, 'timetable.schedule.manage', $school);
+        $this->assertInScope($scope, $entry->campus_id, TimetableEntry::class, $entry->id);
 
-        return $this->context->withSchool($school, function () use ($school, $entry, $actor) {
+        return $this->context->withSchool($school, function () use ($school, $entry, $actor, $scope) {
             $subjectOffering = $entry->subjectOffering()->firstOrFail();
             $section = $entry->section()->firstOrFail();
             $teacher = $entry->teacher()->firstOrFail();
@@ -255,7 +275,8 @@ class TimetableScheduleService
 
             $this->assertParentsSchedulable($subjectOffering, $section, $teacher, $room);
 
-            return $this->withPeriodsLock($school, fn () => $this->guarded(fn () => DB::transaction(function () use ($school, $entry, $period, $actor) {
+            return $this->withPeriodsLock($school, fn () => $this->guarded($scope, fn () => DB::transaction(function () use ($school, $entry, $period, $actor, $scope) {
+                $this->holdInScope($scope, $entry);
                 $this->assertPeriodSchedulable($period);
                 $this->assertCampusSchedulable($school, $entry->campus_id);
 
@@ -321,6 +342,30 @@ class TimetableScheduleService
         if ($room !== null && $room->campus_id !== $subjectOffering->campus_id) {
             throw new RoomCampusMismatchException;
         }
+    }
+
+    /**
+     * ORG.7D-1 (ADR 0076 §37): a Campus outside the actor's scope is NOT
+     * FOUND -- the same answer as a record of another School.
+     *
+     * @param  class-string  $model
+     */
+    private function assertInScope(CampusScope $scope, string $campusId, string $model, string $id): void
+    {
+        if (! $scope->covers($campusId)) {
+            throw (new ModelNotFoundException)->setModel($model, [$id]);
+        }
+    }
+
+    /**
+     * ORG.7D-1: inside the write transaction, the entry row is locked and
+     * its CURRENT Campus re-checked, so an entry another scheduler moved to
+     * another Campus after the caller read it is never written.
+     */
+    private function holdInScope(CampusScope $scope, TimetableEntry $entry): void
+    {
+        $current = TimetableEntry::query()->whereKey($entry->id)->lockForUpdate()->value('campus_id');
+        $this->assertInScope($scope, is_string($current) ? $current : '', TimetableEntry::class, $entry->id);
     }
 
     /**
@@ -390,23 +435,26 @@ class TimetableScheduleService
      * bug, or a constraint this class does not know how to translate)
      * is deliberately rethrown unchanged rather than swallowed.
      *
+     * ORG.7D-1: a slot collision seen by a Campus-scoped actor is concealed
+     * (TimetableScheduleAccess::concealSlotConflict()).
+     *
      * @param  callable(): TimetableEntry  $callback
      */
-    private function guarded(callable $callback): TimetableEntry
+    private function guarded(CampusScope $scope, callable $callback): TimetableEntry
     {
         try {
             return $callback();
         } catch (QueryException $e) {
             if ($this->violatesConstraint($e, 'timetable_entries_teacher_slot_unique')) {
-                throw new TeacherAlreadyScheduledException;
+                throw $this->access->concealSlotConflict($scope, new TeacherAlreadyScheduledException);
             }
 
             if ($this->violatesConstraint($e, 'timetable_entries_section_slot_unique')) {
-                throw new SectionAlreadyScheduledException;
+                throw $this->access->concealSlotConflict($scope, new SectionAlreadyScheduledException);
             }
 
             if ($this->violatesConstraint($e, 'timetable_entries_room_slot_unique')) {
-                throw new RoomAlreadyScheduledException;
+                throw $this->access->concealSlotConflict($scope, new RoomAlreadyScheduledException);
             }
 
             if ($this->violatesConstraint($e, 'timetable_entries_room_campus_fk')) {

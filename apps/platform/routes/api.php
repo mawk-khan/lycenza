@@ -1705,37 +1705,44 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->name('schools.timetable-periods.deactivate');
 
             Route::get('/timetable-entries', [TimetableEntryController::class, 'index'])
-                ->middleware('capability:timetable.schedule.view')
+                ->middleware('capability:timetable.schedule.view,campus')
                 ->name('schools.timetable-entries.index');
             Route::post('/timetable-entries', [TimetableEntryController::class, 'store'])
-                ->middleware(['capability:timetable.schedule.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:timetable.schedule.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.timetable-entries.store');
             Route::get('/timetable-entries/search/subject-offerings', [TimetableEntryController::class, 'searchSubjectOfferings'])
-                ->middleware('capability:timetable.schedule.manage')
+                ->middleware('capability:timetable.schedule.manage,campus')
                 ->name('schools.timetable-entries.search-subject-offerings');
             Route::get('/timetable-entries/search/sections', [TimetableEntryController::class, 'searchSections'])
-                ->middleware('capability:timetable.schedule.manage')
+                ->middleware('capability:timetable.schedule.manage,campus')
                 ->name('schools.timetable-entries.search-sections');
             Route::get('/timetable-entries/search/teachers', [TimetableEntryController::class, 'searchTeachers'])
-                ->middleware('capability:timetable.schedule.manage')
+                ->middleware('capability:timetable.schedule.manage,campus')
                 ->name('schools.timetable-entries.search-teachers');
             Route::get('/timetable-entries/search/rooms', [TimetableEntryController::class, 'searchRooms'])
-                ->middleware('capability:timetable.schedule.manage')
+                ->middleware('capability:timetable.schedule.manage,campus')
                 ->name('schools.timetable-entries.search-rooms');
             Route::get('/timetable-entries/search/periods', [TimetableEntryController::class, 'searchPeriods'])
                 ->middleware('capability:timetable.periods.view')
                 ->name('schools.timetable-entries.search-periods');
+            // ORG.7D-1 (ADR 0076 §37): the scheduling form's own lookup of the
+            // School-wide bell schedule, answered under the Campus-adopted
+            // `timetable.schedule.manage` (the Period catalogue itself, and
+            // `search/periods` above, stay on whole-School `timetable.periods.view`).
+            Route::get('/timetable-entries/search/schedule-periods', [TimetableEntryController::class, 'searchSchedulePeriods'])
+                ->middleware('capability:timetable.schedule.manage,campus')
+                ->name('schools.timetable-entries.search-schedule-periods');
             Route::get('/timetable-entries/{timetableEntry}', [TimetableEntryController::class, 'show'])
-                ->middleware('capability:timetable.schedule.view')
+                ->middleware('capability:timetable.schedule.view,campus')
                 ->name('schools.timetable-entries.show');
             Route::patch('/timetable-entries/{timetableEntry}', [TimetableEntryController::class, 'update'])
-                ->middleware(['capability:timetable.schedule.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:timetable.schedule.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.timetable-entries.update');
             Route::post('/timetable-entries/{timetableEntry}/activate', [TimetableEntryController::class, 'activate'])
-                ->middleware(['capability:timetable.schedule.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:timetable.schedule.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.timetable-entries.activate');
             Route::post('/timetable-entries/{timetableEntry}/deactivate', [TimetableEntryController::class, 'deactivate'])
-                ->middleware(['capability:timetable.schedule.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:timetable.schedule.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.timetable-entries.deactivate');
 
             // Phase 9.8 (idempotency corrected): Payroll HTTP transport --
@@ -1990,22 +1997,22 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             // literal path segments are not swallowed by the parameter
             // route.
             Route::get('/attendance-sessions', [AttendanceSessionController::class, 'index'])
-                ->middleware('capability:attendance.view')
+                ->middleware('capability:attendance.view,campus')
                 ->name('schools.attendance-sessions.index');
             Route::post('/attendance-sessions', [AttendanceSessionController::class, 'store'])
-                ->middleware(['capability:attendance.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->middleware(['capability:attendance.manage,campus', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.attendance-sessions.store');
             Route::get('/attendance-sessions/scheduled-classes', [AttendanceSessionController::class, 'scheduledClasses'])
-                ->middleware('capability:attendance.manage')
+                ->middleware('capability:attendance.manage,campus')
                 ->name('schools.attendance-sessions.scheduled-classes');
             Route::get('/attendance-sessions/roster-preview', [AttendanceSessionController::class, 'rosterPreview'])
-                ->middleware('capability:attendance.manage')
+                ->middleware('capability:attendance.manage,campus')
                 ->name('schools.attendance-sessions.roster-preview');
             Route::get('/attendance-sessions/{attendanceSession}', [AttendanceSessionController::class, 'show'])
-                ->middleware('capability:attendance.view')
+                ->middleware('capability:attendance.view,campus')
                 ->name('schools.attendance-sessions.show');
             Route::post('/attendance-records/{attendanceRecord}/correct', [AttendanceSessionController::class, 'correct'])
-                ->middleware(['capability:attendance.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:attendance.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.attendance-records.correct');
 
             // TCH.4 (ADR 0063 section 11, Tier 2): the OWNED teacher
@@ -2099,22 +2106,22 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             // (duplicate publish/archive fails closed with a 422, never
             // applies twice).
             Route::get('/subject-offerings/{subjectOffering}/learning-content', [LearningContentController::class, 'index'])
-                ->middleware('capability:lms.content.view')
+                ->middleware('capability:lms.content.view,campus')
                 ->name('schools.subject-offerings.learning-content.index');
             Route::post('/subject-offerings/{subjectOffering}/learning-content', [LearningContentController::class, 'store'])
-                ->middleware(['capability:lms.content.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:lms.content.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.subject-offerings.learning-content.store');
             Route::get('/learning-content/{learningContent}', [LearningContentController::class, 'show'])
-                ->middleware('capability:lms.content.view')
+                ->middleware('capability:lms.content.view,campus')
                 ->name('schools.learning-content.show');
             Route::patch('/learning-content/{learningContent}', [LearningContentController::class, 'update'])
-                ->middleware(['capability:lms.content.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:lms.content.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.learning-content.update');
             Route::post('/learning-content/{learningContent}/publish', [LearningContentController::class, 'publish'])
-                ->middleware(['capability:lms.content.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:lms.content.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.learning-content.publish');
             Route::post('/learning-content/{learningContent}/archive', [LearningContentController::class, 'archive'])
-                ->middleware(['capability:lms.content.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:lms.content.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.learning-content.archive');
 
             // Phase 0I.2 -- the LearningContent owner-type extension of
@@ -2179,22 +2186,22 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             // -- never Academic Structure's `academics.subjects.*`, the
             // Canteen capability-boundary lesson carried forward.
             Route::get('/subject-offerings/{subjectOffering}/assignments', [AssignmentController::class, 'index'])
-                ->middleware('capability:lms.assignments.view')
+                ->middleware('capability:lms.assignments.view,campus')
                 ->name('schools.subject-offerings.assignments.index');
             Route::post('/subject-offerings/{subjectOffering}/assignments', [AssignmentController::class, 'store'])
-                ->middleware(['capability:lms.assignments.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:lms.assignments.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.subject-offerings.assignments.store');
             Route::get('/assignments/{assignment}', [AssignmentController::class, 'show'])
-                ->middleware('capability:lms.assignments.view')
+                ->middleware('capability:lms.assignments.view,campus')
                 ->name('schools.assignments.show');
             Route::patch('/assignments/{assignment}', [AssignmentController::class, 'update'])
-                ->middleware(['capability:lms.assignments.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:lms.assignments.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.assignments.update');
             Route::post('/assignments/{assignment}/publish', [AssignmentController::class, 'publish'])
-                ->middleware(['capability:lms.assignments.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:lms.assignments.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.assignments.publish');
             Route::post('/assignments/{assignment}/close', [AssignmentController::class, 'close'])
-                ->middleware(['capability:lms.assignments.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:lms.assignments.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.assignments.close');
 
             // Phase 0I.3 -- the Assignment owner-type extension of the
@@ -2277,19 +2284,19 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             // transition fails closed on the compare-and-swap, and
             // PATCH is naturally idempotent.
             Route::get('/subject-offerings/{subjectOffering}/curriculum-deliveries', [CurriculumDeliveryController::class, 'index'])
-                ->middleware('capability:curriculum.delivery.view')
+                ->middleware('capability:curriculum.delivery.view,campus')
                 ->name('schools.subject-offerings.curriculum-deliveries.index');
             Route::post('/subject-offerings/{subjectOffering}/curriculum-deliveries', [CurriculumDeliveryController::class, 'store'])
-                ->middleware(['capability:curriculum.delivery.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:curriculum.delivery.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.subject-offerings.curriculum-deliveries.store');
             Route::get('/curriculum-deliveries/{curriculumDelivery}', [CurriculumDeliveryController::class, 'show'])
-                ->middleware('capability:curriculum.delivery.view')
+                ->middleware('capability:curriculum.delivery.view,campus')
                 ->name('schools.curriculum-deliveries.show');
             Route::patch('/curriculum-deliveries/{curriculumDelivery}', [CurriculumDeliveryController::class, 'update'])
-                ->middleware(['capability:curriculum.delivery.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:curriculum.delivery.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.curriculum-deliveries.update');
             Route::post('/curriculum-deliveries/{curriculumDelivery}/transition', [CurriculumDeliveryController::class, 'transition'])
-                ->middleware(['capability:curriculum.delivery.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:curriculum.delivery.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.curriculum-deliveries.transition');
 
             // TCH.3 (ADR 0063 section 11, Tier 2): the OWNED teacher surface
@@ -2521,16 +2528,16 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             // duplicate creation is already prevented by the aggregate
             // unique constraint, and PATCH is naturally idempotent.
             Route::get('/examinations/{examination}/examination-papers', [ExaminationPaperController::class, 'index'])
-                ->middleware('capability:examinations.papers.view')
+                ->middleware('capability:examinations.papers.view,campus')
                 ->name('schools.examinations.examination-papers.index');
             Route::post('/examinations/{examination}/examination-papers', [ExaminationPaperController::class, 'store'])
-                ->middleware(['capability:examinations.papers.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:examinations.papers.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.examinations.examination-papers.store');
             Route::get('/examination-papers/{examinationPaper}', [ExaminationPaperController::class, 'show'])
-                ->middleware('capability:examinations.papers.view')
+                ->middleware('capability:examinations.papers.view,campus')
                 ->name('schools.examination-papers.show');
             Route::patch('/examination-papers/{examinationPaper}', [ExaminationPaperController::class, 'update'])
-                ->middleware(['capability:examinations.papers.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:examinations.papers.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.examination-papers.update');
 
             // Phase 0H.4C (GradeScale). School-only -- no Examination

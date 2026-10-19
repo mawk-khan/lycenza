@@ -4,6 +4,7 @@ namespace App\Http\Controllers\App\Attendance;
 
 use App\Domain\AcademicStructure\Application\CurrentAcademicYearResolver;
 use App\Domain\AcademicStructure\Application\SectionLabel;
+use App\Domain\Attendance\Application\AttendanceAdministrationAccess;
 use App\Domain\Attendance\Application\AttendanceCorrectionService;
 use App\Domain\Attendance\Application\AttendanceSubmissionService;
 use App\Domain\Attendance\Application\Exceptions\AttendanceException;
@@ -14,8 +15,8 @@ use App\Domain\Students\Application\SectionRosterMember;
 use App\Domain\Students\Application\StudentEnrollmentRosterReadService;
 use App\Domain\Timetable\Infrastructure\TimetableEntry;
 use App\Http\Controllers\Controller;
-use App\Support\Authorization\AuthorizesCapability;
-use App\Support\Authorization\CapabilityResolver;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Authorization\Campus\CampusScopeResolver;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
@@ -44,21 +45,26 @@ use Inertia\Response;
  * Students'), carrying forward the Canteen capability-boundary lesson.
  * Business logic lives in the two Attendance Application services; this
  * controller validates, calls, and renders (CLAUDE.md rule 3).
+ *
+ * ORG.7D-1 (ADR 0076 §37): `attendance.view`/`.manage` are Campus-adopted.
+ * Every page resolves the actor's CampusScope; registers and the classes
+ * they are taken for come only through AttendanceAdministrationAccess (out
+ * of scope = 404), and the write services receive its Campus write guard.
  */
 class AttendanceController extends Controller
 {
-    use AuthorizesCapability, PresentsAttendancePages;
+    use AuthorizesCampusScope, PresentsAttendancePages;
 
-    public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities): Response
+    public function index(Request $request, TenantContext $context, CampusScopeResolver $scopes, AttendanceAdministrationAccess $access): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('attendance.view', $school);
+        $scope = $this->authorizeCampusScope('attendance.view', $school);
 
         $validated = $request->validate([
             'attendance_date' => ['sometimes', 'date_format:Y-m-d'],
         ]);
 
-        $paginator = AttendanceSession::query()
+        $paginator = $access->sessions($scope)
             ->with(['section.gradeLevel', 'subjectOffering.subject', 'teacher', 'period'])
             ->when(isset($validated['attendance_date']), fn ($q) => $q->whereDate('attendance_date', $validated['attendance_date']))
             ->orderByDesc('attendance_date')
@@ -69,7 +75,7 @@ class AttendanceController extends Controller
         return Inertia::render('App/Attendance/Index', [
             'sessions' => $paginator->through(fn (AttendanceSession $s) => $this->presentSummary($s)),
             'filters' => ['attendanceDate' => $validated['attendance_date'] ?? ''],
-            'canManage' => $capabilities->canInSchool($context->actor(), 'attendance.manage', $school),
+            'canManage' => ! $scopes->campusScope($context->actor(), 'attendance.manage', $school)->isNone(),
             // V11.2 (ADR 0075): same attendance.view gate as this page.
             'exceptionsUrl' => '/app/attendance/exceptions',
         ]);
@@ -82,10 +88,10 @@ class AttendanceController extends Controller
      * Students/SIS as-of-date read service. Both are informational: the
      * authoritative submission re-derives everything under locks.
      */
-    public function take(Request $request, TenantContext $context, StudentEnrollmentRosterReadService $roster): Response
+    public function take(Request $request, TenantContext $context, StudentEnrollmentRosterReadService $roster, AttendanceAdministrationAccess $access): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('attendance.manage', $school);
+        $scope = $this->authorizeCampusScope('attendance.manage', $school);
 
         $validated = $request->validate([
             'attendance_date' => ['sometimes', 'date_format:Y-m-d'],
@@ -94,14 +100,11 @@ class AttendanceController extends Controller
 
         // UAT-ATT-10: "today" is the School's calendar day, as in My attendance.
         $date = $validated['attendance_date'] ?? CarbonImmutable::now(SchoolTimezone::resolve($school))->toDateString();
-        $submitted = AttendanceSession::query()
-            ->whereDate('attendance_date', $date)
-            ->pluck('timetable_entry_id')
-            ->all();
+        $submitted = $access->submittedEntryIds($scope, $date);
 
         // LC-2: only the active year's classes -- next year's timetable can be
         // prepared alongside, and must never appear among today's registers.
-        $classes = TimetableEntry::query()
+        $classes = $access->entries($scope)
             ->with(['subjectOffering.subject', 'section.gradeLevel', 'teacher', 'period'])
             ->where('status', 'active')
             ->forAcademicYear(app(CurrentAcademicYearResolver::class)->tryResolve($school)?->id)
@@ -126,7 +129,7 @@ class AttendanceController extends Controller
         $selected = $validated['timetable_entry_id'] ?? null;
 
         if ($selected !== null) {
-            $entry = TimetableEntry::query()->where('id', $selected)->where('school_id', $school->id)->first();
+            $entry = $access->entries($scope)->where('id', $selected)->where('school_id', $school->id)->first();
 
             if ($entry !== null) {
                 try {
@@ -152,29 +155,30 @@ class AttendanceController extends Controller
         ]);
     }
 
-    public function show(TenantContext $context, CapabilityResolver $capabilities, string $attendanceSession): Response
+    public function show(TenantContext $context, CampusScopeResolver $scopes, AttendanceAdministrationAccess $access, string $attendanceSession): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('attendance.view', $school);
+        $scope = $this->authorizeCampusScope('attendance.view', $school);
 
-        $session = AttendanceSession::query()
-            ->with([
+        $session = $access->session($scope, $attendanceSession)
+            ->load([
                 'academicYear', 'campus', 'gradeLevel', 'section', 'subjectOffering.subject', 'teacher', 'period',
                 'records.studentEnrollment.student:id,school_id,first_name,middle_name,last_name',
-            ])
-            ->findOrFail($attendanceSession);
+            ]);
 
+        // A register is correctable only where the actor manages Attendance
+        // for the register's own (stored) Campus.
         return Inertia::render('App/Attendance/Show', [
             'session' => $this->presentDetail($session),
             'statuses' => AttendanceRecord::STATUSES,
-            'canManage' => $capabilities->canInSchool($context->actor(), 'attendance.manage', $school),
+            'canManage' => $scopes->campusScope($context->actor(), 'attendance.manage', $school)->covers($session->campus_id),
         ]);
     }
 
-    public function store(Request $request, TenantContext $context, AttendanceSubmissionService $service): RedirectResponse
+    public function store(Request $request, TenantContext $context, AttendanceSubmissionService $service, AttendanceAdministrationAccess $access): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('attendance.manage', $school);
+        $guard = $access->writeGuard($this->authorizeCampusScope('attendance.manage', $school));
 
         $validated = $request->validate([
             'timetable_entry_id' => ['required', 'uuid'],
@@ -191,6 +195,7 @@ class AttendanceController extends Controller
                 $validated['attendance_date'],
                 array_values($validated['records']),
                 $context->actor(),
+                $guard,
             )));
         } catch (AttendanceException|AmbiguousHistoricalEnrollmentException $e) {
             throw ValidationException::withMessages(['timetable_entry_id' => $e->getMessage()]);
@@ -206,10 +211,10 @@ class AttendanceController extends Controller
      * page sends the status it currently displays, so a stale tab is
      * refused rather than silently overwriting a colleague's correction.
      */
-    public function correct(Request $request, TenantContext $context, AttendanceCorrectionService $service, string $attendanceRecord): RedirectResponse
+    public function correct(Request $request, TenantContext $context, AttendanceCorrectionService $service, AttendanceAdministrationAccess $access, string $attendanceRecord): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('attendance.manage', $school);
+        $guard = $access->writeGuard($this->authorizeCampusScope('attendance.manage', $school));
 
         $validated = $request->validate([
             'expected_status' => ['required', Rule::in(AttendanceRecord::STATUSES)],
@@ -218,7 +223,7 @@ class AttendanceController extends Controller
 
         try {
             $record = $service->correct(
-                $school, $attendanceRecord, $validated['expected_status'], $validated['new_status'], $context->actor(),
+                $school, $attendanceRecord, $validated['expected_status'], $validated['new_status'], $context->actor(), $guard,
             );
         } catch (AttendanceException $e) {
             throw ValidationException::withMessages(['new_status' => $e->getMessage()]);
@@ -234,20 +239,17 @@ class AttendanceController extends Controller
      * Authorizes before querying and reuses the SAME Students/SIS read
      * service the authoritative submission uses.
      */
-    public function roster(Request $request, TenantContext $context, StudentEnrollmentRosterReadService $roster): JsonResponse
+    public function roster(Request $request, TenantContext $context, StudentEnrollmentRosterReadService $roster, AttendanceAdministrationAccess $access): JsonResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('attendance.manage', $school);
+        $scope = $this->authorizeCampusScope('attendance.manage', $school);
 
         $validated = $request->validate([
             'timetable_entry_id' => ['required', 'uuid'],
             'attendance_date' => ['required', 'date_format:Y-m-d'],
         ]);
 
-        $entry = TimetableEntry::query()
-            ->where('id', $validated['timetable_entry_id'])
-            ->where('school_id', $school->id)
-            ->firstOrFail();
+        $entry = $access->entry($scope, $validated['timetable_entry_id']);
 
         $members = $roster->membersAsOf(
             $school->id, $entry->academic_year_id, $entry->campus_id,

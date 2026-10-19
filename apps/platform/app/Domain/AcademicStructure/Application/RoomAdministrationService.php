@@ -4,6 +4,7 @@ namespace App\Domain\AcademicStructure\Application;
 
 use App\Domain\AcademicStructure\Application\Concerns\AdministersReferenceData;
 use App\Domain\AcademicStructure\Infrastructure\Room;
+use App\Domain\Campuses\Application\ActiveCampus;
 use App\Models\Campus;
 use App\Models\School;
 use App\Models\User;
@@ -30,6 +31,7 @@ class RoomAdministrationService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly ActiveCampus $activeCampus,
     ) {}
 
     /** @param  array<string, mixed>  $input */
@@ -49,6 +51,9 @@ class RoomAdministrationService
             $validated = $this->validateInput($input, $rules);
 
             return $this->writeUnique(fn (): Room => DB::transaction(function () use ($school, $campus, $validated, $actor): Room {
+                // ORG.7D-1 D1-1 (ADR 0076 §37): no new Room on an inactive Campus.
+                $this->activeCampus->require($school, $campus->id);
+
                 $room = Room::query()->create([...$validated, 'school_id' => $school->id, 'campus_id' => $campus->id]);
 
                 $this->audit->school($school, 'room.created', actor: $actor, subject: $room, metadata: [

@@ -12,8 +12,11 @@ use App\Domain\LMS\Infrastructure\Assignment;
 use App\Domain\LMS\Infrastructure\LearningContent;
 use App\Models\School;
 use App\Models\User;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\CampusScope;
+use App\Support\Authorization\Campus\CampusScopeResolver;
 use App\Support\Authorization\CapabilityResolver;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 
 /**
@@ -41,11 +44,17 @@ use InvalidArgumentException;
  *   TeachingAssignment held, owner-only).
  *
  * There is no Submission parent: Submission is cancelled (ADR 0039).
+ *
+ * ORG.7D-1 (ADR 0076 §37): the Tier 1 keys are Campus-adopted, so Tier 1 is
+ * decided in the actor's CampusScope -- whole School as before, or a
+ * Campus set covering the parent's Campus (its Offering's,
+ * LmsAdministrationAccess::campusOf()). A Campus-scoped holder whose scope
+ * does not cover the parent gets the same not-found as an unknown parent
+ * (unless the teacher path applies); an actor holding the key nowhere is
+ * refused by the `campus-capability` Gate exactly as before.
  */
 class LmsParentResourceAuthorization
 {
-    use AuthorizesCapability;
-
     public const LEARNING_CONTENT = 'learning_content';
 
     public const ASSIGNMENT = 'assignment';
@@ -62,11 +71,18 @@ class LmsParentResourceAuthorization
         private readonly TeacherLearningContentAccess $teacherContent,
         private readonly TeacherAssignmentAccess $teacherAssignments,
         private readonly LmsResourceOwnershipReader $resources,
+        private readonly CampusScopeResolver $scopes,
+        private readonly LmsAdministrationAccess $access,
     ) {}
 
     public function authorizeRead(User $actor, School $school, string $parentType, string $parentId): void
     {
-        if ($this->usesTeacherPath($actor, $school, $parentType, self::READ)) {
+        $scope = $this->tierOneScope($actor, $school, self::READ, $parentType);
+        if ($this->campusCovers($scope, $parentType, $parentId)) {
+            return;
+        }
+
+        if ($this->usesTeacherPath($actor, $school, $parentType)) {
             $parentType === self::LEARNING_CONTENT
                 ? $this->teacherContent->visible($actor, $school, $parentId)
                 : $this->teacherAssignments->visible($actor, $school, $parentId);
@@ -74,7 +90,7 @@ class LmsParentResourceAuthorization
             return;
         }
 
-        $this->authorizeCapabilityFor($actor, self::READ[$parentType] ?? $this->unknown($parentType), $school);
+        $this->refuseTierOne($actor, $school, self::READ[$parentType], $scope, $parentType, $parentId);
     }
 
     /**
@@ -83,7 +99,12 @@ class LmsParentResourceAuthorization
      */
     public function authorizeWrite(User $actor, School $school, string $parentType, string $parentId): void
     {
-        if ($this->usesTeacherPath($actor, $school, $parentType, self::WRITE)) {
+        $scope = $this->tierOneScope($actor, $school, self::WRITE, $parentType);
+        if ($this->campusCovers($scope, $parentType, $parentId)) {
+            return;
+        }
+
+        if ($this->usesTeacherPath($actor, $school, $parentType)) {
             if ($parentType === self::LEARNING_CONTENT) {
                 $scope = $this->teacherContent->scope($actor, $school);
                 $ownership = $this->resources->forLearningContent($school, $this->teacherContent->visible($actor, $school, $parentId, $scope)->id);
@@ -97,7 +118,7 @@ class LmsParentResourceAuthorization
             return;
         }
 
-        $this->authorizeCapabilityFor($actor, self::WRITE[$parentType] ?? $this->unknown($parentType), $school);
+        $this->refuseTierOne($actor, $school, self::WRITE[$parentType], $scope, $parentType, $parentId);
     }
 
     /**
@@ -108,7 +129,12 @@ class LmsParentResourceAuthorization
      */
     public function holdWrite(User $actor, School $school, string $parentType, string $parentId): void
     {
-        if ($this->usesTeacherPath($actor, $school, $parentType, self::WRITE)) {
+        $scope = $this->tierOneScope($actor, $school, self::WRITE, $parentType);
+        if ($this->campusCovers($scope, $parentType, $parentId)) {
+            return;
+        }
+
+        if ($this->usesTeacherPath($actor, $school, $parentType)) {
             if ($parentType === self::LEARNING_CONTENT) {
                 $this->teacherContent->guard($actor)->beforeWrite($school, LearningContent::query()->where('school_id', $school->id)->findOrFail($parentId));
             } else {
@@ -118,15 +144,47 @@ class LmsParentResourceAuthorization
             return;
         }
 
-        $this->authorizeCapabilityFor($actor, self::WRITE[$parentType] ?? $this->unknown($parentType), $school);
+        $this->refuseTierOne($actor, $school, self::WRITE[$parentType], $scope, $parentType, $parentId);
     }
 
-    /** @param  array<string, string>  $tierOne */
-    private function usesTeacherPath(User $actor, School $school, string $parentType, array $tierOne): bool
+    /**
+     * ORG.7D-1: where the actor holds the parent kind's Tier 1 key -- the
+     * whole School, some Campuses, or nowhere.
+     *
+     * @param  array<string, string>  $tierOne
+     */
+    private function tierOneScope(User $actor, School $school, array $tierOne, string $parentType): CampusScope
+    {
+        return $this->scopes->campusScope($actor, $tierOne[$parentType] ?? $this->unknown($parentType), $school);
+    }
+
+    /** ORG.7D-1: Tier 1 decides "allowed" -- whole School, or a Campus scope covering the parent's Campus. */
+    public function campusCovers(CampusScope $scope, string $parentType, string $parentId): bool
+    {
+        return $scope->isWholeSchool() || (! $scope->isNone() && $scope->covers($this->access->campusOf($parentType, $parentId)));
+    }
+
+    /** Teacher (Tier 2) path: the owned-scope key, when Tier 1 did not allow. */
+    private function usesTeacherPath(User $actor, School $school, string $parentType): bool
     {
         return isset(self::TEACHER[$parentType])
-            && ! $this->capabilities->canInSchool($actor, $tierOne[$parentType], $school)
             && $this->capabilities->canInSchool($actor, self::TEACHER[$parentType], $school);
+    }
+
+    /**
+     * ORG.7D-1: Tier 1 held only in other Campuses is the same not-found as
+     * an unknown parent; held nowhere, the Gate refuses (403) as before.
+     */
+    private function refuseTierOne(User $actor, School $school, string $capability, CampusScope $scope, string $parentType, string $parentId): never
+    {
+        if (! $scope->isNone()) {
+            throw (new ModelNotFoundException)->setModel($parentType === self::ASSIGNMENT ? Assignment::class : LearningContent::class, [$parentId]);
+        }
+
+        Gate::forUser($actor)->authorize('campus-capability', [$capability, $school]);
+
+        // The Gate refuses whenever the scope is none; this is unreachable.
+        throw (new ModelNotFoundException)->setModel(LearningContent::class, [$parentId]);
     }
 
     private function assertWritable(TeacherLmsScope $scope, LmsResourceOwnership $ownership, \Throwable $notOwned, \Throwable $outside): void

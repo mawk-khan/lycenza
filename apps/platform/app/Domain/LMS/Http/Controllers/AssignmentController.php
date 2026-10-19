@@ -4,10 +4,11 @@ namespace App\Domain\LMS\Http\Controllers;
 
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\LMS\Application\AssignmentService;
+use App\Domain\LMS\Application\LmsAdministrationAccess;
 use App\Domain\LMS\Infrastructure\Assignment;
 use App\Http\Controllers\Controller;
 use App\Models\School;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -35,15 +36,15 @@ use Illuminate\Http\Request;
  */
 class AssignmentController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
-    public function index(Request $request, School $school, string $subjectOffering): JsonResponse
+    public function index(Request $request, School $school, string $subjectOffering, LmsAdministrationAccess $access): JsonResponse
     {
-        $this->authorizeCapability('lms.assignments.view', $school);
+        $scope = $this->authorizeCampusScope('lms.assignments.view', $school);
 
-        $offering = SubjectOffering::query()->where('school_id', $school->id)->findOrFail($subjectOffering);
+        $offering = $access->offering($scope, $subjectOffering);
 
-        $assignments = Assignment::query()
+        $assignments = $access->assignments($scope)
             ->where('subject_offering_id', $offering->id)
             ->orderBy('due_on')
             ->orderBy('created_at')
@@ -54,9 +55,9 @@ class AssignmentController extends Controller
         ]);
     }
 
-    public function store(Request $request, School $school, string $subjectOffering, AssignmentService $service): JsonResponse
+    public function store(Request $request, School $school, string $subjectOffering, AssignmentService $service, LmsAdministrationAccess $access): JsonResponse
     {
-        $this->authorizeCapability('lms.assignments.manage', $school);
+        $scope = $this->authorizeCampusScope('lms.assignments.manage', $school);
 
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -64,25 +65,25 @@ class AssignmentController extends Controller
             'due_on' => ['nullable', 'date'],
         ]);
 
-        $assignment = $service->create($school, $subjectOffering, $validated, $request->user());
+        $assignment = $service->create($school, $access->offering($scope, $subjectOffering)->id, $validated, $request->user());
 
         return response()->json(['data' => $this->present($assignment)], 201);
     }
 
-    public function show(Request $request, School $school, string $assignment): JsonResponse
+    public function show(Request $request, School $school, string $assignment, LmsAdministrationAccess $access): JsonResponse
     {
-        $this->authorizeCapability('lms.assignments.view', $school);
+        $scope = $this->authorizeCampusScope('lms.assignments.view', $school);
 
-        $model = Assignment::query()->where('school_id', $school->id)->findOrFail($assignment);
+        $model = $access->assignment($scope, $assignment);
 
         return response()->json(['data' => $this->present($model)]);
     }
 
-    public function update(Request $request, School $school, string $assignment, AssignmentService $service): JsonResponse
+    public function update(Request $request, School $school, string $assignment, AssignmentService $service, LmsAdministrationAccess $access): JsonResponse
     {
-        $this->authorizeCapability('lms.assignments.manage', $school);
+        $scope = $this->authorizeCampusScope('lms.assignments.manage', $school);
 
-        $model = Assignment::query()->where('school_id', $school->id)->findOrFail($assignment);
+        $model = $access->assignment($scope, $assignment);
 
         $validated = $request->validate([
             'title' => ['sometimes', 'string', 'max:255'],
@@ -95,22 +96,22 @@ class AssignmentController extends Controller
         return response()->json(['data' => $this->present($updated)]);
     }
 
-    public function publish(Request $request, School $school, string $assignment, AssignmentService $service): JsonResponse
+    public function publish(Request $request, School $school, string $assignment, AssignmentService $service, LmsAdministrationAccess $access): JsonResponse
     {
-        $this->authorizeCapability('lms.assignments.manage', $school);
+        $scope = $this->authorizeCampusScope('lms.assignments.manage', $school);
 
-        $model = Assignment::query()->where('school_id', $school->id)->findOrFail($assignment);
+        $model = $access->assignment($scope, $assignment);
 
         $updated = $service->publish($school, $model, $request->user());
 
         return response()->json(['data' => $this->present($updated)]);
     }
 
-    public function close(Request $request, School $school, string $assignment, AssignmentService $service): JsonResponse
+    public function close(Request $request, School $school, string $assignment, AssignmentService $service, LmsAdministrationAccess $access): JsonResponse
     {
-        $this->authorizeCapability('lms.assignments.manage', $school);
+        $scope = $this->authorizeCampusScope('lms.assignments.manage', $school);
 
-        $model = Assignment::query()->where('school_id', $school->id)->findOrFail($assignment);
+        $model = $access->assignment($scope, $assignment);
 
         $updated = $service->close($school, $model, $request->user());
 

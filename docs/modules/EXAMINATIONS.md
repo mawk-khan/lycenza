@@ -959,3 +959,23 @@ The closed vocabulary lives in `MetricCatalog`
 imports the marks module. `StudentMarkOperation` and `StudentMarkTelemetry`
 are test-pinned to it, and every other database error keeps its existing
 handling.
+
+## Campus-scoped Examination Papers (ORG.7D-1, 2026-10-19, ADR 0076 §37)
+
+- **Adopted:** `examinations.papers.view` and `.manage` -- nothing else in
+  Examinations.
+- **Whole-School, unchanged:** the Examination (`examinations.definitions.*`),
+  grade scales and every `examinations.marks.*` key, including
+  `examinations.marks.teacher`.
+  - The marks production gates are unchanged.
+  - `CampusAdoptionImpactTest` bans marks and results families.
+- **Campus source:** the paper's stored Campus, from its Offering.
+- **Access:** `ExaminationPaperAccess` is the one reader; out of scope =
+  404. A new paper's Offering must be in scope.
+- **Parent context:** the paper page shows its parent Examination's code,
+  name, window and status as School-wide context.
+- **Marks effects:** deactivating a paper stops marks entry on it, as
+  before; marks data is never written by the paper surface.
+- **Navigation gap (owner decision):** the Examination list stays
+  whole-School, so a Campus-only holder reaches a paper page by link or the
+  API.

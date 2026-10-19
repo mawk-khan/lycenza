@@ -631,3 +631,21 @@ floored functions `retention_expire_learning_content` /
 not exist (out of scope).
 
 Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERMINATION.md` §5.8).
+
+## Campus-scoped administration (ORG.7D-1, 2026-10-19, ADR 0076 §37)
+
+- **Adopted:** `lms.content.view/.manage` and `lms.assignments.view/.manage`.
+- **Not adopted:** `lms.content.teacher` and `lms.assignments.teacher`
+  (TeachingOwnership-scoped).
+- **Campus source:** the owning Subject Offering. Content and Assignments
+  carry no Campus, and their Offering never changes. Restriction is an SQL
+  subquery on in-scope Offerings.
+- **Access:** `LmsAdministrationAccess` is the one reader; out of scope =
+  404.
+- **Documents:** attached Documents follow the parent.
+  `LmsParentResourceAuthorization` decides Tier 1 in the actor's scope:
+  whole School, or a Campus covering the parent's Offering.
+  - The teacher path follows unchanged.
+  - Tier 1 held only elsewhere answers the same not-found as an unknown
+    parent.
+- **No Student roster** is read (no Submission, ADR 0039).

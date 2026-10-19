@@ -2777,3 +2777,171 @@ impact is reported and marks are deferred.
 No capability, role, route, Campus adoption, SIS, HR or Admissions
 authority change. Two rollback-proven migrations. The ORG.7A grant-history
 rollback contract is unchanged.
+
+## 37. ORG.7D-1 — Pre-SIS academic Campus adoption (as built, 2026-10-19)
+
+Owner authorization: ORG.7D-1 only (decisions D1-1 to D1-12). Baseline
+`origin/main` = `5bd5337f` (ORG.7D-0). ORG.7D-2, Student Campus resolution
+and SIS LC-5–LC-10 were not started.
+
+**37.1 Pre-adoption hardening (D1-1, D1-2).** Data validity only, through
+`ActiveCampus`, never authority:
+- **Room create** refuses an inactive or another School's Campus
+  (`campus_id` field error / 404). The Rooms page offers no create form for
+  an inactive Campus.
+- **Section and Subject Offering reactivation** (`inactive → active`) is
+  refused while their Campus is inactive (`status` error). Re-sending
+  `active` on a record that is already active is not a reactivation. No
+  Campus is activated as a side effect, and nothing is deleted.
+- Room reactivation was not in scope and is unchanged (recorded).
+
+**37.2 Adopted (`CampusScopeCatalogue`).** Five domains, existing
+capabilities only (no new capability, role, migration or schema change):
+
+| Domain | Adopted keys | Campus source | Access class |
+|---|---|---|---|
+| `timetable` | `timetable.schedule.view`, `.manage` | the entry's Offering (`campus_id` NOT NULL; Section and Room FK-bound) | `TimetableScheduleAccess` |
+| `attendance` | `attendance.view`, `.manage` | new register: the class's entry; written register: its STORED Campus (FK-bound to Section, Offering and every record) | `AttendanceAdministrationAccess` + `CampusAttendanceWriteGuard` |
+| `curriculum_delivery` | `curriculum.delivery.view`, `.manage` | the delivery's stored Campus (FK-bound to Section and Offering) | `CurriculumDeliveryAccess` + `CampusDeliveryWriteGuard` |
+| `lms` | `lms.content.view/.manage`, `lms.assignments.view/.manage` | the owning Offering (SQL subquery; the Offering never changes) | `LmsAdministrationAccess` |
+| `examination_papers` | `examinations.papers.view`, `.manage` | the paper's stored Campus (from its Offering) | `ExaminationPaperAccess` |
+
+- **Every adopted route is C6.** Both web and API: 74 routes (98 C6 in all) with
+  `capability:x,campus` API floors and evidence-checked access methods.
+- **Lists are filtered in SQL.** Out-of-scope records, Offerings, Sections,
+  Rooms, Units and LMS parents are 404, like another School's.
+- **Request filters only narrow.** No `campus_id` is accepted from input.
+- **Writes are guarded in the service as well as the controller:**
+  - Timetable resolves the scope itself, so both the entry's current Campus
+    and the target Offering's must be in scope, checked before any
+    eligibility check.
+  - Attendance and Curriculum Delivery pass a Campus write guard through
+    their existing guard hooks.
+- **Whole-School behaviour is unchanged.** A whole-School actor gets no
+  guard and no predicate.
+
+**37.3 Kept whole-School (D1-3, D1-7, D1-9, §9, §20).**
+- The bell schedule (`timetable.periods.*`).
+- Academic Structure (`academics.*`), the syllabus catalogue (`syllabus.*`),
+  the Examination itself (`examinations.definitions.*`) and grade scales.
+- Data Health, the Examination list and every marks/results key.
+
+`CampusAdoptionImpactTest` now bans these prefixes, every `*.teacher` key
+and the SIS families explicitly.
+
+**37.4 Shared lookups (declared in `CampusScopeCatalogue::DOMAINS`).**
+- **Timetable form, teacher picker:** active Employees, id and name only
+  (D0-6).
+- **Timetable form, bell schedule:** a new lookup route
+  `search/schedule-periods` (web and API) under `timetable.schedule.manage`.
+  `search/periods` and the Period catalogue stay on whole-School
+  `timetable.periods.view`, as pinned before.
+- **Exam papers, parent context:** the paper page reads its parent
+  Examination (code, name, window, status) as context.
+- **Owner decision needed:** the Examination list stays whole-School, so a
+  Campus-only papers holder has no navigation path to the paper page (only
+  its URL or the API). Whether the Examination list becomes a shared lookup
+  for paper holders is open.
+
+**37.5 Conflicts and history (D1-12, §10, §14).**
+- **Timetable slots.** Teacher, Section and Room slots stay unique
+  School-wide. A Campus-scoped scheduler's collision is one generic
+  `TIMETABLE_SLOT_UNAVAILABLE` 409, identical in and out of scope.
+  Whole-School schedulers keep the specific codes.
+- **Attendance history.** Authority over a written register is its stored
+  Campus, never a current one. A class later moved to another Campus
+  leaves its earlier registers with the Campus they were written on.
+  "Already submitted" is judged per in-scope class. DDEV development (13
+  registers, 78 records) and test data show zero session/entry or
+  record/session Campus mismatches.
+- **Corrections** follow the register's stored Campus, so a current Campus
+  grant never reaches another Campus's history.
+
+**37.6 Teacher and LMS documents (D1-6, §13, §30).**
+- **Teacher keys are not adopted:** `attendance.teacher`,
+  `curriculum.delivery.teacher`, `lms.*.teacher` and
+  `examinations.marks.teacher`.
+- **TeachingOwnership is unchanged and still mandatory** for the owned
+  surfaces. The `teacher` template stays non-Campus-scopable.
+- **A Campus grant of a teacher key confers nothing.** This is pinned.
+- **LMS documents.** `LmsParentResourceAuthorization` decides Tier 1 in the
+  actor's CampusScope: whole School, or a Campus covering the parent's
+  Offering.
+  - The teacher path follows unchanged.
+  - Tier 1 held only elsewhere answers the same not-found as an unknown
+    parent; held nowhere, the Gate refuses (403).
+
+**37.7 Guards.**
+- **C2 contracts.** `CoverageGuard::adoptedWholeSchool()` also fails a C2
+  Gate contract that names an adopted key (an action checking it
+  School-wide through a constant, which no source scan sees). The one
+  exception is a declared whole-School hub.
+- **Whole-School hubs.**
+  - `CampusScopeCatalogue::WHOLE_SCHOOL_HUBS` (new): `data-health` →
+    `timetable.schedule.view`.
+  - The hub controller may check the declared key with the whole-School
+    Gate; nothing else may.
+  - `CampusScopeAdoptionArchitectureTest` verifies every declaration.
+- **Navigation.** A Campus-held key shows an entry only when every key the
+  entry names is adopted, so Data Health never appears from a Campus grant.
+- **No `WHOLE_SCHOOL_OPERATIONS` declaration** was needed.
+
+**37.8 Impact (D1-11).**
+- **Templates gaining the keys:** `principal` and `school_admin` gain all
+  14 adopted keys; only `principal` is Campus-scopable.
+- **No high-risk activation:**
+  - no marks, Student profile, School settings, staff access, finance or
+    sensitive HR key is adopted;
+  - `principal`'s marks keys stay whole-School only.
+- **Existing Campus-scoped grants that gain authority:** none in DDEV
+  development, test or demo data (the demo grants whole-School only), and
+  nothing is deployed.
+
+**37.9 Cost and async.**
+- **Cost.** One Campus-status read per scope resolution (§34.3, unchanged),
+  never per row (pinned). `AuthorizesCampusScope` now resolves the scope
+  once instead of twice: the Gate runs only to refuse. Timetable list: 28
+  queries whole-School, 36 Campus.
+- **Async.** No adopted domain dispatches jobs or outbox work, so there is
+  no async authority.
+
+**37.10 Deferred (recorded).**
+- Teacher keys (ownership already implies the Campus).
+- Exam paper navigation for Campus-only holders (owner decision, §37.4).
+- Room reactivation on an inactive Campus.
+- Everything needing Student Campus semantics (ORG.7D-2).
+
+**37.11 Security review (ORG.7D-1).** Independent adversarial review of the
+candidate: no HIGH finding. Findings fixed before publication:
+- **MEDIUM — delivery existence probe.** The Curriculum Delivery
+  update/transition API answered an out-of-scope delivery with a different
+  not-found message (it carried the stored id) than an unknown one.
+  - Both controllers now resolve the delivery through
+    `CurriculumDeliveryAccess` first.
+  - `CampusDeliveryWriteGuard` refuses without ids.
+  - Pinned by an identical-body test.
+- **MEDIUM — idempotent replay across a scope change (rule 32).** A
+  `capability:x,campus` floor proves the key is held somewhere, so a replay
+  of a response written for one Campus was not re-authorized for that
+  Campus. This also applied to Visitor check-in since ORG.7A.
+  - On a Campus-floored route, `EnsureIdempotent` now binds the actor's
+    CURRENT CampusScope into the request fingerprint
+    (`RequestFingerprint::compute(..., $authority)`). A changed scope makes
+    the same key a 409 `IDEMPOTENCY_KEY_CONFLICT`, and the stored body is
+    never served.
+  - Every other route's fingerprint is byte-identical (no authority
+    component).
+- **LOW — stale Timetable entry.** Timetable writes now lock the entry row
+  in their transaction and re-check its current Campus, so an entry moved
+  to another Campus after the caller read it is never written.
+- **LOW — LMS upload order.** The LMS Document upload authorizes the parent
+  before checking the classification tier, so an unreachable parent answers
+  like an unknown one whatever the tier. Over HTTP the tier is fixed
+  (`internal`), so this is service-level defence only.
+
+Accepted residuals (LOW, declared):
+- **Teacher slots.** A Campus-scoped scheduler can infer that a teacher is
+  busy somewhere (the Visitor precedent, §34.1). Section and Room slots
+  never cross a Campus.
+- **Moved classes.** A class moved onto an in-scope Campus shows its
+  earlier register as already taken.

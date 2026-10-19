@@ -6,10 +6,11 @@ use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\LMS\Application\Exceptions\LmsException;
 use App\Domain\LMS\Application\LearningContentService;
+use App\Domain\LMS\Application\LmsAdministrationAccess;
 use App\Domain\LMS\Infrastructure\LearningContent;
 use App\Http\Controllers\Controller;
-use App\Support\Authorization\AuthorizesCapability;
-use App\Support\Authorization\CapabilityResolver;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Authorization\Campus\CampusScopeResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -38,12 +39,12 @@ use Inertia\Response;
  */
 class LearningContentController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
-    public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities): Response
+    public function index(Request $request, TenantContext $context, CampusScopeResolver $scopes, LmsAdministrationAccess $access): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('lms.content.view', $school);
+        $scope = $this->authorizeCampusScope('lms.content.view', $school);
 
         $validated = $request->validate([
             'academic_year_id' => ['sometimes', 'uuid'],
@@ -53,7 +54,7 @@ class LearningContentController extends Controller
         $academicYearId = $validated['academic_year_id']
             ?? AcademicYear::query()->where('school_id', $school->id)->where('status', 'active')->value('id');
 
-        $offerings = SubjectOffering::query()
+        $offerings = $access->offerings($scope)
             ->with(['subject', 'gradeLevel', 'campus'])
             ->when($academicYearId, fn ($q) => $q->where('academic_year_id', $academicYearId))
             ->where('status', 'active')
@@ -63,7 +64,7 @@ class LearningContentController extends Controller
         $content = [];
 
         if ($selectedOfferingId !== null && $offerings->contains('id', $selectedOfferingId)) {
-            $content = LearningContent::query()
+            $content = $access->contents($scope)
                 ->where('subject_offering_id', $selectedOfferingId)
                 ->orderBy('sequence')
                 ->orderBy('created_at')
@@ -100,14 +101,14 @@ class LearningContentController extends Controller
             ],
             'content' => $content,
             'statuses' => LearningContent::STATUSES,
-            'canManage' => $capabilities->canInSchool($context->actor(), 'lms.content.manage', $school),
+            'canManage' => ! $scopes->campusScope($context->actor(), 'lms.content.manage', $school)->isNone(),
         ]);
     }
 
-    public function store(Request $request, TenantContext $context, LearningContentService $service): RedirectResponse
+    public function store(Request $request, TenantContext $context, LearningContentService $service, LmsAdministrationAccess $access): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('lms.content.manage', $school);
+        $scope = $this->authorizeCampusScope('lms.content.manage', $school);
 
         $validated = $request->validate([
             'subject_offering_id' => ['required', 'uuid'],
@@ -117,7 +118,7 @@ class LearningContentController extends Controller
         ]);
 
         $offeringId = $validated['subject_offering_id'];
-        $offering = SubjectOffering::query()->where('school_id', $school->id)->findOrFail($offeringId);
+        $offering = $access->offering($scope, $offeringId);
 
         $service->create($school, $offeringId, [
             'title' => $validated['title'],
@@ -133,12 +134,12 @@ class LearningContentController extends Controller
             ->with('status', 'Learning content created.');
     }
 
-    public function update(Request $request, TenantContext $context, LearningContentService $service, string $learningContent): RedirectResponse
+    public function update(Request $request, TenantContext $context, LearningContentService $service, string $learningContent, LmsAdministrationAccess $access): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('lms.content.manage', $school);
+        $scope = $this->authorizeCampusScope('lms.content.manage', $school);
 
-        $content = LearningContent::query()->where('school_id', $school->id)->findOrFail($learningContent);
+        $content = $access->content($scope, $learningContent);
 
         $validated = $request->validate([
             'title' => ['sometimes', 'string', 'max:255'],
@@ -151,12 +152,12 @@ class LearningContentController extends Controller
         return $this->backToOffering($updated, 'Learning content updated.');
     }
 
-    public function publish(Request $request, TenantContext $context, LearningContentService $service, string $learningContent): RedirectResponse
+    public function publish(Request $request, TenantContext $context, LearningContentService $service, string $learningContent, LmsAdministrationAccess $access): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('lms.content.manage', $school);
+        $scope = $this->authorizeCampusScope('lms.content.manage', $school);
 
-        $content = LearningContent::query()->where('school_id', $school->id)->findOrFail($learningContent);
+        $content = $access->content($scope, $learningContent);
 
         try {
             $updated = $service->publish($school, $content, $request->user());
@@ -171,12 +172,12 @@ class LearningContentController extends Controller
         return $this->backToOffering($updated, 'Learning content published.');
     }
 
-    public function archive(Request $request, TenantContext $context, LearningContentService $service, string $learningContent): RedirectResponse
+    public function archive(Request $request, TenantContext $context, LearningContentService $service, string $learningContent, LmsAdministrationAccess $access): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('lms.content.manage', $school);
+        $scope = $this->authorizeCampusScope('lms.content.manage', $school);
 
-        $content = LearningContent::query()->where('school_id', $school->id)->findOrFail($learningContent);
+        $content = $access->content($scope, $learningContent);
 
         try {
             $updated = $service->archive($school, $content, $request->user());
@@ -189,7 +190,7 @@ class LearningContentController extends Controller
 
     private function backToOffering(LearningContent $content, string $status): RedirectResponse
     {
-        $offering = SubjectOffering::query()->find($content->subject_offering_id);
+        $offering = $content->subjectOffering;
 
         return redirect()
             ->route('app.learning-content.index', [

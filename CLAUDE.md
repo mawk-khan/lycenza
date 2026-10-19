@@ -1278,7 +1278,8 @@ once several modules copy it.
        plans or pricing.
 
 101. **Campus is an authorization scope, never a tenant, and it is
-     fail-closed until a domain adopts it (ADR 0076 §11, §33, ORG.7A).**
+     fail-closed until a domain adopts it (ADR 0076 §11, §33, §37, ORG.7A,
+     ORG.7D-1).**
      - **NULL means the whole School.** A School role assignment's
        `campus_id` NULL = the whole School, forever. Never reinterpret an
        existing grant. A Campus id = that one active Campus of the same
@@ -1314,7 +1315,18 @@ once several modules copy it.
        (ORG.7D-0, §36): an exact route in
        `CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS` (capability +
        reason) with the ordinary `capability:<key>` floor. Anything else
-       fails `CoverageGuard::adoptedWholeSchool()`.
+       fails `CoverageGuard::adoptedWholeSchool()`, including a C2 Gate
+       contract naming an adopted key (ORG.7D-1, §37). A whole-School hub
+       that also opens on an adopted key is declared in
+       `CampusScopeCatalogue::WHOLE_SCHOOL_HUBS`; only its own controller
+       may check that key School-wide.
+     - **History follows the Campus it was written on** (ORG.7D-1): a
+       register, delivery or paper stores its Campus, and authority over
+       it never follows a current one.
+     - **Teacher (`*.teacher`) keys stay ownership-scoped.** A Campus
+       scope may only ever add to TeachingOwnership, never replace it;
+       marks, results and School-wide academic configuration are never
+       adopted (`CampusAdoptionImpactTest`).
      - **Every adoption reports its impact:**
        - the new keys, the templates holding them, and the Campus grants
          that gain them (`CampusAdoptionImpactTest`);

@@ -671,6 +671,27 @@ either commits first (and the write is refused) or waits for the write
 The teacher sees the syllabus units of their own classes here without
 School-wide `syllabus.view`.
 
+## 18A. Campus-scoped Curriculum Delivery (ORG.7D-1, 2026-10-19, ADR 0076 §37)
+
+- **Adopted:** `curriculum.delivery.view` and `.manage` (administration).
+- **Not adopted:**
+  - the syllabus catalogue (`syllabus.*`, School-wide curriculum
+    definition);
+  - `curriculum.delivery.teacher` (TeachingOwnership-scoped).
+- **Campus source:** the delivery's stored Campus, FK-bound to its Section
+  and Offering.
+- **Access:** `CurriculumDeliveryAccess` is the one reader.
+  - Offerings, Sections, Syllabus Units and deliveries are resolved within
+    scope; out of scope = 404.
+  - A Unit is found only through an in-scope Offering, so another Campus's
+    Unit is never confirmed to exist.
+  - Writes pass `CampusDeliveryWriteGuard` through the `DeliveryWriteGuard`
+    hook.
+- **Room create and reactivation (ORG.7D-1 D1-1, D1-2):**
+  - Room create needs an active Campus.
+  - A Section or Subject Offering on an inactive Campus is never
+    reactivated.
+
 ## 19. Future
 
 - **Lesson Planning**: still deferred until a real requirement exists;

@@ -2,8 +2,10 @@
 
 namespace Tests\Feature\Campuses;
 
+use App\Domain\AcademicStructure\Application\RoomAdministrationService;
 use App\Domain\AcademicStructure\Application\SectionAdministrationService;
 use App\Domain\AcademicStructure\Application\SubjectOfferingService;
+use App\Domain\AcademicStructure\Infrastructure\Room;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Admissions\Application\AdmissionApplicationService;
@@ -30,12 +32,14 @@ use Tests\TestCase;
 use Throwable;
 
 /**
- * ORG.7D-0 R1/R5 (ADR 0076 §36): the five authoritative writes that place
- * new work on a Campus -- Section, Subject Offering, Timetable entry,
- * admission application, employee assignment -- need an ACTIVE Campus of the
- * same School; a Timetable Room must be on the entry's Campus. Records
- * already on a Campus that later becomes inactive are kept untouched.
- * ActiveCampus is data validity only: authorization is unchanged.
+ * ORG.7D-0 R1/R5 (ADR 0076 §36): the authoritative writes that place new
+ * work on a Campus -- Section, Subject Offering, Timetable entry, admission
+ * application, employee assignment and (ORG.7D-1 D1-1, §37) Room -- need an
+ * ACTIVE Campus of the same School; a Timetable Room must be on the entry's
+ * Campus; (ORG.7D-1 D1-2) a Section or Subject Offering on an inactive
+ * Campus is never reactivated. Records already on a Campus that later
+ * becomes inactive are kept untouched. ActiveCampus is data validity only:
+ * authorization is unchanged.
  */
 class ActiveCampusWriteTest extends TestCase
 {
@@ -136,6 +140,81 @@ class ActiveCampusWriteTest extends TestCase
         $this->assertSame(1, $this->rows(SubjectOffering::class, $this->active->id));
     }
 
+    #[Test]
+    public function a_room_needs_an_active_campus(): void
+    {
+        $actor = $this->createUserWithCapabilities($this->school, ['academics.structure.manage']);
+        $create = fn (Campus $campus, string $code) => app(RoomAdministrationService::class)
+            ->create($this->school, $campus->id, ['name' => $code, 'code' => $code], $actor);
+
+        $this->assertSame($this->active->id, $create($this->active, 'R1')->campus_id);
+        $this->assertCampusFieldError($this->refusal(fn () => $create($this->inactive, 'R2')));
+        $this->assertInstanceOf(ModelNotFoundException::class, $this->refusal(fn () => $create($this->foreign, 'R3')));
+        $this->assertSame(0, $this->rows(Room::class, $this->inactive->id));
+
+        // A Room already on a Campus that becomes inactive is kept and still maintainable.
+        $this->deactivate($this->active);
+        $room = app(TenantContext::class)->withSchool($this->school, fn () => Room::query()->where('campus_id', $this->active->id)->firstOrFail());
+        $this->assertSame('Renamed', app(RoomAdministrationService::class)->update($this->school, $room->id, ['name' => 'Renamed'], $actor)->name);
+        $this->assertSame(1, $this->rows(Room::class, $this->active->id));
+    }
+
+    #[Test]
+    public function a_section_on_an_inactive_campus_is_never_reactivated(): void
+    {
+        $actor = $this->createUserWithCapabilities($this->school, ['academics.structure.manage']);
+        $year = $this->createAcademicYear($this->school);
+        $grade = $this->createGradeLevel($this->school);
+        $service = app(SectionAdministrationService::class);
+        $onActive = $service->create($this->school, $year->id, ['campus_id' => $this->active->id, 'grade_level_id' => $grade->id, 'name' => 'A', 'code' => 'A'], $actor);
+        $moving = $service->create($this->school, $year->id, ['campus_id' => $this->active->id, 'grade_level_id' => $grade->id, 'name' => 'B', 'code' => 'B'], $actor);
+
+        // Active Campus: deactivate and reactivate as before.
+        $this->assertSame('inactive', $service->update($this->school, $onActive->id, ['status' => 'inactive'], $actor)->status);
+        $this->assertSame('active', $service->update($this->school, $onActive->id, ['status' => 'active'], $actor)->status);
+
+        // Inactive Campus: deactivation works, reactivation is refused and nothing changes.
+        $service->update($this->school, $moving->id, ['status' => 'inactive'], $actor);
+        $this->deactivate($this->active);
+        $e = $this->refusal(fn () => $service->update($this->school, $moving->id, ['status' => 'active', 'name' => 'Changed'], $actor));
+        $this->assertInstanceOf(ValidationException::class, $e);
+        $this->assertSame([SectionAdministrationService::INACTIVE_CAMPUS], $e->errors()['status']);
+        $kept = app(TenantContext::class)->withSchool($this->school, fn () => Section::query()->findOrFail($moving->id));
+        $this->assertSame(['inactive', 'B', $this->active->id], [$kept->status, $kept->name, $kept->campus_id], 'no partial write, no Campus change');
+        $this->assertSame('inactive', app(TenantContext::class)->withSchool($this->school, fn () => Campus::query()->findOrFail($this->active->id)->status), 'the Campus is never activated as a side effect');
+
+        // A Section that is still active stays maintainable (re-sending its status is not a reactivation).
+        $this->assertSame('Renamed', $service->update($this->school, $onActive->id, ['name' => 'Renamed', 'status' => 'active'], $actor)->name);
+        $this->assertSame('inactive', $service->update($this->school, $onActive->id, ['status' => 'inactive'], $actor)->status);
+    }
+
+    #[Test]
+    public function a_subject_offering_on_an_inactive_campus_is_never_reactivated(): void
+    {
+        $actor = $this->createUserWithCapabilities($this->school, ['academics.subjects.manage']);
+        $year = $this->createAcademicYear($this->school);
+        $grade = $this->createGradeLevel($this->school);
+        $service = app(SubjectOfferingService::class);
+        $create = fn () => $service->create($this->school, $year->id, ['campus_id' => $this->active->id, 'grade_level_id' => $grade->id, 'subject_id' => $this->createSubject($this->school)->id], $actor);
+        $onActive = $create();
+        $moving = $create();
+
+        $this->assertSame('inactive', $service->updateFromInput($this->school, $onActive->id, ['status' => 'inactive'], $actor)->status);
+        $this->assertSame('active', $service->updateFromInput($this->school, $onActive->id, ['status' => 'active'], $actor)->status);
+
+        $service->updateFromInput($this->school, $moving->id, ['status' => 'inactive'], $actor);
+        $this->deactivate($this->active);
+        $e = $this->refusal(fn () => $service->updateFromInput($this->school, $moving->id, ['status' => 'active', 'sequence' => 9], $actor));
+        $this->assertInstanceOf(ValidationException::class, $e);
+        $this->assertSame([SubjectOfferingService::INACTIVE_CAMPUS], $e->errors()['status']);
+        $kept = app(TenantContext::class)->withSchool($this->school, fn () => SubjectOffering::query()->findOrFail($moving->id));
+        $this->assertSame(['inactive', $this->active->id], [$kept->status, $kept->campus_id]);
+        $this->assertNotSame(9, $kept->sequence, 'no partial write');
+
+        $this->assertSame(3, $service->updateFromInput($this->school, $onActive->id, ['sequence' => 3, 'status' => 'active'], $actor)->sequence);
+        $this->assertSame('inactive', $service->updateFromInput($this->school, $onActive->id, ['status' => 'inactive'], $actor)->status);
+    }
+
     /** @return array{0: User, 1: callable} an actor and a create(Campus $offeringCampus, ?Room $room, int $day) closure */
     private function timetable(): array
     {
@@ -223,9 +302,10 @@ class ActiveCampusWriteTest extends TestCase
     }
 
     #[Test]
-    public function the_five_write_paths_use_the_one_validator_and_it_is_never_authority(): void
+    public function the_write_paths_use_the_one_validator_and_it_is_never_authority(): void
     {
         foreach ([
+            'app/Domain/AcademicStructure/Application/RoomAdministrationService.php',
             'app/Domain/AcademicStructure/Application/SectionAdministrationService.php',
             'app/Domain/AcademicStructure/Application/SubjectOfferingService.php',
             'app/Domain/Timetable/Application/TimetableScheduleService.php',

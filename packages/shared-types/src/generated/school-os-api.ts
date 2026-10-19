@@ -5180,7 +5180,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Lists a School's TimetableEntry schedule (active by default, ordered by day_of_week then period_id). Fixed page size of 50. Requires timetable.schedule.view. */
+        /** Lists a School's TimetableEntry schedule (active by default, ordered by day_of_week then period_id). Fixed page size of 50. Requires timetable.schedule.view. ORG.7D-1 (ADR 0076 section 37): Campus-adopted -- a Campus-scoped holder sees only the classes of their active Campuses, and every entry, Offering, Section and Room outside that scope is 404 on every Timetable entry operation; a Campus-scoped holder's slot collision is one generic 409 TIMETABLE_SLOT_UNAVAILABLE. */
         get: operations["listTimetableEntries"];
         put?: never;
         /** Schedules a required, active SubjectOffering to an active Section, taught by an active teacher (HR Employee), in an optional active Room, during an active TimetablePeriod, on a given day of week. academic_year_id/campus_id/grade_level_id are always derived server-side from the resolved subject_offering_id, never accepted as input. Requires timetable.schedule.manage. */
@@ -5320,6 +5320,23 @@ export interface paths {
         };
         /** Timetable-owned helper: searches active TimetablePeriods by code/name (q is an optional case-insensitive substring match), for the Schedule form's Period picker. Gated by timetable.periods.view (a TimetablePeriod is owned by that capability pair, not timetable.schedule.*, per this checkpoint's own capability-boundary choice). */
         get: operations["searchTimetablePeriods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/timetable-entries/search/schedule-periods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** ORG.7D-1 (ADR 0076 section 37): the Schedule form's own lookup of the School-wide bell schedule -- the same active TimetablePeriods and fields as search/periods, but gated by timetable.schedule.manage held for the whole School OR for at least one Campus (a declared Campus shared lookup), so a Campus-scoped scheduler can pick a Period. The Period catalogue and search/periods stay on timetable.periods.view. */
+        get: operations["searchTimetableSchedulePeriods"];
         put?: never;
         post?: never;
         delete?: never;
@@ -29811,6 +29828,48 @@ export interface operations {
                 content?: never;
             };
             /** @description Authenticated but lacking timetable.periods.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    searchTimetableSchedulePeriods: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK. At most 20 results, no pagination. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TimetablePeriodSummary"][];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but holding timetable.schedule.manage neither School-wide nor in any active Campus. */
             403: {
                 headers: {
                     [name: string]: unknown;

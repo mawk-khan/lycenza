@@ -1886,6 +1886,8 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::get('/search/teachers', [TimetableEntryController::class, 'searchTeachers'])->name('search-teachers');
         Route::get('/search/rooms', [TimetableEntryController::class, 'searchRooms'])->name('search-rooms');
         Route::get('/search/periods', [TimetableEntryController::class, 'searchPeriods'])->name('search-periods');
+        // ORG.7D-1: the scheduling form's bell-schedule lookup (ADR 0076 §37).
+        Route::get('/search/schedule-periods', [TimetableEntryController::class, 'searchSchedulePeriods'])->name('search-schedule-periods');
         Route::post('/', [TimetableEntryController::class, 'store'])->name('store');
         Route::get('/{timetableEntry}/edit', [TimetableEntryController::class, 'edit'])->name('edit');
         Route::patch('/{timetableEntry}', [TimetableEntryController::class, 'update'])->name('update');

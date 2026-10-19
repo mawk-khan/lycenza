@@ -441,10 +441,15 @@ context is set exactly as for a first dispatch (rule 21).
   enrollment in the School's active year, ADR 0076 §35.2). `students` has
   no Campus.
 - **New work needs an active Campus.** Section, Subject Offering,
-  Timetable entry, admission application and employee assignment writes
-  validate their Campus through `ActiveCampus` (exists, same School,
-  active). This is data validity, never authorization. Rows already on an
-  inactive Campus are kept.
+  Timetable entry, admission application, employee assignment and (since
+  ORG.7D-1) Room writes validate their Campus through `ActiveCampus`
+  (exists, same School, active). A Section or Subject Offering on an
+  inactive Campus is never reactivated. This is data validity, never
+  authorization. Rows already on an inactive Campus are kept.
+- **History keeps the Campus it was written on (ORG.7D-1).** An attendance
+  register, a curriculum delivery and an examination paper store their
+  Campus, FK-bound to their parents. Authority over them follows that
+  stored Campus, never a current one (ADR 0076 §37.5).
 
 ## What is NOT yet implemented (Phase 0B honesty note)
 

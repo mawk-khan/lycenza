@@ -4,10 +4,9 @@ namespace App\Domain\Attendance\Application;
 
 use App\Domain\AcademicStructure\Application\SectionLabel;
 use App\Domain\Attendance\Infrastructure\AttendanceRecord;
-use App\Domain\Attendance\Infrastructure\AttendanceSession;
 use App\Models\School;
 use App\Models\User;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
@@ -38,10 +37,14 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
  *   this view adds no data beyond them; teacher reads stay on their own
  *   audited path (TeacherAttendanceReadAudit), which this class never
  *   serves.
+ * - ORG.7D-1 (ADR 0076 §37): `attendance.view` is Campus-adopted. The list
+ *   and the Section filter are restricted in SQL to the actor's CampusScope
+ *   by each record's / register's own stored Campus
+ *   (AttendanceAdministrationAccess); a request Section filter only narrows.
  */
 class AttendanceExceptionReadService
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
     public const string CAPABILITY = 'attendance.view';
 
@@ -50,7 +53,10 @@ class AttendanceExceptionReadService
 
     public const int PER_PAGE = 50;
 
-    public function __construct(private readonly TenantContext $context) {}
+    public function __construct(
+        private readonly TenantContext $context,
+        private readonly AttendanceAdministrationAccess $access,
+    ) {}
 
     /**
      * @param  list<string>  $statuses  a subset of EXCEPTION_STATUSES (empty = all of them)
@@ -58,11 +64,11 @@ class AttendanceExceptionReadService
      */
     public function list(School $school, string $date, ?string $sectionId, array $statuses, int $page, User $actor): LengthAwarePaginator
     {
-        $this->authorizeCapabilityFor($actor, self::CAPABILITY, $school);
+        $scope = $this->authorizeCampusScopeFor($actor, self::CAPABILITY, $school);
 
         $statuses = $statuses === [] ? self::EXCEPTION_STATUSES : array_values(array_intersect(self::EXCEPTION_STATUSES, $statuses));
 
-        return $this->context->withSchool($school, fn () => AttendanceRecord::query()
+        return $this->context->withSchool($school, fn () => $this->access->records($scope)
             ->select('attendance_records.*')
             ->join('attendance_sessions', function ($join) {
                 $join->on('attendance_sessions.id', '=', 'attendance_records.attendance_session_id')
@@ -91,9 +97,9 @@ class AttendanceExceptionReadService
      */
     public function sectionOptions(School $school, string $date, User $actor): array
     {
-        $this->authorizeCapabilityFor($actor, self::CAPABILITY, $school);
+        $scope = $this->authorizeCampusScopeFor($actor, self::CAPABILITY, $school);
 
-        return $this->context->withSchool($school, fn () => AttendanceSession::query()
+        return $this->context->withSchool($school, fn () => $this->access->sessions($scope)
             ->where('school_id', $school->id)
             ->where('attendance_date', $date)
             ->with('section.gradeLevel')

@@ -260,14 +260,17 @@ class DocumentService
             throw new DocumentOwnerNotFoundException('learning_content', $learningContentId);
         }
 
+        // ORG.7D-1 (ADR 0076 §37): authorized BEFORE the tier check, so a
+        // parent the actor may not reach (another Campus's, or not the
+        // teacher's) answers exactly like an unknown one whatever the tier.
+        $this->asNotFound(fn () => $this->lmsParents->authorizeWrite($actor, $school, LmsParentResourceAuthorization::LEARNING_CONTENT, $content->id), new DocumentOwnerNotFoundException('learning_content', $learningContentId));
+
         // A LearningContent resource has exactly one valid tier -- see
         // this class's own docblock. Rejected here, before any I/O,
         // exactly like an unsupported owner type is.
         if ($classificationTier !== self::LEARNING_CONTENT_CLASSIFICATION_TIER) {
             throw new InvalidDocumentClassificationException($classificationTier);
         }
-
-        $this->asNotFound(fn () => $this->lmsParents->authorizeWrite($actor, $school, LmsParentResourceAuthorization::LEARNING_CONTENT, $content->id), new DocumentOwnerNotFoundException('learning_content', $learningContentId));
 
         return ['learning_content_id' => $content->id];
     }
@@ -283,11 +286,12 @@ class DocumentService
             throw new DocumentOwnerNotFoundException('assignment', $assignmentId);
         }
 
+        // ORG.7D-1: authorized before the tier check (see above).
+        $this->asNotFound(fn () => $this->lmsParents->authorizeWrite($actor, $school, LmsParentResourceAuthorization::ASSIGNMENT, $assignment->id), new DocumentOwnerNotFoundException('assignment', $assignmentId));
+
         if ($classificationTier !== self::ASSIGNMENT_CLASSIFICATION_TIER) {
             throw new InvalidDocumentClassificationException($classificationTier);
         }
-
-        $this->asNotFound(fn () => $this->lmsParents->authorizeWrite($actor, $school, LmsParentResourceAuthorization::ASSIGNMENT, $assignment->id), new DocumentOwnerNotFoundException('assignment', $assignmentId));
 
         return ['assignment_id' => $assignment->id];
     }

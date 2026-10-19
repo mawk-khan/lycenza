@@ -3,6 +3,7 @@
 namespace Tests\Support\Authorization;
 
 use App\Support\Authorization\Campus\CampusScopeCatalogue;
+use App\Support\Navigation\StaffNavigation;
 use Illuminate\Routing\Route;
 
 /**
@@ -138,6 +139,7 @@ final class CoverageGuard
      * declaration is an exact, School-facing route that carries exactly that
      * ordinary floor -- the `capability` Gate, which a Campus grant never
      * satisfies -- with a reason, and no Campus floor or C6 contract.
+     * ORG.7D-1: a C2 Gate contract naming an adopted key fails the same way.
      *
      * @return list<string>
      */
@@ -160,6 +162,35 @@ final class CoverageGuard
                     if (($declared[$key]['capability'] ?? null) !== $capability || count($floor) !== 1) {
                         $problems[] = $this->describe($route)." checks Campus-adopted [{$capability}] with a whole-School floor but is not a declared whole-School-only operation";
                     }
+                }
+            }
+        }
+
+        // ORG.7D-1 (§37): nor may a declared C2 Gate contract name an adopted
+        // key -- the action would check it with the whole-School Gate (often
+        // through a constant no source scan sees), silently ignoring Campus
+        // grants. Adopted routes are C6.
+        // A declared whole-School hub (CampusScopeCatalogue::WHOLE_SCHOOL_HUBS)
+        // is the one exception: its any-of floor is exactly the hub's
+        // requirement, for the hub's declared keys only.
+        $hubFloors = [];
+        foreach (CampusScopeCatalogue::WHOLE_SCHOOL_HUBS as $hub => $keys) {
+            $requirement = StaffNavigation::hubRequirement($hub);
+            sort($requirement);
+            $hubFloors[implode('|', $requirement)] = array_keys($keys);
+        }
+        foreach ($this->entries as $entry) {
+            if ($entry->class !== Coverage::GATE) {
+                continue;
+            }
+            $floor = $entry->capabilities;
+            sort($floor);
+            foreach (CampusScopeCatalogue::adoptedAmong($entry->capabilities) as $capability) {
+                if (in_array($capability, $hubFloors[implode('|', $floor)] ?? [], true)) {
+                    continue;
+                }
+                if (($declared[$entry->route]['capability'] ?? null) !== $capability) {
+                    $problems[] = "[{$entry->route}] declares a whole-School {$entry->class} contract on Campus-adopted [{$capability}]; declare a C6 Campus contract (or a whole-School-only operation)";
                 }
             }
         }

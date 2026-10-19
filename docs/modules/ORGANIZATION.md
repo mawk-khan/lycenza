@@ -159,7 +159,10 @@ School setting, a role, a navigation toggle or a commercial plan.
   (the meaning of every grant before ORG.7A) or for one active Campus.
   Several Campuses are several grants.
 - **Effect.** A Campus grant works only in product areas that have adopted
-  Campus scope: today Visitor visits and Inventory stock. Its other
+  Campus scope: Visitor visits and Inventory stock (ORG.7A), and since
+  ORG.7D-1 (ADR 0076 §37) the Timetable schedule, Attendance registers
+  (administration), Curriculum delivery (administration), Learning content
+  and Assignments (administration) and Examination papers. Its other
   permissions stay unavailable from that grant until their area adopts
   Campus scope.
 - **Only whole-School administrators grant.** Staff access, School
@@ -171,3 +174,14 @@ School setting, a role, a navigation toggle or a commercial plan.
   Payments and Canteen and deferred them. Each needs an owner decision, or
   Student-Campus semantics from the SIS wave, before a Campus grant can
   work there.
+- **ORG.7D-1 (ADR 0076 §37)** adopted the five pre-SIS academic areas
+  above.
+  - **Who gains it:** a Principal granted for one Campus now works those
+    areas for that Campus.
+  - **Still whole-School:**
+    - bell periods, School setup and the syllabus catalogue;
+    - Examinations and grade scales;
+    - marks, Data health and teachers' own class pages (which follow
+      teaching assignments).
+  - **Navigation gap (owner decision):** a Campus-only Principal reaches
+    an Examination's papers by link, not from the Examinations list.

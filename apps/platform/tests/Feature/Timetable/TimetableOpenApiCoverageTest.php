@@ -60,8 +60,9 @@ class TimetableOpenApiCoverageTest extends TestCase
         // Pinned so a silent drift (e.g. a route AND its doc entry both
         // quietly removed together, which the diff assertions above
         // cannot catch on their own) fails loudly too.
-        $this->assertCount(17, $live, 'Expected exactly 17 live Timetable routes -- update this pin (and the OpenAPI contract) deliberately if this ever changes.');
-        $this->assertCount(17, $documented);
+        // ORG.7D-1 (ADR 0076 §37): 17 -> 18, the Schedule form's bell-schedule lookup (search/schedule-periods).
+        $this->assertCount(18, $live, 'Expected exactly 18 live Timetable routes -- update this pin (and the OpenAPI contract) deliberately if this ever changes.');
+        $this->assertCount(18, $documented);
     }
 
     /**

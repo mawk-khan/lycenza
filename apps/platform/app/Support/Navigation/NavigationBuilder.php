@@ -5,6 +5,7 @@ namespace App\Support\Navigation;
 use App\Domain\Identity\Application\Portal\ActingGuardianResolver;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Authorization\Campus\CampusScopeCatalogue;
 use App\Support\Authorization\Campus\CampusScopeResolver;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Domains\HostClassification;
@@ -116,11 +117,12 @@ final class NavigationBuilder
         // ORG.7A (ADR 0076 §11.7): an adopted capability held in at least one
         // active Campus also shows its entry. Visibility only -- every page
         // re-applies the actor's CampusScope, and nothing here authorizes.
-        $schoolCapabilities = $school !== null
-            ? array_values(array_unique([
-                ...$this->capabilities->schoolCapabilities($user, $school),
-                ...app(CampusScopeResolver::class)->heldInAnyCampus($user, $school),
-            ]))
+        // ORG.7D-1 (§37): only an entry whose every capability is adopted --
+        // a Campus-aware destination. A hub that also opens on unadopted keys
+        // (Data health) is whole-School, so a Campus grant never shows it.
+        $schoolCapabilities = $school !== null ? $this->capabilities->schoolCapabilities($user, $school) : [];
+        $withCampus = $school !== null
+            ? array_values(array_unique([...$schoolCapabilities, ...app(CampusScopeResolver::class)->heldInAnyCampus($user, $school)]))
             : [];
         $platformCapabilities = $schoolHost ? [] : $this->capabilities->platformCapabilities($user);
         $guardianAvailable = null;
@@ -133,7 +135,7 @@ final class NavigationBuilder
             }
 
             $granted = match ($entry->scope) {
-                NavigationEntry::SCOPE_SCHOOL => $school !== null && $this->satisfies($entry, $schoolCapabilities),
+                NavigationEntry::SCOPE_SCHOOL => $school !== null && $this->satisfies($entry, $this->campusAware($entry) ? $withCampus : $schoolCapabilities),
                 NavigationEntry::SCOPE_PLATFORM => $this->satisfies($entry, $platformCapabilities),
                 NavigationEntry::SCOPE_GROUP => $this->groupSatisfies($user, $entry),
                 NavigationEntry::SCOPE_ACCOUNT => true,
@@ -158,6 +160,14 @@ final class NavigationBuilder
         }
 
         return $visible;
+    }
+
+    /** ORG.7D-1: every capability the entry names is Campus-adopted. */
+    private function campusAware(NavigationEntry $entry): bool
+    {
+        $named = [...$entry->all, ...$entry->any];
+
+        return $named !== [] && CampusScopeCatalogue::adoptedAmong($named) === $named;
     }
 
     /** @param  list<string>  $held */

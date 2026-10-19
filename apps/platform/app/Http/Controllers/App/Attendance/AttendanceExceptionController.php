@@ -4,7 +4,7 @@ namespace App\Http\Controllers\App\Attendance;
 
 use App\Domain\Attendance\Application\AttendanceExceptionReadService;
 use App\Http\Controllers\Controller;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Request;
@@ -17,15 +17,17 @@ use Inertia\Response;
  * absent/late/excused records across every submitted register, under the
  * same `attendance.view` capability as the registers themselves. Thin:
  * validates input and calls AttendanceExceptionReadService.
+ * ORG.7D-1 (ADR 0076 §37): Campus-adopted; the read service restricts both
+ * the list and the Section filter to the actor's CampusScope.
  */
 class AttendanceExceptionController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
     public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities, AttendanceExceptionReadService $reads): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability(AttendanceExceptionReadService::CAPABILITY, $school);
+        $this->authorizeCampusScope(AttendanceExceptionReadService::CAPABILITY, $school);
 
         $validated = $request->validate([
             'date' => ['sometimes', 'nullable', 'date_format:Y-m-d'],

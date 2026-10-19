@@ -560,5 +560,32 @@ Project-adopted, pending legal ratification (`docs/security/E21-RETENTION-DETERM
   re-check the entry's Campus through `ActiveCampus`, inside the
   transaction (`TIMETABLE_CAMPUS_NOT_AVAILABLE`, 422). Existing entries
   are kept, and can still be deactivated.
-- **No Campus authority.** Timetable is not Campus-adopted
-  (`timetable.schedule.*` stays whole-School until ORG.7D-1).
+- **No Campus authority (ORG.7D-0).** Superseded by ORG.7D-1 below.
+
+## Campus-scoped scheduling (ORG.7D-1, 2026-10-19, ADR 0076 §37)
+
+- **Adopted:** `timetable.schedule.view` and `.manage`. The bell schedule
+  (`timetable.periods.*`) is School-wide configuration and stays
+  whole-School.
+- **Campus source:** the entry's Subject Offering. Its Section and Room are
+  FK-bound to the same Campus.
+- **Access:** `TimetableScheduleAccess` is the one reader.
+  - Lists, filter choices and the Offering/Section/Room pickers are
+    restricted in SQL.
+  - An out-of-scope entry, Offering, Section or Room is 404 on every web
+    and API operation; filters only narrow.
+- **Service defence:** `TimetableScheduleService` resolves the actor's scope
+  itself. The entry's current Campus and the target Offering's must both
+  be in scope, checked before any eligibility check.
+- **Slot conflicts:** teacher, Section and Room slots stay unique
+  School-wide. A Campus-scoped scheduler's collision is always
+  `TIMETABLE_SLOT_UNAVAILABLE` (409), identical in and out of scope, while
+  whole-School schedulers keep the specific codes.
+- **Shared lookups:**
+  - the teacher picker (active Employees, id and name only);
+  - the new `search/schedule-periods` bell-schedule lookup, web and API,
+    under `timetable.schedule.manage`.
+
+  `search/periods` keeps `timetable.periods.view`.
+- **Data health** stays a whole-School report: never opened or shown by a
+  Campus grant.

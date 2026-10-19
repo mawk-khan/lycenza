@@ -3,6 +3,9 @@
 namespace App\Http\Middleware;
 
 use App\Models\ApiIdempotencyKey;
+use App\Models\School;
+use App\Models\User;
+use App\Support\Authorization\Campus\CampusScopeResolver;
 use App\Support\Idempotency\Exceptions\IdempotencyKeyConflictException;
 use App\Support\Idempotency\Exceptions\IdempotencyRequestInProgressException;
 use App\Support\Idempotency\IdempotencyGuard;
@@ -48,6 +51,7 @@ class EnsureIdempotent
         private readonly IdempotencyGuard $guard,
         private readonly IdempotencyMetrics $metrics,
         private readonly TenantContext $context,
+        private readonly CampusScopeResolver $campusScopes,
     ) {}
 
     public function handle(Request $request, Closure $next): Response
@@ -69,7 +73,7 @@ class EnsureIdempotent
         $routeAction = $request->route()?->getName() ?? $request->path();
         $actorType = 'user';
 
-        $fingerprint = $this->fingerprint->compute($request, $routeAction, $school->id, $actorType, $actorId);
+        $fingerprint = $this->fingerprint->compute($request, $routeAction, $school->id, $actorType, $actorId, $this->campusAuthority($request, $actor, $school));
         $ttlSeconds = (int) config('idempotency.default_ttl_hours') * 3600;
 
         $claim = $this->guard->claim(
@@ -90,6 +94,34 @@ class EnsureIdempotent
             IdempotencyOutcome::New => $this->executeAndFinalize($request, $next, $claim->record),
             IdempotencyOutcome::Failed => throw new LogicException('Unreachable: claim() never returns Failed.'),
         };
+    }
+
+    /**
+     * ORG.7D-1 (ADR 0076 §37; rule 32): a `capability:x,campus` floor only
+     * proves the key is held SOMEWHERE, so it cannot by itself re-authorize
+     * a replay of a response written for one Campus. The actor's CURRENT
+     * CampusScope for each such floor is bound into the fingerprint: if it
+     * changed since the stored response (a Campus grant revoked, a Campus
+     * inactivated), the same key is a conflict and the stored body is never
+     * served. Null on every route without a Campus floor (unchanged).
+     */
+    private function campusAuthority(Request $request, User $actor, School $school): ?string
+    {
+        $parts = [];
+        foreach ($request->route()?->gatherMiddleware() ?? [] as $middleware) {
+            if (! is_string($middleware) || ! str_starts_with($middleware, 'capability:')) {
+                continue;
+            }
+            $spec = explode(',', substr($middleware, strlen('capability:')));
+            if (($spec[1] ?? null) !== 'campus') {
+                continue;
+            }
+            $scope = $this->campusScopes->campusScope($actor, $spec[0], $school);
+            $parts[] = $spec[0].'='.($scope->isWholeSchool() ? '*' : implode(',', $scope->campusIds()));
+        }
+        sort($parts);
+
+        return $parts === [] ? null : implode(';', $parts);
     }
 
     private function executeAndFinalize(Request $request, Closure $next, ApiIdempotencyKey $record): Response
