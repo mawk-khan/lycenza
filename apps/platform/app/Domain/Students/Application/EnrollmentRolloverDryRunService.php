@@ -8,8 +8,10 @@ use App\Domain\Students\Application\Exceptions\InvalidRolloverPlanChronologyExce
 use App\Domain\Students\Application\Exceptions\StaleRolloverConfigurationException;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
+use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Domain\Students\Infrastructure\StudentSubjectEnrollment;
+use App\Models\Campus;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Tenancy\TenantContext;
@@ -393,6 +395,11 @@ class EnrollmentRolloverDryRunService
     {
         $sectionIds = array_unique(array_column($readyCandidates, 'targetSectionId'));
         $sections = Section::query()->whereIn('id', $sectionIds)->get()->keyBy('id');
+        // ORG.7F-2 (finding F-2): the placement-validity rule execution
+        // enforces (StudentEnrollmentService), surfaced at validation so a
+        // Plan is never validated around an unplaceable target.
+        $activeCampusIds = Campus::query()->whereIn('id', $sections->pluck('campus_id')->unique()->values()->all())->where('status', 'active')->pluck('id')->flip();
+        $studentStatuses = Student::query()->whereIn('id', array_map(fn (array $c) => $c['item']->student_id, $readyCandidates))->pluck('status', 'id');
 
         $results = [];
         $stillCandidates = [];
@@ -411,6 +418,18 @@ class EnrollmentRolloverDryRunService
 
             if ($targetSection->grade_level_id !== $c['mapping']->target_grade_level_id) {
                 $results[$itemId] = $snapshot + ['result' => self::RESULT_BLOCKED, 'reason' => 'target_grade_mismatch'];
+
+                continue;
+            }
+
+            $unplaceable = match (true) {
+                $studentStatuses->get($c['item']->student_id) !== 'active' => 'student_inactive',
+                $targetSection->status !== 'active' => 'target_section_inactive',
+                ! $activeCampusIds->has($targetSection->campus_id) => 'target_campus_inactive',
+                default => null,
+            };
+            if ($unplaceable !== null) {
+                $results[$itemId] = $snapshot + ['result' => self::RESULT_BLOCKED, 'reason' => $unplaceable];
 
                 continue;
             }

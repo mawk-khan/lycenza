@@ -50,7 +50,8 @@ class StudentController extends Controller
     public function create(TenantContext $context): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('students.manage', $school);
+        // ORG.7F-2: students.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:students.manage` (declared).
 
         return Inertia::render('App/Students/Create');
     }
@@ -58,7 +59,8 @@ class StudentController extends Controller
     public function store(Request $request, TenantContext $context, StudentService $service): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('students.manage', $school);
+        // ORG.7F-2: students.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:students.manage` (declared).
 
         $validated = $request->validate([
             'student_number' => ['required', 'string', 'max:255'],
@@ -162,7 +164,7 @@ class StudentController extends Controller
                     ] : null,
                 ];
             })->all(),
-            'canManageStudents' => $capabilities->canInSchool($actor, 'students.manage', $school),
+            'canManageStudents' => $access->holdsWholeSchool($actor, 'students.manage', $school),
             'canManageGuardians' => $capabilities->canInSchool($actor, 'guardians.manage', $school),
             'canViewGuardianContacts' => $canViewGuardianContacts,
         ];
@@ -182,7 +184,7 @@ class StudentController extends Controller
             $history = $enrollmentReads->historyFor($model);
 
             $props['canViewEnrollments'] = true;
-            $props['canManageEnrollments'] = $capabilities->canInSchool($actor, 'enrollments.manage', $school);
+            $props['canManageEnrollments'] = $access->holdsWholeSchool($actor, 'enrollments.manage', $school);
             $props['currentEnrollment'] = $current ? $this->presentEnrollment($current) : null;
             $props['enrollmentHistory'] = $history->map(fn (StudentEnrollment $e) => $this->presentEnrollment($e))->values()->all();
         } else {
@@ -195,7 +197,8 @@ class StudentController extends Controller
     public function edit(TenantContext $context, string $student): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('students.manage', $school);
+        // ORG.7F-2: students.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:students.manage` (declared).
 
         $model = Student::query()->findOrFail($student);
 
@@ -207,7 +210,8 @@ class StudentController extends Controller
     public function update(Request $request, TenantContext $context, StudentService $service, string $student): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('students.manage', $school);
+        // ORG.7F-2: students.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:students.manage` (declared).
 
         $model = Student::query()->findOrFail($student);
 
@@ -233,7 +237,8 @@ class StudentController extends Controller
     public function changeStatus(Request $request, TenantContext $context, StudentService $service, string $student): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('students.manage', $school);
+        // ORG.7F-2: students.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:students.manage` (declared).
 
         $model = Student::query()->findOrFail($student);
 

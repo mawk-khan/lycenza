@@ -52,7 +52,8 @@ class StudentEnrollmentController extends Controller
     public function create(TenantContext $context, string $student): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('enrollments.manage', $school);
+        // ORG.7F-2: enrollments.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:enrollments.manage` (declared).
 
         $studentModel = Student::query()->findOrFail($student);
 
@@ -65,7 +66,8 @@ class StudentEnrollmentController extends Controller
     public function store(Request $request, TenantContext $context, StudentEnrollmentService $service, string $student): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('enrollments.manage', $school);
+        // ORG.7F-2: enrollments.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:enrollments.manage` (declared).
 
         $studentModel = Student::query()->findOrFail($student);
 
@@ -118,7 +120,8 @@ class StudentEnrollmentController extends Controller
     private function transition(Request $request, TenantContext $context, string $enrollment, callable $apply): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('enrollments.manage', $school);
+        // ORG.7F-2: enrollments.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:enrollments.manage` (declared).
 
         $model = StudentEnrollment::query()->findOrFail($enrollment);
 
@@ -140,7 +143,8 @@ class StudentEnrollmentController extends Controller
     public function transferCreate(TenantContext $context, string $enrollment): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('enrollments.manage', $school);
+        // ORG.7F-2: enrollments.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:enrollments.manage` (declared).
 
         $model = StudentEnrollment::query()->with(['student', 'academicYear', 'campus', 'gradeLevel', 'section'])->findOrFail($enrollment);
 
@@ -153,7 +157,8 @@ class StudentEnrollmentController extends Controller
     public function transfer(Request $request, TenantContext $context, StudentEnrollmentService $service, string $enrollment): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('enrollments.manage', $school);
+        // ORG.7F-2: enrollments.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:enrollments.manage` (declared).
 
         $model = StudentEnrollment::query()->findOrFail($enrollment);
 

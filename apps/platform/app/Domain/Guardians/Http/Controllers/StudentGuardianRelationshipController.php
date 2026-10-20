@@ -67,7 +67,8 @@ class StudentGuardianRelationshipController extends Controller
      */
     public function store(Request $request, School $school, string $student, StudentGuardianRelationshipService $service): JsonResponse
     {
-        $this->authorizeCapability('students.manage', $school);
+        // ORG.7F-2: students.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:students.manage` (declared).
         $this->authorizeCapability('guardians.manage', $school);
 
         abort_if(! Str::isUuid($student), 404);
@@ -97,7 +98,8 @@ class StudentGuardianRelationshipController extends Controller
 
     public function update(Request $request, School $school, string $relationship, StudentGuardianRelationshipService $service): JsonResponse
     {
-        $this->authorizeCapability('students.manage', $school);
+        // ORG.7F-2: students.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:students.manage` (declared).
         $this->authorizeCapability('guardians.manage', $school);
 
         abort_if(! Str::isUuid($relationship), 404);
@@ -121,7 +123,8 @@ class StudentGuardianRelationshipController extends Controller
 
     public function setPrimary(Request $request, School $school, string $relationship, StudentGuardianRelationshipService $service): JsonResponse
     {
-        $this->authorizeCapability('students.manage', $school);
+        // ORG.7F-2: students.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:students.manage` (declared).
         $this->authorizeCapability('guardians.manage', $school);
 
         abort_if(! Str::isUuid($relationship), 404);
@@ -134,7 +137,8 @@ class StudentGuardianRelationshipController extends Controller
 
     public function destroy(Request $request, School $school, string $relationship, StudentGuardianRelationshipService $service): JsonResponse
     {
-        $this->authorizeCapability('students.manage', $school);
+        // ORG.7F-2: students.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:students.manage` (declared).
         $this->authorizeCapability('guardians.manage', $school);
 
         abort_if(! Str::isUuid($relationship), 404);

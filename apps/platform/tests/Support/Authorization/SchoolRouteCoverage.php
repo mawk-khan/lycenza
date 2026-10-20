@@ -63,7 +63,9 @@ use App\Domain\Payroll\Statutory\Application\Export\StatutoryEsiContributionWork
 use App\Domain\Payroll\Statutory\Application\Export\StatutoryTdsDraftStatementExportService;
 use App\Domain\StaffAttendance\Application\StaffAttendanceReadService;
 use App\Domain\StaffAttendance\Application\StaffAttendanceService;
+use App\Domain\Students\Application\CampusStudentOnboardingService;
 use App\Domain\Students\Application\StudentAccess;
+use App\Domain\Students\Application\StudentNameEditService;
 use App\Domain\Timetable\Application\TimetableScheduleAccess;
 use App\Domain\Transport\Application\TransportRiderAccess;
 use App\Domain\Visitor\Application\VisitorVisitAccess;
@@ -438,32 +440,19 @@ final class SchoolRouteCoverage
             // Http\Controllers\App\StudentController
             Coverage::campus('app.students.index', 'students.view', StudentAccess::class, 'students'),
             Coverage::campus('app.students.overview', 'students.view', StudentAccess::class, 'student'),
-            Coverage::gate('app.students.create', 'students.manage'),
-            Coverage::gate('app.students.store', 'students.manage'),
-            Coverage::gate('app.students.edit', 'students.manage'),
-            Coverage::gate('app.students.update', 'students.manage'),
-            Coverage::gate('app.students.status', 'students.manage'),
+            // ORG.7F-2 (ADR 0076 §46): the narrow Campus writes.
+            Coverage::campus('app.students.names.edit', 'students.manage', StudentAccess::class, 'student'),
+            Coverage::campus('app.students.names.update', 'students.manage', StudentNameEditService::class, 'edit'),
+            Coverage::campus('app.students.onboard', 'students.manage', CampusStudentOnboardingService::class, 'destinations'),
+            Coverage::campus('app.students.onboard.store', 'students.manage', CampusStudentOnboardingService::class, 'onboard'),
 
             // Http\Controllers\App\StudentGuardianRelationshipController
-            Coverage::gate('app.students.guardians.create', ['students.manage', 'guardians.manage']),
-            Coverage::gate('app.students.guardians.search', ['students.manage', 'guardians.manage']),
-            Coverage::gate('app.students.guardians.candidates', ['students.manage', 'guardians.manage']),
-            Coverage::gate('app.students.guardians.link', ['students.manage', 'guardians.manage']),
-            Coverage::gate('app.students.guardians.store', ['students.manage', 'guardians.manage']),
 
             // Http\Controllers\App\StudentAccountLinkController
-            Coverage::gate('app.students.account-link.search', 'students.manage'),
-            Coverage::gate('app.students.account-link.store', 'students.manage'),
-            Coverage::gate('app.students.account-link.destroy', 'students.manage'),
 
             // Http\Controllers\App\StudentEnrollmentController
-            Coverage::gate('app.students.enrollments.create', 'enrollments.manage'),
-            Coverage::gate('app.students.enrollments.store', 'enrollments.manage'),
 
             // Http\Controllers\App\StudentGuardianRelationshipController
-            Coverage::gate('app.relationships.update', ['students.manage', 'guardians.manage']),
-            Coverage::gate('app.relationships.primary', ['students.manage', 'guardians.manage']),
-            Coverage::gate('app.relationships.destroy', ['students.manage', 'guardians.manage']),
 
             // Http\Controllers\App\GuardianController
             Coverage::gate('app.guardians.index', 'guardians.view'),
@@ -615,37 +604,18 @@ final class SchoolRouteCoverage
             Coverage::campus('app.enrollments.index', 'enrollments.view', StudentAccess::class, 'enrollmentDirectory'),
 
             // Http\Controllers\App\ClosedYearPlacementController
-            Coverage::gate('app.enrollments.closed-year-placements.index', 'enrollments.manage'),
-            Coverage::gate('app.enrollments.closed-year-placements.complete', 'enrollments.manage'),
 
             // Http\Controllers\App\StudentEnrollmentController
-            Coverage::gate('app.enrollments.complete', 'enrollments.manage'),
-            Coverage::gate('app.enrollments.withdraw', 'enrollments.manage'),
-            Coverage::gate('app.enrollments.cancel', 'enrollments.manage'),
-            Coverage::gate('app.enrollments.transfer.create', 'enrollments.manage'),
-            Coverage::gate('app.enrollments.transfer.store', 'enrollments.manage'),
 
             // Http\Controllers\App\EnrollmentRolloverController
-            Coverage::gate('app.enrollment-rollovers.create', ['enrollments.manage', 'enrollments.rollovers.manage']),
-            Coverage::gate('app.enrollment-rollovers.store', ['enrollments.manage', 'enrollments.rollovers.manage']),
-            Coverage::gate('app.enrollment-rollovers.validate', ['enrollments.manage', 'enrollments.rollovers.manage']),
-            Coverage::gate('app.enrollment-rollovers.start', ['enrollments.manage', 'enrollments.rollovers.manage']),
-            Coverage::gate('app.enrollment-rollovers.resume', ['enrollments.manage', 'enrollments.rollovers.manage']),
 
             // Http\Controllers\App\EnrollmentRolloverMappingController
-            Coverage::gate('app.enrollment-rollovers.mappings.store', ['enrollments.manage', 'enrollments.rollovers.manage']),
-            Coverage::gate('app.enrollment-rollovers.mappings.update', ['enrollments.manage', 'enrollments.rollovers.manage']),
 
             // Http\Controllers\App\EnrollmentRolloverSubjectMappingController
-            Coverage::gate('app.enrollment-rollovers.subject-mappings.upsert', ['enrollments.manage', 'enrollments.rollovers.manage']),
-            Coverage::gate('app.enrollment-rollovers.subject-mappings.destroy', ['enrollments.manage', 'enrollments.rollovers.manage']),
 
             // Http\Controllers\App\EnrollmentRolloverItemController
-            Coverage::gate('app.enrollment-rollovers.items.update', ['enrollments.manage', 'enrollments.rollovers.manage']),
 
             // Http\Controllers\App\EnrollmentRolloverBulkDecisionController
-            Coverage::gate('app.enrollment-rollovers.bulk-decisions.preview', ['enrollments.manage', 'enrollments.rollovers.manage']),
-            Coverage::gate('app.enrollment-rollovers.bulk-decisions.apply', ['enrollments.manage', 'enrollments.rollovers.manage']),
 
             // Http\Controllers\App\SubjectOfferingController
             Coverage::gate('app.subject-offerings.index', 'academics.subjects.view'),

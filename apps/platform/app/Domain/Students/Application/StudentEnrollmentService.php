@@ -3,6 +3,7 @@
 namespace App\Domain\Students\Application;
 
 use App\Domain\AcademicStructure\Infrastructure\Section;
+use App\Domain\Campuses\Application\ActiveCampus;
 use App\Domain\Students\Application\Exceptions\ActiveEnrollmentConflictException;
 use App\Domain\Students\Application\Exceptions\CrossAcademicYearTransferException;
 use App\Domain\Students\Application\Exceptions\CrossSchoolEnrollmentException;
@@ -10,6 +11,7 @@ use App\Domain\Students\Application\Exceptions\DuplicateEnrollmentRollNumberExce
 use App\Domain\Students\Application\Exceptions\IntraYearGradeChangeException;
 use App\Domain\Students\Application\Exceptions\InvalidEnrollmentDateRangeException;
 use App\Domain\Students\Application\Exceptions\InvalidEnrollmentTransitionException;
+use App\Domain\Students\Application\Exceptions\PlacementTargetUnavailableException;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Models\User;
@@ -94,6 +96,7 @@ class StudentEnrollmentService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly ActiveCampus $campuses,
     ) {}
 
     /**
@@ -117,13 +120,15 @@ class StudentEnrollmentService
         return $this->context->withSchool($student->school, function () use ($student, $section, $rollNumber, $startsOn, $actor) {
             try {
                 return DB::transaction(function () use ($student, $section, $rollNumber, $startsOn, $actor) {
-                    // Section lock FIRST, before any Enrollment mutation
-                    // (this class's own docblock). Nothing about the
-                    // Section is read from the lock -- it is a pure
-                    // serialization point shared with Attendance.
-                    $this->lockSections([$section->id]);
+                    // ORG.7F-2: the Student FIRST (FOR SHARE), then the
+                    // Section lock before any Enrollment mutation (this
+                    // class's own docblock), then the placement-validity
+                    // check under those locks.
+                    $lockedStudent = $this->lockStudentForPlacement($student->id);
+                    $sections = $this->lockSections([$section->id]);
+                    $this->assertPlaceable($lockedStudent, $sections[$section->id]);
 
-                    return $this->createEnrollmentRow($student, $section, $rollNumber, $startsOn, $actor);
+                    return $this->createEnrollmentRow($lockedStudent, $sections[$section->id], $rollNumber, $startsOn, $actor);
                 });
             } catch (UniqueConstraintViolationException $e) {
                 throw $this->translateUniqueViolation($e, $rollNumber);
@@ -228,8 +233,14 @@ class StudentEnrollmentService
                     // that stops an A->B / B->A pair of concurrent
                     // transfers from deadlocking -- and only then lock
                     // the source Enrollment.
+                    // ORG.7F-2: the Student is locked FIRST (FOR SHARE) --
+                    // before the Sections and the source Enrollment -- so a
+                    // Campus write guard holding the Student (FOR NO KEY
+                    // UPDATE) and then waiting for this Enrollment can never
+                    // form a cycle with this transfer (ADR 0076 §44.11).
+                    $lockedStudent = $this->lockStudentForPlacement($sourceEnrollment->student_id);
                     $discovered = StudentEnrollment::query()->whereKey($sourceEnrollment->id)->firstOrFail();
-                    $this->lockSections([$discovered->section_id, $targetSection->id]);
+                    $sections = $this->lockSections([$discovered->section_id, $targetSection->id]);
 
                     $lockedSource = StudentEnrollment::query()->whereKey($sourceEnrollment->id)->lockForUpdate()->firstOrFail();
 
@@ -276,7 +287,9 @@ class StudentEnrollmentService
                     // audit event just above) rolls back together, so
                     // the source Enrollment is never left half-transferred
                     // and no false "transferred" audit record survives.
-                    return $this->createEnrollmentRow($lockedSource->student, $targetSection, $rollNumber, $effectiveDate, $actor);
+                    $this->assertPlaceable($lockedStudent, $sections[$targetSection->id]);
+
+                    return $this->createEnrollmentRow($lockedStudent, $sections[$targetSection->id], $rollNumber, $effectiveDate, $actor);
                 });
             } catch (UniqueConstraintViolationException $e) {
                 throw $this->translateUniqueViolation($e, $rollNumber);
@@ -365,14 +378,57 @@ class StudentEnrollmentService
      * immediately and would silently guarantee nothing.
      *
      * @param  list<string>  $sectionIds
+     * @return array<string, Section> the locked Sections by id
      */
-    private function lockSections(array $sectionIds): void
+    private function lockSections(array $sectionIds): array
     {
         $ordered = array_values(array_unique($sectionIds));
         sort($ordered);
 
+        $locked = [];
         foreach ($ordered as $sectionId) {
-            Section::query()->whereKey($sectionId)->lockForUpdate()->firstOrFail();
+            $locked[$sectionId] = Section::query()->whereKey($sectionId)->lockForUpdate()->firstOrFail();
+        }
+
+        return $locked;
+    }
+
+    /**
+     * ORG.7F-2 (ADR 0076 §46): the Student row, share-locked until the
+     * placement commits, so a concurrent inactivation (an UPDATE) waits for
+     * it, or -- having committed first -- is seen. Every placement-creating
+     * path takes it BEFORE any Section or Enrollment lock (rollover
+     * execution included, before its source Enrollment), never FOR UPDATE
+     * (an exclusive Student lock would deadlock against the new row's own
+     * foreign-key check, §40.5). Must run inside the write transaction.
+     */
+    public function lockStudentForPlacement(string $studentId): Student
+    {
+        return Student::query()->whereKey($studentId)->sharedLock()->firstOrFail();
+    }
+
+    /**
+     * ORG.7F-2 (finding F-2): the ONE placement-validity rule for every new
+     * Enrollment -- an active Student, an active Section, and that Section's
+     * Campus active in the same School (share-locked by ActiveCampus until
+     * commit, so a Campus deactivation waits or is seen). The Section's year,
+     * Campus and Grade are bound by the composite foreign key (ORG.7D-0); a
+     * future year is fine (rollover), so the year is never required to be
+     * the School's active one here. Data validity, never authorization.
+     */
+    private function assertPlaceable(Student $lockedStudent, Section $lockedSection): void
+    {
+        if ($lockedStudent->school_id !== $lockedSection->school_id) {
+            throw new CrossSchoolEnrollmentException;
+        }
+        if ($lockedStudent->status !== 'active') {
+            throw new PlacementTargetUnavailableException(PlacementTargetUnavailableException::STUDENT_INACTIVE);
+        }
+        if ($lockedSection->status !== 'active') {
+            throw new PlacementTargetUnavailableException(PlacementTargetUnavailableException::SECTION_INACTIVE);
+        }
+        if ($this->campuses->find($lockedSection->school_id, $lockedSection->campus_id) === null) {
+            throw new PlacementTargetUnavailableException(PlacementTargetUnavailableException::CAMPUS_INACTIVE);
         }
     }
 

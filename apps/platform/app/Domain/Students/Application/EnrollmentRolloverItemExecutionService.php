@@ -10,6 +10,7 @@ use App\Domain\Students\Application\Exceptions\DuplicateEnrollmentRollNumberExce
 use App\Domain\Students\Application\Exceptions\ElectiveGroupConflictException;
 use App\Domain\Students\Application\Exceptions\InactiveSubjectOfferingException;
 use App\Domain\Students\Application\Exceptions\IncompatibleSubjectOfferingException;
+use App\Domain\Students\Application\Exceptions\PlacementTargetUnavailableException;
 use App\Domain\Students\Application\Exceptions\RequiredSubjectOfferingEnrollmentException;
 use App\Domain\Students\Application\Exceptions\RolloverItemNotExecutableException;
 use App\Domain\Students\Application\Exceptions\RolloverPlanNotExecutionReadyException;
@@ -162,6 +163,12 @@ class EnrollmentRolloverItemExecutionService
                 throw new RolloverItemNotExecutableException($lockedItem->validation_result);
             }
 
+            // ORG.7F-2 (ADR 0076 §46): the Student is share-locked BEFORE the
+            // source Enrollment -- the placement lock order every
+            // enrollment-creating path follows, so a Campus write guard
+            // holding the Student and waiting for this Enrollment never
+            // forms a cycle with this execution.
+            $this->enrollmentService->lockStudentForPlacement($lockedItem->student_id);
             $lockedSource = StudentEnrollment::query()->whereKey($lockedItem->source_enrollment_id)->lockForUpdate()->firstOrFail();
 
             if ($lockedSource->student_id !== $lockedItem->student_id) {
@@ -239,6 +246,11 @@ class EnrollmentRolloverItemExecutionService
                     : 'existing_target_enrollment_conflict_at_execution';
 
                 return $this->invalidateForDrift($plan, $lockedItem, $reason, $actor);
+            } catch (PlacementTargetUnavailableException $e) {
+                // ORG.7F-2 (F-2): the Student, target Section or its Campus
+                // stopped being placeable after validation -- drift, never a
+                // placement into an invalid target.
+                return $this->invalidateForDrift($plan, $lockedItem, 'placement_target_unavailable_at_execution', $actor);
             }
 
             $this->applySubjectElectives($plan, $lockedItem, $target, $actor);

@@ -49,6 +49,8 @@ interface Props {
     // ORG.7F-1 (ADR 0076 §45): a Campus-scoped reader -- rows open the
     // Campus-safe overview, never the whole-School Profile.
     campusView: boolean;
+    // ORG.7F-2: atomic Campus onboarding (students.manage AND enrollments.manage).
+    canOnboard: boolean;
 }
 
 const props = defineProps<Props>();
@@ -123,13 +125,22 @@ function studentHref(student: StudentRow): string {
                 <h1 class="text-xl font-semibold">Students</h1>
                 <p class="mt-1 text-sm text-slate-500">Your School's student directory.</p>
             </div>
-            <a
-                v-if="canManage"
-                href="/app/students/create"
-                class="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-            >
-                Add student
-            </a>
+            <div class="flex shrink-0 gap-2">
+                <a
+                    v-if="canOnboard"
+                    href="/app/students/onboard"
+                    class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
+                >
+                    Onboard student
+                </a>
+                <a
+                    v-if="canManage"
+                    href="/app/students/create"
+                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                >
+                    Add student
+                </a>
+            </div>
         </div>
 
         <form class="mt-6 flex flex-wrap items-end gap-3" @submit.prevent="applyFilters">

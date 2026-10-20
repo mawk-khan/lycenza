@@ -2,16 +2,22 @@
 
 namespace App\Http\Controllers\App;
 
+use App\Domain\Students\Application\CampusStudentOnboardingService;
+use App\Domain\Students\Application\Exceptions\DuplicateEnrollmentRollNumberException;
+use App\Domain\Students\Application\Exceptions\InvalidEnrollmentRollNumberException;
+use App\Domain\Students\Application\Exceptions\StudentOnboardingUnavailableException;
 use App\Domain\Students\Application\StudentAccess;
+use App\Domain\Students\Application\StudentNameEditService;
 use App\Domain\Students\Application\StudentSearch;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
-use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -35,7 +41,7 @@ class StudentDirectoryController extends Controller
 {
     use AuthorizesCampusScope;
 
-    public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities, StudentAccess $access): Response
+    public function index(Request $request, TenantContext $context, StudentAccess $access): Response
     {
         $school = $context->requireSchool();
         $scope = $this->authorizeCampusScope('students.view', $school);
@@ -84,8 +90,10 @@ class StudentDirectoryController extends Controller
                 'name' => $validated['name'] ?? '',
                 'status' => $validated['status'] ?? '',
             ],
-            // Student writes are whole-School (not Campus-adopted).
-            'canManage' => ! $campusView && $capabilities->canInSchool($actor, 'students.manage', $school),
+            // ORG.7F-2: the legacy create form is whole-School; Campus
+            // onboarding needs both keys (and re-decides everything itself).
+            'canManage' => ! $campusView && $access->holdsWholeSchool($actor, 'students.manage', $school),
+            'canOnboard' => ! $access->scopeOf($actor, 'students.manage', $school)->isNone() && ! $access->scopeOf($actor, 'enrollments.manage', $school)->isNone(),
         ]);
     }
 
@@ -116,7 +124,98 @@ class StudentDirectoryController extends Controller
             'currentPlacement' => $this->presentPlacement($placement, true),
             // The full Profile is a declared whole-School operation.
             'canOpenProfile' => $scope->isWholeSchool(),
+            // ORG.7F-2: names only, when the edit scope reaches this Student
+            // (the update re-decides it under lock).
+            'canEditNames' => $access->students($school, $access->scopeOf($actor, 'students.manage', $school))->whereKey($model->id)->exists(),
         ]);
+    }
+
+    /**
+     * ORG.7F-2 (ADR 0076 §46): the minimal name form -- names and the Student
+     * number only (never date of birth, status or anything else). A Campus
+     * editor reaches only a Student whose CURRENT operational Campus is in
+     * the students.manage scope (out of scope is NOT FOUND).
+     */
+    public function editNames(TenantContext $context, StudentAccess $access, string $student): Response
+    {
+        $school = $context->requireSchool();
+        $scope = $this->authorizeCampusScope('students.manage', $school);
+        $model = $access->student($school, $scope, $student);
+
+        return Inertia::render('App/Students/EditNames', [
+            'student' => [
+                'id' => $model->id,
+                'studentNumber' => $model->student_number,
+                'firstName' => $model->first_name,
+                'middleName' => $model->middle_name,
+                'lastName' => $model->last_name,
+            ],
+        ]);
+    }
+
+    /**
+     * ORG.7F-2: first, middle and last name only (StudentNameEditService,
+     * under StudentAccess::lockedWriteTarget()). Other input is ignored.
+     */
+    public function updateNames(Request $request, TenantContext $context, StudentNameEditService $names, string $student): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $scope = $this->authorizeCampusScope('students.manage', $school);
+
+        $validated = $request->validate([
+            'first_name' => ['required', 'string', 'max:255'],
+            'middle_name' => ['nullable', 'string', 'max:255'],
+            'last_name' => ['nullable', 'string', 'max:255'],
+        ]);
+        $model = $names->edit($school, $scope, $student, $validated, $context->actor());
+
+        return redirect("/app/students/{$model->id}/overview");
+    }
+
+    /**
+     * ORG.7F-2: the atomic Campus onboarding form. It needs BOTH
+     * students.manage and enrollments.manage; destinations are active
+     * Sections of the active year on an active Campus in both scopes. The
+     * Student number is never an input (it is allocated by the server).
+     */
+    public function onboard(TenantContext $context, CampusStudentOnboardingService $onboarding): Response
+    {
+        $school = $context->requireSchool();
+        $studentScope = $this->authorizeCampusScope('students.manage', $school);
+        $enrollmentScope = $this->authorizeCampusScope('enrollments.manage', $school);
+
+        return Inertia::render('App/Students/Onboard', [
+            'sections' => $onboarding->destinations($school, $studentScope, $enrollmentScope),
+        ]);
+    }
+
+    public function storeOnboarding(Request $request, TenantContext $context, CampusStudentOnboardingService $onboarding): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $studentScope = $this->authorizeCampusScope('students.manage', $school);
+        $enrollmentScope = $this->authorizeCampusScope('enrollments.manage', $school);
+
+        // Exactly these fields: never a Student number, an existing Student id,
+        // a status, a Guardian or anything else (owner decisions F2-D5, F2-D9,
+        // F2-D12); date of birth is write-only (F2-D13).
+        $validated = $request->validate([
+            'first_name' => ['required', 'string', 'max:255'],
+            'middle_name' => ['nullable', 'string', 'max:255'],
+            'last_name' => ['nullable', 'string', 'max:255'],
+            'date_of_birth' => ['required', 'date', 'before_or_equal:today'],
+            'section_id' => ['required', 'uuid'],
+            'roll_number' => ['required', 'string', 'max:255'],
+        ]);
+
+        try {
+            $enrollment = $onboarding->onboard($school, $studentScope, $enrollmentScope, $validated, $context->actor());
+        } catch (StudentOnboardingUnavailableException $e) {
+            throw ValidationException::withMessages(['section_id' => [$e->getMessage()]]);
+        } catch (DuplicateEnrollmentRollNumberException|InvalidEnrollmentRollNumberException $e) {
+            throw ValidationException::withMessages(['roll_number' => [$e->getMessage()]]);
+        }
+
+        return redirect("/app/students/{$enrollment->student_id}/overview");
     }
 
     /**

@@ -13,7 +13,9 @@ use App\Support\Authorization\Campus\CampusScopeResolver;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use LogicException;
 
 /**
  * ORG.7F-1 (ADR 0076 §45): the ONE place SIS reads Students and Enrollments
@@ -48,6 +50,7 @@ final class StudentAccess
         private readonly StudentEnrollmentReadService $enrollments,
         private readonly CurrentAcademicYearResolver $years,
         private readonly CampusScopeResolver $scopes,
+        private readonly StudentOperationalEligibility $eligibility,
     ) {}
 
     /**
@@ -166,6 +169,57 @@ final class StudentAccess
         $scope->restrict($enrollments, 'student_enrollments.campus_id');
 
         return $enrollments->whereIn('student_enrollments.student_id', $this->students($school, $scope)->select('students.id'));
+    }
+
+    /**
+     * ORG.7F-2 (ADR 0076 §46): the locked WRITE target for a Student identity
+     * edit -- inside the caller's write transaction, held until it commits.
+     *
+     * - Whole School: the Student (any status), locked FOR NO KEY UPDATE.
+     * - Campus set: in this order, each lock kept until commit --
+     *   1. the School's active year, FOR SHARE (none: refused);
+     *   2. the Student, FOR NO KEY UPDATE (never FOR UPDATE, §40.5), which
+     *      must be active;
+     *   3. its current Campus, read under that lock, must be in scope;
+     *   4. StudentOperationalEligibility::lockOperationalOn() then
+     *      share-locks the current Enrollment and the Campus and proves
+     *      that placement is still current, on that Campus, and active.
+     *   A transfer, inactivation, year switch or Campus deactivation that
+     *   committed first is seen and refused; one that comes later waits.
+     * - Everything refused (unknown, malformed, other School, out of scope,
+     *   inactive, unplaced, moved) is the same NOT FOUND.
+     *
+     * Returns the locked Student only: never a general mutable finder.
+     */
+    public function lockedWriteTarget(School $school, CampusScope $scope, string $studentId): Student
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new LogicException('StudentAccess::lockedWriteTarget() must run inside the write transaction.');
+        }
+        $refuse = fn () => throw (new ModelNotFoundException)->setModel(Student::class, [$studentId]);
+        if ($scope->isNone() || ! Str::isUuid($studentId)) {
+            $refuse();
+        }
+        $student = fn (): ?Student => Student::query()->where('school_id', $school->id)->whereKey($studentId)->lock('for no key update')->first();
+
+        if ($scope->isWholeSchool()) {
+            return $student() ?? $refuse();
+        }
+
+        $yearId = $this->years->shareLockActiveId($school) ?? $refuse();
+        $locked = $student();
+        if ($locked === null || $locked->status !== 'active') {
+            $refuse();
+        }
+        $campusId = $this->enrollments->constrainToCurrentPlacement(StudentEnrollment::query(), $yearId)
+            ->where('student_enrollments.school_id', $school->id)
+            ->where('student_enrollments.student_id', $studentId)
+            ->value('campus_id');
+        if (! is_string($campusId) || ! $scope->covers($campusId) || ! $this->eligibility->lockOperationalOn($school, $studentId, $campusId)) {
+            $refuse();
+        }
+
+        return $locked;
     }
 
     /** The actor's scope for a capability (page affordances; every read re-applies it). */

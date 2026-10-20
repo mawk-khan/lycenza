@@ -1393,3 +1393,19 @@ once several modules copy it.
        - No date of birth or Guardian data on a Campus surface, and a
          Guardian contact value needs `guardians.view`, never
          `students.view`.
+     - **SIS Campus writes are exactly two** (ORG.7F-2, §46):
+       - **Name edits:** first/middle/last name of a Student whose current
+         Campus is in the `students.manage` scope, under
+         `StudentAccess::lockedWriteTarget()`.
+       - **Atomic onboarding:** `CampusStudentOnboardingService`, needing
+         `students.manage` AND `enrollments.manage` in the destination
+         Campus. It creates a NEW Student and their current placement in one
+         transaction, and never finds or captures an existing Student.
+       - Every other operation on those keys is a declared whole-School
+         operation.
+     - **Student numbers.** Campus-onboarded numbers come only from
+       `StudentNumberAllocator`: the School's forward-only counter, never
+       reused, never Campus- or year-coded, never typed.
+     - **Placement validity.** Every new placement needs an active Student,
+       Section and Campus (`StudentEnrollmentService`, F-2). The Student is
+       locked FOR SHARE BEFORE any Section or Enrollment lock.

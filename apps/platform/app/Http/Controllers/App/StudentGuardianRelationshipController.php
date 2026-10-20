@@ -262,7 +262,10 @@ class StudentGuardianRelationshipController extends Controller
 
     private function authorizeBoth(School $school): void
     {
-        $this->authorizeCapability('students.manage', $school);
+        // ORG.7F-2: students.manage is Campus-adopted, so its whole-School
+        // requirement is each route's `capability:students.manage` floor
+        // (declared whole-School-only operations); guardians.manage is
+        // checked here as before.
         $this->authorizeCapability('guardians.manage', $school);
     }
 

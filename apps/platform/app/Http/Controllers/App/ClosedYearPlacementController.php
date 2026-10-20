@@ -29,7 +29,8 @@ class ClosedYearPlacementController extends Controller
     public function index(Request $request, TenantContext $context, ClosedYearPlacementClosureService $closure): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability(ClosedYearPlacementClosureService::CAPABILITY, $school);
+        // ORG.7F-2: enrollments.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:enrollments.manage` (declared).
         $validated = $request->validate(['academic_year_id' => ['sometimes', 'nullable', 'uuid']]);
         $actor = $context->actor();
 
@@ -61,7 +62,8 @@ class ClosedYearPlacementController extends Controller
     public function complete(Request $request, TenantContext $context, ClosedYearPlacementClosureService $closure): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability(ClosedYearPlacementClosureService::CAPABILITY, $school);
+        // ORG.7F-2: enrollments.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:enrollments.manage` (declared).
 
         $validated = $request->validate([
             'academic_year_id' => ['required', 'uuid'],

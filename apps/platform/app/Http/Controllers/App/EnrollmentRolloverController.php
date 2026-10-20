@@ -20,6 +20,7 @@ use App\Domain\Students\Application\Exceptions\RolloverPlanNoLongerConfigurableE
 use App\Domain\Students\Application\Exceptions\RolloverPlanNotExecutionReadyException;
 use App\Domain\Students\Application\Exceptions\RolloverPlanNotResumableException;
 use App\Domain\Students\Application\Exceptions\StaleRolloverConfigurationException;
+use App\Domain\Students\Application\StudentAccess;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverMapping;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
@@ -256,15 +257,20 @@ class EnrollmentRolloverController extends Controller
         $this->authorizeCapability('enrollments.rollovers.view', $school);
     }
 
+    /**
+     * ORG.7F-2 (ADR 0076 §46): enrollments.manage is Campus-adopted, so its
+     * whole-School requirement is the route floor of these declared
+     * whole-School-only operations (`capability:enrollments.manage`); the
+     * unadopted rollover key is still checked here.
+     */
     private function authorizeRolloverManage(School $school): void
     {
-        $this->authorizeCapability('enrollments.manage', $school);
         $this->authorizeCapability('enrollments.rollovers.manage', $school);
     }
 
     private function canManageRollovers(CapabilityResolver $capabilities, User $actor, School $school): bool
     {
-        return $capabilities->canInSchool($actor, 'enrollments.manage', $school)
+        return app(StudentAccess::class)->holdsWholeSchool($actor, 'enrollments.manage', $school)
             && $capabilities->canInSchool($actor, 'enrollments.rollovers.manage', $school);
     }
 

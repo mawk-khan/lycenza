@@ -269,15 +269,17 @@ class StudentOperationalCampusTest extends TestCase
         foreach (['students.view', 'students.manage', 'enrollments.view', 'enrollments.manage'] as $capability) {
             $this->assertFalse(Gate::forUser($user)->allows('capability', [$capability, $this->school]), "{$capability} School-wide");
         }
-        foreach (['students.manage', 'enrollments.manage'] as $capability) {
-            $this->assertTrue(app(CampusScopeResolver::class)->campusScope($user, $capability, $this->school)->isNone(), "{$capability} in a Campus");
-        }
-        foreach (['students.view', 'enrollments.view'] as $capability) {
-            $this->assertSame([$this->a->id], app(CampusScopeResolver::class)->campusScope($user, $capability, $this->school)->campusIds(), "{$capability} (ORG.7F-1 read adoption)");
+        // ORG.7F-2 (§46) adopted the manage keys for the name edit and atomic
+        // onboarding only: every other Student / Enrollment write is declared
+        // whole-School, so the Campus grant still opens none of them.
+        foreach (['students.view', 'enrollments.view', 'students.manage', 'enrollments.manage'] as $capability) {
+            $this->assertSame([$this->a->id], app(CampusScopeResolver::class)->campusScope($user, $capability, $this->school)->campusIds(), "{$capability} (ORG.7F adoption)");
         }
         $anna = $this->student('Anna', ['current' => 'a']);
         $this->actingAs($user)->post("/app/schools/{$this->school->id}/activate");
         $this->get('/app/students')->assertOk();
         $this->get("/app/students/{$anna->id}")->assertForbidden();
+        $this->get('/app/students/create')->assertForbidden();
+        $this->get("/app/students/{$anna->id}/edit")->assertForbidden();
     }
 }

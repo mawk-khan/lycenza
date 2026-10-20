@@ -15,7 +15,9 @@ use App\Domain\Library\Application\LibraryCirculationAccess;
 use App\Domain\Library\Application\LibraryCopyService;
 use App\Domain\Library\Application\LibraryLoanService;
 use App\Domain\Library\Infrastructure\LibraryCopy;
+use App\Domain\Students\Application\CampusStudentOnboardingService;
 use App\Domain\Students\Application\StudentEnrollmentService;
+use App\Domain\Students\Application\StudentNameEditService;
 use App\Domain\Students\Application\StudentService;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
@@ -51,6 +53,10 @@ use Tests\Support\Concurrency\HeldTransaction;
 //   php student-eligibility-op.php year-activate <schoolId> <yearId>
 //   php student-eligibility-op.php year-close <schoolId> <yearId>
 //   php student-eligibility-op.php campus-inactivate <schoolId> <adminUserId> <campusId>
+//   php student-eligibility-op.php student-rename <schoolId> <userId> <studentId> <firstName>   (ORG.7F-2)
+//   php student-eligibility-op.php onboard <schoolId> <userId> <sectionId> <firstName>          (ORG.7F-2; prints the allocated number)
+//   php student-eligibility-op.php section-inactivate <schoolId> <sectionId>                    (ORG.7F-2)
+//   php student-eligibility-op.php manual-create <schoolId> <studentNumber>                     (ORG.7F-2; a typed number)
 
 require __DIR__.'/../../vendor/autoload.php';
 
@@ -141,6 +147,26 @@ try {
             case 'campus-inactivate':
                 [$adminId, $campusId] = $args;
                 $app->make(CampusAdministrationService::class)->update($school, $campusId, ['status' => 'inactive'], User::query()->findOrFail($adminId));
+
+                return 'ok';
+            case 'student-rename':
+                [$userId, $studentId, $firstName] = $args;
+                $app->make(StudentNameEditService::class)->edit($school, $scope($userId, 'students.manage'), $studentId, ['first_name' => $firstName], User::query()->findOrFail($userId));
+
+                return 'ok';
+            case 'onboard':
+                [$userId, $sectionId, $firstName] = $args;
+                $enrollment = $app->make(CampusStudentOnboardingService::class)->onboard($school, $scope($userId, 'students.manage'), $scope($userId, 'enrollments.manage'), [
+                    'first_name' => $firstName, 'date_of_birth' => '2016-05-01', 'section_id' => $sectionId, 'roll_number' => 'R'.random_int(10000, 99999),
+                ], User::query()->findOrFail($userId));
+
+                return 'ok:'.$enrollment->student->student_number;
+            case 'manual-create':
+                $app->make(StudentService::class)->create($school, ['student_number' => $args[0], 'first_name' => 'Manual', 'date_of_birth' => '2016-05-01']);
+
+                return 'ok';
+            case 'section-inactivate':
+                Section::query()->whereKey($args[0])->update(['status' => 'inactive']);
 
                 return 'ok';
             default:

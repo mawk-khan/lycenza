@@ -613,34 +613,42 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
     // operations, CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS).
     Route::prefix('app/students')->name('app.students.')->group(function (): void {
         Route::get('/', [StudentDirectoryController::class, 'index'])->name('index');
-        Route::get('/create', [StudentController::class, 'create'])->name('create');
-        Route::post('/', [StudentController::class, 'store'])->name('store');
+        // ORG.7F-2 (ADR 0076 §46): atomic Campus onboarding (students.manage AND
+        // enrollments.manage in the destination Campus); the Student number is
+        // allocated by the server. Literal path before '/{student}'.
+        Route::get('/onboard', [StudentDirectoryController::class, 'onboard'])->name('onboard');
+        Route::post('/onboard', [StudentDirectoryController::class, 'storeOnboarding'])->name('onboard.store');
+        Route::get('/create', [StudentController::class, 'create'])->middleware('capability:students.manage')->name('create');
+        Route::post('/', [StudentController::class, 'store'])->middleware('capability:students.manage')->name('store');
         Route::get('/{student}', [StudentController::class, 'show'])->middleware('capability:students.view')->name('show');
         Route::get('/{student}/overview', [StudentDirectoryController::class, 'overview'])->name('overview');
-        Route::get('/{student}/edit', [StudentController::class, 'edit'])->name('edit');
+        // ORG.7F-2: the Campus-aware name edit (first/middle/last name only).
+        Route::get('/{student}/names', [StudentDirectoryController::class, 'editNames'])->name('names.edit');
+        Route::put('/{student}/names', [StudentDirectoryController::class, 'updateNames'])->name('names.update');
+        Route::get('/{student}/edit', [StudentController::class, 'edit'])->middleware('capability:students.manage')->name('edit');
         Route::get('/{student}/history', [StudentController::class, 'history'])->middleware('capability:students.view')->name('history');
-        Route::put('/{student}', [StudentController::class, 'update'])->name('update');
-        Route::post('/{student}/status', [StudentController::class, 'changeStatus'])->name('status');
+        Route::put('/{student}', [StudentController::class, 'update'])->middleware('capability:students.manage')->name('update');
+        Route::post('/{student}/status', [StudentController::class, 'changeStatus'])->middleware('capability:students.manage')->name('status');
 
         // "Add guardian" workflow (section 15) -- read-only search/
         // candidate endpoints are plain JSON (fetched live from Vue),
         // not Inertia pages.
-        Route::get('/{student}/guardians/add', [StudentGuardianRelationshipController::class, 'create'])->name('guardians.create');
-        Route::get('/{student}/guardians/search', [StudentGuardianRelationshipController::class, 'searchGuardians'])->name('guardians.search');
-        Route::get('/{student}/guardians/candidates', [StudentGuardianRelationshipController::class, 'candidateGuardians'])->name('guardians.candidates');
-        Route::post('/{student}/guardians/link', [StudentGuardianRelationshipController::class, 'linkExisting'])->name('guardians.link');
-        Route::post('/{student}/guardians', [StudentGuardianRelationshipController::class, 'linkNew'])->name('guardians.store');
+        Route::get('/{student}/guardians/add', [StudentGuardianRelationshipController::class, 'create'])->middleware('capability:students.manage')->name('guardians.create');
+        Route::get('/{student}/guardians/search', [StudentGuardianRelationshipController::class, 'searchGuardians'])->middleware('capability:students.manage')->name('guardians.search');
+        Route::get('/{student}/guardians/candidates', [StudentGuardianRelationshipController::class, 'candidateGuardians'])->middleware('capability:students.manage')->name('guardians.candidates');
+        Route::post('/{student}/guardians/link', [StudentGuardianRelationshipController::class, 'linkExisting'])->middleware('capability:students.manage')->name('guardians.link');
+        Route::post('/{student}/guardians', [StudentGuardianRelationshipController::class, 'linkNew'])->middleware('capability:students.manage')->name('guardians.store');
 
         // Phase 5B.2: the optional School OS account link.
-        Route::get('/{student}/account-link/search', [StudentAccountLinkController::class, 'search'])->name('account-link.search');
-        Route::post('/{student}/account-link', [StudentAccountLinkController::class, 'store'])->name('account-link.store');
-        Route::delete('/{student}/account-link', [StudentAccountLinkController::class, 'destroy'])->name('account-link.destroy');
+        Route::get('/{student}/account-link/search', [StudentAccountLinkController::class, 'search'])->middleware('capability:students.manage')->name('account-link.search');
+        Route::post('/{student}/account-link', [StudentAccountLinkController::class, 'store'])->middleware('capability:students.manage')->name('account-link.store');
+        Route::delete('/{student}/account-link', [StudentAccountLinkController::class, 'destroy'])->middleware('capability:students.manage')->name('account-link.destroy');
 
         // Phase 1B.6: Enrollment administrative UI -- a Student's own
         // "enroll into a Section" flow, nested exactly like the
         // guardians.* routes above.
-        Route::get('/{student}/enrollments/create', [StudentEnrollmentController::class, 'create'])->name('enrollments.create');
-        Route::post('/{student}/enrollments', [StudentEnrollmentController::class, 'store'])->name('enrollments.store');
+        Route::get('/{student}/enrollments/create', [StudentEnrollmentController::class, 'create'])->middleware('capability:enrollments.manage')->name('enrollments.create');
+        Route::post('/{student}/enrollments', [StudentEnrollmentController::class, 'store'])->middleware('capability:enrollments.manage')->name('enrollments.store');
 
         // Phase 0H.4D-P2: the Student Processing Authorization
         // Registry -- Highly Sensitive, so unlike every other route in
@@ -670,9 +678,9 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
     });
 
     Route::prefix('app/relationships')->name('app.relationships.')->group(function (): void {
-        Route::put('/{relationship}', [StudentGuardianRelationshipController::class, 'update'])->name('update');
-        Route::post('/{relationship}/primary', [StudentGuardianRelationshipController::class, 'setPrimary'])->name('primary');
-        Route::delete('/{relationship}', [StudentGuardianRelationshipController::class, 'destroy'])->name('destroy');
+        Route::put('/{relationship}', [StudentGuardianRelationshipController::class, 'update'])->middleware('capability:students.manage')->name('update');
+        Route::post('/{relationship}/primary', [StudentGuardianRelationshipController::class, 'setPrimary'])->middleware('capability:students.manage')->name('primary');
+        Route::delete('/{relationship}', [StudentGuardianRelationshipController::class, 'destroy'])->middleware('capability:students.manage')->name('destroy');
     });
 
     Route::prefix('app/guardians')->name('app.guardians.')->group(function (): void {
@@ -964,13 +972,13 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::get('/', [EnrollmentDirectoryController::class, 'index'])->name('index');
         // V11.3 (ADR 0075 section 11): placements left open in a closed year.
         // Literal paths before /{enrollment}/... (enrollments.manage).
-        Route::get('/closed-year-placements', [ClosedYearPlacementController::class, 'index'])->name('closed-year-placements.index');
-        Route::post('/closed-year-placements/complete', [ClosedYearPlacementController::class, 'complete'])->name('closed-year-placements.complete');
-        Route::post('/{enrollment}/complete', [StudentEnrollmentController::class, 'complete'])->name('complete');
-        Route::post('/{enrollment}/withdraw', [StudentEnrollmentController::class, 'withdraw'])->name('withdraw');
-        Route::post('/{enrollment}/cancel', [StudentEnrollmentController::class, 'cancel'])->name('cancel');
-        Route::get('/{enrollment}/transfer', [StudentEnrollmentController::class, 'transferCreate'])->name('transfer.create');
-        Route::post('/{enrollment}/transfer', [StudentEnrollmentController::class, 'transfer'])->name('transfer.store');
+        Route::get('/closed-year-placements', [ClosedYearPlacementController::class, 'index'])->middleware('capability:enrollments.manage')->name('closed-year-placements.index');
+        Route::post('/closed-year-placements/complete', [ClosedYearPlacementController::class, 'complete'])->middleware('capability:enrollments.manage')->name('closed-year-placements.complete');
+        Route::post('/{enrollment}/complete', [StudentEnrollmentController::class, 'complete'])->middleware('capability:enrollments.manage')->name('complete');
+        Route::post('/{enrollment}/withdraw', [StudentEnrollmentController::class, 'withdraw'])->middleware('capability:enrollments.manage')->name('withdraw');
+        Route::post('/{enrollment}/cancel', [StudentEnrollmentController::class, 'cancel'])->middleware('capability:enrollments.manage')->name('cancel');
+        Route::get('/{enrollment}/transfer', [StudentEnrollmentController::class, 'transferCreate'])->middleware('capability:enrollments.manage')->name('transfer.create');
+        Route::post('/{enrollment}/transfer', [StudentEnrollmentController::class, 'transfer'])->middleware('capability:enrollments.manage')->name('transfer.store');
     });
 
     // Phase 1B.7F: Enrollment Rollover administrative UI
@@ -989,28 +997,28 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         // ORG.7F-1 (ADR 0076 §45): rollover reads are declared whole-School-only
         // operations of the adopted enrollments.view.
         Route::get('/', [EnrollmentRolloverController::class, 'index'])->middleware(['capability:enrollments.view', 'capability:enrollments.rollovers.view'])->name('index');
-        Route::get('/create', [EnrollmentRolloverController::class, 'create'])->name('create');
-        Route::post('/', [EnrollmentRolloverController::class, 'store'])->name('store');
+        Route::get('/create', [EnrollmentRolloverController::class, 'create'])->middleware('capability:enrollments.manage')->name('create');
+        Route::post('/', [EnrollmentRolloverController::class, 'store'])->middleware('capability:enrollments.manage')->name('store');
         Route::get('/{rollover}', [EnrollmentRolloverController::class, 'show'])->middleware(['capability:enrollments.view', 'capability:enrollments.rollovers.view'])->name('show');
-        Route::post('/{rollover}/validate', [EnrollmentRolloverController::class, 'validate'])->name('validate');
-        Route::post('/{rollover}/start', [EnrollmentRolloverController::class, 'start'])->name('start');
-        Route::post('/{rollover}/resume', [EnrollmentRolloverController::class, 'resume'])->name('resume');
+        Route::post('/{rollover}/validate', [EnrollmentRolloverController::class, 'validate'])->middleware('capability:enrollments.manage')->name('validate');
+        Route::post('/{rollover}/start', [EnrollmentRolloverController::class, 'start'])->middleware('capability:enrollments.manage')->name('start');
+        Route::post('/{rollover}/resume', [EnrollmentRolloverController::class, 'resume'])->middleware('capability:enrollments.manage')->name('resume');
 
-        Route::post('/{rollover}/mappings', [EnrollmentRolloverMappingController::class, 'store'])->name('mappings.store');
-        Route::patch('/{rollover}/mappings/{mapping}', [EnrollmentRolloverMappingController::class, 'update'])->name('mappings.update');
+        Route::post('/{rollover}/mappings', [EnrollmentRolloverMappingController::class, 'store'])->middleware('capability:enrollments.manage')->name('mappings.store');
+        Route::patch('/{rollover}/mappings/{mapping}', [EnrollmentRolloverMappingController::class, 'update'])->middleware('capability:enrollments.manage')->name('mappings.update');
 
         // Phase 1G.4: subject-mapping configuration, addressed by the
         // SOURCE SubjectOffering id -- same shape/rationale as the JSON
         // API's identical routes (routes/api.php).
-        Route::put('/{rollover}/subject-mappings/{subjectOffering}', [EnrollmentRolloverSubjectMappingController::class, 'upsert'])->name('subject-mappings.upsert');
-        Route::delete('/{rollover}/subject-mappings/{subjectOffering}', [EnrollmentRolloverSubjectMappingController::class, 'destroy'])->name('subject-mappings.destroy');
+        Route::put('/{rollover}/subject-mappings/{subjectOffering}', [EnrollmentRolloverSubjectMappingController::class, 'upsert'])->middleware('capability:enrollments.manage')->name('subject-mappings.upsert');
+        Route::delete('/{rollover}/subject-mappings/{subjectOffering}', [EnrollmentRolloverSubjectMappingController::class, 'destroy'])->middleware('capability:enrollments.manage')->name('subject-mappings.destroy');
 
-        Route::patch('/{rollover}/items/{item}', [EnrollmentRolloverItemController::class, 'update'])->name('items.update');
+        Route::patch('/{rollover}/items/{item}', [EnrollmentRolloverItemController::class, 'update'])->middleware('capability:enrollments.manage')->name('items.update');
 
         // UAT-C2 (UAT-YR-01b): bulk Promote / Exclude -- preview writes
         // nothing; apply is guarded by the plan's configuration version.
-        Route::post('/{rollover}/bulk-decisions/preview', [EnrollmentRolloverBulkDecisionController::class, 'preview'])->name('bulk-decisions.preview');
-        Route::post('/{rollover}/bulk-decisions', [EnrollmentRolloverBulkDecisionController::class, 'apply'])->name('bulk-decisions.apply');
+        Route::post('/{rollover}/bulk-decisions/preview', [EnrollmentRolloverBulkDecisionController::class, 'preview'])->middleware('capability:enrollments.manage')->name('bulk-decisions.preview');
+        Route::post('/{rollover}/bulk-decisions', [EnrollmentRolloverBulkDecisionController::class, 'apply'])->middleware('capability:enrollments.manage')->name('bulk-decisions.apply');
     });
 
     // Phase 1H.1: SubjectOffering roster / elective administration

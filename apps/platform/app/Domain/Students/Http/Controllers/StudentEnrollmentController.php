@@ -87,7 +87,8 @@ class StudentEnrollmentController extends Controller
      */
     public function store(Request $request, School $school, string $student, StudentEnrollmentService $service): JsonResponse
     {
-        $this->authorizeCapability('enrollments.manage', $school);
+        // ORG.7F-2: enrollments.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:enrollments.manage` (declared).
 
         abort_if(! Str::isUuid($student), 404);
         $studentModel = Student::query()->findOrFail($student);
@@ -110,7 +111,8 @@ class StudentEnrollmentController extends Controller
 
     public function complete(Request $request, School $school, string $enrollment, StudentEnrollmentService $service): JsonResponse
     {
-        $this->authorizeCapability('enrollments.manage', $school);
+        // ORG.7F-2: enrollments.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:enrollments.manage` (declared).
 
         abort_if(! Str::isUuid($enrollment), 404);
         $model = StudentEnrollment::query()->findOrFail($enrollment);
@@ -124,7 +126,8 @@ class StudentEnrollmentController extends Controller
 
     public function withdraw(Request $request, School $school, string $enrollment, StudentEnrollmentService $service): JsonResponse
     {
-        $this->authorizeCapability('enrollments.manage', $school);
+        // ORG.7F-2: enrollments.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:enrollments.manage` (declared).
 
         abort_if(! Str::isUuid($enrollment), 404);
         $model = StudentEnrollment::query()->findOrFail($enrollment);
@@ -138,7 +141,8 @@ class StudentEnrollmentController extends Controller
 
     public function cancel(Request $request, School $school, string $enrollment, StudentEnrollmentService $service): JsonResponse
     {
-        $this->authorizeCapability('enrollments.manage', $school);
+        // ORG.7F-2: enrollments.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:enrollments.manage` (declared).
 
         abort_if(! Str::isUuid($enrollment), 404);
         $model = StudentEnrollment::query()->findOrFail($enrollment);
@@ -160,7 +164,8 @@ class StudentEnrollmentController extends Controller
      */
     public function transfer(Request $request, School $school, string $enrollment, StudentEnrollmentService $service): JsonResponse
     {
-        $this->authorizeCapability('enrollments.manage', $school);
+        // ORG.7F-2: enrollments.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:enrollments.manage` (declared).
 
         abort_if(! Str::isUuid($enrollment), 404);
         $model = StudentEnrollment::query()->findOrFail($enrollment);

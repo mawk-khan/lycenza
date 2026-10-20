@@ -118,7 +118,9 @@ class CampusScopeAdoptionArchitectureTest extends TestCase
             $this->assertArrayHasKey($domain, CampusScopeCatalogue::DOMAINS, "{$capability} names unknown domain {$domain}");
             $this->assertSame('school', DB::table('capabilities')->where('key', $capability)->value('namespace'), "{$capability} must be an existing School capability");
             // ORG.7F-1: of the SIS families only the two read keys are adopted.
-            foreach (['school.', 'integrations.', 'academics.years.', 'students.manage', 'students.processing_authorizations.', 'enrollments.manage', 'enrollments.rollovers.', 'guardians.', 'portal.'] as $forbidden) {
+            // ORG.7F-2: students.manage / enrollments.manage adopted for the
+            // narrow writes only (every other operation declared whole-School).
+            foreach (['school.', 'integrations.', 'academics.years.', 'students.processing_authorizations.', 'enrollments.rollovers.', 'guardians.', 'portal.'] as $forbidden) {
                 $this->assertStringStartsNotWith($forbidden, $capability, "{$capability} is whole-School authority or an unadopted SIS family");
             }
         }

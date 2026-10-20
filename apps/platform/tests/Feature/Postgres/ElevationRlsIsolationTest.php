@@ -101,8 +101,9 @@ class ElevationRlsIsolationTest extends TestCase
         // + examination_paper_mark_states and student_mark_corrections (RES.3, ADR 0068 §21);
         // + elective_teaching_assignments (TCH-E, ADR 0063 §45);
         // + payment_corrections and payment_correction_lines (UAT-C3, ADR 0031 amendment §3);
-        // + school_module_entitlements (ORG.5, ADR 0076 §31).
-        $this->assertSame(208, (int) DB::connection('pgsql_admin')->selectOne(
+        // + school_module_entitlements (ORG.5, ADR 0076 §31);
+        // + student_number_sequences (ORG.7F-2, ADR 0076 §46).
+        $this->assertSame(209, (int) DB::connection('pgsql_admin')->selectOne(
             "select count(*) as c from pg_class where relrowsecurity and relforcerowsecurity and relnamespace = 'public'::regnamespace",
         )->c, 'No tenant table gained or lost RLS in Phase 0N.3.');
     }

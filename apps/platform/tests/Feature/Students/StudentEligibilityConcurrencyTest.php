@@ -283,42 +283,21 @@ class StudentEligibilityConcurrencyTest extends TestCase
     }
 
     /**
-     * Security review (ADR 0076 §40.5): a Campus-scoped assignment holds the
-     * Student row and then waits on the Enrollment, while a transfer or
-     * rollover holds the Enrollment and its new row's foreign key needs a KEY
-     * SHARE on the Student. HostelResidencyService::STUDENT_LOCK (FOR NO KEY
-     * UPDATE) must not block that KEY SHARE, so the transfer completes while
-     * the Student lock is held (no cycle). The assignment that then resumes
-     * sees the move and refuses.
+     * Security review (ADR 0076 §40.5), amended by ORG.7F-2 (§46): a
+     * Campus-scoped assignment holds the Student row (FOR NO KEY UPDATE) and
+     * then waits on the Enrollment. A transfer now share-locks the Student
+     * FIRST -- before its Sections and the Enrollment -- so it waits for the
+     * assignment instead of holding the Enrollment the assignment needs: no
+     * cycle in either order. The transfer completes once the lock is released,
+     * and the assignment that then runs sees the move and refuses.
      */
     #[Test]
-    public function a_transfer_never_waits_on_the_hostel_student_lock(): void
+    public function a_transfer_waits_for_the_hostel_student_lock_and_never_deadlocks(): void
     {
-        $dir = sys_get_temp_dir().'/race_'.bin2hex(random_bytes(8));
-        mkdir($dir);
-        $holder = new Process($this->op('hostel-student-lock', $this->student->id), null, ['CONCURRENCY_HOLD_DIR' => $dir]);
-        $holder->setTimeout(120);
-        $holder->start();
-        try {
-            $deadline = microtime(true) + 90;
-            while (! file_exists($dir.'/acted')) {
-                if (! $holder->isRunning() || microtime(true) > $deadline) {
-                    $this->fail("The holder never took the Student lock.\nOutput: ".$holder->getOutput()."\nError: ".$holder->getErrorOutput());
-                }
-                usleep(2_000);
-            }
-            $transfer = new Process($this->stateChanges()['transfer']);
-            $transfer->setTimeout(20);
-            $transfer->run();
-            $this->assertSame('ok', trim($transfer->getOutput()), 'the transfer completes while the Hostel Student lock is held');
-        } finally {
-            touch($dir.'/release');
-            $holder->wait();
-            @unlink($dir.'/acted');
-            @unlink($dir.'/release');
-            @rmdir($dir);
-        }
-        $this->assertSame('ok', trim($holder->getOutput()));
+        [$holder, $transfer] = $this->raceWithHeldHolder($this->op('hostel-student-lock', $this->student->id), $this->stateChanges()['transfer']);
+
+        $this->assertSame('ok', $holder);
+        $this->assertSame('ok', $transfer, 'the transfer completes after the Hostel Student lock is released');
 
         $assign = new Process($this->assignResidency());
         $assign->run();

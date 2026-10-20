@@ -21,6 +21,7 @@ interface Props {
         rollNumber: string | null;
     } | null;
     canOpenProfile: boolean;
+    canEditNames: boolean;
 }
 
 const props = defineProps<Props>();
@@ -53,6 +54,9 @@ const placementLabel = computed(() => {
                 <p class="mt-1 text-sm text-slate-500">{{ student.studentNumber }}</p>
             </div>
             <div class="flex shrink-0 gap-3 text-sm">
+                <a v-if="canEditNames" class="underline" :href="`/app/students/${student.id}/names`"
+                    >Edit names</a
+                >
                 <a v-if="canOpenProfile" class="underline" :href="`/app/students/${student.id}`"
                     >Full profile</a
                 >

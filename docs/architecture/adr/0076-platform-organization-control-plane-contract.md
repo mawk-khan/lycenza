@@ -5640,3 +5640,260 @@ candidate: no HIGH or MEDIUM finding.
   - Grade Levels stay School-wide reference labels in the filter options.
   - A Campus grant's cached half (60 s) can under-grant for up to a
     minute after deploy, never over-grant.
+
+## 46. ORG.7F-2 — SIS Campus narrow writes: Student-number allocation, placement validity, name edits and atomic onboarding (as built, 2026-10-20)
+
+Owner authorization: ORG.7F-2, decisions F2-D1 to F2-D12, plus F2-D13
+(asked during the phase). Baseline `origin/main` = `2d733fdf` (ORG.7F-1, §45).
+
+**F2-D13 (owner, 2026-10-20).** `students.date_of_birth` is NOT NULL and
+feeds the age and legal-basis logic (`StudentAge`). Campus onboarding
+therefore takes the date of birth as a WRITE-ONLY creation input:
+- It is required to create the record.
+- It is never shown back to a Campus user, never Campus-editable, and on no
+  Campus surface.
+- There is no schema change.
+
+    adopted (domain `students`)   + students.manage, enrollments.manage
+    Campus writes (4 C6 routes)   name edit (first/middle/last only, current in-scope
+                                  Student, under lock); atomic onboarding (BOTH keys
+                                  in the destination Campus; new Student + current
+                                  placement; server-allocated number)
+    everything else on those keys 58 declared whole-School-only operations
+
+**46.1 Student-number audit (read-only, before any change).**
+- **Column:** `students.student_number` is `varchar(255)` NOT NULL.
+- **Uniqueness:** already enforced per School
+  (`students_school_id_student_number_unique`), unchanged. Cross-School
+  reuse is allowed.
+- **DDEV data:**
+  - 39 numbers, 0 numeric-only and 39 alphanumeric (`LDS-0001`,
+    `ANX-0001`);
+  - no duplicate within a School and no number shared across Schools;
+  - the longest value is 8 characters.
+- **Factory:** numeric 100000–999999.
+- **Creation paths:**
+  - `StudentService::create` (web and API create; typed number, legacy and
+    unchanged);
+  - Admissions conversion (typed number, unchanged);
+  - Campus onboarding: the ONLY path that uses the allocator.
+
+**46.2 The allocator (F2-D5 to F2-D7).**
+- **Counter table:** `student_number_sequences`, one row per School
+  (`next_value`, `last_allocated_value`, CHECKs).
+  - FORCE RLS; the runtime role may read, insert and update, never delete.
+  - Seeded per School, School context set row by row so it works for a
+    non-superuser migration role, at (greatest digits-only number) + 1, or 1
+    when there is none. DDEV: both Schools start at 1.
+- **`StudentNumberAllocator::allocate(School)`:**
+  - runs inside the creating transaction;
+  - upserts the row lazily, then locks it FOR UPDATE;
+  - skips a candidate already held by a Student (a bounded defence);
+  - advances the row and returns the plain decimal value.
+  - The result is School-wide and stable, never Campus- or year-coded, never
+    typed and never previewed (no route).
+- **Never reused.** The `students_advance_number_sequence` trigger
+  (BEFORE INSERT OR UPDATE OF `student_number`) moves the counter past ANY
+  digits-only number written by any path, so a number once held (manual,
+  conversion, purged later) is never generated.
+  - Leading zeroes count numerically: `0009` is 9.
+  - Alphanumeric values (`A-15`) never count.
+  - Digit strings longer than 18 characters are outside the counter's range;
+    the unique index remains the backstop.
+- **Transactional, so gapless on rollback.** A rolled-back onboarding leaves
+  the counter where it was. Its number was held by no Student, so it is
+  issued once, to the next onboarding. Owner direction (gap-tolerance
+  acceptable) is satisfied more strictly: no gaps from rollbacks, and no
+  reuse.
+- **Forward only.** A second trigger refuses any decrease of `next_value`
+  or change of the seed, whoever writes.
+- **Rollback.** `down()` drops everything ONLY while the counter is
+  unmoved: no number generated AND `next_value = seeded_next_value`. A
+  number written since seeding could belong to a Student later purged.
+  - The check is an RLS-proof CHECK, which fails otherwise.
+  - **Proven on DDEV:** the CHECK is refused once a row is marked as
+    allocated.
+  - **Rollback-proof:** identical schema, 84 lines, `verify-database
+    failed=0`.
+
+**46.3 F-2 closed: placement validity.** ONE rule in
+`StudentEnrollmentService` (`assertPlaceable`) for every new placement:
+- an active Student;
+- an active Section of the same School;
+- that Section's Campus active (`ActiveCampus`, share-locked).
+
+Year, Campus and Grade context stays bound by the ORG.7D-0 composite FK. A
+future (draft) year is a valid target (rollover); only onboarding requires
+the active year. Data validity only, so whole-School authorization is
+unchanged.
+- **Lock order** (every enrollment-creating path):
+  1. Student FOR SHARE (`lockStudentForPlacement`);
+  2. Sections FOR UPDATE (id order);
+  3. Enrollment;
+  4. Campus share lock.
+- **Writers:**
+  - `enroll`;
+  - `transferPlacement`: the Student is locked before the discovery read,
+    the Sections and the source Enrollment;
+  - rollover item execution: the Student is locked before the source
+    Enrollment; `PlacementTargetUnavailableException` is drift and blocks
+    the item with `placement_target_unavailable_at_execution`;
+  - Admissions conversion: through `enroll`;
+  - Campus onboarding: through `enroll`.
+- **Rollover dry run** now blocks `student_inactive`,
+  `target_section_inactive` and `target_campus_inactive` (staff labels
+  added).
+- **Refusal:** `PLACEMENT_TARGET_UNAVAILABLE` (422) with a reason.
+  - **Behaviour change:** re-entry of an inactive Student now needs
+    reactivation first.
+- **Amended pin (ORG.7D-4 §40.5).** A transfer now WAITS for a Hostel or
+  Transport Student lock instead of passing it. There is no cycle in either
+  order: the transfer holds nothing the assignment needs until it has the
+  Student. The pin was renamed and is proven with real overlap.
+
+**46.4 `StudentAccess::lockedWriteTarget()` (write side).** It runs inside
+the write transaction and returns the locked Student or the unknown 404.
+- **Whole School:** the Student, FOR NO KEY UPDATE.
+- **Campus set:**
+  1. the active year FOR SHARE;
+  2. the Student FOR NO KEY UPDATE (active);
+  3. its current Campus, read under that lock, must be in scope;
+  4. `StudentOperationalEligibility::lockOperationalOn()` then share-locks
+     the current Enrollment and the Campus and re-proves the placement.
+
+It is never a general finder, and there is no `lockedTransferTarget` (F3).
+
+**46.5 Campus name edit.**
+- **Routes:** `app.students.names.edit` / `.update` (C6, `students.manage`).
+- **Service:** `StudentNameEditService`. It whitelists
+  `first_name`/`middle_name`/`last_name` (over-posted number, date of birth,
+  status and `school_id` are ignored, pinned) and runs under
+  `lockedWriteTarget()`.
+- **Audit:** `student.updated` with `changedFields` and `scope`.
+- **Out of scope** (other Campus, former, future, inactive, unplaced,
+  unknown) is 404.
+- **Overview:** `canEditNames` only within reach.
+- **Web only.** The API full update stays whole-School (it carries the
+  number and date of birth).
+- **Races (real processes, both orders):** transfer, inactivation, year
+  switch and Campus deactivation. Whoever locks first commits; a state
+  change that committed first refuses the edit (404).
+
+**46.6 Atomic Campus onboarding (F2-D8, F2-D9, F2-D12).**
+- **Routes:** `app.students.onboard` / `.onboard.store` (C6). Both
+  `students.manage` AND `enrollments.manage` scopes resolve; the
+  destination Campus must be in both.
+- **`CampusStudentOnboardingService::onboard()`**, one transaction:
+  1. active year FOR SHARE (none: refused);
+  2. the destination Section (this School, the active year, a Campus in both
+     scopes);
+  3. the allocated number;
+  4. a new active Student (names, write-only date of birth);
+  5. `enroll()` (F-2 under locks);
+  6. audit `student.created`, `student_enrollment.created` (with
+     `campusId`), and `student.campus_onboarded` (ids only).
+- **DTO, exactly:** `first_name`, `middle_name`, `last_name`,
+  `date_of_birth`, `section_id`, `roll_number`. Never a Student number,
+  Student id, status or Guardian (over-posting ignored, pinned).
+- **No capture.** The service never reads an existing Student.
+- **Refusals:**
+  - One generic `STUDENT_ONBOARDING_UNAVAILABLE` for every probeable
+    refusal: another Campus, a draft or closed year, an inactive Section or
+    Campus, unknown, no active year. Nothing is created and no number is
+    consumed.
+  - A taken roll number in the actor's own Section is ordinary feedback;
+    the whole onboarding rolls back.
+- **Duplicate identity:** the repository has no name or date-of-birth
+  matching, so there is nothing to conceal. Server-generated numbers cannot
+  collide.
+- **Races (real processes):**
+  - two onboardings get distinct numbers;
+  - against Campus deactivation, Section deactivation and a year switch, in
+    both orders: commit, or the generic refusal with no partial Student.
+- **API onboarding: DEFERRED.**
+  - The JSON API needs an all-of floor proven before `idempotent` replay
+    (rule 32), and the `,campus` floor checks one key. Same as HR §43.5.
+  - Web onboarding has no stored replay, so it is safe.
+- **Rule 29:** a double submit creates two Students, the same as the
+  legacy create and HR onboarding. Accepted LOW and recorded.
+- **UI:**
+  - The Directory shows "Onboard student" (`canOnboard`: both keys
+    somewhere).
+  - The form offers in-scope active current-year Sections.
+  - After success the overview shows the allocated number.
+
+**46.7 Adoption bookkeeping.**
+- **58 declared whole-School-only operations**, exact route names with
+  reasons. They cover create, store and the full edit (number, date of
+  birth), status, Guardian links (8 web + 4 API), account links, enroll of
+  an existing Student (capture, F-3), complete, withdraw, cancel, transfer
+  (F3), closed-year closure and every rollover write.
+- **Removed controller checks.** Every whole-School `authorizeCapability`
+  call on these keys was removed. The route floor is now the check, and 37
+  C2 entries became C1.
+- **Defence in depth kept:** `ClosedYearPlacementClosureService` still
+  re-checks with the Gate.
+- **View hints** (`canManageStudents`, `canManageEnrollments`, rollover
+  manage, `canManage`) are explicit whole-School checks.
+- **`CampusAdoptionImpactTest`:**
+  - principal and school_admin hold the new keys;
+  - principal is the only Campus-scopable holder;
+  - `SIS_CAMPUS_CONFERRED.principal` = the four SIS keys;
+  - `students.manage` and `enrollments.manage` are HIGH_RISK and
+    owner-approved (F2-D10).
+  - admissions_officer, front_office, hostel_warden and librarian gain no
+    Student write (pinned).
+- **`StudentCampusWriteArchitectureTest`:**
+  - the name-edit fields and route DTO;
+  - the onboarding DTO;
+  - allocator use only in the onboarding service, which is its only caller;
+  - only the four C6 writes;
+  - 25 named lifecycle, enroll, transfer and Profile routes declared.
+
+**46.8 Recorded for F3 (not built).**
+- **Placement writers.** The only runtime INSERT is
+  `StudentEnrollmentService::createEnrollmentRow`; demo seeding uses
+  `enroll()`. The only UPDATEs are status and `ends_on` (transfer,
+  complete, withdraw, cancel). No runtime code rewrites a placement column.
+- **Proposed freeze (D-6, before F3 publishes):** a
+  `BEFORE UPDATE ON student_enrollments` trigger refusing any change to
+  `student_id`, `school_id`, `academic_year_id`, `campus_id`,
+  `grade_level_id`, `section_id` or `starts_on`. It also allows status only
+  `active` → `completed`/`withdrawn`/`transferred`/`cancelled` with
+  `ends_on` set once. `sections`' placement columns are already frozen by
+  the composite FK while any Enrollment references them.
+- **Transfer prerequisites (F1-D5):**
+  - a dual-scope `lockedTransferTarget` using §46.3's order;
+  - an active source-Campus Hostel residency, Transport rider assignment or
+    elective BLOCKS a Campus-scoped transfer until its owning domain
+    resolves it; nothing is auto-moved;
+  - Campus ids in the transfer audit;
+  - generic concealment.
+
+**46.9 Security review (ORG.7F-2).** Independent adversarial review of the
+candidate: no HIGH or MEDIUM finding.
+- **Fixed -- LOW-1: a typed number equal to the next generated one could
+  deadlock (40P01).**
+  - Cause: the AFTER trigger let the manual writer claim its unique index
+    entry before waiting on the counter.
+  - Fix: the trigger is now BEFORE, so the writer queues on the counter
+    first and then meets the ordinary duplicate refusal (two-process race,
+    both orders, pinned).
+- **Fixed -- LOW-2: rollback then re-seed could re-issue a purged
+  Student's number.**
+  - Fix: `seeded_next_value` is stored, and rollback refuses once the
+    counter moved past it.
+- **Fixed -- LOW-3: the counter was forward-only by convention only.**
+  - Fix: a database trigger now refuses a decrease.
+- **Fixed -- INFO:** the trigger functions pin `search_path` and qualify
+  the counter table, and EXECUTE is revoked from PUBLIC.
+- **Recorded, accepted:**
+  - **Number volume:** School-wide sequential numbers let a Campus actor
+    estimate the School's intake volume. This follows from F2-D5–D7.
+  - **18-digit typo:** one manually typed number of up to 18 digits moves
+    every later generated number past it, permanently (forward-only by
+    design). An input ceiling on manual numbers is an owner option.
+  - **Double submit:** a double-submitted onboarding fails on the roll-number
+    index, so no duplicate Student survives.
+  - **Edit-names page:** it needs `students.manage` only. No role holds
+    manage without view.

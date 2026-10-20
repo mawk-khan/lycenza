@@ -39,7 +39,8 @@ class StudentAccountLinkController extends Controller
     public function search(Request $request, TenantContext $context, string $student): JsonResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('students.manage', $school);
+        // ORG.7F-2: students.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:students.manage` (declared).
         Student::query()->findOrFail($student);
 
         $q = trim((string) $request->string('q'));
@@ -74,7 +75,8 @@ class StudentAccountLinkController extends Controller
     public function store(Request $request, TenantContext $context, AccountLinkService $service, string $student): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('students.manage', $school);
+        // ORG.7F-2: students.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:students.manage` (declared).
 
         $model = Student::query()->findOrFail($student);
 
@@ -100,7 +102,8 @@ class StudentAccountLinkController extends Controller
     public function destroy(TenantContext $context, AccountLinkService $service, string $student): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('students.manage', $school);
+        // ORG.7F-2: students.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:students.manage` (declared).
 
         $model = Student::query()->findOrFail($student);
 

@@ -190,6 +190,10 @@ final class TenantRetentionCatalog
             'school_settings', 'school_domains', 'feature_flag_school_overrides', 'school_group_members', 'platform_idempotency_demo_counters',
             // ORG.5 (ADR 0076 §12.5): platform-governed module entitlement state.
             'school_module_entitlements',
+            // ORG.7F-2 (ADR 0076 §46): the School's forward-only Student-number
+            // counter -- no personal data; kept with the School so a number is
+            // never re-issued.
+            'student_number_sequences',
         ]],
     ];
 

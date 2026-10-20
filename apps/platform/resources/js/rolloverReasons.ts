@@ -25,6 +25,10 @@ const ROLLOVER_REASON_LABELS: Record<string, string> = {
     roll_number_conflict_existing:
         'Another Student already holds this Roll Number in the target Section.',
     invalid_roll_number: 'The Roll Number is missing or blank.',
+    // ORG.7F-2: a new placement needs an active Student, Section and Campus.
+    student_inactive: 'The Student is inactive -- exclude them or reactivate them first.',
+    target_section_inactive: 'The target Section is inactive.',
+    target_campus_inactive: "The target Section's Campus is inactive.",
     // Execution-time drift (EnrollmentRolloverItemExecutionService).
     source_changed_since_validation:
         'The source Enrollment changed since this Plan was last validated -- revalidate.',
@@ -36,6 +40,8 @@ const ROLLOVER_REASON_LABELS: Record<string, string> = {
         'A conflicting target Enrollment appeared during execution -- revalidate.',
     already_enrolled_match_no_longer_valid:
         'The previously-matching target Enrollment no longer exists -- revalidate.',
+    placement_target_unavailable_at_execution:
+        'The Student, target Section or its Campus became inactive during execution -- revalidate.',
     // Phase 1G.2/1G.3: elective subject-rollover validation/execution.
     missing_subject_mapping:
         'This Student has an active elective with no subject mapping configured -- add one below.',

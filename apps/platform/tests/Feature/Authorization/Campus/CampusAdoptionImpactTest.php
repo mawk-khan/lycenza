@@ -44,6 +44,9 @@ class CampusAdoptionImpactTest extends TestCase
      * whole-School only. ORG.7F-1 (owner decision F1-D7): principal and
      * school_admin gain the SIS READ keys students.view/enrollments.view;
      * principal@Campus gains reads only (school_admin stays whole-School).
+     * ORG.7F-2 (F2-D10): both also hold the adopted students.manage /
+     * enrollments.manage; a Campus grant reaches only the name edit and
+     * atomic onboarding (every other operation is declared whole-School).
      */
     private const HOLDERS = [
         'admissions_officer' => ['admissions.manage', 'admissions.view'],
@@ -52,8 +55,8 @@ class CampusAdoptionImpactTest extends TestCase
         'hostel_warden' => ['hostel.residency.manage', 'hostel.residency.view'],
         'hr_officer' => ['hr.employees.assignments.manage', 'hr.employees.assignments.view', 'hr.employees.manage', 'hr.employees.view'],
         'librarian' => ['library.circulation.manage', 'library.circulation.view'],
-        'principal' => ['admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'enrollments.view', 'examinations.papers.manage', 'examinations.papers.view', 'hostel.residency.manage', 'hostel.residency.view', 'hr.employees.manage', 'hr.employees.view', 'inventory.stock.manage', 'inventory.stock.view', 'library.circulation.manage', 'library.circulation.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'students.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view', 'visitor.visits.manage', 'visitor.visits.view'],
-        'school_admin' => ['admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'enrollments.view', 'examinations.papers.manage', 'examinations.papers.view', 'hostel.residency.manage', 'hostel.residency.view', 'hr.employees.manage', 'hr.employees.view', 'inventory.stock.manage', 'inventory.stock.view', 'library.circulation.manage', 'library.circulation.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'students.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view', 'visitor.visits.manage', 'visitor.visits.view'],
+        'principal' => ['admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'enrollments.manage', 'enrollments.view', 'examinations.papers.manage', 'examinations.papers.view', 'hostel.residency.manage', 'hostel.residency.view', 'hr.employees.manage', 'hr.employees.view', 'inventory.stock.manage', 'inventory.stock.view', 'library.circulation.manage', 'library.circulation.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'students.manage', 'students.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view', 'visitor.visits.manage', 'visitor.visits.view'],
+        'school_admin' => ['admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'enrollments.manage', 'enrollments.view', 'examinations.papers.manage', 'examinations.papers.view', 'hostel.residency.manage', 'hostel.residency.view', 'hr.employees.manage', 'hr.employees.view', 'inventory.stock.manage', 'inventory.stock.view', 'library.circulation.manage', 'library.circulation.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'students.manage', 'students.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view', 'visitor.visits.manage', 'visitor.visits.view'],
         'stores_officer' => ['inventory.stock.manage', 'inventory.stock.view'],
         'transport_coordinator' => ['transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view'],
     ];
@@ -82,6 +85,8 @@ class CampusAdoptionImpactTest extends TestCase
         // ORG.7E-1 (ADR 0076 §43): assignments define Campus placement itself, and
         // hr.employees.manage edits School-wide identity and onboards.
         'hr.employees.assignments.', 'hr.employees.manage',
+        // ORG.7F-2 (ADR 0076 §46): children's identity and placement writes.
+        'students.manage', 'enrollments.manage',
     ];
 
     /** Capability classes (CapabilityClasses) that make an adopted key high-risk wherever its prefix is. */
@@ -100,6 +105,11 @@ class CampusAdoptionImpactTest extends TestCase
         // and employment lifecycle, rehire, import, archive and account links
         // stay whole-School (declared operations).
         'hr.employees.assignments.manage', 'hr.employees.assignments.view', 'hr.employees.manage',
+        // ORG.7F-2 (owner decision F2-D10): principal@Campus may edit the names of
+        // an in-scope current Student and onboard a NEW Student atomically --
+        // nothing else (lifecycle, transfer, existing-Student enroll, rollover,
+        // Guardians and the full identity edit are declared whole-School).
+        'enrollments.manage', 'students.manage',
     ];
 
     /**
@@ -130,7 +140,9 @@ class CampusAdoptionImpactTest extends TestCase
         // ORG.7F-1 adopted the two SIS READ keys only: every Student and
         // Enrollment write, rollover, processing authorizations and Guardian
         // authority stay out of Campus scope.
-        'students.manage', 'students.processing_authorizations.', 'enrollments.manage', 'enrollments.rollovers.', 'guardians.',
+        // ORG.7F-2 adopted students.manage / enrollments.manage for the name
+        // edit and atomic onboarding only.
+        'students.processing_authorizations.', 'enrollments.rollovers.', 'guardians.',
     ];
 
     /**
@@ -142,7 +154,7 @@ class CampusAdoptionImpactTest extends TestCase
      * any SIS authority.
      */
     private const SIS_CAMPUS_CONFERRED = [
-        'principal' => ['enrollments.view', 'students.view'],
+        'principal' => ['enrollments.manage', 'enrollments.view', 'students.manage', 'students.view'],
     ];
 
     #[Test]
@@ -214,7 +226,7 @@ class CampusAdoptionImpactTest extends TestCase
             fn (string $key) => str_starts_with($key, 'students.') || str_starts_with($key, 'enrollments.') || str_starts_with($key, 'guardians.'),
         ));
         sort($sis);
-        $this->assertSame(['enrollments.view', 'students.view'], $sis, 'ORG.7F-1 adopts exactly the two SIS read keys.');
+        $this->assertSame(['enrollments.manage', 'enrollments.view', 'students.manage', 'students.view'], $sis, 'ORG.7F-1/7F-2 adopt exactly these SIS keys.');
         $this->assertFalse(StaffRoleCatalog::campusScopable($roles->firstWhere('key', 'school_admin')), 'school_admin stays whole-School only.');
     }
 

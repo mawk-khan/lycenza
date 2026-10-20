@@ -42,7 +42,8 @@ class EnrollmentRolloverItemController extends Controller
     public function update(Request $request, TenantContext $context, string $rollover, string $item, EnrollmentRolloverPlanService $service): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('enrollments.manage', $school);
+        // ORG.7F-2: enrollments.manage is Campus-adopted; this whole-School-only
+        // operation's floor is its route `capability:enrollments.manage` (declared).
         $this->authorizeCapability('enrollments.rollovers.manage', $school);
 
         $plan = EnrollmentRolloverPlan::query()->findOrFail($rollover);
