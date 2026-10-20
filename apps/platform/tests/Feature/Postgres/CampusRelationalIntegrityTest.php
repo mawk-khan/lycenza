@@ -117,8 +117,10 @@ class CampusRelationalIntegrityTest extends TestCase
 
         $this->assertNull($insert($sectionB->id, $b->id), 'an enrollment matching its Section is accepted');
         $this->assertStringContainsString('student_enrollments_section_context_fk', (string) $insert($sectionB->id, $a->id));
-        $this->assertStringContainsString('student_enrollments_section_context_fk', (string) $this->attempt('update student_enrollments set campus_id = ? where id = ?', [$b->id, $enrollment->id]), 'a raw Campus edit is refused');
-        $this->assertStringContainsString('student_enrollments_section_context_fk', (string) $this->attempt('update student_enrollments set section_id = ? where id = ?', [$sectionB->id, $enrollment->id]), 'a raw Section edit to another Campus is refused');
+        // ORG.7F-3 (§47): placement context is frozen after INSERT, so a raw
+        // edit is refused by the freeze trigger before the composite key.
+        $this->assertStringContainsString('student_enrollments_freeze_placement', (string) $this->attempt('update student_enrollments set campus_id = ? where id = ?', [$b->id, $enrollment->id]), 'a raw Campus edit is refused');
+        $this->assertStringContainsString('student_enrollments_freeze_placement', (string) $this->attempt('update student_enrollments set section_id = ? where id = ?', [$sectionB->id, $enrollment->id]), 'a raw Section edit to another Campus is refused');
         $this->assertStringContainsString('student_enrollments_section_context_fk', (string) $this->attempt('update sections set campus_id = ? where id = ?', [$b->id, $sectionA->id]), 'a Section cannot move Campus under its enrollments');
 
         $this->assertSame($a->id, DB::connection('pgsql')->table('student_enrollments')->where('id', $enrollment->id)->value('campus_id'), 'nothing was rewritten');

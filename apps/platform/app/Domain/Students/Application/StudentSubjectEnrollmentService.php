@@ -260,6 +260,13 @@ class StudentSubjectEnrollmentService
             ->where('academic_year_id', $offering->academic_year_id)
             ->where('grade_level_id', $offering->grade_level_id)
             ->where('campus_id', $offering->campus_id)
+            // ORG.7F-3 (ADR 0076 §47): share-lock the anchor placement (after
+            // the Offering, the Enrollment-before-Offering order rollover uses
+            // too) so an elective never lands on a placement a concurrent
+            // transfer is ending: the transfer holds it FOR UPDATE, this waits
+            // and then re-reads it no longer `active` -- or, committed first,
+            // this elective is seen by the transfer's ElectiveTransferBlocker.
+            ->sharedLock()
             ->first();
 
         if ($enrollment === null) {

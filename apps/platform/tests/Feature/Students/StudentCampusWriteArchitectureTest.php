@@ -90,12 +90,12 @@ class StudentCampusWriteArchitectureTest extends TestCase
             }
         }
         sort($campusWrites);
-        $this->assertSame(['app.students.names.edit', 'app.students.names.update', 'app.students.onboard', 'app.students.onboard.store'], $campusWrites);
+        $this->assertSame(['api.v1.schools.enrollments.transfer', 'app.students.names.edit', 'app.students.names.update', 'app.students.onboard', 'app.students.onboard.store', 'app.students.transfer.create', 'app.students.transfer.store'], $campusWrites);
 
         foreach ([
             'app.students.create', 'app.students.store', 'app.students.edit', 'app.students.update', 'app.students.status',
             'app.students.enrollments.create', 'app.students.enrollments.store', 'api.v1.schools.students.enrollments.store',
-            'app.enrollments.transfer.create', 'app.enrollments.transfer.store', 'api.v1.schools.enrollments.transfer',
+            'app.enrollments.transfer.create', 'app.enrollments.transfer.store',
             'app.enrollments.withdraw', 'app.enrollments.complete', 'app.enrollments.cancel', 'app.enrollments.closed-year-placements.complete',
             'app.enrollment-rollovers.start', 'api.v1.schools.enrollment-rollovers.start',
             'app.students.guardians.link', 'app.relationships.destroy', 'app.students.account-link.store',

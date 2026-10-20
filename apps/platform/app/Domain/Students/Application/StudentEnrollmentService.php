@@ -209,7 +209,7 @@ class StudentEnrollmentService
      * campus-transfer path exists because Section already authoritatively
      * owns its Campus.
      */
-    public function transferPlacement(StudentEnrollment $sourceEnrollment, Section $targetSection, string $rollNumber, string $effectiveDate, ?User $actor = null): StudentEnrollment
+    public function transferPlacement(StudentEnrollment $sourceEnrollment, Section $targetSection, string $rollNumber, string $effectiveDate, ?User $actor = null, ?StudentTransferCampusGuard $campusGuard = null): StudentEnrollment
     {
         if ($sourceEnrollment->school_id !== $targetSection->school_id) {
             throw new CrossSchoolEnrollmentException;
@@ -223,9 +223,9 @@ class StudentEnrollmentService
 
         $rollNumber = RollNumberNormalizer::normalize($rollNumber);
 
-        return $this->context->withSchool($sourceEnrollment->school, function () use ($sourceEnrollment, $targetSection, $rollNumber, $effectiveDate, $actor) {
+        return $this->context->withSchool($sourceEnrollment->school, function () use ($sourceEnrollment, $targetSection, $rollNumber, $effectiveDate, $actor, $campusGuard) {
             try {
-                return DB::transaction(function () use ($sourceEnrollment, $targetSection, $rollNumber, $effectiveDate, $actor) {
+                return DB::transaction(function () use ($sourceEnrollment, $targetSection, $rollNumber, $effectiveDate, $actor, $campusGuard) {
                     // Section-before-Enrollment, TWO Sections (this
                     // class's docblock): discover the source Section
                     // from an unlocked read, then lock BOTH Sections in
@@ -257,6 +257,11 @@ class StudentEnrollmentService
                         throw new InvalidEnrollmentTransitionException($lockedSource->status, 'transferred');
                     }
 
+                    // ORG.7F-3 (ADR 0076 §47): a Campus-scoped transfer's
+                    // dual-scope, currentness and blocker checks -- under
+                    // every lock above (none for the whole School).
+                    $campusGuard?->beforeTransfer($lockedStudent, $lockedSource, $sections[$targetSection->id]);
+
                     $sourceEndsOn = Carbon::parse($effectiveDate)->subDay()->toDateString();
                     if ($sourceEndsOn < $lockedSource->starts_on->toDateString()) {
                         throw new InvalidEnrollmentDateRangeException(
@@ -273,23 +278,33 @@ class StudentEnrollmentService
                         throw new InvalidEnrollmentTransitionException($lockedSource->fresh()->status ?? 'unknown', 'transferred');
                     }
 
-                    $this->audit->school($lockedSource->school, 'student_enrollment.transferred', actor: $actor, subject: $lockedSource, metadata: [
-                        'studentId' => $lockedSource->student_id,
-                        'fromSectionId' => $lockedSource->section_id,
-                        'toSectionId' => $targetSection->id,
-                        'endsOn' => $sourceEndsOn,
-                    ]);
-
                     // Same transaction as the source transition above --
                     // if this fails (roll-number conflict, unexpected
                     // active-conflict, integrity failure), the whole
-                    // transaction (including the source UPDATE and its
-                    // audit event just above) rolls back together, so
+                    // transaction (including the source UPDATE just above)
+                    // rolls back together, so
                     // the source Enrollment is never left half-transferred
                     // and no false "transferred" audit record survives.
                     $this->assertPlaceable($lockedStudent, $sections[$targetSection->id]);
 
-                    return $this->createEnrollmentRow($lockedStudent, $sections[$targetSection->id], $rollNumber, $effectiveDate, $actor);
+                    $target = $this->createEnrollmentRow($lockedStudent, $sections[$targetSection->id], $rollNumber, $effectiveDate, $actor);
+
+                    // ORG.7F-3: explicit source and destination Campus, Section
+                    // and Enrollment ids, so the transfer's provenance never
+                    // depends on the Student's current Campus.
+                    $this->audit->school($lockedSource->school, 'student_enrollment.transferred', actor: $actor, subject: $lockedSource, metadata: [
+                        'studentId' => $lockedSource->student_id,
+                        'fromEnrollmentId' => $lockedSource->id,
+                        'toEnrollmentId' => $target->id,
+                        'fromCampusId' => $lockedSource->campus_id,
+                        'toCampusId' => $target->campus_id,
+                        'fromSectionId' => $lockedSource->section_id,
+                        'toSectionId' => $target->section_id,
+                        'endsOn' => $sourceEndsOn,
+                        'scope' => $campusGuard === null ? 'school' : 'campus',
+                    ]);
+
+                    return $target;
                 });
             } catch (UniqueConstraintViolationException $e) {
                 throw $this->translateUniqueViolation($e, $rollNumber);

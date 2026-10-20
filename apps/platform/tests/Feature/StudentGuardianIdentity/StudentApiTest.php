@@ -116,8 +116,10 @@ class StudentApiTest extends TestCase
     public function list_supports_name_search(): void
     {
         [$user, $school] = $this->createSchoolAdmin('school_admin');
-        $this->createStudent($school, ['student_number' => 'S-1001', 'first_name' => 'Asha']);
-        $this->createStudent($school, ['student_number' => 'S-1002', 'first_name' => 'Rohit']);
+        // Every name column is pinned: the search is a substring match, so a
+        // random factory surname (e.g. "Pasha") would otherwise also match.
+        $this->createStudent($school, ['student_number' => 'S-1001', 'first_name' => 'Asha', 'middle_name' => null, 'last_name' => 'Rao']);
+        $this->createStudent($school, ['student_number' => 'S-1002', 'first_name' => 'Rohit', 'middle_name' => null, 'last_name' => 'Verma']);
 
         $response = $this->asUser($user)->getJson("/api/v1/schools/{$school->id}/students?name=Asha");
 

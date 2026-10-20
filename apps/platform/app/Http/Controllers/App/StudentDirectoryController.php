@@ -12,6 +12,8 @@ use App\Domain\Students\Application\StudentSearch;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Http\Controllers\Controller;
+use App\Models\School;
+use App\Models\User;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
@@ -127,6 +129,10 @@ class StudentDirectoryController extends Controller
             // ORG.7F-2: names only, when the edit scope reaches this Student
             // (the update re-decides it under lock).
             'canEditNames' => $access->students($school, $access->scopeOf($actor, 'students.manage', $school))->whereKey($model->id)->exists(),
+            // ORG.7F-3: a Campus transfer, when the enrollments.manage scope
+            // reaches the current placement and offers another Campus (the
+            // transfer re-decides everything under lock).
+            'canTransfer' => $this->canTransfer($access, $actor, $school, $model->id),
         ]);
     }
 
@@ -216,6 +222,15 @@ class StudentDirectoryController extends Controller
         }
 
         return redirect("/app/students/{$enrollment->student_id}/overview");
+    }
+
+    private function canTransfer(StudentAccess $access, User $actor, School $school, string $studentId): bool
+    {
+        $scope = $access->scopeOf($actor, 'enrollments.manage', $school);
+        $placement = $access->currentPlacements($school, $scope, [$studentId])->get($studentId);
+
+        return $placement !== null && $access->students($school, $scope)->whereKey($studentId)->exists()
+            && $access->transferDestinations($school, $scope, $placement) !== [];
     }
 
     /**

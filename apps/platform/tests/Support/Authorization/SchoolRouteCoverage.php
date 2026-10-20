@@ -64,6 +64,7 @@ use App\Domain\Payroll\Statutory\Application\Export\StatutoryTdsDraftStatementEx
 use App\Domain\StaffAttendance\Application\StaffAttendanceReadService;
 use App\Domain\StaffAttendance\Application\StaffAttendanceService;
 use App\Domain\Students\Application\CampusStudentOnboardingService;
+use App\Domain\Students\Application\CampusStudentTransferService;
 use App\Domain\Students\Application\StudentAccess;
 use App\Domain\Students\Application\StudentNameEditService;
 use App\Domain\Timetable\Application\TimetableScheduleAccess;
@@ -171,6 +172,7 @@ final class SchoolRouteCoverage
             // Domain\Students\Http\Controllers\StudentEnrollmentController
             Coverage::campus('api.v1.schools.enrollments.index', 'enrollments.view', StudentAccess::class, 'enrollmentDirectory'),
             Coverage::campus('api.v1.schools.enrollments.show', 'enrollments.view', StudentAccess::class, 'enrollment'),
+            Coverage::campus('api.v1.schools.enrollments.transfer', 'enrollments.manage', StudentAccess::class, 'enrollment'),
             Coverage::campus('api.v1.schools.students.enrollments.current', 'enrollments.view', StudentAccess::class, 'student'),
 
             // Domain\HR\Http\Controllers\EmployeeDocumentController
@@ -445,6 +447,9 @@ final class SchoolRouteCoverage
             Coverage::campus('app.students.names.update', 'students.manage', StudentNameEditService::class, 'edit'),
             Coverage::campus('app.students.onboard', 'students.manage', CampusStudentOnboardingService::class, 'destinations'),
             Coverage::campus('app.students.onboard.store', 'students.manage', CampusStudentOnboardingService::class, 'onboard'),
+            // ORG.7F-3 (ADR 0076 §47): the dual-scope Campus transfer.
+            Coverage::campus('app.students.transfer.create', 'enrollments.manage', StudentAccess::class, 'transferDestinations'),
+            Coverage::campus('app.students.transfer.store', 'enrollments.manage', CampusStudentTransferService::class, 'transfer'),
 
             // Http\Controllers\App\StudentGuardianRelationshipController
 

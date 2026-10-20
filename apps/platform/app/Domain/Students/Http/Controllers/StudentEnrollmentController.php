@@ -153,33 +153,4 @@ class StudentEnrollmentController extends Controller
 
         return response()->json(['data' => $this->presentDetail($cancelled->load(['student', 'academicYear', 'campus', 'gradeLevel', 'section']))]);
     }
-
-    /**
-     * The target Section is the single authoritative placement input --
-     * `target_academic_year_id`/`target_campus_id`/`target_grade_level_id`
-     * are never accepted; they are always derived from the target
-     * Section by StudentEnrollmentService::transferPlacement() (CLAUDE.md
-     * rule 27). Returns the NEW (target) Enrollment -- the source
-     * Enrollment's id is the route parameter, not the response body's.
-     */
-    public function transfer(Request $request, School $school, string $enrollment, StudentEnrollmentService $service): JsonResponse
-    {
-        // ORG.7F-2: enrollments.manage is Campus-adopted; this whole-School-only
-        // operation's floor is its route `capability:enrollments.manage` (declared).
-
-        abort_if(! Str::isUuid($enrollment), 404);
-        $model = StudentEnrollment::query()->findOrFail($enrollment);
-
-        $validated = $request->validate([
-            'target_section_id' => ['required', 'uuid', Rule::exists('sections', 'id')->where('school_id', $school->id)],
-            'roll_number' => ['required', 'string', 'max:255'],
-            'effective_date' => ['required', 'date'],
-        ]);
-
-        $targetSection = Section::query()->findOrFail($validated['target_section_id']);
-
-        $transferred = $service->transferPlacement($model, $targetSection, $validated['roll_number'], $validated['effective_date'], $request->user());
-
-        return response()->json(['data' => $this->presentDetail($transferred->load(['student', 'academicYear', 'campus', 'gradeLevel', 'section']))], 201);
-    }
 }

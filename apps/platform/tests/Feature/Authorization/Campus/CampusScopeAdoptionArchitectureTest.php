@@ -104,7 +104,7 @@ class CampusScopeAdoptionArchitectureTest extends TestCase
         // Student and Enrollment through StudentAccess.
         'students' => [
             'access' => 'app/Domain/Students/Application/StudentAccess.php',
-            'controllers' => ['app/Http/Controllers/App/StudentDirectoryController.php', 'app/Http/Controllers/App/EnrollmentDirectoryController.php', 'app/Domain/Students/Http/Controllers/StudentDirectoryController.php', 'app/Domain/Students/Http/Controllers/EnrollmentDirectoryController.php'],
+            'controllers' => ['app/Http/Controllers/App/StudentDirectoryController.php', 'app/Http/Controllers/App/EnrollmentDirectoryController.php', 'app/Domain/Students/Http/Controllers/StudentDirectoryController.php', 'app/Domain/Students/Http/Controllers/EnrollmentDirectoryController.php', 'app/Http/Controllers/App/StudentTransferController.php', 'app/Domain/Students/Http/Controllers/EnrollmentTransferController.php'],
             'models' => ['Student::query(', 'StudentEnrollment::query(', 'StudentEnrollment::where(', 'Student::where('],
         ],
     ];

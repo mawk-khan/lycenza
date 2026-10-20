@@ -103,6 +103,7 @@ use App\Domain\Students\Http\Controllers\EnrollmentRolloverController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverItemController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverMappingController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverSubjectMappingController;
+use App\Domain\Students\Http\Controllers\EnrollmentTransferController;
 use App\Domain\Students\Http\Controllers\StudentController;
 use App\Domain\Students\Http\Controllers\StudentDirectoryController;
 use App\Domain\Students\Http\Controllers\StudentEnrollmentController;
@@ -502,8 +503,10 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/enrollments/{enrollment}/cancel', [StudentEnrollmentController::class, 'cancel'])
                 ->middleware(['capability:enrollments.manage', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.enrollments.cancel');
-            Route::post('/enrollments/{enrollment}/transfer', [StudentEnrollmentController::class, 'transfer'])
-                ->middleware(['capability:enrollments.manage', 'throttle:school-api-mutations', 'idempotent'])
+            // ORG.7F-3 (ADR 0076 §47): Campus-aware (dual-scope Campus transfer of
+            // the CURRENT placement; whole School unchanged).
+            Route::post('/enrollments/{enrollment}/transfer', [EnrollmentTransferController::class, 'transfer'])
+                ->middleware(['capability:enrollments.manage,campus', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.enrollments.transfer');
 
             Route::get('/students/{student}/enrollments', [StudentEnrollmentController::class, 'historyForStudent'])

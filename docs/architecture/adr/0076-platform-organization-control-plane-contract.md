@@ -5897,3 +5897,215 @@ candidate: no HIGH or MEDIUM finding.
     index, so no duplicate Student survives.
   - **Edit-names page:** it needs `students.manage` only. No role holds
     manage without view.
+
+## 47. ORG.7F-3 — SIS Campus transfer and placement immutability (as built, 2026-10-20)
+
+Owner authorization: ORG.7F-3, decisions F3-D1 to F3-D12. Baseline
+`origin/main` = `e00beec9`: ORG.7F-2 (§46) plus a separate supply-chain
+slice that moved vite 8.2.2 to 8.2.4 (GHSA-587h-7wmj-h5pm, a High advisory
+with a fix, published 2026-10-20, which blocked every candidate's language
+audit).
+
+    placement context    year, Campus, Grade, Section: DB-frozen after INSERT
+    Campus transfer      enrollments.manage over BOTH Campuses; CURRENT placement of an
+                         active Student; another Campus; today; ends the source row +
+                         inserts the destination row (never an UPDATE)
+    blockers (refuse)    active source-Campus Hostel residency, Transport rider,
+                         elective anchored to the source placement -- never moved
+    not blockers         Library loans (Campus frozen at checkout), Canteen orders
+                         (Outlet Campus), Finance, history, Guardians
+
+**47.1 Placement-writer inventory (re-verified).**
+- **A — INSERT:** only `StudentEnrollmentService::createEnrollmentRow`.
+  It is reached from `enroll` (whole-School, Admissions conversion,
+  rollover execution, Campus onboarding) and `transferPlacement`. Demo
+  seeding uses `enroll()`.
+- **B/C — status and `ends_on`:** `transferPlacement` (source →
+  `transferred`), complete, withdraw and cancel.
+- **D — placement-context UPDATE:** none in production code.
+- **E — rollover:** through `enroll()`.
+- **F — transfer:** "end + insert".
+- **G — cleanup:** retention DELETE only (Student core purge). Test race
+  scripts insert raw rows.
+- **H — raw:** the runtime role could UPDATE context columns. This phase
+  closes that.
+- **`roll_number`:** no writer, no correction workflow, and the
+  `(school, year, section, roll)` key is unique in any status. It is not
+  part of the Campus/Section identity, so it is NOT frozen.
+- **Already fixed by `retention_eligibility_guard`:** `id`, `school_id`,
+  `student_id` and `starts_on`; an ended record's `ends_on` and status.
+
+**47.2 Placement freeze (F1-D6).**
+- **Trigger:** `student_enrollments_freeze_placement`, BEFORE UPDATE OF
+  `academic_year_id`, `campus_id`, `grade_level_id`, `section_id`.
+  - It refuses any change for every role except the table owner
+    (migrations, operator repair; the existing guard's convention, and the
+    runtime role is never an owner member, rule 85).
+  - It has a pinned `search_path` and no PUBLIC EXECUTE.
+- **Proof as `school_os_app` (raw SQL):** all four columns are refused;
+  `status`/`ends_on` and `roll_number` updates still succeed; RLS stays
+  forced; the ORG.7D-0 Section-context key still refuses a mismatched
+  INSERT (`PlacementFreezeTest`).
+- **No data rewritten.**
+- **Rollback-proof:** identical schema, 41 lines, `verify-database
+  failed=0`. Rollback re-enables direct context updates by the runtime role
+  and changes no data.
+
+**47.3 Existing transfer, the capability, and same-Campus moves.**
+- **`transferPlacement` already was the named operation:**
+  - same year and same Grade (refuses a Grade change);
+  - ends the source (`transferred`, `ends_on` = effective − 1) and inserts
+    the destination;
+  - Campus follows the destination Section.
+- **Capability:** `enrollments.manage`, unchanged. There is no new
+  capability, and `students.manage` is not involved.
+- **Same-Campus Section changes stay whole-School:**
+  - the Enrollment-based web pages `app.enrollments.transfer.*` remain
+    declared;
+  - the Campus guard refuses `source Campus = destination Campus`.
+
+**47.4 `StudentAccess::lockedTransferTarget()` and the guard.**
+- **`lockedTransferTarget()`**, inside the transfer transaction:
+  1. active year FOR SHARE;
+  2. the Student FOR SHARE (active);
+  3. the CURRENT placement (`constrainToCurrentPlacement`), whose Campus
+     must be in scope;
+  4. the source Campus, share-locked active (`ActiveCampus`), so a source
+     Campus deactivation serializes with the transfer.
+
+  Otherwise the result is the unknown 404. The actor never names an
+  Enrollment row on the web; the API Campus path accepts only the id of
+  that current placement (`expectedSourceId`; any other row is the 404).
+- **Not `lockOperationalOn()`:** that helper share-locks the Enrollment,
+  and `transferPlacement()` then takes it FOR UPDATE; two concurrent
+  transfers would deadlock on the upgrade. The transfer therefore takes
+  the same year and Student locks and leaves the Enrollment to
+  `transferPlacement()`.
+- **`StudentTransferCampusGuard`**, called by `transferPlacement()` after
+  its locks (Student FOR SHARE, Sections FOR UPDATE in id order, source
+  Enrollment FOR UPDATE, status re-checked), requires:
+  - the Student active;
+  - source and destination both in the active year;
+  - the scope covering BOTH Campuses;
+  - the Campuses differing;
+  - no `StudentTransferBlocker` reporting a relationship.
+- **Then the F-2 rule:** destination Section and Campus active (Campus
+  share-locked).
+- **Transaction:** one transaction with the Campus-transfer effective date
+  set to today (School-local). It never backdates, schedules or changes the
+  Student number, names, date of birth or Guardians.
+- **Lock order (one direction everywhere):** year SHARE → Student SHARE →
+  Sections FOR UPDATE → source Enrollment FOR UPDATE → blocker reads →
+  destination Campus SHARE → UPDATE + INSERT.
+  - Hostel, Transport and the name edit take the Student lock first, so
+    they serialize on the Student.
+  - Library, Canteen and elective writers share-lock the Enrollment, so
+    they serialize on it.
+  - There is no School-wide lock.
+
+**47.5 Blockers (F3-D6, F3-D12).**
+- **Contract:** `StudentTransferBlocker` (Students; container tag), the
+  `EmploymentEndParticipant` pattern. Students never reads the Hostel or
+  Transport tables (rule 4).
+- **`HostelTransferBlocker`** (Hostel): an ACTIVE residency in a Hostel of
+  the source Campus.
+- **`TransportTransferBlocker`** (Transport): an ACTIVE rider assignment on
+  a route of the source Campus. A NULL-Campus route does not block.
+- **`ElectiveTransferBlocker`** (Students): an ACTIVE subject enrollment
+  anchored to the source placement.
+- **Answer-only.** Each blocker returns one `exists()`. Nothing is ended,
+  moved or rewritten (pinned).
+- **Serialization:**
+  - Hostel and Transport assignments lock the Student FOR NO KEY UPDATE
+    first, against the transfer's Student FOR SHARE.
+  - Elective enroll now share-locks its anchor placement
+    (`resolveCompatibleEnrollment`, after the Offering, the
+    Enrollment-before-Offering order rollover uses), against the transfer's
+    FOR UPDATE.
+  - In both cases a write committed first is seen, and one arriving later
+    re-reads and refuses.
+- **Refusal:** the Campus actor gets one generic
+  `STUDENT_TRANSFER_UNAVAILABLE` (422) for every in-scope refusal. An
+  out-of-scope or unknown Student is the 404.
+
+**47.6 Not blockers, never rewritten (F3-D7 to F3-D9).**
+- **Library:** an open loan keeps its frozen Campus; a return follows the
+  loan Campus.
+- **Canteen:** orders keep their Outlet Campus, and new orders follow the
+  new current Campus.
+- **Unchanged:** Charges, Payments and balances (charge-year attribution);
+  Attendance, marks and LMS history; Guardians and `GuardianStudentScope`.
+- **Pinned:** a loan on the source Campus does not block and keeps its
+  Campus.
+
+**47.7 Surfaces.**
+- **Web (C6):**
+  - `app.students.transfer.create`: the form, with
+    `StudentAccess::transferDestinations()` = active Sections of the
+    source's year and Grade on ANOTHER active in-scope Campus, in SQL;
+  - `app.students.transfer.store`: `CampusStudentTransferService::transfer`;
+  - the overview shows "Transfer" only when reachable.
+- **API (C6):** `api.v1.schools.enrollments.transfer`, with floor
+  `capability:enrollments.manage,campus` and `idempotent`.
+  - **Whole School:** unchanged (any active placement and date).
+  - **Campus:** only the current in-scope placement (else 404), effective
+    today (else 422), through the same service.
+  - **Replay:** the ORG.7D-1 fingerprint binds the actor's CampusScope, so
+    a changed scope never replays a stored response.
+- **Audit:** `student_enrollment.transferred` now records `studentId`,
+  `from`/`toEnrollmentId`, `from`/`toCampusId`, `from`/`toSectionId`,
+  `endsOn` and `scope`, written after the destination row exists. Names,
+  date of birth and contacts are never included.
+- **Read authority:** the former Campus loses ordinary read on the next
+  request and the destination Campus gains it (no authority cache, pinned).
+
+**47.8 Concurrency matrix (real processes, both orders, overlap
+observed, no deadlock: 20 races).**
+- **State changes:** inactivation, year switch, destination Campus
+  deactivation and a second transfer. Whoever locks first wins, and the
+  loser is refused.
+- **Blockers:** Hostel residency, Transport rider and elective. Committed
+  first, each blocks; arriving later, each is refused
+  (`HostelResidencyUnavailable`, `TransportAssignmentUnavailable`,
+  `IncompatibleSubjectOffering`).
+- **Name edit, Library checkout, Canteen order:** committed first, they do
+  not block; arriving later, the source-Campus actor is refused.
+- **The amended ORG.7D-4 pin** (transfer waits for the Hostel Student lock)
+  still holds.
+
+**47.9 Role impact.** No key changes: `enrollments.manage` was adopted in
+F2.
+- principal@Campus gains the Campus transfer only when both Campuses are
+  in scope (F3-D11, high-risk, owner-approved).
+- school_admin is whole-School.
+- No other Campus-scopable role holds the key (`CampusAdoptionImpactTest`
+  unchanged).
+- Rollover, withdrawal, reactivation, status, generic enroll, history, the
+  Profile and Guardians are unchanged (still declared).
+
+**47.10 Independent security review.** No HIGH or MEDIUM finding. LOW
+findings, all fixed before publication:
+- **LOW-1:** the API Campus path could act on the current placement
+  when given a different, historical Enrollment id of the same Student.
+  It now requires the named row to BE the current placement
+  (`expectedSourceId`), else the 404.
+- **LOW-2:** the API Campus path's `exists` rule distinguished an unknown
+  Section from an out-of-scope one. Removed: every destination failure is
+  the generic `STUDENT_TRANSFER_UNAVAILABLE`.
+- **LOW-3:** the source Campus was not locked; a concurrent deactivation
+  could interleave. It is now share-locked through `ActiveCampus`.
+- **LOW-4:** a legacy elective with a NULL anchor on the source Campus did
+  not block. `ElectiveTransferBlocker` now also matches the Student's
+  active NULL-anchor electives of the source year whose Offering is on
+  the source Campus.
+
+Accepted as INFO: whole-School same-Campus Section moves stay on the
+declared whole-School pages; the transfer audit records ids only; the
+Campus actor cannot choose the effective date (today, School-local).
+
+**47.11 Deferred and unchanged.** Not authorized and not built: generic
+enrollment editing, direct placement edits, automatic Hostel, Transport
+or elective migration, Campus authority over rollover, withdrawal,
+reactivation or Student status, Guardian changes, Admissions conversion,
+Profile expansion, historical enrollment Campus access, bulk transfer, and
+Fees/Payments. ORG.7F-4 and Finance Campus work need owner authorization.

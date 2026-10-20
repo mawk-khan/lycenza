@@ -3,6 +3,7 @@
 use App\Domain\AcademicStructure\Application\AcademicYearService;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\Section;
+use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Campuses\Application\CampusAdministrationService;
 use App\Domain\Canteen\Application\CanteenOrderAccess;
 use App\Domain\Canteen\Application\CanteenOrderLineData;
@@ -16,9 +17,11 @@ use App\Domain\Library\Application\LibraryCopyService;
 use App\Domain\Library\Application\LibraryLoanService;
 use App\Domain\Library\Infrastructure\LibraryCopy;
 use App\Domain\Students\Application\CampusStudentOnboardingService;
+use App\Domain\Students\Application\CampusStudentTransferService;
 use App\Domain\Students\Application\StudentEnrollmentService;
 use App\Domain\Students\Application\StudentNameEditService;
 use App\Domain\Students\Application\StudentService;
+use App\Domain\Students\Application\StudentSubjectEnrollmentService;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Domain\Transport\Application\TransportRiderAccess;
@@ -57,6 +60,8 @@ use Tests\Support\Concurrency\HeldTransaction;
 //   php student-eligibility-op.php onboard <schoolId> <userId> <sectionId> <firstName>          (ORG.7F-2; prints the allocated number)
 //   php student-eligibility-op.php section-inactivate <schoolId> <sectionId>                    (ORG.7F-2)
 //   php student-eligibility-op.php manual-create <schoolId> <studentNumber>                     (ORG.7F-2; a typed number)
+//   php student-eligibility-op.php campus-transfer <schoolId> <userId> <studentId> <sectionId>  (ORG.7F-3)
+//   php student-eligibility-op.php elective-enroll <schoolId> <studentId> <offeringId>          (ORG.7F-3)
 
 require __DIR__.'/../../vendor/autoload.php';
 
@@ -163,6 +168,16 @@ try {
                 return 'ok:'.$enrollment->student->student_number;
             case 'manual-create':
                 $app->make(StudentService::class)->create($school, ['student_number' => $args[0], 'first_name' => 'Manual', 'date_of_birth' => '2016-05-01']);
+
+                return 'ok';
+            case 'campus-transfer':
+                [$userId, $studentId, $sectionId] = $args;
+                $app->make(CampusStudentTransferService::class)->transfer($school, $scope($userId, 'enrollments.manage'), $studentId, $sectionId, 'T'.random_int(1000, 9999), User::query()->findOrFail($userId));
+
+                return 'ok';
+            case 'elective-enroll':
+                [$studentId, $offeringId] = $args;
+                $app->make(StudentSubjectEnrollmentService::class)->enroll(Student::query()->findOrFail($studentId), SubjectOffering::query()->findOrFail($offeringId), now()->toDateString());
 
                 return 'ok';
             case 'section-inactivate':

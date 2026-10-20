@@ -4,6 +4,8 @@ namespace App\Domain\Students\Application;
 
 use App\Domain\AcademicStructure\Application\CurrentAcademicYearResolver;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
+use App\Domain\AcademicStructure\Infrastructure\Section;
+use App\Domain\Campuses\Application\ActiveCampus;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Models\School;
@@ -51,6 +53,7 @@ final class StudentAccess
         private readonly CurrentAcademicYearResolver $years,
         private readonly CampusScopeResolver $scopes,
         private readonly StudentOperationalEligibility $eligibility,
+        private readonly ActiveCampus $campuses,
     ) {}
 
     /**
@@ -220,6 +223,88 @@ final class StudentAccess
         }
 
         return $locked;
+    }
+
+    /**
+     * ORG.7F-3 (ADR 0076 §47): the locked TRANSFER target of a Campus-scoped
+     * transfer -- inside the transfer transaction, held until it commits:
+     *
+     *   1. the School's active year, FOR SHARE (none: NOT FOUND);
+     *   2. the Student, FOR SHARE (never FOR UPDATE, §40.5) -- the same
+     *      placement lock every enrollment-creating path takes first -- which
+     *      must be active;
+     *   3. the CURRENT placement (constrainToCurrentPlacement), whose Campus
+     *      must be in scope and active (share-locked) -- the web actor never
+     *      names an Enrollment row; an API caller's named row must be it;
+     *
+     * Out of scope, unknown, inactive or unplaced: NOT FOUND, like an unknown
+     * Student. The destination Section is only resolved here (this School);
+     * StudentTransferCampusGuard and the F-2 rule decide it under
+     * transferPlacement()'s row locks.
+     *
+     * @return array{source: StudentEnrollment, target: Section|null, activeYearId: string}
+     */
+    public function lockedTransferTarget(School $school, CampusScope $scope, string $studentId, string $targetSectionId, ?string $expectedSourceId = null): array
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new LogicException('StudentAccess::lockedTransferTarget() must run inside the transfer transaction.');
+        }
+        $refuse = fn () => throw (new ModelNotFoundException)->setModel(Student::class, [$studentId]);
+        if ($scope->isNone() || ! Str::isUuid($studentId)) {
+            $refuse();
+        }
+
+        $yearId = $this->years->shareLockActiveId($school) ?? $refuse();
+        $status = Student::query()->where('school_id', $school->id)->whereKey($studentId)->sharedLock()->value('status');
+        if ($status !== 'active') {
+            $refuse();
+        }
+        $source = $this->enrollments->constrainToCurrentPlacement(StudentEnrollment::query(), $yearId)
+            ->where('student_enrollments.school_id', $school->id)
+            ->where('student_enrollments.student_id', $studentId)
+            ->first();
+        // The source Campus must still be active (share-locked until commit, so
+        // a deactivation waits or is seen); an API caller that named a
+        // placement must still be naming THIS current one.
+        if ($source === null || ! $scope->covers($source->campus_id)
+            || ($expectedSourceId !== null && $source->id !== $expectedSourceId)
+            || $this->campuses->find($school, $source->campus_id) === null) {
+            $refuse();
+        }
+
+        $target = Str::isUuid($targetSectionId)
+            ? Section::query()->where('sections.school_id', $school->id)->whereKey($targetSectionId)->first()
+            : null;
+
+        return ['source' => $source, 'target' => $target, 'activeYearId' => $yearId];
+    }
+
+    /**
+     * ORG.7F-3: the purpose-limited destination lookup of a Campus transfer
+     * (never Academic Structure administration): active Sections of the
+     * source's year and Grade on ANOTHER active Campus in scope, in SQL.
+     * Advisory labels only -- the transfer re-decides everything under lock.
+     *
+     * @return list<array{id: string, label: string}>
+     */
+    public function transferDestinations(School $school, CampusScope $scope, StudentEnrollment $source): array
+    {
+        if ($scope->isNone()) {
+            return [];
+        }
+        $query = Section::query()->where('sections.school_id', $school->id)
+            ->where('sections.academic_year_id', $source->academic_year_id)
+            ->where('sections.grade_level_id', $source->grade_level_id)
+            ->where('sections.status', 'active')
+            ->where('sections.campus_id', '!=', $source->campus_id)
+            ->whereHas('campus', fn ($q) => $q->where('status', 'active'))
+            ->with(['campus', 'gradeLevel']);
+        $scope->restrict($query, 'sections.campus_id');
+
+        return $query->get()
+            ->sortBy(fn (Section $s) => [$s->campus->name, $s->name])
+            ->map(fn (Section $s) => ['id' => (string) $s->id, 'label' => "{$s->gradeLevel->name} · Section {$s->name} · {$s->campus->name}"])
+            ->values()->all();
     }
 
     /** The actor's scope for a capability (page affordances; every read re-applies it). */

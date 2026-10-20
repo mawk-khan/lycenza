@@ -1409,3 +1409,15 @@ once several modules copy it.
      - **Placement validity.** Every new placement needs an active Student,
        Section and Campus (`StudentEnrollmentService`, F-2). The Student is
        locked FOR SHARE BEFORE any Section or Enrollment lock.
+     - **Placements are immutable; Campus transfer is the named operation**
+       (ORG.7F-3, §47).
+       - A placement's year, Campus, Grade and Section are DB-frozen
+         (`student_enrollments_freeze_placement`). A transfer ENDS the
+         source row and INSERTS the destination row.
+       - A Campus transfer (`CampusStudentTransferService`) needs
+         `enrollments.manage` over BOTH Campuses. It applies only to the
+         CURRENT placement of an active Student, to ANOTHER Campus, today.
+       - It is refused generically while an active source-Campus Hostel
+         residency, Transport rider assignment or elective exists
+         (`StudentTransferBlocker`). These are never ended or moved by the
+         transfer, and same-Campus Section changes stay whole-School.

@@ -109,7 +109,7 @@ final class CampusScopeCatalogue
             'label' => 'Student Directory, operational overview, current placement, name edits and atomic onboarding',
             'nullCampus' => 'A Student has no Campus (identity is School-wide); their operational Campus is the Campus of their CURRENT placement (the canonical Student foundation rule, ADR 0076 §38: active Student, the active Enrollment in the School\'s active year, active Campus). A Student with no current operational Campus (unplaced, inactive, leaver, between placements, future-year only) is whole-School only. History never decides visibility: a former-Campus or draft/future-year placement places nobody on a Campus.',
             'inactiveCampus' => 'A grant on an inactive Campus confers nothing, and an inactive Campus places nobody (its Students are whole-School only until it is reactivated). History is never rewritten.',
-            'sharedLookups' => 'None. The Campus Directory is a SIS surface under students.view (StudentAccess), never the other domains\' internal purpose-limited Student picker (ADR 0076 §38.5). The full Profile (date of birth, Guardians and their contacts, account link, history), Enrollment history, rollover, Guardian authority and every Student and Enrollment write except the name edit and atomic onboarding stay whole-School; no Guardian data appears on a Campus surface (owner decision F1-D2). Onboarding offers only active Sections of the active year on an in-scope active Campus (read-only labels); the Student number is allocated by the server.',
+            'sharedLookups' => 'None. The Campus Directory is a SIS surface under students.view (StudentAccess), never the other domains\' internal purpose-limited Student picker (ADR 0076 §38.5). The full Profile (date of birth, Guardians and their contacts, account link, history), Enrollment history, rollover, Guardian authority and every Student and Enrollment write except the name edit, atomic onboarding and the dual-scope Campus transfer (ORG.7F-3) stay whole-School; no Guardian data appears on a Campus surface (owner decision F1-D2). Onboarding offers only active Sections of the active year on an in-scope active Campus (read-only labels); the Student number is allocated by the server.',
         ],
     ];
 
@@ -157,7 +157,8 @@ final class CampusScopeCatalogue
         'students.view' => 'students',
         'enrollments.view' => 'students',
         // ORG.7F-2 (ADR 0076 §46, owner decision F2-D10): the narrow writes --
-        // Student names, and atomic onboarding (both keys) -- and nothing else.
+        // Student names, and atomic onboarding (both keys) -- and ORG.7F-3
+        // (§47, F3-D11): the dual-scope Campus transfer of the current placement.
         'students.manage' => 'students',
         'enrollments.manage' => 'students',
     ];
@@ -264,7 +265,6 @@ final class CampusScopeCatalogue
         'api.v1.schools.enrollment-rollovers.validate' => ['capability' => 'enrollments.manage', 'reason' => 'Rollover moves every Student of a year into the next one (School-wide lifecycle; owner decision F2: whole-School).'],
         'api.v1.schools.enrollments.cancel' => ['capability' => 'enrollments.manage', 'reason' => 'Ending a placement removes the Student\'s current Campus (lifecycle, owner decision F2: whole-School).'],
         'api.v1.schools.enrollments.complete' => ['capability' => 'enrollments.manage', 'reason' => 'Ending a placement removes the Student\'s current Campus (lifecycle, owner decision F2: whole-School).'],
-        'api.v1.schools.enrollments.transfer' => ['capability' => 'enrollments.manage', 'reason' => 'Campus transfer is ORG.7F-3 (source AND destination in scope, placement freeze first); whole-School until then.'],
         'api.v1.schools.enrollments.withdraw' => ['capability' => 'enrollments.manage', 'reason' => 'Ending a placement removes the Student\'s current Campus (lifecycle, owner decision F2: whole-School).'],
         'api.v1.schools.students.enrollments.store' => ['capability' => 'enrollments.manage', 'reason' => 'Enrolling an EXISTING Student could capture an unplaced, inactive or other-Campus Student (F-3); Campus actors onboard new Students instead.'],
         'app.enrollment-rollovers.bulk-decisions.apply' => ['capability' => 'enrollments.manage', 'reason' => 'Rollover moves every Student of a year into the next one (School-wide lifecycle; owner decision F2: whole-School).'],

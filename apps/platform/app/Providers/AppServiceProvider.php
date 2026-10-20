@@ -4,13 +4,17 @@ namespace App\Providers;
 
 use App\Domain\Finance\Application\Periods\FinancialPeriodCloseParticipant;
 use App\Domain\Finance\Application\Retention\FinanceRetentionParticipant;
+use App\Domain\Hostel\Application\HostelTransferBlocker;
 use App\Domain\HR\Application\EmploymentEndParticipant;
 use App\Domain\Leave\Application\AttendancePresenceConflictReader;
 use App\Domain\Payments\Application\ChargePeriodStateParticipant;
 use App\Domain\Payments\Application\Retention\ChargeRetentionParticipant;
 use App\Domain\Payroll\Application\Retention\PayrollLedgerRetentionParticipant;
 use App\Domain\StaffAttendance\Application\StaffAttendancePresenceReader;
+use App\Domain\Students\Application\ElectiveTransferBlocker;
+use App\Domain\Students\Application\StudentTransferBlocker;
 use App\Domain\TeachingAssignments\Application\EmploymentEndedTeachingOwnership;
+use App\Domain\Transport\Application\TransportTransferBlocker;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Ai\AiContextTokenService;
@@ -116,6 +120,12 @@ class AppServiceProvider extends ServiceProvider
         // Registered here, not in HR, so HR never references Teaching
         // Assignments (which depends on HR).
         $this->app->tag([EmploymentEndedTeachingOwnership::class], EmploymentEndParticipant::TAG);
+
+        // ORG.7F-3 (ADR 0076 §47): the active source-Campus relationships that
+        // block a Campus-scoped Student transfer. Registered here, not in
+        // Students, so Students never references Hostel or Transport (which
+        // depend on it).
+        $this->app->tag([ElectiveTransferBlocker::class, HostelTransferBlocker::class, TransportTransferBlocker::class], StudentTransferBlocker::TAG);
 
         // HRX.3 (ADR 0065 §24.5): Leave's approval port, implemented by Staff
         // Attendance. Bound here, not in Leave, so Leave never references the

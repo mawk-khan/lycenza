@@ -139,6 +139,7 @@ use App\Http\Controllers\App\StudentEnrollmentController;
 use App\Http\Controllers\App\StudentGuardianRelationshipController;
 use App\Http\Controllers\App\StudentProcessingAuthorizationController;
 use App\Http\Controllers\App\StudentSubjectEnrollmentController;
+use App\Http\Controllers\App\StudentTransferController;
 use App\Http\Controllers\App\SubjectOfferingAdminController;
 use App\Http\Controllers\App\SubjectOfferingController;
 use App\Http\Controllers\App\Syllabus\SyllabusUnitController;
@@ -625,6 +626,10 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         // ORG.7F-2: the Campus-aware name edit (first/middle/last name only).
         Route::get('/{student}/names', [StudentDirectoryController::class, 'editNames'])->name('names.edit');
         Route::put('/{student}/names', [StudentDirectoryController::class, 'updateNames'])->name('names.update');
+        // ORG.7F-3: Campus transfer of the CURRENT placement (enrollments.manage
+        // over the source AND destination Campus).
+        Route::get('/{student}/transfer', [StudentTransferController::class, 'create'])->name('transfer.create');
+        Route::post('/{student}/transfer', [StudentTransferController::class, 'store'])->name('transfer.store');
         Route::get('/{student}/edit', [StudentController::class, 'edit'])->middleware('capability:students.manage')->name('edit');
         Route::get('/{student}/history', [StudentController::class, 'history'])->middleware('capability:students.view')->name('history');
         Route::put('/{student}', [StudentController::class, 'update'])->middleware('capability:students.manage')->name('update');
