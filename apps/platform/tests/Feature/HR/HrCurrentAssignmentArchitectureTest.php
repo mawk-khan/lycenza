@@ -20,7 +20,8 @@ use Tests\TestCase;
  *   reporting line, manager candidates).
  * - HR code never judges "today" on the UTC/server clock.
  * - The model keeps no stray `isCurrent()` helper.
- * - HR capabilities are NOT Campus-adopted (ORG.7E-1 needs owner approval).
+ * - ORG.7E-1: exactly the operational HR subset is Campus-adopted, and it
+ *   reaches the resolver only through HrEmployeeAccess.
  *
  * Comments are stripped before matching.
  */
@@ -100,7 +101,9 @@ class HrCurrentAssignmentArchitectureTest extends TestCase
         $this->assertStringContainsString('SchoolTimezone::today(', $code, 'the School-local date');
         $this->assertStringNotContainsString('is_primary', $code, 'primary status never limits the Campus set');
 
-        // Data, never authorization: no controller consumes it in ORG.7E-0.
+        // Data, never authorization: no controller consumes it (ORG.7E-1: the
+        // HR Campus access layer, HrEmployeeAccess, is the one consumer of
+        // its predicates for authority).
         foreach ($this->sources() as $path => $code) {
             if (str_contains($path, '/Http/Controllers/')) {
                 $this->assertStringNotContainsString(class_basename(CurrentEmployeeAssignments::class), $code, "{$path}: the resolver is data for the HR access layer, never a controller's authority");
@@ -109,11 +112,11 @@ class HrCurrentAssignmentArchitectureTest extends TestCase
     }
 
     #[Test]
-    public function no_hr_capability_is_campus_adopted_yet(): void
+    public function exactly_the_operational_hr_subset_is_campus_adopted(): void
     {
-        foreach (CampusScopeCatalogue::capabilities() as $capability) {
-            $this->assertStringStartsNotWith('hr.', $capability, 'HR Campus adoption is ORG.7E-1 and needs owner approval (ADR 0076 §42).');
-        }
-        $this->assertArrayNotHasKey('hr', CampusScopeCatalogue::DOMAINS);
+        $hr = array_values(array_filter(CampusScopeCatalogue::capabilities(), fn (string $c) => str_starts_with($c, 'hr.')));
+        sort($hr);
+        $this->assertSame(['hr.employees.assignments.manage', 'hr.employees.assignments.view', 'hr.employees.manage', 'hr.employees.view'], $hr, 'ORG.7E-1 (ADR 0076 §43) adopted exactly the operational HR subset; any other HR key needs its own owner approval.');
+        $this->assertArrayHasKey('hr', CampusScopeCatalogue::DOMAINS);
     }
 }

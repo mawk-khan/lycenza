@@ -29,7 +29,8 @@ class HrEmployeeImportController extends Controller
     public function create(TenantContext $context): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('hr.employees.manage', $school);
+        // ORG.7E-1 (ADR 0076 §43): a declared whole-School operation -- authorized by
+        // the route's ordinary `capability:hr.employees.manage` floor, which a Campus grant never satisfies.
 
         return Inertia::render('App/HR/Import/Create');
     }
@@ -37,7 +38,8 @@ class HrEmployeeImportController extends Controller
     public function store(Request $request, TenantContext $context, EmployeeImportService $service): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('hr.employees.manage', $school);
+        // ORG.7E-1 (ADR 0076 §43): a declared whole-School operation -- authorized by
+        // the route's ordinary `capability:hr.employees.manage` floor, which a Campus grant never satisfies.
 
         $validated = $request->validate([
             'rows_json' => ['required', 'string'],

@@ -46,9 +46,19 @@ interface Props {
     departmentOptions: Option[] | null;
     positionOptions: Option[] | null;
     canManage: boolean;
+    // ORG.7E-1: onboarding (Campus-aware), the whole-School Profile, the HR hub.
+    canOnboard: boolean;
+    canViewProfile: boolean;
+    canOpenHub: boolean;
 }
 
 const props = defineProps<Props>();
+
+// A Profile reader opens the Profile; any other Directory reader the
+// operational overview (ORG.7E-1).
+function employeeHref(id: string): string {
+    return props.canViewProfile ? `/app/hr/employees/${id}` : `/app/hr/employees/${id}/overview`;
+}
 
 const search = ref(props.filters.search);
 const campusId = ref(props.filters.campus_id);
@@ -105,20 +115,29 @@ function resetFilters(): void {
 
 <template>
     <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
-        <a class="text-sm underline" href="/app/hr">← HR</a>
+        <a v-if="canOpenHub" class="text-sm underline" href="/app/hr">← HR</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
                 <h1 class="text-xl font-semibold">Employees</h1>
                 <p class="mt-1 text-sm text-slate-500">Your School's Employee directory.</p>
             </div>
-            <a
-                v-if="canManage"
-                href="/app/hr/employees/create"
-                class="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-            >
-                Add employee
-            </a>
+            <div class="flex shrink-0 gap-2">
+                <a
+                    v-if="canOnboard"
+                    href="/app/hr/employees/onboard"
+                    class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
+                >
+                    Onboard employee
+                </a>
+                <a
+                    v-if="canManage"
+                    href="/app/hr/employees/create"
+                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                >
+                    Add employee
+                </a>
+            </div>
         </div>
 
         <form class="mt-6 flex flex-wrap items-end gap-3" @submit.prevent="applyFilters">
@@ -251,7 +270,7 @@ function resetFilters(): void {
                         <td class="py-3">
                             <a
                                 class="font-medium underline"
-                                :href="`/app/hr/employees/${employee.employee_id}`"
+                                :href="employeeHref(employee.employee_id)"
                                 >{{ employee.display_name }}</a
                             >
                         </td>
@@ -260,9 +279,7 @@ function resetFilters(): void {
                         <td class="py-3 text-slate-600">{{ employee.department_name ?? '—' }}</td>
                         <td class="py-3 text-slate-600">{{ employee.campus_name ?? '—' }}</td>
                         <td class="py-3 text-right">
-                            <a
-                                class="text-sm underline"
-                                :href="`/app/hr/employees/${employee.employee_id}`"
+                            <a class="text-sm underline" :href="employeeHref(employee.employee_id)"
                                 >View</a
                             >
                         </td>
@@ -276,11 +293,9 @@ function resetFilters(): void {
                     :key="employee.employee_id"
                     class="rounded border border-slate-200 p-4"
                 >
-                    <a
-                        class="font-medium underline"
-                        :href="`/app/hr/employees/${employee.employee_id}`"
-                        >{{ employee.display_name }}</a
-                    >
+                    <a class="font-medium underline" :href="employeeHref(employee.employee_id)">{{
+                        employee.display_name
+                    }}</a>
                     <p class="mt-1 text-sm text-slate-500">{{ employee.employee_number }}</p>
                     <p class="mt-1 text-sm text-slate-500">
                         {{ employee.position_name ?? '—' }} · {{ employee.department_name ?? '—' }}

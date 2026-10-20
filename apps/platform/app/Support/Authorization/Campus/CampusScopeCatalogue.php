@@ -98,6 +98,12 @@ final class CampusScopeCatalogue
             'inactiveCampus' => 'A grant on an inactive Campus confers nothing; a Campus-scoped rider assignment or end on a Campus that deactivates concurrently waits for it or is refused (share-locked).',
             'sharedLookups' => 'ORG.7D-5: the rider picker is the Students-owned purpose lookup with the actor\'s scope (current operational Students: id, studentNumber, name); the route and stop pickers list only Campus-bound routes in scope and their active stops (id, code/name, sequence). A Campus-scoped assignment needs the route Campus in scope and the Student current on THAT Campus, proven under lock; every refusal is TRANSPORT_ASSIGNMENT_UNAVAILABLE. Rider fee intent is Transport\'s bounded side effect (owner-approved, no Fees authority). Transport fees, fee selections, carry-forward and the route fee head stay whole-School (declared operations).',
         ],
+        'hr' => [
+            'label' => 'HR operational records (Directory, overview, core fields, onboarding, current assignments)',
+            'nullCampus' => 'An Employee has no Campus (identity is School-wide); their operational Campuses are the active Campuses of their CURRENT assignments (CurrentEmployeeAssignments). A NULL-Campus (School-wide) assignment places nobody on a Campus and is whole-School only: never shown to, created, ended or changed by a Campus-scoped actor, and its presence makes the Employee\'s identity whole-School. An Employee with no current Campus assignment (unassigned, not yet started, ended, archived) is whole-School only.',
+            'inactiveCampus' => 'A grant on an inactive Campus confers nothing, and an inactive Campus places nobody. No onboarding or new assignment targets an inactive Campus (ActiveCampus); a Campus deactivating during a scoped write waits for it or refuses it (share-locked). History is never rewritten.',
+            'sharedLookups' => 'ORG.7E-1: read-only reference labels for the assignment and onboarding forms -- active Positions (School-wide), active Departments that are School-wide or of an in-scope Campus, and the in-scope active Campuses -- never Department/Position/Category configuration. The manager picker lists only CURRENT assignments on in-scope Campuses. The Visitor host lookup stays School-wide and name-only (unchanged, recorded for later). Reaching an Employee through one in-scope assignment never discloses another Campus\'s assignment, placement or manager; the Profile (hr.employees.personal.view), history, personal/sensitive data, documents, notes, qualifications, pay, leave and staff attendance stay whole-School.',
+        ],
     ];
 
     /**
@@ -133,6 +139,11 @@ final class CampusScopeCatalogue
         'transport.routes.view' => 'transport',
         'transport.assignments.view' => 'transport',
         'transport.assignments.manage' => 'transport',
+        // ORG.7E-1 (ADR 0076 §43): the operational HR subset (owner decisions E1-1, E1-2).
+        'hr.employees.view' => 'hr',
+        'hr.employees.assignments.view' => 'hr',
+        'hr.employees.manage' => 'hr',
+        'hr.employees.assignments.manage' => 'hr',
     ];
 
     /**
@@ -186,6 +197,32 @@ final class CampusScopeCatalogue
         'api.v1.schools.transport-student-assignments.fee-selections.index' => ['capability' => 'transport.assignments.view', 'reason' => 'A rider\'s recorded fee intent (Fees-linked).'],
         'api.v1.schools.transport-routes.fee-head.show' => ['capability' => 'transport.routes.view', 'reason' => 'The route\'s fee head (Fees configuration).'],
         'api.v1.schools.admission-applications.fee-selection.show' => ['capability' => 'admissions.view', 'reason' => 'Recorded admission fee intent (Fees-linked provenance).'],
+        // ORG.7E-1 (ADR 0076 §43): HR identity, account, lifecycle and bulk
+        // operations of the adopted HR keys stay whole-School.
+        'app.hr.employees.create' => ['capability' => 'hr.employees.manage', 'reason' => 'Identity-only create makes an Employee with no current assignment (no Campus); Campus actors onboard instead.'],
+        'app.hr.employees.store' => ['capability' => 'hr.employees.manage', 'reason' => 'Identity-only create makes an Employee with no current assignment (no Campus); Campus actors onboard instead.'],
+        'api.v1.schools.employees.store' => ['capability' => 'hr.employees.manage', 'reason' => 'Identity-only create (with an optional account link) makes an Employee with no Campus.'],
+        'app.hr.employees.archive' => ['capability' => 'hr.employees.manage', 'reason' => 'Archive ends every current placement of the Employee on every Campus.'],
+        'app.hr.employees.restore' => ['capability' => 'hr.employees.manage', 'reason' => 'Restore revives an Employee who is reachable on no Campus.'],
+        'api.v1.schools.employees.archive' => ['capability' => 'hr.employees.manage', 'reason' => 'Archive ends every current placement of the Employee on every Campus.'],
+        'api.v1.schools.employees.restore' => ['capability' => 'hr.employees.manage', 'reason' => 'Restore revives an Employee who is reachable on no Campus.'],
+        'api.v1.schools.employees.link-user' => ['capability' => 'hr.employees.manage', 'reason' => 'Account linking is identity and security administration (ActingEmployee input).'],
+        'api.v1.schools.employees.unlink-user' => ['capability' => 'hr.employees.manage', 'reason' => 'Account linking is identity and security administration (ActingEmployee input).'],
+        'app.hr.employees.account-link.search' => ['capability' => 'hr.employees.manage', 'reason' => 'The School-wide sign-in account search of the account-link form.'],
+        'app.hr.employees.account-link.store' => ['capability' => 'hr.employees.manage', 'reason' => 'Account linking is identity and security administration (ActingEmployee input).'],
+        'app.hr.employees.account-link.destroy' => ['capability' => 'hr.employees.manage', 'reason' => 'Account linking is identity and security administration (ActingEmployee input).'],
+        'app.hr.employees.import.create' => ['capability' => 'hr.employees.manage', 'reason' => 'Bulk import creates Employees, employments and assignments across the School.'],
+        'app.hr.employees.import.store' => ['capability' => 'hr.employees.manage', 'reason' => 'Bulk import creates Employees, employments and assignments across the School.'],
+        'api.v1.schools.employee-imports.store' => ['capability' => 'hr.employees.manage', 'reason' => 'Bulk import creates Employees, employments and assignments across the School.'],
+        'app.hr.employees.employment-records.store' => ['capability' => 'hr.employees.assignments.manage', 'reason' => 'A new employment for an existing Employee (first hire, rehire, second contract) is School-wide employment administration.'],
+        'app.hr.employees.employment-records.end' => ['capability' => 'hr.employees.assignments.manage', 'reason' => 'Ending employment is terminal and ends teaching ownership on every Campus.'],
+        'app.hr.employees.employment-records.separate' => ['capability' => 'hr.employees.assignments.manage', 'reason' => 'Separation is terminal and ends teaching ownership on every Campus.'],
+        'app.hr.employees.rehire' => ['capability' => 'hr.employees.assignments.manage', 'reason' => 'A former Employee has no current Campus: a Campus rehire would capture any former Employee.'],
+        'api.v1.schools.employees.employment-records.store' => ['capability' => 'hr.employees.assignments.manage', 'reason' => 'A new employment for an existing Employee is School-wide employment administration.'],
+        'api.v1.schools.employees.employment-records.update' => ['capability' => 'hr.employees.assignments.manage', 'reason' => 'Employment terms (type, category, probation) are School-wide employment administration.'],
+        'api.v1.schools.employees.employment-records.end' => ['capability' => 'hr.employees.assignments.manage', 'reason' => 'Ending employment is terminal and ends teaching ownership on every Campus.'],
+        'api.v1.schools.employees.employment-records.separate' => ['capability' => 'hr.employees.assignments.manage', 'reason' => 'Separation is terminal and ends teaching ownership on every Campus.'],
+        'api.v1.schools.employees.rehire' => ['capability' => 'hr.employees.assignments.manage', 'reason' => 'A former Employee has no current Campus: a Campus rehire would capture any former Employee.'],
     ];
 
     /**
@@ -204,6 +241,13 @@ final class CampusScopeCatalogue
      * @var array<string, array<string, string>>
      */
     public const WHOLE_SCHOOL_HUBS = [
+        // ORG.7E-1 (ADR 0076 §43): the HR hub also links HR configuration
+        // (Departments, Positions, Categories) and import; Campus-scoped HR
+        // actors land on the Staff directory entry instead.
+        'hr' => [
+            'hr.employees.view' => 'The HR hub groups whole-School HR configuration and import links; a Campus-scoped reader uses the Campus-aware Staff directory entry.',
+            'hr.employees.manage' => 'The HR hub groups whole-School HR configuration and import links; a Campus-scoped reader uses the Campus-aware Staff directory entry.',
+        ],
         'data-health' => [
             'timetable.schedule.view' => 'Data Health is a School-wide report: its "Sections without a schedule" check lists every Section of the School, so it opens only on whole-School authority.',
         ],

@@ -3,9 +3,11 @@
 namespace App\Domain\HR\Http\Controllers;
 
 use App\Domain\HR\Application\EmployeeService;
+use App\Domain\HR\Application\HrEmployeeAccess;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Http\Controllers\Controller;
 use App\Models\School;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -32,6 +34,11 @@ use Illuminate\Support\Str;
  */
 class EmployeeController extends Controller
 {
+    use AuthorizesCampusScope;
+
+    // ORG.7E-1 (ADR 0076 §43): identity-only create (and its optional account
+    // link) is a declared whole-School operation -- the route's ordinary
+    // `capability:hr.employees.manage` floor; EmployeeService re-checks.
     public function store(Request $request, School $school, EmployeeService $service): JsonResponse
     {
         $validated = $request->validate([
@@ -46,11 +53,17 @@ class EmployeeController extends Controller
         return response()->json(['data' => $this->present($employee)], 201);
     }
 
-    public function update(Request $request, School $school, string $employee, EmployeeService $service): JsonResponse
+    /**
+     * ORG.7E-1 (ADR 0076 §43): Campus-adopted. A Campus-scoped actor reaches
+     * only an Employee in scope (404 otherwise) and edits these School-wide
+     * fields only with every current Campus in scope (decided under lock).
+     */
+    public function update(Request $request, School $school, string $employee, EmployeeService $service, HrEmployeeAccess $access): JsonResponse
     {
+        $scope = $this->authorizeCampusScope('hr.employees.manage', $school);
         abort_if(! Str::isUuid($employee), 404);
 
-        $model = Employee::query()->findOrFail($employee);
+        $model = $access->employee($school, $scope, $employee);
 
         // TCH.1 (ADR 0063 section 6): the User link is not an ordinary
         // field -- it changes only through linkUser()/unlinkUser() below.
@@ -63,19 +76,16 @@ class EmployeeController extends Controller
 
         $updated = $service->update($model, $validated, $request->user());
 
-        return response()->json(['data' => $this->present($updated)]);
+        return response()->json(['data' => $this->present($updated, $scope->isWholeSchool())]);
     }
 
-    /**
-     * TCH.1 (ADR 0063 section 6, D-09): the explicit, audited link. The
-     * body names the User to link; the Employee is the tenant-scoped route
-     * resource. Neither is ever taken as proof of who the actor is.
-     */
-    public function linkUser(Request $request, School $school, string $employee, EmployeeService $service): JsonResponse
+    // ORG.7E-1: account link/unlink and archive/restore are declared whole-School
+    // operations (the routes' ordinary `capability:hr.employees.manage` floor).
+    public function linkUser(Request $request, School $school, string $employee, EmployeeService $service, HrEmployeeAccess $access): JsonResponse
     {
         abort_if(! Str::isUuid($employee), 404);
 
-        $model = Employee::query()->findOrFail($employee);
+        $model = $access->employee($school, $access->scopeOf($request->user(), 'hr.employees.manage', $school), $employee);
 
         $validated = $request->validate([
             'user_id' => ['required', 'uuid'],
@@ -86,31 +96,31 @@ class EmployeeController extends Controller
         return response()->json(['data' => $this->present($linked)]);
     }
 
-    public function unlinkUser(Request $request, School $school, string $employee, EmployeeService $service): JsonResponse
+    public function unlinkUser(Request $request, School $school, string $employee, EmployeeService $service, HrEmployeeAccess $access): JsonResponse
     {
         abort_if(! Str::isUuid($employee), 404);
 
-        $model = Employee::query()->findOrFail($employee);
+        $model = $access->employee($school, $access->scopeOf($request->user(), 'hr.employees.manage', $school), $employee);
         $unlinked = $service->unlinkUser($model, $request->user());
 
         return response()->json(['data' => $this->present($unlinked)]);
     }
 
-    public function archive(Request $request, School $school, string $employee, EmployeeService $service): JsonResponse
+    public function archive(Request $request, School $school, string $employee, EmployeeService $service, HrEmployeeAccess $access): JsonResponse
     {
         abort_if(! Str::isUuid($employee), 404);
 
-        $model = Employee::query()->findOrFail($employee);
+        $model = $access->employee($school, $access->scopeOf($request->user(), 'hr.employees.manage', $school), $employee);
         $archived = $service->archive($model, $request->user());
 
         return response()->json(['data' => $this->present($archived)]);
     }
 
-    public function restore(Request $request, School $school, string $employee, EmployeeService $service): JsonResponse
+    public function restore(Request $request, School $school, string $employee, EmployeeService $service, HrEmployeeAccess $access): JsonResponse
     {
         abort_if(! Str::isUuid($employee), 404);
 
-        $model = Employee::query()->findOrFail($employee);
+        $model = $access->employee($school, $access->scopeOf($request->user(), 'hr.employees.manage', $school), $employee);
         $restored = $service->restore($model, $request->user());
 
         return response()->json(['data' => $this->present($restored)]);
@@ -119,7 +129,7 @@ class EmployeeController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function present(Employee $employee): array
+    private function present(Employee $employee, bool $wholeSchool = true): array
     {
         return [
             'id' => $employee->id,
@@ -127,7 +137,9 @@ class EmployeeController extends Controller
             'fullName' => $employee->full_name,
             'workEmail' => $employee->work_email,
             'workPhone' => $employee->work_phone,
-            'userId' => $employee->user_id,
+            // ORG.7E-1: the account link is whole-School data; a Campus-scoped
+            // caller is never told which sign-in account an Employee has.
+            ...($wholeSchool ? ['userId' => $employee->user_id] : []),
             'recordStatus' => $employee->record_status,
         ];
     }

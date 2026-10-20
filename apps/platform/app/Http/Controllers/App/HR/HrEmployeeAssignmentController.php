@@ -5,6 +5,7 @@ namespace App\Http\Controllers\App\HR;
 use App\Domain\HR\Application\EmployeeAssignmentService;
 use App\Domain\HR\Application\EmployeePickerReadService;
 use App\Domain\HR\Application\Exceptions\HrException;
+use App\Domain\HR\Application\HrEmployeeAccess;
 use App\Domain\HR\Application\ReportingHierarchyService;
 use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\Employee;
@@ -13,8 +14,11 @@ use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\HR\Infrastructure\Position;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Models\School;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Authorization\Campus\CampusScope;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -30,19 +34,26 @@ use Illuminate\Validation\ValidationException;
  * is unchanged -- `ReportingHierarchyService::setManager()` still decides
  * same School, not itself, not the same Employee, never your own reporting
  * line, and no cycle -- and its refusals are shown without identifiers.
+ *
+ * ORG.7E-1 (ADR 0076 §43): Campus-adopted (`hr.employees.assignments.manage`).
+ * Every record is resolved through HrEmployeeAccess (a Campus-scoped actor
+ * reaches only the current employment and CURRENT in-scope assignments of an
+ * Employee in scope; anything else is 404), and the services decide the
+ * write rule under lock. A Campus-scoped actor lands on the overview.
  */
 class HrEmployeeAssignmentController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
-    public function store(Request $request, TenantContext $context, EmployeeAssignmentService $service, string $employee, string $employment): RedirectResponse
+    public function store(Request $request, TenantContext $context, EmployeeAssignmentService $service, HrEmployeeAccess $access, string $employee, string $employment): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('hr.employees.assignments.manage', $school);
+        $scope = $this->authorizeCampusScope('hr.employees.assignments.manage', $school);
         abort_if(! Str::isUuid($employee) || ! Str::isUuid($employment), 404);
 
-        $employeeModel = Employee::query()->findOrFail($employee);
-        $employmentModel = EmploymentRecord::query()->findOrFail($employment);
+        $employeeModel = $access->employee($school, $scope, $employee);
+        $employmentModel = $access->employment($school, $scope, $employment);
+        abort_if($employmentModel->employee_id !== $employeeModel->id, 404);
 
         $validated = $request->validate([
             'starts_on' => ['required', 'date'],
@@ -69,27 +80,31 @@ class HrEmployeeAssignmentController extends Controller
             throw ValidationException::withMessages(['position_id' => [$e->getMessage()]]);
         }
 
-        return redirect("/app/hr/employees/{$employeeModel->id}");
+        return redirect(self::employeePage($scope, $employeeModel->id));
     }
 
-    public function end(Request $request, TenantContext $context, EmployeeAssignmentService $service, string $employee, string $employment, string $assignment): RedirectResponse
+    public function end(Request $request, TenantContext $context, EmployeeAssignmentService $service, HrEmployeeAccess $access, string $employee, string $employment, string $assignment): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('hr.employees.assignments.manage', $school);
-        [$employeeModel, , $assignmentModel] = $this->resolveChain($employee, $employment, $assignment);
+        $scope = $this->authorizeCampusScope('hr.employees.assignments.manage', $school);
+        [$employeeModel, , $assignmentModel] = $this->resolveChain($access, $school, $scope, $employee, $employment, $assignment);
 
         $validated = $request->validate(['ends_on' => ['required', 'date']]);
 
-        $service->end($assignmentModel, $validated['ends_on'], $context->actor());
+        try {
+            $service->end($assignmentModel, $validated['ends_on'], $context->actor());
+        } catch (HrException $e) {
+            throw ValidationException::withMessages(['ends_on' => [$e->getMessage()]]);
+        }
 
-        return redirect("/app/hr/employees/{$employeeModel->id}");
+        return redirect(self::employeePage($scope, $employeeModel->id));
     }
 
-    public function setPrimary(TenantContext $context, EmployeeAssignmentService $service, string $employee, string $employment, string $assignment): RedirectResponse
+    public function setPrimary(TenantContext $context, EmployeeAssignmentService $service, HrEmployeeAccess $access, string $employee, string $employment, string $assignment): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('hr.employees.assignments.manage', $school);
-        [$employeeModel, , $assignmentModel] = $this->resolveChain($employee, $employment, $assignment);
+        $scope = $this->authorizeCampusScope('hr.employees.assignments.manage', $school);
+        [$employeeModel, , $assignmentModel] = $this->resolveChain($access, $school, $scope, $employee, $employment, $assignment);
 
         try {
             $service->setPrimary($assignmentModel, $context->actor());
@@ -97,19 +112,20 @@ class HrEmployeeAssignmentController extends Controller
             throw ValidationException::withMessages(['assignment' => [$e->getMessage()]]);
         }
 
-        return redirect("/app/hr/employees/{$employeeModel->id}");
+        return redirect(self::employeePage($scope, $employeeModel->id));
     }
 
-    public function setManager(Request $request, TenantContext $context, ReportingHierarchyService $service, string $employee, string $employment, string $assignment): RedirectResponse
+    public function setManager(Request $request, TenantContext $context, ReportingHierarchyService $service, HrEmployeeAccess $access, string $employee, string $employment, string $assignment): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('hr.employees.assignments.manage', $school);
-        [$employeeModel, , $subordinate] = $this->resolveChain($employee, $employment, $assignment);
+        $scope = $this->authorizeCampusScope('hr.employees.assignments.manage', $school);
+        [$employeeModel, , $subordinate] = $this->resolveChain($access, $school, $scope, $employee, $employment, $assignment);
 
         $validated = $request->validate(['manager_assignment_id' => ['sometimes', 'nullable', 'uuid']], ['manager_assignment_id.*' => 'Choose a manager from the list.']);
 
+        // ORG.7E-1: a Campus-scoped actor names only a current in-scope manager assignment.
         $manager = isset($validated['manager_assignment_id'])
-            ? EmployeeAssignment::query()->find($validated['manager_assignment_id'])
+            ? self::findAssignment($access, $school, $scope, $validated['manager_assignment_id'])
             : null;
 
         if (isset($validated['manager_assignment_id']) && $manager === null) {
@@ -122,15 +138,15 @@ class HrEmployeeAssignmentController extends Controller
             throw ValidationException::withMessages(['manager_assignment_id' => [self::managerRefusal($e)]]);
         }
 
-        return redirect("/app/hr/employees/{$employeeModel->id}");
+        return redirect(self::employeePage($scope, $employeeModel->id));
     }
 
     /** UAT-C6 (UAT-HR-23): manager candidates for this assignment, by name. */
-    public function managerCandidates(Request $request, TenantContext $context, EmployeePickerReadService $reads, string $employee, string $employment, string $assignment): JsonResponse
+    public function managerCandidates(Request $request, TenantContext $context, EmployeePickerReadService $reads, HrEmployeeAccess $access, string $employee, string $employment, string $assignment): JsonResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('hr.employees.assignments.manage', $school);
-        [, , $subordinate] = $this->resolveChain($employee, $employment, $assignment);
+        $scope = $this->authorizeCampusScope('hr.employees.assignments.manage', $school);
+        [, , $subordinate] = $this->resolveChain($access, $school, $scope, $employee, $employment, $assignment);
 
         return response()->json([
             'candidates' => $reads->managerCandidates($school, $subordinate, (string) $request->string('q'), $context->actor()),
@@ -147,18 +163,33 @@ class HrEmployeeAssignmentController extends Controller
         };
     }
 
+    private static function findAssignment(HrEmployeeAccess $access, School $school, CampusScope $scope, string $id): ?EmployeeAssignment
+    {
+        try {
+            return $access->assignment($school, $scope, $id);
+        } catch (ModelNotFoundException) {
+            return null;
+        }
+    }
+
+    /** A whole-School actor returns to the Profile (unchanged); a Campus-scoped one to the overview. */
+    private static function employeePage(CampusScope $scope, string $employeeId): string
+    {
+        return $scope->isWholeSchool() ? "/app/hr/employees/{$employeeId}" : "/app/hr/employees/{$employeeId}/overview";
+    }
+
     /**
      * @return array{0: Employee, 1: EmploymentRecord, 2: EmployeeAssignment}
      */
-    private function resolveChain(string $employee, string $employment, string $assignment): array
+    private function resolveChain(HrEmployeeAccess $access, School $school, CampusScope $scope, string $employee, string $employment, string $assignment): array
     {
         abort_if(! Str::isUuid($employee) || ! Str::isUuid($employment) || ! Str::isUuid($assignment), 404);
 
-        $employeeModel = Employee::query()->findOrFail($employee);
-        $employmentModel = EmploymentRecord::query()->findOrFail($employment);
+        $employeeModel = $access->employee($school, $scope, $employee);
+        $employmentModel = $access->employment($school, $scope, $employment);
         abort_if($employmentModel->employee_id !== $employeeModel->id, 404);
 
-        $assignmentModel = EmployeeAssignment::query()->findOrFail($assignment);
+        $assignmentModel = $access->assignment($school, $scope, $assignment);
         abort_if($assignmentModel->employment_record_id !== $employmentModel->id, 404);
 
         return [$employeeModel, $employmentModel, $assignmentModel];

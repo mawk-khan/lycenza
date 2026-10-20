@@ -129,6 +129,9 @@ final class StaffNavigation
             // `payroll.runs.view` (its Phase 9 contract) and never names
             // `payroll.statutory.*` (E45: no primary entry).
             new E('hr', 'people', 'HR', 'app.hr.index', any: ['hr.employees.view', 'hr.employees.manage', 'hr.departments.view', 'hr.positions.view', 'hr.categories.view']),
+            // ORG.7E-1 (ADR 0076 §43): the Campus-aware Directory -- the landing
+            // entry a Campus-scoped HR holder gets (the HR hub is whole-School).
+            new E('staff-directory', 'people', 'Staff directory', 'app.hr.employees.index', all: ['hr.employees.view']),
             new E('leave', 'people', 'Leave', 'app.leave.requests', all: ['hr.leave.view'], activeWhen: ['app.leave.*']),
             new E('leave-approvals', 'people', 'Leave approvals', 'app.leave.approvals', all: ['hr.leave.approve'], activeWhen: ['app.leave.approvals*']),
             new E('staff-attendance', 'people', 'Staff attendance', 'app.staff-attendance.register', all: ['hr.staff_attendance.view'], activeWhen: ['app.staff-attendance.*']),

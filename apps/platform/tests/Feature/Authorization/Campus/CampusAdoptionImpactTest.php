@@ -37,22 +37,27 @@ class CampusAdoptionImpactTest extends TestCase
      * and school_admin gain canteen.orders.view/.manage, and canteen_operator
      * becomes Campus-scopable; admissions_officer, principal and
      * school_admin gain admissions.view/.manage (pre-conversion only), and
-     * admissions_officer becomes Campus-scopable.
+     * admissions_officer becomes Campus-scopable. ORG.7E-1 (owner decisions
+     * E1-1/E1-2/E1-3): principal and school_admin gain hr.employees.view/
+     * .manage; hr_officer gains hr.employees.view/.manage/.assignments.view/
+     * .assignments.manage and becomes Campus-scopable; school_admin stays
+     * whole-School only.
      */
     private const HOLDERS = [
         'admissions_officer' => ['admissions.manage', 'admissions.view'],
         'canteen_operator' => ['canteen.orders.manage', 'canteen.orders.view'],
         'front_office' => ['visitor.visits.manage', 'visitor.visits.view'],
         'hostel_warden' => ['hostel.residency.manage', 'hostel.residency.view'],
+        'hr_officer' => ['hr.employees.assignments.manage', 'hr.employees.assignments.view', 'hr.employees.manage', 'hr.employees.view'],
         'librarian' => ['library.circulation.manage', 'library.circulation.view'],
-        'principal' => ['admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'examinations.papers.manage', 'examinations.papers.view', 'hostel.residency.manage', 'hostel.residency.view', 'inventory.stock.manage', 'inventory.stock.view', 'library.circulation.manage', 'library.circulation.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view', 'visitor.visits.manage', 'visitor.visits.view'],
-        'school_admin' => ['admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'examinations.papers.manage', 'examinations.papers.view', 'hostel.residency.manage', 'hostel.residency.view', 'inventory.stock.manage', 'inventory.stock.view', 'library.circulation.manage', 'library.circulation.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view', 'visitor.visits.manage', 'visitor.visits.view'],
+        'principal' => ['admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'examinations.papers.manage', 'examinations.papers.view', 'hostel.residency.manage', 'hostel.residency.view', 'hr.employees.manage', 'hr.employees.view', 'inventory.stock.manage', 'inventory.stock.view', 'library.circulation.manage', 'library.circulation.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view', 'visitor.visits.manage', 'visitor.visits.view'],
+        'school_admin' => ['admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'examinations.papers.manage', 'examinations.papers.view', 'hostel.residency.manage', 'hostel.residency.view', 'hr.employees.manage', 'hr.employees.view', 'inventory.stock.manage', 'inventory.stock.view', 'library.circulation.manage', 'library.circulation.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view', 'visitor.visits.manage', 'visitor.visits.view'],
         'stores_officer' => ['inventory.stock.manage', 'inventory.stock.view'],
         'transport_coordinator' => ['transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view'],
     ];
 
     /** The templates a whole-School administrator may grant for one Campus. */
-    private const CAMPUS_SCOPABLE = ['admissions_officer', 'canteen_operator', 'front_office', 'hostel_warden', 'librarian', 'principal', 'stores_officer', 'transport_coordinator'];
+    private const CAMPUS_SCOPABLE = ['admissions_officer', 'canteen_operator', 'front_office', 'hostel_warden', 'hr_officer', 'librarian', 'principal', 'stores_officer', 'transport_coordinator'];
 
     /**
      * ORG.7D-5 (ADR 0076 §41, owner decisions): an authorized circulation or
@@ -72,6 +77,9 @@ class CampusAdoptionImpactTest extends TestCase
     private const HIGH_RISK = [
         'hr.employees.personal.', 'hr.employees.sensitive.', 'hr.employees.documents.', 'hr.employees.notes.',
         'hr.employees.qualifications.', 'payroll.', 'finance.', 'school.', 'integrations.', 'capabilities.',
+        // ORG.7E-1 (ADR 0076 §43): assignments define Campus placement itself, and
+        // hr.employees.manage edits School-wide identity and onboards.
+        'hr.employees.assignments.', 'hr.employees.manage',
     ];
 
     /** Capability classes (CapabilityClasses) that make an adopted key high-risk wherever its prefix is. */
@@ -82,7 +90,28 @@ class CampusAdoptionImpactTest extends TestCase
      * authorized Canteen order adoption; fulfilment's charge is Canteen's
      * bounded side effect and confers no Fees, Payments or ledger authority.
      */
-    private const OWNER_APPROVED_HIGH_RISK = ['canteen.orders.manage', 'canteen.orders.view'];
+    private const OWNER_APPROVED_HIGH_RISK = [
+        'canteen.orders.manage', 'canteen.orders.view',
+        // ORG.7E-1 (ADR 0076 §43): owner-approved for the guarded operational
+        // subset only -- identity edits need every current Campus in scope,
+        // onboarding is atomic, assignment creation never captures an Employee,
+        // and employment lifecycle, rehire, import, archive and account links
+        // stay whole-School (declared operations).
+        'hr.employees.assignments.manage', 'hr.employees.assignments.view', 'hr.employees.manage',
+    ];
+
+    /**
+     * ORG.7E-1 (owner decisions E1-1, E1-2, §40-§41): exactly what a Campus
+     * grant of each HR-holding template confers among `hr.*` and `payroll.*`
+     * keys. principal@Campus gains the operational Directory and core edit,
+     * never personal/sensitive HR, documents, notes, qualifications, leave,
+     * staff attendance, payroll or HR configuration; hr_officer@Campus gains
+     * the operational subset only, with no bypass for its name.
+     */
+    private const HR_CAMPUS_CONFERRED = [
+        'hr_officer' => ['hr.employees.assignments.manage', 'hr.employees.assignments.view', 'hr.employees.manage', 'hr.employees.view'],
+        'principal' => ['hr.employees.manage', 'hr.employees.view'],
+    ];
 
     /**
      * ORG.7D-1 (ADR 0076 §37, D1-3, D1-10, D1-6): never adoptable in this
@@ -117,6 +146,32 @@ class CampusAdoptionImpactTest extends TestCase
 
         $this->assertSame(self::HOLDERS, $holders, 'A Campus adoption changed which role templates hold adopted keys: report the new keys, their templates and the Campus-scoped grants that gain them (ADR 0076 §36), then update this snapshot.');
         $this->assertSame(self::CAMPUS_SCOPABLE, $scopable, 'A Campus adoption changed which templates may be granted for one Campus: report it, then update this snapshot.');
+    }
+
+    #[Test]
+    public function a_campus_hr_grant_confers_only_the_operational_hr_subset(): void
+    {
+        $roles = Role::query()->where('scope', Role::SCOPE_SCHOOL)->where('is_system', true)->whereNull('retired_at')->with('capabilities')->orderBy('key')->get();
+        $conferred = [];
+        foreach ($roles as $role) {
+            if (! StaffRoleCatalog::campusScopable($role)) {
+                continue;
+            }
+            $keys = array_values(array_filter(
+                CampusScopeCatalogue::adoptedAmong($role->capabilities->pluck('key')->sort()->values()->all()),
+                fn (string $key) => str_starts_with($key, 'hr.') || str_starts_with($key, 'payroll.'),
+            ));
+            if ($keys !== []) {
+                $conferred[$role->key] = $keys;
+            }
+        }
+        $this->assertSame(self::HR_CAMPUS_CONFERRED, $conferred, 'A Campus grant changed what it confers among HR/payroll keys (ADR 0076 §43): report it, then update this snapshot.');
+        $this->assertFalse(StaffRoleCatalog::campusScopable($roles->firstWhere('key', 'school_admin')), 'school_admin stays whole-School only (E1-3).');
+        foreach (CampusScopeCatalogue::capabilities() as $capability) {
+            foreach (['hr.employees.personal.', 'hr.employees.sensitive.', 'hr.employees.documents.', 'hr.employees.notes.', 'hr.employees.qualifications.', 'hr.leave.', 'hr.staff_attendance.', 'hr.departments.', 'hr.positions.', 'hr.categories.', 'payroll.'] as $prefix) {
+                $this->assertStringStartsNotWith($prefix, $capability, "{$capability}: sensitive HR, leave, staff attendance, HR configuration and payroll are not Campus-adopted (ADR 0076 §43).");
+            }
+        }
     }
 
     #[Test]

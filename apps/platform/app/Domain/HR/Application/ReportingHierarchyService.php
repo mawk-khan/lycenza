@@ -10,7 +10,7 @@ use App\Domain\HR\Events\EmployeeManagerChanged;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -51,27 +51,34 @@ use Illuminate\Support\Facades\DB;
  */
 class ReportingHierarchyService
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly HrSelfAdministrationGuard $selfAdministration,
+        private readonly HrEmployeeAccess $access,
     ) {}
 
+    /**
+     * ORG.7E-1 (ADR 0076 §43): Campus-aware. A Campus-scoped actor sets the
+     * manager of a CURRENT in-scope assignment only, and only to a CURRENT
+     * in-scope manager assignment (or clears it), checked after both row
+     * locks (HrEmployeeCampusGuard). Whole-School behaviour is unchanged.
+     */
     public function setManager(EmployeeAssignment $subordinate, ?EmployeeAssignment $manager, User $actor): EmployeeAssignment
     {
         $school = $subordinate->school;
-        $this->authorizeCapabilityFor($actor, 'hr.employees.assignments.manage', $school);
+        $guard = $this->access->writeGuard($school, $this->authorizeCampusScopeFor($actor, 'hr.employees.assignments.manage', $school));
 
-        return $this->context->withSchool($school, function () use ($school, $subordinate, $manager, $actor) {
+        return $this->context->withSchool($school, function () use ($school, $subordinate, $manager, $actor, $guard) {
             if ($manager !== null) {
                 $this->assertSameSchool($school->id, $manager);
                 $this->assertNotSelf($subordinate, $manager);
                 $this->assertNotSameEmployee($subordinate, $manager);
             }
 
-            return DB::transaction(function () use ($school, $subordinate, $manager, $actor) {
+            return DB::transaction(function () use ($school, $subordinate, $manager, $actor, $guard) {
                 // SR.4 (ADR 0071 §26.2): never a reporting line you are on
                 // either side of -- choosing your own approver, or making
                 // yourself someone's. Employees FOR SHARE before the
@@ -94,9 +101,12 @@ class ReportingHierarchyService
                 // guarantee the first row is locked before the second is even
                 // requested. This is what makes the deterministic-lock-order
                 // scheme actually deadlock-and-race-free under concurrency.
+                $locked = [];
                 foreach ($lockIds as $id) {
-                    EmployeeAssignment::query()->where('id', $id)->lockForUpdate()->firstOrFail();
+                    $locked[$id] = EmployeeAssignment::query()->where('id', $id)->lockForUpdate()->firstOrFail();
                 }
+
+                $guard?->beforeSetManager($locked[$subordinate->id], $manager !== null ? $locked[$manager->id] : null);
 
                 if ($manager !== null) {
                     $this->assertNoCycle($subordinate, $manager);

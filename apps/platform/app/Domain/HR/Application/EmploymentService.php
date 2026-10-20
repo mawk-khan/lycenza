@@ -14,7 +14,6 @@ use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
-use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Container\Attributes\Tag;
 use Illuminate\Database\QueryException;
@@ -45,8 +44,6 @@ use Illuminate\Support\Facades\DB;
  */
 class EmploymentService
 {
-    use AuthorizesCapability;
-
     /**
      * The closed set of terminal Employment statuses
      * (docs/modules/HR.md "Employee lifecycle -- state responsibility
@@ -61,6 +58,8 @@ class EmploymentService
         private readonly TenantContext $context,
         private readonly AssignmentClosureCascade $closureCascade,
         private readonly HrSelfAdministrationGuard $selfAdministration,
+        private readonly HrEmployeeAccess $access,
+        private readonly EmployeePlacementLock $placement,
         /** @var iterable<EmploymentEndParticipant> */
         #[Tag(EmploymentEndParticipant::TAG)] private readonly iterable $endParticipants = [],
     ) {}
@@ -71,8 +70,29 @@ class EmploymentService
     public function create(Employee $employee, array $attributes, User $actor): EmploymentRecord
     {
         $school = $employee->school;
-        $this->authorizeCapabilityFor($actor, 'hr.employees.assignments.manage', $school);
+        // ORG.7E-1 (ADR 0076 §43): a new employment for an existing Employee
+        // (a first hire after identity-only create, a rehire, a second
+        // contract) is School-wide employment administration: whole-School
+        // only. Campus onboarding creates its first employment atomically.
+        $this->access->requireWholeSchool($actor, 'hr.employees.assignments.manage', $school);
 
+        return $this->context->withSchool($school, fn () => DB::transaction(fn () => $this->createRecord($employee, $attributes, $actor)));
+    }
+
+    /**
+     * The one EmploymentRecord INSERT (create() and EmployeeOnboardingService):
+     * the Employee lock, the self-administration guard, overlap, audit and the
+     * EmploymentStarted event. No authorization of its own; run inside the
+     * caller's transaction and the School's TenantContext.
+     *
+     * @param  array{employment_type: string, starts_on: string, ends_on?: string|null, status?: string, probation_ends_on?: string|null, employee_category_id?: string|null}  $attributes
+     */
+    public function createRecord(Employee $employee, array $attributes, User $actor): EmploymentRecord
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new \LogicException('EmploymentService::createRecord() runs only inside the creating transaction.');
+        }
+        $school = $employee->school;
         $startsOn = $attributes['starts_on'];
         $endsOn = $attributes['ends_on'] ?? null;
         $categoryId = $attributes['employee_category_id'] ?? null;
@@ -85,51 +105,47 @@ class EmploymentService
             throw new InvalidEmploymentStatusException($status);
         }
 
-        return $this->context->withSchool($school, function () use ($school, $employee, $attributes, $startsOn, $endsOn, $categoryId, $status, $actor) {
-            return DB::transaction(function () use ($school, $employee, $attributes, $startsOn, $endsOn, $categoryId, $status, $actor) {
-                // Lock the Employee row itself (not just existing EmploymentRecord
-                // rows) so two concurrent create() calls for the SAME employee --
-                // including the very first hire, where no EmploymentRecord rows
-                // exist yet to lock -- serialize on this row instead of racing.
-                // Mirrors EmployeeNumberAllocator/AcademicYearService's lock-then-
-                // check-then-write pattern.
-                Employee::query()->where('id', $employee->id)->lockForUpdate()->firstOrFail();
+        // Lock the Employee row itself (not just existing EmploymentRecord
+        // rows) so two concurrent create() calls for the SAME employee --
+        // including the very first hire, where no EmploymentRecord rows
+        // exist yet to lock -- serialize on this row instead of racing.
+        // Mirrors EmployeeNumberAllocator/AcademicYearService's lock-then-
+        // check-then-write pattern.
+        Employee::query()->where('id', $employee->id)->lockForUpdate()->firstOrFail();
 
-                // SR.4 (ADR 0071 §26.2): never your own employment.
-                $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'employment.create');
+        // SR.4 (ADR 0071 §26.2): never your own employment.
+        $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'employment.create');
 
-                $this->assertNoOverlap($employee, $startsOn, $endsOn);
+        $this->assertNoOverlap($employee, $startsOn, $endsOn);
 
-                try {
-                    $employment = EmploymentRecord::query()->create([
-                        'school_id' => $school->id,
-                        'employee_id' => $employee->id,
-                        'employment_type' => $attributes['employment_type'],
-                        'employee_category_id' => $categoryId,
-                        'starts_on' => $startsOn,
-                        'ends_on' => $endsOn,
-                        'probation_ends_on' => $attributes['probation_ends_on'] ?? null,
-                        'status' => $status,
-                    ]);
-                } catch (QueryException $e) {
-                    if ($categoryId !== null && $this->violatesEmployeeCategoryForeignKey($e)) {
-                        throw new EmployeeCategoryNotFoundException($categoryId);
-                    }
+        try {
+            $employment = EmploymentRecord::query()->create([
+                'school_id' => $school->id,
+                'employee_id' => $employee->id,
+                'employment_type' => $attributes['employment_type'],
+                'employee_category_id' => $categoryId,
+                'starts_on' => $startsOn,
+                'ends_on' => $endsOn,
+                'probation_ends_on' => $attributes['probation_ends_on'] ?? null,
+                'status' => $status,
+            ]);
+        } catch (QueryException $e) {
+            if ($categoryId !== null && $this->violatesEmployeeCategoryForeignKey($e)) {
+                throw new EmployeeCategoryNotFoundException($categoryId);
+            }
 
-                    throw $e;
-                }
+            throw $e;
+        }
 
-                $this->audit->school($school, 'hr.employment.created', actor: $actor, subject: $employment, metadata: [
-                    'employeeId' => $employee->id,
-                    'employmentType' => $employment->employment_type,
-                    'startsOn' => $startsOn,
-                ]);
+        $this->audit->school($school, 'hr.employment.created', actor: $actor, subject: $employment, metadata: [
+            'employeeId' => $employee->id,
+            'employmentType' => $employment->employment_type,
+            'startsOn' => $startsOn,
+        ]);
 
-                event(new EmploymentStarted($school->id, $employee->id, $employment->id));
+        event(new EmploymentStarted($school->id, $employee->id, $employment->id));
 
-                return $employment;
-            });
-        });
+        return $employment;
     }
 
     /**
@@ -146,7 +162,8 @@ class EmploymentService
     public function update(EmploymentRecord $employment, array $attributes, User $actor): EmploymentRecord
     {
         $school = $employment->school;
-        $this->authorizeCapabilityFor($actor, 'hr.employees.assignments.manage', $school);
+        // ORG.7E-1: employment-level administration stays whole-School.
+        $this->access->requireWholeSchool($actor, 'hr.employees.assignments.manage', $school);
 
         unset($attributes['school_id'], $attributes['employee_id'], $attributes['starts_on'], $attributes['ends_on'], $attributes['status']);
 
@@ -215,7 +232,9 @@ class EmploymentService
     public function end(EmploymentRecord $employment, string $endsOn, User $actor, string $status = 'separated'): EmploymentRecord
     {
         $school = $employment->school;
-        $this->authorizeCapabilityFor($actor, 'hr.employees.assignments.manage', $school);
+        // ORG.7E-1 (ADR 0076 §43): ending employment is terminal and cascades
+        // into teaching ownership on every Campus: whole-School only.
+        $this->access->requireWholeSchool($actor, 'hr.employees.assignments.manage', $school);
 
         if (! in_array($status, self::TERMINAL_STATUSES, true)) {
             throw new InvalidEmploymentStatusTransitionException($employment->id, $status);
@@ -223,6 +242,8 @@ class EmploymentService
 
         return $this->context->withSchool($school, function () use ($school, $employment, $endsOn, $status, $actor) {
             return DB::transaction(function () use ($school, $employment, $endsOn, $status, $actor) {
+                // ORG.7E-1: the placement lock first (EmployeePlacementLock order).
+                $this->placement->forPlacementChange($school, $employment->employee_id);
                 // SR.4 (ADR 0071 §26.2): Employee FOR SHARE before the record, the ActingEmployee lock order.
                 $this->selfAdministration->refuseOwnEmployee($actor, $employment->employee_id, 'employment.end');
 

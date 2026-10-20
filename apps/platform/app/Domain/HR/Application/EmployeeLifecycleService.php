@@ -11,7 +11,6 @@ use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\HR\Infrastructure\Position;
 use App\Models\Campus;
 use App\Models\User;
-use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
@@ -43,10 +42,9 @@ use InvalidArgumentException;
  */
 class EmployeeLifecycleService
 {
-    use AuthorizesCapability;
-
     public function __construct(
         private readonly TenantContext $context,
+        private readonly HrEmployeeAccess $access,
     ) {}
 
     /**
@@ -67,7 +65,8 @@ class EmployeeLifecycleService
     public function separate(EmploymentRecord $employment, string $endsOn, User $actor, string $status = 'separated'): EmploymentRecord
     {
         $school = $employment->school;
-        $this->authorizeCapabilityFor($actor, 'hr.employees.assignments.manage', $school);
+        // ORG.7E-1 (ADR 0076 §43): separation is terminal -- whole-School only.
+        $this->access->requireWholeSchool($actor, 'hr.employees.assignments.manage', $school);
 
         // ORG.7E-0: "future" on the School's own calendar date, never the UTC date.
         $today = SchoolTimezone::today($school);
@@ -124,7 +123,10 @@ class EmployeeLifecycleService
         ?Campus $campus = null,
     ): EmploymentRecord {
         $school = $employee->school;
-        $this->authorizeCapabilityFor($actor, 'hr.employees.assignments.manage', $school);
+        // ORG.7E-1 (ADR 0076 §43): rehire is whole-School only -- a former
+        // Employee has no current assignment, so a Campus rehire would let any
+        // Campus capture any former Employee.
+        $this->access->requireWholeSchool($actor, 'hr.employees.assignments.manage', $school);
 
         if ($assignmentAttributes !== null && $position === null) {
             throw new InvalidArgumentException('An initial Assignment requires a Position.');

@@ -10,7 +10,8 @@ use App\Domain\HR\Infrastructure\Position;
 use App\Models\Campus;
 use App\Models\School;
 use App\Models\User;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Authorization\Campus\CampusScope;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -58,6 +59,16 @@ use Illuminate\Support\Collection;
  * manager Employees) -- never one query per Employee row, regardless
  * of page size.
  *
+ * ORG.7E-1 (ADR 0076 §43): `hr.employees.view` is Campus-adopted. For a
+ * Campus-scoped reader the result is restricted IN SQL (HrEmployeeAccess) to
+ * Employees with a current assignment on an in-scope Campus; a Campus filter
+ * outside the scope matches nobody, and Department/Position filters match
+ * in-scope current assignments only -- request filters only ever narrow.
+ * The row's placement is then an IN-SCOPE current assignment (primary first),
+ * never the primary placement on another Campus: reaching an Employee through
+ * Campus A never discloses their Campus B position, Department or manager.
+ * Whole-School readers are unchanged.
+ *
  * Manager projection is exactly ONE hop -- the current primary
  * Assignment's live `manager_assignment_id` pointer (8A.5), resolved
  * to that manager Assignment's own EmploymentRecord/Employee. No
@@ -67,13 +78,14 @@ use Illuminate\Support\Collection;
  */
 class EmployeeDirectoryService
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
     public const int MAX_PER_PAGE = 100;
 
     public function __construct(
         private readonly TenantContext $context,
         private readonly CurrentEmployeeAssignments $current,
+        private readonly HrEmployeeAccess $access,
     ) {}
 
     /**
@@ -85,17 +97,20 @@ class EmployeeDirectoryService
      */
     public function search(School $school, EmployeeDirectoryQuery $query, User $actor): LengthAwarePaginator
     {
-        $this->authorizeCapabilityFor($actor, 'hr.employees.view', $school);
+        $scope = $this->authorizeCampusScopeFor($actor, 'hr.employees.view', $school);
 
-        return $this->context->withSchool($school, fn () => $this->runSearch($school, $query));
+        return $this->context->withSchool($school, fn () => $this->runSearch($school, $query, $scope));
     }
 
-    private function runSearch(School $school, EmployeeDirectoryQuery $query): LengthAwarePaginator
+    private function runSearch(School $school, EmployeeDirectoryQuery $query, CampusScope $scope): LengthAwarePaginator
     {
         $today = SchoolTimezone::today($school);
+        $scoped = ! $scope->isWholeSchool();
+        // A Campus-scoped reader's Campus filter can only narrow its scope.
+        $campusFilter = $query->campusId === null ? null : [strtolower((string) $query->campusId)];
+        $scopedCampuses = $campusFilter === null ? $scope->campusIds() : array_values(array_intersect($scope->campusIds(), $campusFilter));
 
-        $employeeQuery = Employee::query()
-            ->where('school_id', $school->id)
+        $employeeQuery = $this->access->employees($school, $scope)
             ->when(! $query->includeArchived, fn ($q) => $q->where('record_status', 'active'))
             ->when($query->search !== null && trim($query->search) !== '', function ($q) use ($query) {
                 $needle = addcslashes(trim($query->search), '%_\\');
@@ -106,9 +121,17 @@ class EmployeeDirectoryService
             })
             // ORG.7E-0: the Campus filter is operational Campus membership --
             // any current assignment on that active Campus (the canonical rule).
-            ->when($query->campusId !== null, fn ($q) => $this->current->whereOperationalOnCampuses($q, $school, [(string) $query->campusId], $today))
+            ->when($campusFilter !== null, fn ($q) => $this->current->whereOperationalOnCampuses($q, $school, $scoped ? $scopedCampuses : $campusFilter, $today))
+            // ORG.7E-1: a scoped reader's Department/Position filter matches an
+            // in-scope current assignment, never a placement on another Campus.
             ->when(
-                $query->departmentId !== null || $query->positionId !== null,
+                $scoped && ($query->departmentId !== null || $query->positionId !== null),
+                fn ($q) => $this->current->whereOperationalOnCampuses($q, $school, $scopedCampuses, $today, fn ($ea) => $ea
+                    ->when($query->departmentId !== null, fn ($w) => $w->where('ea.department_id', $query->departmentId))
+                    ->when($query->positionId !== null, fn ($w) => $w->where('ea.position_id', $query->positionId))),
+            )
+            ->when(
+                ! $scoped && ($query->departmentId !== null || $query->positionId !== null),
                 fn ($q) => $q->whereExists(function ($sub) use ($school, $query, $today) {
                     $sub->selectRaw('1')
                         ->from('employee_assignments as ea')
@@ -130,7 +153,7 @@ class EmployeeDirectoryService
 
         $paginator = $employeeQuery->paginate($query->perPage, ['*'], 'page', $query->page);
 
-        $entries = $this->hydrate($school, $paginator->getCollection(), $today);
+        $entries = $this->hydrate($school, $paginator->getCollection(), $today, $scope);
 
         return new LengthAwarePaginator(
             $entries,
@@ -145,14 +168,36 @@ class EmployeeDirectoryService
      * @param  Collection<int, Employee>  $employees
      * @return Collection<int, EmployeeDirectoryEntry>
      */
-    private function hydrate(School $school, Collection $employees, string $today): Collection
+    private function hydrate(School $school, Collection $employees, string $today, CampusScope $scope): Collection
     {
         if ($employees->isEmpty()) {
             return collect();
         }
 
         $employeeIds = $employees->pluck('id')->all();
+        $assignmentByEmployeeId = $scope->isWholeSchool()
+            ? $this->primaryPlacements($school, $employeeIds, $today)
+            // ORG.7E-1: an in-scope current assignment, primary first (one query).
+            : $this->current->currentAssignmentsOf($school, $employeeIds, $scope->campusIds(), $today)
+                ->groupBy('employee_id')->map(fn (Collection $group) => $group->sortByDesc(fn (EmployeeAssignment $a) => (int) $a->is_primary)->first());
 
+        // Security review L1: a scoped reader sees a reporting manager only when
+        // the manager's own assignment is current and in scope.
+        $visibleManagers = $scope->isWholeSchool() ? null
+            : $this->current->currentAmongOnCampuses($school, $assignmentByEmployeeId->pluck('manager_assignment_id')->filter()->unique()->values()->all(), $scope->campusIds(), $today);
+
+        return $this->present($school, $employees, $assignmentByEmployeeId, $visibleManagers);
+    }
+
+    /**
+     * The whole-School display summary: the current primary assignment of
+     * the current employment, on the School-local date.
+     *
+     * @param  list<string>  $employeeIds
+     * @return Collection<string, EmployeeAssignment>
+     */
+    private function primaryPlacements(School $school, array $employeeIds, string $today): Collection
+    {
         $currentEmploymentByEmployeeId = EmploymentRecord::query()
             ->where('school_id', $school->id)
             ->whereIn('employee_id', $employeeIds)
@@ -178,15 +223,29 @@ class EmployeeDirectoryService
             ->groupBy('employment_record_id')
             ->map(fn (Collection $group) => $group->first());
 
-        $departmentIds = $currentPrimaryAssignmentByEmploymentId->pluck('department_id')->filter()->unique()->all();
-        $positionIds = $currentPrimaryAssignmentByEmploymentId->pluck('position_id')->filter()->unique()->all();
-        $campusIds = $currentPrimaryAssignmentByEmploymentId->pluck('campus_id')->filter()->unique()->all();
+        return $currentEmploymentByEmployeeId
+            ->map(fn (EmploymentRecord $employment) => $currentPrimaryAssignmentByEmploymentId->get($employment->id))
+            ->filter();
+    }
+
+    /**
+     * @param  Collection<int, Employee>  $employees
+     * @param  Collection<string, EmployeeAssignment>  $assignmentByEmployeeId
+     * @param  list<string>|null  $visibleManagers  null = every manager (whole School)
+     * @return Collection<int, EmployeeDirectoryEntry>
+     */
+    private function present(School $school, Collection $employees, Collection $assignmentByEmployeeId, ?array $visibleManagers = null): Collection
+    {
+        $departmentIds = $assignmentByEmployeeId->pluck('department_id')->filter()->unique()->all();
+        $positionIds = $assignmentByEmployeeId->pluck('position_id')->filter()->unique()->all();
+        $campusIds = $assignmentByEmployeeId->pluck('campus_id')->filter()->unique()->all();
 
         $departmentsById = $departmentIds === [] ? collect() : Department::query()->where('school_id', $school->id)->whereIn('id', $departmentIds)->get()->keyBy('id');
         $positionsById = $positionIds === [] ? collect() : Position::query()->where('school_id', $school->id)->whereIn('id', $positionIds)->get()->keyBy('id');
         $campusesById = $campusIds === [] ? collect() : Campus::query()->where('school_id', $school->id)->whereIn('id', $campusIds)->get()->keyBy('id');
 
-        $managerAssignmentIds = $currentPrimaryAssignmentByEmploymentId->pluck('manager_assignment_id')->filter()->unique()->all();
+        $managerAssignmentIds = $assignmentByEmployeeId->pluck('manager_assignment_id')->filter()->unique()
+            ->when($visibleManagers !== null, fn ($ids) => $ids->intersect($visibleManagers))->all();
 
         $managerAssignmentsById = $managerAssignmentIds === [] ? collect() : EmployeeAssignment::query()
             ->where('school_id', $school->id)
@@ -211,12 +270,11 @@ class EmployeeDirectoryService
             ->keyBy('id');
 
         return $employees->map(function (Employee $employee) use (
-            $currentEmploymentByEmployeeId, $currentPrimaryAssignmentByEmploymentId,
+            $assignmentByEmployeeId,
             $departmentsById, $positionsById, $campusesById,
             $managerAssignmentsById, $managerEmploymentsById, $managerEmployeesById,
         ) {
-            $employment = $currentEmploymentByEmployeeId->get($employee->id);
-            $assignment = $employment ? $currentPrimaryAssignmentByEmploymentId->get($employment->id) : null;
+            $assignment = $assignmentByEmployeeId->get($employee->id);
 
             $department = $assignment?->department_id ? $departmentsById->get($assignment->department_id) : null;
             $position = $assignment?->position_id ? $positionsById->get($assignment->position_id) : null;

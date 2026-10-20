@@ -22,7 +22,7 @@ use App\Domain\HR\Infrastructure\Position;
 use App\Models\Campus;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -42,10 +42,18 @@ use Illuminate\Support\Facades\DB;
  *
  * Phase 8A.10: every public method requires a real `User $actor` and
  * authorizes `hr.employees.assignments.manage` at the owning School.
+ *
+ * ORG.7E-1 (ADR 0076 §43): Campus-aware. A Campus-scoped actor creates a new
+ * assignment only for an Employee whose EVERY current Campus is in scope,
+ * under the CURRENT employment, on an active in-scope Campus (never a
+ * NULL-Campus one: no capture of an unassigned or other-Campus Employee), and
+ * ends, promotes or re-manages only a CURRENT assignment on an in-scope
+ * Campus -- each decided under EmployeePlacementLock and the row locks
+ * (HrEmployeeCampusGuard). Whole-School behaviour is unchanged.
  */
 class EmployeeAssignmentService
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
     public function __construct(
         private readonly AuditRecorder $audit,
@@ -53,6 +61,8 @@ class EmployeeAssignmentService
         private readonly AssignmentClosureCascade $closureCascade,
         private readonly HrSelfAdministrationGuard $selfAdministration,
         private readonly ActiveCampus $activeCampus,
+        private readonly HrEmployeeAccess $access,
+        private readonly EmployeePlacementLock $placement,
     ) {}
 
     /**
@@ -73,8 +83,44 @@ class EmployeeAssignmentService
         ?Department $department = null,
     ): EmployeeAssignment {
         $school = $employment->school;
-        $this->authorizeCapabilityFor($actor, 'hr.employees.assignments.manage', $school);
+        $guard = $this->access->writeGuard($school, $this->authorizeCampusScopeFor($actor, 'hr.employees.assignments.manage', $school));
 
+        return $this->context->withSchool($school, function () use ($school, $employment, $attributes, $position, $campus, $department, $actor, $guard) {
+            return DB::transaction(function () use ($school, $employment, $attributes, $position, $campus, $department, $actor, $guard) {
+                if ($guard !== null) {
+                    // ORG.7E-1: the decision needs the whole current placement stable.
+                    $this->placement->forEmployeeWrite($school, $employment->employee_id);
+                    $guard->beforeAssignmentCreate($employment, $campus?->id, $department, $attributes['starts_on']);
+                } else {
+                    $this->placement->forPlacementChange($school, $employment->employee_id);
+                }
+
+                return $this->createRecord($employment, $attributes, $position, $actor, $campus, $department);
+            });
+        });
+    }
+
+    /**
+     * The one EmployeeAssignment INSERT (create() and
+     * EmployeeOnboardingService): reference validation, the
+     * self-administration guard, the active-Campus check, audit and the
+     * AssignmentStarted event. No authorization and no placement lock of its
+     * own; run inside the caller's transaction and the School's TenantContext.
+     *
+     * @param  array{starts_on: string, ends_on?: string|null}  $attributes
+     */
+    public function createRecord(
+        EmploymentRecord $employment,
+        array $attributes,
+        Position $position,
+        User $actor,
+        ?Campus $campus = null,
+        ?Department $department = null,
+    ): EmployeeAssignment {
+        if (DB::transactionLevel() === 0) {
+            throw new \LogicException('EmployeeAssignmentService::createRecord() runs only inside the creating transaction.');
+        }
+        $school = $employment->school;
         $startsOn = $attributes['starts_on'];
         $endsOn = $attributes['ends_on'] ?? null;
 
@@ -86,53 +132,54 @@ class EmployeeAssignmentService
         $this->assertDepartmentIsActive($department);
         $this->assertWithinEmploymentRange($employment, $startsOn, $endsOn);
 
-        return $this->context->withSchool($school, function () use ($school, $employment, $position, $campus, $department, $startsOn, $endsOn, $actor) {
-            return DB::transaction(function () use ($school, $employment, $position, $campus, $department, $startsOn, $endsOn, $actor) {
-                // SR.4 (ADR 0071 §26.2): never your own assignments.
-                $this->selfAdministration->refuseOwnEmployee($actor, $employment->employee_id, 'assignment.create');
+        // SR.4 (ADR 0071 §26.2): never your own assignments.
+        $this->selfAdministration->refuseOwnEmployee($actor, $employment->employee_id, 'assignment.create');
 
-                // ORG.7D-0 R5: no new Assignment on an inactive Campus.
-                if ($campus !== null && $this->activeCampus->find($school, $campus->id) === null) {
-                    throw new AssignmentInactiveCampusException($campus->id);
-                }
+        // ORG.7D-0 R5: no new Assignment on an inactive Campus.
+        if ($campus !== null && $this->activeCampus->find($school, $campus->id) === null) {
+            throw new AssignmentInactiveCampusException($campus->id);
+        }
 
-                $assignment = EmployeeAssignment::query()->create([
-                    'school_id' => $school->id,
-                    'employment_record_id' => $employment->id,
-                    'campus_id' => $campus?->id,
-                    'department_id' => $department?->id,
-                    'position_id' => $position->id,
-                    'is_primary' => false,
-                    'starts_on' => $startsOn,
-                    'ends_on' => $endsOn,
-                ]);
+        $assignment = EmployeeAssignment::query()->create([
+            'school_id' => $school->id,
+            'employment_record_id' => $employment->id,
+            'campus_id' => $campus?->id,
+            'department_id' => $department?->id,
+            'position_id' => $position->id,
+            'is_primary' => false,
+            'starts_on' => $startsOn,
+            'ends_on' => $endsOn,
+        ]);
 
-                $this->audit->school($school, 'hr.assignment.created', actor: $actor, subject: $assignment, metadata: [
-                    // Phase 8A.11: employeeId added (purely additive, does
-                    // not change this event's existing semantics) so the
-                    // Employee Activity Timeline can resolve this event
-                    // directly from metadata.
-                    'employeeId' => $employment->employee_id,
-                    'employmentRecordId' => $employment->id,
-                    'positionId' => $position->id,
-                    'departmentId' => $department?->id,
-                    'campusId' => $campus?->id,
-                ]);
+        $this->audit->school($school, 'hr.assignment.created', actor: $actor, subject: $assignment, metadata: [
+            // Phase 8A.11: employeeId added (purely additive, does
+            // not change this event's existing semantics) so the
+            // Employee Activity Timeline can resolve this event
+            // directly from metadata.
+            'employeeId' => $employment->employee_id,
+            'employmentRecordId' => $employment->id,
+            'positionId' => $position->id,
+            'departmentId' => $department?->id,
+            'campusId' => $campus?->id,
+        ]);
 
-                event(new AssignmentStarted($school->id, $employment->employee_id, $employment->id, $assignment->id));
+        event(new AssignmentStarted($school->id, $employment->employee_id, $employment->id, $assignment->id));
 
-                return $assignment;
-            });
-        });
+        return $assignment;
     }
 
     public function end(EmployeeAssignment $assignment, string $endsOn, User $actor): EmployeeAssignment
     {
         $school = $assignment->school;
-        $this->authorizeCapabilityFor($actor, 'hr.employees.assignments.manage', $school);
+        $guard = $this->access->writeGuard($school, $this->authorizeCampusScopeFor($actor, 'hr.employees.assignments.manage', $school));
 
-        return $this->context->withSchool($school, function () use ($school, $assignment, $endsOn, $actor) {
-            return DB::transaction(function () use ($school, $assignment, $endsOn, $actor) {
+        return $this->context->withSchool($school, function () use ($school, $assignment, $endsOn, $actor, $guard) {
+            return DB::transaction(function () use ($school, $assignment, $endsOn, $actor, $guard) {
+                $this->placement->forPlacementChange($school, $assignment->employmentRecord->employee_id);
+                if ($guard !== null) {
+                    // ORG.7E-1: only a CURRENT in-scope assignment, ended today or later.
+                    $guard->beforeAssignmentEnd($this->lockAssignment($assignment->id), $endsOn);
+                }
                 $this->selfAdministration->refuseOwnEmployee($actor, $assignment->employmentRecord->employee_id, 'assignment.end');
 
                 $assignment->update(['ends_on' => $endsOn]);
@@ -187,38 +234,80 @@ class EmployeeAssignmentService
     public function setPrimary(EmployeeAssignment $assignment, User $actor): EmployeeAssignment
     {
         $school = $assignment->school;
-        $this->authorizeCapabilityFor($actor, 'hr.employees.assignments.manage', $school);
+        $guard = $this->access->writeGuard($school, $this->authorizeCampusScopeFor($actor, 'hr.employees.assignments.manage', $school));
 
-        return $this->context->withSchool($school, function () use ($school, $assignment, $actor) {
-            return DB::transaction(function () use ($school, $assignment, $actor) {
-                $this->selfAdministration->refuseOwnEmployee($actor, $assignment->employmentRecord->employee_id, 'assignment.primary');
-
-                EmployeeAssignment::query()
-                    ->where('employment_record_id', $assignment->employment_record_id)
-                    ->where('is_primary', true)
-                    ->whereNull('ends_on')
-                    ->where('id', '!=', $assignment->id)
-                    ->update(['is_primary' => false]);
-
-                try {
-                    $assignment->update(['is_primary' => true]);
-                } catch (UniqueConstraintViolationException) {
-                    throw new ConcurrentPrimaryAssignmentConflictException($assignment->employment_record_id);
+        return $this->context->withSchool($school, function () use ($school, $assignment, $actor, $guard) {
+            return DB::transaction(function () use ($school, $assignment, $actor, $guard) {
+                if ($guard !== null) {
+                    // ORG.7E-1: never demote an assignment outside scope. The
+                    // exclusive placement lock keeps every other primary change
+                    // out until commit, so the open primary read below cannot go
+                    // stale (security review M2).
+                    $this->placement->forEmployeeWrite($school, $assignment->employmentRecord->employee_id);
+                    $openPrimaryId = EmployeeAssignment::query()->where('employment_record_id', $assignment->employment_record_id)
+                        ->where('is_primary', true)->whereNull('ends_on')->where('id', '!=', $assignment->id)->value('id');
+                    $locked = [];
+                    foreach (array_values(array_unique(array_filter([$assignment->id, $openPrimaryId]))) as $id) {
+                        $locked[$id] = null;
+                    }
+                    ksort($locked);
+                    foreach (array_keys($locked) as $id) {
+                        $locked[$id] = $this->lockAssignment((string) $id);
+                    }
+                    $guard->beforeSetPrimary($locked[$assignment->id], $openPrimaryId !== null ? $locked[$openPrimaryId] : null);
+                } else {
+                    $this->placement->forPlacementChange($school, $assignment->employmentRecord->employee_id);
                 }
 
-                $employeeId = $assignment->employmentRecord->employee_id;
-
-                $this->audit->school($school, 'hr.assignment.primary_changed', actor: $actor, subject: $assignment, metadata: [
-                    // Phase 8A.11: employeeId added, purely additive (see create()).
-                    'employeeId' => $employeeId,
-                    'employmentRecordId' => $assignment->employment_record_id,
-                ]);
-
-                event(new PrimaryAssignmentChanged($school->id, $employeeId, $assignment->employment_record_id, $assignment->id));
-
-                return $assignment->fresh();
+                return $this->setPrimaryRecord($assignment, $actor);
             });
         });
+    }
+
+    /**
+     * The demote-then-promote write of setPrimary() (and of
+     * EmployeeOnboardingService's first assignment): the self-administration
+     * guard, audit and event. No authorization of its own; run inside the
+     * caller's transaction and the School's TenantContext.
+     */
+    public function setPrimaryRecord(EmployeeAssignment $assignment, User $actor): EmployeeAssignment
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new \LogicException('EmployeeAssignmentService::setPrimaryRecord() runs only inside the writing transaction.');
+        }
+        $school = $assignment->school;
+
+        $this->selfAdministration->refuseOwnEmployee($actor, $assignment->employmentRecord->employee_id, 'assignment.primary');
+
+        EmployeeAssignment::query()
+            ->where('employment_record_id', $assignment->employment_record_id)
+            ->where('is_primary', true)
+            ->whereNull('ends_on')
+            ->where('id', '!=', $assignment->id)
+            ->update(['is_primary' => false]);
+
+        try {
+            $assignment->update(['is_primary' => true]);
+        } catch (UniqueConstraintViolationException) {
+            throw new ConcurrentPrimaryAssignmentConflictException($assignment->employment_record_id);
+        }
+
+        $employeeId = $assignment->employmentRecord->employee_id;
+
+        $this->audit->school($school, 'hr.assignment.primary_changed', actor: $actor, subject: $assignment, metadata: [
+            // Phase 8A.11: employeeId added, purely additive (see create()).
+            'employeeId' => $employeeId,
+            'employmentRecordId' => $assignment->employment_record_id,
+        ]);
+
+        event(new PrimaryAssignmentChanged($school->id, $employeeId, $assignment->employment_record_id, $assignment->id));
+
+        return $assignment->fresh();
+    }
+
+    private function lockAssignment(string $id): EmployeeAssignment
+    {
+        return EmployeeAssignment::query()->where('school_id', $this->context->requireSchool()->id)->whereKey($id)->lockForUpdate()->firstOrFail();
     }
 
     private function assertPositionBelongsToSchool(string $schoolId, Position $position): void

@@ -21,7 +21,10 @@ use App\Domain\Documents\Application\DocumentService;
 use App\Domain\Examinations\Application\ExaminationPaperAccess;
 use App\Domain\Hostel\Application\HostelResidencyAccess;
 use App\Domain\HR\Application\EmployeeDirectoryService;
+use App\Domain\HR\Application\EmployeeOnboardingService;
+use App\Domain\HR\Application\EmployeeOperationalOverviewService;
 use App\Domain\HR\Application\EmployeeProfileWorkspaceService;
+use App\Domain\HR\Application\HrEmployeeAccess;
 use App\Domain\HR\Http\Support\HighlySensitiveDocumentStepUp;
 use App\Domain\Identity\Application\Portal\ActingGuardianResolver;
 use App\Domain\Identity\Application\Staff\StaffAccessService;
@@ -177,6 +180,14 @@ final class SchoolRouteCoverage
 
             // Domain\HR\Http\Controllers\DepartmentController
             Coverage::gate('api.v1.schools.hr-departments.index', 'hr.departments.view'),
+
+            // ORG.7E-1 (ADR 0076 §43): Campus-adopted HR API routes (`,campus` floors).
+            Coverage::campus('api.v1.schools.employees.index', 'hr.employees.view', EmployeeDirectoryService::class, 'search'),
+            Coverage::campus('api.v1.schools.employees.update', 'hr.employees.manage', HrEmployeeAccess::class, 'employee'),
+            Coverage::campus('api.v1.schools.employees.assignments.store', 'hr.employees.assignments.manage', HrEmployeeAccess::class, 'employee'),
+            Coverage::campus('api.v1.schools.employees.assignments.end', 'hr.employees.assignments.manage', HrEmployeeAccess::class, 'assignment'),
+            Coverage::campus('api.v1.schools.employees.assignments.set-primary', 'hr.employees.assignments.manage', HrEmployeeAccess::class, 'assignment'),
+            Coverage::campus('api.v1.schools.employees.assignments.set-manager', 'hr.employees.assignments.manage', HrEmployeeAccess::class, 'assignment'),
 
             // Domain\HR\Http\Controllers\PositionController
             Coverage::gate('api.v1.schools.positions.index', 'hr.positions.view'),
@@ -865,21 +876,19 @@ final class SchoolRouteCoverage
             // Http\Controllers\App\HR\HrController
             Coverage::gate('app.hr.index', ['hr.employees.view', 'hr.employees.manage', 'hr.departments.view', 'hr.positions.view', 'hr.categories.view']),
 
-            // Http\Controllers\App\HR\HrEmployeeController
-            Coverage::gate('app.hr.employees.create', 'hr.employees.manage'),
-            Coverage::service('app.hr.employees.index', EmployeeDirectoryService::class, 'search'),
-            Coverage::gate('app.hr.employees.store', 'hr.employees.manage'),
-
-            // Http\Controllers\App\HR\HrEmployeeImportController
-            Coverage::gate('app.hr.employees.import.create', 'hr.employees.manage'),
-            Coverage::gate('app.hr.employees.import.store', 'hr.employees.manage'),
+            // Http\Controllers\App\HR\HrEmployeeController -- ORG.7E-1 (ADR 0076 §43):
+            // identity-only create, archive/restore, import, employment
+            // lifecycle, rehire and account links carry their declared
+            // whole-School `capability:` floor (C1).
+            Coverage::campus('app.hr.employees.index', 'hr.employees.view', EmployeeDirectoryService::class, 'search'),
+            Coverage::campus('app.hr.employees.onboard', 'hr.employees.manage', HrEmployeeAccess::class, 'campusOptions'),
+            Coverage::campus('app.hr.employees.onboard.store', 'hr.employees.manage', EmployeeOnboardingService::class, 'onboard'),
 
             // Http\Controllers\App\HR\HrEmployeeController
             Coverage::service('app.hr.employees.show', EmployeeProfileWorkspaceService::class, 'build'),
-            Coverage::gate('app.hr.employees.edit', 'hr.employees.manage'),
-            Coverage::gate('app.hr.employees.update', 'hr.employees.manage'),
-            Coverage::gate('app.hr.employees.archive', 'hr.employees.manage'),
-            Coverage::gate('app.hr.employees.restore', 'hr.employees.manage'),
+            Coverage::campus('app.hr.employees.overview', 'hr.employees.view', EmployeeOperationalOverviewService::class, 'forEmployee'),
+            Coverage::campus('app.hr.employees.edit', 'hr.employees.manage', HrEmployeeAccess::class, 'employee'),
+            Coverage::campus('app.hr.employees.update', 'hr.employees.manage', HrEmployeeAccess::class, 'employee'),
 
             // Http\Controllers\App\HR\HrEmployeePersonalDetailController
             Coverage::gate('app.hr.employees.personal-detail.update', 'hr.employees.personal.manage'),
@@ -897,23 +906,14 @@ final class SchoolRouteCoverage
             Coverage::gate('app.hr.employees.notes.store', 'hr.employees.notes.manage'),
             Coverage::gate('app.hr.employees.notes.destroy', 'hr.employees.notes.manage'),
 
-            // Http\Controllers\App\HR\HrEmploymentController
-            Coverage::gate('app.hr.employees.employment-records.store', 'hr.employees.assignments.manage'),
-            Coverage::gate('app.hr.employees.employment-records.end', 'hr.employees.assignments.manage'),
-            Coverage::gate('app.hr.employees.employment-records.separate', 'hr.employees.assignments.manage'),
-            Coverage::gate('app.hr.employees.rehire', 'hr.employees.assignments.manage'),
+            // Http\Controllers\App\HR\HrEmployeeAssignmentController (ORG.7E-1: Campus-adopted)
+            Coverage::campus('app.hr.employees.assignments.store', 'hr.employees.assignments.manage', HrEmployeeAccess::class, 'employment'),
+            Coverage::campus('app.hr.employees.assignments.end', 'hr.employees.assignments.manage', HrEmployeeAccess::class, 'assignment'),
+            Coverage::campus('app.hr.employees.assignments.set-primary', 'hr.employees.assignments.manage', HrEmployeeAccess::class, 'assignment'),
+            Coverage::campus('app.hr.employees.assignments.set-manager', 'hr.employees.assignments.manage', HrEmployeeAccess::class, 'assignment'),
+            Coverage::campus('app.hr.employees.assignments.manager-candidates', 'hr.employees.assignments.manage', HrEmployeeAccess::class, 'assignment'),
 
-            // Http\Controllers\App\HR\HrEmployeeAssignmentController
-            Coverage::gate('app.hr.employees.assignments.store', 'hr.employees.assignments.manage'),
-            Coverage::gate('app.hr.employees.assignments.end', 'hr.employees.assignments.manage'),
-            Coverage::gate('app.hr.employees.assignments.set-primary', 'hr.employees.assignments.manage'),
-            Coverage::gate('app.hr.employees.assignments.set-manager', 'hr.employees.assignments.manage'),
-            Coverage::gate('app.hr.employees.assignments.manager-candidates', 'hr.employees.assignments.manage'),
-
-            // Http\Controllers\App\HR\HrEmployeeAccountLinkController
-            Coverage::gate('app.hr.employees.account-link.search', 'hr.employees.manage'),
-            Coverage::gate('app.hr.employees.account-link.store', 'hr.employees.manage'),
-            Coverage::gate('app.hr.employees.account-link.destroy', 'hr.employees.manage'),
+            // Http\Controllers\App\HR\HrEmployeeAccountLinkController: declared whole-School floors (C1, ORG.7E-1).
 
             // Http\Controllers\App\HR\HrEmployeeQualificationController
             Coverage::gate('app.hr.employees.qualifications.store', 'hr.employees.qualifications.manage'),

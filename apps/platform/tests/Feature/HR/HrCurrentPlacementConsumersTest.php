@@ -101,17 +101,24 @@ class HrCurrentPlacementConsumersTest extends TestCase
     }
 
     #[Test]
-    public function a_campus_scoped_grant_still_gains_nothing_from_hr_capabilities(): void
+    public function a_campus_principal_gains_only_the_adopted_operational_hr_keys(): void
     {
+        // ORG.7E-1 (ADR 0076 §43, owner decision E1-1): the whole-School Gate
+        // still never counts the Campus grant; the scope path does, for the
+        // adopted operational keys only.
         $principal = $this->createUser();
         $this->assignSchoolRole($this->createMembership($principal, $this->school), 'principal', $this->a->id);
         $this->employee('Here', [$this->a]);
 
         foreach (['hr.employees.view', 'hr.employees.manage', 'hr.employees.personal.view', 'hr.employees.assignments.manage'] as $capability) {
             $this->assertFalse(Gate::forUser($principal)->allows('capability', [$capability, $this->school]), $capability);
-            $this->assertTrue(app(CampusScopeResolver::class)->campusScope($principal, $capability, $this->school)->isNone(), "{$capability} is not Campus-adopted");
+        }
+        $this->assertSame([$this->a->id], app(CampusScopeResolver::class)->campusScope($principal, 'hr.employees.view', $this->school)->campusIds());
+        $this->assertSame([$this->a->id], app(CampusScopeResolver::class)->campusScope($principal, 'hr.employees.manage', $this->school)->campusIds());
+        foreach (['hr.employees.personal.view', 'hr.employees.assignments.manage', 'hr.employees.assignments.view'] as $capability) {
+            $this->assertTrue(app(CampusScopeResolver::class)->campusScope($principal, $capability, $this->school)->isNone(), "principal does not hold {$capability}");
         }
         $token = $principal->createToken('test-device')->plainTextToken;
-        $this->withHeader('Authorization', 'Bearer '.$token)->getJson("/api/v1/schools/{$this->school->id}/employees")->assertForbidden();
+        $this->withHeader('Authorization', 'Bearer '.$token)->getJson("/api/v1/schools/{$this->school->id}/employees")->assertOk()->assertJsonPath('meta.total', 1);
     }
 }

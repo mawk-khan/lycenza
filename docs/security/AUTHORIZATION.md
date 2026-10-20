@@ -842,14 +842,28 @@ whole-School supersedes. A selected or current Campus
   Check-in fines and rider fee intent are owner-approved bounded side
   effects (`CampusAdoptionImpactTest::OWNER_APPROVED_SIDE_EFFECTS`), never
   Fees authority.
-- **HR (ORG.7E-0, §42): not adopted.** An Employee's operational Campus set
-  comes only from `CurrentEmployeeAssignments`, the union of current
-  assignments on the School-local date. It is data, never authority, and no
-  `hr.*` key is in `CampusScopeCatalogue` (pinned).
-  - Sensitive HR (personal, qualifications, documents, notes, sensitive)
-    and identity/lifecycle actions stay whole-School.
-  - ORG.7E-1 candidates: `hr.employees.view`, the core-field part of
-    `hr.employees.manage`, and `hr.employees.assignments.*`.
+- **HR (ORG.7E-0, §42):** an Employee's operational Campus set comes only
+  from `CurrentEmployeeAssignments`, the union of current assignments on
+  the School-local date. It is data, never authority.
+- **Adopted in ORG.7E-1 (§43):** `hr.employees.view`, `.manage`,
+  `.assignments.view` and `.assignments.manage`, all through
+  `HrEmployeeAccess`.
+  - **Reach and see:** an Employee only through a CURRENT assignment on an
+    in-scope Campus (SQL); only current in-scope assignments are shown or
+    targeted, never NULL-Campus, another Campus's or history.
+  - **Write targets:** an identity edit or a new assignment needs EVERY
+    current Campus in scope, decided under `EmployeePlacementLock`; a
+    per-assignment write needs that assignment current and in scope.
+  - **Onboarding:** `EmployeeOnboardingService`, atomic, needing `.manage`
+    AND `.assignments.manage` on the destination Campus.
+  - **Whole-School (24 declared operations):** identity-only create,
+    archive/restore, account links, import, employment create/update/end/
+    separate and rehire. The Profile (`personal.view`), the HR hub (a
+    declared whole-School hub) and every sensitive, configuration, leave,
+    staff-attendance and payroll key stay whole-School.
+  - **Roles:** `principal@Campus` gains the Directory and core edits;
+    `hr_officer` is Campus-scopable with exactly the four keys;
+    `school_admin` stays whole-School.
 - **Refusals look the same.** A Campus-scoped actor's refusals do not
   differ between an in-scope and an out-of-scope conflict (Visitor
   check-in: one generic refusal; the School-wide one-active-Visit rule

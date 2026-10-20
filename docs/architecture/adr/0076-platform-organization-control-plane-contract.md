@@ -4312,3 +4312,264 @@ HIGH finding and no MEDIUM code finding.
   - **Stale docblock.** A docblock in the `employee_assignments` migration
     still mentions the removed `isCurrent()`; shipped migrations are not
     edited.
+
+## 43. ORG.7E-1 — HR operational Campus adoption (as built, 2026-10-20)
+
+Owner authorization: ORG.7E-1, decisions E1-1 (principal@Campus may gain
+the adopted operational HR keys), E1-2 (`hr_officer` becomes
+Campus-scopable), E1-3 (`school_admin` stays whole-School). Baseline
+`origin/main` = `d0771ebc` (ORG.7E-0).
+
+    adopted (domain `hr`)   hr.employees.view, hr.employees.assignments.view,
+                            hr.employees.manage, hr.employees.assignments.manage
+    reach                   an Employee with >= 1 CURRENT assignment on an active
+                            in-scope Campus (CurrentEmployeeAssignments, SQL EXISTS)
+    see                     only CURRENT in-scope assignments; never NULL-Campus,
+                            another Campus's, or history
+    identity edit / new     EVERY current Campus in scope (and no current NULL-
+    assignment              Campus assignment), decided under EmployeePlacementLock
+    per-assignment write    that assignment current, on an active in-scope Campus
+    onboarding              one atomic operation (Employee + Employment + Assignment)
+    whole-School            Profile, history, employment lifecycle, rehire, import,
+                            archive/restore, account links, identity-only create,
+                            HR configuration, sensitive HR, leave, staff attendance,
+                            payroll
+
+**43.1 Access layer (`App\Domain\HR\Application\HrEmployeeAccess`).** The
+one place HR reads or targets records under a CampusScope; it never judges
+currency itself (CurrentEmployeeAssignments gained `currentAssignmentsOf`,
+`isCurrentAssignment`, `currentEmployment` and an optional narrowing
+closure on `whereOperationalOnCampuses`).
+- `employees()` restricts in SQL (whole School unchanged; none = no rows);
+  `employee()` is 404 out of scope, exactly like an unknown or other-School
+  id (pinned: identical envelopes); `coversEmployee()`;
+  `authorizedCampusSet()` (null = whole School).
+- `employment()`: a Campus-scoped actor reaches only the CURRENT employment
+  of an Employee in scope. `assignment()`: only a CURRENT assignment on an
+  active in-scope Campus.
+- `currentAssignments()` (primary first, display only),
+  `coversAllCurrentCampuses()` (a read-only preview for page affordances),
+  `campusOptions()`, `departmentOptions()` (School-wide or in-scope
+  Departments: reference labels, never configuration).
+- `writeGuard()` builds `HrEmployeeCampusGuard` for a Campus scope (null for
+  the whole School: the unchanged path).
+- `requireWholeSchool()`: the ordinary `capability` Gate, which a Campus
+  grant never satisfies -- the service-level defence of every declared
+  whole-School HR operation. `holdsWholeSchool()` / `scopeFor()` for
+  projections.
+
+**43.2 Write-time guard and the placement lock.**
+- `EmployeePlacementLock` is THE lock on placement, the `employees` row:
+  `forPlacementChange()` FOR SHARE (assignment create/end/primary,
+  employment end) and `forEmployeeWrite()` FOR NO KEY UPDATE (identity
+  edit, archive, restore, every Campus-scoped "every current Campus"
+  decision, and a Campus-scoped set-primary). They conflict, so a scoped decision and a placement change
+  never interleave. Employment creation keeps its FOR UPDATE. NO KEY UPDATE,
+  never FOR UPDATE, for the scoped write (rule 101's lesson).
+- Lock order, every HR placement writer: Employee FIRST -> EmploymentRecord
+  -> EmployeeAssignment rows (sorted id) -> Campus rows FOR SHARE
+  (ActiveCampus, sorted id). The account link keeps its own order
+  (membership -> User -> Employee); no HR writer takes a membership or User
+  lock after the Employee lock. Pinned by `HrCampusArchitectureTest` (the
+  lock precedes every other lock and write).
+- `HrEmployeeCampusGuard` (inside the transaction, after the lock):
+  - identity write and new assignment: the Employee's current Campus set is
+    non-empty, entirely in scope, with no current NULL-Campus assignment,
+    and each of those Campuses is share-locked active; else NOT FOUND (no
+    longer reachable) or `HR_WHOLE_SCHOOL_AUTHORITY_REQUIRED` (403, naming
+    nothing);
+  - new assignment additionally: the CURRENT employment, a start today or
+    later, a non-NULL active in-scope destination, and no Department of
+    another Campus (checked before the assignment's own message could name
+    that Campus); else the generic `HR_ASSIGNMENT_UNAVAILABLE` (422);
+  - end: a current in-scope assignment; last day on or after the School's
+    today and its start, never later than an end already set or the
+    employment's end (only shortening); and every open subordinate whose
+    reporting line the end would clear is itself in scope;
+  - primary: never demotes an open primary outside scope or NULL-Campus,
+    read after the exclusive placement lock;
+  - manager: the manager assignment is itself current and in scope.
+- Backdated and extended history is whole-School: a Campus-scoped actor
+  never starts an assignment or onboards before today, nor ends one before
+  today or later than already set.
+- Deviation from §42.8, recorded: a current NULL-Campus (School-wide)
+  assignment makes the Employee's identity whole-School (stricter than "every
+  operational Campus"), because School-wide placement is whole-School
+  administration (owner rule "NULL assignment: whole-School only").
+
+**43.3 Directory (`hr.employees.view`).**
+- Campus reader: SQL-restricted; a Campus filter outside scope matches
+  nobody; Department/Position filters match an in-scope CURRENT assignment
+  (not the primary placement, which may be on another Campus); request
+  filters only narrow; `include_archived` adds nothing (archived Employees
+  are never current).
+- Projection: the row's placement is an in-scope current assignment
+  (primary first): its Position, Department, Campus and its manager --
+  the manager only when the manager's own assignment is current and in
+  scope; never another Campus's placement or manager. The field set is unchanged
+  (id, number, display name, Position, Department, Campus, manager); no
+  personal table is read.
+- Whole-School reader: unchanged (primary placement summary).
+- Web: Campus options are the scope's Campuses; rows link to the overview
+  unless the reader holds whole-School `personal.view`.
+
+**43.4 Operational overview (`app.hr.employees.overview`, new).**
+`EmployeeOperationalOverviewService`: entry `hr.employees.view` (Employee in
+scope, else 404). Fields: id, employee number, display name, archived flag;
+the in-scope placement (Position, Department, Campus, and the manager's
+name only when that manager is current in scope); and,
+only with `hr.employees.assignments.view`, the CURRENT assignments in that
+scope (id, employment id, Position, Department, Campus, primary, dates,
+manager name). Never work/personal contact data, addresses, date of birth,
+identifiers, qualifications, documents, notes, pay, leave, attendance or
+account data; no table holding them is read. The Profile
+(`hr.employees.personal.view`) is unchanged and whole-School; its
+employment/assignment history tier now checks whole-School
+`assignments.view` explicitly.
+
+**43.5 Core manage and onboarding (`hr.employees.manage`).**
+- Campus-safe core fields: `full_name`, `work_email`, `work_phone` (web
+  edit/update, API PATCH). Rule: every current Campus in scope (43.2). The
+  API response omits `userId` for a Campus-scoped caller.
+- `EmployeeOnboardingService::onboard()` (web `app.hr.employees.onboard`,
+  `.onboard.store`): ONE transaction creating the Employee, an `active`
+  Employment and the first, primary, current Assignment.
+  - Authority: `hr.employees.manage` AND `hr.employees.assignments.manage`,
+    both covering the destination Campus (the two capabilities the separate
+    whole-School steps need). principal@Campus therefore does not onboard
+    (it holds no `assignments.*`).
+  - Field set: full name, work email, work phone, employment type, start
+    date (today for a Campus-scoped actor; on or before today for a
+    whole-School one), Campus, Position, optional Department. No account link, personal, category, qualification,
+    document, note or pay field.
+  - The Campus row is share-locked first; the primitives
+    (`EmployeeService::createRecord`, `EmploymentService::createRecord`,
+    `EmployeeAssignmentService::createRecord`/`setPrimaryRecord`) carry no
+    authorization and are callable only from their services and the
+    onboarding service (pinned).
+  - No capture: a work email already used in the School is refused
+    (generically, `HR_ONBOARDING_UNAVAILABLE`, for a Campus-scoped actor;
+    the existing duplicate message for a whole-School one). Nothing
+    persists on any refusal (pinned per case, including a late
+    inactive-Position failure).
+  - The API transport is deferred: its `idempotent` route would need an
+    all-of floor (manage AND assignments.manage) ahead of the guard (rule
+    32), which the C6 contract cannot express. API identity-only create
+    stays whole-School.
+
+**43.6 Assignments (`hr.employees.assignments.*`).**
+- View: the overview's current-assignment section only (43.4); history
+  stays whole-School.
+- Manage (owner-approved HIGH-RISK): create (secondary, no capture), end,
+  set primary, set manager and manager candidates (current in-scope
+  assignments only), web and API, each under 43.2. A Campus actor never
+  touches a NULL-Campus, ended or another Campus's assignment, and
+  `campus_id` has no update path.
+- Move (D-E0-11): DEFERRED. The named move needs decisions on primary
+  transfer, the reporting line and Department compatibility across
+  Campuses. The same outcome is reachable with the same authority by a new
+  assignment plus an end.
+- TeachingAssignments: HR assignment create/end do not touch teaching
+  ownership (it follows employment coverage, not HR placement). Employment
+  end -- the path that ends ownership -- is whole-School, and the Teaching
+  participants still check whole-School `assignments.manage`. No academic
+  authority is created for HR Campus actors.
+
+**43.7 Declared whole-School operations (24, exact routes).** Identity-only
+create (web create/store, API store), archive/restore (web, API), account
+link/unlink (API) and the web account-link search/store/remove, import
+(web create/store, API), employment store/end/separate (web, API) and
+update (API), rehire (web, API). Each carries its ordinary
+`capability:hr.employees.manage|.assignments.manage` floor (web routes
+gained theirs), no controller-level check, and the service re-checks with
+`requireWholeSchool()`. The HR hub is a declared whole-School hub
+(`WHOLE_SCHOOL_HUBS['hr']`: view, manage); Campus-scoped readers get the new
+all-adopted **Staff directory** navigation entry.
+
+**43.8 Coverage.** C6 (adopted key, `,campus` floor or `authorizeCampusScope`,
+HrEmployeeAccess / service method): API employees.index, .update,
+assignments.store/.end/.set-primary/.set-manager; web employees.index,
+.overview, .edit, .update, .onboard, .onboard.store, assignments.store/.end/
+.set-primary/.set-manager/.manager-candidates. The Profile and sensitive
+routes are not C6.
+
+**43.9 Role impact (`CampusAdoptionImpactTest`).**
+- `principal`: gains `hr.employees.view`, `.manage` in its Campus grants
+  (E1-1). Never personal/sensitive HR, documents, notes, qualifications,
+  leave, staff attendance, payroll, HR configuration, import, archive,
+  rehire or account administration (pinned `HR_CAMPUS_CONFERRED`).
+- `hr_officer`: Campus-scopable; a Campus grant confers exactly the four
+  adopted keys (E1-2).
+- `school_admin`: holds view/manage, never Campus-scopable (E1-3).
+- High-risk classification: `hr.employees.assignments.*` and
+  `hr.employees.manage`, owner-approved for the guarded subset only.
+
+**43.10 Unchanged.** Self-service and `HrSelfAdministrationGuard` (still
+applied in every write); reporting-manager leave approval (ActingEmployee +
+`holdManagerOf`); Leave, Staff Attendance and Payroll (no Campus); module
+entitlements (HR stays one module; no per-Campus entitlement); the Visitor
+host lookup (School-wide, name-only; tightening recorded); Student/SIS,
+Fees/Payments; LC-5–LC-10 paused. No new capability, no migration, no
+`employees.campus_id`. No HR job exists or was added; onboarding and import
+are synchronous.
+
+**43.11 Concurrency (`HrCampusConcurrencyTest`, real two-process).** The
+contender is observed blocked on the holder's uncommitted transaction:
+- a Campus edit waiting on a new B assignment is refused (sees B); a new
+  assignment waits for an edit already proven;
+- an edit waiting on the B assignment's end proceeds on the new placement;
+  an A-only edit stays refused behind an A+B edit;
+- onboarding waiting on a Campus deactivation is refused with no partial
+  Employee; a deactivation waits for onboarding already proven;
+- a new assignment waiting on a Campus deactivation is refused;
+- a scoped new assignment waits for a placement change, no deadlock.
+
+**43.12 Performance and tenancy.** The Campus Directory restriction is one
+statement (EXPLAIN on DDEV, 12 Employees: index scans on `employees.school_id`
+and `employee_assignments_campus_id_index`, ~2.5 ms); placement is one
+batched query. Query counts do not grow with rows or assignments
+(`HrCampusPerformanceTest`). No index added (no plan evidence). Every
+predicate carries `school_id`, runs in the School's TenantContext, no
+`BYPASSRLS`; another School's Employee or Campus never participates
+(tested).
+
+**43.13 Security review (ORG.7E-1).** Independent adversarial review of the
+candidate: no HIGH finding.
+- **Fixed -- MEDIUM M1:** ending an in-scope assignment cleared the
+  reporting manager of open subordinates on other Campuses (the closure
+  cascade is School-wide). A Campus-scoped end now refuses generically
+  unless every such subordinate is in scope (checked under the assignment
+  row lock, which a concurrent setManager also takes).
+- **Fixed -- MEDIUM M2:** a Campus-scoped set-primary read the open primary
+  under only the shared placement lock, so a concurrent whole-School
+  set-primary could commit a B primary that it then demoted. The scoped path
+  now takes the exclusive placement lock first (two-process race pinned).
+- **Fixed -- LOW:** a reporting manager outside the scope is no longer named
+  (Directory, overview); Campus writes no longer backdate or extend history
+  (assignment start, end extension, backdated onboarding); the lock-order
+  text; `school_id` predicates on the assignment row lock and the manager
+  candidate Campus check; the Directory Campus filter is lower-cased.
+- **Recorded, accepted -- LOW:**
+  - **Duplicate work email on a core edit** still answers the existing
+    duplicate message to a Campus-scoped editor: a School-wide "address in
+    use" signal that does not differ between in- and out-of-scope (rule 101
+    holds). Onboarding answers generically.
+  - **An inactive Campus is ignored by the identity rule** (§42: an inactive
+    Campus places nobody), so an A-only editor may edit someone whose other
+    current assignment is on a deactivated Campus.
+  - **`HR_WHOLE_SCHOOL_AUTHORITY_REQUIRED`** tells a Campus actor that a
+    reachable Employee has a placement beyond their scope, never where.
+- **Verified:** the 24 declared operations carry whole-School floors and
+  service re-checks; concealment (identical envelopes, web and API); no
+  capture; SQL restriction and narrowing-only filters; the minimized
+  overview and API response; no deadlock against employment end, teaching
+  participants, compensation, account links, rehire or Campus deactivation;
+  idempotent `,campus` floors authorize before the guard; tenancy
+  predicates; role confinement.
+
+**43.14 Deferred (owner decision needed to reopen).**
+- The named Campus move (43.6).
+- The API onboarding transport (43.5).
+- Historical HR by Campus (timeline and history stay whole-School).
+- The Visitor host lookup tightening (§42.8, unchanged).
+- Campus-scoped Leave, Staff Attendance and Payroll (out of scope).

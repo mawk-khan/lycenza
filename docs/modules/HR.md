@@ -4126,3 +4126,36 @@ definition of an operationally current assignment.
 - **Dates.** The Directory, the Profile and separation now judge "today" on
   the School's calendar.
 - **No HR capability is Campus-adopted yet:** ORG.7E-1 needs owner approval.
+
+## HR operational Campus scope (ORG.7E-1, 2026-10-20, ADR 0076 §43)
+
+`hr.employees.view`, `.manage`, `.assignments.view` and `.assignments.manage`
+are Campus-adopted through `App\Domain\HR\Application\HrEmployeeAccess`.
+- **Who a Campus actor reaches:** Employees with a current assignment on an
+  in-scope active Campus (an SQL EXISTS on `CurrentEmployeeAssignments`).
+  Unassigned, not-yet-started, ended and archived Employees, and those only
+  on another Campus or only School-wide, are whole-School only and answer
+  404 like an unknown id.
+- **What they see:** the Directory row and the new operational overview
+  (`/app/hr/employees/{id}/overview`) show an in-scope placement and, with
+  `assignments.view`, the in-scope CURRENT assignments only. The Profile,
+  history, personal/sensitive data, documents, notes and qualifications stay
+  whole-School.
+- **Core edits** (`full_name`, `work_email`, `work_phone`) need every current
+  Campus of the Employee in scope (and no current School-wide assignment).
+- **Onboarding** (`EmployeeOnboardingService`, web `/app/hr/employees/onboard`)
+  creates the Employee, an `active` employment and the first primary
+  assignment in one transaction; it needs `.manage` and `.assignments.manage`
+  on the Campus, a start date on or before the School's today, and never
+  attaches an existing Employee.
+- **Assignments:** a new one needs every current Campus plus the destination
+  in scope; end, primary and manager act only on a current in-scope
+  assignment (an end date on or after today). The named Campus move is
+  deferred.
+- **Locking:** every placement writer and Campus-scoped write takes
+  `EmployeePlacementLock` on the `employees` row first (FOR SHARE / FOR NO KEY
+  UPDATE).
+- **Whole-School, declared:** identity-only create, archive/restore, account
+  links, import, employment create/update/end/separate and rehire.
+- **Unchanged:** self-service and the self-administration guard, leave
+  approval by reporting line, Leave, Staff Attendance and Payroll.

@@ -1340,24 +1340,32 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
     // (that pattern is reserved for the Bearer-token /api/v1 JSON API,
     // see item 9's own reasoning there). Every mutation delegates to
     // the SAME Application-layer services the JSON API controllers use.
+    // ORG.7E-1 (ADR 0076 §43): the Directory, operational overview, core edit,
+    // onboarding and assignment actions are Campus-adopted (checked in the
+    // controllers through HrEmployeeAccess); every route below carrying a
+    // `capability:hr.employees.*` floor is a declared whole-School-only
+    // operation (CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS).
     Route::prefix('app/hr')->name('app.hr.')->group(function (): void {
         Route::get('/', [HrController::class, 'index'])->name('index');
 
         // 'employees/create' and 'employees/import' registered BEFORE
         // the '/{employee}' wildcard below, matching this file's own
         // established convention.
-        Route::get('/employees/create', [HrEmployeeController::class, 'create'])->name('employees.create');
+        Route::get('/employees/create', [HrEmployeeController::class, 'create'])->middleware('capability:hr.employees.manage')->name('employees.create');
         Route::get('/employees', [HrEmployeeController::class, 'index'])->name('employees.index');
-        Route::post('/employees', [HrEmployeeController::class, 'store'])->name('employees.store');
+        Route::post('/employees', [HrEmployeeController::class, 'store'])->middleware('capability:hr.employees.manage')->name('employees.store');
+        Route::get('/employees/onboard', [HrEmployeeController::class, 'onboard'])->name('employees.onboard');
+        Route::post('/employees/onboard', [HrEmployeeController::class, 'storeOnboarding'])->name('employees.onboard.store');
 
-        Route::get('/employees/import', [HrEmployeeImportController::class, 'create'])->name('employees.import.create');
-        Route::post('/employees/import', [HrEmployeeImportController::class, 'store'])->name('employees.import.store');
+        Route::get('/employees/import', [HrEmployeeImportController::class, 'create'])->middleware('capability:hr.employees.manage')->name('employees.import.create');
+        Route::post('/employees/import', [HrEmployeeImportController::class, 'store'])->middleware('capability:hr.employees.manage')->name('employees.import.store');
 
         Route::get('/employees/{employee}', [HrEmployeeController::class, 'show'])->name('employees.show');
+        Route::get('/employees/{employee}/overview', [HrEmployeeController::class, 'overview'])->name('employees.overview');
         Route::get('/employees/{employee}/edit', [HrEmployeeController::class, 'edit'])->name('employees.edit');
         Route::put('/employees/{employee}', [HrEmployeeController::class, 'update'])->name('employees.update');
-        Route::post('/employees/{employee}/archive', [HrEmployeeController::class, 'archive'])->name('employees.archive');
-        Route::post('/employees/{employee}/restore', [HrEmployeeController::class, 'restore'])->name('employees.restore');
+        Route::post('/employees/{employee}/archive', [HrEmployeeController::class, 'archive'])->middleware('capability:hr.employees.manage')->name('employees.archive');
+        Route::post('/employees/{employee}/restore', [HrEmployeeController::class, 'restore'])->middleware('capability:hr.employees.manage')->name('employees.restore');
 
         Route::put('/employees/{employee}/personal-detail', [HrEmployeePersonalDetailController::class, 'update'])->name('employees.personal-detail.update');
 
@@ -1371,10 +1379,10 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::post('/employees/{employee}/notes', [HrEmployeeNoteController::class, 'store'])->name('employees.notes.store');
         Route::delete('/employees/{employee}/notes/{note}', [HrEmployeeNoteController::class, 'destroy'])->name('employees.notes.destroy');
 
-        Route::post('/employees/{employee}/employment-records', [HrEmploymentController::class, 'store'])->name('employees.employment-records.store');
-        Route::post('/employees/{employee}/employment-records/{employment}/end', [HrEmploymentController::class, 'end'])->name('employees.employment-records.end');
-        Route::post('/employees/{employee}/employment-records/{employment}/separate', [HrEmploymentController::class, 'separate'])->name('employees.employment-records.separate');
-        Route::post('/employees/{employee}/rehire', [HrEmploymentController::class, 'rehire'])->name('employees.rehire');
+        Route::post('/employees/{employee}/employment-records', [HrEmploymentController::class, 'store'])->middleware('capability:hr.employees.assignments.manage')->name('employees.employment-records.store');
+        Route::post('/employees/{employee}/employment-records/{employment}/end', [HrEmploymentController::class, 'end'])->middleware('capability:hr.employees.assignments.manage')->name('employees.employment-records.end');
+        Route::post('/employees/{employee}/employment-records/{employment}/separate', [HrEmploymentController::class, 'separate'])->middleware('capability:hr.employees.assignments.manage')->name('employees.employment-records.separate');
+        Route::post('/employees/{employee}/rehire', [HrEmploymentController::class, 'rehire'])->middleware('capability:hr.employees.assignments.manage')->name('employees.rehire');
 
         Route::post('/employees/{employee}/employment-records/{employment}/assignments', [HrEmployeeAssignmentController::class, 'store'])->name('employees.assignments.store');
         Route::post('/employees/{employee}/employment-records/{employment}/assignments/{assignment}/end', [HrEmployeeAssignmentController::class, 'end'])->name('employees.assignments.end');
@@ -1383,9 +1391,9 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         // UAT-C6 (UAT-HR-23): manager picked by name, never a typed id.
         Route::get('/employees/{employee}/employment-records/{employment}/assignments/{assignment}/manager-candidates', [HrEmployeeAssignmentController::class, 'managerCandidates'])->name('employees.assignments.manager-candidates');
         // UAT-C6 (UAT-STF-05): the governed Employee <-> account link in the browser.
-        Route::get('/employees/{employee}/account-link/search', [HrEmployeeAccountLinkController::class, 'search'])->name('employees.account-link.search');
-        Route::post('/employees/{employee}/account-link', [HrEmployeeAccountLinkController::class, 'store'])->name('employees.account-link.store');
-        Route::post('/employees/{employee}/account-link/remove', [HrEmployeeAccountLinkController::class, 'destroy'])->name('employees.account-link.destroy');
+        Route::get('/employees/{employee}/account-link/search', [HrEmployeeAccountLinkController::class, 'search'])->middleware('capability:hr.employees.manage')->name('employees.account-link.search');
+        Route::post('/employees/{employee}/account-link', [HrEmployeeAccountLinkController::class, 'store'])->middleware('capability:hr.employees.manage')->name('employees.account-link.store');
+        Route::post('/employees/{employee}/account-link/remove', [HrEmployeeAccountLinkController::class, 'destroy'])->middleware('capability:hr.employees.manage')->name('employees.account-link.destroy');
 
         Route::post('/employees/{employee}/qualifications', [HrEmployeeQualificationController::class, 'store'])->name('employees.qualifications.store');
         Route::delete('/employees/{employee}/qualifications/{qualification}', [HrEmployeeQualificationController::class, 'destroy'])->name('employees.qualifications.destroy');

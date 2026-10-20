@@ -4,6 +4,7 @@ namespace App\Domain\HR\Http\Controllers;
 
 use App\Domain\HR\Application\EmployeeAssignmentService;
 use App\Domain\HR\Application\Exceptions\EmployeeOwnershipMismatchException;
+use App\Domain\HR\Application\HrEmployeeAccess;
 use App\Domain\HR\Application\ReportingHierarchyService;
 use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\Employee;
@@ -13,6 +14,8 @@ use App\Domain\HR\Infrastructure\Position;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Models\School;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Authorization\Campus\CampusScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -34,17 +37,26 @@ use Illuminate\Support\Str;
  */
 class EmployeeAssignmentController extends Controller
 {
+    // ORG.7E-1 (ADR 0076 §43): Campus-adopted (`hr.employees.assignments.manage`).
+    // Every record resolves through HrEmployeeAccess -- a Campus-scoped caller
+    // reaches only the current employment and CURRENT in-scope assignments of
+    // an Employee in scope (404 otherwise) -- and the services decide the write
+    // rule under lock.
+    use AuthorizesCampusScope;
+
     public function store(
         Request $request,
         School $school,
         string $employee,
         string $employment,
         EmployeeAssignmentService $service,
+        HrEmployeeAccess $access,
     ): JsonResponse {
+        $scope = $this->authorizeCampusScope('hr.employees.assignments.manage', $school);
         abort_if(! Str::isUuid($employee) || ! Str::isUuid($employment), 404);
 
-        $employeeModel = Employee::query()->findOrFail($employee);
-        $employmentModel = $this->resolveOwnedEmployment($employeeModel, $employment);
+        $employeeModel = $access->employee($school, $scope, $employee);
+        $employmentModel = $this->resolveOwnedEmployment($access, $school, $scope, $employeeModel, $employment);
 
         $validated = $request->validate([
             'starts_on' => ['required', 'date'],
@@ -81,8 +93,10 @@ class EmployeeAssignmentController extends Controller
         string $employment,
         string $assignment,
         EmployeeAssignmentService $service,
+        HrEmployeeAccess $access,
     ): JsonResponse {
-        [$employeeModel, , $assignmentModel] = $this->resolveChain($employee, $employment, $assignment);
+        $scope = $this->authorizeCampusScope('hr.employees.assignments.manage', $school);
+        [$employeeModel, , $assignmentModel] = $this->resolveChain($access, $school, $scope, $employee, $employment, $assignment);
 
         $validated = $request->validate(['ends_on' => ['required', 'date']]);
 
@@ -98,8 +112,10 @@ class EmployeeAssignmentController extends Controller
         string $employment,
         string $assignment,
         EmployeeAssignmentService $service,
+        HrEmployeeAccess $access,
     ): JsonResponse {
-        [, , $assignmentModel] = $this->resolveChain($employee, $employment, $assignment);
+        $scope = $this->authorizeCampusScope('hr.employees.assignments.manage', $school);
+        [, , $assignmentModel] = $this->resolveChain($access, $school, $scope, $employee, $employment, $assignment);
 
         $updated = $service->setPrimary($assignmentModel, $request->user());
 
@@ -113,13 +129,16 @@ class EmployeeAssignmentController extends Controller
         string $employment,
         string $assignment,
         ReportingHierarchyService $service,
+        HrEmployeeAccess $access,
     ): JsonResponse {
-        [, , $subordinate] = $this->resolveChain($employee, $employment, $assignment);
+        $scope = $this->authorizeCampusScope('hr.employees.assignments.manage', $school);
+        [, , $subordinate] = $this->resolveChain($access, $school, $scope, $employee, $employment, $assignment);
 
         $validated = $request->validate(['manager_assignment_id' => ['sometimes', 'nullable', 'uuid']]);
 
+        // A Campus-scoped caller names only a current in-scope manager assignment (404 otherwise).
         $manager = isset($validated['manager_assignment_id'])
-            ? EmployeeAssignment::query()->findOrFail($validated['manager_assignment_id'])
+            ? $access->assignment($school, $scope, $validated['manager_assignment_id'])
             : null;
 
         $updated = $service->setManager($subordinate, $manager, $request->user());
@@ -130,13 +149,13 @@ class EmployeeAssignmentController extends Controller
     /**
      * @return array{0: Employee, 1: EmploymentRecord, 2: EmployeeAssignment}
      */
-    private function resolveChain(string $employee, string $employment, string $assignment): array
+    private function resolveChain(HrEmployeeAccess $access, School $school, CampusScope $scope, string $employee, string $employment, string $assignment): array
     {
         abort_if(! Str::isUuid($employee) || ! Str::isUuid($employment) || ! Str::isUuid($assignment), 404);
 
-        $employeeModel = Employee::query()->findOrFail($employee);
-        $employmentModel = $this->resolveOwnedEmployment($employeeModel, $employment);
-        $assignmentModel = EmployeeAssignment::query()->findOrFail($assignment);
+        $employeeModel = $access->employee($school, $scope, $employee);
+        $employmentModel = $this->resolveOwnedEmployment($access, $school, $scope, $employeeModel, $employment);
+        $assignmentModel = $access->assignment($school, $scope, $assignment);
 
         if ($assignmentModel->employment_record_id !== $employmentModel->id) {
             throw new EmployeeOwnershipMismatchException($assignmentModel->id, $employmentModel->id, $assignmentModel->employment_record_id);
@@ -145,9 +164,9 @@ class EmployeeAssignmentController extends Controller
         return [$employeeModel, $employmentModel, $assignmentModel];
     }
 
-    private function resolveOwnedEmployment(Employee $employee, string $employmentId): EmploymentRecord
+    private function resolveOwnedEmployment(HrEmployeeAccess $access, School $school, CampusScope $scope, Employee $employee, string $employmentId): EmploymentRecord
     {
-        $model = EmploymentRecord::query()->findOrFail($employmentId);
+        $model = $access->employment($school, $scope, $employmentId);
 
         if ($model->employee_id !== $employee->id) {
             throw new EmployeeOwnershipMismatchException($model->id, $employee->id, $model->employee_id);

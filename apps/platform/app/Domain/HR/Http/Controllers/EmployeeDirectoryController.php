@@ -7,6 +7,7 @@ use App\Domain\HR\Application\EmployeeDirectoryQuery;
 use App\Domain\HR\Application\EmployeeDirectoryService;
 use App\Http\Controllers\Controller;
 use App\Models\School;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -25,8 +26,14 @@ use Illuminate\Http\Request;
  */
 class EmployeeDirectoryController extends Controller
 {
+    use AuthorizesCampusScope;
+
     public function index(Request $request, School $school): JsonResponse
     {
+        // ORG.7E-1 (ADR 0076 §43): Campus-adopted -- the service restricts the
+        // result to the actor's Campuses in SQL (whole School unchanged).
+        $this->authorizeCampusScope('hr.employees.view', $school);
+
         $validated = $request->validate([
             'search' => ['sometimes', 'nullable', 'string', 'max:255'],
             // Phase 8A.15: `uuid` format is enforced HERE, not left to

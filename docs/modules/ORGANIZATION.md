@@ -233,3 +233,16 @@ School setting, a role, a navigation toggle or a commercial plan.
   ended. The staff directory's Campus filter now finds people who work on
   more than one Campus. Campus grants still give no HR access; that is the
   next, separately approved step.
+- **ORG.7E-1 (ADR 0076 §43)** gave Campus scope to everyday HR work:
+  - a Campus-only HR officer or principal finds, in the new **Staff
+    directory**, the people working on their Campus today, and sees only
+    that Campus's part of someone who also works elsewhere;
+  - they can correct a person's name and work contact details when every
+    Campus the person works on is theirs;
+  - a Campus HR officer can onboard a new person straight onto their
+    Campus, and add, end or adjust that Campus's current assignments.
+
+  Still whole-School: the full Employee profile and history, personal and
+  sensitive records, documents, notes, qualifications, pay, leave, staff
+  attendance, HR set-up, imports, archiving, rehiring and sign-in account
+  links.

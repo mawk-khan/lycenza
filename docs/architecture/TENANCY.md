@@ -471,6 +471,12 @@ context is set exactly as for a first dispatch (rule 21).
   stays School-scoped with no Campus. The operational Campus set is the
   union of current assignments' active Campuses on the School-local date,
   resolved per call inside the School's context (ADR 0076 §42).
+- **HR Campus scope is a filter inside the School, serialized on the
+  Employee row (ORG.7E-1).** `HrEmployeeAccess` restricts Employee queries
+  with an EXISTS predicate carrying `school_id`; Campus-scoped writes decide
+  under `EmployeePlacementLock` (the `employees` row) and share-lock the
+  Campuses they rest on. Another School's Employee or Campus never
+  participates (ADR 0076 §43).
 
 ## What is NOT yet implemented (Phase 0B honesty note)
 

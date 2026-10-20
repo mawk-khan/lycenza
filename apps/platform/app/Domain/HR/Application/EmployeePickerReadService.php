@@ -11,7 +11,7 @@ use App\Models\Campus;
 use App\Models\School;
 use App\Models\SchoolMembership;
 use App\Models\User;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Privacy\EmailNormalizer;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
@@ -39,16 +39,21 @@ use Carbon\CarbonImmutable;
  */
 class EmployeePickerReadService
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
     private const LIMIT = 20;
 
-    public function __construct(private readonly TenantContext $context) {}
+    public function __construct(
+        private readonly TenantContext $context,
+        private readonly HrEmployeeAccess $access,
+        private readonly CurrentEmployeeAssignments $current,
+    ) {}
 
     /** @return list<array{userId: string, name: string}> */
     public function accountCandidates(School $school, Employee $employee, string $query, User $actor): array
     {
-        $this->authorizeCapabilityFor($actor, 'hr.employees.manage', $school);
+        // ORG.7E-1: account linking stays whole-School (a declared operation).
+        $this->access->requireWholeSchool($actor, 'hr.employees.manage', $school);
 
         return $this->context->withSchool($school, function () use ($school, $employee, $query, $actor) {
             $linked = Employee::query()->whereNotNull('user_id')->pluck('user_id');
@@ -79,7 +84,7 @@ class EmployeePickerReadService
     /** The linked account's display name, for an HR manager; null when unlinked. */
     public function linkedAccountName(School $school, Employee $employee, User $actor): ?string
     {
-        $this->authorizeCapabilityFor($actor, 'hr.employees.manage', $school);
+        $this->access->requireWholeSchool($actor, 'hr.employees.manage', $school);
 
         return $employee->user_id === null ? null : User::query()->whereKey($employee->user_id)->value('name');
     }
@@ -87,9 +92,11 @@ class EmployeePickerReadService
     /** @return list<array{assignmentId: string, label: string}> */
     public function managerCandidates(School $school, EmployeeAssignment $subordinate, string $query, User $actor): array
     {
-        $this->authorizeCapabilityFor($actor, 'hr.employees.assignments.manage', $school);
+        // ORG.7E-1 (ADR 0076 §43): a Campus-scoped actor is offered only CURRENT
+        // assignments on in-scope Campuses (the same rule setManager() enforces).
+        $scope = $this->authorizeCampusScopeFor($actor, 'hr.employees.assignments.manage', $school);
 
-        return $this->context->withSchool($school, function () use ($school, $subordinate, $query, $actor) {
+        return $this->context->withSchool($school, function () use ($school, $subordinate, $query, $actor, $scope) {
             $today = CarbonImmutable::now(SchoolTimezone::resolve($school))->toDateString();
             $term = self::like($query);
             $ownEmployeeId = Employee::query()->where('user_id', $actor->id)->value('id');
@@ -116,6 +123,10 @@ class EmployeePickerReadService
                 ->where('id', '!=', $subordinate->id)
                 ->whereDate('starts_on', '<=', $today)
                 ->where(fn ($q) => $q->whereNull('ends_on')->orWhereDate('ends_on', '>=', $today))
+                ->when(! $scope->isWholeSchool(), fn ($q) => $q->whereIn('id', $this->current->current($school, $today)
+                    ->whereIn('employee_assignments.campus_id', $scope->campusIds())
+                    ->whereExists(fn ($c) => $c->selectRaw('1')->from('campuses')->whereColumn('campuses.id', 'employee_assignments.campus_id')->where('campuses.school_id', $school->id)->where('campuses.status', 'active'))
+                    ->select('employee_assignments.id')))
                 ->get();
 
             $positions = Position::query()->whereIn('id', $assignments->pluck('position_id'))->pluck('name', 'id');

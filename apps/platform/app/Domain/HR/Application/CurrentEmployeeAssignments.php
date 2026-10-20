@@ -9,6 +9,7 @@ use App\Models\School;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -138,6 +139,119 @@ final class CurrentEmployeeAssignments
     }
 
     /**
+     * ORG.7E-1 (ADR 0076 §43): the given Employees' current assignments, each
+     * carrying its `employee_id`, in ONE query. $campusIds null = every
+     * current assignment (NULL-Campus and inactive-Campus ones included: the
+     * whole-School view); a list = only those on the given ACTIVE Campuses
+     * (a Campus-scoped view never sees a NULL-Campus assignment). Ordered by
+     * start and id (primary status is display only: callers order by it).
+     * MUST be run inside the target
+     * School's TenantContext.
+     *
+     * @param  list<string>  $employeeIds
+     * @param  list<string>|null  $campusIds
+     * @return Collection<int, EmployeeAssignment>
+     */
+    public function currentAssignmentsOf(School $school, array $employeeIds, ?array $campusIds = null, ?string $date = null): Collection
+    {
+        $employeeIds = self::uuids($employeeIds);
+        if ($employeeIds === [] || ($campusIds !== null && self::uuids($campusIds) === [])) {
+            return new Collection;
+        }
+
+        $query = $this->current($school, $date)
+            ->join('employment_records as own_er', fn ($j) => $j->on('own_er.id', '=', 'employee_assignments.employment_record_id')->on('own_er.school_id', '=', 'employee_assignments.school_id'))
+            ->whereIn('own_er.employee_id', $employeeIds)
+            ->select(['employee_assignments.*', 'own_er.employee_id as employee_id']);
+        if ($campusIds !== null) {
+            $query->whereIn('employee_assignments.campus_id', self::uuids($campusIds))
+                ->whereExists(fn (QueryBuilder $q) => $q->selectRaw('1')->from('campuses as own_c')
+                    ->whereColumn('own_c.id', 'employee_assignments.campus_id')
+                    ->whereColumn('own_c.school_id', 'employee_assignments.school_id')
+                    ->where('own_c.status', 'active'));
+        }
+
+        return $query->orderBy('employee_assignments.starts_on')
+            ->orderBy('employee_assignments.id')
+            ->get();
+    }
+
+    /**
+     * ORG.7E-1 (ADR 0076 §43, security review L1): which of $assignmentIds are
+     * operationally current on one of the given ACTIVE Campuses -- in ONE
+     * query (e.g. which reporting managers a Campus-scoped reader may see).
+     * MUST be run inside the target School's TenantContext.
+     *
+     * @param  list<string>  $assignmentIds
+     * @param  list<string>  $campusIds
+     * @return list<string>
+     */
+    public function currentAmongOnCampuses(School $school, array $assignmentIds, array $campusIds, ?string $date = null): array
+    {
+        $assignmentIds = self::uuids($assignmentIds);
+        $campusIds = self::uuids($campusIds);
+        if ($assignmentIds === [] || $campusIds === []) {
+            return [];
+        }
+
+        return $this->current($school, $date)
+            ->whereIn('employee_assignments.id', $assignmentIds)
+            ->whereIn('employee_assignments.campus_id', $campusIds)
+            ->whereExists(fn (QueryBuilder $q) => $q->selectRaw('1')->from('campuses as own_c')
+                ->whereColumn('own_c.id', 'employee_assignments.campus_id')
+                ->whereColumn('own_c.school_id', 'employee_assignments.school_id')
+                ->where('own_c.status', 'active'))
+            ->pluck('employee_assignments.id')->map(fn ($id) => (string) $id)->all();
+    }
+
+    /**
+     * ORG.7E-1 (ADR 0076 §43): whether $assignmentId is operationally current
+     * on $date (the same rule as current()). MUST be run inside the target
+     * School's TenantContext.
+     */
+    public function isCurrentAssignment(School $school, string $assignmentId, ?string $date = null): bool
+    {
+        return Str::isUuid($assignmentId) && $this->current($school, $date)->whereKey($assignmentId)->exists();
+    }
+
+    /**
+     * ORG.7E-1 (ADR 0076 §43): the Employee's operationally current
+     * Employment on $date -- an eligible status (`active`, `notice_period`)
+     * whose dates cover the date, of an active Employee -- or null. Overlap is
+     * refused on write, so there is at most one. MUST be run inside the
+     * target School's TenantContext.
+     */
+    public function currentEmployment(School $school, string $employeeId, ?string $date = null): ?EmploymentRecord
+    {
+        if (! Str::isUuid($employeeId)) {
+            return null;
+        }
+        $date ??= $this->today($school);
+
+        return EmploymentRecord::query()
+            ->where('employment_records.school_id', $school->id)
+            ->where('employment_records.employee_id', $employeeId)
+            ->whereIn('employment_records.status', EmploymentRecord::AUTHORIZATION_ELIGIBLE_STATUSES)
+            ->where('employment_records.starts_on', '<=', $date)
+            ->where(fn ($w) => $w->whereNull('employment_records.ends_on')->orWhere('employment_records.ends_on', '>=', $date))
+            ->whereExists(fn (QueryBuilder $q) => $q->selectRaw('1')->from('employees as cur_e')
+                ->whereColumn('cur_e.id', 'employment_records.employee_id')
+                ->whereColumn('cur_e.school_id', 'employment_records.school_id')
+                ->where('cur_e.record_status', 'active'))
+            ->orderBy('employment_records.starts_on')
+            ->first();
+    }
+
+    /**
+     * @param  list<string>  $ids
+     * @return list<string> the lower-cased UUIDs among $ids
+     */
+    private static function uuids(array $ids): array
+    {
+        return array_values(array_unique(array_map('strtolower', array_filter($ids, fn (string $id) => Str::isUuid($id)))));
+    }
+
+    /**
      * Restricts an `employees` query, in SQL, to Employees operationally
      * present on at least one of $campusIds (an EXISTS predicate: Employee
      * rows only, never hydrated assignment columns). [] matches nothing.
@@ -146,19 +260,24 @@ final class CurrentEmployeeAssignments
      *
      * MUST be called inside the target School's TenantContext.
      *
+     * ORG.7E-1: $assignment optionally narrows the matching current
+     * assignment further (e.g. its Department or Position, alias `ea`) --
+     * never widens it.
+     *
      * @param  Builder<Employee>  $employees
      * @param  list<string>  $campusIds
+     * @param  (callable(QueryBuilder): mixed)|null  $assignment
      * @return Builder<Employee>
      */
-    public function whereOperationalOnCampuses(Builder $employees, School $school, array $campusIds, ?string $date = null): Builder
+    public function whereOperationalOnCampuses(Builder $employees, School $school, array $campusIds, ?string $date = null, ?callable $assignment = null): Builder
     {
-        $campusIds = array_values(array_unique(array_map('strtolower', array_filter($campusIds, fn (string $id) => Str::isUuid($id)))));
+        $campusIds = self::uuids($campusIds);
         if ($campusIds === []) {
             return $employees->whereRaw('1 = 0');
         }
         $date ??= $this->today($school);
 
-        return $employees->whereExists(function (QueryBuilder $q) use ($school, $campusIds, $date): void {
+        return $employees->whereExists(function (QueryBuilder $q) use ($school, $campusIds, $date, $assignment): void {
             $q->selectRaw('1')
                 ->from('employee_assignments as ea')
                 ->join('employment_records as er', fn ($j) => $j->on('er.id', '=', 'ea.employment_record_id')->on('er.school_id', '=', 'ea.school_id'))
@@ -168,6 +287,9 @@ final class CurrentEmployeeAssignments
                 ->whereIn('ea.campus_id', $campusIds)
                 ->where('c.status', 'active');
             $this->constrainToCurrent($q, $date);
+            if ($assignment !== null) {
+                $q->where(fn (QueryBuilder $w) => $assignment($w));
+            }
         });
     }
 }

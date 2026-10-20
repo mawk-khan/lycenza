@@ -18,7 +18,7 @@ use App\Models\School;
 use App\Models\SchoolMembership;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -48,7 +48,7 @@ use Illuminate\Support\Facades\DB;
  */
 class EmployeeService
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
     public function __construct(
         private readonly EmployeeNumberAllocator $allocator,
@@ -56,6 +56,8 @@ class EmployeeService
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly HrSelfAdministrationGuard $selfAdministration,
+        private readonly HrEmployeeAccess $access,
+        private readonly EmployeePlacementLock $placement,
     ) {}
 
     /**
@@ -63,55 +65,79 @@ class EmployeeService
      */
     public function create(School $school, array $attributes, User $actor): Employee
     {
-        $this->authorizeCapabilityFor($actor, 'hr.employees.manage', $school);
+        // ORG.7E-1 (ADR 0076 §43): an identity-only Employee has no current
+        // assignment, so creating one is whole-School (a Campus actor onboards
+        // through EmployeeOnboardingService, never an unassigned Employee).
+        $this->access->requireWholeSchool($actor, 'hr.employees.manage', $school);
 
         $userId = $attributes['user_id'] ?? null;
-        $workEmail = $attributes['work_email'] ?? null;
 
-        return $this->translatingUserLinkConflict($userId, fn () => $this->context->withSchool($school, function () use ($school, $attributes, $userId, $workEmail, $actor) {
-            return DB::transaction(function () use ($school, $attributes, $userId, $workEmail, $actor) {
-                $sequenceValue = $this->allocator->allocate($school);
-                $employeeNumber = $this->formatter->format($sequenceValue);
-
-                try {
-                    $employee = Employee::query()->create([
-                        'school_id' => $school->id,
-                        'user_id' => null,
-                        'employee_number' => $employeeNumber,
-                        'full_name' => $attributes['full_name'],
-                        'work_email' => $workEmail,
-                        'work_phone' => $attributes['work_phone'] ?? null,
-                        'record_status' => 'active',
-                    ]);
-                } catch (QueryException $e) {
-                    if ($workEmail !== null && $this->violatesConstraint($e, 'employees_work_email_unique')) {
-                        throw new DuplicateWorkEmailException($workEmail);
-                    }
-
-                    // UAT-HR-20b: the counter is behind numbers written out of band.
-                    // Refuse cleanly, but keep the database error in the error log.
-                    if ($this->violatesConstraint($e, EmployeeNumberConflictException::CONSTRAINT)) {
-                        report($e);
-
-                        throw new EmployeeNumberConflictException($employeeNumber);
-                    }
-
-                    throw $e;
-                }
-
-                $this->audit->school($school, 'employee.created', actor: $actor, subject: $employee, metadata: [
-                    'employeeNumber' => $employee->employee_number,
-                ]);
+        return $this->translatingUserLinkConflict($userId, fn () => $this->context->withSchool($school, function () use ($school, $attributes, $userId, $actor) {
+            return DB::transaction(function () use ($school, $attributes, $userId, $actor) {
+                $employee = $this->createRecord($school, $attributes, $actor);
 
                 if ($userId !== null) {
                     $this->link($school, $employee, $userId, $actor);
                 }
 
-                event(new EmployeeCreated($school->id, $employee->id, $employee->employee_number));
-
                 return $employee->fresh();
             });
         }));
+    }
+
+    /**
+     * The one Employee INSERT (create() and EmployeeOnboardingService):
+     * allocates the number, persists, audits and emits EmployeeCreated. No
+     * authorization and no account link of its own -- the caller authorized,
+     * and runs it inside its transaction and the School's TenantContext.
+     *
+     * @param  array{full_name: string, work_email?: string|null, work_phone?: string|null}  $attributes
+     *
+     * @throws DuplicateWorkEmailException|EmployeeNumberConflictException
+     */
+    public function createRecord(School $school, array $attributes, User $actor): Employee
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new \LogicException('EmployeeService::createRecord() runs only inside the creating transaction.');
+        }
+        $workEmail = $attributes['work_email'] ?? null;
+
+        $sequenceValue = $this->allocator->allocate($school);
+        $employeeNumber = $this->formatter->format($sequenceValue);
+
+        try {
+            $employee = Employee::query()->create([
+                'school_id' => $school->id,
+                'user_id' => null,
+                'employee_number' => $employeeNumber,
+                'full_name' => $attributes['full_name'],
+                'work_email' => $workEmail,
+                'work_phone' => $attributes['work_phone'] ?? null,
+                'record_status' => 'active',
+            ]);
+        } catch (QueryException $e) {
+            if ($workEmail !== null && $this->violatesConstraint($e, 'employees_work_email_unique')) {
+                throw new DuplicateWorkEmailException($workEmail);
+            }
+
+            // UAT-HR-20b: the counter is behind numbers written out of band.
+            // Refuse cleanly, but keep the database error in the error log.
+            if ($this->violatesConstraint($e, EmployeeNumberConflictException::CONSTRAINT)) {
+                report($e);
+
+                throw new EmployeeNumberConflictException($employeeNumber);
+            }
+
+            throw $e;
+        }
+
+        $this->audit->school($school, 'employee.created', actor: $actor, subject: $employee, metadata: [
+            'employeeNumber' => $employee->employee_number,
+        ]);
+
+        event(new EmployeeCreated($school->id, $employee->id, $employee->employee_number));
+
+        return $employee;
     }
 
     /**
@@ -130,7 +156,10 @@ class EmployeeService
     public function update(Employee $employee, array $attributes, User $actor): Employee
     {
         $school = $employee->school;
-        $this->authorizeCapabilityFor($actor, 'hr.employees.manage', $school);
+        // ORG.7E-1 (ADR 0076 §43): Campus-aware. A Campus-scoped actor edits
+        // these School-wide identity fields only when EVERY current Campus of
+        // the Employee is in scope, decided under the Employee lock.
+        $guard = $this->access->writeGuard($school, $this->authorizeCampusScopeFor($actor, 'hr.employees.manage', $school));
 
         if (array_key_exists('user_id', $attributes)) {
             throw new EmployeeUserLinkNotEditableException;
@@ -138,8 +167,11 @@ class EmployeeService
 
         unset($attributes['school_id'], $attributes['employee_number'], $attributes['record_status']);
 
-        return $this->context->withSchool($school, function () use ($school, $employee, $attributes, $actor) {
-            return DB::transaction(function () use ($school, $employee, $attributes, $actor) {
+        return $this->context->withSchool($school, function () use ($school, $employee, $attributes, $actor, $guard) {
+            return DB::transaction(function () use ($school, $employee, $attributes, $actor, $guard) {
+                $locked = $this->placement->forEmployeeWrite($school, $employee->id);
+                $guard?->beforeEmployeeWrite($locked);
+
                 try {
                     $employee->update($attributes);
                 } catch (QueryException $e) {
@@ -174,10 +206,12 @@ class EmployeeService
     public function archive(Employee $employee, User $actor): Employee
     {
         $school = $employee->school;
-        $this->authorizeCapabilityFor($actor, 'hr.employees.manage', $school);
+        // ORG.7E-1: archive/restore stay whole-School (declared operations).
+        $this->access->requireWholeSchool($actor, 'hr.employees.manage', $school);
 
         return $this->context->withSchool($school, function () use ($school, $employee, $actor) {
             return DB::transaction(function () use ($school, $employee, $actor) {
+                $this->placement->forEmployeeWrite($school, $employee->id);
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'archive');
 
                 if ($employee->record_status === 'archived') {
@@ -204,10 +238,11 @@ class EmployeeService
     public function restore(Employee $employee, User $actor): Employee
     {
         $school = $employee->school;
-        $this->authorizeCapabilityFor($actor, 'hr.employees.manage', $school);
+        $this->access->requireWholeSchool($actor, 'hr.employees.manage', $school);
 
         return $this->context->withSchool($school, function () use ($school, $employee, $actor) {
             return DB::transaction(function () use ($school, $employee, $actor) {
+                $this->placement->forEmployeeWrite($school, $employee->id);
                 $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'restore');
 
                 if ($employee->record_status === 'active') {
@@ -235,7 +270,8 @@ class EmployeeService
     public function linkUser(Employee $employee, string $userId, User $actor): Employee
     {
         $school = $employee->school;
-        $this->authorizeCapabilityFor($actor, 'hr.employees.manage', $school);
+        // ORG.7E-1: account link/unlink stay whole-School (declared operations).
+        $this->access->requireWholeSchool($actor, 'hr.employees.manage', $school);
 
         return $this->translatingUserLinkConflict($userId, fn () => $this->context->withSchool($school, function () use ($school, $employee, $userId, $actor) {
             return DB::transaction(function () use ($school, $employee, $userId, $actor) {
@@ -262,7 +298,7 @@ class EmployeeService
     public function unlinkUser(Employee $employee, User $actor): Employee
     {
         $school = $employee->school;
-        $this->authorizeCapabilityFor($actor, 'hr.employees.manage', $school);
+        $this->access->requireWholeSchool($actor, 'hr.employees.manage', $school);
 
         return $this->context->withSchool($school, function () use ($school, $employee, $actor) {
             return DB::transaction(function () use ($school, $employee, $actor) {

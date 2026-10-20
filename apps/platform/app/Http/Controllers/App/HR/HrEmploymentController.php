@@ -23,7 +23,8 @@ class HrEmploymentController extends Controller
     public function store(Request $request, TenantContext $context, EmploymentService $service, string $employee): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('hr.employees.assignments.manage', $school);
+        // ORG.7E-1 (ADR 0076 §43): a declared whole-School operation -- authorized by
+        // the route's ordinary `capability:hr.employees.assignments.manage` floor, which a Campus grant never satisfies.
         abort_if(! Str::isUuid($employee), 404);
 
         $model = Employee::query()->findOrFail($employee);
@@ -47,7 +48,8 @@ class HrEmploymentController extends Controller
     public function end(Request $request, TenantContext $context, EmploymentService $service, string $employee, string $employment): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('hr.employees.assignments.manage', $school);
+        // ORG.7E-1 (ADR 0076 §43): a declared whole-School operation -- authorized by
+        // the route's ordinary `capability:hr.employees.assignments.manage` floor, which a Campus grant never satisfies.
         abort_if(! Str::isUuid($employee) || ! Str::isUuid($employment), 404);
 
         $employeeModel = Employee::query()->findOrFail($employee);
@@ -66,7 +68,8 @@ class HrEmploymentController extends Controller
     public function separate(Request $request, TenantContext $context, EmployeeLifecycleService $service, string $employee, string $employment): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('hr.employees.assignments.manage', $school);
+        // ORG.7E-1 (ADR 0076 §43): a declared whole-School operation -- authorized by
+        // the route's ordinary `capability:hr.employees.assignments.manage` floor, which a Campus grant never satisfies.
         abort_if(! Str::isUuid($employee) || ! Str::isUuid($employment), 404);
 
         $employeeModel = Employee::query()->findOrFail($employee);
@@ -85,7 +88,8 @@ class HrEmploymentController extends Controller
     public function rehire(Request $request, TenantContext $context, EmployeeLifecycleService $service, string $employee): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('hr.employees.assignments.manage', $school);
+        // ORG.7E-1 (ADR 0076 §43): a declared whole-School operation -- authorized by
+        // the route's ordinary `capability:hr.employees.assignments.manage` floor, which a Campus grant never satisfies.
         abort_if(! Str::isUuid($employee), 404);
 
         $model = Employee::query()->findOrFail($employee);

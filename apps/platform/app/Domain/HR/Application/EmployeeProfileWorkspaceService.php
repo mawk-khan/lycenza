@@ -112,7 +112,9 @@ class EmployeeProfileWorkspaceService
     {
         $this->authorizeCapabilityFor($actor, 'hr.employees.personal.view', $school);
 
-        $canViewAssignments = $this->capabilities->canInSchool($actor, 'hr.employees.assignments.view', $school);
+        // ORG.7E-1 (ADR 0076 §43): employment and assignment HISTORY stays
+        // whole-School -- a Campus-scoped assignments.view grant never opens it.
+        $canViewAssignments = app(HrEmployeeAccess::class)->holdsWholeSchool($actor, 'hr.employees.assignments.view', $school);
         $canViewQualifications = $this->capabilities->canInSchool($actor, 'hr.employees.qualifications.view', $school);
         $canViewDocuments = $this->capabilities->canInSchool($actor, 'hr.employees.documents.view', $school);
         // Phase 8A closure correction: same "absent, not fetched"

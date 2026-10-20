@@ -1365,3 +1365,19 @@ once several modules copy it.
        employment. Primary status never limits it. Never add
        `employees.campus_id`, a UTC "today" or another ad-hoc currency
        reader (`HrCurrentAssignmentArchitectureTest`).
+     - **HR Campus authority goes through `HrEmployeeAccess`** (ORG.7E-1,
+       §43). Adopted: `hr.employees.view`, `.manage`, `.assignments.view`,
+       `.assignments.manage`.
+       - A Campus actor reaches an Employee only through a CURRENT in-scope
+         assignment, and sees and targets only current in-scope
+         assignments: never a NULL-Campus one, another Campus's, or history.
+       - An identity edit or a new assignment needs EVERY current Campus in
+         scope, decided in the write transaction after
+         `EmployeePlacementLock`, which every HR placement writer takes
+         FIRST (FOR SHARE / FOR NO KEY UPDATE, never FOR UPDATE for the
+         scoped write).
+       - Onboarding is the one atomic `EmployeeOnboardingService` (Employee
+         + Employment + first Assignment), never a capture.
+       - Whole-School, declared: the Profile, history, employment
+         lifecycle, rehire, import, archive/restore, identity-only create
+         and account links.

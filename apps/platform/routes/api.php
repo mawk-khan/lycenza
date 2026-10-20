@@ -556,8 +556,13 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             // either order, since that exception originates from INSIDE
             // the controller, already nested under every route
             // middleware regardless of array position.
+            // ORG.7E-1 (ADR 0076 §43): the Directory, core update and assignment
+            // writes are Campus-adopted (`,campus` entry floors + C6 contracts);
+            // every other `hr.employees.manage` / `.assignments.manage` floor in
+            // this block is a declared whole-School-only operation
+            // (CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS).
             Route::get('/employees', [EmployeeDirectoryController::class, 'index'])
-                ->middleware(['private-no-store', 'capability:hr.employees.view', 'throttle:hr-api-reads'])
+                ->middleware(['private-no-store', 'capability:hr.employees.view,campus', 'throttle:hr-api-reads'])
                 ->name('schools.employees.index');
             Route::get('/employees/{employee}', [EmployeeProfileController::class, 'show'])
                 ->middleware(['private-no-store', 'capability:hr.employees.personal.view', 'throttle:hr-api-reads'])
@@ -594,7 +599,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->middleware(['capability:hr.employees.manage', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.employees.store');
             Route::patch('/employees/{employee}', [EmployeeController::class, 'update'])
-                ->middleware(['capability:hr.employees.manage', 'throttle:school-api-mutations'])
+                ->middleware(['capability:hr.employees.manage,campus', 'throttle:school-api-mutations'])
                 ->name('schools.employees.update');
             Route::post('/employees/{employee}/archive', [EmployeeController::class, 'archive'])
                 ->middleware(['capability:hr.employees.manage', 'throttle:school-api-mutations', 'idempotent'])
@@ -666,16 +671,16 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->name('schools.employees.employment-records.separate');
 
             Route::post('/employees/{employee}/employment-records/{employment}/assignments', [EmployeeAssignmentController::class, 'store'])
-                ->middleware(['capability:hr.employees.assignments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->middleware(['capability:hr.employees.assignments.manage,campus', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.employees.assignments.store');
             Route::post('/employees/{employee}/employment-records/{employment}/assignments/{assignment}/end', [EmployeeAssignmentController::class, 'end'])
-                ->middleware(['capability:hr.employees.assignments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->middleware(['capability:hr.employees.assignments.manage,campus', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.employees.assignments.end');
             Route::post('/employees/{employee}/employment-records/{employment}/assignments/{assignment}/primary', [EmployeeAssignmentController::class, 'setPrimary'])
-                ->middleware(['capability:hr.employees.assignments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->middleware(['capability:hr.employees.assignments.manage,campus', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.employees.assignments.set-primary');
             Route::post('/employees/{employee}/employment-records/{employment}/assignments/{assignment}/manager', [EmployeeAssignmentController::class, 'setManager'])
-                ->middleware(['capability:hr.employees.assignments.manage', 'throttle:school-api-mutations', 'idempotent'])
+                ->middleware(['capability:hr.employees.assignments.manage,campus', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.employees.assignments.set-manager');
 
             Route::post('/employees/{employee}/rehire', [EmployeeLifecycleController::class, 'rehire'])

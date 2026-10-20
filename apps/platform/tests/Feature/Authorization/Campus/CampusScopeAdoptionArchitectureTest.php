@@ -93,6 +93,13 @@ class CampusScopeAdoptionArchitectureTest extends TestCase
             'controllers' => ['app/Domain/Transport/Http/Controllers/TransportStudentAssignmentController.php', 'app/Http/Controllers/App/TransportStudentAssignmentController.php', 'app/Domain/Transport/Http/Controllers/TransportRouteController.php'],
             'models' => ['TransportStudentAssignment::query(', 'Student::query('],
         ],
+        // ORG.7E-1 (ADR 0076 §43): the Campus-adopted HR controllers resolve every
+        // Employee, employment and assignment through HrEmployeeAccess.
+        'hr' => [
+            'access' => 'app/Domain/HR/Application/HrEmployeeAccess.php',
+            'controllers' => ['app/Http/Controllers/App/HR/HrEmployeeController.php', 'app/Http/Controllers/App/HR/HrEmployeeAssignmentController.php', 'app/Domain/HR/Http/Controllers/EmployeeDirectoryController.php', 'app/Domain/HR/Http/Controllers/EmployeeController.php', 'app/Domain/HR/Http/Controllers/EmployeeAssignmentController.php'],
+            'models' => ['Employee::query(', 'EmploymentRecord::query(', 'EmployeeAssignment::query('],
+        ],
     ];
 
     #[Test]

@@ -36,7 +36,8 @@ class HrEmployeeAccountLinkController extends Controller
     public function search(Request $request, TenantContext $context, EmployeePickerReadService $reads, string $employee): JsonResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('hr.employees.manage', $school);
+        // ORG.7E-1 (ADR 0076 §43): a declared whole-School operation -- authorized by
+        // the route's ordinary `capability:hr.employees.manage` floor, which a Campus grant never satisfies.
 
         return response()->json([
             'candidates' => $reads->accountCandidates($school, $this->employee($employee), (string) $request->string('q'), $context->actor()),
@@ -46,7 +47,8 @@ class HrEmployeeAccountLinkController extends Controller
     public function store(Request $request, TenantContext $context, EmployeeService $service, string $employee): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('hr.employees.manage', $school);
+        // ORG.7E-1 (ADR 0076 §43): a declared whole-School operation -- authorized by
+        // the route's ordinary `capability:hr.employees.manage` floor, which a Campus grant never satisfies.
         $model = $this->employee($employee);
 
         $validated = $request->validate(['account' => ['required', 'uuid']], ['account.*' => 'Choose a Lycenza account from the list.']);
@@ -69,7 +71,8 @@ class HrEmployeeAccountLinkController extends Controller
     public function destroy(TenantContext $context, EmployeeService $service, string $employee): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('hr.employees.manage', $school);
+        // ORG.7E-1 (ADR 0076 §43): a declared whole-School operation -- authorized by
+        // the route's ordinary `capability:hr.employees.manage` floor, which a Campus grant never satisfies.
         $model = $this->employee($employee);
 
         try {
