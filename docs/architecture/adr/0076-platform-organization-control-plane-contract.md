@@ -4573,3 +4573,851 @@ candidate: no HIGH finding.
 - Historical HR by Campus (timeline and history stay whole-School).
 - The Visitor host lookup tightening (§42.8, unchanged).
 - Campus-scoped Leave, Staff Attendance and Payroll (out of scope).
+
+## 44. ORG.7F-0 — SIS Campus authorization and lifecycle contract audit (read-only, 2026-10-20)
+
+Owner authorization: a read-only audit only. No implementation, no
+`CampusScopeCatalogue` change, no C6 conversion, no Student Profile change,
+and LC-5–LC-10 stay paused. Baseline `origin/main` = `d74cd9d6` (ORG.7E-1).
+
+Evidence:
+- code reading of the Students, Guardians, Admissions and Campus-adopted
+  consumer services, controllers, routes and coverage registry;
+- the live DDEV schema (`\d`, `pg_trigger`, privileges) and `EXPLAIN`;
+- 68 architecture and guard tests run on DDEV, all passing (Campus guards,
+  coverage guard, Student foundation, eligibility, role snapshot, module
+  and async contracts).
+
+No production code, test, capability, role or route changed.
+
+    Student identity        = School-wide (no Campus column; unchanged)
+    current Campus          = active Student + active Enrollment in the School's
+                              active year + active Campus (§38, unchanged)
+    Campus SIS authority    = a future adoption of students.view / enrollments.view
+                              (F1), then narrow write paths (F2/F3), each
+                              behind one StudentAccess layer
+    everything else         = whole-School: lifecycle, history, Guardians,
+                              rollover, processing authorizations, bulk
+
+### 44.1 Prerequisite verification
+
+**Verified present and guard-pinned:**
+- ADR 0076 §33–§43.
+- `StudentEnrollmentReadService::constrainToCurrentPlacement()`, the one
+  current-placement definition.
+- `StudentOperationalCampusResolver`, which is data only, with an EXISTS
+  predicate.
+- `StudentOperationalEligibility::lockOperationalOn()`, the write-time proof
+  (§40).
+- `StudentPurposeLookup`, returning `id`, `displayName` and
+  `studentNumber`.
+- `CampusScopeResolver`, `CampusScopeCatalogue` (with
+  `WHOLE_SCHOOL_OPERATIONS` and `WHOLE_SCHOOL_HUBS`), C6 coverage, and
+  `CampusAdoptionImpactTest`.
+- `ModuleCatalogue` and the async module contract.
+
+**SIS adoption is barred today:**
+- `students.`, `enrollments.` and `guardians.` are in
+  `CampusAdoptionImpactTest::PROHIBITED_PREFIXES`.
+- `academics.` (which includes `academics.subjects.*`) is prohibited too.
+- No SIS controller uses the resolver.
+
+### 44.2 Schema reality
+
+- **`students`:** `student_number` (unique per School), `first_name`,
+  `middle_name`, `last_name`, `date_of_birth` (NOT NULL, Highly Sensitive),
+  and `status` (`active`/`inactive`, no CHECK).
+  - There is **no** gender, address, contact, photo, government identifier,
+    medical, health, disability or custom-field data.
+  - There is no notes column and no Campus column.
+  - `Student::$fillable` includes `status` and `school_id`.
+- **`student_enrollments`:**
+  - Statuses are `active`, `completed`, `withdrawn`, `transferred` and
+    `cancelled`, with no CHECK.
+  - At most one `active` row per (Student, year).
+  - Campus is bound to the Section by `student_enrollments_section_context_fk`.
+  - `school_os_app` can still UPDATE every placement column, and
+    `sections.campus_id`. No freeze trigger exists (the §35.2 item 6 freeze
+    is still open). The FK and the attendance 6-tuple FK make an in-place
+    Campus rewrite fail for rows that are referenced, but not for an
+    unreferenced row moved together with its Section id.
+- **Guardians:**
+  - `guardians` holds names and status only.
+  - `guardian_contacts` holds email and mobile, encrypted, with an HMAC
+    `lookup_hash`.
+  - `student_guardian_relationships` carries type plus the `is_primary`
+    (one per Student), `is_legal_guardian`, `is_emergency_contact` and
+    `is_authorized_pickup` flags.
+- **Documents:** `documents.student_id` and `guardian_id` exist, but every
+  Student and Guardian owner path throws
+  `DocumentOwnerTypeNotSupportedException` (404). There is no route and no
+  capability. Student documents are **not activated**.
+- **Not built:** Student import, Student bulk create, a Student custom-field
+  system, and medical records.
+- **Domain events:** none from Students, Guardians or Admissions, and no
+  outbox rows. Rollover execution is synchronous (at most 100 items per
+  request). No queued job or consumer touches SIS. Retention prunes are
+  console-only and lock through `lockExit`.
+
+### 44.3 Capability inventory
+
+14 keys, all `school` scope:
+
+| Key | Holders | Module | Classes | Gate today | Proposed class |
+|---|---|---|---|---|---|
+| `students.view` | school_admin, principal | student_records (core) | children | Gate (C2) | **A**, with declared whole-School ops (full Profile, history, API show, Guardians list) |
+| `students.manage` | school_admin, principal | core | children | C1 on API writes, Gate on web | **H** (split by declared ops): names are Campus-editable (F2); create, number, date of birth, status, account link and Guardian links are whole-School |
+| `enrollments.view` | school_admin, principal | core | children | Gate | **A** for the current placement only; history is **E** |
+| `enrollments.manage` | school_admin, principal | core | children | C1/Gate | **H**: transfer (F3) and Campus onboarding (F2) only; enroll-existing, complete, withdraw, cancel and closed-year closure are **D** |
+| `enrollments.rollovers.view` | school_admin, principal | core | children | Gate (paired) | **D** |
+| `enrollments.rollovers.manage` | school_admin | core | **authority**, children | C1/Gate (paired) | **D** |
+| `guardians.view` | school_admin, principal | core | children | Gate | **F** (relationship and School-wide identity); never Campus |
+| `guardians.manage` | school_admin, principal | core | children | C1/Gate (+ `school.members.manage`, fresh MFA where noted) | **F**; never Campus |
+| `students.processing_authorizations.view` | school_admin, principal | core | children | `capability:` + `mfa` | **G** |
+| `students.processing_authorizations.manage` | school_admin, principal | core | **authority**, children | `capability:` + `mfa` | **G** |
+| `academics.subjects.view` / `.manage` | school_admin, principal | academic_structure (core) | operational, sensitive | Gate / C1 | **C/I**: School configuration bundled with subject-enrollment writes; prohibited, needs a catalogue split (rule 93) before any change |
+| `admissions.view` / `.manage` | school_admin, principal, admissions_officer | admissions (optional) | children | `capability:…,campus` (C6) | already adopted pre-conversion (§39); conversion is a declared whole-School op (§44.17) |
+
+- **No dedicated keys exist** for documents, imports, identifiers, Student
+  status, history, Data Health or retention. Data Health opens on any of
+  five keys; its Student checks need `students.view` + `enrollments.view`.
+- **No legal-gated SIS key exists.**
+- **MFA appears only twice:** the `mfa` middleware on processing
+  authorizations, and the fresh-MFA check on Guardian portal offboarding.
+- **New capabilities** are not needed for F1–F3: the HR pattern (§43:
+  adoption plus declared whole-School ops plus service-level field rules)
+  covers them. A split may be needed only for F4 (§44.17), or if the owner
+  wants Campus Guardian contact visibility (§44.13).
+
+### 44.4 Route inventory (120: 75 web, 45 API)
+
+| Group | Web | API | Coverage today |
+|---|---|---|---|
+| Directory/search | `app.students.index`, `app.enrollments.index` (all statuses) | `students.index`, `enrollments.index`, `guardian-candidates` | C2 |
+| Profile/history | `app.students.show`, `.history` | `students.show` (date of birth), `enrollments.show`, `students.enrollments.index` (history), `students.enrollments.current` | C2 |
+| Create/update/status | 5 (create, store, edit, update, status) | 3 | C2 web / C1 API |
+| Placements | 7 + closed-year ×2 | 5 | C2 / C1 |
+| Rollover | 14 | 12 | C2 / C1 (API writes have no in-controller re-check; acceptable under rule 98 C1) |
+| Subject enrollments | 6 | 5 (+ roster) | C2 / C1 (`academics.subjects.*`) |
+| Guardian links (Student side) | 8 (`students.manage` AND `guardians.manage`) | 5 | C2 / C1 |
+| Guardian admin and contacts | 19 | 8 | C2 / C1 |
+| Account link | 3 | — | C2 |
+| Processing authorizations | 5 (no UI consumer) | — | C1 + `mfa` |
+| Data Health | 2 | — | C2 hub |
+
+- **Bindings:** every action resolves `string` ids through
+  `findOrFail()` under SchoolScope and RLS, so another School's id is a 404.
+  The one exception is processing authorizations, which use implicit
+  binding.
+- **Navigation:** `students`, `guardians`, `enrollments` and
+  `enrollment-rollovers` appear in the People group. The Data Health hub
+  opens on any of its five keys.
+- **Other consumers that read SIS keys as link or label hints** (all
+  `canInSchool`, so they degrade safely to "no link" for a Campus-only
+  actor):
+  - `SubjectOfferingController`, `AttendanceExceptionController`
+    (`students.view`);
+  - `OutstandingFeesController`, `DataHealthController`
+    (`enrollments.view`);
+  - `AdmissionApplicationController:202` reads
+    `campusScope('students.view')` for a converted-Student link. It must be
+    re-checked when `students.view` is adopted.
+
+### 44.5 Student Directory (decision: Campus-aware, F1)
+
+- **Today.** The web list returns `id`, `studentNumber`, the names and
+  `status`, plus `currentPlacement {gradeLevel, section, rollNumber}` when
+  the actor holds `enrollments.view`. It is whole-School, 20 per page, with
+  no Campus filter. The API list is the same without placement, up to 100
+  per page, with an unescaped name `ilike` and an exact number match.
+- **Campus contract.** A Campus `students.view` holder sees only Students
+  whose CURRENT operational Campus is in scope:
+  - `restrictToOperationalCampus()` applied in SQL (EXISTS), before
+    pagination;
+  - no PHP post-filtering;
+  - a request Campus filter narrows only.
+- **Whole-School actor:** the existing Directory, unchanged.
+- **Stays whole-School:** no current Campus (new, unplaced, between
+  placements), inactive Students and leavers.
+- **History never decides visibility:** a former-Campus or future-year
+  placement never makes a Student visible.
+- **Campus row projection (SAFE_OPERATIONAL):** `id`, `studentNumber`,
+  display name (first, middle and last), current Campus name, Grade,
+  Section and roll number. Status is not needed, because it is always
+  `active` in scope.
+- **Excluded:** date of birth, every Guardian field, account link,
+  history, processing authorizations and any cross-domain data.
+- **Separate surfaces.** This is a SIS surface under `students.view`, never
+  `StudentPurposeLookup`. The lookup stays the other domains' picker
+  (§38.5), and the two must not share code paths that widen either.
+
+### 44.6 Full Profile versus Campus operational overview (decision: separate, F1)
+
+- **Today's Profile (`app.students.show`):**
+  - **Identity:** includes date of birth (Highly Sensitive).
+  - **Current placement and FULL history:** both gated server-side on
+    `enrollments.view`.
+  - **Guardians:** names, flags and a **decrypted contact value**.
+  - **Lycenza account link.**
+  - **Static communication text.**
+  - **No cross-domain panels:** no Fees, Attendance, Library, Hostel,
+    Transport, Canteen, Exams, LMS, documents or processing
+    authorizations. A separate history page projects the audit ledger by
+    per-category capability.
+- **The full Profile mixes too much for Campus.** It stays whole-School: a
+  declared `WHOLE_SCHOOL_OPERATIONS` entry for `students.view`. A Campus
+  actor gets a capability refusal there (403), the HR §43 pattern.
+- **New Campus-safe overview** (`/app/students/{id}/overview`, C6) contains:
+  - `id`, `studentNumber`, display name;
+  - CURRENT placement only: academic year name, Campus, Grade, Section,
+    roll number, `starts_on`.
+  - Out of scope or no current Campus gives the unknown-resource 404.
+- **Guardians on the overview.** By default there is no Guardian block in
+  F1. An optional block is an owner decision (§44.13).
+- **Excluded from the overview:** date of birth, history, account link,
+  processing authorizations, documents and every cross-domain panel.
+- **Cross-domain data stays on its own domain routes and capabilities.**
+  `students.view` must never become a carrier for Fees, Attendance,
+  Library, Hostel, Transport, Canteen, LMS, Exams or marks data. Any future
+  panel embeds a domain read only after that domain's capability, module
+  entitlement and Campus scope pass independently. Marks stay excluded and
+  legal-gated.
+
+### 44.7 Sensitive Student data boundary
+
+- **Whole-School / separately gated:**
+  - date of birth (Highly Sensitive child data, DATA-CLASSIFICATION.md
+    "Children's data specifically"); the owner may later approve it for the overview;
+  - Guardian contact values (`guardians.view`);
+  - processing authorizations (`mfa`, and their `note` column is never
+    returned);
+  - the account link;
+  - the audit-history projection;
+  - enrollment history;
+  - documents, once activated (they inherit their own classification and
+    need their own capability and review; never `students.view`).
+- **Health, identifier and custom fields do not exist.** Any future one
+  must arrive with field-level classification metadata. A Campus surface
+  never exposes a field by default, and the Highly Sensitive ones need a
+  legal review first (DATA-CLASSIFICATION.md health, government
+  identifier and document rows).
+- **Today's protection is server-side capability checks only.** There is
+  no field-level classification; the projections above are the only
+  control. UI hiding is never relied on.
+
+### 44.8 Current and historical enrollment access
+
+- **CURRENT** (the `active` row in the active year, Campus in scope) may be
+  Campus-visible:
+  - the overview placement;
+  - `students.enrollments.current`;
+  - `app.enrollments.index` and API `enrollments.index`, restricted in SQL
+    to current in-scope rows for a Campus actor;
+  - `enrollments.show`, a 404 unless the row is that current in-scope row.
+- **HISTORICAL** stays whole-School in v1:
+  - prior, closed, future and draft rows, and transferred, withdrawn,
+    completed and cancelled rows;
+  - the Profile history panel;
+  - `students.enrollments.index`;
+  - non-current rows in the directory.
+- **History is never a reason for access.** Old rows never grant access to
+  a former Campus, a current grant never exposes School-wide history, and
+  history is never rewritten to a destination Campus.
+- **A historical Campus contract** (a former Campus reading what happened
+  on it, keyed by stored Campus, §37/§41) can be added later if the owner
+  needs it. None is proposed now.
+
+### 44.9 Student identity edits (F2)
+
+| Field | Campus READ | Campus EDIT | Reason |
+|---|---|---|---|
+| first, middle, last name | yes | yes (owner approval) | operational correction; School-wide effect is benign |
+| `student_number` | yes | **no** | School-wide identifier; uniqueness is an oracle (§44.20 F-9); external references |
+| `date_of_birth` | no (default) | **no** | Highly Sensitive; legal/age effects (`StudentAge`, processing authorizations) |
+| `status` | — | **no** | lifecycle (§44.15) |
+| account link | no | **no** | identity and access administration |
+
+- **Authority:** `students.manage` resolved through `CampusScopeResolver`,
+  plus the Student's ONE current operational Campus in scope, decided in
+  the write transaction under the StudentAccess lock (§44.18).
+- **Refusals:**
+  - no current Campus (inactive, leaver, unplaced, future-only) refuses
+    with the generic unknown envelope;
+  - an out-of-field change (number, date of birth) by a Campus actor
+    refuses generically.
+- **Whole-School:** unchanged.
+- **Mass assignment:** the service, not only the controller, must whitelist
+  fields; `status` is mass-assignable today (F-7).
+
+### 44.10 Creation, onboarding and capture (F2)
+
+- **Today:**
+  - `StudentService::create` creates a Student only.
+  - `enroll()` adds a placement for ANY existing Student. It does not check
+    whether the Student, Section, year or Campus is active (a documented
+    deferral in `STUDENT-ENROLLMENT.md`).
+  - Duplicates are detected only by the `(school_id, student_number)`
+    unique index; there is no name or date-of-birth matching.
+- **Capture risk (P-3).** For a whole-School actor this is correct. Under
+  Campus authority, `enroll()` on an existing unplaced, inactive, leaver or
+  other-Campus Student is a **capture/transfer bypass**. The services
+  authorize nothing, so a Campus path must never reach `enroll()` for an
+  existing Student.
+- **Campus onboarding** = one named atomic operation:
+  - It creates a NEW Student and their active-year Enrollment in an active,
+    in-scope Section.
+  - There is never an intermediate Campus-less Student under Campus
+    authority.
+  - **Authority:** `students.manage` AND `enrollments.manage`, both
+    resolving the destination Campus.
+  - **Destination:** the Section's Campus is in scope and ActiveCampus is
+    share-locked; the year is the School's active year (no draft-year
+    intake for Campus actors).
+  - **Minimum fields:** names, date of birth (write-only for the Campus
+    actor), student number (or a server-generated number, owner decision),
+    Section and roll number.
+  - **Duplicate student number:** generic `STUDENT_ONBOARDING_UNAVAILABLE`.
+    Never "already in use", and never a hint about the other Student.
+  - **Guardians:** whole-School by default; no Guardian created or linked
+    in the Campus path (§44.13).
+  - **Transaction and audit:** one transaction, audit events
+    `student.created` plus `student_enrollment.created` (which already
+    carries `campusId`).
+- **Never for a Campus actor:**
+  - attaching an existing Student (unassigned, inactive, leaver, or in
+    another Campus) through "create enrollment". That is transfer (§44.11)
+    or whole-School re-entry (§44.15).
+  - Admissions-style identity matching, which would become a cross-Campus
+    Student search.
+
+### 44.11 Campus transfer (F3)
+
+- **The named operation already exists.** `transferPlacement()` works
+  within one year and one grade:
+  - it ends the source row as `transferred` and inserts a new row;
+  - the Campus follows the target Section;
+  - it is never a `campus_id` PATCH.
+  - Lock order today: both Sections FOR UPDATE in id order → source
+    Enrollment FOR UPDATE → a conditional UPDATE → INSERT (FK KEY SHARE on
+    the Student, Campus and year).
+- **Future Campus authority:**
+  - `enrollments.manage` with BOTH the locked source placement's Campus AND
+    the target Section's Campus in scope;
+  - whole-School keeps today's behaviour;
+  - refusal is one generic envelope (no "busy elsewhere", no destination
+    detail).
+- **Missing today (P-2), required for the Campus path:**
+  - Student active, checked under lock;
+  - target Section `active`;
+  - target Campus active, share-locked through `ActiveCampus` (a transfer
+    to an inactive Campus currently yields a placement with no operational
+    Campus);
+  - the audit carrying `fromCampusId`/`toCampusId`; today it carries
+    Section ids only.
+- **Side effects (verified; no events, nothing reacts):**
+
+| Item | Effect of a cross-Campus transfer today | Contract |
+|---|---|---|
+| Section, Grade | new row; grade change refused | unchanged |
+| Elective subject enrollments | stay `active`, anchored to the `transferred` row | **owner decision:** end, re-anchor or refuse while active (F3) |
+| Attendance, marks, papers history | untouched (stored Campus / enrollment context) | never rewritten |
+| Library loans | unchanged (loan Campus frozen at checkout, §41) | return follows loan Campus |
+| Hostel residency | stays active on the source Hostel | **owner decision:** refuse a Campus-scoped transfer while active, or require whole-School (no cross-Campus boarding for Campus staff, §40.1) |
+| Transport assignment | stays active on the source route | same decision as Hostel |
+| Canteen | orders keep Outlet Campus; future orders follow eligibility | unchanged |
+| Fees/charges | untouched (charge-year attribution, LC-4) | never re-attributed (§44.24) |
+| Guardians, documents, teaching | relationship-based / not activated / Section rosters by date | unchanged |
+
+- **Concurrency (verified, no cycle today):**
+  - Eligibility consumers wait on the source Enrollment FOR UPDATE and then
+    refuse, because the new row is outside their snapshot.
+  - A future Campus transfer that also locks the Student **must take it
+    before the Sections and Enrollment**, in this order:
+    1. active year FOR SHARE;
+    2. Student FOR NO KEY UPDATE;
+    3. Sections in id order;
+    4. source Enrollment FOR UPDATE;
+    5. target Campus via `ActiveCampus`.
+  - Locking the Student after the Enrollment would deadlock against
+    Hostel/Transport `assign()`, which hold the Student FOR NO KEY UPDATE
+    before taking the eligibility Enrollment FOR SHARE.
+  - FOR UPDATE on the Student stays banned (rule 101, §40.5).
+  - No School-wide lock is introduced.
+- **Before F3 (P-4):** the owner should decide on freezing placement
+  columns, i.e. the open §35.2 item 6 (a trigger refusing UPDATE of
+  `section_id`/`campus_id`/`academic_year_id`/`grade_level_id`/`student_id`
+  on `student_enrollments`, and of `sections.campus_id` once a Section has
+  enrollments).
+
+### 44.12 Promotion and rollover (decision: whole-School in v1)
+
+- **Rollover creates target-year rows** whose Campus comes from the target
+  Section:
+  - Execution is synchronous and capped.
+  - It re-checks snapshots for drift, but **not** Student, Section or
+    Campus active status.
+  - The dry run includes inactive Students.
+  - The item path locks the source Enrollment FOR UPDATE before the target
+    Section (an inversion of the documented Section-before-Enrollment
+    order; no cycle found; F-8).
+- **No current Campus authority over future-year placement.** A future-year
+  placement is not current Campus authority, and today's Campus does not
+  confer management of next year's placement.
+- **Both keys stay whole-School.** `enrollments.rollovers.*` are
+  whole-School, and `.manage` is classed `authority`. Every rollover route
+  that also checks `enrollments.view`/`.manage` must be declared whole-School
+  if those keys are adopted (§44.19).
+
+### 44.13 Guardians
+
+**Identity** is School-wide and relationship-based, never Campus-owned:
+- 12 of 24 DDEV Guardians relate to more than one Student;
+- `GuardianStudentScope` is unchanged;
+- Guardian search, profile, contacts, status, portal invitation and
+  offboarding, account link and communication consent stay whole-School
+  under `guardians.*` (class F);
+- the Guardian name search and the contact-candidate lookup (an HMAC
+  contact-to-identity oracle) are never Campus-reachable.
+
+**Relationship mutation** (link existing, create-and-link, type and flags,
+primary, unlink) needs `students.manage` AND `guardians.manage` today:
+- It stays whole-School in v1. Its effects reach Students on other
+  Campuses: a shared Guardian, portal visibility through
+  `is_legal_guardian`, and processing-authorization evidence.
+- A Campus actor creating Guardians or attaching existing Guardians is
+  **not proposed**.
+
+**Guardian data through a Campus Student:**
+- F1 shows none.
+- An optional, purpose-minimized block (owner decision D-4) would show:
+  - relationship type;
+  - Guardian display name;
+  - `isPrimary`/`isEmergencyContact`/`isAuthorizedPickup`;
+  - **no contact value**.
+- An emergency phone for Campus staff would be a separate, explicitly
+  approved projection (possibly a new key), never `guardians.view` in
+  Campus.
+
+**Prerequisite P-1 (F-1):**
+- Today's Profile returns the decrypted Guardian contact under
+  `students.view` alone. That contradicts
+  `docs/modules/STUDENT-GUARDIAN-IDENTITY.md:472` (contact information =
+  `guardians.view`), and `StudentGuardianLinkUiTest:76` pins the current
+  behaviour.
+- It is latent today, because both holders also hold `guardians.view`.
+- It must be corrected (contact value only with `guardians.view`, and an
+  inactive primary never chosen) before any `students.view` adoption.
+
+### 44.14 Documents, custom fields, bulk work and imports
+
+- **Documents:** not activated for Students or Guardians. When activated
+  they need their own capability, classification per document, and their
+  own review. They are never Campus-adopted through `students.view`.
+- **Custom fields:** none exist. The future contract is field-level
+  classification (`safe_operational` / `sensitive` / `highly_sensitive`),
+  and a Campus projection must not show any field by default.
+- **Bulk operations:** rollover bulk decisions, closed-year placement
+  closure and rollover execution all stay whole-School. No Campus bulk
+  operation is proposed for v1.
+- **Imports:** there is no Student import. A future import stays
+  whole-School in the first SIS Campus release.
+
+### 44.15 Lifecycle: status, withdrawal, leavers and reactivation (decision: whole-School in v1)
+
+**Status writers:**
+- `StudentService::changeStatus()` sets `active`/`inactive`. It takes no
+  explicit lock, but its UPDATE row lock does conflict with eligibility's
+  FOR SHARE, so it serializes (§40.3 holds).
+- Its audit `previousStatus` is read from memory, and it audits even when
+  nothing changed (F-6).
+- Inactivation does not end placements, residency or assignments; Data
+  Health reports the result.
+- No other writer exists besides `create()`. Retention deletes rather than
+  writes.
+
+**Withdrawal, leavers and re-entry:**
+- `complete`, `withdraw` and `cancel` are terminal; re-entry is a new row.
+- All of these remove the current Campus, so they stay **whole-School**.
+  That covers status change, withdrawal, completion, cancellation,
+  closed-year closure, reactivation and re-entry.
+- A Campus "request leaver/withdrawal" workflow is a possible later
+  approval-pattern feature (§16), not proposed.
+
+**No Campus path for any Student without a current Campus:**
+- This covers new-before-placement, inactive, leaver, withdrawn, between
+  placements, future-only and history-only Students.
+- No ordinary update or enrollment path can capture them; reactivation and
+  any later placement are whole-School named operations.
+
+**Race recorded (F-5, LOW, pre-existing, whole-School path):**
+- Hostel and Transport `assign()` check `$student->isActive()` on the
+  pre-transaction model and do not re-check it under their Student lock.
+- A concurrent inactivation can therefore commit between the check and the
+  lock.
+- The Campus-scoped path is safe (the §40 guard).
+
+### 44.16 Concealment, stale pages and direct access
+
+- **Campus operational surfaces** (Directory row, overview, current
+  enrollment, F2/F3 writes): a Student or Enrollment outside the scope, or
+  with no current Campus, answers exactly as an unknown id does: 404 on
+  reads, and one generic envelope on writes. This is the convention of
+  §34 and §43.
+- **Whole-School surfaces** (full Profile, history, lifecycle, Guardians):
+  a capability refusal (403) from the whole-School floor, the same for every
+  Student, so nothing is revealed.
+- **A Student who moves out of scope:**
+  - Every Campus write re-decides the current Campus inside its transaction
+    through StudentAccess (§44.18). A stale page, a serialized Campus id or
+    a UI Campus value never authorizes anything.
+  - Once Campus A's actor sees the transfer committed, they get the
+    unknown envelope.
+- **Malformed ids:** the web `{student}` is UUID-constrained (404). The API
+  has no equivalent guard on Students routes (HR has a pinned one), so a
+  malformed id is likely a 500 (F-12, not reproduced).
+
+### 44.17 Admissions conversion (decision: WHOLE_SCHOOL_ONLY in v1)
+
+- **Conversion is one transaction under `admissions.manage` alone:**
+  1. Application FOR UPDATE;
+  2. Student create;
+  3. Guardian instruction (create, which runs a School-wide contact-match
+     oracle, or link-existing, which needs a School-wide Guardian pick);
+  4. enroll (no ActiveCampus re-check);
+  5. converted;
+  6. fee selection.
+- **Why it stays whole-School:** a Campus conversion would need
+  - generic duplicate and contact-match semantics;
+  - no School-wide Guardian pick;
+  - an ActiveCampus share lock;
+  - a decision that `admissions.manage` alone may create a Student (today's
+    trusted seam) when used from a Campus.
+- **Re-evaluate as F4** once F2 onboarding exists (it is the same shape:
+  new Student plus active-year placement in an in-scope Campus). The
+  Campus-scoped part would be "convert into a Section of the application's
+  own Campus" with Guardian creation from application data only. That may
+  require a split or a whole-School Guardian step.
+
+### 44.18 Proposed `StudentAccess` (Students-owned; not built)
+
+One access class composes the §38 and §40 foundations, so controllers never
+compute Campus. Responsibilities:
+- `restrictToScope(Builder<Student>, School, CampusScope)` delegates to
+  `restrictToOperationalCampus()` (SQL EXISTS; whole-School is a no-op;
+  none matches nothing).
+- `restrictEnrollmentsToScope(Builder<StudentEnrollment>, …)` returns only
+  current in-scope placements for a Campus actor.
+- `findInScope(School, CampusScope, studentId)` returns the Student, or the
+  unknown-envelope 404.
+- `lockedWriteTarget(School, CampusScope, studentId)` runs inside the write
+  transaction. It takes the active year FOR SHARE, then the Student FOR NO
+  KEY UPDATE, then the current Enrollment FOR SHARE, then `ActiveCampus`,
+  and returns the locked Student plus the current placement only when the
+  Campus is in scope; otherwise a generic refusal. It extends §40's order
+  with an exclusive Student lock in the same position.
+- `lockedTransferTarget(…, sourceEnrollmentId, targetSectionId)` applies
+  §44.11's order and the dual-scope rule.
+
+Rules for it:
+- It never carries an `authorized` flag or a Campus id across a request or
+  job.
+- `CampusScope` comes only from the resolver.
+- An architecture guard should pin that SIS controllers never call the
+  resolver, `currentFor`, or Enrollment storage for authorization.
+
+### 44.19 C6 impact and declared whole-School operations (proposed, not declared)
+
+**C6 candidates:**
+
+| Wave | Route(s) | Capability | Campus source | Restriction | Write re-check |
+|---|---|---|---|---|---|
+| F1 | `app.students.index`, API `students.index` | `students.view` | current placement | `StudentAccess::restrictToScope` | — |
+| F1 | new `app.students.overview` | `students.view` (+ `enrollments.view` for the placement block) | current placement | `findInScope` (404) | — |
+| F1 | `app.enrollments.index`, API `enrollments.index`, `enrollments.show`, `students.enrollments.current` | `enrollments.view` | the row's Campus, current rows only | `restrictEnrollmentsToScope` | — |
+| F2 | `app.students.edit/update`, API `students.update` | `students.manage` | current placement | `findInScope` | `lockedWriteTarget`; names only |
+| F2 | new onboarding (web first) | `students.manage` + `enrollments.manage` | target Section | in-scope Section options | ActiveCampus + active year, generic |
+| F3 | `app.enrollments.transfer.create/store`, API `enrollments.transfer` | `enrollments.manage` | source AND target | `lockedTransferTarget` | dual scope under locks |
+
+**Whole-School operations to declare when a key is adopted** (exact route +
+capability + reason, `CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS`):
+- **`students.view`:**
+  - `app.students.show` (full Profile: date of birth, history, Guardians,
+    account link);
+  - `app.students.history`;
+  - API `students.show` (date of birth);
+  - API `students.guardians.index` (relationships);
+  - the converted-Student link at `AdmissionApplicationController:202` must
+    switch to the whole-School check or to the overview.
+- **`enrollments.view`:**
+  - API `students.enrollments.index` (history);
+  - all 26 rollover routes, which check it together with the rollover
+    keys, plus the `data-health` hub and its Student checks (extend
+    `WHOLE_SCHOOL_HUBS['data-health']`).
+- **`students.manage`:**
+  - `app.students.create/store`, API `students.store` (standalone create);
+  - `app.students.status`, API `students.status`;
+  - the 3 account-link routes;
+  - the 8 web and 5 API Guardian-relationship routes (also gated on
+    `guardians.manage`).
+- **`enrollments.manage`:**
+  - `app.students.enrollments.create/store`, API `students.enrollments.store`
+    (existing-Student enroll = capture);
+  - complete, withdraw and cancel (web and API);
+  - the 2 closed-year placement routes;
+  - every rollover write.
+
+### 44.20 Security and privacy findings (recorded, NOT fixed; each needs owner approval)
+
+**F-1 — MEDIUM, latent, a prerequisite for F1.** The Profile shows a
+decrypted Guardian contact under `students.view` alone, and may choose an
+inactive primary contact (§44.13).
+
+**F-2 — MEDIUM, a prerequisite for F2/F3 Campus paths.** `enroll()`,
+`transferPlacement()`, rollover and conversion check neither the active
+Student, the target Section, nor ActiveCampus. This is documented as a
+whole-School deferral.
+
+**F-3 — MEDIUM, a prerequisite for F2.** Services authorize nothing, so
+`enroll()` on an existing Student is a capture path for any future Campus
+caller.
+
+**F-4 — LOW–MEDIUM, owner decision for F3.** A cross-Campus transfer leaves
+active electives anchored to the transferred row, and leaves Hostel and
+Transport assignments on the source Campus. No event is emitted. The
+transfer audit carries no Campus ids.
+
+**F-5 — LOW, pre-existing.** The whole-School Hostel/Transport `assign()`
+student-active check is not re-checked under the lock (§44.15).
+
+**F-6 — LOW.** `changeStatus()` audits a stale `previousStatus` and audits
+no-ops. The same applies to Guardian `changeStatus()` and to
+`AcademicYearService::close()`.
+
+**F-7 — LOW.** `Student::$fillable` (and `Guardian::$fillable`) include
+`status` and `school_id`; only controller whitelists protect them. This is
+the rule 97 pattern for Schools.
+
+**F-8 — LOW.** Rollover item execution:
+- locks the source Enrollment before the target Section, with an unlocked
+  target-Section validity read;
+- the dry run admits inactive Students.
+No deadlock cycle was found. While the source year is active, the
+FOR UPDATE on the source row blocks eligibility consumers for that Student
+for the item transaction.
+
+**F-9 — LOW.** `DuplicateStudentNumberException` echoes the number (an
+existence oracle). The web Students page masks it; the Admissions web
+conversion passes it through.
+
+**F-10 — LOW (R8 continued).** These LIKE searches are unescaped:
+- the API Students index;
+- the web and API Guardian index;
+- the Student "add Guardian" search;
+- the Communications audience search;
+- the account-link searches.
+
+**F-11 — LOW (R8 continued).**
+- The `GuardianStudentScope` docblock still claims withdrawn/transferred
+  exclusion.
+- `setPrimary` after a concurrent unlink demotes the old primary and
+  promotes nothing.
+- Web `linkNew` uses two transactions, so it can leave an orphan Guardian.
+- Contact `deactivate` is not transactional.
+- Candidates are not filtered by `is_active`.
+
+**F-12 — LOW, not reproduced.** The Students API has no malformed-UUID
+guard.
+
+**Verified safe:**
+- RLS and SchoolScope on every SIS table, with no BYPASSRLS path.
+- Status, transfer, Campus and year writers all serialize against
+  `lockOperationalOn()` (§40.3 confirmed).
+- No SIS job carries authority.
+- No audit row carries a name, date of birth or contact value.
+- `student_enrollment.created` and `admission_application.converted`
+  already carry `campusId`.
+
+### 44.21 Role impact
+
+**Holders:**
+- `school_admin`: all 14 keys; never Campus-scopable (access
+  administration).
+- `principal`: 13 keys (not `enrollments.rollovers.manage`); Campus-scopable.
+- `admissions_officer`: only `admissions.*`.
+- No other role holds a Student key: front_office, teacher, accountant,
+  cashier, librarian, hostel_warden, transport_coordinator,
+  canteen_operator, stores_officer, hr_officer and
+  communications_coordinator all hold none. No registrar, class-teacher or
+  academic-coordinator role exists.
+
+**What `principal@Campus` would gain:**
+
+| Family | Gain |
+|---|---|
+| Directory and overview | F1: in-scope current Students |
+| Current enrollment read | F1 |
+| Identity edits | F2: names only |
+| Onboarding | F2: new Students into in-scope Sections |
+| Transfers | F3: only between in-scope Campuses |
+| Enrollment history | nothing (declared whole-School) |
+| Lifecycle (status, withdraw, complete, cancel, reactivate) | nothing |
+| Rollover | nothing |
+| Guardians | nothing; the optional minimized block only if D-4 is approved |
+| Processing authorizations | nothing |
+| Documents | nothing |
+| Bulk work | nothing |
+
+- Each wave must state this in `CampusAdoptionImpactTest`. F2/F3 writes
+  are high-risk (children data mutation) and need explicit owner approval.
+- **No unexpected activation.** No other Campus-scopable role (front
+  office, admissions officer, warden, librarian, transport, canteen,
+  stores, HR officer) gains any Student authority from F1–F3, because none
+  holds the keys. The new holders after adoption are principal only.
+- **`school_admin` is unchanged** (whole-School).
+
+### 44.22 Data audit (DDEV, 2026-10-20)
+
+- **Population:** 2 Schools with one Campus each (the demo multi-Campus case
+  is two Schools). 39 Students, all active. 36 have a current placement
+  (2026-27, Main Campus); 3 annexe Students have no enrollment at all.
+- **No lifecycle history yet:**
+  - no prior-year or draft-year rows;
+  - no transfers;
+  - no Student with more than one Campus in their history;
+  - no inactive Students;
+  - no inconsistent states (no inactive Student with an active placement,
+    no active placement in a closed year, no unknown statuses).
+- **Guardians:** every placed Student has 2 Guardians (mother and father,
+  all flags true); 12 of 24 Guardians relate to more than one Student.
+  There are 48 active contacts and 2 Student account links.
+- **Other data:** no Student documents, no processing authorizations, one
+  draft rollover plan, 12 subject enrollments.
+- **Consequence:** F1–F3 need seeded multi-Campus, transfer and leaver
+  fixtures in their own tests. The DDEV demo alone does not exercise them.
+
+### 44.23 Performance, tenancy and RLS
+
+- **Query plan.** On DDEV, the Campus Directory predicate (Student EXISTS a
+  current active-year placement on an active in-scope Campus, ordered by
+  name, limit 25) plans as a semi-join that uses
+  `student_enrollments_one_active_per_student_year`. It is one bounded
+  query, with no per-Student resolver call.
+- **Indexes.** The data is too small to justify one. F1 must `EXPLAIN` at a
+  realistic scale (thousands of Students across several Campuses) before
+  proposing any index, for example a partial `(academic_year_id, campus_id)
+  WHERE status = 'active'`.
+- **Tenancy is unchanged.** School stays the tenant: School RLS AND Campus
+  application scope, no Campus RLS, no organisation or branch id, no
+  admin or BYPASSRLS runtime path. Every StudentAccess query carries an
+  explicit `school_id` predicate.
+
+### 44.24 Fees and Payments dependency
+
+**Before a Fees/Payments Campus phase, SIS must have:**
+- F1 (the canonical StudentAccess read restriction, so a Finance Student
+  view can compose it);
+- F-1 fixed;
+- the transfer contract frozen (F3 or at least §44.11's lock order).
+
+**Finance Campus decisions never use the current Student Campus.** They use
+the record's own context:
+- charges, concessions, adjustments, payments, allocations and balances
+  use charge-year attribution (`campusAttribution()`, LC-4) or the stored
+  run, assessment or structure Campus;
+- leavers keep historical finance attribution;
+- an ambiguous attribution means whole-School only;
+- a transfer never re-attributes a charge or payment;
+- the ledger and journals stay whole-School.
+
+### 44.25 Reference parity (for ORG.9; nothing copied)
+
+The reference workbook and screenshots name these functions: Student
+inactivate/reactivate, branch transfer, bulk branch transfer, transfer
+certificates and Student directories. These parity questions are open for
+ORG.9:
+- whether a bulk Campus transfer is wanted (v1: no);
+- whether a transfer or leaving certificate is a document type (Documents
+  are not activated);
+- whether Campus staff should *request* a leaver or reactivation for
+  whole-School approval.
+
+Reference Branch role permissions are not adopted.
+
+### 44.26 LC-5–LC-10
+
+All stay paused by owner direction. Mapping:
+
+| Slice | SIS Campus impact |
+|---|---|
+| LC-5 (applicant edit ADM-14, undo deactivation) | Applicant identity edit is a declared whole-School Admissions op (§39); reactivation in Campus-adopted domains must keep their ActiveCampus and Campus-fixity rules. Independent of SIS. |
+| LC-6 (attendance daily) | ATT-07 per-Student history follows stored record Campus (§37). Independent. |
+| LC-7 (Data Health exits) | Whole-School hub; touches §44.19's hub declaration. Independent. |
+| LC-8 (ENR-01 Section pickers, STU-14 inactivate confirmation) | Touches SIS surfaces that F2/F3 change. ENR-01's restriction of transfer targets to the same year and grade is compatible with F3; do it before F3, or fold it into F3. |
+| LC-9 (operations edits) | Each domain's existing access class applies. Independent. |
+| LC-10 (responsive) | Independent. |
+
+None needs to wait for SIS Campus authorization. Their order is the owner's
+choice.
+
+### 44.27 Proposed canonical SIS Campus contract (summary)
+
+| Surface | Contract |
+|---|---|
+| Student Directory | Campus-aware (current in-scope only, SQL), minimal projection (§44.5) |
+| Operational overview | new Campus-safe page, current placement only (§44.6) |
+| Full Profile | whole-School (declared) |
+| Current enrollment | Campus-visible when in scope |
+| Historical enrollment | whole-School |
+| Identity edits | names only, current Campus in scope, under lock; number, date of birth and status whole-School |
+| Creation | Campus onboarding = atomic new Student + active-year placement in scope; standalone create whole-School; generic duplicate |
+| Existing-Student enrollment | whole-School (capture) |
+| Campus transfer | named op, source AND destination in scope, locked, generic refusal, side-effect decisions (§44.11) |
+| Promotion and rollover | whole-School |
+| Withdrawal, leaver, status, reactivation, re-entry | whole-School |
+| Guardians | School-wide identity; relationship and contact whole-School; optional minimized block (D-4) |
+| Documents and custom fields | not activated / none; future field-classified and separately gated |
+| Bulk work and imports | whole-School |
+| Processing authorizations | whole-School, `mfa`, legal/privacy |
+
+### 44.28 Recommended waves and the owner decisions they need
+
+- **ORG.7F-1 (recommended next):**
+  - fix F-1 and F-12;
+  - add StudentAccess (read half);
+  - adopt `students.view` + `enrollments.view` for the Campus Directory,
+    the overview and current enrollment reads;
+  - declare whole-School operations (§44.19) and Campus nav (the
+    all-adopted-only rule);
+  - make the impact statement (principal@Campus);
+  - scale EXPLAIN.
+  - No writes.
+- **ORG.7F-2:**
+  - fix F-2 and F-3 for the Campus paths;
+  - add StudentAccess `lockedWriteTarget`;
+  - name edits;
+  - atomic Campus onboarding (web first, like HR §43.5);
+  - adopt `students.manage` and `enrollments.manage` with every non-adopted
+    operation declared;
+  - fix F-7 and F-9 on the touched paths.
+- **ORG.7F-3:**
+  - P-4 (placement freeze, owner decision);
+  - the Campus transfer (dual scope, §44.11 lock order, Campus ids in the
+    audit);
+  - the F-4 side-effect decisions;
+  - lifecycle stays whole-School unless separately approved.
+- **ORG.7F-4 (optional):** Campus Admissions conversion, only after F2
+  proves onboarding, with generic Guardian and duplicate semantics.
+
+**Owner decisions needed:**
+- D-1: is date of birth on the Campus overview? (default no)
+- D-2: are names Campus-editable? (default yes, F2)
+- D-3: is the student number caller-supplied or server-generated on Campus
+  onboarding?
+- D-4: is there a minimized Guardian block on the overview, and is any
+  contact value shown?
+- D-5: Hostel, Transport and elective handling on a Campus-scoped transfer.
+- D-6: the placement-column freeze (P-4).
+- D-7: whether principal@Campus may gain F2/F3 writes (high-risk).
+
+Implementation of any wave needs explicit owner approval. The regression
+counter is unchanged (0/5); this audit is documentation-only.
