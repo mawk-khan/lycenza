@@ -9,6 +9,7 @@ use App\Models\School;
 use App\Support\Authorization\AuthorizesCapability;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -31,48 +32,16 @@ class StudentController extends Controller
 {
     use AuthorizesCapability;
 
-    public function index(Request $request, School $school): JsonResponse
-    {
-        $this->authorizeCapability('students.view', $school);
-
-        $validated = $request->validate([
-            'student_number' => ['sometimes', 'string', 'max:255'],
-            'name' => ['sometimes', 'string', 'max:255'],
-            'status' => ['sometimes', Rule::in(['active', 'inactive'])],
-            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
-        ]);
-
-        $query = Student::query()->orderBy('first_name')->orderBy('last_name');
-
-        if (isset($validated['student_number'])) {
-            $query->where('student_number', $validated['student_number']);
-        }
-
-        if (isset($validated['name'])) {
-            $term = '%'.$validated['name'].'%';
-            $query->where(fn ($q) => $q->where('first_name', 'ilike', $term)->orWhere('last_name', 'ilike', $term));
-        }
-
-        if (isset($validated['status'])) {
-            $query->where('status', $validated['status']);
-        }
-
-        $paginator = $query->paginate($validated['per_page'] ?? 25);
-
-        return response()->json([
-            'data' => collect($paginator->items())->map(fn (Student $s) => $this->presentSummary($s))->all(),
-            'meta' => [
-                'page' => $paginator->currentPage(),
-                'perPage' => $paginator->perPage(),
-                'total' => $paginator->total(),
-            ],
-        ]);
-    }
-
+    /**
+     * ORG.7F-1 (ADR 0076 §45): the full detail (date of birth included) is a
+     * declared whole-School-only operation -- the route carries the ordinary
+     * `capability:students.view` floor, which a Campus-scoped grant never
+     * satisfies. The list is Campus-aware (StudentDirectoryController).
+     */
     public function show(School $school, string $student): JsonResponse
     {
-        $this->authorizeCapability('students.view', $school);
 
+        abort_if(! Str::isUuid($student), 404);
         $model = Student::query()->findOrFail($student);
 
         return response()->json(['data' => $this->presentDetail($model)]);
@@ -106,6 +75,7 @@ class StudentController extends Controller
     {
         $this->authorizeCapability('students.manage', $school);
 
+        abort_if(! Str::isUuid($student), 404);
         $model = Student::query()->findOrFail($student);
 
         $validated = $request->validate([
@@ -125,6 +95,7 @@ class StudentController extends Controller
     {
         $this->authorizeCapability('students.manage', $school);
 
+        abort_if(! Str::isUuid($student), 404);
         $model = Student::query()->findOrFail($student);
 
         $validated = $request->validate([

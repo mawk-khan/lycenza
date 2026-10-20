@@ -91,9 +91,9 @@ class AuthorizationCoverageGuardSelfTest extends TestCase
         // A C6 entry on an unadopted capability, on an action that resolves no
         // CampusScope and never calls its access method, is caught from the code.
         Route::middleware(['web', 'auth', 'school-context'])->get('/app/__org7a-wrong', [SchoolDomainController::class, 'index'])->name('org7a.probe.wrong');
-        $evidence = implode("\n", $this->guard([Coverage::campus('org7a.probe.wrong', 'students.view', VisitorVisitAccess::class, 'visits')])->evidence());
-        $this->assertStringContainsString('[org7a.probe.wrong] C6 names [students.view], which is not adopted for Campus scope', $evidence);
-        $this->assertStringContainsString("C6 does not resolve the actor's CampusScope for [students.view]", $evidence);
+        $evidence = implode("\n", $this->guard([Coverage::campus('org7a.probe.wrong', 'guardians.view', VisitorVisitAccess::class, 'visits')])->evidence());
+        $this->assertStringContainsString('[org7a.probe.wrong] C6 names [guardians.view], which is not adopted for Campus scope', $evidence);
+        $this->assertStringContainsString("C6 does not resolve the actor's CampusScope for [guardians.view]", $evidence);
         $this->assertStringContainsString('[org7a.probe.wrong] C6 never calls visits() of VisitorVisitAccess', $evidence);
     }
 }

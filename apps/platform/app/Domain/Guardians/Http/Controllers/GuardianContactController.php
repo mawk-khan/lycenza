@@ -12,6 +12,7 @@ use App\Support\Authorization\AuthorizesCapability;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
@@ -37,6 +38,7 @@ class GuardianContactController extends Controller
     {
         $this->authorizeCapability('guardians.manage', $school);
 
+        abort_if(! Str::isUuid($guardian), 404);
         $model = Guardian::query()->findOrFail($guardian);
 
         $validated = $request->validate([
@@ -71,6 +73,7 @@ class GuardianContactController extends Controller
     {
         $this->authorizeCapability('guardians.manage', $school);
 
+        abort_if(! Str::isUuid($contact), 404);
         $model = GuardianContact::query()->findOrFail($contact);
 
         $updated = $service->setPrimary($model, $request->user());
@@ -82,6 +85,7 @@ class GuardianContactController extends Controller
     {
         $this->authorizeCapability('guardians.manage', $school);
 
+        abort_if(! Str::isUuid($contact), 404);
         $model = GuardianContact::query()->findOrFail($contact);
 
         $updated = $service->deactivate($model, $request->user());

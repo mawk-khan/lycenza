@@ -998,6 +998,11 @@ is a thin wrapper over `StudentGuardianRelationshipService` (Phase
   relationship for one Student; requires only `students.view` (reading
   a Student's own relationships is part of reading that Student, not a
   Guardian-management concern).
+  It carries no contact value. ORG.7F-1 (ADR 0076 §45): the route is a
+  declared whole-School-only operation, so a Campus-scoped
+  `students.view` grant never reaches it, and the web Student Profile now
+  sends a Guardian's contact value only to a `guardians.view` holder
+  (finding F-1; only an active contact is ever shown).
 - **Link** (`POST .../students/{student}/guardians`) —
   `guardian_id` (`Rule::exists` scoped to the current School, see
   above), `relationship_type` (`Rule::enum(RelationshipType::class)`),

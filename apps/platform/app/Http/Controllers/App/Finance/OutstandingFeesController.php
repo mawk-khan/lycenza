@@ -8,13 +8,13 @@ use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\Fees\Application\ChargeCollectionFact;
 use App\Domain\Payments\Application\Collections\OutstandingFeeRow;
 use App\Domain\Payments\Application\Collections\OutstandingFeesReadService;
+use App\Domain\Students\Application\StudentAccess;
 use App\Domain\Students\Application\StudentEnrollmentReadService;
 use App\Domain\Students\Application\StudentSearch;
 use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Support\Authorization\AuthorizesCapability;
-use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -41,12 +41,13 @@ class OutstandingFeesController extends Controller
     /** LC-4 (SB-03b): the Campus filter's value for obligations whose Campus cannot be determined. */
     public const string CAMPUS_UNAVAILABLE = 'unavailable';
 
-    public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities, OutstandingFeesReadService $outstanding, StudentEnrollmentReadService $placements): Response
+    public function index(Request $request, TenantContext $context, StudentAccess $students, OutstandingFeesReadService $outstanding, StudentEnrollmentReadService $placements): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('finance.charges.view', $school);
         $this->authorizeCapability('finance.payments.view', $school);
-        $canSeeClass = $capabilities->canInSchool($context->actor(), 'enrollments.view', $school);
+        // ORG.7F-1: a School-wide Finance list shows classes only to a whole-School enrollments.view holder.
+        $canSeeClass = $students->holdsWholeSchool($context->actor(), 'enrollments.view', $school);
 
         $validated = $request->validate([
             'status' => ['sometimes', Rule::in([OutstandingFeesReadService::OUTSTANDING, OutstandingFeesReadService::OVERDUE])],

@@ -257,6 +257,19 @@ class StudentEnrollmentReadService
      */
     public function directory(array $filters = [], int $perPage = 25): LengthAwarePaginator
     {
+        return $this->directoryQuery($filters)->paginate($perPage);
+    }
+
+    /**
+     * ORG.7F-1 (ADR 0076 §45): the directory's filtered query, unpaginated,
+     * so StudentAccess can apply a Campus actor's scope in SQL before the
+     * page is read.
+     *
+     * @param  array{academic_year_id?: string, campus_id?: string, grade_level_id?: string, section_id?: string, status?: string, student_number?: string, student_name?: string, roll_number?: string}  $filters
+     * @return Builder<StudentEnrollment>
+     */
+    public function directoryQuery(array $filters = []): Builder
+    {
         $query = StudentEnrollment::query()
             ->with([
                 'student:id,school_id,student_number,first_name,middle_name,last_name,status',
@@ -291,6 +304,6 @@ class StudentEnrollmentReadService
             $query->whereHas('student', fn ($q) => StudentSearch::name($q, $filters['student_name']));
         }
 
-        return $query->paginate($perPage);
+        return $query;
     }
 }

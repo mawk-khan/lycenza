@@ -11,6 +11,7 @@ use App\Http\Controllers\Controller;
 use App\Models\School;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -46,6 +47,7 @@ class EnrollmentRolloverMappingController extends Controller
      */
     public function store(Request $request, School $school, string $rollover, EnrollmentRolloverPlanService $service): JsonResponse
     {
+        abort_if(! Str::isUuid($rollover), 404);
         $plan = EnrollmentRolloverPlan::query()->findOrFail($rollover);
 
         $validated = $request->validate([
@@ -78,7 +80,9 @@ class EnrollmentRolloverMappingController extends Controller
      */
     public function update(Request $request, School $school, string $rollover, string $mapping, EnrollmentRolloverPlanService $service): JsonResponse
     {
+        abort_if(! Str::isUuid($rollover), 404);
         $plan = EnrollmentRolloverPlan::query()->findOrFail($rollover);
+        abort_if(! Str::isUuid($mapping), 404);
         $existing = EnrollmentRolloverMapping::query()->where('plan_id', $plan->id)->findOrFail($mapping);
 
         $validated = $request->validate([

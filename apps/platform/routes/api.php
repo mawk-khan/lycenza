@@ -98,11 +98,13 @@ use App\Domain\Payroll\Statutory\Http\Controllers\StatutoryRuleStatusController;
 use App\Domain\Payroll\Statutory\Http\Controllers\StatutoryTaxProfileController;
 use App\Domain\StaffAttendance\Http\Controllers\MyStaffAttendanceController;
 use App\Domain\StaffAttendance\Http\Controllers\StaffAttendanceController;
+use App\Domain\Students\Http\Controllers\EnrollmentDirectoryController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverItemController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverMappingController;
 use App\Domain\Students\Http\Controllers\EnrollmentRolloverSubjectMappingController;
 use App\Domain\Students\Http\Controllers\StudentController;
+use App\Domain\Students\Http\Controllers\StudentDirectoryController;
 use App\Domain\Students\Http\Controllers\StudentEnrollmentController;
 use App\Domain\Students\Http\Controllers\StudentSubjectEnrollmentController;
 use App\Domain\Syllabus\Http\Controllers\SyllabusUnitController;
@@ -385,12 +387,17 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             // AcademicTermController's established "nested for
             // index/store, flat for singular actions" split.
 
-            Route::get('/students', [StudentController::class, 'index'])
+            // ORG.7F-1 (ADR 0076 §45): the list is Campus-aware (StudentAccess);
+            // the detail and a Student's Guardian relationships carry the
+            // whole-School `capability:students.view` floor (declared
+            // whole-School-only operations).
+            Route::get('/students', [StudentDirectoryController::class, 'index'])
                 ->name('schools.students.index');
             Route::post('/students', [StudentController::class, 'store'])
                 ->middleware(['capability:students.manage', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.students.store');
             Route::get('/students/{student}', [StudentController::class, 'show'])
+                ->middleware('capability:students.view')
                 ->name('schools.students.show');
             Route::patch('/students/{student}', [StudentController::class, 'update'])
                 ->middleware(['capability:students.manage', 'throttle:school-api-mutations'])
@@ -400,6 +407,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->name('schools.students.status');
 
             Route::get('/students/{student}/guardians', [StudentGuardianRelationshipController::class, 'index'])
+                ->middleware('capability:students.view')
                 ->name('schools.students.guardians.index');
             // Both students.manage AND guardians.manage -- the
             // operation mutates both domain identities' relationship at
@@ -477,9 +485,13 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             // split StudentGuardianRelationshipController/RoomController/
             // AcademicTermController already established above.
 
-            Route::get('/enrollments', [StudentEnrollmentController::class, 'index'])
+            // ORG.7F-1 (ADR 0076 §45): directory, detail and current placement
+            // are Campus-aware (EnrollmentDirectoryController); a Student's
+            // full history carries the whole-School `capability:enrollments.view`
+            // floor (a declared whole-School-only operation).
+            Route::get('/enrollments', [EnrollmentDirectoryController::class, 'index'])
                 ->name('schools.enrollments.index');
-            Route::get('/enrollments/{enrollment}', [StudentEnrollmentController::class, 'show'])
+            Route::get('/enrollments/{enrollment}', [EnrollmentDirectoryController::class, 'show'])
                 ->name('schools.enrollments.show');
             Route::post('/enrollments/{enrollment}/complete', [StudentEnrollmentController::class, 'complete'])
                 ->middleware(['capability:enrollments.manage', 'throttle:school-api-mutations', 'idempotent'])
@@ -495,8 +507,9 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->name('schools.enrollments.transfer');
 
             Route::get('/students/{student}/enrollments', [StudentEnrollmentController::class, 'historyForStudent'])
+                ->middleware('capability:enrollments.view')
                 ->name('schools.students.enrollments.index');
-            Route::get('/students/{student}/enrollments/current', [StudentEnrollmentController::class, 'currentForStudent'])
+            Route::get('/students/{student}/enrollments/current', [EnrollmentDirectoryController::class, 'currentForStudent'])
                 ->name('schools.students.enrollments.current');
             Route::post('/students/{student}/enrollments', [StudentEnrollmentController::class, 'store'])
                 ->middleware(['capability:enrollments.manage', 'throttle:school-api-mutations', 'idempotent'])
@@ -833,15 +846,20 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             // under the Plan specifically so nested-ownership can be
             // verified against the ROUTE's Plan, not merely the current
             // School.
+            // ORG.7F-1 (ADR 0076 §45): rollover reads are declared whole-School-only
+            // operations of the adopted enrollments.view.
             Route::get('/enrollment-rollovers', [EnrollmentRolloverController::class, 'index'])
+                ->middleware(['capability:enrollments.view', 'capability:enrollments.rollovers.view'])
                 ->name('schools.enrollment-rollovers.index');
             Route::post('/enrollment-rollovers', [EnrollmentRolloverController::class, 'store'])
                 ->middleware(['capability:enrollments.manage', 'capability:enrollments.rollovers.manage', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.enrollment-rollovers.store');
             Route::get('/enrollment-rollovers/{rollover}', [EnrollmentRolloverController::class, 'show'])
+                ->middleware(['capability:enrollments.view', 'capability:enrollments.rollovers.view'])
                 ->name('schools.enrollment-rollovers.show');
 
             Route::get('/enrollment-rollovers/{rollover}/items', [EnrollmentRolloverItemController::class, 'index'])
+                ->middleware(['capability:enrollments.view', 'capability:enrollments.rollovers.view'])
                 ->name('schools.enrollment-rollovers.items.index');
             Route::patch('/enrollment-rollovers/{rollover}/items/{item}', [EnrollmentRolloverItemController::class, 'update'])
                 ->middleware(['capability:enrollments.manage', 'capability:enrollments.rollovers.manage', 'throttle:school-api-mutations', 'idempotent'])

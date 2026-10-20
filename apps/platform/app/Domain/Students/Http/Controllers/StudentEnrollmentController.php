@@ -15,6 +15,7 @@ use App\Models\School;
 use App\Support\Authorization\AuthorizesCapability;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -53,56 +54,20 @@ use Illuminate\Validation\Rule;
 class StudentEnrollmentController extends Controller
 {
     use AuthorizesCapability;
-
-    // --- Directory / detail --------------------------------------------
-
-    public function index(Request $request, School $school, StudentEnrollmentReadService $reads): JsonResponse
-    {
-        $this->authorizeCapability('enrollments.view', $school);
-
-        $validated = $request->validate([
-            'academic_year_id' => ['sometimes', 'uuid'],
-            'campus_id' => ['sometimes', 'uuid'],
-            'grade_level_id' => ['sometimes', 'uuid'],
-            'section_id' => ['sometimes', 'uuid'],
-            'status' => ['sometimes', Rule::in(['active', 'completed', 'withdrawn', 'transferred', 'cancelled'])],
-            'student_number' => ['sometimes', 'string', 'max:255'],
-            'student_name' => ['sometimes', 'string', 'max:255'],
-            'roll_number' => ['sometimes', 'string', 'max:255'],
-            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
-        ]);
-
-        $perPage = $validated['per_page'] ?? 25;
-        $filters = collect($validated)->except('per_page')->all();
-
-        $paginator = $reads->directory($filters, $perPage);
-
-        return response()->json([
-            'data' => collect($paginator->items())->map(fn (StudentEnrollment $e) => $this->presentSummary($e))->all(),
-            'meta' => [
-                'page' => $paginator->currentPage(),
-                'perPage' => $paginator->perPage(),
-                'total' => $paginator->total(),
-            ],
-        ]);
-    }
-
-    public function show(School $school, string $enrollment, StudentEnrollmentReadService $reads): JsonResponse
-    {
-        $this->authorizeCapability('enrollments.view', $school);
-
-        $model = $reads->detail($enrollment);
-        abort_if($model === null, 404);
-
-        return response()->json(['data' => $this->presentDetail($model)]);
-    }
+    use PresentsStudentEnrollment;
 
     // --- Per-Student reads ------------------------------------------------
 
+    /**
+     * ORG.7F-1 (ADR 0076 §45): a Student's FULL placement history is a
+     * declared whole-School-only operation -- the route carries the ordinary
+     * `capability:enrollments.view` floor, which a Campus-scoped grant never
+     * satisfies. The directory, detail and current-placement reads are
+     * Campus-aware (EnrollmentDirectoryController).
+     */
     public function historyForStudent(School $school, string $student, StudentEnrollmentReadService $reads): JsonResponse
     {
-        $this->authorizeCapability('enrollments.view', $school);
-
+        abort_if(! Str::isUuid($student), 404);
         $studentModel = Student::query()->findOrFail($student);
 
         $history = $reads->historyFor($studentModel)->each(
@@ -110,28 +75,6 @@ class StudentEnrollmentController extends Controller
         );
 
         return response()->json(['data' => $history->map(fn (StudentEnrollment $e) => $this->presentDetail($e))->values()->all()]);
-    }
-
-    public function currentForStudent(Request $request, School $school, string $student, StudentEnrollmentReadService $reads): JsonResponse
-    {
-        $this->authorizeCapability('enrollments.view', $school);
-
-        $studentModel = Student::query()->findOrFail($student);
-
-        $validated = $request->validate([
-            'academic_year_id' => ['sometimes', 'uuid'],
-        ]);
-
-        // A foreign-School academic_year_id 404s exactly like a random
-        // UUID (SchoolScope/RLS), never silently falling back to the
-        // School's own currently-active year -- CLAUDE.md rule 36.
-        $academicYear = isset($validated['academic_year_id'])
-            ? AcademicYear::query()->findOrFail($validated['academic_year_id'])
-            : null;
-
-        $current = $reads->currentFor($studentModel, $academicYear)?->setRelation('student', $studentModel);
-
-        return response()->json(['data' => $current === null ? null : $this->presentDetail($current)]);
     }
 
     // --- Create -------------------------------------------------------
@@ -146,6 +89,7 @@ class StudentEnrollmentController extends Controller
     {
         $this->authorizeCapability('enrollments.manage', $school);
 
+        abort_if(! Str::isUuid($student), 404);
         $studentModel = Student::query()->findOrFail($student);
 
         $validated = $request->validate([
@@ -168,6 +112,7 @@ class StudentEnrollmentController extends Controller
     {
         $this->authorizeCapability('enrollments.manage', $school);
 
+        abort_if(! Str::isUuid($enrollment), 404);
         $model = StudentEnrollment::query()->findOrFail($enrollment);
 
         $validated = $request->validate(['ends_on' => ['required', 'date']]);
@@ -181,6 +126,7 @@ class StudentEnrollmentController extends Controller
     {
         $this->authorizeCapability('enrollments.manage', $school);
 
+        abort_if(! Str::isUuid($enrollment), 404);
         $model = StudentEnrollment::query()->findOrFail($enrollment);
 
         $validated = $request->validate(['ends_on' => ['required', 'date']]);
@@ -194,6 +140,7 @@ class StudentEnrollmentController extends Controller
     {
         $this->authorizeCapability('enrollments.manage', $school);
 
+        abort_if(! Str::isUuid($enrollment), 404);
         $model = StudentEnrollment::query()->findOrFail($enrollment);
 
         $validated = $request->validate(['ends_on' => ['required', 'date']]);
@@ -215,6 +162,7 @@ class StudentEnrollmentController extends Controller
     {
         $this->authorizeCapability('enrollments.manage', $school);
 
+        abort_if(! Str::isUuid($enrollment), 404);
         $model = StudentEnrollment::query()->findOrFail($enrollment);
 
         $validated = $request->validate([
@@ -228,62 +176,5 @@ class StudentEnrollmentController extends Controller
         $transferred = $service->transferPlacement($model, $targetSection, $validated['roll_number'], $validated['effective_date'], $request->user());
 
         return response()->json(['data' => $this->presentDetail($transferred->load(['student', 'academicYear', 'campus', 'gradeLevel', 'section']))], 201);
-    }
-
-    // --- Presentation -----------------------------------------------------
-
-    /**
-     * Deliberately excludes `dateOfBirth`/Guardian PII/encrypted
-     * contact values/lookup hashes -- the Enrollment API operates on
-     * academic placement only (CLAUDE.md section 12/49). Used for both
-     * directory rows and single-record detail; there is no broader
-     * "full" student shape exposed through this controller at all.
-     *
-     * @return array<string, mixed>
-     */
-    private function presentSummary(StudentEnrollment $enrollment): array
-    {
-        return [
-            'id' => $enrollment->id,
-            'student' => [
-                'id' => $enrollment->student->id,
-                'studentNumber' => $enrollment->student->student_number,
-                'firstName' => $enrollment->student->first_name,
-                'middleName' => $enrollment->student->middle_name,
-                'lastName' => $enrollment->student->last_name,
-            ],
-            'academicYear' => $this->presentRef($enrollment->academicYear),
-            'campus' => $this->presentRef($enrollment->campus),
-            'gradeLevel' => $this->presentRef($enrollment->gradeLevel),
-            'section' => $this->presentRef($enrollment->section),
-            'rollNumber' => $enrollment->roll_number,
-            'status' => $enrollment->status,
-            'startsOn' => $enrollment->starts_on->toDateString(),
-            'endsOn' => $enrollment->ends_on?->toDateString(),
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function presentDetail(StudentEnrollment $enrollment): array
-    {
-        return [
-            ...$this->presentSummary($enrollment),
-            'createdAt' => $enrollment->created_at->toIso8601String(),
-            'updatedAt' => $enrollment->updated_at->toIso8601String(),
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function presentRef(AcademicYear|Campus|GradeLevel|Section $model): array
-    {
-        return [
-            'id' => $model->id,
-            'name' => $model->name,
-            'code' => $model->code,
-        ];
     }
 }

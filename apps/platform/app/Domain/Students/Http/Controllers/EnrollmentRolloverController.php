@@ -19,6 +19,7 @@ use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Rollover\BoundsRolloverExecutionRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -53,7 +54,7 @@ class EnrollmentRolloverController extends Controller
 
     public function index(Request $request, School $school, EnrollmentRolloverReadService $reads): JsonResponse
     {
-        $this->authorizeCapability('enrollments.view', $school);
+        // ORG.7F-1: enrollments.view is the route floor (a declared whole-School-only operation).
         $this->authorizeCapability('enrollments.rollovers.view', $school);
 
         $validated = $request->validate([
@@ -80,9 +81,10 @@ class EnrollmentRolloverController extends Controller
 
     public function show(School $school, string $rollover, EnrollmentRolloverReadService $reads): JsonResponse
     {
-        $this->authorizeCapability('enrollments.view', $school);
+        // ORG.7F-1: enrollments.view is the route floor (a declared whole-School-only operation).
         $this->authorizeCapability('enrollments.rollovers.view', $school);
 
+        abort_if(! Str::isUuid($rollover), 404);
         $plan = $reads->detail($rollover);
         abort_if($plan === null, 404);
 
@@ -129,6 +131,7 @@ class EnrollmentRolloverController extends Controller
      */
     public function validate(Request $request, School $school, string $rollover, EnrollmentRolloverDryRunService $dryRun): JsonResponse
     {
+        abort_if(! Str::isUuid($rollover), 404);
         $plan = EnrollmentRolloverPlan::query()->findOrFail($rollover);
 
         $summary = $dryRun->run($plan, $request->user());
@@ -161,6 +164,7 @@ class EnrollmentRolloverController extends Controller
      */
     public function start(Request $request, School $school, string $rollover, EnrollmentRolloverExecutionService $execution): JsonResponse
     {
+        abort_if(! Str::isUuid($rollover), 404);
         $plan = EnrollmentRolloverPlan::query()->findOrFail($rollover);
 
         $summary = $execution->start($plan, $request->user(), afterEachItem: $this->stopAfterItemCap());
@@ -179,6 +183,7 @@ class EnrollmentRolloverController extends Controller
      */
     public function resume(Request $request, School $school, string $rollover, EnrollmentRolloverExecutionService $execution): JsonResponse
     {
+        abort_if(! Str::isUuid($rollover), 404);
         $plan = EnrollmentRolloverPlan::query()->findOrFail($rollover);
 
         $summary = $execution->resume($plan, $request->user(), afterEachItem: $this->stopAfterItemCap());

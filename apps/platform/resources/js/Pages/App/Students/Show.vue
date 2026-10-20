@@ -66,6 +66,9 @@ interface Props {
     relationships: Relationship[];
     canManageStudents: boolean;
     canManageGuardians: boolean;
+    // ORG.7F-1 (F-1): a Guardian's contact value is sent only to a
+    // guardians.view holder; without it `contact` is always null.
+    canViewGuardianContacts: boolean;
     accountLink: AccountLink | null;
     // Phase 1B.6: present ONLY when the actor holds enrollments.view --
     // a Student page for a user with students.view but not

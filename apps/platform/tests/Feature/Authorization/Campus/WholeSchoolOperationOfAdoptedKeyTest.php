@@ -91,17 +91,17 @@ class WholeSchoolOperationOfAdoptedKeyTest extends TestCase
     #[Test]
     public function stale_pattern_unadopted_and_unreasoned_declarations_fail(): void
     {
-        $this->probe('org7d0.probe.unadopted', 'capability:students.view');
+        $this->probe('org7d0.probe.unadopted', 'capability:guardians.view');
 
         $problems = $this->problems([
             'org7d0.no-such-route' => ['capability' => 'visitor.visits.view', 'reason' => self::REASON],
             'org7d0.probe.*' => ['capability' => 'visitor.visits.view', 'reason' => self::REASON],
-            'org7d0.probe.unadopted' => ['capability' => 'students.view', 'reason' => ' '],
+            'org7d0.probe.unadopted' => ['capability' => 'guardians.view', 'reason' => ' '],
         ]);
 
         $this->assertStringContainsString('[org7d0.no-such-route] whole-School-only operation is not a registered route', $problems);
         $this->assertStringContainsString('[org7d0.probe.*] whole-School-only operation looks like a pattern', $problems);
-        $this->assertStringContainsString('[org7d0.probe.unadopted] whole-School-only operation names [students.view], which is not Campus-adopted', $problems);
+        $this->assertStringContainsString('[org7d0.probe.unadopted] whole-School-only operation names [guardians.view], which is not Campus-adopted', $problems);
         $this->assertStringContainsString('[org7d0.probe.unadopted] whole-School-only operation needs its reason', $problems);
     }
 
@@ -116,11 +116,11 @@ class WholeSchoolOperationOfAdoptedKeyTest extends TestCase
         $guard = fn (Coverage $entry): string => implode("\n", (new CoverageGuard($router->getRoutes()->getRoutes(), [$entry], []))->adoptedWholeSchool());
 
         $this->assertStringContainsString('[org7d1.probe.c2] declares a whole-School C2 contract on Campus-adopted [visitor.visits.view]', $guard(Coverage::gate('org7d1.probe.c2', 'visitor.visits.view')));
-        $this->assertStringNotContainsString('org7d1.probe.c2', $guard(Coverage::gate('org7d1.probe.c2', 'students.view')), 'an unadopted key is unaffected');
+        $this->assertStringNotContainsString('org7d1.probe.c2', $guard(Coverage::gate('org7d1.probe.c2', 'guardians.view')), 'an unadopted key is unaffected');
         // A declared whole-School hub's exact any-of floor is the one exception -- a partial copy is not.
         $hub = StaffNavigation::hubRequirement('data-health');
         $this->assertStringNotContainsString('org7d1.probe.c2', $guard(Coverage::gate('org7d1.probe.c2', $hub)));
-        $this->assertStringContainsString('[org7d1.probe.c2] declares a whole-School C2 contract on Campus-adopted [timetable.schedule.view]', $guard(Coverage::gate('org7d1.probe.c2', ['timetable.schedule.view', 'students.view'])));
+        $this->assertStringContainsString('[org7d1.probe.c2] declares a whole-School C2 contract on Campus-adopted [timetable.schedule.view]', $guard(Coverage::gate('org7d1.probe.c2', ['timetable.schedule.view', 'guardians.view'])));
     }
 
     private function holder(School $school, ?string $campusId): User

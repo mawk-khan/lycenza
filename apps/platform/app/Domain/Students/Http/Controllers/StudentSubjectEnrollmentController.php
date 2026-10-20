@@ -12,6 +12,7 @@ use App\Models\School;
 use App\Support\Authorization\AuthorizesCapability;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -37,6 +38,7 @@ class StudentSubjectEnrollmentController extends Controller
     {
         $this->authorizeCapability('academics.subjects.view', $school);
 
+        abort_if(! Str::isUuid($subjectOffering), 404);
         $offering = SubjectOffering::query()->findOrFail($subjectOffering);
 
         $studentIds = $reads->currentRosterStudentIds($offering);
@@ -56,6 +58,7 @@ class StudentSubjectEnrollmentController extends Controller
     {
         $this->authorizeCapability('academics.subjects.manage', $school);
 
+        abort_if(! Str::isUuid($student), 404);
         $studentModel = Student::query()->findOrFail($student);
 
         $validated = $request->validate([
@@ -75,6 +78,7 @@ class StudentSubjectEnrollmentController extends Controller
     {
         $this->authorizeCapability('academics.subjects.manage', $school);
 
+        abort_if(! Str::isUuid($enrollment), 404);
         $model = StudentSubjectEnrollment::query()->findOrFail($enrollment);
 
         $validated = $request->validate(['ends_on' => ['required', 'date']]);
@@ -88,6 +92,7 @@ class StudentSubjectEnrollmentController extends Controller
     {
         $this->authorizeCapability('academics.subjects.manage', $school);
 
+        abort_if(! Str::isUuid($enrollment), 404);
         $model = StudentSubjectEnrollment::query()->findOrFail($enrollment);
 
         $validated = $request->validate(['ends_on' => ['required', 'date']]);
@@ -101,6 +106,7 @@ class StudentSubjectEnrollmentController extends Controller
     {
         $this->authorizeCapability('academics.subjects.manage', $school);
 
+        abort_if(! Str::isUuid($enrollment), 404);
         $model = StudentSubjectEnrollment::query()->findOrFail($enrollment);
 
         $validated = $request->validate([

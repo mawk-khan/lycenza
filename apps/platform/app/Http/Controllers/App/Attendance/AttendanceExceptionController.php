@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\App\Attendance;
 
 use App\Domain\Attendance\Application\AttendanceExceptionReadService;
+use App\Domain\Students\Application\StudentAccess;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
-use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -24,7 +24,7 @@ class AttendanceExceptionController extends Controller
 {
     use AuthorizesCampusScope;
 
-    public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities, AttendanceExceptionReadService $reads): Response
+    public function index(Request $request, TenantContext $context, StudentAccess $students, AttendanceExceptionReadService $reads): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCampusScope(AttendanceExceptionReadService::CAPABILITY, $school);
@@ -47,8 +47,9 @@ class AttendanceExceptionController extends Controller
             'filters' => ['date' => $date, 'sectionId' => $sectionId ?? '', 'status' => $status ?? ''],
             'sectionOptions' => $reads->sectionOptions($school, $date, $actor),
             'statuses' => AttendanceExceptionReadService::EXCEPTION_STATUSES,
-            // A row links to the Student only when the viewer may open it.
-            'canViewStudents' => $capabilities->canInSchool($actor, 'students.view', $school),
+            // A row links to the Student only when the viewer may open it
+            // (the full Profile: whole-School only, ORG.7F-1).
+            'canViewStudents' => $students->holdsWholeSchool($actor, 'students.view', $school),
         ]);
     }
 }

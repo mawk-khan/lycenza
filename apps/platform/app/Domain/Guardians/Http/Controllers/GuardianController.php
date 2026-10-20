@@ -13,6 +13,7 @@ use App\Models\School;
 use App\Support\Authorization\AuthorizesCapability;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
@@ -68,6 +69,7 @@ class GuardianController extends Controller
     {
         $this->authorizeCapability('guardians.view', $school);
 
+        abort_if(! Str::isUuid($guardian), 404);
         $model = Guardian::query()->with(['contacts', 'studentRelationships.student'])->findOrFail($guardian);
 
         return response()->json(['data' => $this->presentDetail($model)]);
@@ -92,6 +94,7 @@ class GuardianController extends Controller
     {
         $this->authorizeCapability('guardians.manage', $school);
 
+        abort_if(! Str::isUuid($guardian), 404);
         $model = Guardian::query()->findOrFail($guardian);
 
         $validated = $request->validate([
@@ -109,6 +112,7 @@ class GuardianController extends Controller
     {
         $this->authorizeCapability('guardians.manage', $school);
 
+        abort_if(! Str::isUuid($guardian), 404);
         $model = Guardian::query()->findOrFail($guardian);
 
         $validated = $request->validate([

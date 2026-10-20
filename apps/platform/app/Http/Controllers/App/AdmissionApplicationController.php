@@ -199,7 +199,9 @@ class AdmissionApplicationController extends Controller
             'canManage' => $canManage,
             'canConvert' => $canConvert,
             'canViewApplicants' => $scope->isWholeSchool(),
-            'canViewStudents' => ! $scopes->campusScope($context->actor(), 'students.view', $school)->isNone(),
+            // ORG.7F-1: the converted-Student link opens the full Profile, a
+            // declared whole-School-only operation.
+            'canViewStudents' => $scopes->campusScope($context->actor(), 'students.view', $school)->isWholeSchool(),
             // Only the accepted state ever needs a Section picker -- a
             // UI convenience only (AdmissionConversionService remains
             // authoritative regardless), matching

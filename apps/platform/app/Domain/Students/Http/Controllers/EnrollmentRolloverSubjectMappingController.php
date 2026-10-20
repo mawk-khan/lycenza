@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Models\School;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -53,7 +54,9 @@ class EnrollmentRolloverSubjectMappingController extends Controller
 {
     public function upsert(Request $request, School $school, string $rollover, string $subjectOffering, EnrollmentRolloverPlanService $service): JsonResponse
     {
+        abort_if(! Str::isUuid($rollover), 404);
         $plan = EnrollmentRolloverPlan::query()->findOrFail($rollover);
+        abort_if(! Str::isUuid($subjectOffering), 404);
         $source = SubjectOffering::query()->findOrFail($subjectOffering);
 
         $validated = $request->validate([
@@ -71,7 +74,9 @@ class EnrollmentRolloverSubjectMappingController extends Controller
 
     public function destroy(Request $request, School $school, string $rollover, string $subjectOffering, EnrollmentRolloverPlanService $service): JsonResponse
     {
+        abort_if(! Str::isUuid($rollover), 404);
         $plan = EnrollmentRolloverPlan::query()->findOrFail($rollover);
+        abort_if(! Str::isUuid($subjectOffering), 404);
         $source = SubjectOffering::query()->findOrFail($subjectOffering);
 
         $service->removeSubjectMapping($plan, $source, $request->user());

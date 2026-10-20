@@ -5421,3 +5421,222 @@ choice.
 
 Implementation of any wave needs explicit owner approval. The regression
 counter is unchanged (0/5); this audit is documentation-only.
+
+## 45. ORG.7F-1 — SIS Campus read surfaces (as built, 2026-10-20)
+
+Owner authorization: ORG.7F-1 only. Baseline `origin/main` = `c603f858`
+(ORG.7F-0, §44).
+
+**Owner decisions recorded:**
+- **F1-D1:** no date of birth on any Campus Student surface.
+- **F1-D2:** no Guardian block on the Campus overview. That means no name,
+  relationship or contact value. A future minimized Guardian projection
+  needs its own review.
+- **F1-D3:** future Campus onboarding never takes a user-chosen
+  School-wide Student number.
+- **F1-D4:** name edits are approved in principle for F2 only.
+- **F1-D5:** a Campus transfer never auto-moves Hostel, Transport or
+  electives (§45.9).
+- **F1-D6:** the placement-column freeze is required before F3.
+- **F1-D7:** principal@Campus gains READS only in F1. F2/F3 writes come
+  only under their own reviewed high-risk contracts.
+
+    adopted (domain `students`)   students.view, enrollments.view
+    reach                         a Student whose CURRENT operational Campus is in scope
+                                  (active Student + active Enrollment in the School's
+                                  active year + active Campus; SQL EXISTS)
+    see (Campus)                  id, studentNumber, names; current Campus, Grade,
+                                  Section, roll number (enrollments.view reach)
+    never (Campus)                date of birth, Guardians and contacts, history,
+                                  account link, processing authorizations, other
+                                  domains' data, any write
+
+**45.1 F-1 closed: Guardian contact values.**
+- **Root cause.** `StudentController::show` eager-loaded
+  `guardianRelationships.guardian.contacts` and serialized the decrypted
+  primary (else first active) contact under `students.view` alone.
+  `guardians.view` is the capability that covers Guardian contact
+  information (`docs/modules/STUDENT-GUARDIAN-IDENTITY.md`).
+- **Fix: the value is sent only to a `guardians.view` holder.** Without it,
+  the contacts are not loaded at all, so `contact` is `null` and no value
+  exists anywhere in the response. This holds for whole-School readers
+  too, and no Guardian access was widened.
+- **Fix: only an ACTIVE contact is ever chosen.** That is the active
+  primary, else the first active one; a deactivated primary is never
+  chosen.
+- **Unchanged:**
+  - The relationship flags and the Guardian name stay on the Profile
+    (documented, Phase 1A.6).
+  - The API `students/{id}/guardians` never carried a contact value; now
+    pinned.
+  - The Campus Directory and overview carry no Guardian data at all
+    (F1-D2), even for an actor who also holds `guardians.view`.
+- **Pinned by:** `StudentProfileGuardianContactTest`.
+
+**45.2 F-12 closed: malformed ids.** Reproduced: a malformed `{student}`,
+`{enrollment}` or `{relationship}` id on the JSON API reached PostgreSQL as
+an invalid-UUID query (22P02) and aborted the request's transaction. It is
+now NOT FOUND before any query, the HR convention (`abort_if(!
+Str::isUuid(...), 404)`), in:
+- the Student detail, update and status actions;
+- the Guardian relationship index, link, update, primary and unlink
+  actions;
+- the Enrollment history, store and lifecycle actions;
+- every StudentAccess read.
+
+Pinned by `StudentApiMalformedIdTest`: 13 routes × 3 malformed shapes, plus
+a well-formed unknown id. Web routes were already UUID-constrained (LC-1).
+After the security review the guard was extended to every remaining
+path-id lookup in the Students and Guardians API controllers: Guardian,
+contact, subject-enrollment, offering roster and the rollover
+plan/item/mapping/subject-mapping routes.
+
+**45.3 StudentAccess (READ side only).**
+`App\Domain\Students\Application\StudentAccess` composes the §38
+foundation and never judges currency itself:
+- `students()`: whole School = every Student; Campus set =
+  `restrictToOperationalCampus()` (SQL EXISTS); none = nothing.
+- `student()`: NOT FOUND for a malformed id, an unknown id, another
+  School's Student, and one out of scope.
+- `enrollmentDirectory()` and `enrollment()`: whole School = every row;
+  Campus set = THE current placement (`constrainToCurrentPlacement()`) on
+  an in-scope Campus of a Student who is operational in scope.
+- `currentPlacements()`: one SQL query per page. For a Campus reach it
+  returns only the current in-scope placement of a Student operational in
+  scope, the same rule as the directory.
+- `placementInYear()`: whole-School named-year reads; nothing for any
+  other scope.
+
+It has no write method (`lockedWriteTarget`/`lockedTransferTarget` are
+F2/F3) and no cache, so the next request after a transfer sees the new
+Campus (pinned).
+
+**45.4 Campus-aware routes (C6, 7).**
+
+| Route | Key | StudentAccess |
+|---|---|---|
+| `app.students.index`, `api.v1.schools.students.index` | students.view | `students` |
+| `app.students.overview` (new) | students.view | `student` |
+| `app.enrollments.index`, `api.v1.schools.enrollments.index` | enrollments.view | `enrollmentDirectory` |
+| `api.v1.schools.enrollments.show` | enrollments.view | `enrollment` |
+| `api.v1.schools.students.enrollments.current` | enrollments.view | `student` (+ current placements) |
+
+- **Where they live:** new dedicated read controllers
+  (`App\…\StudentDirectoryController`, `App\…\EnrollmentDirectoryController`,
+  and the Students API pair). The existing controllers keep the
+  whole-School actions. The API enrollment presenters are shared by trait
+  (`PresentsStudentEnrollment`).
+- **Campus reader behaviour:**
+  - Directory rows carry only `id`, `studentNumber` and the names, plus
+    `currentPlacement {campus, gradeLevel, section, rollNumber}` when the
+    `enrollments.view` reach covers it.
+  - Status is omitted (always active), and rows link to the overview.
+  - Filters narrow only: `status=inactive`, another Campus, another year
+    or another Student all find nothing.
+  - The enrollment filter options are cut to the active year, in-scope
+    Campuses and their Sections.
+  - The current placement for another year is `null`.
+- **Search input is literal.** Name search uses `StudentSearch` (LIKE
+  escaped): the API name filter was unescaped `first/last ilike` and now
+  matches every name word in any name field (F-10, in the Directory only).
+- **Overview fields:** `id`, `studentNumber`, the names and the current
+  placement. `canOpenProfile` is true only for whole-School readers.
+
+**45.5 Declared whole-School-only operations (10) and one hub.**
+- **`students.view`:**
+  - `app.students.show` (full Profile);
+  - `app.students.history`;
+  - `api.v1.schools.students.show` (date of birth);
+  - `api.v1.schools.students.guardians.index`.
+- **`enrollments.view`:**
+  - `api.v1.schools.students.enrollments.index` (full history);
+  - the 5 rollover reads (web index/show, API index/show/items). Those
+    also keep `capability:enrollments.rollovers.view`.
+- **Data Health:** `WHOLE_SCHOOL_HUBS['data-health']['enrollments.view']`.
+- **The route floor is the check.** Each operation carries the ordinary
+  `capability:<key>` route floor; the controller's former whole-School
+  Gate call was removed, because the floor replaces it. The history
+  service re-checks with the `capability` Gate.
+- **Link hints are explicit whole-School checks.** Hints that open the
+  full Profile, or show a class on a whole-School Finance list, are now
+  explicit whole-School scope checks: the Subject offering roster,
+  Attendance exceptions, the Admissions converted-Student link, and
+  Outstanding fees.
+- **School writes are untouched.** Every Student and Enrollment write keeps
+  its unadopted whole-School key (`students.manage`, `enrollments.manage`,
+  `enrollments.rollovers.manage`, `guardians.*`), so a Campus grant never
+  reaches one (pinned for web and API).
+
+**45.6 Role impact (machine-checked, `CampusAdoptionImpactTest`).**
+- **New holders of adopted keys:** principal and school_admin
+  (`students.view`, `enrollments.view`).
+- **Campus-scopable holders:** principal only.
+  `SIS_CAMPUS_CONFERRED = {principal: [enrollments.view, students.view]}`.
+- **school_admin:** whole-School only.
+- **No other role gains anything.** admissions_officer, front_office,
+  hostel_warden, librarian, hr_officer, canteen_operator, stores_officer,
+  transport_coordinator and teacher gain nothing (pinned).
+- **Prohibited prefixes are narrowed, not lifted:** `students.manage`,
+  `students.processing_authorizations.`, `enrollments.manage`,
+  `enrollments.rollovers.` and `guardians.`.
+
+**45.7 Navigation.** The `students` and `enrollments` entries name only
+adopted keys, so they appear for a Campus grant and land on the Campus-aware
+directories. Rollover (needs `enrollments.rollovers.view`), Guardians and
+Data Health stay hidden. Navigation is never authorization.
+
+**45.8 Performance and tenancy.**
+- **Bounded queries.** One EXISTS predicate and one placements query per
+  page. The query count does not grow with rows
+  (`StudentCampusReadPerformanceTest`), and there is no per-row resolver
+  call.
+- **Index.** Uses `student_enrollments_one_active_per_student_year` (§44.23).
+  No index was added; there is no evidence one is needed.
+- **Tenancy.** Every predicate carries `school_id`, and RLS and SchoolScope
+  are unchanged. Another School's Student or Campus never participates
+  (pinned). No migration, and no new capability.
+
+**45.9 Recorded for F2/F3 (not built).**
+- **F-2 (open):** active Student, Section and Campus checks on `enroll`,
+  transfer, rollover and conversion.
+- **F-3 (open):** `enroll()` can place any existing Student. Campus
+  onboarding must create a NEW Student atomically and never call a path
+  that can capture one.
+- **Student numbers (F1-D3):**
+  - **No canonical server-side allocator exists.** `StudentService::create`
+    and Admissions conversion both take the number from the caller.
+  - **F2 onboarding is BLOCKED** pending an owner number policy.
+- **Campus transfer (F1-D5):**
+  - It does not move Hostel residency, Transport rider assignments or
+    electives.
+  - An unresolved active source-Campus relationship in those domains
+    BLOCKS the Campus transfer until its owning domain resolves it.
+  - History is unchanged.
+- **Placement freeze (F1-D6):** generic runtime mutation of enrollment
+  placement columns must be refused before F3 publishes. The named
+  lifecycle operations become the only placement writers. The §44.11 lock
+  order (Student before Sections and Enrollment) applies.
+- **principal@Campus (F1-D7):** approved in principle for F2 (names,
+  safe onboarding) and F3 (transfer between two in-scope Campuses),
+  conditional on those phases proving their high-risk guards.
+
+**45.10 Security review (ORG.7F-1).** Independent adversarial review of the
+candidate: no HIGH or MEDIUM finding.
+- **Fixed -- LOW-1:** a mixed-scope reader (whole-School `students.view`,
+  Campus `enrollments.view`) got current placements filtered in PHP,
+  without the operational-Student rule. An inactive Student's
+  active-year placement could be shown. Placements are now one SQL query
+  with the same rule as the directory (pinned).
+- **Fixed -- LOW-2:** every StudentAccess enrollment query carries an
+  explicit `school_id`.
+- **Fixed -- LOW-3:** the F-12 guard covers every remaining path-id
+  lookup in the Students and Guardians API controllers.
+- **Fixed -- INFO:**
+  - `placementInYear()` refuses any non-whole-School scope itself;
+  - the unused `requireWholeSchool()` was removed;
+  - Enrollment-directory Student links follow the reader's
+    `students.view` reach (Profile, overview, or none).
+- **Recorded, accepted:**
+  - Grade Levels stay School-wide reference labels in the filter options.
+  - A Campus grant's cached half (60 s) can under-grant for up to a
+    minute after deploy, never over-grant.

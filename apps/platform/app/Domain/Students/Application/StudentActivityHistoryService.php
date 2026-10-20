@@ -9,9 +9,9 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\SchoolAuditSubjectHistoryEntry;
 use App\Support\Audit\SchoolAuditSubjectHistoryReader;
-use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * V11.2 (ADR 0075): a Student's operational history -- a READ PROJECTION
@@ -38,8 +38,6 @@ use App\Support\Tenancy\TenantContext;
  */
 class StudentActivityHistoryService
 {
-    use AuthorizesCapability;
-
     public const int LIMIT = 200;
 
     /**
@@ -83,7 +81,10 @@ class StudentActivityHistoryService
      */
     public function forStudent(School $school, string $studentId, User $actor): ?array
     {
-        $this->authorizeCapabilityFor($actor, 'students.view', $school);
+        // ORG.7F-1 (ADR 0076 §45): history is a declared whole-School-only
+        // operation -- the ordinary `capability` Gate, which a Campus-scoped
+        // students.view grant never satisfies.
+        Gate::forUser($actor)->authorize('capability', ['students.view', $school]);
 
         $student = $this->context->withSchool($school, fn () => Student::query()->where('school_id', $school->id)->find($studentId));
         if ($student === null) {

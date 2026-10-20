@@ -245,9 +245,14 @@ class EnrollmentRolloverController extends Controller
 
     // --- Authorization helpers ----------------------------------------
 
+    /**
+     * ORG.7F-1 (ADR 0076 §45): enrollments.view is Campus-adopted, so its
+     * whole-School requirement here is the route floor of these declared
+     * whole-School-only operations (`capability:enrollments.view`); the
+     * unadopted rollover key is still checked here.
+     */
     private function authorizeRolloverView(School $school): void
     {
-        $this->authorizeCapability('enrollments.view', $school);
         $this->authorizeCapability('enrollments.rollovers.view', $school);
     }
 

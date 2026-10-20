@@ -2,8 +2,6 @@
 
 namespace App\Http\Controllers\App;
 
-use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
-use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\Students\Application\Exceptions\ActiveEnrollmentConflictException;
 use App\Domain\Students\Application\Exceptions\CrossAcademicYearTransferException;
@@ -21,11 +19,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Models\School;
 use App\Support\Authorization\AuthorizesCapability;
-use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -50,55 +46,6 @@ use Inertia\Response;
 class StudentEnrollmentController extends Controller
 {
     use AuthorizesCapability;
-
-    // --- Directory --------------------------------------------------------
-
-    public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities, StudentEnrollmentReadService $reads): Response
-    {
-        $school = $context->requireSchool();
-        $this->authorizeCapability('enrollments.view', $school);
-
-        $validated = $request->validate([
-            'academic_year_id' => ['sometimes', 'uuid'],
-            'campus_id' => ['sometimes', 'uuid'],
-            'grade_level_id' => ['sometimes', 'uuid'],
-            'section_id' => ['sometimes', 'uuid'],
-            'status' => ['sometimes', Rule::in(['active', 'completed', 'withdrawn', 'transferred', 'cancelled'])],
-            'student_number' => ['sometimes', 'string', 'max:255'],
-            'student_name' => ['sometimes', 'string', 'max:255'],
-            'roll_number' => ['sometimes', 'string', 'max:255'],
-            'page' => ['sometimes', 'integer', 'min:1'],
-        ]);
-
-        $filters = collect($validated)->except('page')->all();
-        // StudentEnrollmentReadService::directory() is typed to the
-        // LengthAwarePaginator CONTRACT (correctly, as a general read
-        // API) but always returns the concrete Eloquent paginator at
-        // runtime -- the same object StudentController::index() (this
-        // checkpoint's own established web pattern) calls ->through()
-        // on directly. The annotation only narrows the static type for
-        // PHPStan; it changes no runtime behavior.
-        /** @var LengthAwarePaginator<int, StudentEnrollment> $paginator */
-        $paginator = $reads->directory($filters, 20)->withQueryString();
-
-        return Inertia::render('App/Enrollments/Index', [
-            'enrollments' => $paginator->through(fn (StudentEnrollment $e) => $this->presentSummary($e)),
-            'filters' => [
-                'academic_year_id' => $validated['academic_year_id'] ?? '',
-                'campus_id' => $validated['campus_id'] ?? '',
-                'grade_level_id' => $validated['grade_level_id'] ?? '',
-                'section_id' => $validated['section_id'] ?? '',
-                'status' => $validated['status'] ?? '',
-                'student_number' => $validated['student_number'] ?? '',
-                'student_name' => $validated['student_name'] ?? '',
-                'roll_number' => $validated['roll_number'] ?? '',
-            ],
-            'academicYears' => $this->academicYearOptions(),
-            'campuses' => $this->campusOptions(),
-            'gradeLevels' => $this->gradeLevelOptions(),
-            'sections' => $this->sectionOptions($school, onlyEligible: false),
-        ]);
-    }
 
     // --- Create (nested under a Student) -----------------------------------
 
@@ -265,36 +212,6 @@ class StudentEnrollmentController extends Controller
                 'gradeLevelId' => $s->grade_level_id,
             ])
             ->values()
-            ->all();
-    }
-
-    /**
-     * @return array<int, array<string, string>>
-     */
-    private function academicYearOptions(): array
-    {
-        return AcademicYear::query()->orderByDesc('starts_on')->get()
-            ->map(fn (AcademicYear $y) => ['id' => $y->id, 'name' => $y->name])
-            ->all();
-    }
-
-    /**
-     * @return array<int, array<string, string>>
-     */
-    private function campusOptions(): array
-    {
-        return Campus::query()->orderBy('name')->get()
-            ->map(fn (Campus $c) => ['id' => $c->id, 'name' => $c->name])
-            ->all();
-    }
-
-    /**
-     * @return array<int, array<string, string>>
-     */
-    private function gradeLevelOptions(): array
-    {
-        return GradeLevel::query()->orderBy('sequence')->get()
-            ->map(fn (GradeLevel $g) => ['id' => $g->id, 'name' => $g->name])
             ->all();
     }
 

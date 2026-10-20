@@ -1381,3 +1381,15 @@ once several modules copy it.
        - Whole-School, declared: the Profile, history, employment
          lifecycle, rehire, import, archive/restore, identity-only create
          and account links.
+     - **SIS Campus reads go through `StudentAccess`** (ORG.7F-1, §45).
+       Adopted: `students.view` and `enrollments.view` only.
+       - A Campus reader reaches a Student only while their CURRENT
+         operational Campus is in scope, in SQL, and sees only the current
+         placement -- never history, a draft/future year, an inactive or
+         unplaced Student. Out of scope is the unknown 404.
+       - Whole-School, declared: the full Profile, history, Guardians,
+         Enrollment history, rollover and Data Health. Every Student and
+         Enrollment write stays unadopted.
+       - No date of birth or Guardian data on a Campus surface, and a
+         Guardian contact value needs `guardians.view`, never
+         `students.view`.

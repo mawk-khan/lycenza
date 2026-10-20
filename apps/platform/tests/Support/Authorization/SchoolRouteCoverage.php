@@ -63,6 +63,7 @@ use App\Domain\Payroll\Statutory\Application\Export\StatutoryEsiContributionWork
 use App\Domain\Payroll\Statutory\Application\Export\StatutoryTdsDraftStatementExportService;
 use App\Domain\StaffAttendance\Application\StaffAttendanceReadService;
 use App\Domain\StaffAttendance\Application\StaffAttendanceService;
+use App\Domain\Students\Application\StudentAccess;
 use App\Domain\Timetable\Application\TimetableScheduleAccess;
 use App\Domain\Transport\Application\TransportRiderAccess;
 use App\Domain\Visitor\Application\VisitorVisitAccess;
@@ -156,11 +157,9 @@ final class SchoolRouteCoverage
             Coverage::gate('api.v1.schools.subject-offerings.roster', 'academics.subjects.view'),
 
             // Domain\Students\Http\Controllers\StudentController
-            Coverage::gate('api.v1.schools.students.index', 'students.view'),
-            Coverage::gate('api.v1.schools.students.show', 'students.view'),
+            Coverage::campus('api.v1.schools.students.index', 'students.view', StudentAccess::class, 'students'),
 
             // Domain\Guardians\Http\Controllers\StudentGuardianRelationshipController
-            Coverage::gate('api.v1.schools.students.guardians.index', 'students.view'),
 
             // Domain\Guardians\Http\Controllers\GuardianController
             Coverage::gate('api.v1.schools.guardians.index', 'guardians.view'),
@@ -168,10 +167,9 @@ final class SchoolRouteCoverage
             Coverage::gate('api.v1.schools.guardians.show', 'guardians.view'),
 
             // Domain\Students\Http\Controllers\StudentEnrollmentController
-            Coverage::gate('api.v1.schools.enrollments.index', 'enrollments.view'),
-            Coverage::gate('api.v1.schools.enrollments.show', 'enrollments.view'),
-            Coverage::gate('api.v1.schools.students.enrollments.index', 'enrollments.view'),
-            Coverage::gate('api.v1.schools.students.enrollments.current', 'enrollments.view'),
+            Coverage::campus('api.v1.schools.enrollments.index', 'enrollments.view', StudentAccess::class, 'enrollmentDirectory'),
+            Coverage::campus('api.v1.schools.enrollments.show', 'enrollments.view', StudentAccess::class, 'enrollment'),
+            Coverage::campus('api.v1.schools.students.enrollments.current', 'enrollments.view', StudentAccess::class, 'student'),
 
             // Domain\HR\Http\Controllers\EmployeeDocumentController
             Coverage::service('api.v1.schools.employees.hr-document-records.store', HighlySensitiveDocumentStepUp::class, 'requireFor'),
@@ -196,11 +194,8 @@ final class SchoolRouteCoverage
             Coverage::gate('api.v1.schools.employee-categories.index', 'hr.categories.view'),
 
             // Domain\Students\Http\Controllers\EnrollmentRolloverController
-            Coverage::gate('api.v1.schools.enrollment-rollovers.index', ['enrollments.view', 'enrollments.rollovers.view']),
-            Coverage::gate('api.v1.schools.enrollment-rollovers.show', ['enrollments.view', 'enrollments.rollovers.view']),
 
             // Domain\Students\Http\Controllers\EnrollmentRolloverItemController
-            Coverage::gate('api.v1.schools.enrollment-rollovers.items.index', ['enrollments.view', 'enrollments.rollovers.view']),
 
             // Domain\Documents\Http\Controllers\DocumentController
             Coverage::service('api.v1.schools.employees.documents.store', DocumentService::class, 'create')->validatesFirst(),
@@ -441,12 +436,11 @@ final class SchoolRouteCoverage
             Coverage::gate('app.elective-groups.offerings.destroy', 'academics.subjects.manage'),
 
             // Http\Controllers\App\StudentController
-            Coverage::gate('app.students.index', 'students.view'),
+            Coverage::campus('app.students.index', 'students.view', StudentAccess::class, 'students'),
+            Coverage::campus('app.students.overview', 'students.view', StudentAccess::class, 'student'),
             Coverage::gate('app.students.create', 'students.manage'),
             Coverage::gate('app.students.store', 'students.manage'),
-            Coverage::gate('app.students.show', 'students.view'),
             Coverage::gate('app.students.edit', 'students.manage'),
-            Coverage::gate('app.students.history', 'students.view'),
             Coverage::gate('app.students.update', 'students.manage'),
             Coverage::gate('app.students.status', 'students.manage'),
 
@@ -618,7 +612,7 @@ final class SchoolRouteCoverage
             Coverage::gate('app.communications.threads.attachments.destroy', 'communications.reply'),
 
             // Http\Controllers\App\StudentEnrollmentController
-            Coverage::gate('app.enrollments.index', 'enrollments.view'),
+            Coverage::campus('app.enrollments.index', 'enrollments.view', StudentAccess::class, 'enrollmentDirectory'),
 
             // Http\Controllers\App\ClosedYearPlacementController
             Coverage::gate('app.enrollments.closed-year-placements.index', 'enrollments.manage'),
@@ -632,10 +626,8 @@ final class SchoolRouteCoverage
             Coverage::gate('app.enrollments.transfer.store', 'enrollments.manage'),
 
             // Http\Controllers\App\EnrollmentRolloverController
-            Coverage::gate('app.enrollment-rollovers.index', ['enrollments.view', 'enrollments.rollovers.view']),
             Coverage::gate('app.enrollment-rollovers.create', ['enrollments.manage', 'enrollments.rollovers.manage']),
             Coverage::gate('app.enrollment-rollovers.store', ['enrollments.manage', 'enrollments.rollovers.manage']),
-            Coverage::gate('app.enrollment-rollovers.show', ['enrollments.view', 'enrollments.rollovers.view']),
             Coverage::gate('app.enrollment-rollovers.validate', ['enrollments.manage', 'enrollments.rollovers.manage']),
             Coverage::gate('app.enrollment-rollovers.start', ['enrollments.manage', 'enrollments.rollovers.manage']),
             Coverage::gate('app.enrollment-rollovers.resume', ['enrollments.manage', 'enrollments.rollovers.manage']),

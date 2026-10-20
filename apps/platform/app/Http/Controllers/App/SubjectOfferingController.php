@@ -6,6 +6,7 @@ use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Subject;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
+use App\Domain\Students\Application\StudentAccess;
 use App\Domain\Students\Application\StudentSubjectEnrollmentHistoryReadService;
 use App\Domain\Students\Application\SubjectOfferingRosterReadService;
 use App\Domain\Students\Infrastructure\Student;
@@ -117,7 +118,8 @@ class SubjectOfferingController extends Controller
 
         $actor = $context->actor();
         $canManage = $capabilities->canInSchool($actor, 'academics.subjects.manage', $school);
-        $canViewStudentDetail = $capabilities->canInSchool($actor, 'students.view', $school);
+        // ORG.7F-1: the roster links to the full Student Profile, a whole-School operation.
+        $canViewStudentDetail = app(StudentAccess::class)->holdsWholeSchool($actor, 'students.view', $school);
 
         $historyPaginator = $offering->is_required ? null : $history->forOffering($offering, 25)->withQueryString();
 

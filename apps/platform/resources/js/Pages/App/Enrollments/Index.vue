@@ -58,9 +58,23 @@ interface Props {
     campuses: Ref[];
     gradeLevels: Ref[];
     sections: Array<Ref & { label: string }>;
+    // ORG.7F-1 (ADR 0076 §45): a Campus-scoped reader sees current in-scope
+    // placements only. Student links follow the reader's students.view reach:
+    // the full Profile (whole School), the Campus-safe overview, or none.
+    campusView: boolean;
+    studentLink: 'profile' | 'overview' | 'none';
 }
 
 const props = defineProps<Props>();
+
+function studentHref(id: string): string | undefined {
+    if (props.studentLink === 'none') {
+        return undefined;
+    }
+    return props.studentLink === 'overview'
+        ? `/app/students/${id}/overview`
+        : `/app/students/${id}`;
+}
 
 const academicYearId = ref(props.filters.academic_year_id);
 const campusId = ref(props.filters.campus_id);
@@ -250,7 +264,7 @@ const hasFilters = Object.values(props.filters).some((v) => v !== '');
                             <td class="py-3">
                                 <a
                                     class="font-medium underline"
-                                    :href="`/app/students/${e.student.id}`"
+                                    :href="studentHref(e.student.id)"
                                     >{{ enrollmentStudentName(e.student) }}</a
                                 >
                             </td>
@@ -262,7 +276,10 @@ const hasFilters = Object.values(props.filters).some((v) => v !== '');
                             <td class="py-3 text-slate-600">{{ e.rollNumber }}</td>
                             <td class="py-3"><StatusBadge :status="e.status" /></td>
                             <td class="py-3 text-right">
-                                <a class="text-sm underline" :href="`/app/students/${e.student.id}`"
+                                <a
+                                    v-if="studentLink !== 'none'"
+                                    class="text-sm underline"
+                                    :href="studentHref(e.student.id)"
                                     >View student</a
                                 >
                             </td>
@@ -278,7 +295,7 @@ const hasFilters = Object.values(props.filters).some((v) => v !== '');
                     :key="e.id"
                     class="rounded border border-slate-200 p-4"
                 >
-                    <a class="font-medium underline" :href="`/app/students/${e.student.id}`">{{
+                    <a class="font-medium underline" :href="studentHref(e.student.id)">{{
                         enrollmentStudentName(e.student)
                     }}</a>
                     <p class="mt-1 text-sm text-slate-500">

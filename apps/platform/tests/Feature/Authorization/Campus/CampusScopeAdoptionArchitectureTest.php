@@ -100,6 +100,13 @@ class CampusScopeAdoptionArchitectureTest extends TestCase
             'controllers' => ['app/Http/Controllers/App/HR/HrEmployeeController.php', 'app/Http/Controllers/App/HR/HrEmployeeAssignmentController.php', 'app/Domain/HR/Http/Controllers/EmployeeDirectoryController.php', 'app/Domain/HR/Http/Controllers/EmployeeController.php', 'app/Domain/HR/Http/Controllers/EmployeeAssignmentController.php'],
             'models' => ['Employee::query(', 'EmploymentRecord::query(', 'EmployeeAssignment::query('],
         ],
+        // ORG.7F-1 (ADR 0076 §45): the Campus-aware SIS reads resolve every
+        // Student and Enrollment through StudentAccess.
+        'students' => [
+            'access' => 'app/Domain/Students/Application/StudentAccess.php',
+            'controllers' => ['app/Http/Controllers/App/StudentDirectoryController.php', 'app/Http/Controllers/App/EnrollmentDirectoryController.php', 'app/Domain/Students/Http/Controllers/StudentDirectoryController.php', 'app/Domain/Students/Http/Controllers/EnrollmentDirectoryController.php'],
+            'models' => ['Student::query(', 'StudentEnrollment::query(', 'StudentEnrollment::where(', 'Student::where('],
+        ],
     ];
 
     #[Test]
@@ -110,7 +117,8 @@ class CampusScopeAdoptionArchitectureTest extends TestCase
         foreach (CampusScopeCatalogue::ADOPTED as $capability => $domain) {
             $this->assertArrayHasKey($domain, CampusScopeCatalogue::DOMAINS, "{$capability} names unknown domain {$domain}");
             $this->assertSame('school', DB::table('capabilities')->where('key', $capability)->value('namespace'), "{$capability} must be an existing School capability");
-            foreach (['school.', 'integrations.', 'academics.years.', 'students.', 'enrollments.', 'guardians.', 'portal.'] as $forbidden) {
+            // ORG.7F-1: of the SIS families only the two read keys are adopted.
+            foreach (['school.', 'integrations.', 'academics.years.', 'students.manage', 'students.processing_authorizations.', 'enrollments.manage', 'enrollments.rollovers.', 'guardians.', 'portal.'] as $forbidden) {
                 $this->assertStringStartsNotWith($forbidden, $capability, "{$capability} is whole-School authority or an unadopted SIS family");
             }
         }

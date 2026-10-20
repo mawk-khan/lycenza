@@ -104,6 +104,13 @@ final class CampusScopeCatalogue
             'inactiveCampus' => 'A grant on an inactive Campus confers nothing, and an inactive Campus places nobody. No onboarding or new assignment targets an inactive Campus (ActiveCampus); a Campus deactivating during a scoped write waits for it or refuses it (share-locked). History is never rewritten.',
             'sharedLookups' => 'ORG.7E-1: read-only reference labels for the assignment and onboarding forms -- active Positions (School-wide), active Departments that are School-wide or of an in-scope Campus, and the in-scope active Campuses -- never Department/Position/Category configuration. The manager picker lists only CURRENT assignments on in-scope Campuses. The Visitor host lookup stays School-wide and name-only (unchanged, recorded for later). Reaching an Employee through one in-scope assignment never discloses another Campus\'s assignment, placement or manager; the Profile (hr.employees.personal.view), history, personal/sensitive data, documents, notes, qualifications, pay, leave and staff attendance stay whole-School.',
         ],
+        // ORG.7F-1 (ADR 0076 §45): SIS READ surfaces only.
+        'students' => [
+            'label' => 'Student Directory, operational overview and current placement (read only)',
+            'nullCampus' => 'A Student has no Campus (identity is School-wide); their operational Campus is the Campus of their CURRENT placement (the canonical Student foundation rule, ADR 0076 §38: active Student, the active Enrollment in the School\'s active year, active Campus). A Student with no current operational Campus (unplaced, inactive, leaver, between placements, future-year only) is whole-School only. History never decides visibility: a former-Campus or draft/future-year placement places nobody on a Campus.',
+            'inactiveCampus' => 'A grant on an inactive Campus confers nothing, and an inactive Campus places nobody (its Students are whole-School only until it is reactivated). History is never rewritten.',
+            'sharedLookups' => 'None. The Campus Directory is a SIS surface under students.view (StudentAccess), never the other domains\' internal purpose-limited Student picker (ADR 0076 §38.5). The full Profile (date of birth, Guardians and their contacts, account link, history), Enrollment history, rollover, Guardian authority and every Student and Enrollment write stay whole-School; no Guardian data appears on a Campus surface (owner decision F1-D2).',
+        ],
     ];
 
     /**
@@ -144,6 +151,11 @@ final class CampusScopeCatalogue
         'hr.employees.assignments.view' => 'hr',
         'hr.employees.manage' => 'hr',
         'hr.employees.assignments.manage' => 'hr',
+        // ORG.7F-1 (ADR 0076 §45): SIS reads only -- students.manage,
+        // enrollments.manage, rollover, Guardian and processing-authorization
+        // keys stay whole-School.
+        'students.view' => 'students',
+        'enrollments.view' => 'students',
     ];
 
     /**
@@ -223,6 +235,18 @@ final class CampusScopeCatalogue
         'api.v1.schools.employees.employment-records.end' => ['capability' => 'hr.employees.assignments.manage', 'reason' => 'Ending employment is terminal and ends teaching ownership on every Campus.'],
         'api.v1.schools.employees.employment-records.separate' => ['capability' => 'hr.employees.assignments.manage', 'reason' => 'Separation is terminal and ends teaching ownership on every Campus.'],
         'api.v1.schools.employees.rehire' => ['capability' => 'hr.employees.assignments.manage', 'reason' => 'A former Employee has no current Campus: a Campus rehire would capture any former Employee.'],
+        // ORG.7F-1 (ADR 0076 §45): SIS whole-School-only reads of the adopted
+        // students.view / enrollments.view.
+        'app.students.show' => ['capability' => 'students.view', 'reason' => 'The full Student Profile: date of birth, Guardians, the account link and Enrollment history (Campus readers use the operational overview).'],
+        'app.students.history' => ['capability' => 'students.view', 'reason' => 'The Student\'s audit history across every Campus and year.'],
+        'api.v1.schools.students.show' => ['capability' => 'students.view', 'reason' => 'The full Student detail, including date of birth (Highly Sensitive).'],
+        'api.v1.schools.students.guardians.index' => ['capability' => 'students.view', 'reason' => 'Guardian relationships are relationship-scoped School-wide identity, never Campus data.'],
+        'api.v1.schools.students.enrollments.index' => ['capability' => 'enrollments.view', 'reason' => 'A Student\'s full placement history across years and Campuses.'],
+        'app.enrollment-rollovers.index' => ['capability' => 'enrollments.view', 'reason' => 'Rollover plans move every Student of a year into the next one (School-wide lifecycle).'],
+        'app.enrollment-rollovers.show' => ['capability' => 'enrollments.view', 'reason' => 'Rollover plans move every Student of a year into the next one (School-wide lifecycle).'],
+        'api.v1.schools.enrollment-rollovers.index' => ['capability' => 'enrollments.view', 'reason' => 'Rollover plans move every Student of a year into the next one (School-wide lifecycle).'],
+        'api.v1.schools.enrollment-rollovers.show' => ['capability' => 'enrollments.view', 'reason' => 'Rollover plans move every Student of a year into the next one (School-wide lifecycle).'],
+        'api.v1.schools.enrollment-rollovers.items.index' => ['capability' => 'enrollments.view', 'reason' => 'Rollover items list every Student of the source year (School-wide lifecycle).'],
     ];
 
     /**
@@ -250,6 +274,8 @@ final class CampusScopeCatalogue
         ],
         'data-health' => [
             'timetable.schedule.view' => 'Data Health is a School-wide report: its "Sections without a schedule" check lists every Section of the School, so it opens only on whole-School authority.',
+            // ORG.7F-1 (ADR 0076 §45).
+            'enrollments.view' => 'Data Health is a School-wide report: its placement checks list Students and placements of every Campus and year, so it opens only on whole-School authority.',
         ],
     ];
 

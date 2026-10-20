@@ -13,6 +13,7 @@ use App\Models\School;
 use App\Support\Authorization\AuthorizesCapability;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -41,9 +42,10 @@ class EnrollmentRolloverItemController extends Controller
 
     public function index(Request $request, School $school, string $rollover, EnrollmentRolloverReadService $reads): JsonResponse
     {
-        $this->authorizeCapability('enrollments.view', $school);
+        // ORG.7F-1: enrollments.view is the route floor (a declared whole-School-only operation).
         $this->authorizeCapability('enrollments.rollovers.view', $school);
 
+        abort_if(! Str::isUuid($rollover), 404);
         $plan = EnrollmentRolloverPlan::query()->findOrFail($rollover);
 
         $validated = $request->validate([
@@ -70,7 +72,9 @@ class EnrollmentRolloverItemController extends Controller
 
     public function update(Request $request, School $school, string $rollover, string $item, EnrollmentRolloverPlanService $service): JsonResponse
     {
+        abort_if(! Str::isUuid($rollover), 404);
         $plan = EnrollmentRolloverPlan::query()->findOrFail($rollover);
+        abort_if(! Str::isUuid($item), 404);
         $model = EnrollmentRolloverItem::query()->where('plan_id', $plan->id)->findOrFail($item);
 
         $validated = $request->validate([

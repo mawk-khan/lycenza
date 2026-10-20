@@ -11,10 +11,14 @@ interface StudentRow {
     firstName: string;
     middleName: string | null;
     lastName: string | null;
-    status: 'active' | 'inactive';
+    // Absent for a Campus-scoped reader (ORG.7F-1): their Directory holds
+    // active Students only.
+    status?: 'active' | 'inactive';
     // Present only when the viewer holds enrollments.view (V11.2); null when
     // the Student has no active placement in the School's active year.
+    // `campus` is sent to a Campus-scoped reader only.
     currentPlacement?: {
+        campus?: string | null;
         gradeLevel: string | null;
         section: string | null;
         rollNumber: string | null;
@@ -42,6 +46,9 @@ interface Props {
     };
     canManage: boolean;
     canViewEnrollments: boolean;
+    // ORG.7F-1 (ADR 0076 §45): a Campus-scoped reader -- rows open the
+    // Campus-safe overview, never the whole-School Profile.
+    campusView: boolean;
 }
 
 const props = defineProps<Props>();
@@ -96,8 +103,14 @@ function placementLabel(student: StudentRow): string {
     if (!p) {
         return 'No current class';
     }
-    const cls = [p.gradeLevel, p.section].filter(Boolean).join(' · ');
+    const cls = [p.gradeLevel, p.section, p.campus].filter(Boolean).join(' · ');
     return p.rollNumber ? `${cls} (roll ${p.rollNumber})` : cls;
+}
+
+function studentHref(student: StudentRow): string {
+    return props.campusView
+        ? `/app/students/${student.id}/overview`
+        : `/app/students/${student.id}`;
 }
 </script>
 
@@ -140,7 +153,7 @@ function placementLabel(student: StudentRow): string {
                     class="mt-1 w-48 rounded border border-slate-300 px-3 py-2 text-sm"
                 />
             </div>
-            <div>
+            <div v-if="!campusView">
                 <label class="block text-sm text-slate-600" for="filter-status">Status</label>
                 <select
                     id="filter-status"
@@ -162,7 +175,7 @@ function placementLabel(student: StudentRow): string {
                 Clear filters
             </button>
         </form>
-        <p v-if="canViewEnrollments" class="mt-2 text-sm text-slate-500">
+        <p v-if="canViewEnrollments && !campusView" class="mt-2 text-sm text-slate-500">
             To find Students by academic year, campus, grade, Section or roll number, use the
             <a class="underline" href="/app/enrollments">Enrollments directory</a>.
         </p>
@@ -197,7 +210,7 @@ function placementLabel(student: StudentRow): string {
                         <th v-if="canViewEnrollments" scope="col" class="py-2 font-medium">
                             Current class
                         </th>
-                        <th scope="col" class="py-2 font-medium">Status</th>
+                        <th v-if="!campusView" scope="col" class="py-2 font-medium">Status</th>
                         <th scope="col" class="py-2 font-medium">
                             <span class="sr-only">Actions</span>
                         </th>
@@ -206,21 +219,19 @@ function placementLabel(student: StudentRow): string {
                 <tbody class="divide-y divide-slate-100">
                     <tr v-for="student in students.data" :key="student.id">
                         <td class="py-3">
-                            <a
-                                class="font-medium underline"
-                                :href="`/app/students/${student.id}`"
-                                >{{ fullName(student) }}</a
-                            >
+                            <a class="font-medium underline" :href="studentHref(student)">{{
+                                fullName(student)
+                            }}</a>
                         </td>
                         <td class="py-3 text-slate-600">{{ student.studentNumber }}</td>
                         <td v-if="canViewEnrollments" class="py-3 text-slate-600">
                             {{ placementLabel(student) }}
                         </td>
-                        <td class="py-3"><StatusBadge :status="student.status" /></td>
+                        <td v-if="student.status" class="py-3">
+                            <StatusBadge :status="student.status" />
+                        </td>
                         <td class="py-3 text-right">
-                            <a class="text-sm underline" :href="`/app/students/${student.id}`"
-                                >View</a
-                            >
+                            <a class="text-sm underline" :href="studentHref(student)">View</a>
                         </td>
                     </tr>
                 </tbody>
@@ -233,14 +244,16 @@ function placementLabel(student: StudentRow): string {
                     :key="student.id"
                     class="rounded border border-slate-200 p-4"
                 >
-                    <a class="font-medium underline" :href="`/app/students/${student.id}`">{{
+                    <a class="font-medium underline" :href="studentHref(student)">{{
                         fullName(student)
                     }}</a>
                     <p class="mt-1 text-sm text-slate-500">{{ student.studentNumber }}</p>
                     <p v-if="canViewEnrollments" class="mt-1 text-sm text-slate-500">
                         {{ placementLabel(student) }}
                     </p>
-                    <div class="mt-2"><StatusBadge :status="student.status" /></div>
+                    <div v-if="student.status" class="mt-2">
+                        <StatusBadge :status="student.status" />
+                    </div>
                 </li>
             </ul>
 

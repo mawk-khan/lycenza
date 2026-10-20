@@ -261,15 +261,23 @@ class StudentOperationalCampusTest extends TestCase
     #[Test]
     public function the_foundation_grants_no_student_authority(): void
     {
-        // A principal granted for Campus A gains no Student profile or Enrollment access.
+        // The foundation itself grants nothing. ORG.7F-1 (ADR 0076 §45) adopted
+        // only the SIS READ keys through StudentAccess: a principal granted for
+        // Campus A reads its current Students, never School-wide, never a write.
         $user = $this->createUser();
         $this->assignSchoolRole($this->createMembership($user, $this->school), 'principal', $this->a->id);
-        foreach (['students.view', 'students.update', 'enrollments.view'] as $capability) {
+        foreach (['students.view', 'students.manage', 'enrollments.view', 'enrollments.manage'] as $capability) {
             $this->assertFalse(Gate::forUser($user)->allows('capability', [$capability, $this->school]), "{$capability} School-wide");
+        }
+        foreach (['students.manage', 'enrollments.manage'] as $capability) {
             $this->assertTrue(app(CampusScopeResolver::class)->campusScope($user, $capability, $this->school)->isNone(), "{$capability} in a Campus");
         }
-        $this->student('Anna', ['current' => 'a']);
+        foreach (['students.view', 'enrollments.view'] as $capability) {
+            $this->assertSame([$this->a->id], app(CampusScopeResolver::class)->campusScope($user, $capability, $this->school)->campusIds(), "{$capability} (ORG.7F-1 read adoption)");
+        }
+        $anna = $this->student('Anna', ['current' => 'a']);
         $this->actingAs($user)->post("/app/schools/{$this->school->id}/activate");
-        $this->get('/app/students')->assertForbidden();
+        $this->get('/app/students')->assertOk();
+        $this->get("/app/students/{$anna->id}")->assertForbidden();
     }
 }

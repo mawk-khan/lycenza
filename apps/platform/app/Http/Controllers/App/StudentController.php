@@ -4,9 +4,9 @@ namespace App\Http\Controllers\App;
 
 use App\Domain\Identity\Application\AccountLinkService;
 use App\Domain\Students\Application\Exceptions\DuplicateStudentNumberException;
+use App\Domain\Students\Application\StudentAccess;
 use App\Domain\Students\Application\StudentActivityHistoryService;
 use App\Domain\Students\Application\StudentEnrollmentReadService;
-use App\Domain\Students\Application\StudentSearch;
 use App\Domain\Students\Application\StudentService;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
@@ -17,6 +17,7 @@ use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -45,60 +46,6 @@ use Inertia\Response;
 class StudentController extends Controller
 {
     use AuthorizesCapability;
-
-    public function index(Request $request, TenantContext $context, CapabilityResolver $capabilities, StudentEnrollmentReadService $enrollmentReads): Response
-    {
-        $school = $context->requireSchool();
-        $this->authorizeCapability('students.view', $school);
-
-        $validated = $request->validate([
-            'student_number' => ['sometimes', 'string', 'max:255'],
-            'name' => ['sometimes', 'string', 'max:255'],
-            'status' => ['sometimes', Rule::in(['active', 'inactive'])],
-            'page' => ['sometimes', 'integer', 'min:1'],
-        ]);
-
-        $query = Student::query()->orderBy('first_name')->orderBy('last_name');
-
-        // UAT-C4 (UAT-SRCH-01): any part of the number; every name word in
-        // any name field (StudentSearch).
-        if (isset($validated['student_number'])) {
-            StudentSearch::number($query, $validated['student_number']);
-        }
-
-        if (isset($validated['name'])) {
-            StudentSearch::name($query, $validated['name']);
-        }
-
-        if (isset($validated['status'])) {
-            $query->where('status', $validated['status']);
-        }
-
-        $paginator = $query->paginate(20)->withQueryString();
-
-        // V11.2 (ADR 0075): each row's current class, so two Students with
-        // similar names can be told apart. Present ONLY for holders of
-        // enrollments.view -- the same independent-capability rule show()
-        // applies (Phase 1B.6) -- and loaded for the whole page in one
-        // query (StudentEnrollmentReadService::currentForMany()).
-        $canViewEnrollments = $capabilities->canInSchool($context->actor(), 'enrollments.view', $school);
-        $placements = $canViewEnrollments
-            ? $enrollmentReads->currentForMany($school, $paginator->getCollection()->pluck('id')->all())
-            : null;
-
-        return Inertia::render('App/Students/Index', [
-            'students' => $paginator->through(fn (Student $s) => $this->presentSummary($s) + (
-                $placements === null ? [] : ['currentPlacement' => $this->presentPlacement($placements->get($s->id))]
-            )),
-            'canViewEnrollments' => $canViewEnrollments,
-            'filters' => [
-                'student_number' => $validated['student_number'] ?? '',
-                'name' => $validated['name'] ?? '',
-                'status' => $validated['status'] ?? '',
-            ],
-            'canManage' => $capabilities->canInSchool($context->actor(), 'students.manage', $school),
-        ]);
-    }
 
     public function create(TenantContext $context): Response
     {
@@ -139,8 +86,10 @@ class StudentController extends Controller
      */
     public function history(TenantContext $context, StudentActivityHistoryService $histories, string $student): Response
     {
+        // ORG.7F-1 (ADR 0076 §45): a declared whole-School-only operation --
+        // the route carries the ordinary `capability:students.view` floor,
+        // which a Campus-scoped grant never satisfies.
         $school = $context->requireSchool();
-        $this->authorizeCapability('students.view', $school);
 
         $result = $histories->forStudent($school, $student, $context->actor());
         abort_if($result === null, 404);
@@ -156,17 +105,24 @@ class StudentController extends Controller
         ]);
     }
 
-    public function show(TenantContext $context, CapabilityResolver $capabilities, AccountLinkService $accountLinks, StudentEnrollmentReadService $enrollmentReads, string $student): Response
+    public function show(TenantContext $context, CapabilityResolver $capabilities, AccountLinkService $accountLinks, StudentEnrollmentReadService $enrollmentReads, StudentAccess $access, string $student): Response
     {
+        // ORG.7F-1 (ADR 0076 §45): the full Profile is a declared
+        // whole-School-only operation -- the route carries the ordinary
+        // `capability:students.view` floor, which a Campus-scoped grant never
+        // satisfies (a Campus reader uses the operational overview).
         $school = $context->requireSchool();
-        $this->authorizeCapability('students.view', $school);
+        abort_if(! Str::isUuid($student), 404);
+        $actor = $context->actor();
 
-        // Guardian contacts are eager-loaded here (a single-record
-        // detail view) but deliberately excluded from the Student
-        // INDEX row -- the same "detail views may show more than a
-        // broad list view" principle already applied to dateOfBirth
-        // (docs/security/DATA-CLASSIFICATION.md).
-        $model = Student::query()->with('guardianRelationships.guardian.contacts')->findOrFail($student);
+        // ORG.7F-1 (F-1): a Guardian's contact VALUE is Guardian contact
+        // information, which is `guardians.view` -- never `students.view`
+        // alone (docs/modules/STUDENT-GUARDIAN-IDENTITY.md). Without it the
+        // contacts are not even loaded, so no value can be serialized.
+        $canViewGuardianContacts = $capabilities->canInSchool($actor, 'guardians.view', $school);
+        $model = Student::query()
+            ->with($canViewGuardianContacts ? 'guardianRelationships.guardian.contacts' : 'guardianRelationships.guardian')
+            ->findOrFail($student);
 
         // Phase 5B.2: the optional, explicit School OS account link.
         $link = $accountLinks->activeLinkForStudent($model);
@@ -178,9 +134,13 @@ class StudentController extends Controller
                 'memberName' => $link->membership->user->name,
                 'membershipActive' => $link->membership->isActive(),
             ],
-            'relationships' => $model->guardianRelationships->map(function ($r) {
-                $primaryContact = $r->guardian->contacts->firstWhere('is_primary', true)
-                    ?? $r->guardian->contacts->firstWhere('is_active', true);
+            'relationships' => $model->guardianRelationships->map(function ($r) use ($canViewGuardianContacts) {
+                // Only an ACTIVE contact is ever shown: the active primary,
+                // else the first active one (a deactivated primary is never
+                // chosen).
+                $primaryContact = ! $canViewGuardianContacts ? null
+                    : ($r->guardian->contacts->first(fn ($c) => $c->is_primary && $c->is_active)
+                        ?? $r->guardian->contacts->firstWhere('is_active', true));
 
                 return [
                     'id' => $r->id,
@@ -202,8 +162,9 @@ class StudentController extends Controller
                     ] : null,
                 ];
             })->all(),
-            'canManageStudents' => $capabilities->canInSchool($context->actor(), 'students.manage', $school),
-            'canManageGuardians' => $capabilities->canInSchool($context->actor(), 'guardians.manage', $school),
+            'canManageStudents' => $capabilities->canInSchool($actor, 'students.manage', $school),
+            'canManageGuardians' => $capabilities->canInSchool($actor, 'guardians.manage', $school),
+            'canViewGuardianContacts' => $canViewGuardianContacts,
         ];
 
         // Phase 1B.6: Enrollment data is included ONLY when the actor
@@ -214,12 +175,14 @@ class StudentController extends Controller
         // enrollments.manage never implies enrollments.view (section 30)
         // -- canManageEnrollments is only meaningful/present alongside
         // canViewEnrollments.
-        if ($capabilities->canInSchool($context->actor(), 'enrollments.view', $school)) {
+        // ORG.7F-1: Enrollment history is whole-School (a Campus-scoped
+        // enrollments.view grant reads current placements elsewhere).
+        if ($access->holdsWholeSchool($actor, 'enrollments.view', $school)) {
             $current = $enrollmentReads->currentFor($model);
             $history = $enrollmentReads->historyFor($model);
 
             $props['canViewEnrollments'] = true;
-            $props['canManageEnrollments'] = $capabilities->canInSchool($context->actor(), 'enrollments.manage', $school);
+            $props['canManageEnrollments'] = $capabilities->canInSchool($actor, 'enrollments.manage', $school);
             $props['currentEnrollment'] = $current ? $this->presentEnrollment($current) : null;
             $props['enrollmentHistory'] = $history->map(fn (StudentEnrollment $e) => $this->presentEnrollment($e))->values()->all();
         } else {
@@ -281,18 +244,6 @@ class StudentController extends Controller
         $service->changeStatus($model, $validated['status'], $context->actor());
 
         return redirect("/app/students/{$model->id}");
-    }
-
-    /**
-     * @return array{gradeLevel: string|null, section: string|null, rollNumber: string|null}|null
-     */
-    private function presentPlacement(?StudentEnrollment $enrollment): ?array
-    {
-        return $enrollment === null ? null : [
-            'gradeLevel' => $enrollment->gradeLevel?->name,
-            'section' => $enrollment->section?->name,
-            'rollNumber' => $enrollment->roll_number,
-        ];
     }
 
     /**

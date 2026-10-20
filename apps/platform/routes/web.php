@@ -36,6 +36,7 @@ use App\Http\Controllers\App\DashboardController;
 use App\Http\Controllers\App\DataHealthController;
 use App\Http\Controllers\App\Domains\SchoolDomainController;
 use App\Http\Controllers\App\ElectiveGroupController;
+use App\Http\Controllers\App\EnrollmentDirectoryController;
 use App\Http\Controllers\App\EnrollmentRolloverBulkDecisionController;
 use App\Http\Controllers\App\EnrollmentRolloverController;
 use App\Http\Controllers\App\EnrollmentRolloverItemController;
@@ -133,6 +134,7 @@ use App\Http\Controllers\App\Staff\StaffAccountController;
 use App\Http\Controllers\App\StaffAttendance\StaffAttendanceAdminController;
 use App\Http\Controllers\App\StudentAccountLinkController;
 use App\Http\Controllers\App\StudentController;
+use App\Http\Controllers\App\StudentDirectoryController;
 use App\Http\Controllers\App\StudentEnrollmentController;
 use App\Http\Controllers\App\StudentGuardianRelationshipController;
 use App\Http\Controllers\App\StudentProcessingAuthorizationController;
@@ -604,13 +606,19 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
     // re-derives the active School from TenantContext, never a
     // client-supplied id. See
     // docs/modules/STUDENT-GUARDIAN-IDENTITY.md ("Administrative UI").
+    // ORG.7F-1 (ADR 0076 §45): the Directory and the operational overview are
+    // Campus-adopted (StudentDirectoryController, through StudentAccess); the
+    // full Profile and history carry the ordinary whole-School
+    // `capability:students.view` floor (declared whole-School-only
+    // operations, CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS).
     Route::prefix('app/students')->name('app.students.')->group(function (): void {
-        Route::get('/', [StudentController::class, 'index'])->name('index');
+        Route::get('/', [StudentDirectoryController::class, 'index'])->name('index');
         Route::get('/create', [StudentController::class, 'create'])->name('create');
         Route::post('/', [StudentController::class, 'store'])->name('store');
-        Route::get('/{student}', [StudentController::class, 'show'])->name('show');
+        Route::get('/{student}', [StudentController::class, 'show'])->middleware('capability:students.view')->name('show');
+        Route::get('/{student}/overview', [StudentDirectoryController::class, 'overview'])->name('overview');
         Route::get('/{student}/edit', [StudentController::class, 'edit'])->name('edit');
-        Route::get('/{student}/history', [StudentController::class, 'history'])->name('history');
+        Route::get('/{student}/history', [StudentController::class, 'history'])->middleware('capability:students.view')->name('history');
         Route::put('/{student}', [StudentController::class, 'update'])->name('update');
         Route::post('/{student}/status', [StudentController::class, 'changeStatus'])->name('status');
 
@@ -952,7 +960,8 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
     // pattern -- every action re-derives the active School from
     // TenantContext, never a client-supplied id.
     Route::prefix('app/enrollments')->name('app.enrollments.')->group(function (): void {
-        Route::get('/', [StudentEnrollmentController::class, 'index'])->name('index');
+        // ORG.7F-1 (ADR 0076 §45): Campus-aware (current in-scope placements for a Campus actor).
+        Route::get('/', [EnrollmentDirectoryController::class, 'index'])->name('index');
         // V11.3 (ADR 0075 section 11): placements left open in a closed year.
         // Literal paths before /{enrollment}/... (enrollments.manage).
         Route::get('/closed-year-placements', [ClosedYearPlacementController::class, 'index'])->name('closed-year-placements.index');
@@ -977,10 +986,12 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
     // 1G.1 operation returning a source Offering to UNCONFIGURED,
     // distinct from the Grade/Section mapping model's own semantics.
     Route::prefix('app/enrollment-rollovers')->name('app.enrollment-rollovers.')->group(function (): void {
-        Route::get('/', [EnrollmentRolloverController::class, 'index'])->name('index');
+        // ORG.7F-1 (ADR 0076 §45): rollover reads are declared whole-School-only
+        // operations of the adopted enrollments.view.
+        Route::get('/', [EnrollmentRolloverController::class, 'index'])->middleware(['capability:enrollments.view', 'capability:enrollments.rollovers.view'])->name('index');
         Route::get('/create', [EnrollmentRolloverController::class, 'create'])->name('create');
         Route::post('/', [EnrollmentRolloverController::class, 'store'])->name('store');
-        Route::get('/{rollover}', [EnrollmentRolloverController::class, 'show'])->name('show');
+        Route::get('/{rollover}', [EnrollmentRolloverController::class, 'show'])->middleware(['capability:enrollments.view', 'capability:enrollments.rollovers.view'])->name('show');
         Route::post('/{rollover}/validate', [EnrollmentRolloverController::class, 'validate'])->name('validate');
         Route::post('/{rollover}/start', [EnrollmentRolloverController::class, 'start'])->name('start');
         Route::post('/{rollover}/resume', [EnrollmentRolloverController::class, 'resume'])->name('resume');
