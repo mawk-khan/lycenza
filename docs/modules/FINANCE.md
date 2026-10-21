@@ -5612,3 +5612,19 @@ no Campus fee statement; corrections, refunds, reversals, Charges, runs,
 concessions, configuration, accounts, periods and ledger whole-School;
 accountant never Campus-scoped; receipt numbers School-wide (gaps per Campus
 are expected).
+
+## Approval authority audit (ORG.8, 2026-10-21, ADR 0076 §56 — read-only)
+
+Nothing changed. Recorded for later owner-authorized phases:
+- **G-1 (MEDIUM, pre-existing):** `LedgerAdministrationService::reverse()`
+  accepts any journal entry of the School. Only a Payment's settlement entry
+  is protected (`journal_entries_payment_reversal_guard`). A Charge,
+  fee-adjustment, payment-correction, payroll or statutory posting entry
+  reversed directly leaves its owner live (the Charge stays uncancelled
+  and a later cancel is refused as already cancelled). Fix first, as
+  ORG.8-P1, before any Finance approval work.
+- **Concessions** are the pilot request/approve workflow (ORG.8A); revoke
+  and adjustment cancellation still lack a separation-of-duties check and
+  a reason (G-3).
+- **Payment reversal and refund** maker/checker, a ledger reverser != poster
+  rule and Charge cancel reasons/step-up are owner decisions OD-8.1–OD-8.3.

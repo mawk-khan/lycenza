@@ -1007,3 +1007,12 @@ ADR 0065 §26 and
     (`payroll.compensation.sensitive.view`, `payroll.payslip.viewed`) and
     the run states are unchanged. `PayslipPresenter` is now the one shape
     both payslip transports share. No loss-of-pay or NCP (HRX.5).
+
+## Approval authority audit (ORG.8, 2026-10-21, ADR 0076 §56 — read-only)
+
+Nothing changed. **G-2 (MEDIUM, separation of duties):** approval compares
+only the run creator (`prepared_by_user_id`) with the approver, so someone
+holding both `payroll.runs.prepare` and `.approve` can record overrides or
+deltas on, or recalculate, another preparer's run and then approve it.
+Recommended fix (ORG.8B): no prior participant decides. The approver's own
+pay and approve != post stay owner decision OD-8.4.

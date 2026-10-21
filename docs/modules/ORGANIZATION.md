@@ -289,3 +289,13 @@ School setting, a role, a navigation toggle or a commercial plan.
   database; stock writes share-lock their Location and re-check its Campus.
   ORG.7 stays closed. ORG.7H-1R (§55) made "used" monotonic: the runtime
   role can no longer delete or re-point that evidence.
+- **ORG.8 (ADR 0076 §56)** audited approvals without changing anything.
+  An approval lets one specific request go ahead; it never gives anyone a
+  new permission and never gets around a Campus limit, a disabled module, a
+  School's status or a legal review. Approvals stay inside each area (fee
+  concessions, message approval, marks corrections, leave, payroll); there
+  is no general workflow builder. Nobody approves their own request, and
+  every approval permission is School-wide today. The rules, the gaps found
+  and the order of future work are in
+  `docs/security/APPROVAL-AUTHORITY-MATRIX.md`; the test plan is
+  `docs/product/APPROVAL-AUTHORITY-UAT.md`.

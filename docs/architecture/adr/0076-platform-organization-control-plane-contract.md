@@ -864,6 +864,9 @@ capability resolution (roles ∩ scope ∩ entitlements)  ──►  navigation 
   - student status (inactive / reactivate) requests;
   - fee unassignment;
   - lesson-plan approval (no lesson-plan module exists).
+- **ORG.8 contract audit (2026-10-21):** §56 freezes the v1 approval
+  contract against repository truth, records gaps G-1..G-6 and the
+  implementation sequence; nothing is built.
 
 ## 17. Authorization evaluation order (ORG-D17)
 
@@ -8052,3 +8055,406 @@ edit.
 **55.9 Status.** ORG.7H-1R CLOSED once published. ORG.7 remains technically
 complete, integrated UAT ready, production blocked by the §53.15 gates.
 Next: ORG.8 read-only contract audit (owner authorization).
+
+## 56. ORG.8 — Approval authority and assurance contract audit (read-only, 2026-10-21)
+
+Owner authorization: ORG.8, read-only architecture / authority / assurance
+audit; implementation NOT authorized. Baseline `origin/main` = `98932b07`
+(§55). No production code, schema, capability, role template,
+`CampusScopeCatalogue`, route, RLS or legal-gate change. Documentation only.
+Matrix: `docs/security/APPROVAL-AUTHORITY-MATRIX.md`; UAT plan:
+`docs/product/APPROVAL-AUTHORITY-UAT.md`. This section refines §16; it does
+not replace it.
+
+    APPROVAL ARCHITECTURE        UNDERSTOOD; v1 contract frozen below
+    IMPLEMENTATION               NOT STARTED (owner authorization per phase, 56.30)
+    PREREQUISITES                ORG.8-P1 subledger reversal guard (G-1) before any Finance approval work;
+                                 owner decisions OD-8.1..OD-8.9 (56.29)
+
+**56.1 Terminology (frozen).** REQUEST asks for one action. APPROVE
+authorizes that action subject to current validity. REJECT ends a request
+without executing it. EXECUTE performs the business action. REVERSE
+compensates an executed action with a new record (never an edit or delete,
+rules 9, 11, 91). OVERRIDE is a documented exception to a rule that is
+explicitly overrideable. CANCEL ends an unexecuted request. Approval,
+reversal and override are distinct operations, distinct capabilities and
+distinct audit events; no generic "approve" button collapses them.
+
+**56.2 Approval is not permission.** A capability authorizes an action
+class; an approval authorizes one item under stated terms. No code may
+treat "approved" as `can()`, cache it as authority, or turn it into a
+grant. Every approval row is item-bound (56.11).
+
+**56.3 Approval never bypasses authorization.** Execution re-evaluates the
+full order (§53.1): platform/environment -> legal availability -> School
+lifecycle -> module entitlement -> capability -> Campus/whole-School scope
+-> ownership/relationship -> approval/SoD/MFA/idempotency -> domain
+validity. An approval satisfies only the approval layer. Repository truth
+agrees: every existing approve path re-resolves the decider's capability
+in the decision transaction (concessions, marks corrections, Leave
+manager re-resolved under `ReportingLine::holdManagerOf`), and
+Communications re-checks `currentlyApprovedAndValid` at publish and
+schedule (`AnnouncementService` :423, :701).
+
+**56.4 Legal gates are never overridable.** No approval, override or
+administrative decision opens E21, E30–E34, E36/E37, E42 (RES-L7), E45,
+E46, E47, HRX-L1..L4 or any other recorded gate (§53.15, ADR 0058 §6).
+Gates enforced in code (E36/E37 marks, E46 portal, teacher Attendance API)
+refuse before any approval logic; gates without a code refusal
+(E30–E34) block production by process. ORG.8 changes no gate status.
+
+**56.5 Repository truth: no generic approval framework.** There is no
+`approval_requests`, workflow, delegation or sign-off table and no shared
+approval service. Approval is module-owned, as §16 decided. Request/decide
+workflows that exist:
+
+    workflow                 tables / checks                                                status
+    fee concessions          fee_concessions (pending/approved/rejected/withdrawn/revoked),  COMPLETE (G-3)
+                             fee_concessions_sod_check, transition trigger, immutable terms
+    Communications approval  communication_approval_requests (+ invalidated),               COMPLETE (fingerprint reference)
+                             CommunicationApprovalFingerprint, School approval policies
+    marks corrections        student_mark_corrections, maker_checker_check, reason_code,    COMPLETE; prod refused (E36/E37)
+                             one pending per mark, decided rows immutable
+    Leave                    leave_requests + leave_decisions, no_self_decision,            COMPLETE for v1 (G-4)
+                             closed rejection/closing codes, content immutable
+    payroll runs             draft->calculated->approved->posted, payroll_runs_sod_check,    PARTIAL (G-2)
+                             freezes at approval; approver may post
+    erasure cases            requested->approved/denied->executing->completed               COMPLETE (compliance, out of scope)
+
+Everything else that changes money, status or history is a direct
+privileged operation by one actor (matrix §2): payment corrections,
+ledger post/reverse, period close, Charge cancel/voids, fee-run cancel,
+Library fine void, Student and Staff Attendance corrections, Student
+status, Enrollment end, Campus transfer, Admissions decisions and
+conversion, marks paper lock, HR lifecycle. MISSING as request/approve:
+payment refund/reversal approval, Library fine void request, Student
+status requests, attendance regularisation approval. Lesson plans: no
+module exists (MISSING; out of v1). Results/publication/moderation: not
+built and LEGAL_BLOCKED (RES-L4..L7).
+
+**56.6 Capability inventory (approval-shaped keys, seeded holders).**
+`communications.approve` (school_admin, principal); `hr.leave.approve`
+(school_admin, principal; manager path) with `hr.leave.manage`
+(school_admin, hr_officer; administrative decide); `finance.fee_concessions
+.request` (school_admin, accountant) / `.approve` (school_admin);
+`finance.ledger.post` (school_admin, accountant) / `.reverse`
+(school_admin); `payroll.runs.prepare` (school_admin, payroll_officer) /
+`.approve` / `.post` / `.reverse` (school_admin); `examinations.marks
+.correction.request` / `.approve` / `.lock` (school_admin, principal);
+`library.fines.void` (school_admin); `finance.periods.manage`
+(school_admin). None is Campus-adopted; `finance.ledger.*` and
+`finance.fee_concessions.*` are `CAMPUS_INCOMPATIBLE`. Consequence:
+school_admin is today the only template that can approve concessions or
+payroll, reverse the ledger or void a fine, so in a School whose only
+finance-authority holder is one administrator, four-eyes needs a second
+person to hold `.request` (accountant) — holding both never satisfies SoD.
+
+**56.7 Maker/checker contract.** Per item, per actor, never per role.
+`SELF_APPROVAL_FORBIDDEN` for every request/approve workflow (existing and
+future) and extended to PRIOR PARTICIPATION: whoever created, calculated,
+amended (override, delta, term change) or requested an item never decides
+it. An actor may be maker on item 1 and checker on item 2. No global role
+incompatibility is added (the only ones remain Platform Manager/Auditor
+exclusivity and `CAMPUS_INCOMPATIBLE`, which is a scope rule, not SoD).
+Database CHECKs remain the backstop pattern (§16) for material workflows.
+
+**56.8 Requester / approver / executor.** Four patterns, chosen per domain
+by risk, never ceremony:
+- A — approval executes in the same transaction (concessions, marks
+  corrections, Leave). Default for v1.
+- B — approval then a separate executor (payroll approve -> post).
+  Approver and executor MAY be the same actor (Checkpoint 9.5; owner
+  decision OD-8.4 open per ADR 0071 §26.13); execution re-checks current
+  authority.
+- C — requester executes after external approval: not used; not adopted.
+- D — no request object; fresh MFA + reason + audit (ledger post, period
+  close, payment corrections today).
+Separate execution is required only where execution is a distinct
+financial event (payroll posting).
+
+**56.9 Campus intersection.** All approval keys are whole-School today, so
+a Campus grant confers no approval authority (rule 101: whole-School paths
+never count Campus grants). Future rule: a Campus-scoped approval key
+exists only where its domain adopted Campus scope; requester, approver and
+executor each independently need their own scope over the item's STORED
+Campus; a Campus A approval never authorizes Campus B; a whole-School
+approver may decide a Campus item where the domain contract permits;
+multi-Campus grants union as frozen; refusals stay generic (§34).
+
+**56.10 Snapshot vs current.** The decision row keeps historical
+provenance (who, when, which scope fact, fingerprint, reason); execution
+and every replay re-check CURRENT authority and validity. An approver's
+later revocation leaves the historical decision valid as evidence; an
+unexecuted pattern-B approval whose approver lost authority is
+re-validated at execution against the executor's current authority, and
+is invalidated if the domain requires the approver's authority to persist
+(default: invalidate, for internal administrative approvals). No domain
+today has an "immutable external approval" exception.
+
+**56.11 Drift and fingerprint.** The canonical binding is a server-side
+fingerprint of the approval-sensitive fields (recursive key-sorted JSON,
+SHA-256: `RequestFingerprint` / `CommunicationApprovalFingerprint` are the
+reference). Either the request terms are DB-immutable after submission
+(concessions, Leave, marks corrections — preferred), or an
+approval-sensitive edit invalidates the approval (Communications). Material
+fields per domain: amount, Student, Campus, effective date, target
+Employee, Leave dates, Charge allocations, destination/settlement account,
+attendance status and date, Student status transition, fine amount.
+Operational timing (e.g. schedule time) is excluded only by an explicit
+domain decision. Targeted concessions are additionally re-validated under
+the Charge lock at approval; standing concessions apply to later Charges
+by design (owner decision recorded in ADR 0062).
+
+**56.12 Expiry / invalidation.** No approval expires by clock today and
+none should by default. Invalidate (or refuse execution) on: material
+drift; effective date passed where the domain is date-bound; Campus
+inactive; module disabled; School not operational per that operation's
+lifecycle rule; accounting period closed for the target date; approver
+authority lost (pattern B, 56.10); legal gate refusing in code. A
+re-enabled module or re-activated Campus never revives a materially changed
+request; validity is re-evaluated. Pending requests are not auto-expired in
+v1 (no requirement); a stale pending item is cancelled explicitly.
+
+**56.13 Fresh MFA (repository truth).** One mechanism:
+`FreshMfaRequirement::requireForAction()` — a new TOTP code (step strictly
+greater than the factor's last used step, row-locked) or an unused recovery
+code PER ACTION; no freshness window; works for session and bearer alike;
+runs after the capability, outside the business transaction. Distinct from
+assurance (`mfa`/`mfa-page`/`SensitiveReadAssurance`, 60-minute window bound
+to the current factor) used for Highly Sensitive reads and marks routes.
+Because a code is per action, "MFA expired between approval and execution"
+cannot carry over: each step that requires it asks again. Recommended
+step-up: payment reversal/refund ON_BOTH (request + approval) or
+ON_APPROVAL at minimum; ledger post/reverse ON_EXECUTION (as today);
+payroll ON_APPROVAL + ON_EXECUTION (as today); concession approve/revoke/
+cancel ON_APPROVAL (as today), reject NONE; marks correction decide (as
+today); Student status / Enrollment end ON_EXECUTION (new, with D-13);
+Charge cancel/void ON_EXECUTION (new); attendance corrections NONE;
+Leave NONE; access administration unchanged. No new MFA mechanism.
+
+**56.14 Reason codes.** Closed catalogues already exist (elevation,
+lifecycle, entitlements, Leave, marks, Staff Attendance, erasure, holds).
+Rule: every REJECT, REVERSE, OVERRIDE, CANCEL-of-executed and high-risk
+direct action carries a CLOSED reason code (machine-auditable), with
+optional bounded free text stored on the domain row and never in audit
+metadata. REASON_REQUIRED: refund, payment reversal, ledger reverse,
+payroll reverse (today optional), Charge cancel/voids, Library fine void
+(today free text only), attendance corrections (Student today none),
+Student status and Enrollment end, concession revoke/cancel-adjustment,
+HR separation, any override. OPTIONAL_COMMENT: approve decisions.
+NO_REASON_REQUIRED: request submission where the request itself is the
+justification (Leave reason stays optional).
+
+**56.15 Override.** v1 needs no override capability: no existing policy is
+designed to be overrideable, and no repository path overrides a policy
+(payroll `manual_override` is an adjustment kind, not a policy override;
+emergency Communications publish is a named policy path with fresh MFA).
+Any future override requires: a dedicated `.override` key (authority
+class); the exact named policy it relaxes; a closed reason; fresh MFA;
+an immutable audit event; and it may NEVER bypass tenancy, legal gates,
+module entitlement, School lifecycle, Campus scope, SoD or domain
+invariants (DB constraints).
+
+**56.16 Delegation.** None exists and none is needed for v1 (Leave falls
+back to the administrative `hr.leave.manage` path when no manager exists;
+no other domain has an approver-absence problem with one whole-School
+approver class). Any future delegation: bounded window, explicit delegator
+and delegate, delegate must independently hold the capability and scope
+(intersection, never amplification), immutable audit, no delegation of
+legal-gated or access-administration authority.
+
+**56.17 Thresholds and multi-level.** No threshold exists (ADR 0062 v1
+explicitly has none) and none is invented. If the owner later requires
+amount thresholds (refund, concession), they are a SCHOOL-CONFIGURABLE
+business policy bounded by a code-owned ceiling, evaluated at decision
+time against the fingerprinted amount. Every candidate is SINGLE_APPROVAL;
+no MULTI_LEVEL requirement exists (Leave multi-level/HR-final explicitly
+out of v1, ADR 0065 §6). No N-stage machinery.
+
+**56.18 Finance — payment corrections.** Today pattern D: one actor,
+whole-School, fresh MFA, mandatory reason (5-500, DB), server-issued
+idempotency key, append-only `payment_corrections`, one reversal per
+Payment. Recommendation: reallocation stays direct; reversal and recorded
+refund become REQUEST -> APPROVE (approval executes, pattern A),
+SELF_APPROVAL_FORBIDDEN, closed reason + text, ON_APPROVAL step-up (and on
+request), proposed keys `finance.payment_corrections.request/.approve`.
+This amends ADR 0031 §3 and CLAUDE.md rule 91 and needs its own owner
+decision (OD-8.1). Campus cashier never requests or approves (corrections
+stay whole-School, §51).
+
+**56.19 Finance — ledger.** Post: any `finance.ledger.post` holder, fresh
+MFA, NO_APPROVAL. Reverse: `finance.ledger.reverse`, fresh MFA, optional
+text, one reversal per entry, reversal posts in the current open period.
+No poster column exists, so "poster may reverse own entry" cannot be
+enforced (ADR 0071 §26.13, OD-8.2). **New finding G-1 (MEDIUM,
+pre-existing, integrity):** the general reverse path accepts any School
+journal entry; only Payment settlement entries are protected
+(`journal_entries_payment_reversal_guard`). Charge recognition, fee
+adjustment, payment correction, payroll and statutory posting entries can
+be reversed directly, leaving the owning record live. Reproduced read-only
+with an uncommitted scratch test: after a direct reversal the Charge stays
+`cancelled_at = NULL` and a later cancel is refused as
+`ChargeAlreadyCancelledException`. Requires school_admin + fresh MFA;
+audited; repairable by reversing the reversal; no cross-tenant effect.
+Not fixed (implementation not authorized): prerequisite ORG.8-P1.
+
+**56.20 Fees — concessions (reference implementation).** Mature: separate
+request/approve keys, SoD in service and DB, DB-immutable terms, closed
+category, transition trigger, locked decision, fresh MFA on approve/revoke/
+cancel-adjustment, idempotent request (server key on web), targeted amount
+re-validated under the Charge lock; no thresholds, no expiry. Gaps (G-3,
+LOW): revoke and cancel-adjustment have no SoD check; no reason on
+revoke/cancel. Recommended pilot (56.31).
+
+**56.21 Fees — unassignment / waiver / correction.** Charge amounts are
+immutable (`fees_reject_recognized_charge_mutation`); removal is
+cancellation by reversal (Charge cancel, assessment void, late-fee void,
+all `finance.charges.manage`, no MFA, optional text); unassigning an
+optional fee only changes intent. Classification: cancel/void = ordinary
+correction (direct, recommend REASON_REQUIRED + ON_EXECUTION step-up);
+waiver = a concession (category `waiver`, already maker/checker); no
+override exists. No approval layer recommended unless the owner chooses
+(OD-8.3).
+
+**56.22 Library fines.** Generated once at check-in (bounded Finance side
+effect, stored loan Campus). Void: `library.fines.void` (school_admin
+only), controller-checked, free-text reason (DB), refused when paid or
+adjusted, cancels the Charge, never a refund. Waiver = concession.
+Recommendation: keep direct for the holder; add a closed reason; an
+optional librarian request (`library.fine_voids.request`, Finance-side
+decision by the existing key) only if the owner wants librarians to
+initiate (OD-8.5). Never broad Finance authority for the librarian. E34
+blocks production regardless.
+
+**56.23 Attendance.** Student: corrections are direct compare-and-swap by
+`attendance.manage` (Campus-adopted, register's stored Campus) or the
+owning teacher; no reason, no window, no approval. Recommendation:
+NO_APPROVAL; REASON_REQUIRED (closed); any "late correction needs approval"
+window is a School-configurable business policy (OD-8.6), not v1. Staff:
+separate system (HRX), direct correction with closed reason, version CAS,
+correction evidence trigger, self refused; NO_APPROVAL, unchanged. E33
+applies to teacher Student Attendance only.
+
+**56.24 Student lifecycle and transfer.** Status toggle and Enrollment
+end are direct whole-School operations (`students.manage`,
+`enrollments.manage`: school_admin, principal) without reason, lock (status)
+or MFA (G-6). Recommendation: NO_APPROVAL in v1 + closed reason +
+ON_EXECUTION step-up + confirmation (LC-8 STU-14); a Campus-staff request
+with whole-School approval (`students.status.request/.approve`) only on
+owner decision D-13 / OD-8.7. Campus transfer: **NO_APPROVAL** — dual-scope
+authority over both Campuses, active-placement guard, Hostel/Transport/
+elective blockers, immutable placements and audit already exceed what an
+approval adds; Campus actors are limited to today.
+
+**56.25 HR Leave.** Single-level, final either path; manager re-resolved
+under lock at decision (a stale manager gets the private 404); no manager
+-> administrative fallback; no delegation; no Campus logic (whole-School).
+Gaps: G-4 (`hr.leave.manage` writes on one's own leave balance and
+administrative cancel of one's own approved leave are not self-refused);
+Campus principal approval and cross-Campus managers remain owner decisions
+(§53.16, OD-8.8); no fresh MFA (recommend NONE). HRX-L1/L3 open.
+
+**56.26 HR lifecycle.** Onboarding, assignments, separation, rehire,
+account links and archive are direct HR operations with the
+self-administration guard (rule 95); highly sensitive documents need fresh
+MFA. Recommendation: no approval; closed separation reason; core-field and
+personal-detail self-access stays the open ADR 0071 §26.13 decision.
+
+**56.27 Payroll.** Prepare (create, calculate, overrides, deltas) ->
+approve (fresh MFA; creator != approver in service and DB) -> post (fresh
+MFA; approver may post) -> reverse (fresh MFA, optional reason) or a
+correction run. No reopen, no payment release. **G-2 (MEDIUM SoD):** the
+check compares only the run creator, so a prepare+approve holder can amend
+or recalculate another preparer's run and approve it. Recommendation:
+prior-participation SoD (56.7), closed reverse reason. Open owner
+decisions: approver's own pay, approve != post (OD-8.4). HRX-L4, E45 open.
+
+**56.28 Exams, lesson plans, Admissions.** Marks corrections are the
+marks maker/checker (closed reason, SoD, fresh MFA, DB invariants); paper
+lock is a direct irreversible step with fresh MFA; results, publication,
+moderation are not built and legal-blocked; approval authority never
+grants marks access and TeachingOwnership stays independent. Lesson plans:
+no module, nothing to approve. Admissions: accept/reject/withdraw are direct
+privileged transitions (`admissions.manage`, Campus-adopted on the stored
+application Campus), optional unaudited note; conversion whole-School.
+Recommendation: NO_APPROVAL; closed rejection reason.
+
+**56.29 Owner decisions (recorded, open).** OD-8.1 payment
+reversal/refund maker/checker (amends ADR 0031 §3 / rule 91); OD-8.2
+ledger reverser != poster for manual entries (needs a poster column);
+OD-8.3 Charge cancel/void approval or reason+MFA only; OD-8.4 payroll
+approver's own pay and approve != post; OD-8.5 librarian void request;
+OD-8.6 School-configurable attendance correction window; OD-8.7 Student
+status requests (D-13); OD-8.8 Campus principal Leave approval and
+cross-Campus managers; OD-8.9 Group governance fresh MFA (G-5, platform).
+
+**56.30 Canonical v1 model and sequencing.** Model: domain-owned request
+tables and domain-specific queues (option B) over a small shared assurance
+kit (option C-lite): a per-item participation/SoD evaluator, the canonical
+fingerprint helper, the closed-reason convention, the audit vocabulary
+(`<domain>.<item>.requested|approved|rejected|executed|reversed|cancelled|
+overridden`, ids and closed codes only), and an architecture guard that
+registers every approval workflow (state CHECK + SoD CHECK + fingerprint or
+immutable terms + reason policy + step-up policy). State: `pending ->
+approved | rejected | cancelled`, plus `invalidated` where terms may change
+and `executing -> executed` only for pattern B; terminal decisions by
+conditional `UPDATE ... WHERE status = 'pending'` under a row lock, one
+decision per request (unique index), transition triggers. Idempotency:
+server-issued request keys, payload fingerprint, replay re-checks current
+authority before returning a stored result (rule 32); decisions are
+idempotent through the state machine. Async: no approval job serializes
+"authorized"; a job carries request id, decision id, target and fingerprint
+and re-validates at execution (`ExecutesModuleWork` pattern). Audit: the
+School audit ledger is append-only and sufficient as evidence; the decision
+row must additionally persist decider, time, scope fact (Campus id or NULL),
+fingerprint, reason code and the fresh-MFA fact, so history never depends
+on today's role or Campus state. No tenant-configurable workflow engine;
+approval topology and security policy are CODE-OWNED; only business
+policies (Communications approval policy today; a future threshold or
+correction window) are School-configurable; legal policy is never
+configurable. Platform roles never decide tenant business items.
+
+Sequence (each needs its own owner authorization):
+- ORG.8-P1 — subledger journal reversal guard (G-1), integrity only.
+- ORG.8A — assurance kit + pilot on fee concessions (G-3): the kit ships
+  with its first adopter (rule 2).
+- ORG.8B — payroll prior-participation SoD (G-2).
+- ORG.8C — Finance high-risk: payment reversal/refund maker/checker
+  (OD-8.1), ledger actor rule (OD-8.2), Charge cancel reason/step-up.
+- ORG.8D — HR Leave completion (G-4, OD-8.8).
+- ORG.8E — SIS status/Enrollment end, attendance reasons, Library void,
+  Admissions reasons (OD-8.3/8.5/8.6/8.7).
+
+**56.31 Pilot.** Fee concessions: the most complete existing Finance
+request/approve workflow (DB SoD, immutable terms, locked decisions, fresh
+MFA, idempotent requests), so the kit is extracted from working code, not
+a synthetic demo; Communications supplies the fingerprint/invalidation
+reference.
+
+**56.32 Queue privacy.** Each queue lists only items its viewer may decide,
+filtered in SQL by capability, Campus scope and relationship; shows
+minimal fields (no full Student/Employee profile, no contact value);
+out-of-scope ids are the unknown 404. Today's queues already comply: Leave
+approvals (current direct reports only, private 404), concessions
+(`.view`), marks corrections, Communications approvals.
+
+**56.33 Separation from other work.** ORG.7 LOW residuals (replay residual,
+LIKE hygiene, Inventory item `orWhere`, Library rollback,
+`StudentPurposeLookup` docblock, Payment-list scale, malformed Campus UUID,
+Canteen Location 500) stay separate; no approval workflow depends on them.
+LC-5–LC-10 stay paused and none needs ORG.8 (LC-6 ATT-06 and LC-8 STU-14 /
+LIB-05 add confirmation only and stay compatible with 56.23/56.24/56.22).
+ORG.9 owns reference parity: offline-payment approval, bank
+reconciliation, cash-deposit/petty-cash/journal-voucher approvals,
+bulk refunds, report-card publish settings, transfer certificates, bulk
+branch transfer, staff-attendance modification approvals, approval ageing
+(reference `Menu_Permissions_Master.xlsx`, §31.8, not committed; its
+"Approve" cells are product exposure, not security design).
+
+**56.34 Validation.** Authorization, Campus, coverage, catalogue and
+approval-domain tests and the documentation guards; no full regression (documentation only); counter 0/5. One uncommitted
+scratch test reproduced G-1 and was deleted.
+
+**56.35 Status.** ORG.8 contract audit CLOSED once published; PASS WITH
+PREREQUISITES (ORG.8-P1, owner decisions). Next: owner authorization of
+ORG.8-P1 and then ORG.8A.

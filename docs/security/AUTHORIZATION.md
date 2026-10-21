@@ -1484,6 +1484,39 @@ No new capability.
   evaluates. No menu configuration is ever stored as authorization or
   entitlement state.
 
+## Approval authority (ORG.8 contract audit, ADR 0076 §56 — contract, not built)
+
+Read-only audit, 2026-10-21. Matrix: `docs/security/APPROVAL-AUTHORITY-MATRIX.md`;
+UAT plan: `docs/product/APPROVAL-AUTHORITY-UAT.md`.
+
+- **Approval is not permission.** A capability authorizes an action class;
+  an approval authorizes one item. "Approved" is never `can()`, never
+  cached as authority and never a grant.
+- **Approval never bypasses authorization.** Execution re-checks the whole
+  order: environment, legal gate, School lifecycle, module entitlement,
+  capability, Campus scope, ownership, then SoD/MFA/idempotency and domain
+  validity. No approval or override opens a legal gate.
+- **No generic workflow engine.** Approval stays module-owned (§16).
+  Existing workflows: fee concessions, Communications approval, marks
+  corrections, Leave, payroll runs. Everything else is a direct
+  privileged operation.
+- **Maker/checker is per item and per actor**, extended to prior
+  participation (creator, calculator, amender never decide). Holding both
+  keys never satisfies it.
+- **Campus:** every approval key is whole-School today, so a Campus grant
+  confers no approval authority. A future Campus approval key needs its
+  domain's adoption, and requester, approver and executor each need their
+  own scope over the item's stored Campus.
+- **Fresh MFA** stays `FreshMfaRequirement` (one code per action); no new
+  mechanism.
+- **Reasons:** reject, reverse, override and high-risk direct actions carry
+  a closed reason code; free text stays on the domain row, never in audit
+  metadata.
+- **Platform roles** never decide tenant business items.
+- **Recorded gaps (not fixed):** G-1 direct ledger reversal of
+  subledger-owned journal entries (MEDIUM, prerequisite ORG.8-P1); G-2
+  payroll SoD checks only the run creator (MEDIUM); G-3..G-6 LOW.
+
 ## What is NOT yet implemented
 
 Contracted by ADR 0076 (ORG.1, 2026-10-17) and not built:
