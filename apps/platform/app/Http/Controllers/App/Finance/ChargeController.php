@@ -6,6 +6,7 @@ use App\Domain\AcademicStructure\Application\AcademicYearChoices;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\Fees\Application\AssessChargeData;
 use App\Domain\Fees\Application\ChargeAdministrationService;
+use App\Domain\Fees\Application\ChargeCampusAttribution;
 use App\Domain\Fees\Application\ChargeDetail;
 use App\Domain\Fees\Application\ChargeQuery;
 use App\Domain\Fees\Application\ChargeReadService;
@@ -212,6 +213,7 @@ class ChargeController extends Controller
                 amount: $amount,
                 receivableLedgerAccountId: $validated['receivable_ledger_account_id'],
                 revenueLedgerAccountId: $validated['revenue_ledger_account_id'],
+                campus: ChargeCampusAttribution::placementOnAssessmentDate(),
                 dueDate: $validated['due_date'] ?? null,
             ), $context->actor());
         } catch (InvalidChargeAccountException $e) {

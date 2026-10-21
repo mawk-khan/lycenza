@@ -4,6 +4,7 @@ namespace Tests\Concerns;
 
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\Fees\Application\AssessChargeData;
+use App\Domain\Fees\Application\ChargeCampusAttribution;
 use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Infrastructure\Charge;
 use App\Domain\Finance\Infrastructure\LedgerAccount;
@@ -42,6 +43,7 @@ trait CreatesFeesFixtures
             amount: Money::of($amount, $currency),
             receivableLedgerAccountId: $receivableAccount->id,
             revenueLedgerAccountId: $revenueAccount->id,
+            campus: ChargeCampusAttribution::placementOnAssessmentDate(),
             dueDate: $dueDate,
         ));
 

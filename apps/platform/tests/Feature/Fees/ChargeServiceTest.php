@@ -3,6 +3,7 @@
 namespace Tests\Feature\Fees;
 
 use App\Domain\Fees\Application\AssessChargeData;
+use App\Domain\Fees\Application\ChargeCampusAttribution;
 use App\Domain\Fees\Application\ChargeResult;
 use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Application\Exceptions\AcademicYearNotFoundException;
@@ -49,6 +50,7 @@ class ChargeServiceTest extends TestCase
             amount: Money::of($amount, $currency),
             receivableLedgerAccountId: $receivableId,
             revenueLedgerAccountId: $revenueId,
+            campus: ChargeCampusAttribution::placementOnAssessmentDate(),
         );
     }
 

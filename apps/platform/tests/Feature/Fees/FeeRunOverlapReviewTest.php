@@ -4,6 +4,7 @@ namespace Tests\Feature\Fees;
 
 use App\Domain\Fees\Application\AssessChargeData;
 use App\Domain\Fees\Application\ChargeAdministrationService;
+use App\Domain\Fees\Application\ChargeCampusAttribution;
 use App\Domain\Fees\Application\Exceptions\FeeAssessmentRunItemNotDecidableException;
 use App\Domain\Fees\Application\Exceptions\FeeAssessmentRunOverlapChangedException;
 use App\Domain\Fees\Application\Exceptions\FeeAssessmentRunUnresolvedOverlapException;
@@ -49,6 +50,7 @@ class FeeRunOverlapReviewTest extends TestCase
             amount: Money::of($amount, 'INR'),
             receivableLedgerAccountId: $w['receivable']->id,
             revenueLedgerAccountId: $revenueId ?? $w['revenue']->id,
+            campus: ChargeCampusAttribution::placementOnAssessmentDate(),
             dueDate: $due,
         ), $w['actor']);
 

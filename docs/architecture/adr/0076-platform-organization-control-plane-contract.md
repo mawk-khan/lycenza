@@ -6455,3 +6455,240 @@ No HIGH finding.
   One `PaymentReceiptBackfillTest` ordering flake passed 3/3 alone.
 - **Not run:** the full suite (docs-only). Regression counter unchanged at
   0/5.
+
+## 49. ORG.7G-1A — Finance Campus attribution foundation: stored immutable Charge Campus and SQL filtering (as built, 2026-10-21)
+
+Owner authorization: ORG.7G-1A, decisions G1A-D1 to G1A-D9. Baseline
+`origin/main` = `e8d600fe` (ORG.7G-0, §48). This closes §48.5 F-1. No
+Finance capability, role, route or coverage entry changed.
+
+    charges.campus_id   the Campus the obligation was attributed to WHEN CREATED;
+                        written once by ChargeService::assess(), DB-frozen,
+                        same-School composite key; NULL = whole-School only
+    sources             fee run -> stored assessment Enrollment; late fee -> source
+                        Charge; Canteen -> Outlet; Library fine -> Loan; manual ->
+                        the one placement in effect on the creation date (FOR SHARE)
+    never               the Student's current Campus; re-derivation on read
+    unchanged           Payments (School-wide), allocations, receipts, every finance.* key
+
+**49.1 Pre-migration audit (DDEV development data, read-only).**
+- **Charges:** 39 in 1 School, all live, all in the one active year,
+  for 36 Students.
+- **By provenance:** 36 manual and 3 Canteen. There were 0 fee-run, late-fee
+  or Library Charges; Transport, Hostel and Admissions create none directly.
+- **Edge cases:** no Student with Charges in several years, none on several
+  Campuses, no leaver with a Charge, none without a current Campus.
+- **Classification:** all 39 UNAMBIGUOUS.
+  - The 36 manual Charges each had one valid placement on their creation
+    date.
+  - The 3 Canteen Charges each had an Outlet with a Campus.
+  - 0 were NULL by contract and 0 AMBIGUOUS.
+- **Backfill result:** all 39 → Main Campus. `updated_at` and
+  `retention_recorded_at` were unchanged (`campus_id` is not a retention
+  anchor column).
+
+**49.2 Charge creators (every production INSERT path).** The only INSERT is
+`ChargeService::assess()` (pinned). Each caller must pass a
+`ChargeCampusAttribution`, a required, non-nullable constructor argument of
+`AssessChargeData` and `FeeSourceChargeData`. Its constructor is private,
+so no caller can name an arbitrary Campus.
+
+| Creator | Attribution | Stability |
+|---|---|---|
+| `FeeAssessmentItemExecutor` | `fromEnrollment()`: the Enrollment the run assesses, re-locked FOR SHARE (`lockForFeeAssessment`) | `fee_assessments.student_enrollment_id` is frozen; placement columns are frozen (§47) |
+| `LateFeeItemExecutor` | `fromCharge()`: the source Charge's stored Campus (`LateFeeSourceFacts::campusId`) | the source Charge is frozen and locked by `outstanding->locked()` |
+| `CanteenOrderService::fulfill` | `fromCanteenOutlet()`: the Outlet's Campus, read FOR SHARE in the fulfil transaction | an Outlet's Campus has no update path; a NULL Outlet → whole-School |
+| `LibraryFineService` (via `FeeSourceChargeService`) | `fromLibraryLoan()`: `library_loans.campus_id` | frozen at checkout (§41) |
+| Manual Charge (web, API), demo seeder | `placementOnAssessmentDate()`: resolved inside `assess()` | see 49.3 |
+| Transport, Hostel, Admissions | intent only (`fee_optional_selections`); a later fee run charges it | fee-run rule |
+
+**49.3 Manual Charge rule and its lock.**
+- **Rule:** `StudentEnrollmentFeeTargetReadService::placementCampusOn()` (a
+  Students-owned read; rule 4) runs inside `assess()`'s transaction, before
+  the ledger posting.
+  - It share-locks every placement of the Student in that year (id order).
+  - It returns the ONE Campus among the non-cancelled placements in effect
+    on the School-local creation date; otherwise NULL.
+  - It never uses the current placement, the latest row, or Rule 1 of the
+    retired derivation (one Campus in the year regardless of date). A Charge
+    raised before any placement starts is therefore whole-School.
+- **Race (two OS processes, both orders, no deadlock):**
+  - Charge first: the cancellation waits, and the Charge keeps the placement
+    it saw.
+  - Cancellation first: the Charge waits, then sees no valid placement and
+    stores NULL.
+  - (`ChargeCampusConcurrencyTest`; the harness op fires deferred ledger
+    checks before holding.)
+- **Lock order:** placements SHARE, then ledger, then the Charge INSERT (FK
+  KEY SHARE on the Student). This is compatible with a transfer (Student
+  SHARE, Enrollment FOR UPDATE) and a cancellation (Enrollment FOR UPDATE).
+
+**49.4 Migration `2026_12_26_090000_add_charge_campus_attribution`.**
+- **Abort first:** it derives every existing Charge by provenance
+  (`derivationSql()`) and aborts the WHOLE migration, listing the Charges,
+  when any is ambiguous:
+  - several provenance rows;
+  - several placements in effect on the creation date;
+  - a placement in effect when the Charge was created that has since changed
+    (created before the Charge and ended, cancelled or edited after it);
+  - a placement recorded after the Charge but backdated over its date;
+  - a late fee whose source is ambiguous.
+- **Fail closed:**
+  - It refuses to run unless the connection's role bypasses RLS (FORCE RLS
+    would otherwise show it no rows).
+  - It SHARE-locks every table that decides an attribution before the check.
+  - It backfills only unambiguous rows.
+- **Schema:**
+  - `campus_id uuid NULL`;
+  - `charges_campus_fk (campus_id, school_id) → campuses (id, school_id)
+    ON DELETE RESTRICT` (Campuses are deactivated, never deleted);
+  - `charges_school_campus_index (school_id, campus_id)`, justified in 49.7.
+- **Backfill:** only `campus_id` is written. No other column or table is
+  touched.
+- **Freeze:** `fees_reject_recognized_charge_mutation` (the existing
+  recognized-fields trigger) also refuses any `campus_id` change.
+  - There is no owner or maintenance exemption, like the trigger's other
+    columns.
+  - The one-time cancellation stays the only UPDATE.
+- **Source guards** (`*_charge_campus_guard`, SECURITY INVOKER, pinned
+  `search_path`) refuse a source row whose Charge's Campus differs from its
+  own historical Campus:
+  - BEFORE INSERT on `fee_assessments` and `late_fee_assessments`;
+  - BEFORE INSERT OR UPDATE OF `charge_id` on `library_fines` and
+    `canteen_orders` (the Canteen guard reads the Outlet FOR SHARE).
+  - They share `fees_charge_campus_matches()`: no PUBLIC EXECUTE, EXECUTE
+    granted to `school_os_app`.
+- **Rollback:**
+  - Rollback-proof (one step) is IDENTICAL; the rollback removes 166 schema
+    lines; `verify-database` failed=0.
+  - Post-use, `down()` REFUSES when any stored Campus differs from what the
+    pre-7G-1A runtime derivation would now return (`rollbackBlockers()`), so
+    dropping the column never silently re-homes debt.
+  - Proven: after a B placement is cancelled behind a B Charge, the blocker
+    count is 1.
+
+**49.5 Raw-SQL proof as `school_os_app` (`ChargeCampusIntegrityTest`).**
+- An UPDATE of `campus_id` (to another Campus or to NULL) is refused.
+- The existing cancellation still succeeds and keeps the Campus.
+- Another School's Campus is refused by `charges_campus_fk`.
+- A fee assessment, late fee or Canteen order pointing at a Charge of
+  another Campus is refused.
+- RLS stays forced on `charges`.
+
+**49.6 Historical stability (pinned; `ChargeCampusAttributionTest`).**
+- **Transfer:** a fee-run Charge on A and its late fee stay A after a
+  transfer to B; the later T2 run charges the B placement.
+- **G0 F-1 closed:** cancelling the B placement after a B Charge leaves it
+  B. It neither falls back to A nor becomes unavailable.
+- **Later placement:** a later same-year placement changes nothing.
+- **Leaver and inactive Campus:**
+  - A leaver keeps both Charges' Campuses.
+  - A deactivated Campus keeps its Charges.
+  - The leaver's debt stays visible under the stored Campus filter.
+- **NULL:**
+  - An unplaced Student's Charge is NULL.
+  - A Campus filter never returns it.
+  - "Whole school (no campus)" and the unfiltered list do.
+- **Other sources:**
+  - A Canteen Charge takes the Outlet Campus, although the Student is on
+    another Campus; a School-wide Outlet gives NULL.
+  - A Library fine takes the Loan Campus, although the Student has no
+    placement.
+- **Audit:** `charge.assessed` adds `campusId` and `campusSource` (ids
+  only).
+
+**49.7 Outstanding Fees in SQL.**
+- **Filter:** `ChargeService::collectionFacts($school, $year,
+  ChargeCampusFilter)` narrows by the stored Campus in the query
+  (`campus_id = ?`, or `IS NULL` for "Whole school (no campus)").
+  - The PHP closure filter, the Enrollment query behind it and
+    `ChargeCollectionFact::assessedOn` are removed.
+  - The query count drops from two to one.
+- **Authority:** the request `campus_id` is still validated against this
+  School's Campuses plus `unavailable`. It only narrows a whole-School
+  reader's list and never widens it (no Finance key is Campus-aware).
+- **Wording:** "Charge campus" with a note that it never follows the current
+  Campus.
+- **EXPLAIN:** on a synthetic 200k-row table shaped like `charges` (20
+  Schools, 5 Campuses each), the stored-Campus predicate with only
+  `(school_id)` read the School's 10,000 rows and filtered 8,000 (13.2 ms).
+  With `(school_id, campus_id)` it read the Campus's 2,000 rows (8.0 ms),
+  and the `IS NULL` filter uses the same index. Hence the index.
+
+**49.8 Retired.** `StudentEnrollmentReadService::campusAttribution()` is
+removed (its only caller was the Outstanding filter). The ORG.7D-2
+docblocks no longer point at it. `ChargeCampusAttributionArchitectureTest`
+pins:
+- no `campusAttribution(`;
+- no current-Campus reader (`StudentOperationalCampusResolver`,
+  `StudentOperationalEligibility`, `StudentPurposeLookup`,
+  `constrainToCurrentPlacement`) in Fees, Payments, Finance or the Finance
+  controllers;
+- no PHP charge-line filter.
+
+**49.9 Unchanged.**
+- **Payments** stay School-wide: no `campus_id` on payments, allocations,
+  receipts or corrections (pinned). Allocation, reallocation, receipt
+  numbering and corrections are untouched.
+- **`PaymentReceiptBackfillTest`:** the outbox helper has no ORDER BY, and
+  the backfill's frozen clock even predates the live settlement. The order
+  is incidental, so the test compares the issuance kinds as a multiset; no
+  product change.
+- **Legal:** E30, E31, E32 and E34 are unchanged. Stored attribution makes
+  no fee, rate or late fee lawful.
+
+**49.10 Roles and G1 planning.**
+- **Pinned:**
+  - No `finance.*` key is in `CampusScopeCatalogue::ADOPTED`.
+  - `cashier` and `accountant` are not Campus-grantable.
+  - `principal` holds no Finance key.
+- **Mechanism to keep `accountant` whole-School in G1 (G1A-D7):**
+  `StaffRoleCatalog::campusScopable()` derives scopability from holding ANY
+  adopted key. Adopting `finance.charges.view` or `finance.payments.view`
+  would therefore make BOTH `cashier` and `accountant` Campus-grantable.
+  - G1 must add an explicit, declared exclusion: a role holding any
+    whole-School Finance authority key is never Campus-scopable. The keys
+    are `finance.ledger.*`, `finance.accounts.manage`,
+    `finance.periods.manage`, `finance.fee_structures.manage`,
+    `finance.fee_assessments.run`, `finance.charges.manage` and
+    `finance.fee_concessions.*`.
+  - Declare it beside the access-administration exclusion it extends (the
+    database scope trigger already enforces that part), with a test.
+  - `accountant` holds several of those keys; `cashier` holds none.
+  - This is not built in 7G-1A.
+
+**49.11 Independent security review.** No HIGH and no MEDIUM finding.
+- **Fixed before publication:**
+  - LOW-1: a placement recorded later but backdated over the Charge date
+    was silently adopted by the backfill. It is now ambiguous (pinned).
+  - LOW-2: the migration assumed the admin role bypasses RLS. It now fails
+    closed otherwise (it would have backfilled nothing and allowed a lossy
+    rollback).
+  - LOW-3: a check-to-backfill window. It now takes SHARE locks first and
+    backfills only unambiguous rows.
+  - LOW-6: the backfill derivation is pinned against Canteen and Library
+    Charges too.
+  - INFO-7: only `ChargeService` may call `withResolvedCampus()` (pinned).
+- **Accepted residuals:**
+  - LOW-4: a false-positive abort on noisy placement history. It fails
+    closed and needs owner remediation, never a guess.
+  - LOW-5: an Outlet's Campus is fixed by the application (no update path)
+    but not by a database freeze, so the Canteen backfill reads today's
+    Outlet Campus. That equals the Campus at fulfil for every row; there is
+    no history to check against.
+  - No raw refusal test for the Library-fine guard: it shares
+    `fees_charge_campus_matches()` with the three tested guards.
+- **Deploy note:** this schema and its code ship together. Older code would
+  insert NULL-Campus source Charges, which the source guards refuse.
+
+**49.12 Validation.**
+- **Affected and shared suites** (Fees, Payments, Finance, Canteen, Library,
+  Students, Authorization, Postgres, App, Retention, Transport, Hostel,
+  Admissions, and every *Architecture*/*Guard* test): 4310 passed. The 4
+  failures are the real-MinIO tests (environment-only).
+- **G1A suites:** 24 passed after the review fixes, including both race
+  orders, run 3×.
+- **Rollback-proof:** IDENTICAL; `verify-database` failed=0.
+- **Static and frontend gates:** Pint, Larastan, vue-tsc, ESLint (3
+  existing v-html warnings), Prettier and the build all pass.
+- **Full regression:** one exact-SHA full CI on the published candidate.

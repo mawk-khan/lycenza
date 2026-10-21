@@ -21,5 +21,8 @@ final class LateFeeSourceFacts
         public readonly string $amount,
         public readonly string $currency,
         public readonly string $description,
+        // ORG.7G-1A (ADR 0076 §49): the source Charge's stored Campus, which
+        // its late fee inherits (ChargeCampusAttribution::fromCharge()).
+        public readonly ?string $campusId = null,
     ) {}
 }

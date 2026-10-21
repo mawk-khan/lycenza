@@ -41,6 +41,7 @@ use Illuminate\Support\Carbon;
  * @property string $journal_entry_id
  * @property Carbon|null $cancelled_at
  * @property string|null $cancellation_journal_entry_id
+ * @property string|null $campus_id ORG.7G-1A: the historical Campus written once at assessment (NULL = whole-School only)
  * @property Carbon $created_at
  * @property Carbon $updated_at
  */
@@ -53,6 +54,7 @@ class Charge extends Model
     protected $fillable = [
         'school_id', 'student_id', 'academic_year_id', 'description', 'amount', 'currency',
         'due_date', 'receivable_ledger_account_id', 'revenue_ledger_account_id', 'journal_entry_id',
+        'campus_id',
     ];
 
     protected function casts(): array

@@ -5,7 +5,7 @@ namespace App\Http\Controllers\App\Finance;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Section;
-use App\Domain\Fees\Application\ChargeCollectionFact;
+use App\Domain\Fees\Application\ChargeCampusFilter;
 use App\Domain\Payments\Application\Collections\OutstandingFeeRow;
 use App\Domain\Payments\Application\Collections\OutstandingFeesReadService;
 use App\Domain\Students\Application\StudentAccess;
@@ -38,7 +38,7 @@ class OutstandingFeesController extends Controller
 
     private const int PER_PAGE = 25;
 
-    /** LC-4 (SB-03b): the Campus filter's value for obligations whose Campus cannot be determined. */
+    /** LC-4 (SB-03b), ORG.7G-1A: the Campus filter's value for whole-School (unattributed, NULL-Campus) charges. */
     public const string CAMPUS_UNAVAILABLE = 'unavailable';
 
     public function index(Request $request, TenantContext $context, StudentAccess $students, OutstandingFeesReadService $outstanding, StudentEnrollmentReadService $placements): Response
@@ -91,19 +91,17 @@ class OutstandingFeesController extends Controller
             $studentIds = $inStanding;
         }
 
-        // LC-4 (SB-03b): a Campus is chosen per obligation (charge line), from
-        // the Student's placement in that charge's academic year -- never the
-        // current one -- and only then added up (StudentEnrollmentReadService::campusAttribution).
-        $chargeFilter = $campusId === null ? null : function (array $facts) use ($placements, $campusId): array {
-            $attributed = $placements->campusAttribution(array_combine(
-                array_map(fn (ChargeCollectionFact $f) => $f->id, $facts),
-                array_map(fn (ChargeCollectionFact $f) => [$f->studentId, $f->academicYearId, $f->assessedOn], $facts),
-            ) ?: []);
-
-            return array_values(array_filter($facts, fn (ChargeCollectionFact $f) => ($attributed[$f->id] ?? null) === ($campusId === self::CAMPUS_UNAVAILABLE ? null : $campusId)));
+        // ORG.7G-1A (ADR 0076 §49): the Campus filter narrows by each charge's
+        // STORED historical Campus, in SQL -- written once when the charge was
+        // assessed, never re-derived and never the Student's current Campus.
+        // A filter, never authority; 'unavailable' = the whole-School charges.
+        $chargeCampus = match ($campusId) {
+            null => null,
+            self::CAMPUS_UNAVAILABLE => ChargeCampusFilter::unattributed(),
+            default => ChargeCampusFilter::campus($campusId),
         };
 
-        $list = $outstanding->list($school, $context->actor(), $status, $validated['academic_year_id'] ?? null, $studentIds, $chargeFilter);
+        $list = $outstanding->list($school, $context->actor(), $status, $validated['academic_year_id'] ?? null, $studentIds, $chargeCampus);
 
         $page = (int) ($validated['page'] ?? 1);
         $slice = array_slice($list->rows, ($page - 1) * self::PER_PAGE, self::PER_PAGE);

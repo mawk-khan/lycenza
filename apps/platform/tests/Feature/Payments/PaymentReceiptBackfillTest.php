@@ -51,7 +51,11 @@ class PaymentReceiptBackfillTest extends TestCase
         $this->assertNull($receipt->issued_by_user_id);
         $this->assertSame(3, $this->auditCount($w['school'], 'payment_receipt.backfilled'));
         $this->assertSame(1, $this->auditCount($w['school'], 'payment_receipt.issued'));
-        $this->assertSame(['settlement', 'backfill', 'backfill', 'backfill'], $this->outboxOf($w, 'payment_receipt.issued.v1')->pluck('payload.issuance')->all());
+        // ORG.7G-1A: outbox rows have no insertion order (outboxOf() has no
+        // ORDER BY, and the backfill's frozen clock even predates the live
+        // settlement), and no consumer depends on one -- compare the kinds as
+        // a multiset, never in incidental row order.
+        $this->assertEqualsCanonicalizing(['settlement', 'backfill', 'backfill', 'backfill'], $this->outboxOf($w, 'payment_receipt.issued.v1')->pluck('payload.issuance')->all());
     }
 
     #[Test]

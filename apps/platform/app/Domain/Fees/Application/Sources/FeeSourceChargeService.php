@@ -67,6 +67,7 @@ class FeeSourceChargeService
                 amount: Money::of($data->amount, $head->currency),
                 receivableLedgerAccountId: $head->receivable_ledger_account_id,
                 revenueLedgerAccountId: $head->revenue_ledger_account_id,
+                campus: $data->campus,
             ), $actor);
 
             $this->audit->school($school, 'charge.source_assessed', actor: $actor, metadata: [

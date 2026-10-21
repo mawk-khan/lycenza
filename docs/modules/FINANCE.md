@@ -5368,14 +5368,16 @@ existing `selectableFeeHead()` still decides.
     means "left"; a missing current class never makes anyone a leaver.
     Leavers stay in All and are marked "Left (inactive)".
   - *Campus:* filters charge LINES before anything is added up
-    (`OutstandingFeesReadService::list(..., $chargeFilter)`), so a Student
-    whose debts span Campuses is never counted in full under one. A charge
-    belongs to the Campus of the Student's placement in that charge's
-    academic year (`StudentEnrollmentReadService::campusAttribution()`):
-    one Campus that year -> it; several -> the placement in effect on the
-    date the charge was assessed; none, or no single one -> "Campus
-    unavailable", never a guess. Cancelled placements are ignored. The
-    Student's current placement is never used.
+    (`OutstandingFeesReadService::list(..., $campus)`), so a Student whose
+    debts span Campuses is never counted in full under one. Since ORG.7G-1A
+    (ADR 0076 §49) a charge belongs to the Campus STORED on it at assessment
+    (`charges.campus_id`, frozen), filtered in SQL (`ChargeCampusFilter`):
+    fee run -> the assessment Enrollment; late fee -> its source charge;
+    Canteen -> the Outlet; Library fine -> the Loan; manual -> the one
+    placement in effect on the creation date, else NULL ("Whole school (no
+    campus)"), never a guess. The Student's current placement is never used,
+    and nothing re-derives it. (The LC-4 runtime derivation,
+    `campusAttribution()`, is retired.)
   - Balances are the same post-correction amounts (`ChargeStateReader`).
 
 ### Payments received (LC-4, M4, 2026-10-17)

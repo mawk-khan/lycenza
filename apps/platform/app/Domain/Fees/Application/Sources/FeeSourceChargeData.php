@@ -2,6 +2,8 @@
 
 namespace App\Domain\Fees\Application\Sources;
 
+use App\Domain\Fees\Application\ChargeCampusAttribution;
+
 /**
  * OPF.4 (ADR 0067 §17): the trusted input of one source event charge. The
  * source computes the amount under its own policy (D3); FEE takes the
@@ -17,5 +19,7 @@ final readonly class FeeSourceChargeData
         public string $feeHeadId,
         public string $amount,
         public string $description,
+        // ORG.7G-1A (ADR 0076 §49): the source's historical Campus.
+        public ChargeCampusAttribution $campus,
     ) {}
 }

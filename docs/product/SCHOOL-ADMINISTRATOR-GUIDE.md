@@ -483,11 +483,13 @@ Shows Students who still owe money, most overdue first.
 - **Students:** All, Current, or **Leavers** (Students marked inactive,
   shown as "Left (inactive)"). A leaver has no current class, so a Grade or
   Section filter excludes them.
-- **Campus:** each charge counts for the Campus the Student was placed in
-  for that charge's year (the one in effect when it was charged, if they
-  moved). A Student with debts at two Campuses appears under each with only
-  that Campus's part. "Campus unavailable" lists charges with no such
-  placement.
+- **Charge campus:** each charge keeps the Campus it was recorded against
+  when it was charged: a fee run's placement, the canteen outlet, the
+  library loan, or, for a manual charge, the Student's placement that day.
+  It never follows the Student's current Campus, so a transfer, a leaver or
+  a closed Campus never moves old debt. A Student with debts at two
+  Campuses appears under each with only that Campus's part. "Whole school
+  (no campus)" lists charges that had no single placement that day.
 - **Statement:** open a Student to see every charge.
 
 ## 14. Correcting payments and charges

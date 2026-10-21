@@ -224,6 +224,7 @@ class FeeAssessmentItemExecutor
                     amount: Money::of((string) $installment->amount, 'INR'),
                     receivableLedgerAccountId: $head->receivable_ledger_account_id,
                     revenueLedgerAccountId: $head->revenue_ledger_account_id,
+                    campus: ChargeCampusAttribution::fromEnrollment($enrollment),
                     dueDate: $installment->due_date->toDateString(),
                 ), $actor);
 

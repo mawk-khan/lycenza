@@ -24,6 +24,11 @@ use App\Support\Money\Money;
  * 20's "Academic year vs. financial period" -- a due date is an
  * operational Fees concern, never confused with `journal_entries.posted_at`,
  * which `LedgerService` sets to the real transaction time regardless).
+ *
+ * ORG.7G-1A (ADR 0076 §49): `campus` is REQUIRED -- every Charge creator
+ * states where its obligation's historical Campus comes from
+ * (ChargeCampusAttribution), or that it is resolved from the Student's
+ * placement on the assessment date. Never the Student's current Campus.
  */
 final class AssessChargeData
 {
@@ -34,6 +39,7 @@ final class AssessChargeData
         public readonly Money $amount,
         public readonly string $receivableLedgerAccountId,
         public readonly string $revenueLedgerAccountId,
+        public readonly ChargeCampusAttribution $campus,
         public readonly ?string $dueDate = null,
     ) {}
 }

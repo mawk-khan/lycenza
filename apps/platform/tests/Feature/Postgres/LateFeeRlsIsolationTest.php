@@ -3,6 +3,7 @@
 namespace Tests\Feature\Postgres;
 
 use App\Domain\Fees\Application\AssessChargeData;
+use App\Domain\Fees\Application\ChargeCampusAttribution;
 use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Infrastructure\FeeLateFeeRule;
 use App\Domain\Finance\Application\LedgerService;
@@ -135,7 +136,7 @@ class LateFeeRlsIsolationTest extends TestCase
         $this->inSchool($w['school'], fn () => DB::table('late_fee_runs')->where('id', $open->id)->update(['status' => 'executing', 'execution_started_at' => now()]));
         $newFee = fn ($student, $year, $due = '2026-06-12') => app(ChargeService::class)->assess($w['school'], new AssessChargeData(
             studentId: $student, academicYearId: $year, description: 'raw', amount: Money::of('5.00', 'INR'),
-            receivableLedgerAccountId: $w['lateHead']->receivable_ledger_account_id, revenueLedgerAccountId: $w['lateIncome']->id, dueDate: $due,
+            receivableLedgerAccountId: $w['lateHead']->receivable_ledger_account_id, revenueLedgerAccountId: $w['lateIncome']->id, campus: ChargeCampusAttribution::placementOnAssessmentDate(), dueDate: $due,
         ))->chargeId;
         $second = $newFee($w['source']->student_id, $w['source']->academic_year_id);
         $this->setSchool($w['school']->id);

@@ -2,7 +2,7 @@
 
 namespace App\Domain\Payments\Application\Collections;
 
-use App\Domain\Fees\Application\ChargeCollectionFact;
+use App\Domain\Fees\Application\ChargeCampusFilter;
 use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Payments\Application\Charges\ChargeStateReader;
 use App\Models\School;
@@ -12,7 +12,6 @@ use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Money\Money;
 use App\Support\Tenancy\SchoolTimezone;
 use Carbon\CarbonImmutable;
-use Closure;
 
 /**
  * UAT-C3 (UAT-FIN-08): the operational "who owes what" list -- computed on
@@ -50,14 +49,15 @@ class OutstandingFeesReadService
     ) {}
 
     /**
-     * LC-4 (SB-03b): `$chargeFilter` narrows the charge LINES before
-     * anything is added up (e.g. one Campus's obligations), so a Student
-     * whose debts span Campuses is never counted in full under one of them.
+     * LC-4 (SB-03b): `$campus` narrows the charge LINES before anything is
+     * added up (one Campus's obligations), so a Student whose debts span
+     * Campuses is never counted in full under one of them. ORG.7G-1A (ADR
+     * 0076 §49): by the STORED Charge Campus, in SQL -- a narrowing filter,
+     * never authority (a NULL-Campus Charge never matches a Campus).
      *
      * @param  list<string>|null  $studentIds
-     * @param  (Closure(list<ChargeCollectionFact>): list<ChargeCollectionFact>)|null  $chargeFilter
      */
-    public function list(School $school, User $actor, string $status = self::OUTSTANDING, ?string $academicYearId = null, ?array $studentIds = null, ?Closure $chargeFilter = null): OutstandingFeesList
+    public function list(School $school, User $actor, string $status = self::OUTSTANDING, ?string $academicYearId = null, ?array $studentIds = null, ?ChargeCampusFilter $campus = null): OutstandingFeesList
     {
         $this->authorizeCapabilityFor($actor, 'finance.charges.view', $school);
         $this->authorizeCapabilityFor($actor, 'finance.payments.view', $school);
@@ -66,12 +66,9 @@ class OutstandingFeesReadService
         $only = $studentIds === null ? null : array_flip($studentIds);
 
         $facts = array_values(array_filter(
-            $this->charges->collectionFacts($school, $academicYearId),
+            $this->charges->collectionFacts($school, $academicYearId, $campus),
             fn ($f) => $only === null || isset($only[$f->studentId]),
         ));
-        if ($chargeFilter !== null) {
-            $facts = $chargeFilter($facts);
-        }
         $states = $this->states->forCharges($school, array_map(fn ($f) => $f->id, $facts));
 
         /** @var array<string, array{outstanding: Money, overdue: Money, open: int, earliestOverdue: ?string, nextDue: ?string}> $byStudent */
@@ -116,7 +113,7 @@ class OutstandingFeesReadService
             'status' => $status,
             'academicYearId' => $academicYearId,
             'narrowed' => $studentIds !== null,
-            'chargeFiltered' => $chargeFilter !== null,
+            'chargeFiltered' => $campus !== null,
         ]);
 
         return new OutstandingFeesList($rows, $totalOutstanding, $totalOverdue, $today);

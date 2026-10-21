@@ -4,6 +4,7 @@ namespace Tests\Feature\App;
 
 use App\Domain\Fees\Application\AssessChargeData;
 use App\Domain\Fees\Application\ChargeAdministrationService;
+use App\Domain\Fees\Application\ChargeCampusAttribution;
 use App\Domain\Fees\Infrastructure\Charge;
 use App\Domain\Fees\Infrastructure\FeeAssessmentRunItem;
 use App\Models\User;
@@ -35,6 +36,7 @@ class FeeRunOverlapWebTest extends TestCase
             amount: Money::of('25000.00', 'INR'),
             receivableLedgerAccountId: $w['receivable']->id,
             revenueLedgerAccountId: $w['revenue']->id,
+            campus: ChargeCampusAttribution::placementOnAssessmentDate(),
             dueDate: '2026-07-30',
         ), $w['actor']);
 

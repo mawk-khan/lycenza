@@ -3,6 +3,7 @@
 namespace Tests\Feature\Postgres;
 
 use App\Domain\Fees\Application\AssessChargeData;
+use App\Domain\Fees\Application\ChargeCampusAttribution;
 use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Infrastructure\Charge;
 use App\Domain\Fees\Infrastructure\FeeAssessment;
@@ -166,6 +167,7 @@ class FeeAssessmentRlsIsolationTest extends TestCase
         $second = app(ChargeService::class)->assess($w['school'], new AssessChargeData(
             studentId: $row->student_id, academicYearId: $row->academic_year_id, description: 'Second', amount: Money::of('1.00', 'INR'),
             receivableLedgerAccountId: $w['receivable']->id, revenueLedgerAccountId: $w['revenue']->id,
+            campus: ChargeCampusAttribution::placementOnAssessmentDate(),
         ));
         $this->setSchool($w['school']->id);
 

@@ -25,6 +25,7 @@ use App\Domain\Finance\Application\JournalLineData;
 use App\Domain\Finance\Application\LedgerService;
 use App\Domain\Finance\Application\PostJournalEntryData;
 use App\Domain\Finance\Domain\JournalSide;
+use App\Domain\Students\Application\StudentEnrollmentFeeTargetReadService;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
@@ -85,6 +86,7 @@ class ChargeService
         private readonly LedgerService $ledger,
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly StudentEnrollmentFeeTargetReadService $placements,
     ) {}
 
     /**
@@ -120,6 +122,17 @@ class ChargeService
 
         return $this->context->withSchool($school, function () use ($school, $data, $actor) {
             return DB::transaction(function () use ($school, $data, $actor) {
+                // ORG.7G-1A (ADR 0076 §49): the historical Campus is decided
+                // here, once. A manual Charge reads the Student's placement in
+                // the Charge's year on today's School-local date under FOR
+                // SHARE (a concurrent cancel/transfer commits first and is
+                // seen, or waits) -- never the current Campus.
+                $campus = $data->campus->resolvedAtAssessment()
+                    ? $data->campus->withResolvedCampus($this->placements->placementCampusOn(
+                        $school, $data->studentId, $data->academicYearId, CarbonImmutable::parse(SchoolTimezone::today($school)),
+                    ))
+                    : $data->campus;
+
                 $posted = $this->ledger->post($school, new PostJournalEntryData(
                     currency: $data->amount->currency(),
                     description: $data->description,
@@ -141,6 +154,7 @@ class ChargeService
                         'receivable_ledger_account_id' => $data->receivableLedgerAccountId,
                         'revenue_ledger_account_id' => $data->revenueLedgerAccountId,
                         'journal_entry_id' => $posted->journalEntryId,
+                        'campus_id' => $campus->campusId,
                     ]);
                 } catch (QueryException $e) {
                     if ($this->violatesConstraint($e, 'charges_student_fk')) {
@@ -157,6 +171,8 @@ class ChargeService
                 $this->audit->school($school, 'charge.assessed', actor: $actor, subject: $charge, metadata: [
                     'studentId' => $charge->student_id,
                     'currency' => $charge->currency,
+                    'campusId' => $charge->campus_id,
+                    'campusSource' => $campus->source,
                 ]);
 
                 event(new ChargeAssessed($school->id, $charge->id, $charge->student_id, $charge->journal_entry_id, $charge->currency));
@@ -481,7 +497,7 @@ class ChargeService
             ->join('fee_assessments as fa', fn ($j) => $j->on('fa.charge_id', '=', 'c.id')->whereNull('fa.voided_at'))
             ->where('c.school_id', $school->id)
             ->whereNull('c.cancelled_at')
-            ->select('c.id', 'c.student_id', 'c.academic_year_id', 'fa.fee_structure_id', 'fa.fee_head_id', 'fa.billing_period_key', 'c.due_date', 'c.amount', 'c.currency', 'c.description');
+            ->select('c.id', 'c.student_id', 'c.academic_year_id', 'fa.fee_structure_id', 'fa.fee_head_id', 'fa.billing_period_key', 'c.due_date', 'c.amount', 'c.currency', 'c.description', 'c.campus_id');
         $scope($query);
 
         return $query->orderBy('c.due_date')->orderBy('c.id')->get()
@@ -496,6 +512,7 @@ class ChargeService
                 amount: (string) $r->amount,
                 currency: (string) $r->currency,
                 description: (string) $r->description,
+                campusId: $r->campus_id === null ? null : (string) $r->campus_id,
             ))->values()->all();
     }
 
@@ -604,17 +621,19 @@ class ChargeService
      * what is still owed through `ChargeStateReader`. Trusted, read-only, no
      * capability check (the Payments read service authorizes). Ordered by id.
      *
+     * ORG.7G-1A (ADR 0076 §49): `$campus` narrows by the STORED historical
+     * Charge Campus in SQL (never re-derived, never the current Campus).
+     *
      * @return list<ChargeCollectionFact>
      */
-    public function collectionFacts(School $school, ?string $academicYearId = null): array
+    public function collectionFacts(School $school, ?string $academicYearId = null, ?ChargeCampusFilter $campus = null): array
     {
-        $timezone = SchoolTimezone::resolve($school);
-
-        return $this->context->withSchool($school, function () use ($school, $academicYearId, $timezone) {
+        return $this->context->withSchool($school, function () use ($school, $academicYearId, $campus) {
             $facts = [];
             foreach (Charge::query()->where('school_id', $school->id)->whereNull('cancelled_at')
                 ->when($academicYearId !== null, fn ($q) => $q->where('academic_year_id', $academicYearId))
-                ->orderBy('id')->toBase()->select(['id', 'student_id', 'academic_year_id', 'amount', 'currency', 'due_date', 'created_at'])
+                ->when($campus !== null, fn ($q) => $campus->apply($q))
+                ->orderBy('id')->toBase()->select(['id', 'student_id', 'academic_year_id', 'amount', 'currency', 'due_date'])
                 ->cursor() as $row) {
                 $facts[] = new ChargeCollectionFact(
                     id: (string) $row->id,
@@ -623,7 +642,6 @@ class ChargeService
                     amount: (string) $row->amount,
                     currency: (string) $row->currency,
                     dueDate: $row->due_date === null ? null : substr((string) $row->due_date, 0, 10),
-                    assessedOn: CarbonImmutable::parse((string) $row->created_at, 'UTC')->setTimezone($timezone)->toDateString(),
                 );
             }
 

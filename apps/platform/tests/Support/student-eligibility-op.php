@@ -9,6 +9,9 @@ use App\Domain\Canteen\Application\CanteenOrderAccess;
 use App\Domain\Canteen\Application\CanteenOrderLineData;
 use App\Domain\Canteen\Application\CanteenOrderService;
 use App\Domain\Canteen\Application\PlaceCanteenOrderData;
+use App\Domain\Fees\Application\AssessChargeData;
+use App\Domain\Fees\Application\ChargeCampusAttribution;
+use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Hostel\Application\HostelResidencyAccess;
 use App\Domain\Hostel\Application\HostelResidencyService;
 use App\Domain\Hostel\Infrastructure\HostelBed;
@@ -31,8 +34,10 @@ use App\Domain\Transport\Infrastructure\TransportRoute;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Authorization\Campus\CampusScopeResolver;
+use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Support\Facades\DB;
 use Tests\Support\Concurrency\HeldTransaction;
 
 // Standalone bootstrap script for StudentEligibilityConcurrencyTest
@@ -62,6 +67,8 @@ use Tests\Support\Concurrency\HeldTransaction;
 //   php student-eligibility-op.php manual-create <schoolId> <studentNumber>                     (ORG.7F-2; a typed number)
 //   php student-eligibility-op.php campus-transfer <schoolId> <userId> <studentId> <sectionId>  (ORG.7F-3)
 //   php student-eligibility-op.php elective-enroll <schoolId> <studentId> <offeringId>          (ORG.7F-3)
+//   php student-eligibility-op.php manual-charge <schoolId> <studentId> <yearId> <receivableId> <revenueId>  (ORG.7G-1A)
+//   php student-eligibility-op.php enrollment-cancel <schoolId> <enrollmentId>                  (ORG.7G-1A)
 
 require __DIR__.'/../../vendor/autoload.php';
 
@@ -178,6 +185,22 @@ try {
             case 'elective-enroll':
                 [$studentId, $offeringId] = $args;
                 $app->make(StudentSubjectEnrollmentService::class)->enroll(Student::query()->findOrFail($studentId), SubjectOffering::query()->findOrFail($offeringId), now()->toDateString());
+
+                return 'ok';
+            case 'manual-charge':
+                [$studentId, $yearId, $receivableId, $revenueId] = $args;
+                $app->make(ChargeService::class)->assess($school, new AssessChargeData(
+                    studentId: $studentId, academicYearId: $yearId, description: 'Race', amount: Money::of('10.00', 'INR'),
+                    receivableLedgerAccountId: $receivableId, revenueLedgerAccountId: $revenueId,
+                    campus: ChargeCampusAttribution::placementOnAssessmentDate(),
+                ));
+                // The ledger's deferred balance check must run while the School
+                // context is still set (a held holder commits after withSchool()).
+                DB::statement('SET CONSTRAINTS ALL IMMEDIATE');
+
+                return 'ok';
+            case 'enrollment-cancel':
+                $app->make(StudentEnrollmentService::class)->cancel(StudentEnrollment::query()->findOrFail($args[0]), now()->toDateString());
 
                 return 'ok';
             case 'section-inactivate':

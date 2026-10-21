@@ -25,6 +25,7 @@ final class ChargeResult
         public readonly string $journalEntryId,
         public readonly ?Carbon $cancelledAt,
         public readonly ?string $cancellationJournalEntryId,
+        public readonly ?string $campusId = null,
     ) {}
 
     public static function fromModel(Charge $charge): self
@@ -39,6 +40,7 @@ final class ChargeResult
             journalEntryId: $charge->journal_entry_id,
             cancelledAt: $charge->cancelled_at,
             cancellationJournalEntryId: $charge->cancellation_journal_entry_id,
+            campusId: $charge->campus_id,
         );
     }
 }

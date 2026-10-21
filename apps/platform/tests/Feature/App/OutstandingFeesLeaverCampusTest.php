@@ -18,10 +18,10 @@ use Tests\TestCase;
 
 /**
  * LC-4 (SB-03b): Outstanding fees can isolate leavers (Students marked
- * inactive) and one Campus's debt. A charge belongs to the Campus of the
- * Student's placement in that charge's academic year -- the one in effect
- * when it was charged if they moved -- and lines are filtered before they
- * are added up. Balances stay the authoritative post-correction ones.
+ * inactive) and one Campus's debt. ORG.7G-1A (ADR 0076 §49): a charge belongs
+ * to the Campus STORED on it when it was assessed -- for these manual charges
+ * the Student's placement on the day it was charged -- filtered in SQL before
+ * lines are added up. Balances stay the authoritative post-correction ones.
  */
 class OutstandingFeesLeaverCampusTest extends TestCase
 {

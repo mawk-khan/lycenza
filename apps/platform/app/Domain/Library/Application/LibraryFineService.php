@@ -3,6 +3,7 @@
 namespace App\Domain\Library\Application;
 
 use App\Domain\AcademicStructure\Application\CurrentAcademicYearResolver;
+use App\Domain\Fees\Application\ChargeCampusAttribution;
 use App\Domain\Fees\Application\Exceptions\ChargeHasActiveAdjustmentsException;
 use App\Domain\Fees\Application\Exceptions\ChargeHasPaymentAllocationsException;
 use App\Domain\Fees\Application\Exceptions\SourceChargeFeeHeadUnavailableException;
@@ -151,6 +152,8 @@ class LibraryFineService
                     feeHeadId: (string) $policy->fee_head_id,
                     amount: $calculated['amount'],
                     description: 'Library overdue fine',
+                    // ORG.7G-1A (ADR 0076 §49): the Loan's Campus, frozen at checkout.
+                    campus: ChargeCampusAttribution::fromLibraryLoan($loan->campus_id),
                 ), FeeChargeSource::libraryFine($fineId), $actor);
 
                 return LibraryFine::query()->create([

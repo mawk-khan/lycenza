@@ -25,6 +25,7 @@ use App\Domain\Examinations\Application\ExaminationPaperService;
 use App\Domain\Examinations\Application\ExaminationService;
 use App\Domain\Examinations\Application\GradeScaleService;
 use App\Domain\Fees\Application\AssessChargeData;
+use App\Domain\Fees\Application\ChargeCampusAttribution;
 use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Application\FeeSettingsService;
 use App\Domain\Finance\Application\JournalLineData;
@@ -530,6 +531,7 @@ final class DemoModuleData
                 amount: Money::of('25000.00', 'INR'),
                 receivableLedgerAccountId: $this->ledger['FEES_AR']->id,
                 revenueLedgerAccountId: $this->ledger['TUITION']->id,
+                campus: ChargeCampusAttribution::placementOnAssessmentDate(),
                 dueDate: '2026-04-30',
             ), $d->admin);
 

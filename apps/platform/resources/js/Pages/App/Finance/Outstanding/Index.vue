@@ -142,7 +142,9 @@ function apply(): void {
                 </select>
             </div>
             <div v-if="campuses.length > 0">
-                <label class="block text-xs text-slate-600" for="filter-campus">Campus</label>
+                <label class="block text-xs text-slate-600" for="filter-campus"
+                    >Charge campus</label
+                >
                 <select
                     id="filter-campus"
                     v-model="campusId"
@@ -151,7 +153,7 @@ function apply(): void {
                 >
                     <option value="">All campuses</option>
                     <option v-for="c in campuses" :key="c.id" :value="c.id">{{ c.name }}</option>
-                    <option value="unavailable">Campus unavailable</option>
+                    <option value="unavailable">Whole school (no campus)</option>
                 </select>
             </div>
             <template v-if="canSeeClass">
@@ -215,9 +217,10 @@ function apply(): void {
         </dl>
 
         <p v-if="filters.campus_id" class="mt-3 text-xs text-slate-500">
-            A charge belongs to the Campus of the Student's placement in that charge's academic year
-            (the one in effect when it was charged, if they moved). Charges with no such placement
-            are under "Campus unavailable".
+            Each charge keeps the campus it was recorded against when it was charged (a fee run's
+            placement, a canteen outlet, a library loan, or a manual charge's placement on that
+            day). It never follows the Student's current campus. Charges with no campus are under
+            "Whole school (no campus)".
         </p>
 
         <EmptyState

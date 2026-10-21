@@ -4,6 +4,7 @@ namespace App\Domain\Fees\Http\Controllers;
 
 use App\Domain\Fees\Application\AssessChargeData;
 use App\Domain\Fees\Application\ChargeAdministrationService;
+use App\Domain\Fees\Application\ChargeCampusAttribution;
 use App\Domain\Fees\Application\ChargeDetail;
 use App\Domain\Fees\Application\ChargeQuery;
 use App\Domain\Fees\Application\ChargeReadService;
@@ -97,6 +98,7 @@ class ChargeController extends Controller
             amount: $this->parseAmount($validated['amount'], $validated['currency']),
             receivableLedgerAccountId: $validated['receivable_ledger_account_id'],
             revenueLedgerAccountId: $validated['revenue_ledger_account_id'],
+            campus: ChargeCampusAttribution::placementOnAssessmentDate(),
             dueDate: $validated['due_date'] ?? null,
         ), $request->user());
 

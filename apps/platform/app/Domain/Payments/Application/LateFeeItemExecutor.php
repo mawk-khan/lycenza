@@ -3,6 +3,7 @@
 namespace App\Domain\Payments\Application;
 
 use App\Domain\Fees\Application\AssessChargeData;
+use App\Domain\Fees\Application\ChargeCampusAttribution;
 use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Application\LateFeeRuleService;
 use App\Domain\Payments\Domain\LateFeeCalculation;
@@ -161,6 +162,7 @@ class LateFeeItemExecutor
                     amount: $calc['final'],
                     receivableLedgerAccountId: $rule->receivableLedgerAccountId,
                     revenueLedgerAccountId: $rule->revenueLedgerAccountId,
+                    campus: ChargeCampusAttribution::fromCharge($source),
                     dueDate: $evaluation,
                 ), $actor);
 

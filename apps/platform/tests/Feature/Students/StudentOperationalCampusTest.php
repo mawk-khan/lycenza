@@ -154,8 +154,8 @@ class StudentOperationalCampusTest extends TestCase
         $this->assertNull($state->operationalCampusId());
         $this->assertSame([], $this->lookup(CampusScope::wholeSchool()));
         $this->assertSame([], $this->lookup(CampusScope::campuses([$this->a->id])));
-        // Finance's charge-year attribution is a different question and still answers.
-        $this->assertSame(['k' => $this->a->id], $this->inSchool(fn () => app(StudentEnrollmentReadService::class)->campusAttribution(['k' => [$leaver->id, $this->current->id, null]])));
+        // A leaver's debt keeps the Campus stored on each Charge when it was
+        // assessed (ORG.7G-1A, ADR 0076 §49; ChargeCampusAttributionTest).
     }
 
     #[Test]

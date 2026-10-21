@@ -2197,6 +2197,13 @@ or schema changes.
 
    Cancelled placements are ignored; the current placement is never used.
 
+   *Superseded in part by ADR 0076 §49 (ORG.7G-1A, 2026-10-21):* the
+   runtime derivation could move a charge after a later Enrollment
+   cancellation or same-year placement. Each charge now STORES its
+   historical Campus at assessment (`charges.campus_id`, frozen), and the
+   filter reads it in SQL. `campusAttribution()` and `assessedOn` are
+   retired.
+
 **Not in scope.** Exports, printing, a cashbook or settlement report, new
 payment methods or lifecycle states.
 

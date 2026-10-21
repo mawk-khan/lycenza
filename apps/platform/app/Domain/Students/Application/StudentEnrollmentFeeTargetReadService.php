@@ -122,6 +122,38 @@ class StudentEnrollmentFeeTargetReadService
         return $this->toTarget($enrollment, $studentActive);
     }
 
+    /**
+     * ORG.7G-1A (ADR 0076 §49): the Campus a manual Charge is attributed to
+     * -- the Student's placement(s) in that AcademicYear in effect on `$on`
+     * (`starts_on <= on <= ends_on`, open-ended when not ended; cancelled
+     * placements never count). Exactly one Campus among them, or null
+     * (none, or several): unavailable, never guessed, never the current
+     * Campus. Every placement of the Student in that year is read FOR SHARE
+     * (id order), so a concurrent cancel or transfer commits first and is
+     * seen, or waits for the caller's transaction. Data, never authority.
+     */
+    public function placementCampusOn(School $school, string $studentId, string $academicYearId, CarbonImmutable $on): ?string
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new LogicException('placementCampusOn() must run inside a database transaction.');
+        }
+
+        $day = $on->toDateString();
+        $campuses = StudentEnrollment::query()
+            ->where('school_id', $school->id)
+            ->where('student_id', $studentId)
+            ->where('academic_year_id', $academicYearId)
+            ->orderBy('id')
+            ->sharedLock()
+            ->get(['id', 'campus_id', 'status', 'starts_on', 'ends_on'])
+            ->filter(fn (StudentEnrollment $e) => $e->status !== 'cancelled'
+                && $e->starts_on->toDateString() <= $day
+                && ($e->ends_on === null || $e->ends_on->toDateString() >= $day))
+            ->pluck('campus_id')->unique()->values();
+
+        return $campuses->count() === 1 ? (string) $campuses->first() : null;
+    }
+
     private function toTarget(StudentEnrollment $e, bool $studentIsActive): FeeTargetEnrollment
     {
         return new FeeTargetEnrollment(

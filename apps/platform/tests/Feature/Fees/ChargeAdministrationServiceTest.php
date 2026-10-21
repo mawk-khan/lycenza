@@ -4,6 +4,7 @@ namespace Tests\Feature\Fees;
 
 use App\Domain\Fees\Application\AssessChargeData;
 use App\Domain\Fees\Application\ChargeAdministrationService;
+use App\Domain\Fees\Application\ChargeCampusAttribution;
 use App\Domain\Fees\Application\ChargeResult;
 use App\Domain\Fees\Infrastructure\Charge;
 use App\Domain\Finance\Infrastructure\JournalEntry;
@@ -44,6 +45,7 @@ class ChargeAdministrationServiceTest extends TestCase
             amount: Money::of('250.00', 'INR'),
             receivableLedgerAccountId: $receivableId,
             revenueLedgerAccountId: $revenueId,
+            campus: ChargeCampusAttribution::placementOnAssessmentDate(),
         );
     }
 

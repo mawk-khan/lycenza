@@ -32,8 +32,8 @@ use Illuminate\Database\Query\JoinClause;
  *   capability first and passes an already-resolved CampusScope where it
  *   filters (restrictToOperationalCampus()).
  * - Current, not historical: records already written keep the Campus
- *   stored on them; Finance's charge-year attribution
- *   (StudentEnrollmentReadService::campusAttribution()) stays separate.
+ *   stored on them; a Charge's Campus is stored on the Charge at assessment
+ *   (ORG.7G-1A, ADR 0076 §49) and never read from here.
  * - Advisory, never a write-time proof: it reads without locks. A write that
  *   creates NEW operational work for a Student on a Campus proves it with
  *   StudentOperationalEligibility::lockOperationalOn() inside its own

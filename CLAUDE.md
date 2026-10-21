@@ -1421,3 +1421,20 @@ once several modules copy it.
          residency, Transport rider assignment or elective exists
          (`StudentTransferBlocker`). These are never ended or moved by the
          transfer, and same-Campus Section changes stay whole-School.
+     - **A Charge's Campus is stored history, never the current Campus**
+       (ORG.7G-1A, §49).
+       - `charges.campus_id` is written once by `ChargeService::assess()`
+         from the creator's `ChargeCampusAttribution`, then frozen
+         (`fees_reject_recognized_charge_mutation`), with a same-School
+         composite key.
+         - The sources: the fee-run Enrollment, the late fee's source
+           Charge, the Canteen Outlet, the Library Loan, or a manual
+           Charge's placement on its creation date (FOR SHARE).
+         - Source rows are DB-bound to it (`*_charge_campus_guard`).
+       - NULL = whole-School only, never every Campus. Nothing re-derives a
+         Charge's Campus, and a transfer, cancellation, leaver or inactive
+         Campus never moves it.
+       - A new Charge creator must state its source
+         (`ChargeCampusAttributionArchitectureTest`).
+       - Payments stay School-wide (no Payment Campus). No `finance.*` key
+         is Campus-adopted, and `accountant` stays whole-School.

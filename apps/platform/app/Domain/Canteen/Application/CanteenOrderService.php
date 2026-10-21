@@ -25,6 +25,7 @@ use App\Domain\Canteen\Infrastructure\CanteenOrderLine;
 use App\Domain\Canteen\Infrastructure\CanteenOrderStockConsumption;
 use App\Domain\Canteen\Infrastructure\CanteenOutlet;
 use App\Domain\Fees\Application\AssessChargeData;
+use App\Domain\Fees\Application\ChargeCampusAttribution;
 use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Inventory\Application\InventoryStockService;
 use App\Domain\Inventory\Application\IssueRequirement;
@@ -275,6 +276,12 @@ class CanteenOrderService
                 amount: Money::of($order->total_amount, $order->currency),
                 receivableLedgerAccountId: $billingConfig->receivable_ledger_account_id,
                 revenueLedgerAccountId: $billingConfig->revenue_ledger_account_id,
+                // ORG.7G-1A (ADR 0076 §49): the order's Outlet Campus, read
+                // FOR SHARE in this transaction (an Outlet's Campus is fixed
+                // at creation; NULL = a School-wide Outlet, whole-School).
+                campus: ChargeCampusAttribution::fromCanteenOutlet(
+                    CanteenOutlet::query()->where('school_id', $school->id)->whereKey($order->outlet_id)->sharedLock()->value('campus_id'),
+                ),
                 dueDate: null,
             ), $actor);
 
