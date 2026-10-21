@@ -5649,3 +5649,15 @@ adjustment cancellation, Payment correction, or the Payroll reversal.
 - **Repairing a pre-P1 reversal:** reverse that reversal through the generic
   ledger; the ledger again matches the still-live record. The original
   cannot then be cancelled canonically; use a fee waiver to remove it.
+
+## Fee concessions on the shared approval foundation (ORG.8A, 2026-10-21, ADR 0076 §58)
+
+Approving or rejecting a concession now re-reads the decider's authority at
+the moment of decision, under the concession lock. The decider must still
+hold `finance.fee_concessions.approve` for the whole School, with the Fees
+module enabled and the School operational, even if a cached answer says
+otherwise. Nobody who requested the concession decides it, through any
+screen, API or internal call. The audit events record who requested and who
+decided, and whether a fresh MFA code was verified. They never record
+amounts, Student details or free text. Who may request or approve is
+unchanged. Revocation and adjustment cancellation are unchanged (G-3).

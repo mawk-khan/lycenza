@@ -21,7 +21,12 @@ use App\Domain\Fees\Infrastructure\FeeConcession;
 use App\Domain\Fees\Infrastructure\FeeHead;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Approval\ApprovalDecisionAuthority;
+use App\Support\Approval\ApprovalParticipants;
+use App\Support\Approval\ApprovalProvenance;
+use App\Support\Approval\MakerCheckerPolicy;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Money\Money;
 use App\Support\Tenancy\SchoolOperationalGuard;
@@ -54,6 +59,15 @@ use Illuminate\Support\Str;
  * Decisions lock the concession row (FOR UPDATE) and re-check its status;
  * the database transition trigger is the backstop. There is no free-text
  * note (M): audit metadata is ids and closed codes only.
+ *
+ * ORG.8A (ADR 0076 §58, the shared approval foundation's pilot): approve and
+ * reject run lock -> the decider's CURRENT authority (`ApprovalDecisionAuthority`:
+ * operational School, `.approve` held whole-School now, module entitled) ->
+ * maker/checker (`MakerCheckerPolicy` over `participants()`: the requester,
+ * the only User who shapes a concession -- its terms and requester are
+ * DB-immutable, so drift is impossible) -> transition -> adjustment (approve,
+ * same transaction) -> audit with `ApprovalProvenance`. Withdraw, revoke and
+ * adjustment cancellation are outside the pilot (G-3).
  */
 class FeeConcessionService
 {
@@ -65,12 +79,22 @@ class FeeConcessionService
 
     private const AMOUNT_PATTERN = '/^(0|[1-9]\d{0,11})(\.\d{1,2})?$/';
 
+    public const WORKFLOW = 'fee_concessions';
+
     public function __construct(
         private readonly FeeAdjustmentService $adjustments,
         private readonly SchoolOperationalGuard $operational,
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly ApprovalDecisionAuthority $authority,
+        private readonly MakerCheckerPolicy $makerChecker,
     ) {}
+
+    /** The concession's material participants, from its own immutable columns. */
+    public static function participants(FeeConcession $concession): ApprovalParticipants
+    {
+        return new ApprovalParticipants(self::WORKFLOW, $concession->id, ['requester' => [$concession->requested_by_user_id]]);
+    }
 
     /** @return array{concession: FeeConcession, replayed: bool} */
     public function request(School $school, RequestFeeConcessionData $data, User $actor): array
@@ -118,12 +142,13 @@ class FeeConcessionService
         });
     }
 
-    public function approve(School $school, string $concessionId, User $actor): FeeConcession
+    /** `$mfa`: the fresh-MFA proof the transport verified for $actor, recorded as provenance. */
+    public function approve(School $school, string $concessionId, User $actor, ?FreshMfaProof $mfa = null): FeeConcession
     {
         $this->authorizeCapabilityFor($actor, self::APPROVE, $school);
 
         return $this->decide($school, $concessionId, $actor, 'approved', function (FeeConcession $concession) use ($school, $actor) {
-            $this->assertNotRequester($concession, $actor);
+            $this->assertMayDecide($school, $concession, $actor);
             $concession->forceFill([
                 'status' => FeeConcession::STATUS_APPROVED,
                 'decided_by_user_id' => $actor->id,
@@ -142,7 +167,7 @@ class FeeConcessionService
             }
 
             event(new FeeConcessionApproved($school->id, $concession->id, $concession->student_id, $concession->scope, $concession->category));
-        });
+        }, $mfa);
     }
 
     public function reject(School $school, string $concessionId, User $actor): FeeConcession
@@ -150,7 +175,7 @@ class FeeConcessionService
         $this->authorizeCapabilityFor($actor, self::APPROVE, $school);
 
         return $this->decide($school, $concessionId, $actor, 'rejected', function (FeeConcession $concession) use ($school, $actor) {
-            $this->assertNotRequester($concession, $actor);
+            $this->assertMayDecide($school, $concession, $actor);
             $concession->forceFill([
                 'status' => FeeConcession::STATUS_REJECTED,
                 'decided_by_user_id' => $actor->id,
@@ -190,9 +215,9 @@ class FeeConcessionService
      * @param  'withdrawn'|'approved'|'rejected'|'revoked'  $to
      * @param  callable(FeeConcession): void  $transition
      */
-    private function decide(School $school, string $concessionId, User $actor, string $to, callable $transition): FeeConcession
+    private function decide(School $school, string $concessionId, User $actor, string $to, callable $transition, ?FreshMfaProof $mfa = null): FeeConcession
     {
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $concessionId, $actor, $to, $transition) {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $concessionId, $actor, $to, $transition, $mfa) {
             $this->operational->requireOperational($school->id);
 
             $concession = Str::isUuid($concessionId)
@@ -211,19 +236,31 @@ class FeeConcessionService
 
             $transition($concession);
 
+            $decision = match ($to) {
+                'approved' => ApprovalProvenance::APPROVED,
+                'rejected' => ApprovalProvenance::REJECTED,
+                default => null,
+            };
             $this->audit->school($school, "fee_concession.{$to}", actor: $actor, subject: $concession, metadata: [
                 'feeConcessionId' => $concession->id,
                 'scope' => $concession->scope,
                 'category' => $concession->category,
+                ...($decision === null ? [] : ApprovalProvenance::metadata(self::participants($concession), $decision, $actor, 'school', $mfa)),
             ]);
 
             return $concession->refresh();
         }));
     }
 
-    private function assertNotRequester(FeeConcession $concession, User $actor): void
+    /**
+     * Under the concession lock: the decider's current whole-School authority,
+     * then maker/checker (backed by `fee_concessions_sod_check`).
+     */
+    private function assertMayDecide(School $school, FeeConcession $concession, User $actor): void
     {
-        if ($concession->requested_by_user_id === $actor->id) {
+        $this->authority->requireCurrent($actor, self::APPROVE, $school);
+
+        if (! $this->makerChecker->permits($actor, self::participants($concession))) {
             throw new SelfApprovalNotAllowedException($concession->id);
         }
     }
@@ -287,6 +324,7 @@ class FeeConcessionService
             'scope' => $concession->scope,
             'category' => $concession->category,
             'kind' => $concession->kind,
+            ...ApprovalProvenance::metadata(self::participants($concession), ApprovalProvenance::REQUESTED),
         ]);
 
         return $concession->refresh();

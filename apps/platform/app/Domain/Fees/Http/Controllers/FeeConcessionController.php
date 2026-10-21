@@ -94,9 +94,9 @@ class FeeConcessionController extends Controller
     /** SR.4 (ADR 0071 §26.7): approve, revoke and adjustment cancellation need a fresh `mfa_code`. */
     public function approve(Request $request, School $school, string $concession, FeeConcessionService $concessions, FreshMfaRequirement $mfa): JsonResponse
     {
-        $mfa->requireForAction($request, $request->user());
+        $proof = $mfa->requireForAction($request, $request->user());
 
-        return response()->json(['data' => FeeSetupPresenter::concession($concessions->approve($school, $concession, $request->user()))]);
+        return response()->json(['data' => FeeSetupPresenter::concession($concessions->approve($school, $concession, $request->user(), $proof))]);
     }
 
     public function reject(Request $request, School $school, string $concession, FeeConcessionService $concessions): JsonResponse

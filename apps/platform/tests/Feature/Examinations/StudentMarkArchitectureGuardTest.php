@@ -136,7 +136,9 @@ class StudentMarkArchitectureGuardTest extends TestCase
             if (preg_match('/\bStudentMark(Revision|Correction)?\b|\bExaminationPaperMarkState\b/', $code) || preg_match("/'(student_marks|student_mark_revisions|student_mark_corrections|examination_paper_mark_states)'/", $code)) {
                 $this->assertDoesNotMatchRegularExpression('/->(forceFill|save|update|delete|create)\(|::create\(|->insert\(/', in_array($file, $this->markFiles(), true) ? $code : '',
                     basename($file).' must not write marks, the lock or corrections; each has exactly one writer.');
-                $this->assertContains($file, [...$this->markFiles(), app_path('Support/Retention/RetentionAnchors.php'), app_path('Support/Retention/TenantRetentionCatalog.php'), app_path('Support/Retention/Erasure/UserReferenceCatalog.php'), app_path('Support/Operations/DatabaseRoleVerifier.php')],
+                $this->assertContains($file, [...$this->markFiles(), app_path('Support/Retention/RetentionAnchors.php'), app_path('Support/Retention/TenantRetentionCatalog.php'), app_path('Support/Retention/Erasure/UserReferenceCatalog.php'), app_path('Support/Operations/DatabaseRoleVerifier.php'),
+                    // ORG.8A (ADR 0076 §58): the approval-workflow registry names the marks-correction table only (no class, no read or write).
+                    app_path('Support/Approval/ApprovalWorkflowRegistry.php')],
                     basename($file).' references StudentMark outside its own files and the retention/verifier registries (no reuse, ADR 0068 §19.2 #8-9).');
             }
         }

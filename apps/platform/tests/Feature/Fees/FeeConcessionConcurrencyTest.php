@@ -11,6 +11,7 @@ use App\Domain\Fees\Infrastructure\FeeConcession;
 use App\Domain\Payments\Application\Exceptions\ChargeAllocationExceedsChargeAmountException;
 use App\Domain\Payments\Infrastructure\PaymentAllocation;
 use App\Models\School;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
@@ -32,6 +33,11 @@ use Tests\TestCase;
  * 4. Revocation vs. a standing application, in both orders; two
  *    cancellations of one adjustment -> one reversal.
  * 5. Charge cancellation vs. an approval, in both orders.
+ * 6. ORG.8A (ADR 0076 §58): approval vs. rejection and approval vs. the
+ *    requester's withdrawal, in both orders -> one terminal decision, and an
+ *    adjustment only when the approval won; a revocation of the approver's
+ *    grants committed first -> the waiting approval re-reads current
+ *    authority and is refused.
  */
 class FeeConcessionConcurrencyTest extends TestCase
 {
@@ -245,5 +251,98 @@ class FeeConcessionConcurrencyTest extends TestCase
         $this->assertSame('approved', $holder);
         $this->assertSame('rejected:'.ChargeHasActiveAdjustmentsException::class, $contender);
         $this->assertNull($this->inSchool($w['school'], fn () => $w['charge']->refresh()->cancelled_at));
+    }
+
+    /** @return array{0: array, 1: FeeConcession} */
+    private function pending(): array
+    {
+        $w = $this->world();
+
+        return [$w, $this->requestTargeted($w, '100.00')];
+    }
+
+    private function statusOf(array $w, FeeConcession $concession): string
+    {
+        return $this->inSchool($w['school'], fn () => $concession->refresh()->status);
+    }
+
+    #[Test]
+    public function an_approval_committed_first_makes_a_racing_rejection_a_conflict(): void
+    {
+        [$w, $concession] = $this->pending();
+        $second = $this->createUserWithCapabilities($w['school'], ['finance.fee_concessions.approve']);
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->concession($w, 'approve', $w['checker']->id, $concession->id),
+            $this->concession($w, 'reject', $second->id, $concession->id),
+        );
+
+        $this->assertSame('approved', $holder);
+        $this->assertSame('rejected:'.FeeConcessionIllegalTransitionException::class, $contender);
+        $this->assertSame(FeeConcession::STATUS_APPROVED, $this->statusOf($w, $concession));
+        $this->assertCount(1, $this->adjustmentsOf($w));
+    }
+
+    #[Test]
+    public function a_rejection_committed_first_makes_a_racing_approval_a_conflict_with_no_adjustment(): void
+    {
+        [$w, $concession] = $this->pending();
+        $second = $this->createUserWithCapabilities($w['school'], ['finance.fee_concessions.approve']);
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->concession($w, 'reject', $second->id, $concession->id),
+            $this->concession($w, 'approve', $w['checker']->id, $concession->id),
+        );
+
+        $this->assertSame('rejected', $holder);
+        $this->assertSame('rejected:'.FeeConcessionIllegalTransitionException::class, $contender);
+        $this->assertSame(FeeConcession::STATUS_REJECTED, $this->statusOf($w, $concession));
+        $this->assertCount(0, $this->adjustmentsOf($w));
+    }
+
+    #[Test]
+    public function a_withdrawal_committed_first_makes_a_racing_approval_a_conflict(): void
+    {
+        [$w, $concession] = $this->pending();
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->concession($w, 'withdraw', $w['maker']->id, $concession->id),
+            $this->concession($w, 'approve', $w['checker']->id, $concession->id),
+        );
+
+        $this->assertSame('withdrawn', $holder);
+        $this->assertSame('rejected:'.FeeConcessionIllegalTransitionException::class, $contender);
+        $this->assertCount(0, $this->adjustmentsOf($w));
+    }
+
+    #[Test]
+    public function an_approval_committed_first_makes_a_racing_withdrawal_a_conflict(): void
+    {
+        [$w, $concession] = $this->pending();
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->concession($w, 'approve', $w['checker']->id, $concession->id),
+            $this->concession($w, 'withdraw', $w['maker']->id, $concession->id),
+        );
+
+        $this->assertSame('approved', $holder);
+        $this->assertSame('rejected:'.FeeConcessionIllegalTransitionException::class, $contender);
+        $this->assertCount(1, $this->adjustmentsOf($w));
+    }
+
+    #[Test]
+    public function a_revocation_of_the_approvers_grants_committed_first_refuses_the_waiting_approval(): void
+    {
+        [$w, $concession] = $this->pending();
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->concession($w, 'revoke-grants', $w['checker']->id),
+            $this->concession($w, 'approve', $w['checker']->id, $concession->id),
+        );
+
+        $this->assertNotSame('0', $holder, 'the approver held a grant to revoke');
+        $this->assertSame('rejected:'.AuthorizationException::class, $contender, 'current authority, read after the revocation committed');
+        $this->assertSame(FeeConcession::STATUS_PENDING, $this->statusOf($w, $concession));
+        $this->assertCount(0, $this->adjustmentsOf($w));
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Support\Auth\Mfa;
 
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -16,7 +17,7 @@ class FreshMfaRequirement
 {
     public function __construct(private readonly MfaReverificationService $mfa) {}
 
-    public function require(Request $request, User $user, mixed $code): void
+    public function require(Request $request, User $user, mixed $code): FreshMfaProof
     {
         if (! $this->mfa->hasActiveFactor($user)) {
             throw ValidationException::withMessages(['mfa_code' => 'This action requires multi-factor authentication. Enroll a factor under Account security first.']);
@@ -29,6 +30,8 @@ class FreshMfaRequirement
         if (! $this->mfa->reverify($request, $user, trim($code))) {
             throw ValidationException::withMessages(['mfa_code' => 'That code is not valid.']);
         }
+
+        return new FreshMfaProof($user->id, CarbonImmutable::now());
     }
 
     /**
@@ -38,10 +41,13 @@ class FreshMfaRequirement
      * re-verified now. Call it AFTER the capability check (an unauthorized
      * caller gets its 403, never burns a code) and OUTSIDE the business
      * transaction (a rollback must never un-consume a code).
+     *
+     * ORG.8A: returns the proof, which a domain may record as assurance
+     * provenance; callers that need no record ignore it.
      */
-    public function requireForAction(Request $request, User $user): void
+    public function requireForAction(Request $request, User $user): FreshMfaProof
     {
-        $this->require($request, $user, $request->input('mfa_code'));
+        return $this->require($request, $user, $request->input('mfa_code'));
     }
 
     public function hasActiveFactor(User $user): bool

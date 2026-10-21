@@ -25,6 +25,7 @@ use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
@@ -223,7 +224,7 @@ class FeeConcessionController extends Controller
     /** SR.4 (ADR 0071 §26.7): approval posts the concession adjustment -- a fresh code. */
     public function approve(Request $request, TenantContext $context, FeeConcessionService $concessions, string $concession): RedirectResponse
     {
-        return $this->act($context, FeeConcessionService::APPROVE, $concession, fn ($school, $actor) => $concessions->approve($school, $concession, $actor), $request);
+        return $this->act($context, FeeConcessionService::APPROVE, $concession, fn ($school, $actor, $mfa) => $concessions->approve($school, $concession, $actor, $mfa), $request);
     }
 
     public function reject(TenantContext $context, FeeConcessionService $concessions, string $concession): RedirectResponse
@@ -275,19 +276,17 @@ class FeeConcessionController extends Controller
      * $stepUp: the request whose `mfa_code` must be re-verified (after the
      * capability, before the decision) -- a financially consequential decision.
      *
-     * @param  callable(School, User): mixed  $operation
+     * @param  callable(School, User, ?FreshMfaProof): mixed  $operation
      */
     private function act(TenantContext $context, string $capability, string $concession, callable $operation, ?Request $stepUp = null): RedirectResponse
     {
         $school = $context->requireSchool();
         $this->authorizeCapability($capability, $school);
-        if ($stepUp !== null) {
-            app(FreshMfaRequirement::class)->requireForAction($stepUp, $context->actor());
-        }
+        $mfa = $stepUp === null ? null : app(FreshMfaRequirement::class)->requireForAction($stepUp, $context->actor());
         $url = "/app/finance/concessions/{$concession}";
 
         try {
-            $operation($school, $context->actor());
+            $operation($school, $context->actor(), $mfa);
         } catch (FeeConcessionNotFoundException) {
             throw new NotFoundHttpException;
         } catch (FeesException $e) {

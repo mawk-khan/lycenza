@@ -1481,3 +1481,28 @@ once several modules copy it.
        - The database refuses a Campus grant of any role holding a
          `CAMPUS_INCOMPATIBLE` key, and refuses adding such a key to a
          Campus-granted role (fail closed without RLS bypass).
+
+102. **Approval is a domain-owned workflow over one shared security
+     foundation (ADR 0076 §56, §58, ORG.8A).**
+     - **Approval is not permission.** It authorizes one item; execution
+       re-checks the current environment, legal gate, School lifecycle,
+       module, capability, scope and domain validity. No approval or
+       override ever opens a legal gate.
+     - **No generic approval table or workflow engine.** Each domain owns
+       its request table, states, queue and transaction; approval topology
+       is code-owned.
+     - **Every request/decide workflow is registered** in
+       `App\Support\Approval\ApprovalWorkflowRegistry`
+       (`ApprovalWorkflowRegistryTest`). A new decision column or
+       request/approve capability fails until it is classified.
+     - **A workflow on the shared foundation decides** under its item lock:
+       - `ApprovalDecisionAuthority::requireCurrent()`, a fresh
+         capability, module and School read, never the cache;
+       - then `MakerCheckerPolicy` over the domain's durable
+         `ApprovalParticipants` (every material participant, per item,
+         never a role name);
+       - then `ApprovalProvenance` on its own audit event (ids and closed
+         codes only).
+       - Its database maker/checker backstop stays at least as strict.
+     - **Fresh MFA:** a `FreshMfaProof` comes only from
+       `FreshMfaRequirement` and is provenance, never authority.

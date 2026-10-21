@@ -1518,6 +1518,28 @@ UAT plan: `docs/product/APPROVAL-AUTHORITY-UAT.md`.
   database refuse any entry another domain owns); G-2 payroll SoD checks
   only the run creator (MEDIUM, open); G-3..G-6 LOW.
 
+## Shared approval foundation (ORG.8A, ADR 0076 §58 — built 2026-10-21)
+
+- **Domains own their workflows.** Each keeps its own request table,
+  states, queue and transaction. There is no generic approval table and no
+  configurable workflow engine.
+- **Every request/decide workflow is registered** in
+  `App\Support\Approval\ApprovalWorkflowRegistry`, a code-owned
+  architecture guard proven by `ApprovalWorkflowRegistryTest`. A new
+  decision column or approval capability fails until it is classified.
+- **A workflow on the shared foundation decides like this,** in its own
+  transaction, after locking its item:
+  - `ApprovalDecisionAuthority::requireCurrent()`: the School is
+    operational, and the decider holds the capability whole-School now
+    (read fresh, never the cache);
+  - `MakerCheckerPolicy::permits()` over the domain's
+    `ApprovalParticipants`: no material participant decides;
+  - `ApprovalProvenance` on its own audit event.
+- **Pilot:** fee concessions (approve, reject). The other workflows keep
+  their own rules until migrated deliberately (§58.5).
+- **`FreshMfaRequirement` returns a `FreshMfaProof`,** recorded as
+  assurance. It is never authority, and only `FreshMfaRequirement` mints it.
+
 ## What is NOT yet implemented
 
 Contracted by ADR 0076 (ORG.1, 2026-10-17) and not built:

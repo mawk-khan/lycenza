@@ -8600,3 +8600,132 @@ gates unchanged (E30–E34 still block production).
 
 **57.12 Status.** G-1 CLOSED once published. Next: ORG.8A (assurance kit +
 fee-concession pilot), owner authorization.
+
+## 58. ORG.8A — Shared approval assurance foundation and fee-concession pilot (as built, 2026-10-21)
+
+Owner authorization: ORG.8A. Baseline `origin/main` = `db9a654a` (§57). No
+generic approval table, workflow engine, capability, role-template,
+`CampusScopeCatalogue`, migration or legal-gate change.
+
+**58.1 Owner decisions frozen.** 8A-D1: a shared SECURITY foundation over
+domain-owned workflows — every domain keeps its own request table, states,
+queue and execution transaction. No configurable or tenant workflow engine;
+approval topology is code-owned. Fee concessions are the sole pilot.
+
+**58.2 The toolkit (`app/Support/Approval`, plus two hooks).** Only what the
+pilot proves common:
+- `ApprovalParticipants` — the Users who MATERIALLY took part in one item,
+  keyed by participation, supplied by the domain from durable columns.
+- `MakerCheckerPolicy` — the one rule: the decider took no material part in
+  the item (any participant, not only a requester). Per item and per actor;
+  never a role name; holding both capabilities never satisfies it.
+- `ApprovalDecisionAuthority` — inside the decision transaction, after the
+  item lock: the School is operational (FOR SHARE) and the decider holds the
+  decision capability whole-School NOW (`CapabilityResolver::holdsInSchoolNow`:
+  fresh, not the 60 s grant or entitlement caches; active membership and
+  active whole-School grants share-locked; disabled Users, Campus grants and
+  a disabled module never count). A concurrent revocation or suspension is
+  ordered before or after the decision; the disabled flag and the module
+  entitlement are read fresh at decision time but not locked. Lock order matches `StaffAccessService` (membership,
+  then grants); the approval side never takes a lock revocation needs later,
+  so no deadlock.
+- `ApprovalProvenance` — the approval facts appended to the domain's OWN
+  audit event (event names unchanged): workflow, decision
+  (`requested`/`approved`/`rejected`), participants and decider by User id,
+  the decision scope as the domain states it (`school`), and whether a fresh
+  MFA code was verified. Ids and closed codes only.
+- `FreshMfaProof` — `FreshMfaRequirement` now returns the fact it verified;
+  a domain records it as provenance (refused for anyone but the decider).
+  Minted only by `FreshMfaRequirement` (pinned). Assurance, never authority.
+- `ApprovalWorkflowRegistry` — the code-owned inventory (architecture guard,
+  never read at runtime).
+Deliberately NOT in the toolkit: request data, states, transitions, queues,
+Charge/payroll/Leave/marks/publishing effects, a fingerprint helper (no
+pilot needs one), expiry, delegation, thresholds, multi-level, override,
+reason-code framework.
+
+**58.3 Pilot contract (request -> approve/reject, immediate execution).**
+- **Participants:** `{requester}` = `fee_concessions.requested_by_user_id`.
+  Every request term and the requester are DB-immutable after submission
+  (`fees_validate_fee_concession`), nobody amends a concession, so the
+  requester is the only material participant; application and
+  `fee_concessions_sod_check` agree exactly. No DB change needed.
+- **Drift:** IMMUTABLE_TERMS (no fingerprint). Targeted amounts are still
+  re-validated under the Charge lock at approval (G1 capacity).
+- **Order (one transaction):** cached capability floor -> School
+  operational -> concession FOR UPDATE -> state -> current authority ->
+  maker/checker -> transition -> adjustment + journal (approve, via
+  `FeeAdjustmentService`/`LedgerService`, P1 intact) -> audit with
+  provenance -> commit. Any refusal rolls everything back; there is no
+  approved-but-unexecuted state.
+- **MFA (unchanged):** approve needs a fresh code (web and API, recorded as
+  `freshMfa: true`); reject does not (`freshMfa: false`).
+- **Reasons (unchanged):** none on decisions (owner decision M); no
+  free text in audit.
+- **Retries/races:** decisions are not keyed; the locked state transition
+  plus the DB trigger make a repeat a 409 conflict with no second adjustment
+  or journal. Two-process races: approve vs approve (existing), approve vs
+  reject both orders, approve vs withdraw both orders -> one terminal
+  decision, an adjustment only if approval won; a revocation of the
+  approver's grants committed first -> the waiting approval re-reads and is
+  refused (403), nothing written.
+- **Direct service calls** enforce the cached floor, current authority,
+  maker/checker, state and validity (no reliance on route middleware). Web
+  and API converge on the same service.
+- **Queue:** `finance.fee_concessions.view`, School predicate, unknown and
+  malformed ids not-found, ids/terms/status only (no Student profile).
+- **Whole-School:** keys unchanged, not adopted, `CAMPUS_INCOMPATIBLE`; a
+  Campus grant never counts. Holders unchanged (request: school_admin,
+  accountant; approve: school_admin). No principal, cashier or platform
+  authority.
+- **Higher-order gates:** a disabled `fees` module and a suspended School
+  refuse at decision time even behind warm caches; no legal gate changes
+  (E30–E32 still block production use).
+- **Outside the pilot (G-3, LOW, open):** revoke and adjustment cancellation
+  keep their current semantics (no SoD, optional reason).
+
+**58.4 Registry and completeness guard (`ApprovalWorkflowRegistryTest`).**
+Registered: fee concessions (shared, pilot), Communications approval
+(adapter), marks corrections (as-is), Leave (special rules), payroll runs
+(adapter, G-2), erasure cases (not applicable). It fails when a
+decision-shaped column (`*_by_user_id` of decided/approved/requested/
+reviewed/rejected/prepared/previewed/submitted) is undeclared, a
+request/approve/decide/review capability is unclassified or Campus-adopted,
+a registered table/column/backstop/service/method vanishes, a workflow other
+than the registered shared one uses `MakerCheckerPolicy`, the shared
+workflow decides without the policy/authority/provenance, a fresh-MFA proof
+is minted elsewhere, or the toolkit touches business data or a generic
+`approval_requests` table appears. Marks isolation (ADR 0068 §19.2) is
+kept: the registry names the marks-correction table and columns but never a
+marks class (the closed consumer set is unchanged), and
+`StudentMarkArchitectureGuardTest` lists the registry beside the other
+name-only registries (retention, role verifier).
+
+**58.5 Compatibility (analysis only; no behaviour change).**
+
+    workflow                participants today                    verdict        later need
+    Communications          requester (service only, no DB check) ADAPTER        announcement creator as participant; DB backstop; capability below controller
+    marks corrections       requester (+ DB check)                AS-IS          capability below the route
+    Leave                   requester Employee (trigger-derived)  SPECIAL RULES  Employee identity, manager relationship, admin path, self withdraw/cancel
+    payroll runs            run creator only (+ DB check)         ADAPTER        G-2: override/delta authors and recalculators (ORG.8B)
+    erasure cases           data subject (not a User)             NOT APPLICABLE —
+
+**58.5a Security review** (independent): no HIGH or MEDIUM. LOW fixed: the
+fresh-MFA proof guard now catches fully qualified, aliased and reflective
+construction; the registry guard's column and capability patterns were
+widened (Leave's Employee decision columns registered) and every declared
+decision method must call the shared check; the fresh-read docblock no
+longer claims locking for the disabled flag and entitlement. LOW accepted:
+a decision service still accepts a missing MFA proof (fresh MFA stays a
+transport control, rule 95; provenance then records `freshMfa: false`);
+revoke/cancel stay outside the pilot (G-3); the revocation race uses a plain
+grant UPDATE, not `StaffAccessService` (lock order argued in 58.2); a
+membership share lock briefly delays other updates of that row. New LOW
+G-7 (pre-existing, recorded for the owner): a staff member who is also the
+Student's linked Guardian can approve a colleague's concession for that
+Student -- a beneficiary-relationship participation class is a later
+decision, not part of 8A.
+
+**58.6 Unchanged / open.** G-2 (payroll participation) MEDIUM, next phase
+ORG.8B; G-3 LOW; G-4..G-6, OD-8.1..OD-8.9; ORG.7 residuals; LC-5–LC-10
+paused; ORG.9 parity.

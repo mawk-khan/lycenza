@@ -15,7 +15,9 @@ use App\Support\Authorization\Campus\CampusScopeCatalogue;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\PersonalAccessToken;
+use LogicException;
 
 /**
  * The single authoritative service computing effective capabilities.
@@ -351,6 +353,67 @@ class CapabilityResolver
     public function canInSchool(User $actor, string $capability, School $school): bool
     {
         return in_array($capability, $this->schoolCapabilities($actor, $school), true);
+    }
+
+    /**
+     * ORG.8A (ADR 0076 §58): whether the actor holds $capability in the School
+     * NOW -- the same whole-School rule as canInSchool(), but read fresh (never
+     * the 60 s grant cache or the entitlement cache). The active membership
+     * and its active grants are share-locked until the caller's transaction
+     * ends, so a concurrent suspension or revocation is ordered strictly
+     * before or after the caller's decision; the User's disabled flag and the
+     * module entitlement are read fresh at decision time, not locked.
+     * Disabled Users, Campus-scoped grants and capabilities of a disabled
+     * module never count. For approval
+     * decisions (`ApprovalDecisionAuthority`); everything else keeps can().
+     * Lock order matches StaffAccessService: membership, then grants.
+     */
+    public function holdsInSchoolNow(User $actor, string $capability, School $school): bool
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new LogicException('CapabilityResolver::holdsInSchoolNow() must run inside the decision transaction.');
+        }
+
+        if (! User::query()->whereKey($actor->id)->where('is_disabled', false)->exists()) {
+            return false;
+        }
+
+        $required = ModuleCatalogue::modulesFor($capability);
+        if ($required === []) {
+            return false;
+        }
+
+        return $this->context->withSchool($school, function () use ($actor, $capability, $school, $required): bool {
+            $membership = SchoolMembership::query()
+                ->where('school_id', $school->id)
+                ->where('user_id', $actor->id)
+                ->active()
+                ->sharedLock()
+                ->first();
+            if ($membership === null) {
+                return false;
+            }
+
+            $held = MembershipRoleAssignment::query()
+                ->where('school_membership_id', $membership->id)
+                ->active()
+                ->whereNull('campus_id')
+                ->sharedLock()
+                ->with('role.capabilities')
+                ->get()
+                ->contains(fn (MembershipRoleAssignment $grant): bool => $grant->role->capabilities->contains('key', $capability));
+            if (! $held) {
+                return false;
+            }
+
+            foreach ($required as $module) {
+                if (! ModuleCatalogue::isCore($module) && ! $this->entitlements->isEnabledFresh($school, $module)) {
+                    return false;
+                }
+            }
+
+            return true;
+        });
     }
 
     /**
