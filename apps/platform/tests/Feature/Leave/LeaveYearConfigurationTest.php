@@ -126,7 +126,11 @@ class LeaveYearConfigurationTest extends TestCase
         $this->assertSame(['2029-01-01', '2029-12-31', false], (fn ($y) => [$y->startsOn, $y->endsOn, $y->isTransition])(LeaveYearBounds::inSchedule(4, [['effective_from' => '2028-01-01', 'start_month' => 1], ['effective_from' => '2030-07-01', 'start_month' => 7]], '2029-06-01')));
         $this->assertSame(['2030-01-01', '2030-06-30', true], (fn ($y) => [$y->startsOn, $y->endsOn, $y->isTransition])(LeaveYearBounds::inSchedule(4, [['effective_from' => '2028-01-01', 'start_month' => 1], ['effective_from' => '2030-07-01', 'start_month' => 7]], '2030-03-01')));
 
-        $audit = $this->inSchool($w['school'], fn () => DB::table('school_audit_events')->where('school_id', $w['school']->id)->where('event_type', 'leave.year_start.change_scheduled')->orderBy('occurred_at')->first());
+        // Both scheduled changes are audited; occurred_at has whole-second precision, so the two can tie --
+        // find the first change by its own facts, never by row order (ORG.8A-R1 CI flake fix).
+        $audits = $this->inSchool($w['school'], fn () => DB::table('school_audit_events')->where('school_id', $w['school']->id)->where('event_type', 'leave.year_start.change_scheduled')->get());
+        $this->assertCount(2, $audits);
+        $audit = $audits->first(fn ($a) => json_decode($a->metadata, true)['effectiveFrom'] === '2028-01-01');
         $this->assertNotNull($audit);
         $this->assertSame($w['admin']->id, $audit->actor_user_id);
         $this->assertNotNull($audit->occurred_at);
