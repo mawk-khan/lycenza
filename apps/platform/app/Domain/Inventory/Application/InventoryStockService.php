@@ -65,6 +65,7 @@ class InventoryStockService
 
         return $this->guarded(function () use ($item, $location, $quantity, $actor) {
             return DB::transaction(function () use ($item, $location, $quantity, $actor) {
+                $this->lockLocations($location);
                 $balance = $this->lockBalance($this->ensureBalanceRow($item, $location));
 
                 $balance->quantity_on_hand = $this->boundedSum($balance->quantity_on_hand, $quantity);
@@ -100,6 +101,7 @@ class InventoryStockService
 
         return $this->guarded(function () use ($item, $location, $quantity, $actor) {
             return DB::transaction(function () use ($item, $location, $quantity, $actor) {
+                $this->lockLocations($location);
                 $balance = $this->lockBalance($this->ensureBalanceRow($item, $location));
 
                 if (bccomp($balance->quantity_on_hand, $quantity, 3) < 0) {
@@ -155,6 +157,7 @@ class InventoryStockService
 
         return $this->guarded(function () use ($item, $from, $to, $quantity, $actor) {
             return DB::transaction(function () use ($item, $from, $to, $quantity, $actor) {
+                $this->lockLocations($from, $to);
                 $sourceBalanceId = $this->ensureBalanceRow($item, $from);
                 $destBalanceId = $this->ensureBalanceRow($item, $to);
 
@@ -276,6 +279,7 @@ class InventoryStockService
 
         return $this->guardedMany(function () use ($location, $requirements, $items, $actor) {
             return DB::transaction(function () use ($location, $requirements, $items, $actor) {
+                $this->lockLocations($location);
                 $balanceIdsByItemId = [];
                 foreach ($requirements as $requirement) {
                     $item = $items->get($requirement->inventoryItemId);
@@ -363,6 +367,34 @@ class InventoryStockService
             ->where('inventory_location_id', $location->id)
             ->firstOrFail()
             ->id;
+    }
+
+    /**
+     * ORG.7H-1 (ADR 0076 §54): the FIRST lock of every stock write. Takes the
+     * Location row(s) FOR SHARE in ascending id order (one statement) and
+     * refuses -- the generic LocationNotAvailableException -- unless each is
+     * still active with exactly the Campus the caller resolved and authorized
+     * it under. A concurrent Campus change therefore either commits first (and
+     * this write is refused, never recorded under the old Campus) or waits
+     * until this write commits (and is then refused by the Campus freeze: the
+     * Location is used). Share locks never conflict with one another, so stock
+     * writers do not serialize on a Location; the balance locks follow.
+     */
+    private function lockLocations(InventoryLocation ...$locations): void
+    {
+        $current = InventoryLocation::query()
+            ->whereKey(array_map(fn (InventoryLocation $l) => $l->id, $locations))
+            ->orderBy('id')
+            ->sharedLock()
+            ->get(['id', 'campus_id', 'status'])
+            ->keyBy('id');
+
+        foreach ($locations as $location) {
+            $locked = $current->get($location->id);
+            if ($locked === null || ! $locked->isActive() || $locked->campus_id !== $location->campus_id) {
+                throw new LocationNotAvailableException;
+            }
+        }
     }
 
     private function lockBalance(string $balanceId): InventoryStockBalance

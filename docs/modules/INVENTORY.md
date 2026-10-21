@@ -717,3 +717,23 @@ their orders under Finance (D8).
 - **One access class.** All reads and targets go through
   `App\Domain\Inventory\Application\InventoryStockAccess`. Canteen's
   system stock issue (`issueMany`) is unchanged; Canteen is not adopted.
+
+## Location Campus freeze (ORG.7H-1, ADR 0076 §54)
+
+- **A Location's Campus is provenance.** Before any operational use it may
+  be corrected (NULL -> Campus, A -> B, Campus -> NULL). Once used it never
+  changes: a used shared Location stays shared, a used Campus Location stays
+  on its Campus, so stock history can never move to another Campus.
+- **"Used"** = any stock movement from or to the Location, any stock balance
+  row, or any Canteen Order naming it -- the database function
+  `inventory_location_has_operational_history()`, the one definition.
+- **One writer:** `InventoryLocationService` (web and API create/update),
+  which locks the Location FOR UPDATE and answers 409
+  `INVENTORY_LOCATION_CAMPUS_FROZEN`. Name and status stay editable.
+- **Database backstop:** `trg_inventory_location_campus_freeze` refuses the
+  change for every writer; `trg_inventory_location_evidence` share-locks the
+  Location on each evidence insert, so first use and a Campus change
+  serialize.
+- **Stock writes** share-lock their Location(s) first and refuse (the
+  generic "not available") if the Location changed Campus after the caller
+  resolved it. Transfers between Locations are unchanged.

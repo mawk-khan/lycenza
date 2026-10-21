@@ -896,6 +896,10 @@ whole-School supersedes. A selected or current Campus
   never `school_admin`, `accountant` or a role with no adopted key. Any new
   adoption is a new owner-approved phase; deferrals and residuals are in
   ADR 0076 §53.
+- **ORG.7H-1 (§54, 2026-10-21):** an Inventory Location's Campus is
+  frozen once used (database-enforced), so Inventory history can no longer
+  move between Campuses. Location management stays whole-School
+  (`inventory.directory.manage`); no Campus authority was added.
 - **Refusals look the same.** A Campus-scoped actor's refusals do not
   differ between an in-scope and an out-of-scope conflict (Visitor
   check-in: one generic refusal; the School-wide one-active-Visit rule

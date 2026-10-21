@@ -113,6 +113,7 @@ Campus UAT readiness" (22 cases). This plan covers every domain together.
 | N13 | any Campus persona | use a disabled module | 403 |
 | N14 | stores_officer@C | Campus C inactive | 403 |
 | N15 | any persona | ids of the second School | not found |
+| N16 | school_admin | change the Campus of a store with stock history (A -> B, A -> none, shared -> A) | refused (409); an unused store can still be corrected |
 
 ## Navigation (projection only, never security)
 

@@ -1356,7 +1356,12 @@ once several modules copy it.
        deadlocks against a transfer's enrollment insert.
      - **History keeps its Campus** (ORG.7D-5, §41): a Library loan stores
        its copy's Campus at checkout (immutable), and a Transport route's
-       Campus is fixed once used. Scoped returns, ends and history follow
+       Campus is fixed once used. An Inventory Location's Campus is frozen
+       once it has operational history (ORG.7H-1, §54): movements, balances
+       or Canteen Orders, decided by the one database predicate
+       `inventory_location_has_operational_history()`; only
+       `InventoryLocationService` writes Locations, and every stock write
+       share-locks its Location(s) and re-checks the Campus it authorized. Scoped returns, ends and history follow
        the stored Campus, never the Student's current one.
      - **An Employee's operational Campus set comes only from
        `CurrentEmployeeAssignments`** (ORG.7E-0, §42): the union of current

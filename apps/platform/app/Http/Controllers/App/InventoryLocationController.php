@@ -2,17 +2,16 @@
 
 namespace App\Http\Controllers\App;
 
+use App\Domain\Inventory\Application\InventoryLocationService;
 use App\Domain\Inventory\Infrastructure\InventoryLocation;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
-use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\NormalizesCodeInput;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -21,7 +20,9 @@ use Inertia\Response;
 /**
  * Phase 10E -- session-authenticated Inertia pages for the Inventory
  * Location directory. Mirrors
- * App\Http\Controllers\App\VisitorController's shape exactly.
+ * App\Http\Controllers\App\VisitorController's shape exactly. Writes go
+ * through InventoryLocationService (ORG.7H-1); this page never edits a
+ * Location's Campus.
  */
 class InventoryLocationController extends Controller
 {
@@ -70,7 +71,7 @@ class InventoryLocationController extends Controller
         ]);
     }
 
-    public function store(Request $request, TenantContext $context): RedirectResponse
+    public function store(Request $request, TenantContext $context, InventoryLocationService $service): RedirectResponse
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('inventory.directory.manage', $school);
@@ -84,40 +85,24 @@ class InventoryLocationController extends Controller
 
         $this->assertCampusBelongsToSchool($validated['campus_id'] ?? null);
 
-        $location = DB::transaction(function () use ($school, $validated, $context) {
-            $location = InventoryLocation::query()->create([...$validated, 'school_id' => $school->id, 'status' => 'active']);
-
-            app(AuditRecorder::class)->school($school, 'inventory.location.created', actor: $context->actor(), subject: $location, metadata: [
-                'locationId' => $location->id,
-                'code' => $location->code,
-            ]);
-
-            return $location;
-        });
+        $location = $service->create($school, $validated, $context->actor());
 
         return redirect('/app/inventory-locations')->with('flash', "Location {$location->code} created.");
     }
 
-    public function update(Request $request, TenantContext $context, string $inventoryLocation): RedirectResponse
+    public function update(Request $request, TenantContext $context, InventoryLocationService $service, string $inventoryLocation): RedirectResponse
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('inventory.directory.manage', $school);
 
-        $model = InventoryLocation::query()->findOrFail($inventoryLocation);
+        InventoryLocation::query()->findOrFail($inventoryLocation);
 
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
             'status' => ['sometimes', Rule::in(['active', 'inactive'])],
         ]);
 
-        $before = $model->only(array_keys($validated));
-        $model->update($validated);
-
-        app(AuditRecorder::class)->school($school, 'inventory.location.updated', actor: $context->actor(), subject: $model, metadata: [
-            'locationId' => $model->id,
-            'statusBefore' => $before['status'] ?? null,
-            'statusAfter' => $validated['status'] ?? null,
-        ]);
+        $service->update($school, $inventoryLocation, $validated, $context->actor());
 
         return redirect('/app/inventory-locations')->with('flash', 'Location updated.');
     }

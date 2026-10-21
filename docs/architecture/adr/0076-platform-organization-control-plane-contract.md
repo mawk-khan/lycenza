@@ -7527,7 +7527,7 @@ and `restrict()` uses `whereIn`, so NULL never means every Campus.
 
     resource                NULL meaning           Campus read  Campus write  history
     Visitor visit           not possible           in scope     in scope      stored Campus
-    Inventory Location      School-wide store      no           no            follows the Location's CURRENT Campus (53.13 ORG.7H-1)
+    Inventory Location      School-wide store      no           no            Campus frozen once used (DB, §54; was 53.13 ORG.7H-1)
     Section/Offering/Room   not possible           in scope     in scope      fixed (composite FKs)
     Attendance register     not possible           in scope     in scope      stored at write
     Hostel                  not possible           in scope     in scope      Campus fixed once it has Rooms (app)
@@ -7675,7 +7675,8 @@ Not a Campus-actor bypass (whole-School authority, stock data only), but
 the one adopted domain without a "fixed once used" Campus rule (Library,
 Transport, Hostel and Canteen have one). Recommended: freeze a Location's
 Campus once it has movements or balances (a small hardening slice). Not a
-closure or UAT blocker. Accepted LOW/INFO residuals by domain remain as
+closure or UAT blocker. **CLOSED by ORG.7H-1 (§54, 2026-10-21):** a used
+Location's Campus is frozen in the database. Accepted LOW/INFO residuals by domain remain as
 recorded in §33–§52 (Visitor busy-somewhere; Admissions no immutability
 trigger, fingerprint drift, F-9; Library audit outside transaction,
 `student_id` not frozen; Transport non-UUID 500, app-only route freeze,
@@ -7756,7 +7757,7 @@ whole-School boundary needing an owner decision before any build.
                 corrections, refunds, reversals
     Examinations Campus exam-papers hub (navigation gap)                   UX           academic UX follow-up
     Marks       Campus adoption                                            legal        after RES gates
-    Inventory   Location Campus freeze (ORG.7H-1)                          integrity    hardening slice
+    Inventory   Location Campus freeze (ORG.7H-1)                          integrity    DONE (§54)
     cross-cut   R8 LIKE/docblock/CHECK remainder; C6 all-of floors          hygiene      hygiene slice
     parity      Branch filters, reports, HR MIS (reference screenshots)   parity       ORG.9
 
@@ -7803,3 +7804,132 @@ the Authorization suite (catalogue, adoption impact, route coverage and
 whole-School declaration guards, every domain's Campus tests): 1362 passed;
 1 failure is environment-only (a real-MinIO Guardian purge test).
 Documentation guards: 22 passed. No full regression (documentation only); counter 0/5.
+
+## 54. ORG.7H-1 — Inventory Location Campus immutability (as built, 2026-10-21)
+
+Owner authorization: ORG.7H-1, narrow data-integrity hardening closing the
+§53.13 LOW ORG.7H-1. Baseline `origin/main` = `895a824f` (§53). No new
+capability, role, catalogue, RLS, Canteen or stock-history change. ORG.7
+is not reopened: this is a post-closure correction.
+
+**54.1 Contract (owner decisions H1-D1–D5).** An Inventory Location's
+`campus_id` is operational provenance. Before any operational use it may be
+corrected every way (NULL -> Campus, A -> B, Campus -> NULL) under the
+existing whole-School `inventory.directory.manage` and same-School
+validation. After first use it is immutable: A -> B, A -> NULL and NULL -> A
+are refused, so a used School-shared Location stays shared and a used
+Campus-A Location stays A. "Used" is derived from relational evidence, never
+a stored flag; no history row is rewritten; other fields (name, status)
+keep their edit behaviour. No Campus-scoped actor gains Location
+authority.
+
+**54.2 Writer audit.** Before: the API `PATCH .../inventory-locations/{id}`
+(`campus_id`, unlocked, inline in the controller) was the only Campus
+changer; API and web create set it once; the web edit accepts name/status
+only; the demo seeder creates. No import path. Now every Location write
+(create and update, web and API) goes through
+`App\Domain\Inventory\Application\InventoryLocationService`, pinned as the
+only writer in `app/` (`InventoryLocationCampusArchitectureTest`).
+
+**54.3 Operational evidence (the one predicate).** Database function
+`inventory_location_has_operational_history(location, school)`, VOLATILE,
+SECURITY INVOKER, fixed `search_path`, EXECUTE for `school_os_app` only:
+
+    stock_movements           from_location_id or to_location_id   (receipt, issue, transfer)
+    inventory_stock_balances  inventory_location_id                (current stock state, even at 0)
+    canteen_orders            inventory_location_id                (placement snapshot, any status)
+
+Canteen stock consumptions reference movements (covered). A Canteen Outlet
+naming the Location is configuration, not history (its Campus-bound
+composite key already pins the Location's Campus). There are no receipts,
+opening balances, reservations or purchase tables. Every foreign key into
+`inventory_locations` must be classified as evidence or configuration
+(`InventoryLocationCampusFreezeDbTest`), so a new referencing table fails
+until decided. The service calls the same function; there is no second
+definition.
+
+**54.4 Application rule.** `InventoryLocationService::update()` locks the
+Location FOR UPDATE, then refuses an actual Campus change (case-insensitive
+id comparison; a no-op is not a change) while the predicate holds:
+`LocationCampusFrozenException`, 409 `INVENTORY_LOCATION_CAMPUS_FROZEN`,
+"This Inventory Location already has stock history, so its Campus can no
+longer change." The audit row and other fields are unchanged.
+
+**54.5 Database backstop** (migration
+`2026_12_28_090000_freeze_used_inventory_location_campus`, the ADR 0069 S1
+pattern): `trg_inventory_location_campus_freeze` (BEFORE UPDATE OF
+`campus_id` on `inventory_locations`) raises `check_violation`
+`inventory_location_campus_frozen` when the value actually changes and the
+predicate holds — for every role, including raw runtime SQL.
+`trg_inventory_location_evidence` (BEFORE INSERT OR UPDATE OF the Location
+columns on each evidence table) takes each named Location FOR SHARE, so the
+first evidence and a Campus change serialize regardless of which unique
+keys include `campus_id` (today the Canteen composite key also makes the
+UPDATE take FOR UPDATE, which conflicts with the evidence rows' foreign-key
+KEY SHARE). Same-School validity stays the composite foreign key; the
+active-Campus rule is unchanged (a Location Campus was never required to be
+active); RLS stays forced.
+
+**54.6 Stock writes.** Every `InventoryStockService` write (`receive`,
+`issue`, `transfer`, `issueMany` — Canteen fulfilment included) first takes
+its Location row(s) FOR SHARE in ascending id order inside the transaction
+and refuses (generic `LocationNotAvailableException`) unless each is still
+active with exactly the Campus the caller resolved and authorized it under.
+A stock write therefore never commits under a Campus the Location no longer
+has. Transfers between Locations work exactly as before: the freeze is
+about a Location's own identity, not stock moving between Locations.
+
+**54.7 Lock order and races.** Stock writes: Location(s) FOR SHARE (id
+order) -> balances FOR UPDATE (id order). Canteen fulfilment: Order -> Canteen
+Items -> Location FOR SHARE -> balances -> Outlet FOR SHARE. Location edit:
+the one Location FOR UPDATE, then reads only. Share locks never conflict
+with each other and the edit holds a single row, so no cycle exists; no
+School-wide or advisory lock. Real two-process races
+(`InventoryLocationCampusConcurrencyTest`, contender positively observed
+blocked): first receipt first -> the edit waits, then is refused; edit
+first -> the receipt authorized under the old Campus waits, then is refused
+and nothing is recorded; name-only edit first -> the receipt waits, then
+succeeds; first receipt first -> a raw runtime UPDATE waits, then the
+database refuses it; first Canteen Order first -> the edit waits, then is
+refused; edit first -> Canteen's `issueMany()` waits, then is refused. A
+mutation check (Location lock removed) makes the edit-first race fail.
+
+**54.8 Data audit and migration.** Before the migration: development
+database 2 Locations (both Campus-bound, both used), test database 0; no
+cross-School Campus, no orphan movement/balance/order, no Outlet/Location
+Campus mismatch, no recorded Campus change. The rule constrains future
+changes only; nothing was rewritten. Rollback proof: IDENTICAL schema after
+rollback + re-apply (123 schema lines removed), `platform:verify-database`
+failed=0. `down()` drops the triggers and functions and changes no data;
+rolling back re-opens Campus changes of used Locations. Roll back the code
+before the migration: the service calls the predicate function, so code
+without the migration answers 500 on a Campus edit (fails closed).
+
+**54.9 Unchanged.** `inventory.directory.*` stays whole-School (route floors
+`capability:inventory.directory.manage`; a Campus-scoped `principal` or
+`stores_officer` is 403); `CampusScopeCatalogue`, role templates, Inventory
+capabilities, Canteen authorization and Charges unchanged; stock history
+keeps following the (now fixed) Location Campus; Location deactivation is
+unchanged (no delete path exists).
+
+**54.10 Residuals (unchanged, not fixed here).** Unchanged-scope API replay;
+LIKE hygiene (including the Location directory search); the Inventory item
+search `orWhere`; Library loan-Campus rollback; `StudentPurposeLookup`
+docblock; API Payment-list bounds. Pre-existing and recorded: changing the
+Campus of an unused Location that backs a Campus-bound Canteen Outlet is
+refused by the Outlet's composite key as a raw database error (fails
+closed, no data effect; a friendlier message is UX hygiene), and so is a
+non-UUID `campus_id` on the API edit (a 500 from PostgreSQL, unchanged). The
+freeze is only as strong as its evidence: `stock_movements` and
+`inventory_stock_balances` are append-only by application convention only
+(no runtime code deletes or repoints them) and `canteen_orders` refuses
+DELETE but not an UPDATE of its Location snapshot (no code path does it);
+making the evidence database-immutable is a separate hardening decision.
+Independent security review: no HIGH or MEDIUM; its two introduced LOWs
+were fixed in this slice (the evidence guard raises on an unknown column
+instead of silently skipping the lock; the single-writer guard also scans
+`fill`/`save`/`campus_id =` writes and `DB::table` updates).
+
+**54.11 Status.** ORG.7H-1 CLOSED. ORG.7 remains technically complete,
+integrated UAT ready, production blocked by the §53.15 gates. Next: ORG.8
+read-only contract audit (owner authorization).

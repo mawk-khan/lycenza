@@ -283,3 +283,8 @@ School setting, a role, a navigation toggle or a commercial plan.
   cross-Campus lending or riding, Campus fee statements, approvals), is
   listed in §53 for a separate owner decision. The integrated test plan is
   `docs/product/CAMPUS-INTEGRATED-UAT.md`.
+- **ORG.7H-1 (ADR 0076 §54)** closed the ORG.7H LOW: an Inventory
+  Location's Campus is frozen once the Location has operational history
+  (stock movements, balances or Canteen Orders), in the service and the
+  database; stock writes share-lock their Location and re-check its Campus.
+  ORG.7 stays closed.
