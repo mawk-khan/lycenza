@@ -334,6 +334,7 @@ class ChargeService
                 receivableLedgerAccountId: $charge->receivable_ledger_account_id,
                 isCancelled: $charge->isCancelled(),
                 adjustedTotal: $this->liveAdjustmentTotalsFor($school, [$charge->id])[$charge->id] ?? Money::of('0.00', $charge->currency),
+                campusId: $charge->campus_id,
             );
         });
     }
@@ -525,14 +526,20 @@ class ChargeService
      * may be allocated to. A cross-School Student id simply returns no
      * rows (School-scoped query under the School's TenantContext).
      *
+     * ORG.7G-2 (ADR 0076 §51): `$campusIds` null = every Charge (a
+     * whole-School caller); a list keeps only Charges whose STORED Campus is
+     * one of them (a NULL-Campus Charge never), applied in SQL before the limit.
+     *
+     * @param  list<string>|null  $campusIds
      * @return Collection<int, ChargeSummary>
      */
-    public function uncancelledChargesForStudent(School $school, string $studentId, int $limit = 100): Collection
+    public function uncancelledChargesForStudent(School $school, string $studentId, int $limit = 100, ?array $campusIds = null): Collection
     {
         return $this->context->withSchool($school, fn () => Charge::query()
             ->where('school_id', $school->id)
             ->where('student_id', $studentId)
             ->whereNull('cancelled_at')
+            ->when($campusIds !== null, fn ($q) => $q->whereIn('campus_id', $campusIds ?? []))
             ->orderBy('created_at')
             ->orderBy('id')
             ->limit($limit)
@@ -650,6 +657,33 @@ class ChargeService
 
             return $facts;
         });
+    }
+
+    /**
+     * ORG.7G-2 (ADR 0076 §51): locks this School's Charges named in `$chargeIds`
+     * FOR UPDATE in ONE statement, in ascending id order (the order
+     * lockChargeForAllocation() callers use -- no upgrade, no request-order
+     * dependence), and returns each found Charge's STORED Campus (null =
+     * whole-School). A missing id is simply absent. Trusted, no capability
+     * check (the caller authorizes); must run inside the caller's transaction.
+     *
+     * @param  list<string>  $chargeIds  valid UUIDs
+     * @return array<string, ?string> charge id => stored campus id
+     */
+    public function lockChargeCampusesForAllocation(School $school, array $chargeIds): array
+    {
+        if ($chargeIds === []) {
+            return [];
+        }
+
+        return $this->context->withSchool($school, fn (): array => Charge::query()
+            ->where('school_id', $school->id)
+            ->whereIn('id', $chargeIds)
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get(['id', 'campus_id'])
+            ->mapWithKeys(fn (Charge $c): array => [(string) $c->id => $c->campus_id === null ? null : (string) $c->campus_id])
+            ->all());
     }
 
     /**

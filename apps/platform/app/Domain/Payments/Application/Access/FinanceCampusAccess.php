@@ -153,18 +153,52 @@ class FinanceCampusAccess
     public function debtors(School $school, User $actor, ?string $term, int $limit = StudentIdentityLookup::DEFAULT_LIMIT): array
     {
         $scope = $this->authorizeCampusScopeFor($actor, 'finance.charges.view', $school);
-        $open = DB::query()
-            ->fromSub($this->charges->liveChargesQuery($school, $scope), 'live')
-            ->whereRaw('live.assessed_net - payments_effective_allocated(live.id) > 0')
-            ->select('live.student_id');
-
-        $found = $this->students->searchAmong($school, $open, $term, $limit);
+        $found = $this->students->searchAmong($school, $this->openDebtors($school, $scope), $term, $limit);
         $this->audit->school($school, 'finance.debtor_lookup.viewed', actor: $actor, metadata: [
             'resultCount' => count($found),
             'scope' => $scope->isWholeSchool() ? 'school' : 'campus',
         ]);
 
         return $found;
+    }
+
+    /**
+     * ORG.7G-2 (ADR 0076 §51): who a payment recorder may record for. A
+     * whole-School recorder searches every Student (unchanged); a Campus
+     * recorder only Students with an OPEN Charge whose stored Campus its
+     * finance.payments.record scope covers -- leavers and moved Students
+     * included, never by the current Campus.
+     *
+     * @return list<StudentLookupCandidate>
+     */
+    public function collectionDebtors(School $school, User $actor, string $term, int $limit = 10): array
+    {
+        $scope = $this->authorizeCampusScopeFor($actor, 'finance.payments.record', $school);
+
+        return $scope->isWholeSchool()
+            ? $this->students->search($school, $term, $limit)
+            : $this->students->searchAmong($school, $this->openDebtors($school, $scope), $term, $limit);
+    }
+
+    /** A display decision only: whether the actor records payments anywhere (whole School or a Campus). */
+    public function recordsPayments(User $actor, School $school): bool
+    {
+        return ! $this->resolver->campusScope($actor, 'finance.payments.record', $school)->isNone();
+    }
+
+    /** A display decision only: whether the actor could record a payment against a Charge of `$campusId`. */
+    public function canCollect(User $actor, School $school, ?string $campusId): bool
+    {
+        return $this->resolver->campusScope($actor, 'finance.payments.record', $school)->covers($campusId);
+    }
+
+    /** Students with an uncancelled, still-owing Charge whose stored Campus `$scope` covers (one SQL subquery). */
+    private function openDebtors(School $school, CampusScope $scope): QueryBuilder
+    {
+        return DB::query()
+            ->fromSub($this->charges->liveChargesQuery($school, $scope), 'live')
+            ->whereRaw('live.assessed_net - payments_effective_allocated(live.id) > 0')
+            ->select('live.student_id');
     }
 
     /** @return LengthAwarePaginator<int, PaymentSummary> */

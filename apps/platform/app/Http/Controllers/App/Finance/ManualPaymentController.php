@@ -4,8 +4,10 @@ namespace App\Http\Controllers\App\Finance;
 
 use App\Domain\Fees\Application\Exceptions\ChargeNotFoundException;
 use App\Domain\Finance\Application\LedgerAccountSummary;
+use App\Domain\Payments\Application\Access\FinanceCampusAccess;
 use App\Domain\Payments\Application\ChargeAllocationInput;
 use App\Domain\Payments\Application\Exceptions\AllocationDoesNotSumToPaymentAmountException;
+use App\Domain\Payments\Application\Exceptions\CampusPaymentUnavailableException;
 use App\Domain\Payments\Application\Exceptions\ChargeAllocationExceedsChargeAmountException;
 use App\Domain\Payments\Application\Exceptions\ChargeIsCancelledException;
 use App\Domain\Payments\Application\Exceptions\InvalidManualPaymentException;
@@ -15,11 +17,12 @@ use App\Domain\Payments\Application\ManualPaymentRecordingService;
 use App\Domain\Payments\Application\OutstandingCharge;
 use App\Domain\Payments\Application\RecordManualPaymentData;
 use App\Domain\Payments\Domain\ManualPaymentMethod;
-use App\Domain\Students\Application\StudentSearch;
-use App\Domain\Students\Infrastructure\Student;
+use App\Domain\Students\Application\StudentIdentityLookup;
+use App\Domain\Students\Application\StudentLookupCandidate;
 use App\Http\Controllers\Controller;
+use App\Models\Campus;
 use App\Support\Auth\Mfa\FreshMfaRequirement;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Money\Exceptions\InvalidMoneyException;
 use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
@@ -51,22 +54,31 @@ use Inertia\Response;
  */
 class ManualPaymentController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
     /** One-shot session key the Payment page reads after a recording. */
     public const RECORDED_SESSION_KEY = 'finance.manual_payment_outcome';
 
-    public function create(Request $request, TenantContext $context, ManualPaymentRecordingService $service): Response
+    public function create(Request $request, TenantContext $context, ManualPaymentRecordingService $service, StudentIdentityLookup $identities): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability(ManualPaymentRecordingService::CAPABILITY, $school);
+        // ORG.7G-2 (ADR 0076 §51): Campus-aware (C6) -- a Campus recorder is
+        // offered only Charges whose stored Campus it collects for.
+        $scope = $this->authorizeCampusScope('finance.payments.record', $school);
 
         $validated = $request->validate([
             'student_id' => ['sometimes', 'uuid'],
             'charge_id' => ['sometimes', 'uuid'],
         ]);
 
-        $student = isset($validated['student_id']) ? Student::query()->find($validated['student_id']) : null;
+        $charges = isset($validated['student_id']) ? $service->outstandingChargesForStudent($school, $validated['student_id'], $context->actor()) : [];
+        // A Campus recorder learns nothing about a Student without collectable
+        // (outstanding) debt in scope -- not even the name; the same rule as
+        // the debtor search.
+        $collectable = array_filter($charges, fn (OutstandingCharge $c) => Money::of($c->outstanding, $c->currency)->isPositive());
+        $student = isset($validated['student_id']) && ($scope->isWholeSchool() || $collectable !== [])
+            ? ($identities->labels($school, [$validated['student_id']])[$validated['student_id']] ?? null)
+            : null;
 
         return Inertia::render('App/Finance/Payments/Record', [
             'idempotencyKey' => (string) Str::uuid(),
@@ -77,8 +89,8 @@ class ManualPaymentController extends Controller
                 ->all(),
             'student' => $student === null ? null : [
                 'id' => $student->id,
-                'name' => $this->fullName($student),
-                'studentNumber' => $student->student_number,
+                'name' => $student->displayName,
+                'studentNumber' => $student->studentNumber,
             ],
             'charges' => $student === null ? [] : array_map(
                 fn (OutstandingCharge $c) => [
@@ -90,9 +102,13 @@ class ManualPaymentController extends Controller
                     'outstanding' => $c->outstanding,
                     'currency' => $c->currency,
                     'dueDate' => $c->dueDate?->toDateString(),
+                    'campusId' => $c->campusId,
                 ],
-                $service->outstandingChargesForStudent($school, $student->id, $context->actor()),
+                $charges,
             ),
+            // One payment pays charges of ONE campus for a Campus recorder (G2-D4/D5).
+            'campusScoped' => ! $scope->isWholeSchool(),
+            'campusNames' => $scope->isWholeSchool() ? [] : Campus::query()->whereIn('id', array_values(array_unique(array_filter(array_map(fn (OutstandingCharge $c) => $c->campusId, $charges)))))->pluck('name', 'id')->all(),
             'preselectedChargeId' => $validated['charge_id'] ?? null,
             'hasMfaFactor' => app(FreshMfaRequirement::class)->hasActiveFactor($context->actor()),
         ]);
@@ -103,34 +119,30 @@ class ManualPaymentController extends Controller
      * mirrors `ChargeController::searchStudents()`, gated by the recording
      * capability instead of `finance.charges.manage`.
      */
-    public function searchStudents(Request $request, TenantContext $context): JsonResponse
+    public function searchStudents(Request $request, TenantContext $context, FinanceCampusAccess $access): JsonResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability(ManualPaymentRecordingService::CAPABILITY, $school);
+        $this->authorizeCampusScope('finance.payments.record', $school);
 
         $validated = $request->validate([
             'q' => ['required', 'string', 'min:2', 'max:255'],
         ]);
 
-        $students = Student::query()
-            ->tap(fn ($q) => StudentSearch::anyField($q, $validated['q']))
-            ->orderBy('first_name')
-            ->limit(10)
-            ->get();
-
+        // ORG.7G-2: a Campus recorder finds only debtors with open debt in
+        // scope (leavers included), never a Student directory.
         return response()->json([
-            'data' => $students->map(fn (Student $s) => [
+            'data' => array_map(fn (StudentLookupCandidate $s) => [
                 'id' => $s->id,
-                'studentNumber' => $s->student_number,
-                'name' => $this->fullName($s),
-            ])->all(),
+                'studentNumber' => $s->studentNumber,
+                'name' => $s->displayName,
+            ], $access->collectionDebtors($school, $context->actor(), $validated['q'])),
         ]);
     }
 
     public function store(Request $request, TenantContext $context, ManualPaymentRecordingService $service, FreshMfaRequirement $mfa): RedirectResponse
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability(ManualPaymentRecordingService::CAPABILITY, $school);
+        $this->authorizeCampusScope('finance.payments.record', $school);
 
         $validated = $request->validate([
             'idempotency_key' => ['required', 'uuid'],
@@ -146,7 +158,9 @@ class ManualPaymentController extends Controller
 
         $allocations = [];
         foreach ($validated['allocations'] as $index => $allocation) {
-            $allocations[] = new ChargeAllocationInput($allocation['charge_id'], $this->parseAmount($allocation['amount'], "allocations.{$index}.amount"));
+            // ORG.7G-2: canonical lowercase ids -- one lock order in PHP and
+            // PostgreSQL alike (uuid validation accepts either case).
+            $allocations[] = new ChargeAllocationInput(strtolower($allocation['charge_id']), $this->parseAmount($allocation['amount'], "allocations.{$index}.amount"));
         }
 
         // SR.4 (ADR 0071 §26.7): a posted Payment is immutable (corrected only
@@ -178,6 +192,9 @@ class ManualPaymentController extends Controller
             throw ValidationException::withMessages(['allocations' => [$e->getMessage()]]);
         } catch (ManualPaymentIdempotencyConflictException $e) {
             throw ValidationException::withMessages(['idempotency_key' => [$e->getMessage()]]);
+        } catch (CampusPaymentUnavailableException $e) {
+            // ORG.7G-2: one generic answer -- never which charge or why.
+            throw ValidationException::withMessages(['allocations' => [$e->getMessage()]]);
         }
 
         return redirect("/app/finance/payments/{$result->paymentId}")
@@ -201,10 +218,5 @@ class ManualPaymentController extends Controller
         } catch (InvalidMoneyException $e) {
             throw ValidationException::withMessages([$field => [$e->getMessage()]]);
         }
-    }
-
-    private function fullName(Student $student): string
-    {
-        return collect([$student->first_name, $student->middle_name, $student->last_name])->filter()->implode(' ');
     }
 }

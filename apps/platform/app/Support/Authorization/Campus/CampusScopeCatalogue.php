@@ -113,10 +113,10 @@ final class CampusScopeCatalogue
         ],
         // ORG.7G-1 (ADR 0076 §50): Finance READ surfaces only.
         'finance' => [
-            'label' => 'Finance reads: outstanding fees, charge history, payments received, receipts and the debtor lookup',
+            'label' => 'Finance reads (outstanding fees, charge history, payments received, receipts, debtor lookup) and ordinary payment entry',
             'nullCampus' => 'A Charge\'s financial Campus is the one STORED on it when it was assessed (charges.campus_id, frozen; ORG.7G-1A) -- never the Student\'s current Campus. A NULL-Campus Charge is whole-School only, never "every Campus". A Payment has no Campus: it is Campus-visible only when it has allocations and EVERY Charge it touches (original allocations and correction lines) carries the SAME non-NULL Campus in scope; a mixed-Campus or NULL-touching Payment, and its receipt and collections row, are whole-School only -- even for an actor holding every Campus it touches (owner decision G1-D4).',
             'inactiveCampus' => 'A grant on an inactive Campus confers nothing (no Charge, Payment, receipt or debtor read); whole-School holders keep every record, and Charges keep their stored Campus.',
-            'sharedLookups' => 'The Finance debtor lookup (FinanceCampusAccess::debtors(): id, studentNumber, displayName only) answers a Campus-scoped finance.charges.view holder for Students with an OPEN Charge attributed in scope -- leavers and transferred Students included; never the SIS purpose-limited Student picker, the Campus Student Directory or the current Campus, and never Student Profile authority. An in-scope Charge shows its correct paid and outstanding amounts even when a contributing Payment is hidden (G1-D7): that Payment\'s amount on the Charge is shown without its id, receipt or other allocations. Fee configuration, fee and late-fee runs, manual Charges, concessions, payment entry and corrections, the ledger and the full Student fee statement stay whole-School.',
+            'sharedLookups' => 'The Finance debtor lookup (FinanceCampusAccess::debtors(): id, studentNumber, displayName only) answers a Campus-scoped finance.charges.view holder for Students with an OPEN Charge attributed in scope -- leavers and transferred Students included; never the SIS purpose-limited Student picker, the Campus Student Directory or the current Campus, and never Student Profile authority. An in-scope Charge shows its correct paid and outstanding amounts even when a contributing Payment is hidden (G1-D7): that Payment\'s amount on the Charge is shown without its id, receipt or other allocations. ORG.7G-2 (§51): payment ENTRY (finance.payments.record) records only when every allocated Charge has ONE non-NULL stored Campus in scope and active, under Charge locks (FinancePaymentAccess); a mixed or NULL-touching payment is refused with one generic answer; a replay is returned only while the stored Payment is still visible to the current scope. Fee configuration, fee and late-fee runs, manual Charges, concessions, payment corrections (reallocation, reversal, refund), the ledger and the full Student fee statement stay whole-School.',
         ],
     ];
 
@@ -195,6 +195,12 @@ final class CampusScopeCatalogue
         // ledger stay whole-School (and their holders non-scopable).
         'finance.charges.view' => 'finance',
         'finance.payments.view' => 'finance',
+        // ORG.7G-2 (ADR 0076 §51, owner decisions G2-D1..G2-D8): ordinary
+        // payment ENTRY only -- every allocated Charge of ONE non-NULL stored
+        // Campus in scope (FinancePaymentAccess). Reallocation (which also needs
+        // the protected finance.charges.manage), reversal, refund and every
+        // other Finance write stay whole-School.
+        'finance.payments.record' => 'finance',
     ];
 
     /**
@@ -391,6 +397,8 @@ final class CampusScopeCatalogue
         'finance' => [
             'finance.charges.view' => 'The Finance hub groups whole-School fee configuration, runs, concessions, statements and ledger links; a Campus-scoped reader uses the Campus-aware Outstanding fees entry.',
             'finance.payments.view' => 'The Finance hub groups whole-School fee configuration, runs, concessions, statements and ledger links; a Campus-scoped reader uses the Campus-aware Payments received entry.',
+            // ORG.7G-2 (§51).
+            'finance.payments.record' => 'The Finance hub groups whole-School Finance links; a Campus-scoped recorder records from the Campus-aware Payments received page.',
         ],
         'data-health' => [
             'timetable.schedule.view' => 'Data Health is a School-wide report: its "Sections without a schedule" check lists every Section of the School, so it opens only on whole-School authority.',

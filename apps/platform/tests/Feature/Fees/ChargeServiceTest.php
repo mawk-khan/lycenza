@@ -239,9 +239,10 @@ class ChargeServiceTest extends TestCase
         // outstanding-fees list. LC-4: studentIdsForCharges()/chargeIdsForStudents()
         // are read-only lookups for Payments' collections list. ORG.7G-1:
         // campusAttributionQuery()/liveChargesQuery() are read-only Fees-owned
-        // subqueries Payments composes for Campus visibility and debtors.
+        // subqueries Payments composes for Campus visibility and debtors. ORG.7G-2:
+        // lockChargeCampusesForAllocation() locks a payment's Charges (id order).
         $this->assertFalse(method_exists(ChargeService::class, 'update'));
-        $this->assertSame(['assess', 'cancel', 'lockChargeForAllocation', 'liveAdjustmentTotalsFor', 'statementLinesForStudent', 'statementLinesForStudentWithin', 'statementLinesForCharges', 'lateFeeCandidates', 'lateFeeSource', 'uncancelledChargesForStudent', 'ledgerFacts', 'studentIdsForCharges', 'chargeIdsForStudents', 'collectionFacts', 'campusAttributionQuery', 'liveChargesQuery', 'adjustmentLedgerFacts'], array_values(array_filter(
+        $this->assertSame(['assess', 'cancel', 'lockChargeForAllocation', 'liveAdjustmentTotalsFor', 'statementLinesForStudent', 'statementLinesForStudentWithin', 'statementLinesForCharges', 'lateFeeCandidates', 'lateFeeSource', 'uncancelledChargesForStudent', 'ledgerFacts', 'studentIdsForCharges', 'chargeIdsForStudents', 'collectionFacts', 'lockChargeCampusesForAllocation', 'campusAttributionQuery', 'liveChargesQuery', 'adjustmentLedgerFacts'], array_values(array_filter(
             array_map(fn ($m) => $m->name, (new \ReflectionClass(ChargeService::class))->getMethods(\ReflectionMethod::IS_PUBLIC)),
             fn ($name) => $name !== '__construct',
         )));

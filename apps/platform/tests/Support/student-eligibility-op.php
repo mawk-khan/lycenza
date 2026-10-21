@@ -19,6 +19,10 @@ use App\Domain\Library\Application\LibraryCirculationAccess;
 use App\Domain\Library\Application\LibraryCopyService;
 use App\Domain\Library\Application\LibraryLoanService;
 use App\Domain\Library\Infrastructure\LibraryCopy;
+use App\Domain\Payments\Application\ChargeAllocationInput;
+use App\Domain\Payments\Application\ManualPaymentRecordingService;
+use App\Domain\Payments\Application\RecordManualPaymentData;
+use App\Domain\Payments\Domain\ManualPaymentMethod;
 use App\Domain\Students\Application\CampusStudentOnboardingService;
 use App\Domain\Students\Application\CampusStudentTransferService;
 use App\Domain\Students\Application\StudentEnrollmentService;
@@ -38,6 +42,7 @@ use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\Support\Concurrency\HeldTransaction;
 
 // Standalone bootstrap script for StudentEligibilityConcurrencyTest
@@ -69,6 +74,7 @@ use Tests\Support\Concurrency\HeldTransaction;
 //   php student-eligibility-op.php elective-enroll <schoolId> <studentId> <offeringId>          (ORG.7F-3)
 //   php student-eligibility-op.php manual-charge <schoolId> <studentId> <yearId> <receivableId> <revenueId>  (ORG.7G-1A)
 //   php student-eligibility-op.php enrollment-cancel <schoolId> <enrollmentId>                  (ORG.7G-1A)
+//   php student-eligibility-op.php campus-payment <schoolId> <userId> <settlementId> <chargeId:amount,...>  (ORG.7G-2)
 
 require __DIR__.'/../../vendor/autoload.php';
 
@@ -196,6 +202,23 @@ try {
                 ));
                 // The ledger's deferred balance check must run while the School
                 // context is still set (a held holder commits after withSchool()).
+                DB::statement('SET CONSTRAINTS ALL IMMEDIATE');
+
+                return 'ok';
+            case 'campus-payment':
+                [$userId, $settlementId, $lines] = $args;
+                $allocations = [];
+                $total = '0.00';
+                foreach (explode(',', $lines) as $line) {
+                    [$chargeId, $amount] = explode(':', $line);
+                    $allocations[] = new ChargeAllocationInput($chargeId, Money::of($amount, 'INR'));
+                    $total = bcadd($total, $amount, 2);
+                }
+                $app->make(ManualPaymentRecordingService::class)->record($school, new RecordManualPaymentData(
+                    method: ManualPaymentMethod::Cash, amount: Money::of($total, 'INR'), occurredOn: now($school->timezone)->toDateString(),
+                    reference: null, settlementLedgerAccountId: $settlementId, allocations: $allocations, idempotencyKey: (string) Str::uuid(),
+                ), User::query()->findOrFail($userId));
+                // The deferred allocation/ledger checks must run while the School context is still set.
                 DB::statement('SET CONSTRAINTS ALL IMMEDIATE');
 
                 return 'ok';

@@ -117,6 +117,8 @@ class CampusScopeAdoptionArchitectureTest extends TestCase
                 'app/Http/Controllers/App/Finance/PaymentRecordController.php', 'app/Http/Controllers/App/Finance/FinanceDebtorController.php',
                 'app/Domain/Payments/Http/Controllers/PaymentController.php', 'app/Domain/Payments/Http/Controllers/PaymentReceiptController.php',
                 'app/Domain/Fees/Http/Controllers/ChargeController.php',
+                // ORG.7G-2 (§51): Campus payment entry.
+                'app/Http/Controllers/App/Finance/ManualPaymentController.php',
             ],
             'models' => ['Charge::query(', 'Payment::query(', 'PaymentReceipt::query(', 'PaymentAllocation::query(', 'Student::query(', 'Student::where('],
         ],

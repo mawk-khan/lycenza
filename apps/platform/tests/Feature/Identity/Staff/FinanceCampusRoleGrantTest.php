@@ -46,7 +46,10 @@ class FinanceCampusRoleGrantTest extends TestCase
         $resolver = app(CampusScopeResolver::class);
         $this->assertSame([$campus->id], $resolver->campusScope($staff, 'finance.charges.view', $school)->campusIds());
         $this->assertSame([$campus->id], $resolver->campusScope($staff, 'finance.payments.view', $school)->campusIds());
-        $this->assertTrue($resolver->campusScope($staff, 'finance.payments.record', $school)->isNone(), 'the template\'s write key is not adopted: the Campus grant confers no payment entry');
+        $this->assertSame([$campus->id], $resolver->campusScope($staff, 'finance.payments.record', $school)->campusIds(), 'ORG.7G-2: ordinary payment entry for that Campus');
+        foreach (['finance.charges.manage', 'finance.ledger.reverse', 'finance.fee_concessions.approve', 'finance.fee_structures.manage'] as $never) {
+            $this->assertTrue($resolver->campusScope($staff, $never, $school)->isNone(), "{$never} is never conferred by a Campus grant");
+        }
     }
 
     #[Test]

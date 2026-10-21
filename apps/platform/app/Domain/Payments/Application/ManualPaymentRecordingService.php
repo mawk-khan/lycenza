@@ -6,6 +6,7 @@ use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Application\ChargeSummary;
 use App\Domain\Finance\Application\LedgerAccountSummary;
 use App\Domain\Finance\Application\LedgerService;
+use App\Domain\Payments\Application\Access\FinancePaymentAccess;
 use App\Domain\Payments\Application\Charges\ChargeStateReader;
 use App\Domain\Payments\Application\Exceptions\InvalidManualPaymentException;
 use App\Domain\Payments\Application\Exceptions\ManualPaymentIdempotencyConflictException;
@@ -15,7 +16,7 @@ use App\Domain\Payments\Infrastructure\Payment;
 use App\Domain\Payments\Infrastructure\PaymentAllocation;
 use App\Models\School;
 use App\Models\User;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Money\Money;
 use App\Support\Tenancy\SchoolOperationalGuard;
 use App\Support\Tenancy\TenantContext;
@@ -55,7 +56,7 @@ use Illuminate\Support\Str;
  */
 class ManualPaymentRecordingService
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
     public const CAPABILITY = 'finance.payments.record';
 
@@ -71,27 +72,40 @@ class ManualPaymentRecordingService
         private readonly SchoolOperationalGuard $guard,
         private readonly TenantContext $context,
         private readonly ChargeStateReader $states,
+        private readonly FinancePaymentAccess $campusWrites,
     ) {}
 
+    /**
+     * ORG.7G-2 (ADR 0076 §51): the actor's CampusScope for
+     * finance.payments.record is resolved FIRST (403 when held nowhere). A
+     * Campus scope records only through FinancePaymentAccess (every Charge
+     * locked, ONE non-NULL stored Campus, in scope, active) and replays only
+     * a stored Payment still visible to its CURRENT scope -- checked before
+     * anything is returned. Whole School: unchanged.
+     */
     public function record(School $school, RecordManualPaymentData $data, User $actor): ManualPaymentResult
     {
-        $this->authorizeCapabilityFor($actor, self::CAPABILITY, $school);
+        $scope = $this->authorizeCampusScopeFor($actor, self::CAPABILITY, $school);
 
         $occurredAt = $this->occurredAt($school, $data->occurredOn);
         $this->assertValidInput($data);
         $this->recorder->assertValidShape($data->amount, $data->allocations);
 
-        return $this->context->withSchool($school, function () use ($school, $data, $actor, $occurredAt) {
+        return $this->context->withSchool($school, function () use ($school, $scope, $data, $actor, $occurredAt) {
             try {
-                return DB::transaction(function () use ($school, $data, $actor, $occurredAt) {
+                return DB::transaction(function () use ($school, $scope, $data, $actor, $occurredAt) {
                     $this->guard->requireOperational($school->id);
 
                     DB::select('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', ["payments.manual:{$school->id}:{$data->idempotencyKey}"]);
 
                     $existing = $this->findByKey($school, $data->idempotencyKey);
                     if ($existing !== null) {
+                        $this->campusWrites->assertReplayable($school, $scope, $existing->id);
+
                         return $this->replay($existing, $data, $actor, $occurredAt);
                     }
+
+                    $campusId = $scope->isWholeSchool() ? null : $this->campusWrites->lockAllocationsForCampusWrite($school, $scope, $data->allocations);
 
                     $this->assertSettlementAccount($school, $data->settlementLedgerAccountId);
 
@@ -108,6 +122,9 @@ class ManualPaymentRecordingService
                         'occurredOn' => $data->occurredOn,
                         'allocationCount' => count($data->allocations),
                         'hasReference' => $data->reference !== null,
+                        // ORG.7G-2: the one authorized Campus of a Campus-scoped recording.
+                        'scope' => $campusId === null ? 'school' : 'campus',
+                        'campusId' => $campusId,
                     ], $actor);
 
                     return new ManualPaymentResult(ManualPaymentOutcome::Recorded, $payment->id);
@@ -122,6 +139,7 @@ class ManualPaymentRecordingService
                 // is the authoritative guarantee (rule 30).
                 $existing = $this->findByKey($school, $data->idempotencyKey)
                     ?? throw new ManualPaymentIdempotencyConflictException;
+                $this->campusWrites->assertReplayable($school, $scope, $existing->id);
 
                 return $this->replay($existing, $data, $actor, $occurredAt);
             }
@@ -136,7 +154,7 @@ class ManualPaymentRecordingService
      */
     public function settlementAccounts(School $school, User $actor): Collection
     {
-        $this->authorizeCapabilityFor($actor, self::CAPABILITY, $school);
+        $this->authorizeCampusScopeFor($actor, self::CAPABILITY, $school);
 
         return $this->ledger->activeAccountsOfType($school, 'asset');
     }
@@ -149,13 +167,16 @@ class ManualPaymentRecordingService
      */
     public function outstandingChargesForStudent(School $school, string $studentId, User $actor): array
     {
-        $this->authorizeCapabilityFor($actor, self::CAPABILITY, $school);
+        $scope = $this->authorizeCampusScopeFor($actor, self::CAPABILITY, $school);
 
         if (! Str::isUuid($studentId)) {
             return [];
         }
 
-        $charges = $this->charges->uncancelledChargesForStudent($school, $studentId, self::MAX_OPEN_CHARGES);
+        // ORG.7G-2: a Campus recorder is offered only Charges whose STORED
+        // Campus it collects for (NULL-Campus Charges are whole-School only),
+        // filtered in SQL before the bound.
+        $charges = $this->charges->uncancelledChargesForStudent($school, $studentId, self::MAX_OPEN_CHARGES, $scope->isWholeSchool() ? null : $scope->campusIds());
 
         // FEE.3 (ADR 0062 §15): net of live fee adjustments. E21.3A2: through
         // the carry-forward read (latest closed state + later facts).
@@ -175,6 +196,7 @@ class ManualPaymentRecordingService
                 currency: $charge->currency,
                 dueDate: $charge->dueDate,
                 adjusted: $concession->amount(),
+                campusId: $charge->campusId,
             );
         })->values()->all();
     }

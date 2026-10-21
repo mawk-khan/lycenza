@@ -113,7 +113,8 @@ class PaymentRecordController extends Controller
             'filters' => ['from' => $from, 'to' => $to, 'receipt' => $receipt ?? '', 'student' => $search, 'method' => $validated['method'] ?? ''],
             'today' => $today,
             'methods' => [...ManualPaymentRecordingService::methodOptions(), ['value' => 'provider', 'label' => 'Online (payment provider)']],
-            'canRecord' => $capabilities->canInSchool($context->actor(), ManualPaymentRecordingService::CAPABILITY, $school),
+            // ORG.7G-2: a Campus recorder records here too (one Campus per payment).
+            'canRecord' => $access->recordsPayments($context->actor(), $school),
         ]);
     }
 

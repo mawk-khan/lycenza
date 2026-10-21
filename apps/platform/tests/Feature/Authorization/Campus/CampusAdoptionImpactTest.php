@@ -49,16 +49,16 @@ class CampusAdoptionImpactTest extends TestCase
      * atomic onboarding (every other operation is declared whole-School).
      */
     private const HOLDERS = [
-        'accountant' => ['finance.charges.view', 'finance.payments.view'],
+        'accountant' => ['finance.charges.view', 'finance.payments.record', 'finance.payments.view'],
         'admissions_officer' => ['admissions.manage', 'admissions.view'],
         'canteen_operator' => ['canteen.orders.manage', 'canteen.orders.view'],
-        'cashier' => ['finance.charges.view', 'finance.payments.view'],
+        'cashier' => ['finance.charges.view', 'finance.payments.record', 'finance.payments.view'],
         'front_office' => ['visitor.visits.manage', 'visitor.visits.view'],
         'hostel_warden' => ['hostel.residency.manage', 'hostel.residency.view'],
         'hr_officer' => ['hr.employees.assignments.manage', 'hr.employees.assignments.view', 'hr.employees.manage', 'hr.employees.view'],
         'librarian' => ['library.circulation.manage', 'library.circulation.view'],
         'principal' => ['admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'enrollments.manage', 'enrollments.view', 'examinations.papers.manage', 'examinations.papers.view', 'hostel.residency.manage', 'hostel.residency.view', 'hr.employees.manage', 'hr.employees.view', 'inventory.stock.manage', 'inventory.stock.view', 'library.circulation.manage', 'library.circulation.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'students.manage', 'students.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view', 'visitor.visits.manage', 'visitor.visits.view'],
-        'school_admin' => ['admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'enrollments.manage', 'enrollments.view', 'examinations.papers.manage', 'examinations.papers.view', 'finance.charges.view', 'finance.payments.view', 'hostel.residency.manage', 'hostel.residency.view', 'hr.employees.manage', 'hr.employees.view', 'inventory.stock.manage', 'inventory.stock.view', 'library.circulation.manage', 'library.circulation.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'students.manage', 'students.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view', 'visitor.visits.manage', 'visitor.visits.view'],
+        'school_admin' => ['admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'enrollments.manage', 'enrollments.view', 'examinations.papers.manage', 'examinations.papers.view', 'finance.charges.view', 'finance.payments.record', 'finance.payments.view', 'hostel.residency.manage', 'hostel.residency.view', 'hr.employees.manage', 'hr.employees.view', 'inventory.stock.manage', 'inventory.stock.view', 'library.circulation.manage', 'library.circulation.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'students.manage', 'students.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view', 'visitor.visits.manage', 'visitor.visits.view'],
         'stores_officer' => ['inventory.stock.manage', 'inventory.stock.view'],
         'transport_coordinator' => ['transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view'],
     ];
@@ -117,6 +117,11 @@ class CampusAdoptionImpactTest extends TestCase
         // the debtor lookup; every Finance write, configuration, run, correction
         // and the ledger stay whole-School (and their holders non-scopable).
         'finance.charges.view', 'finance.payments.view',
+        // ORG.7G-2 (ADR 0076 §51, owner decisions G2-D1..G2-D8): ordinary payment
+        // ENTRY (a monetary write, HIGH-RISK): one non-NULL stored Campus in
+        // scope, under Charge locks; corrections, refunds and reversals stay
+        // whole-School.
+        'finance.payments.record',
     ];
 
     /**
@@ -126,7 +131,7 @@ class CampusAdoptionImpactTest extends TestCase
      * never Campus-scopable; principal holds no Finance key.
      */
     private const FINANCE_CAMPUS_CONFERRED = [
-        'cashier' => ['finance.charges.view', 'finance.payments.view'],
+        'cashier' => ['finance.charges.view', 'finance.payments.record', 'finance.payments.view'],
     ];
 
     /**
@@ -316,9 +321,9 @@ class CampusAdoptionImpactTest extends TestCase
         }
         $finance = array_values(array_filter(CampusScopeCatalogue::capabilities(), fn (string $k) => str_starts_with($k, 'finance.')));
         sort($finance);
-        $this->assertSame(['finance.charges.view', 'finance.payments.view'], $finance, 'ORG.7G-1 adopts exactly the two Finance read keys.');
+        $this->assertSame(['finance.charges.view', 'finance.payments.record', 'finance.payments.view'], $finance, 'ORG.7G-1 reads + ORG.7G-2 payment entry, nothing else.');
         foreach ($finance as $key) {
-            $this->assertFalse(CampusScopeCatalogue::isCampusIncompatible($key), "{$key} is a read key, never protected authority.");
+            $this->assertFalse(CampusScopeCatalogue::isCampusIncompatible($key), "{$key} is never protected authority.");
         }
     }
 }

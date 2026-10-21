@@ -222,6 +222,9 @@ class ManualPaymentRecordingServiceTest extends TestCase
             'occurredOn' => '2026-09-10',
             'allocationCount' => 1,
             'hasReference' => true,
+            // ORG.7G-2 (ADR 0076 §51): a whole-School recording.
+            'scope' => 'school',
+            'campusId' => null,
         ], $event->metadata);
         $this->assertStringNotContainsString('CHQ-77', json_encode($event->metadata));
         $this->assertSame(0, $this->inSchool($school, fn () => SchoolAuditEvent::query()->where('event_type', 'payment.settled')->count()), 'Manual recording must not write the provider settlement audit event.');

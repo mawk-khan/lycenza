@@ -131,7 +131,7 @@ class ChargeCampusAttributionArchitectureTest extends TestCase
         // pin with the owner-approved read adoption (G1-D9..G1-D11).
         $finance = array_values(array_filter(array_keys(CampusScopeCatalogue::ADOPTED), fn (string $k) => str_starts_with($k, 'finance.')));
         sort($finance);
-        $this->assertSame(['finance.charges.view', 'finance.payments.view'], $finance, 'no Finance write, configuration, run, correction or ledger key is Campus-adopted');
+        $this->assertSame(['finance.charges.view', 'finance.payments.record', 'finance.payments.view'], $finance, 'reads (ORG.7G-1) and payment entry (ORG.7G-2) only -- no configuration, run, correction or ledger key');
         $roles = Role::query()->with('capabilities')->where('scope', Role::SCOPE_SCHOOL)->whereIn('key', ['cashier', 'accountant', 'principal'])->get()->keyBy('key');
         $this->assertTrue(StaffRoleCatalog::campusScopable($roles['cashier']), 'cashier is the Campus Finance persona (G1-D9)');
         $this->assertFalse(StaffRoleCatalog::campusScopable($roles['accountant']), 'accountant stays whole-School (G1-D10)');

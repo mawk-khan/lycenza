@@ -46,6 +46,7 @@ use App\Domain\LMS\Application\LmsAdministrationAccess;
 use App\Domain\LMS\Application\TeacherAssignmentAccess;
 use App\Domain\LMS\Application\TeacherLearningContentAccess;
 use App\Domain\Payments\Application\Access\FinanceCampusAccess;
+use App\Domain\Payments\Application\ManualPaymentRecordingService;
 use App\Domain\Payments\Application\PaymentCorrectionService;
 use App\Domain\Payroll\Application\PayrollAccountingAdministrationService;
 use App\Domain\Payroll\Application\PayrollCompensationReadService;
@@ -827,9 +828,10 @@ final class SchoolRouteCoverage
             Coverage::gate('app.finance.charges.cancel', 'finance.charges.manage'),
 
             // Http\Controllers\App\Finance\ManualPaymentController
-            Coverage::gate('app.finance.payments.record.create', 'finance.payments.record'),
-            Coverage::gate('app.finance.payments.record.students.search', 'finance.payments.record'),
-            Coverage::gate('app.finance.payments.record.store', 'finance.payments.record'),
+            // ORG.7G-2 (ADR 0076 §51): Campus payment entry -- one stored Campus, in scope, locked.
+            Coverage::campus('app.finance.payments.record.create', 'finance.payments.record', ManualPaymentRecordingService::class, 'outstandingChargesForStudent'),
+            Coverage::campus('app.finance.payments.record.students.search', 'finance.payments.record', FinanceCampusAccess::class, 'collectionDebtors'),
+            Coverage::campus('app.finance.payments.record.store', 'finance.payments.record', ManualPaymentRecordingService::class, 'record'),
 
             // Http\Controllers\App\Finance\PaymentController
             // ORG.7G-1: Payment visibility -- one stored Campus across every touched Charge, in scope.

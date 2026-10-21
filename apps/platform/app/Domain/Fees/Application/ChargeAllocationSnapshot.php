@@ -25,6 +25,8 @@ final class ChargeAllocationSnapshot
         public readonly string $receivableLedgerAccountId,
         public readonly bool $isCancelled,
         public readonly Money $adjustedTotal,
+        // ORG.7G-2 (ADR 0076 §51): the locked Charge's STORED Campus (NULL = whole-School).
+        public readonly ?string $campusId = null,
     ) {}
 
     /** The charge amount net of live fee adjustments (before any payment allocation). */

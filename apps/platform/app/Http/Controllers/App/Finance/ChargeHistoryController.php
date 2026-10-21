@@ -112,7 +112,8 @@ class ChargeHistoryController extends Controller
             'canManage' => $capabilities->canInSchool($actor, 'finance.charges.manage', $school),
             // Phase 0O.11A: a link to record an offline payment for this
             // Charge's Student; the recording route re-checks everything.
-            'canRecordPayment' => $capabilities->canInSchool($actor, 'finance.payments.record', $school),
+            // ORG.7G-2: also a Campus recorder, for a Charge of a Campus it collects for.
+            'canRecordPayment' => $access->canCollect($actor, $school, $detail->campusId),
             // FEE.3: the charge's posted concession adjustments (Highly
             // Sensitive -- only with finance.fee_concessions.view, audited
             // by the read service) and a link to request a concession.

@@ -24,5 +24,8 @@ final class OutstandingCharge
         public readonly string $currency,
         public readonly ?Carbon $dueDate,
         public readonly string $adjusted = '0.00',
+        // ORG.7G-2 (ADR 0076 §51): the Charge's STORED Campus, for grouping a
+        // Campus recorder's choices by Campus (one Campus per payment).
+        public readonly ?string $campusId = null,
     ) {}
 }

@@ -5529,3 +5529,23 @@ per Student; there is deliberately no "include all":
 - proration (none, owner decision D1);
 - run idempotency (`already_assessed`, `fee_assessments_one_live_per_period`);
 - exact instalment amounts.
+
+## Campus cashiers (ORG.7G-1, ORG.7G-2, 2026-10-21, ADR 0076 §50–§51)
+
+- **Who.** `cashier` is the only Finance role that may be granted for one
+  Campus. A role holding ledger, accounts, periods, fee configuration, runs,
+  charge management or concessions is never Campus-scoped, and the database
+  refuses such a grant.
+- **What a Campus cashier sees.** Charges whose stored Campus (fixed at
+  assessment) is theirs, and Payments whose every Charge is of one of their
+  Campuses. Anything touching a whole-School (no-campus) Charge, or two
+  Campuses, is visible School-wide only.
+- **Recording a payment.** Finance -> Record payment. A Campus cashier finds
+  only Students with outstanding debt on their Campus, leavers and Students
+  who have since moved included. One payment pays Charges of ONE Campus;
+  pay each Campus separately. A payment mixing Campuses, or touching a
+  whole-School Charge, is refused with one generic message and must be
+  recorded by a whole-School cashier or accountant.
+- **Unchanged.** The receipt series is School-wide. Corrections
+  (reallocation, reversal, refund), cancellations, manual Charges, runs,
+  concessions, the fee statement and the ledger stay whole-School.

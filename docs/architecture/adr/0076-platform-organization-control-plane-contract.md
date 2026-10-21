@@ -6950,3 +6950,224 @@ standing, year, Grade/Section, Campus, receipt, method).
 - **Static and frontend gates:** Pint, Larastan, vue-tsc, ESLint (3
   existing warnings), Prettier and the build all pass.
 - **Full regression:** one exact-SHA full CI on the candidate.
+
+## 51. ORG.7G-2 — Campus cashier Payment entry: one stored Campus under Charge locks, scope-checked replay, database Finance-role backstop (as built, 2026-10-21)
+
+Owner authorization: ORG.7G-2, decisions G2-D1 to G2-D11. Baseline
+`origin/main` = `3008b832` (ORG.7G-1, §50). One migration, no new
+capability, no new table or column, no `payments.campus_id` (G2-D3).
+
+    adopted (new)        finance.payments.record (domain `finance`) -- payment ENTRY only
+    Campus persona       cashier@Campus (G2-D1); accountant stays whole-School, DB-enforced (G2-D2)
+    allocation rule      EVERY allocated Charge: non-NULL STORED Campus, all ONE Campus C,
+                         C in the actor's CURRENT scope, C active -- else one generic 422
+    A+B / NULL           whole-School only, even for an A+B actor (G2-D5, G2-D6)
+    Student placement    irrelevant: transferred Students and leavers are collectable (G2-D7, G2-D8)
+    receipt              unchanged, School-wide series (G2-D9)
+    corrections          unchanged, whole-School only (G2-D10)
+
+**51.1 Database backstop (§50.13 LOW-1 closed).** Migration
+`2026_12_27_090000_guard_campus_finance_role_grants`:
+- **Grant side:** `assert_membership_role_assignment_scope()` (the existing
+  scope trigger) gains one block. A row with a non-NULL `campus_id` is
+  refused when its role holds any `CAMPUS_INCOMPATIBLE` key:
+  `finance.ledger.%`, `finance.accounts.manage`, `finance.periods.manage`,
+  `finance.fee_structures.manage`, `finance.fee_assessments.run`,
+  `finance.charges.manage`, `finance.fee\_concessions.%`. Decided by
+  capability, never by role name.
+- **Catalogue side:** a new `BEFORE INSERT OR UPDATE` trigger on
+  `role_capabilities` (`role_capabilities_campus_finance_guard()`) refuses
+  adding a protected key to a role that has an active (unrevoked) Campus
+  grant. `membership_role_assignments` is FORCE-RLS, so the check is
+  meaningful only for a writer that bypasses RLS: any other writer of a
+  protected key is refused outright (fail closed, never an empty EXISTS).
+- **Precondition:** the migration requires the admin connection with RLS
+  bypass (as §49's migration does), then refuses to run (changing nothing)
+  if any active Campus grant of a protected role already exists. DDEV and
+  the test seed had none.
+- **Rollback:** `down()` drops the new trigger and function and restores the
+  previous scope function body exactly. Proven by the rollback-proof
+  (schema dump IDENTICAL after rollback and re-apply, 43 lines removed,
+  `platform:verify-database` failed=0).
+- **Proven** (`FinanceRoleCampusScopeGuardTest`, raw INSERTs below every
+  application path): `accountant@Campus` refused; `school_admin@Campus`
+  still refused by the access-administration rule; `cashier@Campus` and a
+  whole-School `accountant` allowed; the function source mirrors
+  `CAMPUS_INCOMPATIBLE` and names no role; a protected key cannot be added to
+  a Campus-granted `cashier` by INSERT or UPDATE, with no tenant context set
+  (as migrations and the seeder run); the catalogue guard carries the
+  RLS-bypass refusal.
+- **Deployment note:** catalogue writes already need the admin connection
+  (rule 93); a deployment's admin role must bypass RLS (already required by
+  §49's migration).
+
+**51.2 Payment-write key audit.** `finance.payments.record` is used by:
+- the three record routes (`payments.record.create`,
+  `.students.search`, `.store`) -- now C6;
+- `ManualPaymentRecordingService::settlementAccounts()` -- Campus-aware
+  (any scope may list the School's asset accounts; the account is a ledger
+  settlement target, not Campus data);
+- reallocation (`PaymentCorrectionService::REALLOCATE_CAPABILITIES`), which
+  ALSO needs `finance.charges.manage` -- protected, checked through the
+  whole-School Gate, and never Campus-scopable. A Campus cashier therefore
+  cannot reallocate.
+No API payment-entry route exists (`/api/v1` has none), so the API is
+unchanged and Campus API entry is DEFERRED, not built.
+
+**51.3 Write authority (`FinancePaymentAccess`, Payments).**
+`ManualPaymentRecordingService::record()`:
+1. resolves the CampusScope for `finance.payments.record` FIRST (403 when
+   held nowhere, including an inactive Campus or the fees module disabled);
+2. validates the shape (unchanged);
+3. in the transaction: `SchoolOperationalGuard` (School FOR SHARE), then the
+   per-key advisory lock;
+4. an existing key: `assertReplayable()` BEFORE `replay()` (51.5);
+5. otherwise, for a Campus scope only,
+   `lockAllocationsForCampusWrite()`:
+   - every Charge id must be a UUID (the controller lowercases ids, so PHP
+     and PostgreSQL agree on one lock order);
+   - Fees' `ChargeService::lockChargeCampusesForAllocation()` locks every
+     requested Charge of this School FOR UPDATE in ONE statement, in
+     ascending id order, and returns each STORED Campus;
+   - a missing id, another School's Charge, a NULL Campus, two Campuses or
+     an out-of-scope Campus: the one generic
+     `CampusPaymentUnavailableException` (422 `PAYMENT_UNAVAILABLE`);
+   - the one Campus must be active (`ActiveCampus::find`, FOR SHARE);
+6. then the existing settlement path (`SettledPaymentRecorder`, which
+   re-takes the same Charge locks in the same order -- no upgrade), receipt,
+   audit and outbox.
+- Whole-School actors never enter the guard: mixed and NULL-Campus payments
+  behave exactly as before.
+- No Student, Enrollment or current-placement read is involved: the
+  Charge's stored Campus is immutable (§49), so historical debt decides.
+- **Audit:** `finance.payment.recorded` metadata gains `scope`
+  (`school`/`campus`) and `campusId` (the authorized Campus). No PII.
+
+**51.4 Lock order.** advisory key lock → School FOR SHARE → Charges FOR
+UPDATE (id order, one statement) → Campus FOR SHARE → recorder re-lock
+(same rows, same order) → receipt counter. Opposite-order allocation sets
+cannot deadlock (51.7).
+
+**51.5 Replay (rule 32).** Both replay paths (the advisory-lock path and
+the unique-index fallback) call `assertReplayable()` before anything is
+returned. For a Campus scope the stored Payment must still be visible to
+the actor's CURRENT scope under §50.5's atomic rule; otherwise the same
+generic refusal. A whole-School scope is unchanged. Losing the scope
+entirely is a 403 before the service is reached.
+
+**51.6 Surfaces (C6).**
+
+    route                                      floor                                   access method
+    app.finance.payments.record.create         capability:finance.payments.record,campus  ManualPaymentRecordingService::outstandingChargesForStudent
+    app.finance.payments.record.students.search capability:finance.payments.record,campus FinanceCampusAccess::collectionDebtors
+    app.finance.payments.record.store          capability:finance.payments.record,campus  ManualPaymentRecordingService::record
+
+- **Form:** a Campus recorder is offered only Charges whose stored Campus
+  it covers, filtered in SQL before the 100-Charge bound; the Student label
+  and list appear only when at least one such Charge is still outstanding
+  (the same rule as the debtor search) -- nothing about other Students. The page shows each Charge's
+  Campus and explains one payment = one Campus.
+- **Search:** a Campus recorder searches only debtors with open debt in
+  scope (§50.8's debtor query, leavers included) -- never a Student
+  directory. Whole-School search is unchanged
+  (`StudentIdentityLookup::search`).
+- **Links (display only):** Charge history shows "Record payment" only when
+  `FinanceCampusAccess::canCollect()` (whole-School, or the Charge's stored
+  Campus in scope); the Payments index shows "Record" when the actor holds
+  the key anywhere. The server decides on store regardless.
+- `CampusScopeCatalogue::WHOLE_SCHOOL_HUBS['finance']` gains the key: the
+  Finance hub still opens on it only School-wide; a Campus recorder starts
+  from the Campus-aware Payments received page.
+
+**51.7 Proven.**
+- `FinanceCampusPaymentEntryTest`:
+  - a leaver's and a transferred Student's Campus-A debt is collectable by a
+    cashier@A, receipt `RCPT/…`, per-Campus collections, audit
+    `scope=campus`;
+  - mixed A+B, a NULL Charge, an out-of-scope Charge: refused generically,
+    no partial Payment; an A+B cashier may pay A-only and B-only payments,
+    never A+B; a whole-School actor may still pay a mixed set;
+  - over-allocation, sum and shape invariants unchanged;
+  - replay after the A grant is revoked is refused generically, and with no
+    scope left the route is 403;
+  - an inactive Campus and a disabled fees module are 403;
+  - the form and the search show only in-scope debt.
+- `FinanceCampusPaymentConcurrencyTest` (two real OS processes, contender
+  observed blocked):
+  - two payments on one Charge never over-allocate it;
+  - overlapping Charge sets named in opposite order both commit (no
+    deadlock);
+  - payment first, then Campus deactivation: both commit;
+  - deactivation first: the payment is refused.
+- `FinancePaymentCampusArchitectureTest`: scope before the transaction;
+  one guard call; both replays checked before `replay()`; the guard is
+  called only by the recording service and reads no Student placement;
+  exactly three adopted Finance keys; `PaymentCorrectionService` has no
+  Campus path and reallocation needs a Campus-incompatible key.
+- `FinanceCampusRoleGrantTest`, `CampusAdoptionImpactTest`: cashier@Campus
+  confers `charges.view`, `payments.record`, `payments.view` and never a
+  protected key; `finance.payments.record` recorded as owner-approved
+  HIGH_RISK.
+
+**51.8 Unchanged.**
+- Corrections (reallocation, reversal, refund), cancellation, manual
+  Charges, fee and late-fee runs, concessions, configuration, ledger and the
+  statement stay whole-School. The corrections route is a C3 multi-kind
+  service contract (reversal and refund do not need `payments.record`), so
+  it is not a `WHOLE_SCHOOL_OPERATIONS` declaration; the architecture test
+  and the 403 tests pin it.
+- Receipt numbering stays School-wide (G2-D9); gaps disclose nothing.
+- accountant@Campus and principal Finance authority: not granted.
+- Legal gates E30/E31/E32/E34: unchanged (G2-D11).
+- Admissions conversion, SIS lifecycle, LC-5..LC-10: untouched.
+
+**51.9 Deferred (owner approval needed).** Campus API payment entry (no API
+route exists); Campus corrections, refunds and reversals; accountant Campus
+scope; statement Campus adoption.
+
+**51.10 Independent security review.** No HIGH and no MEDIUM finding.
+- **Fixed:**
+  - LOW-1: the database backstop could pass silently for a writer without
+    RLS bypass (FORCE RLS hides the grants). The migration now asserts
+    bypass, and the catalogue guard refuses a protected key from any
+    non-bypassing writer; tested with no tenant context.
+  - LOW-2: the `role_capabilities` guard now fires on INSERT OR UPDATE (as
+    its sibling scope and root-reserved triggers do).
+  - LOW-3: the record form showed a settled Student's name to a Campus
+    recorder; it now needs outstanding in-scope debt.
+  - LOW-4: the 100-Charge bound ran before the Campus filter; the filter is
+    now SQL, before the bound.
+  - LOW-5: tests added for an unknown, another School's and a non-UUID
+    Charge id, a settled Student, a non-vacuous NULL-debtor search and the
+    unchanged whole-School search.
+  - INFO: Charge ids are lowercased at the controller (one lock order for
+    mixed-case input).
+- **Accepted INFO:**
+  - The scope is resolved before the transaction, so a grant revoked during
+    the request is not re-checked inside it -- the same as whole-School
+    recording today. A Campus deactivation is (Campus FOR SHARE).
+  - Replay answers differ (not visible / content mismatch / unknown key);
+    observable only with another user's server-issued key.
+  - A Campus cashier may settle into any active School asset account, as a
+    whole-School recorder may: accounting control, owner decision.
+  - The record-form debtor search is not read-audited (it never was).
+
+**51.11 Validation.**
+- **Affected and shared suites** (every *Architecture*/*Guard* test, Fees,
+  Payments, Finance, Authorization, Identity/Staff, Students, Canteen,
+  Library, Transport, Hostel, Admissions, Postgres, App, Retention, Portal,
+  Platform/Modules, Demo): 4467 passed. 14 failures:
+  - 7 Identity tests and 4 real-MinIO Retention tests, environment-only
+    (`APP_URL=localhost:8000` under DDEV's `https://lycenza.ddev.site`; no
+    real MinIO);
+  - 2 ran against source edited mid-run (the guard and `ChargeService`
+    pins), green on the final tree;
+  - 1 real: the whole-School recording audit pin now lists `scope=school`
+    and `campusId=null` (updated).
+- **After the review fixes:** Finance, Fees, Payments, Campus
+  authorization, the database guard and the role-grant tests: 666 passed.
+- **Migration:** rollback-proof IDENTICAL (50 schema lines removed by the
+  rollback), `platform:verify-database` failed=0; re-applied on DDEV.
+- **Static and frontend gates:** Pint, Larastan, vue-tsc, ESLint, Prettier
+  and the build pass.
+- **Full regression:** one exact-SHA full CI on the candidate.

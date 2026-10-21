@@ -51,6 +51,27 @@ class StudentIdentityLookup
     }
 
     /**
+     * Any of the School's Students matching `$term`, bounded -- for a caller
+     * already holding WHOLE-SCHOOL authority over Students (e.g. a
+     * whole-School payment recorder).
+     *
+     * @return list<StudentLookupCandidate>
+     */
+    public function search(School $school, string $term, int $limit = self::DEFAULT_LIMIT): array
+    {
+        $limit = max(1, min($limit, self::MAX_LIMIT));
+
+        return $this->context->withSchool($school, fn (): array => Student::query()
+            ->where('students.school_id', $school->id)
+            ->tap(fn ($q) => StudentSearch::anyField($q, $term))
+            ->orderBy('students.first_name')->orderBy('students.last_name')->orderBy('students.student_number')->orderBy('students.id')
+            ->limit($limit)
+            ->get(['students.id', 'students.first_name', 'students.middle_name', 'students.last_name', 'students.student_number'])
+            ->map(fn (Student $s): StudentLookupCandidate => self::candidate($s))
+            ->values()->all());
+    }
+
+    /**
      * Identity labels for Students a caller already holds rows for.
      *
      * @param  list<string>  $studentIds

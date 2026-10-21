@@ -242,9 +242,10 @@ class FinanceCampusReadTest extends TestCase
         $this->as($cashierA)->get('/app/finance')->assertForbidden();
         $this->as($cashierA)->get('/app/finance/fee-statements')->assertForbidden();
         $this->as($cashierA)->get('/app/finance/fee-runs')->assertForbidden();
-        $this->as($cashierA)->get('/app/finance/payments/record')->assertForbidden();
-        $this->as($cashierA)->post('/app/finance/payments/record', [])->assertForbidden();
+        // ORG.7G-2 opened payment ENTRY only (FinanceCampusPaymentEntryTest); corrections stay whole-School.
         $this->as($cashierA)->post("/app/finance/payments/{$w['PA']}/corrections", ['kind' => 'reversal'])->assertForbidden();
+        $this->as($cashierA)->post("/app/finance/payments/{$w['PA']}/corrections", ['kind' => 'reallocation'])->assertForbidden();
+        $this->as($cashierA)->post("/app/finance/payments/{$w['PA']}/corrections", ['kind' => 'refund'])->assertForbidden();
         $this->as($cashierA)->post('/app/finance/charges', [])->assertForbidden();
     }
 

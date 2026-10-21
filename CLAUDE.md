@@ -1456,5 +1456,20 @@ once several modules copy it.
          (ledger, accounts, periods, fee configuration, runs, charge
          management, concessions) is never Campus-scopable: `cashier` yes,
          `accountant` never.
-       - Fee and late-fee runs, the fee statement, the Finance hub and every
-         Finance write stay whole-School (declared).
+       - Fee and late-fee runs, the fee statement and the Finance hub stay
+         whole-School (declared).
+     - **Campus payment entry goes through `FinancePaymentAccess`** (ORG.7G-2,
+       §51). Adopted: `finance.payments.record`, for entry only.
+       - `lockAllocationsForCampusWrite()` locks every allocated Charge FOR
+         UPDATE (id order, one statement) inside the recording transaction.
+         Every Charge needs a non-NULL STORED Campus, all ONE Campus, in
+         scope and active; anything else is one generic refusal.
+       - A+B and NULL-touching payments are whole-School only, even for A+B.
+         The Student's current Campus never decides, so leavers are
+         collectable.
+       - Every replay re-checks the CURRENT scope first (`assertReplayable`).
+       - No Payment Campus; receipts stay School-wide.
+       - Corrections, reallocation, refunds and reversals stay whole-School.
+       - The database refuses a Campus grant of any role holding a
+         `CAMPUS_INCOMPATIBLE` key, and refuses adding such a key to a
+         Campus-granted role (fail closed without RLS bypass).

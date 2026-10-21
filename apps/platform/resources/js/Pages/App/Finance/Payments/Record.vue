@@ -19,6 +19,7 @@ interface OpenCharge {
     outstanding: string;
     currency: string;
     dueDate: string | null;
+    campusId: string | null;
 }
 
 interface Props {
@@ -30,6 +31,9 @@ interface Props {
     charges: OpenCharge[];
     preselectedChargeId: string | null;
     hasMfaFactor: boolean;
+    /** ORG.7G-2: a Campus recorder -- one payment pays charges of one campus. */
+    campusScoped?: boolean;
+    campusNames?: Record<string, string>;
 }
 
 const props = defineProps<Props>();
@@ -217,6 +221,10 @@ function record(): void {
                     Enter how much of this payment goes to each charge. One payment can cover
                     several charges.
                 </p>
+                <p v-if="campusScoped" class="mt-1 text-sm text-amber-800">
+                    You collect for your campus: one payment can only pay charges of one campus.
+                    Record a separate payment for each campus.
+                </p>
                 <p v-if="charges.length === 0" class="mt-3 text-sm text-slate-500">
                     This Student has no open charges.
                 </p>
@@ -234,6 +242,11 @@ function record(): void {
                                 {{ charge.description }}
                                 <span v-if="charge.dueDate" class="block text-xs text-slate-500"
                                     >Due {{ charge.dueDate }}</span
+                                >
+                                <span
+                                    v-if="campusScoped && charge.campusId && campusNames"
+                                    class="block text-xs text-slate-500"
+                                    >{{ campusNames[charge.campusId] }}</span
                                 >
                             </td>
                             <td class="py-3 text-right font-mono">

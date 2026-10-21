@@ -28,6 +28,8 @@ final class ChargeDetail
         public readonly ?Carbon $cancelledAt,
         public readonly ?string $cancellationJournalEntryId,
         public readonly Carbon $createdAt,
+        // ORG.7G-2 (ADR 0076 §51): the STORED historical Campus (NULL = whole-School).
+        public readonly ?string $campusId = null,
     ) {}
 
     public static function fromModel(Charge $charge): self
@@ -46,6 +48,7 @@ final class ChargeDetail
             cancelledAt: $charge->cancelled_at,
             cancellationJournalEntryId: $charge->cancellation_journal_entry_id,
             createdAt: $charge->created_at,
+            campusId: $charge->campus_id,
         );
     }
 }

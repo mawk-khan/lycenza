@@ -1339,10 +1339,12 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         // only (web group: session + CSRF); no /api/v1 write. Registered
         // BEFORE the '/{payment}' wildcard, same reasoning as
         // 'charges/create' above.
-        Route::get('/payments/record', [FinanceManualPaymentController::class, 'create'])->name('payments.record.create');
-        Route::get('/payments/record/students/search', [FinanceManualPaymentController::class, 'searchStudents'])->name('payments.record.students.search');
+        // ORG.7G-2 (ADR 0076 §51): Campus-aware (C6) -- a Campus recorder may
+        // record only for Charges of ONE stored Campus in scope.
+        Route::get('/payments/record', [FinanceManualPaymentController::class, 'create'])->middleware('capability:finance.payments.record,campus')->name('payments.record.create');
+        Route::get('/payments/record/students/search', [FinanceManualPaymentController::class, 'searchStudents'])->middleware('capability:finance.payments.record,campus')->name('payments.record.students.search');
         Route::post('/payments/record', [FinanceManualPaymentController::class, 'store'])
-            ->middleware('throttle:finance-payment-recording')->name('payments.record.store');
+            ->middleware(['capability:finance.payments.record,campus', 'throttle:finance-payment-recording'])->name('payments.record.store');
 
         // ORG.7G-1 (ADR 0076 §50): collections, one Payment and its receipt are
         // Campus-aware (C6): a Payment is Campus-visible only when every Charge
