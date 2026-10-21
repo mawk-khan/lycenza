@@ -8458,3 +8458,145 @@ scratch test reproduced G-1 and was deleted.
 **56.35 Status.** ORG.8 contract audit CLOSED once published; PASS WITH
 PREREQUISITES (ORG.8-P1, owner decisions). Next: owner authorization of
 ORG.8-P1 and then ORG.8A.
+
+## 57. ORG.8-P1 — Ledger / subledger reversal integrity guard (as built, 2026-10-21)
+
+Owner authorization: ORG.8-P1, narrow financial data-integrity correction
+of ORG.8 finding G-1 (§56.19). Baseline `origin/main` = `6fa511dc`. No
+approval workflow, capability, role, catalogue, Campus, legal-gate or MFA
+change.
+
+**57.1 Invariant.** A journal entry whose lifecycle another domain owns is
+never reversed except through that domain. The generic ledger reversal is
+not a back door around the Charge, fee-adjustment, Payment-correction or
+Payroll state machines.
+
+**57.2 Reproduction (before P1, committed tests failing first).** Through
+`LedgerAdministrationService::reverse()` (school_admin, fresh MFA): a
+Charge entry, a Charge's cancellation entry, a fee-adjustment entry, an
+adjustment's cancellation entry, a Payment-correction entry and a payroll
+posting's entry were all REVERSED; only a Payment's settlement entry was
+refused (`journal_entries_payment_reversal_guard`). The JSON API answered
+201 for a Charge entry; the Charge then stayed live and its canonical
+cancellation refused as `ChargeAlreadyCancelledException`.
+
+**57.3 Provenance (structural, complete).** Every production writer of
+journal entries (machine-inventoried by `JournalProvenanceArchitectureTest`)
+stores its entry on an owner column in the same transaction; none of those
+columns changes afterwards (immutable / append-only owners). Every foreign
+key into `journal_entries` is classified (`SubledgerJournalReversalDbTest`):
+
+    writer                              owner column (kind)                                   canonical reversal
+    ChargeService                       charges.journal_entry_id (charge)                     ChargeService::cancel -> charges.cancellation_journal_entry_id
+                                        charges.cancellation_journal_entry_id (charge_cancellation)   never
+    FeeAdjustmentService                fee_adjustments.journal_entry_id (fee_adjustment)     FeeAdjustmentService::cancel -> .cancellation_journal_entry_id
+                                        fee_adjustments.cancellation_journal_entry_id (..._cancellation) never
+    SettledPaymentRecorder              payments.journal_entry_id (payment)                   never (corrections post new entries)
+    PaymentCorrectionService            payment_corrections.journal_entry_id (payment_correction)    never
+    PayrollPostingService               payroll_run_postings original / reversal              PayrollPostingService::reverse (reversal posting) / never
+    StatutoryPayrollPostingService      payroll_statutory_run_postings original / reversal    StatutoryPayrollPostingService::reverse / never
+    LedgerAdministrationService         none (ledger-native manual posting)                   generic reversal
+    DemoModuleData (local demo only)    none (ledger-native)                                  generic reversal
+    structure                           journal_entries.reversal_of_journal_entry_id, journal_lines.journal_entry_id
+
+Late fees, Library fines, Hostel/Transport/Canteen/Admissions fees and
+fee-run assessments are Charges; concessions post fee adjustments; refunds
+and reversals of Payments are Payment corrections. There is no opening,
+period-close, import or migration writer of journal entries. Class C
+(system-generated) is empty; class D (unknown/legacy) cannot arise: an entry
+no owner column names is ledger-native by construction, and a new writer or
+a new foreign key fails the architecture/DB guards until classified. No
+description, memo or account text is ever read.
+
+**57.4 Canonical policy.** `journal_entry_subledger_owner(entry, school)`
+(SECURITY INVOKER, RLS-scoped, not PUBLIC-executable) is the one
+classification. `LedgerReversalPolicy::assertGenericallyReversible()` is the
+single Finance entry that applies it; `LedgerAdministrationService::reverse()`
+runs capability -> entry lookup (unknown and cross-School ids stay the same
+404) -> policy -> `LedgerService::reverse()` (already-reversed pre-check,
+period assignment, unique reversal, audit); the controllers check the
+capability and the fresh MFA code first. A refused entry is the existing
+`JournalEntryNotReversibleException` (409 `JOURNAL_ENTRY_NOT_REVERSIBLE`,
+browser: reversal error), now with a message that never names the owner;
+nothing is written. MFA never bypasses it. Finance still never reads an
+owner table itself.
+
+**57.5 Database backstop (every role, raw SQL included).** On
+`journal_entries`:
+- `journal_entries_subledger_reversal_guard` (BEFORE INSERT, reversal rows):
+  refuses at once a reversal of a never-reversed kind (Payment, Payment
+  correction, any cancellation or reversal entry). The Payment guard is kept
+  unchanged and fires first for Payments.
+- `journal_entries_subledger_reversal_owner_check` (DEFERRABLE INITIALLY
+  DEFERRED): at COMMIT, a reversal of a Charge, fee-adjustment, payroll or
+  statutory original must be linked by its owner (cancellation entry /
+  reversal posting). The canonical services link it in the same
+  transaction; a generic or raw reversal is rolled back. The check pins
+  `app.current_school_id` to the row's own School for its reads and restores
+  it, so a cleared or forged context at COMMIT cannot make the owner
+  invisible (fail closed); it reads only that School, whose row RLS already
+  let the inserter write. `SET CONSTRAINTS ... IMMEDIATE` only checks sooner.
+The runtime role holds only INSERT and SELECT on the ledger, owns neither
+table nor function, and cannot disable a trigger.
+
+**57.5a Security review** (independent): no HIGH or MEDIUM. LOW fixed: the
+classification tested originals before cancellations, so a raw-SQL owner
+row naming an existing cancellation entry could make it look like a
+reversible original -- the never-reversed kinds are now decided first
+(pinned). LOW fixed (tests): another School's entry classifies as nothing
+and a reversal under another School cannot name it (same-School key); the
+architecture scan also refuses an inline `LedgerService::class)->` call.
+LOW accepted: a raw-SQL owner row adopting an entry that was ALREADY
+reversed in an earlier transaction is not refused (the runtime role can
+already post arbitrary balanced entries; no application path writes owner
+rows except with the entry it just posted). LOW accepted: a pre-P1 orphan
+leaves its owner un-cancellable (57.9); none exists.
+
+**57.6 Domain flows unchanged.** Charge cancellation, fee-adjustment
+cancellation (concession `cancelAdjustment`), Payment corrections (MFA,
+mandatory reason, server key, one reversal per Payment), payroll and
+statutory reversals all work and satisfy the COMMIT check; no double
+reversal (`journal_entries_reversal_of_unique` unchanged).
+
+**57.7 Concurrency (two real processes, contender observed blocked).** Raw
+reversal holding vs canonical Charge cancel waiting: the raw reversal fails
+at its own COMMIT and the cancellation wins. Canonical cancel holding vs raw
+reversal waiting: the raw one is the refused second reversal. Raw reversal
+holding vs Payroll reversal waiting: Payroll wins; the one reversal is the
+one its reversal posting records. The generic service path never reaches an
+insert for an owned entry (refused before), and ownership is fixed when the
+entry is created, so the decision cannot change under it. Lock order is
+unchanged (the owner's row lock, then the unique reversal index); no School
+or global lock; no deadlock found. Two generic reversals of one ledger-native
+entry: unchanged (`JournalReversalConcurrencyTest`).
+
+**57.8 Periods, audit, authorization.** Period rules unchanged (a reversal
+posts in the current open period; closed periods refuse postings). Audit
+unchanged (`journal_entry.reversed` only for a performed reversal; no
+refusal event, no owner data logged). `finance.ledger.reverse` stays
+whole-School and `CAMPUS_INCOMPATIBLE`; no capability, role, Campus or
+platform-persona change; cross-School ids stay not-found.
+
+**57.9 Repair of pre-P1 records.** An orphan reversal written before P1 is
+not owner-referenced, so it is ledger-native and stays generically
+reversible: reversing it restores the ledger to match the still-live record
+(committed test). The original keeps its one historical reversal, so that
+Charge can no longer be cancelled canonically; removing it economically is
+a fee waiver (concession, category `waiver`). No historical row is rewritten.
+Data audit (development database, read-only, as superuser): 72 entries —
+39 Charge, 30 Payment, 1 payroll posting, 2 ledger-native — no reversals at
+all, no live owner against a reversed entry, no double reversal, no
+dangling link, no multi-owner entry. Nothing to repair.
+
+**57.10 Migration and rollback.** `2026_12_30_090000_guard_subledger_journal_reversals`:
+one function, two trigger functions, two triggers; no table, column, index or
+data change. Rollback + re-apply IDENTICAL (152 schema lines);
+`verify-database` failed=0. Rolling back re-opens G-1 (Payment guard stays).
+
+**57.11 Unchanged and deferred.** No approval toolkit, request table,
+maker/checker, reason-code framework or new capability; G-2 (payroll SoD),
+G-3..G-6 and OD-8.1..OD-8.9 stay open; ORG.7 residuals unchanged; legal
+gates unchanged (E30–E34 still block production).
+
+**57.12 Status.** G-1 CLOSED once published. Next: ORG.8A (assurance kit +
+fee-concession pilot), owner authorization.

@@ -45,6 +45,7 @@ class LedgerAdministrationService
     public function __construct(
         private readonly LedgerService $ledger,
         private readonly TenantContext $context,
+        private readonly LedgerReversalPolicy $reversalPolicy,
     ) {}
 
     /**
@@ -77,6 +78,10 @@ class LedgerAdministrationService
      * `JournalEntryNotFoundException`, both before `LedgerService::
      * reverse()` is ever invoked and before that resolution attempt can
      * be used as an existence oracle for another School's ledger.
+     *
+     * ORG.8-P1: then `LedgerReversalPolicy` -- an entry another domain
+     * owns is refused (`JournalEntryNotReversibleException`) before any
+     * write; only a ledger-native entry reaches `LedgerService::reverse()`.
      */
     public function reverse(School $school, string $journalEntryId, User $actor, ?string $reason = null): JournalEntryResult
     {
@@ -90,6 +95,9 @@ class LedgerAdministrationService
         if ($original === null) {
             throw new JournalEntryNotFoundException($journalEntryId);
         }
+
+        // ORG.8-P1 (ADR 0076 §57): an entry another domain owns is reversed only through that domain.
+        $this->context->withSchool($school, fn () => $this->reversalPolicy->assertGenericallyReversible($original));
 
         return $this->ledger->reverse($original, $actor, $reason);
     }

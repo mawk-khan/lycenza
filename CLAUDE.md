@@ -961,7 +961,9 @@ docs/roadmap             MASTER-ROADMAP.md
     negative Payment, gateway refund or a further correction kind without
     amending that contract. Never use a concession as a correction, and
     never reverse a Payment's own journal entry
-    (`journal_entries_payment_reversal_guard`). Capacity, cancellation and
+    (`journal_entries_payment_reversal_guard`); since ORG.8-P1 (ADR 0076
+    §57) no journal entry another domain owns is reversed through the
+    generic ledger (`journal_entry_subledger_owner()`). Capacity, cancellation and
     charge state always use the EFFECTIVE allocation
     (`payments_effective_allocated()`). Never log or audit the reference,
     key, reason text or form payload, and never accept card or bank

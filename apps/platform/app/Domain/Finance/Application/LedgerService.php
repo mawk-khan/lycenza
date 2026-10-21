@@ -209,9 +209,10 @@ class LedgerService
                     return JournalEntryResult::fromModel($reversal->refresh(), $original->lines->count());
                 }));
             } catch (QueryException $e) {
-                // Phase 0O.11A: a subledger guard trigger (today
-                // journal_entries_payment_reversal_guard) refuses the
-                // reversal of an entry it owns with restrict_violation.
+                // Phase 0O.11A / ORG.8-P1: a subledger guard trigger
+                // (journal_entries_payment_reversal_guard,
+                // journal_entries_subledger_reversal_guard) refuses the
+                // reversal of an owned entry with restrict_violation.
                 // Finance recognizes only the SQLSTATE, never the owner.
                 if ($e->getCode() === self::SUBLEDGER_REVERSAL_GUARD_SQLSTATE) {
                     throw new JournalEntryNotReversibleException($original->id);

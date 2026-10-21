@@ -5628,3 +5628,24 @@ Nothing changed. Recorded for later owner-authorized phases:
   a reason (G-3).
 - **Payment reversal and refund** maker/checker, a ledger reverser != poster
   rule and Charge cancel reasons/step-up are owner decisions OD-8.1–OD-8.3.
+
+## Ledger / subledger reversal guard (ORG.8-P1, 2026-10-21, ADR 0076 §57)
+
+Closes ORG.8 G-1. The generic ledger reversal (web, JSON API) now reverses
+only a ledger-native entry: a manual posting, or a reversal it created
+itself. An entry another domain owns -- a Charge, fee adjustment, Payment,
+Payment correction, payroll or statutory posting, or the cancellation or
+reversal of one -- answers 409 `JOURNAL_ENTRY_NOT_REVERSIBLE` (browser: a
+reversal error), even with a valid fresh MFA code, and nothing is written.
+Reverse it through its own domain: Charge cancellation, concession
+adjustment cancellation, Payment correction, or the Payroll reversal.
+
+- **One classification:** the database function
+  `journal_entry_subledger_owner()`, decided only by owner columns, never by
+  description text; `LedgerReversalPolicy` applies it for the generic path.
+- **Database backstop for every role:** a reversal of a never-reversed kind
+  is refused at INSERT; a reversal of a Charge, adjustment or payroll
+  original must be linked by its owner by COMMIT, or it is rolled back.
+- **Repairing a pre-P1 reversal:** reverse that reversal through the generic
+  ledger; the ledger again matches the still-live record. The original
+  cannot then be cancelled canonically; use a fee waiver to remove it.

@@ -1513,9 +1513,10 @@ UAT plan: `docs/product/APPROVAL-AUTHORITY-UAT.md`.
   a closed reason code; free text stays on the domain row, never in audit
   metadata.
 - **Platform roles** never decide tenant business items.
-- **Recorded gaps (not fixed):** G-1 direct ledger reversal of
-  subledger-owned journal entries (MEDIUM, prerequisite ORG.8-P1); G-2
-  payroll SoD checks only the run creator (MEDIUM); G-3..G-6 LOW.
+- **Recorded gaps:** G-1 direct ledger reversal of subledger-owned journal
+  entries (MEDIUM) is CLOSED by ORG.8-P1 (§57: the generic reversal and the
+  database refuse any entry another domain owns); G-2 payroll SoD checks
+  only the run creator (MEDIUM, open); G-3..G-6 LOW.
 
 ## What is NOT yet implemented
 
