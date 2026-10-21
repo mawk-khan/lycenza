@@ -10,12 +10,9 @@ use Tests\TestCase;
  * Phase 10E (docs/modules/INVENTORY.md "Movement immutability limits").
  * `stock_movements` is append-only in APPLICATION semantics -- there is
  * no update/delete endpoint anywhere, and no service method mutates a
- * posted row after insert. This does NOT claim PostgreSQL itself
- * enforces immutability (unlike Finance's journal-line-set trigger
- * enforcement) -- the repository deliberately avoided introducing a new
- * trigger-function framework solely for this checkpoint, given the
- * known shared-test-reset persistence issue with raw-SQL trigger
- * functions (docs/modules/INVENTORY.md "Movement immutability limits").
+ * posted row after insert. Since ORG.7H-1R (ADR 0076 §55) PostgreSQL
+ * enforces it as well, by privilege: the runtime role has no UPDATE or
+ * DELETE on the table (InventoryLocationEvidenceMonotonicityDbTest).
  * Reversal/correction is explicitly deferred. Mirrors
  * FinanceHttpArchitectureGuardTest's grep/route-inspection pattern.
  */

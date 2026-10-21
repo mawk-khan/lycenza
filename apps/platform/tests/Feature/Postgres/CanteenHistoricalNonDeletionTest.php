@@ -156,6 +156,11 @@ class CanteenHistoricalNonDeletionTest extends TestCase
             $rejected = true;
         }
 
-        $this->assertTrue($rejected, 'canteen_order_stock_consumptions_movement_fk RESTRICT must reject deleting a StockMovement a real Consumption row still references.');
+        $this->assertTrue($rejected, 'The runtime role must never delete a StockMovement a real Consumption row still references.');
+
+        // ORG.7H-1R (ADR 0076 §55): the runtime role now has no DELETE on the
+        // movement ledger at all, so the refusal above is the privilege; the
+        // foreign key stays RESTRICT behind it for every other role.
+        $this->assertSame('r', DB::connection('pgsql_admin')->selectOne("select confdeltype from pg_constraint where conname = 'canteen_order_stock_consumptions_movement_fk'")->confdeltype);
     }
 }

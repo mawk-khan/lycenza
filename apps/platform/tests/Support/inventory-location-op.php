@@ -27,6 +27,13 @@ use Tests\Support\Concurrency\HeldTransaction;
 //   php inventory-location-op.php order <schoolId> <studentId> <outletId>
 //   php inventory-location-op.php edit <schoolId> <adminUserId> <locationId> <campusId|null|name:...>
 //   php inventory-location-op.php raw-campus <schoolId> <locationId> <campusId|null>
+//   php inventory-location-op.php erase-then-campus <schoolId> <locationId> <elsewhereId> <campusId|null>
+//
+// erase-then-campus (ORG.7H-1R, ADR 0076 §55) is a raw runtime "cleanup":
+// it waits for the Location (FOR UPDATE), then tries to erase or move every
+// piece of its evidence, each in its own savepoint, then to change its
+// Campus. It answers each step's outcome: rows changed, denied (no
+// privilege), refused (evidence guard) or frozen.
 
 require __DIR__.'/../../vendor/autoload.php';
 
@@ -73,6 +80,34 @@ try {
                 }
 
                 return 'ok';
+            case 'erase-then-campus':
+                [$locationId, $elsewhereId, $campusId] = $args;
+                $step = function (string $sql, array $bindings): string {
+                    try {
+                        return (string) DB::transaction(fn () => DB::affectingStatement($sql, $bindings));
+                    } catch (QueryException $e) {
+                        return match (true) {
+                            str_contains($e->getMessage(), 'permission denied') => 'denied',
+                            str_contains($e->getMessage(), 'inventory_location_evidence_immutable') => 'refused',
+                            str_contains($e->getMessage(), 'inventory_location_campus_frozen') => 'frozen',
+                            default => 'error',
+                        };
+                    }
+                };
+
+                return DB::transaction(function () use ($step, $locationId, $elsewhereId, $campusId, $nullable): string {
+                    DB::select('select id from inventory_locations where id = ? for update', [$locationId]);
+
+                    $steps = [
+                        'move-movement:'.$step('update stock_movements set to_location_id = ? where to_location_id = ?', [$elsewhereId, $locationId]),
+                        'move-balance:'.$step('update inventory_stock_balances set inventory_location_id = ? where inventory_location_id = ?', [$elsewhereId, $locationId]),
+                        'delete-movement:'.$step('delete from stock_movements where to_location_id = ?', [$locationId]),
+                        'delete-balance:'.$step('delete from inventory_stock_balances where inventory_location_id = ?', [$locationId]),
+                    ];
+                    $campus = $step('update inventory_locations set campus_id = ? where id = ?', [$nullable($campusId), $locationId]);
+
+                    return implode(';', [...$steps, 'campus:'.($campus === '1' ? 'ok' : $campus)]);
+                });
             default:
                 throw new InvalidArgumentException("Unknown operation {$operation}");
         }

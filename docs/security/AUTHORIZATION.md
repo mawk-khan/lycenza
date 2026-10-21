@@ -900,6 +900,9 @@ whole-School supersedes. A selected or current Campus
   frozen once used (database-enforced), so Inventory history can no longer
   move between Campuses. Location management stays whole-School
   (`inventory.directory.manage`); no Campus authority was added.
+  ORG.7H-1R (§55): its evidence cannot be erased or moved by the runtime
+  role (movements append-only; balances and Canteen Orders never deleted or
+  re-pointed), so a used Location never becomes unused again.
 - **Refusals look the same.** A Campus-scoped actor's refusals do not
   differ between an in-scope and an out-of-scope conflict (Visitor
   check-in: one generic refusal; the School-wide one-active-Visit rule

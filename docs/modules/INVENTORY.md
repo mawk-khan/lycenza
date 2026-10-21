@@ -440,25 +440,24 @@ No delete endpoint exists for either entity (rule 73).
 `stock_movements` is append-only in **application** semantics: no
 update/delete endpoint exists anywhere, and
 `InventoryStockService` only ever `create()`s a movement, never
-queries one back for mutation. This does **not** claim PostgreSQL
-itself structurally enforces immutability the way Finance's
-`journal_entries` line-set-immutability trigger does — the repository
-deliberately avoided introducing a new trigger-function framework
-solely for this checkpoint, given the shared-test-environment
-persistence issue with raw-SQL trigger functions surfaced during Phase
-10D's main integration (`docs/modules/HOSTEL.md`/Phase 10D closure
-notes; `finance_set_journal_entry_posting_txid` was found to persist
-across certain fresh-schema resets). **Proven directly** (not merely
-asserted) by `StockMovementArchitectureGuardTest`: no PATCH/PUT/DELETE
-route exists under `inventory-stock/movements`, no generic `/
-stock-movements` creation route exists, `StockMovement.php` defines no
-`update`/`delete` method and uses no `SoftDeletes`, and
-`InventoryStockService.php` never calls `$movement->update(`/
-`->delete(`/`->save(` on a previously-created movement. Reversal/
-correction of a posted movement is explicitly deferred — document as
+queries one back for mutation -- **proven directly** by
+`StockMovementArchitectureGuardTest` (no PATCH/PUT/DELETE route under
+`inventory-stock/movements`, no generic `/stock-movements` creation
+route, no `update`/`delete`/`SoftDeletes` on `StockMovement.php`, no
+`$movement->update(`/`->delete(`/`->save(` in `InventoryStockService.php`).
+
+**Since ORG.7H-1R (ADR 0076 §55) PostgreSQL enforces it too, by
+privilege:** the runtime role `school_os_app` has no UPDATE and no
+DELETE on `stock_movements` (`TenantRls::makeAppendOnly()`, migration
+`2026_12_29_090000`; `platform:verify-database` checks it through
+`DatabaseRoleVerifier::NO_RUNTIME_UPDATE`/`NO_RUNTIME_DELETE`). The
+ledger is evidence for the Location Campus freeze below, so a
+deletable or re-pointable movement would let a used Location look
+unused. A School's own cascade (platform-only, rule 86) is unaffected.
+Reversal/correction of a posted movement stays deferred -- document as
 `movements immutable; reversal deferred`, matching Visitor/Hostel/
 Transport's own first-checkpoint precedent of shipping without an
-undo concept.
+undo concept; a future reversal is a NEW movement, never an edit.
 
 ## 17. Historical parent deletion
 
@@ -737,3 +736,10 @@ their orders under Finance (D8).
 - **Stock writes** share-lock their Location(s) first and refuse (the
   generic "not available") if the Location changed Campus after the caller
   resolved it. Transfers between Locations are unchanged.
+- **"Used" is monotonic (ORG.7H-1R, ADR 0076 §55).** The runtime role can
+  never erase or move the evidence: movements are append-only (no UPDATE,
+  no DELETE); balance rows and Canteen Orders are never deleted (no DELETE;
+  a balance's quantity and an Order's lifecycle stay writable); and the
+  evidence guard refuses any UPDATE that re-points an evidence row's
+  Location (`inventory_location_evidence_immutable`). A used Location never
+  becomes unused again.

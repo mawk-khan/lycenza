@@ -140,10 +140,11 @@ class InventoryItemsRlsIsolationTest extends TestCase
         $school = $this->createSchool();
         $item = $this->createInventoryItem($school);
         $location = $this->createInventoryLocation($school);
-        $balance = $this->createInventoryStockBalance($item, $location, ['quantity_on_hand' => '5.000']);
 
         $this->setSchool($school->id);
 
+        // ORG.7H-1R (ADR 0076 §55): no balance row at all (the runtime role can no
+        // longer delete one), so the movement key is the sole remaining blocker.
         DB::connection('pgsql')->table('stock_movements')->insert([
             'id' => (string) new UuidV7,
             'school_id' => $school->id,
@@ -159,8 +160,7 @@ class InventoryItemsRlsIsolationTest extends TestCase
         $rejected = false;
 
         try {
-            DB::connection('pgsql')->transaction(function () use ($item, $balance): void {
-                DB::connection('pgsql')->table('inventory_stock_balances')->where('id', $balance->id)->delete();
+            DB::connection('pgsql')->transaction(function () use ($item): void {
                 DB::connection('pgsql')->table('inventory_items')->where('id', $item->id)->delete();
             });
         } catch (QueryException) {

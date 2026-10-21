@@ -287,4 +287,5 @@ School setting, a role, a navigation toggle or a commercial plan.
   Location's Campus is frozen once the Location has operational history
   (stock movements, balances or Canteen Orders), in the service and the
   database; stock writes share-lock their Location and re-check its Campus.
-  ORG.7 stays closed.
+  ORG.7 stays closed. ORG.7H-1R (§55) made "used" monotonic: the runtime
+  role can no longer delete or re-point that evidence.

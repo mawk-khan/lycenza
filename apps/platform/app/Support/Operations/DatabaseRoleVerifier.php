@@ -76,6 +76,8 @@ class DatabaseRoleVerifier
         'student_marks', 'student_mark_revisions',
         // RES.3 (ADR 0068 §21): the per-paper marks lock and the append-only correction requests.
         'examination_paper_mark_states', 'student_mark_corrections',
+        // ORG.7H-1R (ADR 0076 §55): Inventory Location-use evidence, so a used Location never looks unused again.
+        'stock_movements', 'inventory_stock_balances', 'canteen_orders',
     ];
 
     /**
@@ -97,6 +99,8 @@ class DatabaseRoleVerifier
         'library_fines', 'library_fine_voids', 'library_fine_policies',
         // RES.2 (ADR 0068 §19.3 a): StudentMark value history is never rewritten.
         'student_mark_revisions',
+        // ORG.7H-1R (ADR 0076 §55): the Inventory movement ledger is append-only.
+        'stock_movements',
     ];
 
     /**

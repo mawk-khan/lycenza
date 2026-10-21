@@ -6,6 +6,7 @@ use App\Domain\Inventory\Infrastructure\InventoryItem;
 use App\Domain\Inventory\Infrastructure\InventoryLocation;
 use App\Models\Campus;
 use App\Models\School;
+use App\Support\Operations\DatabaseRoleVerifier;
 use App\Support\Tenancy\TenantRls;
 use Illuminate\Database\Connection;
 use Illuminate\Database\QueryException;
@@ -198,5 +199,10 @@ class InventoryLocationCampusFreezeDbTest extends TestCase
         $classified = [...array_keys(self::EVIDENCE), ...self::CONFIGURATION];
         sort($classified);
         $this->assertSame($classified, $referencing, 'a new table referencing a Location must be classified as operational evidence (predicate + guard) or configuration');
+
+        // ORG.7H-1R (ADR 0076 §55): evidence must be monotonic -- the runtime role can never remove it.
+        foreach (array_keys(self::EVIDENCE) as $table) {
+            $this->assertContains($table, DatabaseRoleVerifier::NO_RUNTIME_DELETE, "{$table} is Location-use evidence: platform:verify-database must refuse a runtime DELETE grant");
+        }
     }
 }

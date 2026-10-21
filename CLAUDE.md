@@ -1359,7 +1359,8 @@ once several modules copy it.
        Campus is fixed once used. An Inventory Location's Campus is frozen
        once it has operational history (ORG.7H-1, §54): movements, balances
        or Canteen Orders, decided by the one database predicate
-       `inventory_location_has_operational_history()`; only
+       `inventory_location_has_operational_history()`, whose evidence the
+       runtime role can never delete or re-point (ORG.7H-1R, §55); only
        `InventoryLocationService` writes Locations, and every stock write
        share-locks its Location(s) and re-checks the Campus it authorized. Scoped returns, ends and history follow
        the stored Campus, never the Student's current one.

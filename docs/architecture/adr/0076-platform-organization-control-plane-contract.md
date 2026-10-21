@@ -7924,7 +7924,8 @@ freeze is only as strong as its evidence: `stock_movements` and
 `inventory_stock_balances` are append-only by application convention only
 (no runtime code deletes or repoints them) and `canteen_orders` refuses
 DELETE but not an UPDATE of its Location snapshot (no code path does it);
-making the evidence database-immutable is a separate hardening decision.
+making the evidence database-immutable is a separate hardening decision
+(done by ORG.7H-1R, §55).
 Independent security review: no HIGH or MEDIUM; its two introduced LOWs
 were fixed in this slice (the evidence guard raises on an unknown column
 instead of silently skipping the lock; the single-writer guard also scans
@@ -7933,3 +7934,121 @@ instead of silently skipping the lock; the single-writer guard also scans
 **54.11 Status.** ORG.7H-1 CLOSED. ORG.7 remains technically complete,
 integrated UAT ready, production blocked by the §53.15 gates. Next: ORG.8
 read-only contract audit (owner authorization).
+
+## 55. ORG.7H-1R — Inventory use-evidence monotonicity (as built, 2026-10-21)
+
+Owner authorization: ORG.7H-1R, a narrow database-integrity correction
+reopening §54 ("PASS WITH PREREQUISITES"). Baseline `origin/main` =
+`ecbbefca`. No table, column, marker, capability, role, catalogue,
+`CampusScopeCatalogue`, Canteen or Charge change; no data rewritten.
+
+**55.1 Invariant.** Once a Location has committed operational Inventory
+history it never again becomes eligible for a Campus change because an
+evidence row was deleted, re-pointed, rewritten, compacted or moved. "Used"
+is monotonic. `inventory_location_has_operational_history()` stays the one
+decision; every relation it reads is now monotonic for the runtime role.
+
+**55.2 The gap (reproduced at `ecbbefca`, raw SQL as `school_os_app`).**
+
+    relation                  INSERT UPDATE DELETE TRUNCATE  writers (app/)
+    stock_movements           yes    YES    YES    no        InventoryStockService create() only
+    inventory_stock_balances  yes    yes    YES    no        InventoryStockService (insertOrIgnore, quantity)
+    canteen_orders            yes    yes    no     no        CanteenOrderService (place; fulfil/cancel status)
+
+Observed: re-pointing a movement's Location, re-quantifying and deleting a
+movement, re-pointing and deleting a balance, and re-pointing a Canteen
+Order's Location each changed 1 row; a Canteen Order DELETE and every
+TRUNCATE were already denied; moving a row to another School is refused by
+RLS. A real two-process race reproduced the bypass end to end: a raw
+"cleanup" waiting on the first receipt (Location FOR UPDATE) re-pointed the
+committed movement and balance, then moved the Location's Campus (`ok`).
+
+**55.3 Repository truth.**
+- Movements are the authoritative, immutable ledger (INVENTORY.md §16;
+  reversal deferred). No code updates or deletes one.
+- A balance is current stock state, reconstructible from movements, but
+  every legitimate balance row is created in the same transaction as a
+  movement at that Location, its row is never removed (Inventory is tenant
+  lifetime: E21 determination, `ResidualRetentionArchitectureGuardTest`)
+  and only its quantity changes. Pinning its existence and Location costs
+  the product nothing; no new marker or ledger is needed.
+- A Canteen Order's Location is a placement snapshot, written once
+  (Phase 10F). No retention unit deletes an Order: the Finance D8 unit
+  refuses a unit an Order references.
+- No SECURITY DEFINER function reachable by the runtime role writes these
+  tables; every key into `inventory_locations` and from the evidence
+  parents is NO ACTION on update and RESTRICT on delete; the runtime role
+  cannot delete a School (rule 86) and owns no table or function.
+
+**55.4 Correction** (migration
+`2026_12_29_090000_make_inventory_location_evidence_monotonic`):
+- `stock_movements`: `TenantRls::makeAppendOnly()` (runtime UPDATE and
+  DELETE revoked).
+- `inventory_stock_balances`: `TenantRls::revokeDelete()`.
+- `canteen_orders`: DELETE was already revoked.
+- `inventory_location_evidence_guard()` (already fired BEFORE UPDATE OF
+  exactly the Location columns on each evidence table) now raises
+  `inventory_location_evidence_immutable` (`check_violation`) when an
+  UPDATE actually changes or clears an evidence row's Location, for every
+  role (checked before the NULL skip). A
+  no-op write passes; the INSERT path (FOR SHARE first-use lock) is
+  byte-for-byte unchanged. Same SECURITY INVOKER, pinned `search_path`,
+  owner and ACL (CREATE OR REPLACE).
+- `DatabaseRoleVerifier`: the three tables join `NO_RUNTIME_DELETE`,
+  `stock_movements` joins `NO_RUNTIME_UPDATE`, so `platform:verify-database`
+  fails on a restored grant; `InventoryLocationCampusFreezeDbTest` requires
+  every classified evidence table to be listed there.
+
+**55.5 Data audit (before the migration).** Development database: 2
+Locations (both used), 12 movements = 12 stock audit events (6 issued, 5
+received, 1 transferred; every audited movement still exists), 6 balances
+all reconciling exactly to the ledger, no movement-derived balance missing,
+5 Orders = 5 `canteen.order.placed`, every Canteen consumption drawn from
+its Order's Location, no Order Location differing from its Outlet's, no
+recorded Location Campus change. Test database empty. No ambiguity; nothing
+repaired.
+
+**55.6 Proof.** `InventoryLocationEvidenceMonotonicityDbTest` (raw runtime
+SQL): per source independently, an unused Location becomes used, every
+erasing or moving mutation is refused (movements: re-point, detach,
+re-quantify, DELETE, TRUNCATE denied; balances: re-point refused, DELETE and
+TRUNCATE denied, another School refused by RLS; Canteen Orders: re-point
+refused, DELETE and TRUNCATE denied, another School refused by RLS), the
+permitted writes still work (a balance quantity, an Order cancellation, a
+no-op Location write), and the Campus change is still refused; no parent
+deletion cascades evidence away; the privilege matrix, verifier lists and
+guard body are pinned. Race G
+(`InventoryLocationCampusConcurrencyTest`): the cleanup waiting on the
+first receipt now answers `move-movement:denied;move-balance:refused;
+delete-movement:denied;delete-balance:denied;campus:frozen`; the six §54.7
+races are unchanged. The refusals depend only on privileges and the row's
+own OLD/NEW values, never on other rows or timing, and the remaining
+permitted UPDATEs never touch a Location column, so no race window exists;
+no new lock.
+
+**55.6a Security review** (independent, scoped to §15 of the brief): no
+HIGH or MEDIUM. LOW fixed in this slice: the guard's NULL skip ran before
+the refusal, so a Location -> NULL re-point (movements only, unreachable by
+the runtime role) passed for a role with UPDATE. LOW accepted:
+`platform:verify-database` checks the runtime grants, not the guard trigger
+or body; a migration rollback is still flagged (55.7), and the trigger and
+body are pinned by `InventoryLocationCampusFreezeDbTest` and
+`InventoryLocationEvidenceMonotonicityDbTest`; replacing them needs the
+owner role.
+
+**55.7 Rollback.** IDENTICAL schema after rollback + re-apply (8 lines);
+the rolled-back guard body hashes equal to §54's; `verify-database`
+failed=0 applied. Rolling back restores the runtime grants and the §54
+guard and re-opens the evidence-erasure bypass -- never silently:
+`verify-database` then fails `runtime_destructive_privileges_restricted`
+(3 grants). `down()` changes no data.
+
+**55.8 Unchanged and deferred.** Malformed Campus UUID 500, Canteen Outlet
+edit 500, LIKE hygiene, Inventory item `orWhere`, replay residual, Library
+rollback, `StudentPurposeLookup` docblock and Payment-list scale stay
+deferred (§54.10). A future movement reversal is a new movement, never an
+edit.
+
+**55.9 Status.** ORG.7H-1R CLOSED once published. ORG.7 remains technically
+complete, integrated UAT ready, production blocked by the §53.15 gates.
+Next: ORG.8 read-only contract audit (owner authorization).

@@ -34,6 +34,10 @@ use Tests\TestCase;
  *   E  first Canteen Order      -> the Campus edit waits, then is refused
  *   F  Campus edit first        -> Canteen's issueMany() waits, then is
  *                                  refused on the changed Location
+ *   G  first receipt first      -> a raw runtime "cleanup" waits, then can
+ *                                  neither erase nor move the now-committed
+ *                                  evidence, and its Campus change is refused
+ *                                  (ORG.7H-1R, ADR 0076 §55: used is monotonic)
  *
  * Never: a movement committed under Campus A while the Location commits to B.
  */
@@ -183,5 +187,21 @@ class InventoryLocationCampusConcurrencyTest extends TestCase
         $this->assertSame('rejected:LocationNotAvailableException', $contender, 'refused on the changed Location, before any stock check');
         $this->assertNull($this->campus());
         $this->assertSame(0, $this->movements());
+    }
+
+    #[Test]
+    public function a_cleanup_waiting_on_the_first_receipt_can_neither_erase_its_evidence_nor_move_the_campus(): void
+    {
+        $elsewhere = $this->createInventoryLocation($this->school, ['campus_id' => $this->a->id, 'status' => 'active']);
+
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->op('receive', $this->item->id, $this->location->id, '5'),
+            $this->op('erase-then-campus', $this->location->id, $elsewhere->id, $this->b->id),
+        );
+
+        $this->assertSame('ok', $holder);
+        $this->assertSame('move-movement:denied;move-balance:refused;delete-movement:denied;delete-balance:denied;campus:frozen', $contender);
+        $this->assertSame($this->a->id, $this->campus());
+        $this->assertSame(1, $this->inSchool(fn () => StockMovement::query()->where('to_location_id', $this->location->id)->count()));
     }
 }
