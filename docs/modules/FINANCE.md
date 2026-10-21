@@ -5549,3 +5549,66 @@ per Student; there is deliberately no "include all":
 - **Unchanged.** The receipt series is School-wide. Corrections
   (reallocation, reversal, refund), cancellations, manual Charges, runs,
   concessions, the fee statement and the ledger stay whole-School.
+
+### Finance Campus UAT readiness (ORG.7G-3, 2026-10-21, ADR 0076 §52)
+
+The v1 Campus Finance scope is frozen (§52.1) and technically closed. This is
+the local/UAT plan. It verifies software behaviour on synthetic fixtures
+only. Testers never judge whether a fee, a late-fee rate, a receipt form or
+an RTE treatment is lawful: that is E30/E31/E32/E34, still open.
+
+**Read this first: balance vs payment privacy.** A Campus-A Charge always
+shows its true paid and outstanding amounts, even when part of it was paid
+by an A+B (mixed) Payment that cashier@A cannot see. Cashier@A sees that
+amount as "paid by payments recorded elsewhere" only: never that Payment's
+id, receipt, other lines or anything about Campus B.
+
+**Fixtures (minimum, deterministic).**
+
+| Kind | Fixture |
+|---|---|
+| Campuses | A (active), B (active), C (inactive) |
+| Students | S1 active on A; S2 active on B; S3 transferred A -> B; S4 leaver (inactive) with A debt; S5 with a whole-School (no-campus) manual Charge |
+| Charges | A-only (S1); B-only (S2); NULL (S5); S3 old A Charge; S3 new B Charge; S4 A Charge |
+| Payments | A-only; B-only; A+B mixed (S3's two Charges, by a whole-School actor); one touching the NULL Charge |
+| Users | cashier@A; cashier@B; cashier@A+B (two grants); whole-School cashier; accountant; school_admin; principal@A |
+
+**Cases.** Expected results are server behaviour; the UI hiding something is
+never the check.
+
+| # | Actor | Precondition | Action | Expected | Invariant |
+|---|---|---|---|---|---|
+| 1 | cashier@A | signed in | open Finance | Outstanding fees, Payments received and Record payment reachable; the Finance hub is not | hub is whole-School |
+| 2 | cashier@A | fixtures | Outstanding fees | S1, S3 (old A), S4 lines only; never S2, S5 or S3's B line | stored Charge Campus, SQL |
+| 3 | cashier@A | fixtures | open each Charge by URL | A Charges open; B, NULL and another School's Charge are "not found" | out of scope = 404 |
+| 4 | cashier@A | fixtures | debtor search | S1, S3, S4 found (S4 a leaver); never S2 or S5; no Student profile link works | open in-scope debt only |
+| 5 | cashier@A | S4 A debt | record payment for S4 | succeeds; normal School receipt `RCPT/...`; appears once in A's Payments received | leaver collectable |
+| 6 | cashier@A / @B | S3 old A + new B | each records for S3 | A collects the old A Charge only; B the new B Charge only | no reattribution after transfer |
+| 7 | cashier@A+B | S3 | one payment over both S3 Charges | refused, one generic message, nothing recorded; A-only and B-only payments succeed | one Campus per payment |
+| 8 | cashier@A | S5 | record against the NULL Charge | refused generically | NULL = whole-School |
+| 9 | cashier@A, @B, @A+B | mixed Payment exists | open it, its receipt, collections | not found / absent for all three; whole-School cashier sees it | atomic Payment visibility |
+| 10 | cashier@A | mixed Payment exists | open S3's old A Charge | true balance; mixed Payment shown only as an amount | balance vs privacy |
+| 11 | cashier@A | another receipt id | open `/payments/{id}/receipt` for B / mixed / another School | not found | no receipt probing |
+| 12 | cashier@C | Campus C inactive | any Finance page or payment | 403; reactivate C: works again; no record changed | inactive Campus confers nothing |
+| 13 | cashier@A | fees module disabled | any Finance page | 403; re-enable: works again | entitlement intersects |
+| 14 | cashier@A+B | records an A payment | revoke the A grant, resubmit the same form (replay) | generic refusal, stored result not returned; revoke B too: 403 | replay re-authorized |
+| 15 | another user | cashier's payment key | resubmit with another user / changed content | refused (idempotency mismatch) | replay bound to user + content |
+| 16 | cashier@A | own A payment | open correction / refund / reversal URLs | 403 | corrections whole-School |
+| 17 | cashier@A | — | manual Charge, fee run, late-fee run, concession, fee set-up, accounts, periods, ledger URLs | 403 | protected authority |
+| 18 | cashier@A | — | full Student fee statement | 403 | statement whole-School |
+| 19 | school_admin | Staff accounts | grant accountant (or school_admin) for one Campus | refused (`role_not_campus_scopable`); a raw database insert is refused too | DB backstop |
+| 20 | school_admin | Staff accounts | grant cashier for A, then A+B, revoke A, revoke all | access follows each grant immediately | grants decide |
+| 21 | principal@A | — | any Finance URL | 403 | principal holds no Finance |
+| 22 | cashier@A | another School | any Finance id of School 2 | not found | tenancy |
+
+**Audit and observability.** After case 5, one `payment.recorded_manually`
+event with `scope=campus` and `campusId` = A and no personal data; the
+receipt and outbox behave as before; Payments received shows it at once.
+After every refused payment (7, 8, 11, 14): no Payment, allocation, receipt
+or success audit.
+
+**Not UAT defects (deliberate v1 boundaries):** no payment-recording API;
+no Campus fee statement; corrections, refunds, reversals, Charges, runs,
+concessions, configuration, accounts, periods and ledger whole-School;
+accountant never Campus-scoped; receipt numbers School-wide (gaps per Campus
+are expected).

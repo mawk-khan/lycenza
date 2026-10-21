@@ -246,3 +246,32 @@ School setting, a role, a navigation toggle or a commercial plan.
   sensitive records, documents, notes, qualifications, pay, leave, staff
   attendance, HR set-up, imports, archiving, rehiring and sign-in account
   links.
+- **ORG.7F-1 to ORG.7F-3 (ADR 0076 §45–§47)** gave Campus scope to Student
+  records:
+  - a Campus-only reader finds the Students currently placed on their
+    Campus, and sees only the current placement;
+  - a Campus-only administrator can correct a Student's name, and onboard a
+    new Student straight onto their Campus;
+  - moving a Student to another Campus is one named transfer that needs
+    both Campuses.
+
+  Still whole-School: the full Student profile and history, Guardians,
+  rollover, Data Health and every other Student or enrollment change.
+- **ORG.7G-1A to ORG.7G-3 (ADR 0076 §49–§52)** gave Campus scope to fee
+  collection, and the Finance Campus scope is now frozen for v1:
+  - every Charge keeps the Campus it was charged on, for ever (a later
+    move, leaving or a closed Campus never changes it); a Charge with no
+    Campus is whole-School only;
+  - a Campus-only cashier sees that Campus's Charges, outstanding fees,
+    payments, receipts and day's collections, finds Students who owe that
+    Campus money (leavers and Students who moved included), and records
+    payments for that Campus's Charges only, one Campus per payment;
+  - the accountant and the School administrator are never Campus-scoped,
+    and the database refuses such a grant; the principal has no Finance
+    access.
+
+  Still whole-School: the full fee statement, payment corrections, refunds
+  and reversals, Charges, fee and late-fee runs, concessions, fee set-up,
+  accounts, periods, the ledger and the Finance hub. The legal reviews of
+  receipts, late fees, RTE and Library fines (E30, E31, E32, E34) are
+  unchanged and still block production use.

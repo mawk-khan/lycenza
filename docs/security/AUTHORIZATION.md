@@ -34,7 +34,9 @@ This table is a design reference, not a list of implemented roles.
 - **no grant is Campus-scoped.** Every School grant covers the whole
   School. "Campus" in the "Typical scope" column below is design intent.
   ADR 0076 §11 contracts Campus-scoped assignments for ORG.7 (NULL = whole
-  School), and they are not built;
+  School), and they are not built *(superseded since ORG.7A: Campus-scoped
+  grants are built and adopted domain by domain — see "Campus-scoped role
+  assignments" below; ORG.7G-3 correction, 2026-10-21)*;
 - the product's "Platform Admin" is `platform_super_admin` (root). A
   Platform Manager is contracted by ADR 0076 §7 and not built;
 - rows with no matching catalogue role (e.g. Academic Coordinator,
@@ -864,6 +866,27 @@ whole-School supersedes. A selected or current Campus
   - **Roles:** `principal@Campus` gains the Directory and core edits;
     `hr_officer` is Campus-scopable with exactly the four keys;
     `school_admin` stays whole-School.
+- **SIS (ORG.7F-1–7F-3, §45–§47):** `students.view` and `enrollments.view`
+  through `StudentAccess` (a Student whose CURRENT operational Campus is in
+  scope); two narrow writes (name edits, atomic Campus onboarding) and the
+  named dual-scope Campus transfer. Everything else is whole-School.
+- **Finance (ORG.7G-1A–7G-3, §49–§52) — v1 frozen:**
+  - Adopted: `finance.charges.view`, `finance.payments.view` (reads,
+    `FinanceCampusAccess`) and `finance.payments.record` (payment entry
+    only, `FinancePaymentAccess`). No other `finance.*` key.
+  - A Charge is read by its STORED, immutable Campus; NULL is whole-School
+    only. A Payment, receipt or collections row is Campus-visible only when
+    every Charge it touches has ONE non-NULL Campus in scope.
+  - A Campus payment needs every allocated Charge on one non-NULL Campus,
+    in scope and active, decided under Charge locks; replay re-checks the
+    current scope. The Student's current Campus never decides.
+  - Persona: `cashier` only. A role holding any `CAMPUS_INCOMPATIBLE` key
+    (`accountant`, `school_admin`) is never Campus-scoped, enforced in the
+    application and the database. `principal` holds no `finance.*` key.
+  - Whole-School by design: the fee statement, corrections (reallocation,
+    reversal, refund), Charge management, runs, concessions, configuration,
+    accounts, periods, ledger, the Finance hub and the (non-existent)
+    payment API.
 - **Refusals look the same.** A Campus-scoped actor's refusals do not
   differ between an in-scope and an out-of-scope conflict (Visitor
   check-in: one generic refusal; the School-wide one-active-Visit rule

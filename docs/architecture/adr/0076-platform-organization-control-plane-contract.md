@@ -6987,7 +6987,7 @@ capability, no new table or column, no `payments.campus_id` (G2-D3).
   the test seed had none.
 - **Rollback:** `down()` drops the new trigger and function and restores the
   previous scope function body exactly. Proven by the rollback-proof
-  (schema dump IDENTICAL after rollback and re-apply, 43 lines removed,
+  (schema dump IDENTICAL after rollback and re-apply, 50 lines removed after the review fixes (43 in the first proof); *(ORG.7G-3 correction, 2026-10-21)*,
   `platform:verify-database` failed=0).
 - **Proven** (`FinanceRoleCampusScopeGuardTest`, raw INSERTs below every
   application path): `accountant@Campus` refused; `school_admin@Campus`
@@ -7171,3 +7171,233 @@ scope; statement Campus adoption.
 - **Static and frontend gates:** Pint, Larastan, vue-tsc, ESLint, Prettier
   and the build pass.
 - **Full regression:** one exact-SHA full CI on the candidate.
+
+## 52. ORG.7G-3 — Finance Campus closure and UAT readiness audit (read-only, 2026-10-21)
+
+Owner authorization: ORG.7G-3, closure / UAT-readiness / security audit.
+Baseline `origin/main` = `a2944052` (ORG.7G-2, §51). No production code,
+schema, capability, route or legal-gate change. Documentation only.
+
+    TECHNICAL (v1 scope)   COMPLETE
+    LOCAL / UAT            READY (plan: docs/modules/FINANCE.md "Finance Campus UAT readiness")
+    PRODUCTION             BLOCKED by E30/E31/E32/E34 and the general production gates (52.12)
+
+**52.1 Frozen v1 scope.** Campus-adopted Finance keys are exactly
+`finance.charges.view`, `finance.payments.view` (reads) and
+`finance.payments.record` (payment entry). The Campus persona is `cashier`.
+`accountant`, `school_admin` and any role holding a `CAMPUS_INCOMPATIBLE` key
+are whole-School; `principal` holds no `finance.*` key. Deliberate
+boundaries, not defects: API payment entry, the Student fee statement,
+payment correction, reallocation, reversal, refund, Payment cancellation
+(none exists), manual Charges, fee and late-fee runs, concessions, fee
+configuration, accounts, periods, the ledger and accountant@Campus. Any of
+them needs a new owner-approved decision.
+
+**52.2 Capability inventory (all 15 `finance.*` keys).**
+
+    CAMPUS_V1_READ                    finance.charges.view, finance.payments.view
+    CAMPUS_V1_WRITE                   finance.payments.record
+    WHOLE_SCHOOL_CONFIGURATION        finance.fee_structures.manage, .fee_structures.view,
+                                      .accounts.manage, .periods.manage
+    WHOLE_SCHOOL_HIGH_RISK_MUTATION   finance.charges.manage, .fee_assessments.run,
+                                      .fee_concessions.request/.approve/.view
+    WHOLE_SCHOOL_LEDGER               finance.ledger.post, .ledger.reverse, .ledger.view
+    LEGAL/REGULATORY_GATED            none by key; E30/E31/E32/E34 gate features (52.12)
+    UNUSED/OTHER                      none
+
+No discrepancy. `CampusScopeCatalogue::ADOPTED` holds exactly the three
+(pinned by `FinancePaymentCampusArchitectureTest`,
+`ChargeCampusAttributionArchitectureTest`, `CampusAdoptionImpactTest`); no
+Finance wildcard; every `CAMPUS_INCOMPATIBLE` entry is protected and none
+is adopted.
+
+**52.3 Role closure (seeded catalogue).**
+
+    ROLE          ADOPTED KEYS                 PROTECTED KEYS            CAMPUS-SCOPABLE  EXPECTED
+    cashier       charges.view, payments.view, none                      yes              yes
+                  payments.record
+    accountant    the three                    9 (ledger, accounts,      no               yes
+                                               charges.manage, runs, ...)
+    school_admin  the three                    12 (+ access admin)       no               yes
+    principal     none                         none                      n/a              yes
+    other 13      none                         none                      n/a              yes
+
+No unexpected Campus Finance persona.
+
+**52.4 Database role-guard closure.** `assert_membership_role_assignment_scope`
+refuses a Campus grant of a role holding a protected key, and
+`role_capabilities_campus_finance_guard` (INSERT OR UPDATE, fail closed
+without RLS bypass) refuses adding one to a Campus-granted role. Both test
+capabilities, never role names (`FinanceRoleCampusScopeGuardTest`, 4 tests;
+§51.1). Application (`StaffRoleCatalog::campusScopable()` over
+`CAMPUS_INCOMPATIBLE`) and database agree: the trigger source is pinned to
+the catalogue list.
+
+**52.5 Charge historical attribution.** One INSERT
+(`ChargeService::assess`, pinned by `only_charge_service_inserts_charges`);
+`ChargeCampusAttribution` has a private constructor and named sources only.
+
+    fee run          stored Enrollment (FeeAssessmentItemExecutor)
+    late fee         source Charge's stored Campus (LateFeeItemExecutor)
+    Canteen          Outlet Campus (CanteenOrderService)
+    Library fine     frozen Loan Campus (LibraryFineService via FeeSourceChargeService)
+    manual (web/API) the one placement in effect on the creation date, else NULL
+    Transport / Admissions / Hostel   intent only (fee_optional_selections) ->
+                     charged by a fee run -> fee-run Enrollment
+    demo seeder      as manual
+
+`ChargeCampusAttributionArchitectureTest` pins all 8 creator sites; none is
+uncovered; no runtime re-derivation remains (`campusAttribution()` retired).
+**Immutability scenarios** (`ChargeCampusAttributionTest`): transfer A -> B,
+Enrollment cancellation, later same-year Enrollment, leaver and Campus
+inactivation are tested directly. An active-year change has no direct test
+and needs none: `fees_reject_recognized_charge_mutation` refuses any change
+of `campus_id` (and `academic_year_id`), no code updates them, and a manual
+Charge reads placements of its own year at creation only.
+
+**52.6 NULL Charge contract.** NULL = whole-School only, everywhere:
+`CampusScope::covers` (NULL never covered) and `::restrict` (`whereIn`);
+`ChargeReadService`, `OutstandingFeesReadService` (`collectionFacts`, SQL),
+`FinanceCampusAccess` (`restrictCharges`, `chargePayments`, `canCollect`),
+`PaymentCampusVisibility` (`coalesce(... , false)` makes any NULL-touching
+Payment invisible), `FinancePaymentAccess` (any NULL refuses) and
+`uncancelledChargesForStudent($campusIds)`. `ChargeCampusFilter::unattributed()`
+is a narrowing filter, never authority. Test:
+`an_unattributable_charge_is_whole_school_only_and_never_matches_a_campus`.
+
+**52.7 Read closure.** Charges: stored Campus in scope, else 404 (other
+Campus, NULL, other School); the Student's current location is irrelevant.
+Outstanding fees: Campus authorization first (intersection of both read
+scopes), request filters only narrow, the filter means Charge Campus.
+Payments, receipts, collections: visible only when the Payment has at least
+one allocation (an empty set fails the `HAVING`) and every touched Charge
+(allocations and correction lines) has ONE non-NULL Campus in scope;
+A+B and NULL-touching Payments are whole-School even for A+B; no partial
+projection; receipts follow the Payment (404 otherwise, no probing); one
+School-wide receipt series, gaps accepted, never chosen by the actor; a
+Payment appears once in its Campus's collections, whole-School totals stay
+complete. Balance vs privacy: a Charge's paid/outstanding stay true; a
+hidden Payment is an amount only (G1-D7). Debtor lookup: open in-scope debt
+(leavers, inactive and transferred Students included), `id`/`studentNumber`/
+`displayName` only, no current Campus, no Profile or Guardian data.
+
+**52.8 Write closure (§51).** Every allocated Charge of this School,
+locked FOR UPDATE in id order before the decision: non-NULL stored Campus,
+ONE Campus C, C active and in the current scope; normal allocation rules;
+one transaction (no partial Payment); no Payment Campus column; replay
+re-checks the current scope (generic refusal, 403 with no scope); four
+two-process races (no over-allocation, no deadlock, deactivation both
+orders).
+
+**52.9 Isolation.** A Campus cashier cannot reallocate (needs
+`finance.charges.manage`), reverse or refund (`finance.ledger.reverse`),
+create or cancel Charges, run assessments or late fees, grant concessions,
+or reach configuration, accounts, periods, the ledger or the Finance hub
+(declared whole-School hub) — including for a Payment they recorded
+(recording confers no ownership). Canteen, Library and Transport roles hold
+no `finance.*` key; their fee effects stay owner-approved bounded side
+effects. The cashier gains no Canteen, Library, Transport, Student Profile
+or Guardian authority.
+
+**52.10 API, statement, entitlement, tenancy.** Finance read API: Campus-
+aware where G1 adopted (`/charges`, `/payments`, receipts). Payment-record
+API: does not exist (OpenAPI documents recording as browser-only); no
+mobile or contract client depends on one; deferred, not broken. The full
+Student fee statement is whole-School by design (a Campus slice would
+misstate the Student's position); a Campus statement would be a separately
+designed, labelled partial statement. Module entitlements intersect Campus
+grants (`CapabilityResolver::campusCapabilities`), no per-Campus
+entitlement; an inactive Campus confers nothing and its status is re-read on
+every call. Tenancy: every query School-bound under the School's RLS
+context; another School's ids are refused generically or 404.
+
+**52.11 Database invariants.**
+
+    Charge Campus same-School          charges_campus_fk (campus_id, school_id), RESTRICT
+    Charge Campus immutable            fees_reject_recognized_charge_mutation (charges_immutability_trigger)
+    source rows agree with Charge      *_charge_campus_guard via fees_charge_campus_matches (4 tables)
+    protected role never Campus-granted   assert_membership_role_assignment_scope
+    protected key never added to a Campus role   role_capabilities_campus_finance_guard
+    Payment fully allocated            payments_fully_allocated_check (deferred CONSTRAINT TRIGGER)
+    Charge capacity (no over-allocation)  payments_lock_and_validate_charge_allocation + payments_effective_allocated()
+    receipt series School-wide         payment_receipt_counters (per School x financial year)
+    RLS forced                         TenantRls on every tenant table; runtime role never BYPASSRLS
+Tests: `ChargeCampusIntegrityTest`, `FinanceRoleCampusScopeGuardTest`,
+`ChargeCampusConcurrencyTest`, `FinanceCampusPaymentConcurrencyTest`.
+
+**52.12 Legal-gate matrix** (ADR 0058 §6 register; ADR 0074 classification).
+
+    gate  subject                          status                 gates                         dev    UAT        production
+    E30   receipt form / GST               LEGAL_REVIEW_REQUIRED  every issued receipt          built  no block   blocks; no code refusal
+    E31   late fees / in-year fee changes  LEGAL_REVIEW_REQUIRED  late-fee rules and runs       built  no block   blocks; no code refusal
+    E32   RTE / free-seat obligations      LEGAL_REVIEW_REQUIRED  assessment, concessions (RTE) n/a    no block   blocks; no code refusal
+    E34   Library fine regulation          LEGAL_REVIEW_REQUIRED  overdue fines                 built  no block   blocks; no code refusal
+Approving authority: Legal + Owner (all four). Missing: a qualified answer
+for each (or an owner CONDITIONAL amendment backed by a code refusal,
+OD-PPR-14a). None is Campus-specific: Campus scope never enables a fee, rate
+or late fee (G0-D9). Other production prerequisites: E21 (retention
+ratification), E02/E15 (release qualification), E16 (time-bound
+exceptions), O1 (25 rows, not satisfied). Nothing here infers approval.
+
+**52.13 Security closure.**
+
+    FINDING                                SEV     PHASE      FIX                                   REGRESSION                         STATUS
+    F-1 Charge Campus re-derived on read   MEDIUM  7G-0       stored, frozen charges.campus_id      ChargeCampusAttributionTest et al  CLOSED (7G-1A)
+G1A, G1 and G2: no HIGH, no MEDIUM. Accepted LOW/INFO residuals (open by
+decision): reallocation same-Student in application code and not year-
+checked (whole-School only); fee/late-fee jobs do not re-check the
+dispatcher; a Payment may span Students/years/Campuses (handled by atomic
+visibility and the write refusal); backfill fails closed on noisy history;
+Outlet Campus not DB-frozen (the Canteen guard binds each Charge); no raw
+refusal test for the Library-fine guard (shared helper); receipt-number
+gaps; debtor lookup reflects settled state; `otherPaymentsAmount` (by
+design); scope resolved before the transaction (as whole-School);
+replay answers differ by cause; any active asset account may be the
+settlement account; the record-form search is not read-audited; a stale
+seeder comment on `finance.accounts.manage` (code comment, left for a code
+slice).
+
+**52.14 Architecture guards.** Charge attribution, single INSERT, no
+re-derivation (`ChargeCampusAttributionArchitectureTest`); Payment no-Campus
+and the write/replay guard (`FinancePaymentCampusArchitectureTest`); role
+eligibility and impact (`CampusAdoptionImpactTest`,
+`FinanceCampusRoleGrantTest`); adoption catalogue and controller entry
+(`CampusScopeAdoptionArchitectureTest`); C6 and whole-School declarations
+(route coverage guard). Gaps (LOW, no implementation in G3): the
+no-re-derivation scan does not include `Http/Controllers/App/Fees`; the
+NULL exclusion in `PaymentCampusVisibility` rests on one `coalesce` (tested,
+fragile if edited); no direct active-year-change test (structurally
+covered, 52.5).
+
+**52.15 Performance.** Outstanding fees: SQL on `charges(school_id,
+campus_id)`. Charges: indexed scope filter. Payments/collections: per-
+candidate index probes (3.2 ms / 25 rows). Debtors: one semi-join (12 ms /
+36 Students). Payment write: one locking statement per payment. Residual:
+the API Payment list is not date-bounded, so its cost grows with candidate
+Payments — POST-CLOSURE PERFORMANCE ITEM (no UAT-scale evidence of failure).
+
+**52.16 Dependencies.** Not Finance blockers: API Student onboarding,
+Admissions conversion, rollover, withdrawal/leaver, reactivation and
+historical Student Campus views, bulk transfer (Finance attribution is
+stored, so it no longer depends on them); LC-5–LC-10 (paused); reference-
+ERP parity (Branch filters, more reports, broader roles) belongs to ORG.9.
+
+**52.17 Documentation corrections (this audit).** §51.1 rollback count (50
+after the review fixes); `DOMAIN-MAP.md` Payments row ("no human Payment
+mutation route" superseded); `AUTHORIZATION.md` (stale "no grant is
+Campus-scoped" marked superseded; SIS and Finance Campus entries);
+`ORGANIZATION.md` (ORG.7F/7G status); `FINANCE.md` (UAT readiness plan);
+`MASTER-ROADMAP.md` (ORG row).
+
+**52.18 Next.** Finance is the last planned ORG.7 adoption wave (SIS
+last, §11.10, then Finance). Recommended, each needing owner authorization:
+the ORG.7 programme closure (a read-only, cross-domain Campus closure audit
+of §33–§52 and every recorded deferral), then ORG.8 approval-authority
+completion. Finance Campus UAT runs under ORG.10 (or earlier on owner
+request) from the FINANCE.md plan.
+
+**52.19 Validation.** Every *Architecture*/*Guard* test plus Fees,
+Payments, Finance, Campus authorization, the Finance role-grant and
+catalogue-snapshot tests: 1547 passed; 1 failure is environment-only (a
+real-MinIO Guardian purge test; DDEV has no real MinIO). Documentation guards: 22 passed.
+No full regression (documentation only); regression counter 0/5.
