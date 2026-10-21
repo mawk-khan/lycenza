@@ -6109,3 +6109,349 @@ or elective migration, Campus authority over rollover, withdrawal,
 reactivation or Student status, Guardian changes, Admissions conversion,
 Profile expansion, historical enrollment Campus access, bulk transfer, and
 Fees/Payments. ORG.7F-4 and Finance Campus work need owner authorization.
+
+## 48. ORG.7G-0 — Fees & Payments Campus attribution and authorization contract audit (read-only, 2026-10-21)
+
+Owner authorization: ORG.7G-0 (read-only audit; implementation not
+authorized). Baseline `origin/main` = `cbd7139d` (ORG.7F-3, §47). No
+production code, schema, capability, role, route or coverage entry changed.
+
+    financial Campus   != the Student's current Campus (owner decision, frozen)
+    Charge             School + Student + academic year; NO Campus, NO Enrollment
+    Payment            School only; reaches Students only through its allocations
+    attribution today  re-derived on read (campusAttribution), NOT historically stable
+    verdict            PASS WITH PREREQUISITES: a stored, immutable Charge Campus first
+
+**48.1 Schema truth (re-audited from the migrations).**
+- **`charges`:** `student_id`, `academic_year_id` (NOT NULL), `due_date`,
+  accounts, journal. No Campus and no Enrollment.
+  - `charges_immutability_trigger` freezes every column except the one-time
+    cancellation pair. DELETE is revoked. `school_id` is ON DELETE RESTRICT.
+  - The only INSERT is `ChargeService::assess()`.
+- **`fee_assessments`:** stores `student_enrollment_id` (NOT NULL, composite
+  FK), frozen by its guard trigger. It is the only stored historical
+  placement behind a Charge.
+- **`fee_assessment_run_items.campus_id`:** a nullable snapshot with no FK,
+  frozen.
+- **`fee_structures.campus_id`:** a nullable configuration dimension, frozen
+  once not draft. NULL = the School default.
+- **`payments`:** School only. No Student, year, Enrollment or Campus.
+  Append-only.
+  - `payments_source_shape_check`.
+  - The deferred `payments_fully_allocated_check` makes allocations equal the
+    amount at creation, so an unallocated or advance Payment cannot exist.
+- **`payment_allocations`:** append-only and frozen after the settlement
+  transaction. There is no unique `(payment, charge)` key, so one Payment
+  can settle many Charges.
+- **`payment_corrections` / `payment_correction_lines`:** append-only;
+  release/apply lines; `payments_effective_allocated()`.
+- **`payment_receipts`:** one per Payment; one School-wide financial-year
+  series.
+- **`fee_concessions` / `fee_adjustments`, `late_fee_*`:** Student + year
+  (or source Charge). No Campus.
+- **Ledger (`journal_*`, `ledger_accounts`, `financial_period*`):** no
+  Campus.
+- **Absent tables:** overrides, discounts (a category only), separate
+  refunds (a correction kind), credits, a balances table, cashier records.
+- **RLS:** every table is FORCE RLS.
+
+**48.2 Capabilities and roles (no change).**
+- **Keys:** 15 `finance.*` keys plus `portal.fees.view`. There is no
+  `fees.*` or `payments.*` namespace.
+  - Modules: Finance = `finance.ledger/accounts/periods`; Fees ("Fees &
+    Payments", depends on Finance) = `finance.fee_*`, `finance.charges.*`,
+    `finance.payments.*`.
+  - Every key is class `financial`, with no grant right and none legal-gated.
+- **Holders:**
+  - `school_admin` holds all 15.
+  - `accountant` holds 12: everything except `ledger.reverse`,
+    `periods.manage` and `fee_concessions.approve`.
+  - `cashier` holds `payments.view`, `payments.record` and `charges.view`.
+  - `principal` holds NONE.
+  - No Campus-scopable role holds any Finance key.
+- **Adoption:** nothing is adopted. `CampusAdoptionImpactTest` treats
+  `finance.` as HIGH_RISK (owner approval required) and forbids Finance
+  keys on the Library/Transport roles (FINANCIAL_AUTHORITY_PREFIXES).
+- **Scopability is derived** (`StaffRoleCatalog::campusScopable`): adopting
+  any key makes every holder without access administration
+  Campus-grantable. Adopting a Finance key would therefore make `cashier`
+  AND `accountant` Campus-grantable.
+  - A Campus grant confers only adopted keys. The ledger, configuration and
+    checker keys would not be conferred.
+- **Routes:**
+  - Web `app.finance.*` routes are C2 (controller Gate plus service
+    re-check); corrections are C3.
+  - API `/schools/{school}/…` routes are C1 (`capability:` middleware).
+  - There is no API for payment recording, corrections, Outstanding or
+    collections.
+  - No finance route is `idempotent`. Rule 91 keys (payment, correction,
+    concession) are server-issued and claimed on the row.
+
+**48.3 Charge creation paths (classification).**
+| Path | Year source | Campus context available at creation | Class |
+|---|---|---|---|
+| Fee assessment run (job) | structure year | the stored `fee_assessments` Enrollment | Whole-School finance mutation (`fee_assessments.run`) |
+| Manual charge (web/API) | user-chosen, any year | none consulted | Whole-School finance mutation (`charges.manage`) |
+| Late fee (job) | source Charge's year | the source Charge | Whole-School, legal-gated E31 |
+| Canteen fulfil | active year | Outlet Campus (nullable) | System/bounded side effect |
+| Library fine at check-in | active year | Loan Campus (frozen) | System/bounded side effect (E34) |
+| Transport / Hostel / Admissions | intent only (`fee_optional_selections`); a later fee run charges it | the Enrollment at run time | Bounded intent |
+
+Bounded side effects grant no Fees, Payments or ledger key (seeder,
+`OperationalFeeSourceArchitectureGuardTest`, `CampusAdoptionImpactTest`).
+This audit found no weakening.
+
+**48.4 Existing Campus attribution (inventory).**
+- **A, charge-year attribution:**
+  `StudentEnrollmentReadService::campusAttribution()`. The only caller is
+  the Outstanding Fees `campus_id` filter (E, a filter, never authority).
+  - Rule 1: one Campus among the year's non-cancelled placements → that
+    Campus.
+  - Rule 2: otherwise, the placement in effect on `assessedOn` (the
+    Charge's `created_at`, School-local).
+  - Otherwise null ("unavailable").
+- **B, current Campus:** `currentForMany` / `currentStudentIdsIn` (class
+  label and Grade/Section filter only). `StudentOperationalCampusResolver`
+  is unused by Finance.
+- **C, stored historical Campus:** run items, `fee_assessments`' Enrollment,
+  the Library loan Campus, the Canteen Outlet Campus. Only the last two act
+  as authority, and only in their own domains.
+- **D, allocation-derived:** none. Daily collections, receipts, statements,
+  the payments list, the portal, Analytics and Data Health have no Campus
+  logic.
+
+**48.5 Finding F-1 (prerequisite): today's Charge Campus is not historically
+stable.** `campusAttribution()` re-derives on every read, and its inputs
+still change after the Charge exists:
+- An ACTIVE placement can be cancelled later (`StudentEnrollmentService::cancel`,
+  whole-School `enrollments.manage`, held by `school_admin` and `principal`).
+  - After a transfer A→B, cancelling B leaves only A, so Rule 1 moves every
+    B-period Charge to A.
+  - Cancelling a Student's only placement turns that year's Charges into
+    "unavailable".
+- A later placement on another Campus in the same year can move an earlier
+  Charge from Rule 1 to Rule 2. If its `assessedOn` falls outside every
+  placement, it becomes null.
+- **Divergence from the stored truth:**
+  - A fee-run Charge is dated at EXECUTION, not by its stored Enrollment.
+  - A late fee uses its own date, not its source Charge's Campus.
+  - Canteen and Library Charges ignore the Outlet and Loan Campus.
+- **What already holds:** the placement freeze (§47), the immutable Charge,
+  and transfer's "end + insert". A transfer alone never moves an earlier
+  Charge whose `assessedOn` falls inside a placement.
+- **Tests:** `OutstandingFeesLeaverCampusTest` covers the mover split,
+  unplaced and leaver cases. It does not cover cancellation, the Rule 1 → 2
+  flip or the date divergences.
+
+Consequence: re-derivation is acceptable as a display filter (today's use)
+but NOT as authorization. Campus authority must never move with an
+Enrollment edit.
+
+**48.6 Proposed canonical contract (owner decisions G0-D1..G0-D9; not
+implemented).**
+- **G0-D1, Charge Campus = one stored, immutable attribution.** A nullable
+  Campus written once by `ChargeService::assess()` from a caller-supplied
+  attribution source, then frozen by `charges_immutability_trigger`. NULL
+  = whole-School only, never "all Campuses". Sources:
+  - fee run → the stored assessment Enrollment's Campus;
+  - late fee → the source Charge's attribution;
+  - Canteen → the Outlet Campus (NULL Outlet → the Rule 1/2 placement on
+    the fulfil date);
+  - Library fine → the Loan Campus;
+  - manual Charge → the Student's placement in the Charge's year by the
+    Rule 1/2 rule on the creation date, else NULL.
+  - **Backfill** of existing Charges uses the same rule, recorded once;
+    unresolved → NULL.
+  - The Students module supplies the placement answer through a
+    Students-owned reader (rule 4). Fees never reads `student_enrollments`
+    directly.
+  - **Rationale:** this is a historical-stability requirement (§48.5), not
+    convenience. The owner may choose a separate attribution table instead
+    of a column; either must be insert-only and frozen.
+- **G0-D2, Payment Campus (model B).** The Payment stays School-wide. Each
+  allocation and correction line takes its Charge's Campus.
+  - A Campus actor reaches a Payment, its receipt and its collections row
+    only when EVERY original and correction-line Charge is attributed
+    inside the actor's scope.
+  - A mixed-Campus or NULL-touching Payment is whole-School only. It never
+    appears partially or in two Campus views.
+  - No Payment Campus column is needed. Unallocated/advance Payments do not
+    exist (DB-enforced); if ever added, they are whole-School until
+    allocated.
+- **G0-D3, Campus collection writes (G2).** A Campus cashier may record a
+  Payment only when every allocated Charge is in scope, decided under the
+  existing Charge FOR UPDATE locks.
+  - A mixed Payment is refused generically.
+  - The Student's current Campus is irrelevant: leavers and moved Students
+    pay old debt by the Charge's Campus.
+  - The receipt follows the same all-in-scope rule.
+- **G0-D4, whole-School forever (first releases):**
+  - fee heads, structures, lines, instalments, optional selections,
+    receipt numbering, the concession account, settings;
+  - fee and late-fee runs and voids;
+  - manual Charge assess and cancel;
+  - concessions (request/approve/revoke);
+  - every payment correction (reallocation, reversal, refund);
+  - ledger, accounts, journals, periods.
+  - Note: reallocation is same-Student in application code only and is not
+    year-checked, so it can move money across Campuses.
+- **G0-D5, Finance debtor lookup.** A Fees-owned purpose lookup returning
+  `id`, `studentNumber` and `displayName` for Students with OPEN Charges
+  attributed in scope. It includes inactive Students and leavers, and never
+  uses `StudentPurposeLookup` or the Campus Directory.
+  - Never: DOB, Guardians, contacts, documents or the Profile.
+- **G0-D6, access layer.** One `FinanceCampusAccess` (Fees/Payments-owned):
+  SQL restriction of Charges, Outstanding facts and Payments (all-in-scope
+  `NOT EXISTS`); whole-School pass-through; multi-Campus union. Out of
+  scope = the unknown 404 for a Charge, Payment, receipt or statement
+  line. Write refusals are one generic code (the Visitor standard).
+- **G0-D7, Campus inactivation.** It denies NEW Campus-scoped collection on
+  that Campus (ActiveCampus under the Charge locks) but never hides or
+  reassigns history. Whole-School actors keep everything. Reactivation
+  restores Campus-scoped access to its open Charges.
+- **G0-D8, roles.** `principal` gains nothing (it holds no Finance key). On
+  adoption, `cashier` and `accountant` become Campus-grantable.
+  - Recommendation: allow `cashier`.
+  - Decide `accountant` explicitly: a Campus accountant would hold only
+    the adopted keys, which may surprise a reviewer.
+  - Owner approval is mandatory (HIGH_RISK `finance.`).
+- **G0-D9, legal and module order:** module entitlement → legal
+  availability (E30, E31, E32, E34; still documentation-only, with no code
+  switch) → capability → Campus scope. Campus scope never enables a fee,
+  rate or late fee.
+
+**48.7 Scenarios (contract under G0-D1/D2).**
+- **Transfer (A until 30 Sep, B from 1 Oct):**
+  - An August Charge stays A, and an October Charge is B.
+  - A Payment after the transfer against the August debt is A.
+  - A Payment for both Charges is whole-School only.
+  - A refund or reversal follows its line's Charge, and corrections are
+    whole-School.
+  - With stored attribution, cancelling B later changes nothing.
+- **Leaver:** no current Campus. Their debt keeps its stored Charge Campus
+  and stays in that Campus's Outstanding view.
+  - A Campus cashier finds them through the G0-D5 lookup and can collect.
+  - Today's filter already keeps leaver debt by charge year (pinned test).
+- **Unattributed:** a Charge with no defensible placement is NULL →
+  whole-School only. The dev data has none.
+
+**48.8 Reads, filters and performance.**
+- **Outstanding Fees:** gated by `charges.view` AND `payments.view`
+  (whole-School). The Campus filter is applied in PHP after
+  `collectionFacts()` streams every live Charge.
+  - A request `campus_id` (validated against the School's Campuses plus
+    `unavailable`) only narrows, and can never widen; Finance has no Campus
+    authority to widen.
+  - G1 must move the restriction into SQL against the stored attribution.
+- **Daily collections:** one row per Payment; no Campus; filterable only
+  under G0-D2.
+- **Receipts:** per Payment, with School-wide numbering. A receipt lists
+  every Student and allocation, which is why the all-in-scope rule is
+  needed. Provider references are not shown.
+- **EXPLAIN (dev data):** both a set-based Charge restriction and the
+  all-allocations-in-scope Payment restriction run as one bounded,
+  index-driven query (≈0.5 ms; nested-loop or hash semi/anti joins). The
+  only O(year) probe was the re-derived single-Campus check on
+  `student_enrollments(academic_year_id)`, which a stored attribution
+  removes. No index is recommended without G1 evidence.
+
+**48.9 Concurrency, async, callbacks, idempotency.**
+- **Locks:**
+  - Recording locks Charges FOR UPDATE in id order, after the School share
+    lock and key advisory lock; an allocation trigger re-locks.
+  - Corrections take the key advisory lock, then the Payment advisory lock,
+    then the Charges in id order.
+  - A stored, immutable attribution cannot move while a write holds those
+    locks, so a Campus check taken there is race-free. A transfer never
+    touches Charges.
+  - Re-derived attribution would race with an Enrollment cancellation
+    (another reason for G0-D1).
+- **Jobs:** `ExecuteFeeAssessmentRunJob` and `ExecuteLateFeeRunJob` are
+  `TenantScoped` + `ExecutesModuleWork`, user-authorized at dispatch, with
+  the actor used for audit only. They carry no "authorized" flag and must
+  stay whole-School.
+  - Outbox events have no consumer.
+  - The receipt backfill, retention prune and balance verify are operator
+    or system work.
+- **Provider callbacks:** a trusted system boundary with no production
+  caller (ADR 0057 deferred). The School is passed in; allocations are
+  explicit. Never Campus-user-authorized.
+- **Idempotency:** server-issued keys replay only for the same User and
+  identical content. A future Campus write must re-evaluate the Campus
+  predicate before replaying (rule 32; §37's fingerprint precedent).
+
+**48.10 Security and privacy review (no production fix).**
+No HIGH finding.
+- **MEDIUM (F-1):** re-derived attribution would let an Enrollment
+  cancellation re-home debt. It is harmless today (display filter) and a
+  blocker for Campus authority.
+- **LOW:**
+  - A Payment can span Students, years and Campuses (any whole-School
+    recording). This is a design fact, handled by G0-D2.
+  - Reallocation is cross-year and same-Student by application code only.
+  - The Outstanding filter loads every live Charge in PHP.
+  - Fee and late-fee jobs do not re-check the dispatching User (accepted;
+    whole-School, audited).
+- **INFO:**
+  - The seeder comment at `CapabilityAndRoleSeeder.php:472-476` says
+    `finance.accounts.manage` is not registered; it is (line 528).
+  - `DOMAIN-MAP.md:116` still says "no human Payment mutation route
+    exists".
+  - `PaymentReceiptBackfillTest` asserts an unordered outbox query in a
+    fixed order. It failed once in a shared batch and passed 3/3 alone.
+    Fix: compare as a set, in the next code slice.
+- **Confirmed isolation:**
+  - Guardian fee access stays relationship-scoped (`GuardianStudentScope`,
+    production-refused), with no Campus coupling.
+  - The SIS overview has no Finance panel.
+  - Bounded side effects grant no Fees authority.
+  - Legal gates are unchanged.
+
+**48.11 Data audit (DDEV, read-only).**
+- **Data with Charges:** 1 School, 39 Charges, all in the one active year
+  (36 Students). Every Charge resolves to exactly one Campus; none is
+  multi-Campus or unattributed.
+- **Charge origins:** all 39 are manual or seed Charges; there are no fee
+  runs or late fees.
+- **Payments:** 30, every one fully allocated to exactly one Charge (none
+  multi-Student, multi-year or multi-Campus). 26 manual (10 cash, 12 bank
+  transfer, 4 cheque) and 4 provider.
+- **Other records:** 30 receipts; 0 corrections, concessions, adjustments
+  or late fees; 0 leavers with debt.
+- **Limit:** the transfer, leaver and multi-Campus cases are therefore
+  proven from code and schema, not data.
+
+**48.12 Readiness and sequencing.**
+- **ORG.7G-1A, attribution foundation (PREREQUISITE, needs approval):**
+  - the stored immutable Charge Campus (G0-D1) with backfill and freeze;
+  - a Students-owned attribution reader for writers;
+  - the Outstanding restriction moved to SQL;
+  - tests for cancellation, the Rule 1 → 2 flip and the date divergences;
+  - no capability adoption.
+- **ORG.7G-1, Campus READ surfaces (after 1A):**
+  - `finance.charges.view` / `finance.payments.view` adopted through
+    `FinanceCampusAccess`;
+  - Outstanding, Charge history, statements, collections and receipts
+    under G0-D2;
+  - the debtor lookup;
+  - declared whole-School configuration, ledger and corrections;
+  - owner approval of HIGH_RISK, and the cashier/accountant decision.
+- **ORG.7G-2, Campus cashier WRITES (separate):** `finance.payments.record`
+  under G0-D3. It needs G1 plus a decision on whether the payment
+  idempotency replay re-checks scope.
+- **ORG.7G-3, corrections, concessions or manual Charges by Campus:** not
+  recommended, and only ever on explicit approval.
+- **Not dependencies:**
+  - Admissions conversion: Admission fees are charged by fee runs from the
+    stored Enrollment.
+  - The remaining SIS gaps: rollover, withdrawal, reactivation, history,
+    bulk transfer, API onboarding.
+  - LC-5..LC-10.
+
+**48.13 Validation.** Read-only.
+- **Tests:** Fees, Finance and Payments, Finance web pages, the Outstanding
+  Campus tests, `StudentOperationalCampusTest`, and every *Architecture* /
+  *Guard* test: 1589 passed. One real-MinIO test failed (environment-only).
+  One `PaymentReceiptBackfillTest` ordering flake passed 3/3 alone.
+- **Not run:** the full suite (docs-only). Regression counter unchanged at
+  0/5.
