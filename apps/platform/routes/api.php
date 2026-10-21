@@ -1274,36 +1274,40 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 ->middleware(['capability:finance.ledger.reverse', 'throttle:school-api-mutations'])
                 ->name('schools.journal-entries.reverse');
 
+            // ORG.7G-1 (ADR 0076 §50): Campus-aware (C6) reads -- by stored
+            // Charge Campus; a Payment/receipt only when every Charge it
+            // touches has the same stored Campus in scope.
             Route::get('/charges', [ChargeController::class, 'index'])
-                ->middleware('capability:finance.charges.view')
+                ->middleware('capability:finance.charges.view,campus')
                 ->name('schools.charges.index');
             Route::post('/charges', [ChargeController::class, 'store'])
                 ->middleware(['capability:finance.charges.manage', 'throttle:school-api-mutations'])
                 ->name('schools.charges.store');
             Route::get('/charges/{charge}', [ChargeController::class, 'show'])
-                ->middleware('capability:finance.charges.view')
+                ->middleware('capability:finance.charges.view,campus')
                 ->name('schools.charges.show');
             Route::post('/charges/{charge}/cancel', [ChargeController::class, 'cancel'])
                 ->middleware(['capability:finance.charges.manage', 'throttle:school-api-mutations'])
                 ->name('schools.charges.cancel');
 
             Route::get('/payments', [PaymentController::class, 'index'])
-                ->middleware('capability:finance.payments.view')
+                ->middleware('capability:finance.payments.view,campus')
                 ->name('schools.payments.index');
             Route::get('/payments/{payment}', [PaymentController::class, 'show'])
-                ->middleware('capability:finance.payments.view')
+                ->middleware('capability:finance.payments.view,campus')
                 ->name('schools.payments.show');
             // --- FEE.4 (ADR 0062 §17, §18): read-only receipt and Student
-            // fee statement. The receipt needs finance.payments.view; the
-            // statement needs finance.charges.view AND finance.payments.view
-            // (both middlewares, and again in the read services). No
+            // fee statement. The receipt needs finance.payments.view (Campus-
+            // aware, ORG.7G-1); the statement is a declared whole-School
+            // operation: finance.charges.view floor, and the statement service
+            // also requires WHOLE-SCHOOL finance.payments.view. No
             // receipt create/edit/delete/renumber/void/tax route exists; the
             // I2 backfill is an operator command.
             Route::get('/payments/{payment}/receipt', [PaymentReceiptController::class, 'receipt'])
-                ->middleware('capability:finance.payments.view')
+                ->middleware('capability:finance.payments.view,campus')
                 ->name('schools.payments.receipt');
             Route::get('/students/{student}/fee-statement', [PaymentReceiptController::class, 'statement'])
-                ->middleware(['capability:finance.charges.view', 'capability:finance.payments.view'])
+                ->middleware('capability:finance.charges.view')
                 ->name('schools.students.fee-statement');
 
             // --- FEE.1 (ADR 0062 §5-§8): ledger-account administration (K1),

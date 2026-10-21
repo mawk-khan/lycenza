@@ -9,6 +9,7 @@ use App\Domain\Fees\Infrastructure\FeeAssessmentRunItem;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -21,7 +22,7 @@ use Illuminate\Support\Collection;
  */
 class FeeAssessmentRunReadService
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope, AuthorizesCapability;
 
     public function __construct(private readonly TenantContext $context) {}
 
@@ -31,7 +32,7 @@ class FeeAssessmentRunReadService
      */
     public function listRuns(School $school, array $filters, User $actor): Collection
     {
-        $this->authorizeCapabilityFor($actor, 'finance.charges.view', $school);
+        $this->authorizeWholeSchoolScopeFor($actor, 'finance.charges.view', $school);
 
         return $this->context->withSchool($school, fn () => FeeAssessmentRun::query()
             ->where('school_id', $school->id)
@@ -45,7 +46,7 @@ class FeeAssessmentRunReadService
 
     public function getRun(School $school, string $runId, User $actor): FeeAssessmentRun
     {
-        $this->authorizeCapabilityFor($actor, 'finance.charges.view', $school);
+        $this->authorizeWholeSchoolScopeFor($actor, 'finance.charges.view', $school);
 
         $run = $this->context->withSchool($school, fn () => FeeAssessmentRun::query()->where('school_id', $school->id)->find($runId));
 
@@ -94,7 +95,7 @@ class FeeAssessmentRunReadService
      */
     public function overlapCharges(School $school, array $chargeIds, User $actor): array
     {
-        $this->authorizeCapabilityFor($actor, 'finance.charges.view', $school);
+        $this->authorizeWholeSchoolScopeFor($actor, 'finance.charges.view', $school);
 
         if ($chargeIds === []) {
             return [];

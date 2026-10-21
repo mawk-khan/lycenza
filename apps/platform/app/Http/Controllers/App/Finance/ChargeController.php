@@ -7,30 +7,19 @@ use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\Fees\Application\AssessChargeData;
 use App\Domain\Fees\Application\ChargeAdministrationService;
 use App\Domain\Fees\Application\ChargeCampusAttribution;
-use App\Domain\Fees\Application\ChargeDetail;
-use App\Domain\Fees\Application\ChargeQuery;
-use App\Domain\Fees\Application\ChargeReadService;
-use App\Domain\Fees\Application\ChargeSummary;
 use App\Domain\Fees\Application\Exceptions\AcademicYearNotFoundException;
 use App\Domain\Fees\Application\Exceptions\ChargeHasPaymentAllocationsException;
 use App\Domain\Fees\Application\Exceptions\ChargeNotFoundException;
 use App\Domain\Fees\Application\Exceptions\FeesException;
 use App\Domain\Fees\Application\Exceptions\InvalidChargeAccountException;
 use App\Domain\Fees\Application\Exceptions\StudentNotFoundException;
-use App\Domain\Fees\Application\FeeConcessionReadService;
-use App\Domain\Fees\Application\FeeConcessionService;
-use App\Domain\Fees\Http\FeeSetupPresenter;
-use App\Domain\Fees\Infrastructure\FeeAdjustment;
 use App\Domain\Finance\Application\Exceptions\FinanceException;
 use App\Domain\Finance\Application\Exceptions\LedgerAccountNotFoundException;
 use App\Domain\Finance\Application\LedgerAccountSummary;
-use App\Domain\Payments\Application\LateFeeReadService;
-use App\Domain\Payments\Application\PaymentApplicationReader;
 use App\Domain\Students\Application\StudentSearch;
 use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\AuthorizesCapability;
-use App\Support\Authorization\CapabilityResolver;
 use App\Support\Money\Exceptions\InvalidMoneyException;
 use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
@@ -66,6 +55,11 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * No edit/update route exists -- a recognized Charge's amount/Student/
  * AcademicYear/account mapping remain structurally immutable (0G.4);
  * the only post-assessment transition is `cancel()`.
+ *
+ * ORG.7G-1 (ADR 0076 §50): the charge list and detail moved to the
+ * Campus-aware ChargeHistoryController; this controller keeps the
+ * whole-School finance.charges.manage actions (create, Student search,
+ * assess, cancel).
  */
 class ChargeController extends Controller
 {
@@ -73,47 +67,6 @@ class ChargeController extends Controller
 
     /** One-shot session key: the charges an ad-hoc charge resembled. */
     public const SIMILAR_SESSION_KEY = 'finance.similar_charges';
-
-    public function index(Request $request, TenantContext $context, ChargeReadService $service, CapabilityResolver $capabilities): Response
-    {
-        $school = $context->requireSchool();
-        $this->authorizeCapability('finance.charges.view', $school);
-
-        $validated = $request->validate([
-            'student_id' => ['sometimes', 'uuid'],
-            'academic_year_id' => ['sometimes', 'uuid'],
-            'include_cancelled' => ['sometimes', 'boolean'],
-            'page' => ['sometimes', 'integer', 'min:1'],
-        ]);
-
-        $query = new ChargeQuery(
-            studentId: $validated['student_id'] ?? null,
-            academicYearId: $validated['academic_year_id'] ?? null,
-            includeCancelled: (bool) ($validated['include_cancelled'] ?? false),
-            page: (int) ($validated['page'] ?? 1),
-        );
-
-        $page = $service->listCharges($school, $query, $context->actor());
-        $students = $this->studentNamesFor($page->getCollection()->pluck('studentId')->all());
-
-        return Inertia::render('App/Finance/Charges/Index', [
-            'charges' => $page
-                ->through(fn (ChargeSummary $c) => $this->presentSummary($c, $students[$c->studentId] ?? null))
-                ->appends($request->only(['student_id', 'academic_year_id', 'include_cancelled'])),
-            'filters' => [
-                'student_id' => $validated['student_id'] ?? '',
-                'academic_year_id' => $validated['academic_year_id'] ?? '',
-                'include_cancelled' => (bool) ($validated['include_cancelled'] ?? false),
-            ],
-            'selectedStudentName' => isset($validated['student_id'])
-                ? $this->studentNamesFor([$validated['student_id']])[$validated['student_id']] ?? null
-                : null,
-            'academicYears' => AcademicYear::query()->orderByDesc('starts_on')->get(['id', 'name', 'code'])
-                ->map(fn (AcademicYear $y) => ['id' => $y->id, 'name' => $y->name, 'code' => $y->code])
-                ->all(),
-            'canManage' => $capabilities->canInSchool($context->actor(), 'finance.charges.manage', $school),
-        ]);
-    }
 
     public function create(Request $request, TenantContext $context, ChargeAdministrationService $service): Response
     {
@@ -231,60 +184,6 @@ class ChargeController extends Controller
         return redirect("/app/finance/charges/{$result->chargeId}");
     }
 
-    public function show(TenantContext $context, ChargeReadService $service, CapabilityResolver $capabilities, FeeConcessionReadService $concessions, LateFeeReadService $lateFees, PaymentApplicationReader $applications, string $charge): Response
-    {
-        $school = $context->requireSchool();
-        $this->authorizeCapability('finance.charges.view', $school);
-
-        try {
-            $detail = $service->getChargeDetail($school, $charge, $context->actor());
-        } catch (ChargeNotFoundException) {
-            throw new NotFoundHttpException;
-        }
-
-        $student = Student::query()->find($detail->studentId);
-        $academicYear = AcademicYear::query()->find($detail->academicYearId);
-
-        return Inertia::render('App/Finance/Charges/Show', [
-            'charge' => [
-                ...$this->presentDetail($detail),
-                'studentName' => $student ? $this->fullName($student) : null,
-                'studentNumber' => $student?->student_number,
-                'academicYearName' => $academicYear?->name,
-            ],
-            'canManage' => $capabilities->canInSchool($context->actor(), 'finance.charges.manage', $school),
-            // Phase 0O.11A: a link to record an offline payment for this
-            // Charge's Student; the recording route re-checks everything.
-            'canRecordPayment' => $capabilities->canInSchool($context->actor(), 'finance.payments.record', $school),
-            // FEE.3: the charge's posted concession adjustments (Highly
-            // Sensitive -- only with finance.fee_concessions.view, audited
-            // by the read service) and a link to request a concession.
-            'adjustments' => $capabilities->canInSchool($context->actor(), FeeConcessionReadService::VIEW, $school)
-                ? $concessions->listAdjustments($school, ['charge_id' => $detail->chargeId], $context->actor())
-                    ->map(fn (FeeAdjustment $a) => FeeSetupPresenter::adjustment($a))->values()->all()
-                : null,
-            'canRequestConcession' => $capabilities->canInSchool($context->actor(), FeeConcessionService::REQUEST, $school),
-            // FEE.5: late fees raised on this charge, or its source if it is one
-            // (a separate linked charge -- never an edit of this one).
-            'lateFees' => (function () use ($lateFees, $school, $detail, $context) {
-                $links = $lateFees->linksForCharge($school, $detail->chargeId, $context->actor());
-
-                return [
-                    'raised' => $links['lateFees']->map(fn ($a) => ['assessmentId' => $a->id, 'chargeId' => $a->charge_id, 'voided' => $a->voided_at !== null])->values()->all(),
-                    'sourceChargeId' => $links['sourceOf']?->source_charge_id,
-                ];
-            })(),
-            // FEE.4: a link to the Student's fee statement (charges + payments view).
-            'canViewStatement' => $canViewPayments = $capabilities->canInSchool($context->actor(), 'finance.payments.view', $school),
-            // UAT-C3: the payments standing on this charge now (after any
-            // corrections) -- the way to the payment page to correct one.
-            'payments' => $canViewPayments
-                ? collect($applications->netByCharge($school, [$detail->chargeId])[$detail->chargeId] ?? [])
-                    ->map(fn (string $amount, string $paymentId) => ['paymentId' => $paymentId, 'amount' => $amount])->values()->all()
-                : null,
-        ]);
-    }
-
     public function cancel(Request $request, TenantContext $context, ChargeAdministrationService $service, string $charge): RedirectResponse
     {
         $school = $context->requireSchool();
@@ -323,62 +222,5 @@ class ChargeController extends Controller
         } catch (InvalidMoneyException $e) {
             throw ValidationException::withMessages(['amount' => [$e->getMessage()]]);
         }
-    }
-
-    private function fullName(Student $student): string
-    {
-        return collect([$student->first_name, $student->middle_name, $student->last_name])->filter()->implode(' ');
-    }
-
-    /**
-     * @param  list<string>  $studentIds
-     * @return array<string, string>
-     */
-    private function studentNamesFor(array $studentIds): array
-    {
-        return Student::query()->whereIn('id', array_unique($studentIds))->get()
-            ->mapWithKeys(fn (Student $s) => [$s->id => $this->fullName($s)])
-            ->all();
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function presentSummary(ChargeSummary $charge, ?string $studentName): array
-    {
-        return [
-            'id' => $charge->chargeId,
-            'studentId' => $charge->studentId,
-            'studentName' => $studentName,
-            'academicYearId' => $charge->academicYearId,
-            'description' => $charge->description,
-            'amount' => $charge->amount,
-            'currency' => $charge->currency,
-            'dueDate' => $charge->dueDate?->toDateString(),
-            'cancelledAt' => $charge->cancelledAt?->toIso8601String(),
-            'createdAt' => $charge->createdAt->toIso8601String(),
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function presentDetail(ChargeDetail $charge): array
-    {
-        return [
-            'id' => $charge->chargeId,
-            'studentId' => $charge->studentId,
-            'academicYearId' => $charge->academicYearId,
-            'description' => $charge->description,
-            'amount' => $charge->amount,
-            'currency' => $charge->currency,
-            'dueDate' => $charge->dueDate?->toDateString(),
-            'receivableLedgerAccountId' => $charge->receivableLedgerAccountId,
-            'revenueLedgerAccountId' => $charge->revenueLedgerAccountId,
-            'journalEntryId' => $charge->journalEntryId,
-            'cancelledAt' => $charge->cancelledAt?->toIso8601String(),
-            'cancellationJournalEntryId' => $charge->cancellationJournalEntryId,
-            'createdAt' => $charge->createdAt->toIso8601String(),
-        ];
     }
 }

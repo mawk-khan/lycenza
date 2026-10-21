@@ -6,15 +6,15 @@ use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\Fees\Application\ChargeCampusFilter;
+use App\Domain\Payments\Application\Access\FinanceCampusAccess;
 use App\Domain\Payments\Application\Collections\OutstandingFeeRow;
 use App\Domain\Payments\Application\Collections\OutstandingFeesReadService;
 use App\Domain\Students\Application\StudentAccess;
 use App\Domain\Students\Application\StudentEnrollmentReadService;
-use App\Domain\Students\Application\StudentSearch;
-use App\Domain\Students\Infrastructure\Student;
+use App\Domain\Students\Application\StudentIdentityLookup;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -25,27 +25,33 @@ use Inertia\Response;
 /**
  * UAT-C3 (UAT-FIN-08): Finance -> Outstanding fees, the follow-up list of
  * Students who still owe money. Balances come only from Payments'
- * `OutstandingFeesReadService` (which authorizes `finance.charges.view` +
- * `finance.payments.view` itself). This controller only narrows the Student
- * set and names the rows, reading `Student` for display and search (the
- * FeeStatementController precedent) and class placement through Students'
- * read service -- class shown and filterable only with `enrollments.view`.
+ * `OutstandingFeesReadService`, read through FinanceCampusAccess.
+ *
+ * ORG.7G-1 (ADR 0076 §50): Campus-aware (C6). Authority is the actor's
+ * CampusScope for BOTH finance.charges.view and finance.payments.view
+ * (their intersection), applied in SQL to each Charge's STORED Campus --
+ * never the Student's current Campus, so a leaver's or a moved Student's
+ * old debt stays with the Campus it was charged on, and NULL-Campus
+ * (whole-School) Charges are never in a Campus view. Every request filter
+ * (Student, standing, year, class, Campus) only narrows it. Names come from
+ * Students' identity projection; class is shown and filterable only for a
+ * whole-School enrollments.view holder, and means "in this class NOW" (the
+ * current placement) -- it never re-attributes a Charge's Campus.
  * Staff only; no export, no headcount analytics.
  */
 class OutstandingFeesController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
     private const int PER_PAGE = 25;
 
     /** LC-4 (SB-03b), ORG.7G-1A: the Campus filter's value for whole-School (unattributed, NULL-Campus) charges. */
     public const string CAMPUS_UNAVAILABLE = 'unavailable';
 
-    public function index(Request $request, TenantContext $context, StudentAccess $students, OutstandingFeesReadService $outstanding, StudentEnrollmentReadService $placements): Response
+    public function index(Request $request, TenantContext $context, StudentAccess $students, FinanceCampusAccess $access, StudentIdentityLookup $identities, StudentEnrollmentReadService $placements): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('finance.charges.view', $school);
-        $this->authorizeCapability('finance.payments.view', $school);
+        $scope = $this->authorizeCampusScope('finance.charges.view', $school)->intersect($this->authorizeCampusScope('finance.payments.view', $school));
         // ORG.7F-1: a School-wide Finance list shows classes only to a whole-School enrollments.view holder.
         $canSeeClass = $students->holdsWholeSchool($context->actor(), 'enrollments.view', $school);
 
@@ -68,12 +74,7 @@ class OutstandingFeesController extends Controller
         $gradeId = $canSeeClass ? ($validated['grade_level_id'] ?? null) : null;
         $sectionId = $canSeeClass ? ($validated['section_id'] ?? null) : null;
 
-        $studentIds = null;
-        if ($search !== '') {
-            $studentIds = Student::query()
-                ->tap(fn ($q) => StudentSearch::anyField($q, $search))
-                ->pluck('id')->map(fn ($id) => (string) $id)->all();
-        }
+        $studentIds = $search === '' ? null : $identities->idsMatching($school, $search);
         // The Section filter's options are the active year's Sections.
         $activeYear = AcademicYear::query()->where('status', 'active')->first();
         // ORG.7D-2 (ADR 0076 §38): "in this class now" is the Students-owned
@@ -85,10 +86,8 @@ class OutstandingFeesController extends Controller
         }
 
         if ($standing !== null) {
-            $inStanding = Student::query()->where('status', $standing === 'leavers' ? 'inactive' : 'active')
-                ->when($studentIds !== null, fn ($q) => $q->whereIn('id', $studentIds))
-                ->pluck('id')->map(fn ($id) => (string) $id)->all();
-            $studentIds = $inStanding;
+            $inStanding = $identities->idsMatching($school, status: $standing === 'leavers' ? 'inactive' : 'active');
+            $studentIds = $studentIds === null ? $inStanding : array_values(array_intersect($studentIds, $inStanding));
         }
 
         // ORG.7G-1A (ADR 0076 §49): the Campus filter narrows by each charge's
@@ -101,20 +100,21 @@ class OutstandingFeesController extends Controller
             default => ChargeCampusFilter::campus($campusId),
         };
 
-        $list = $outstanding->list($school, $context->actor(), $status, $validated['academic_year_id'] ?? null, $studentIds, $chargeCampus);
+        $list = $access->outstandingFees($school, $context->actor(), $status, $validated['academic_year_id'] ?? null, $studentIds, $chargeCampus);
 
         $page = (int) ($validated['page'] ?? 1);
         $slice = array_slice($list->rows, ($page - 1) * self::PER_PAGE, self::PER_PAGE);
         $ids = array_map(fn (OutstandingFeeRow $r) => $r->studentId, $slice);
-        $students = Student::query()->whereIn('id', $ids)->get()->keyBy('id');
+        $names = $identities->labels($school, $ids);
+        $leavers = array_flip($ids === [] ? [] : $identities->idsMatching($school, status: 'inactive', within: $ids));
         $classes = $canSeeClass ? $placements->currentForMany($school, $ids) : collect();
 
         $paginator = (new LengthAwarePaginator(
             array_map(fn (OutstandingFeeRow $r) => [
                 'studentId' => $r->studentId,
-                'name' => collect([$students->get($r->studentId)?->first_name, $students->get($r->studentId)?->middle_name, $students->get($r->studentId)?->last_name])->filter()->implode(' '),
-                'studentNumber' => $students->get($r->studentId)?->student_number,
-                'leaver' => $students->get($r->studentId)?->status === 'inactive',
+                'name' => $names[$r->studentId]->displayName ?? '',
+                'studentNumber' => $names[$r->studentId]->studentNumber ?? null,
+                'leaver' => isset($leavers[$r->studentId]),
                 'class' => ($e = $classes->get($r->studentId)) === null ? null : "{$e->gradeLevel?->name} · {$e->section?->name}",
                 'outstanding' => $r->outstanding->amount(),
                 'overdue' => $r->overdue->amount(),
@@ -141,7 +141,9 @@ class OutstandingFeesController extends Controller
                 'standing' => $standing ?? '',
                 'campus_id' => $campusId ?? '',
             ],
-            'campuses' => Campus::query()->orderBy('name')->get(['id', 'school_id', 'name'])->map(fn (Campus $c) => ['id' => $c->id, 'name' => $c->name])->values()->all(),
+            // Only the Campuses the reader's scope covers are offered (a filter, never authority).
+            'campuses' => Campus::query()->tap(fn ($q) => $access->restrictCharges($q, $scope, 'id'))->orderBy('name')->get(['id', 'school_id', 'name'])->map(fn (Campus $c) => ['id' => $c->id, 'name' => $c->name])->values()->all(),
+            'scope' => $scope->isWholeSchool() ? 'school' : 'campus',
             'academicYears' => AcademicYear::query()->orderByDesc('starts_on')->get()->map(fn (AcademicYear $y) => ['id' => $y->id, 'name' => $y->name])->values()->all(),
             'canSeeClass' => $canSeeClass,
             'gradeLevels' => $canSeeClass ? GradeLevel::query()->orderBy('sequence')->get()->map(fn (GradeLevel $g) => ['id' => $g->id, 'name' => $g->name])->values()->all() : [],

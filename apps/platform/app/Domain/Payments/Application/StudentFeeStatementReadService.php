@@ -15,6 +15,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
 
@@ -40,7 +41,7 @@ use App\Support\Tenancy\TenantContext;
  */
 class StudentFeeStatementReadService
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope, AuthorizesCapability;
 
     public function __construct(
         private readonly ChargeService $charges,
@@ -52,8 +53,8 @@ class StudentFeeStatementReadService
 
     public function statementFor(School $school, string $studentId, ?string $academicYearId, User $actor): StudentFeeStatement
     {
-        $this->authorizeCapabilityFor($actor, 'finance.charges.view', $school);
-        $this->authorizeCapabilityFor($actor, 'finance.payments.view', $school);
+        $this->authorizeWholeSchoolScopeFor($actor, 'finance.charges.view', $school);
+        $this->authorizeWholeSchoolScopeFor($actor, 'finance.payments.view', $school);
 
         return $this->context->withSchool($school, function () use ($school, $studentId, $academicYearId, $actor) {
             $facts = $this->charges->statementLinesForStudent($school, $studentId, $academicYearId);

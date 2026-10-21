@@ -49,20 +49,22 @@ class CampusAdoptionImpactTest extends TestCase
      * atomic onboarding (every other operation is declared whole-School).
      */
     private const HOLDERS = [
+        'accountant' => ['finance.charges.view', 'finance.payments.view'],
         'admissions_officer' => ['admissions.manage', 'admissions.view'],
         'canteen_operator' => ['canteen.orders.manage', 'canteen.orders.view'],
+        'cashier' => ['finance.charges.view', 'finance.payments.view'],
         'front_office' => ['visitor.visits.manage', 'visitor.visits.view'],
         'hostel_warden' => ['hostel.residency.manage', 'hostel.residency.view'],
         'hr_officer' => ['hr.employees.assignments.manage', 'hr.employees.assignments.view', 'hr.employees.manage', 'hr.employees.view'],
         'librarian' => ['library.circulation.manage', 'library.circulation.view'],
         'principal' => ['admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'enrollments.manage', 'enrollments.view', 'examinations.papers.manage', 'examinations.papers.view', 'hostel.residency.manage', 'hostel.residency.view', 'hr.employees.manage', 'hr.employees.view', 'inventory.stock.manage', 'inventory.stock.view', 'library.circulation.manage', 'library.circulation.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'students.manage', 'students.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view', 'visitor.visits.manage', 'visitor.visits.view'],
-        'school_admin' => ['admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'enrollments.manage', 'enrollments.view', 'examinations.papers.manage', 'examinations.papers.view', 'hostel.residency.manage', 'hostel.residency.view', 'hr.employees.manage', 'hr.employees.view', 'inventory.stock.manage', 'inventory.stock.view', 'library.circulation.manage', 'library.circulation.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'students.manage', 'students.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view', 'visitor.visits.manage', 'visitor.visits.view'],
+        'school_admin' => ['admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'enrollments.manage', 'enrollments.view', 'examinations.papers.manage', 'examinations.papers.view', 'finance.charges.view', 'finance.payments.view', 'hostel.residency.manage', 'hostel.residency.view', 'hr.employees.manage', 'hr.employees.view', 'inventory.stock.manage', 'inventory.stock.view', 'library.circulation.manage', 'library.circulation.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'students.manage', 'students.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view', 'visitor.visits.manage', 'visitor.visits.view'],
         'stores_officer' => ['inventory.stock.manage', 'inventory.stock.view'],
         'transport_coordinator' => ['transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view'],
     ];
 
     /** The templates a whole-School administrator may grant for one Campus. */
-    private const CAMPUS_SCOPABLE = ['admissions_officer', 'canteen_operator', 'front_office', 'hostel_warden', 'hr_officer', 'librarian', 'principal', 'stores_officer', 'transport_coordinator'];
+    private const CAMPUS_SCOPABLE = ['admissions_officer', 'canteen_operator', 'cashier', 'front_office', 'hostel_warden', 'hr_officer', 'librarian', 'principal', 'stores_officer', 'transport_coordinator'];
 
     /**
      * ORG.7D-5 (ADR 0076 §41, owner decisions): an authorized circulation or
@@ -110,6 +112,21 @@ class CampusAdoptionImpactTest extends TestCase
         // nothing else (lifecycle, transfer, existing-Student enroll, rollover,
         // Guardians and the full identity edit are declared whole-School).
         'enrollments.manage', 'students.manage',
+        // ORG.7G-1 (ADR 0076 §50, owner decisions G1-D1..G1-D9): the Finance READ
+        // keys -- stored Charge Campus, atomic single-Campus Payment visibility,
+        // the debtor lookup; every Finance write, configuration, run, correction
+        // and the ledger stay whole-School (and their holders non-scopable).
+        'finance.charges.view', 'finance.payments.view',
+    ];
+
+    /**
+     * ORG.7G-1 (G1-D9..G1-D11): exactly what a Campus grant confers among
+     * Finance keys -- cashier@Campus gains the two read keys (never
+     * payments.record, which is not adopted); accountant and school_admin are
+     * never Campus-scopable; principal holds no Finance key.
+     */
+    private const FINANCE_CAMPUS_CONFERRED = [
+        'cashier' => ['finance.charges.view', 'finance.payments.view'],
     ];
 
     /**
@@ -266,6 +283,42 @@ class CampusAdoptionImpactTest extends TestCase
                     }
                 }
             }
+        }
+    }
+
+    #[Test]
+    public function a_campus_finance_grant_confers_only_the_read_keys_and_protected_finance_authority_is_never_scopable(): void
+    {
+        $roles = Role::query()->where('scope', Role::SCOPE_SCHOOL)->where('is_system', true)->whereNull('retired_at')->with('capabilities')->orderBy('key')->get();
+        $conferred = [];
+        foreach ($roles as $role) {
+            $keys = $role->capabilities->pluck('key')->sort()->values()->all();
+            $protected = array_values(array_filter($keys, fn (string $k) => CampusScopeCatalogue::isCampusIncompatible($k)));
+            if ($protected !== []) {
+                $this->assertFalse(StaffRoleCatalog::campusScopable($role), "{$role->key} holds whole-School Finance authority (".implode(', ', $protected).') and is never Campus-scopable (G1-D10).');
+            }
+            if (! StaffRoleCatalog::campusScopable($role)) {
+                continue;
+            }
+            $finance = array_values(array_filter(CampusScopeCatalogue::adoptedAmong($keys), fn (string $k) => str_starts_with($k, 'finance.')));
+            if ($finance !== []) {
+                $conferred[$role->key] = $finance;
+            }
+        }
+        $this->assertSame(self::FINANCE_CAMPUS_CONFERRED, $conferred, 'A Campus grant changed what it confers among Finance keys (ADR 0076 §50): report it, then update this snapshot.');
+
+        $byKey = $roles->keyBy('key');
+        $this->assertFalse(StaffRoleCatalog::campusScopable($byKey['accountant']), 'accountant stays whole-School (G1-D10).');
+        $this->assertFalse(StaffRoleCatalog::campusScopable($byKey['school_admin']), 'school_admin stays whole-School.');
+        $this->assertSame([], $byKey['principal']->capabilities->pluck('key')->filter(fn ($k) => str_starts_with($k, 'finance.'))->values()->all(), 'principal holds no Finance key (G1-D11).');
+        foreach (['admissions_officer', 'canteen_operator', 'hostel_warden', 'librarian', 'transport_coordinator', 'front_office', 'stores_officer', 'hr_officer'] as $bounded) {
+            $this->assertSame([], $byKey[$bounded]->capabilities->pluck('key')->filter(fn ($k) => str_starts_with($k, 'finance.'))->values()->all(), "{$bounded} keeps bounded side effects only, never Finance authority.");
+        }
+        $finance = array_values(array_filter(CampusScopeCatalogue::capabilities(), fn (string $k) => str_starts_with($k, 'finance.')));
+        sort($finance);
+        $this->assertSame(['finance.charges.view', 'finance.payments.view'], $finance, 'ORG.7G-1 adopts exactly the two Finance read keys.');
+        foreach ($finance as $key) {
+            $this->assertFalse(CampusScopeCatalogue::isCampusIncompatible($key), "{$key} is a read key, never protected authority.");
         }
     }
 }

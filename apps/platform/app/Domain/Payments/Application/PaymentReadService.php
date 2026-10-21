@@ -2,14 +2,16 @@
 
 namespace App\Domain\Payments\Application;
 
+use App\Domain\Payments\Application\Access\PaymentCampusVisibility;
 use App\Domain\Payments\Application\Exceptions\PaymentNotFoundException;
 use App\Domain\Payments\Infrastructure\Payment;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Str;
 
 /**
  * Phase 0G.5 -- the sole authorized read path for `payments`, mirroring
@@ -17,6 +19,11 @@ use Illuminate\Pagination\LengthAwarePaginator;
  * boundary/authorization/audit discipline. Every result is a typed DTO
  * (`PaymentSummary`/`PaymentDetail`), never the raw `Payment` Eloquent
  * model.
+ *
+ * ORG.7G-1 (ADR 0076 §50): the check RESOLVES the actor's CampusScope and
+ * every read applies PaymentCampusVisibility in SQL (G1-D4: a Payment is
+ * Campus-visible only when every Charge it touches has the same stored
+ * Campus, in scope; otherwise it is the same "not found" as an unknown one).
  *
  * Single capability, `finance.payments.view`, checked BEFORE any query
  * runs. `finance.payments.manage` is deliberately NOT introduced in
@@ -29,13 +36,14 @@ use Illuminate\Pagination\LengthAwarePaginator;
  */
 class PaymentReadService
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
     public const int MAX_PER_PAGE = 100;
 
     public function __construct(
         private readonly TenantContext $context,
         private readonly AuditRecorder $audit,
+        private readonly PaymentCampusVisibility $visibility,
     ) {}
 
     /**
@@ -43,11 +51,10 @@ class PaymentReadService
      */
     public function listPayments(School $school, PaymentQuery $query, User $actor): LengthAwarePaginator
     {
-        $this->authorizeCapabilityFor($actor, 'finance.payments.view', $school);
+        $scope = $this->authorizeCampusScopeFor($actor, 'finance.payments.view', $school);
 
-        return $this->context->withSchool($school, function () use ($school, $query, $actor) {
-            $builder = Payment::query()
-                ->where('school_id', $school->id)
+        return $this->context->withSchool($school, function () use ($school, $scope, $query, $actor) {
+            $builder = $this->visibility->restrict(Payment::query()->where('payments.school_id', $school->id), $school, $scope)
                 ->when(
                     $query->providerPaymentReference !== null,
                     fn ($q) => $q->where('provider_payment_reference', $query->providerPaymentReference)
@@ -76,10 +83,12 @@ class PaymentReadService
 
     public function getPaymentDetail(School $school, string $paymentId, User $actor): PaymentDetail
     {
-        $this->authorizeCapabilityFor($actor, 'finance.payments.view', $school);
+        $scope = $this->authorizeCampusScopeFor($actor, 'finance.payments.view', $school);
 
-        return $this->context->withSchool($school, function () use ($school, $paymentId, $actor) {
-            $payment = Payment::query()->where('school_id', $school->id)->with(['allocations', 'receipt'])->find($paymentId);
+        return $this->context->withSchool($school, function () use ($school, $scope, $paymentId, $actor) {
+            $payment = Str::isUuid($paymentId)
+                ? $this->visibility->restrict(Payment::query()->where('payments.school_id', $school->id), $school, $scope)->with(['allocations', 'receipt'])->find($paymentId)
+                : null;
 
             if ($payment === null) {
                 throw new PaymentNotFoundException($paymentId);

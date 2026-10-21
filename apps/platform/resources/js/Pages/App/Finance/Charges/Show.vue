@@ -15,9 +15,9 @@ interface ChargeDetail {
     amount: string;
     currency: string;
     dueDate: string | null;
-    receivableLedgerAccountId: string;
-    revenueLedgerAccountId: string;
-    journalEntryId: string;
+    receivableLedgerAccountId: string | null;
+    revenueLedgerAccountId: string | null;
+    journalEntryId: string | null;
     cancelledAt: string | null;
     cancellationJournalEntryId: string | null;
     createdAt: string;
@@ -45,6 +45,8 @@ interface Props {
         sourceChargeId: string | null;
     };
     payments: Array<{ paymentId: string; amount: string }> | null;
+    /** ORG.7G-1: the amount on this charge from payments a Campus reader cannot open. */
+    otherPaymentsAmount: string | null;
 }
 
 const props = defineProps<Props>();
@@ -125,7 +127,7 @@ function cancel(): void {
                 <dt class="text-slate-500">Assessed</dt>
                 <dd>{{ formatDateTime(charge.createdAt) }}</dd>
             </div>
-            <div>
+            <div v-if="charge.journalEntryId">
                 <dt class="text-slate-500">Recognition journal entry</dt>
                 <dd>
                     <a
@@ -196,7 +198,10 @@ function cancel(): void {
             </ul>
         </section>
 
-        <section v-if="payments && payments.length > 0" class="mt-8 border-t border-slate-200 pt-6">
+        <section
+            v-if="(payments && payments.length > 0) || otherPaymentsAmount"
+            class="mt-8 border-t border-slate-200 pt-6"
+        >
             <h2 class="text-sm font-medium text-slate-900">Payments on this charge</h2>
             <p class="mt-1 text-sm text-slate-500">
                 What each payment has on this charge now, after any corrections. Open a payment to
@@ -212,6 +217,18 @@ function cancel(): void {
                         >View payment</a
                     >
                     <span class="font-mono">{{ formatMoney(p.amount, charge.currency) }}</span>
+                </li>
+                <li
+                    v-if="otherPaymentsAmount"
+                    class="flex flex-wrap items-center justify-between gap-2 py-2"
+                >
+                    <span class="text-slate-600"
+                        >Payments recorded across campuses (whole-school finance can open
+                        them)</span
+                    >
+                    <span class="font-mono">{{
+                        formatMoney(otherPaymentsAmount, charge.currency)
+                    }}</span>
                 </li>
             </ul>
         </section>

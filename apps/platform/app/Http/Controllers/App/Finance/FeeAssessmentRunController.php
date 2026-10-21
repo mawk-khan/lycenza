@@ -58,7 +58,7 @@ class FeeAssessmentRunController extends Controller
     public function index(TenantContext $context, FeeAssessmentRunReadService $reads, FeeStructureReadService $structures, CapabilityResolver $capabilities): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('finance.charges.view', $school);
+        // ORG.7G-1: finance.charges.view is the route floor (a declared whole-School operation).
         $actor = $context->actor();
         $canRun = $capabilities->canInSchool($actor, 'finance.fee_assessments.run', $school);
         $canViewStructures = $capabilities->canInSchool($actor, 'finance.fee_structures.view', $school);
@@ -110,7 +110,7 @@ class FeeAssessmentRunController extends Controller
     public function show(Request $request, TenantContext $context, FeeAssessmentRunReadService $reads, CapabilityResolver $capabilities, FeeConcessionReadService $concessions, ChargeStateReader $chargeStates, string $run): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('finance.charges.view', $school);
+        // ORG.7G-1: finance.charges.view is the route floor (a declared whole-School operation).
         $actor = $context->actor();
 
         $validated = $request->validate([

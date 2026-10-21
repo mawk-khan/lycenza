@@ -107,6 +107,19 @@ class CampusScopeAdoptionArchitectureTest extends TestCase
             'controllers' => ['app/Http/Controllers/App/StudentDirectoryController.php', 'app/Http/Controllers/App/EnrollmentDirectoryController.php', 'app/Domain/Students/Http/Controllers/StudentDirectoryController.php', 'app/Domain/Students/Http/Controllers/EnrollmentDirectoryController.php', 'app/Http/Controllers/App/StudentTransferController.php', 'app/Domain/Students/Http/Controllers/EnrollmentTransferController.php'],
             'models' => ['Student::query(', 'StudentEnrollment::query(', 'StudentEnrollment::where(', 'Student::where('],
         ],
+        // ORG.7G-1 (ADR 0076 §50): the Campus-aware Finance reads resolve every
+        // Charge, Payment, receipt and debtor through FinanceCampusAccess (the
+        // Fees API charge reads through the scope-restricting ChargeReadService).
+        'finance' => [
+            'access' => 'app/Domain/Payments/Application/Access/FinanceCampusAccess.php',
+            'controllers' => [
+                'app/Http/Controllers/App/Finance/OutstandingFeesController.php', 'app/Http/Controllers/App/Finance/ChargeHistoryController.php',
+                'app/Http/Controllers/App/Finance/PaymentRecordController.php', 'app/Http/Controllers/App/Finance/FinanceDebtorController.php',
+                'app/Domain/Payments/Http/Controllers/PaymentController.php', 'app/Domain/Payments/Http/Controllers/PaymentReceiptController.php',
+                'app/Domain/Fees/Http/Controllers/ChargeController.php',
+            ],
+            'models' => ['Charge::query(', 'Payment::query(', 'PaymentReceipt::query(', 'PaymentAllocation::query(', 'Student::query(', 'Student::where('],
+        ],
     ];
 
     #[Test]

@@ -33,6 +33,20 @@ trait AuthorizesCampusScope
         return $scope;
     }
 
+    /**
+     * ORG.7G-1 (ADR 0076 §50): a declared WHOLE-SCHOOL-ONLY read of an adopted
+     * capability inside an Application service (e.g. a School-wide report or
+     * the full fee statement): only a whole-School holder passes; a
+     * Campus-only holder is refused exactly like someone without the key
+     * (403), so a Campus grant never reaches School-wide data.
+     */
+    protected function authorizeWholeSchoolScopeFor(User $actor, string $capability, School $school): void
+    {
+        if (! app(CampusScopeResolver::class)->campusScope($actor, $capability, $school)->isWholeSchool()) {
+            Gate::forUser($actor)->authorize('capability', [$capability, $school]);
+        }
+    }
+
     /** For an Application service called with an explicit actor (tests, jobs). */
     protected function authorizeCampusScopeFor(User $actor, string $capability, School $school): CampusScope
     {

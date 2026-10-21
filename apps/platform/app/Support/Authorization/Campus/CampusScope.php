@@ -56,6 +56,23 @@ final class CampusScope
         return $this->campusIds;
     }
 
+    /**
+     * ORG.7G-1 (ADR 0076 §50): the scope an action needing TWO adopted keys
+     * may use -- whole School only when both are; otherwise the Campuses both
+     * cover (an action never reaches a Campus where the actor lacks one key).
+     */
+    public function intersect(self $other): self
+    {
+        if ($this->wholeSchool) {
+            return $other;
+        }
+        if ($other->wholeSchool) {
+            return $this;
+        }
+
+        return self::campuses(array_values(array_intersect($this->campusIds, $other->campusIds)));
+    }
+
     /** Whether a record of $campusId (NULL = School-wide) is within scope. */
     public function covers(?string $campusId): bool
     {

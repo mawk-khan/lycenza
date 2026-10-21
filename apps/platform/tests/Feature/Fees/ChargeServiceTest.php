@@ -237,9 +237,11 @@ class ChargeServiceTest extends TestCase
         // twin of statementLinesForStudent() with the Guardian scope embedded.
         // UAT-C3: collectionFacts() is the read-only input of Payments'
         // outstanding-fees list. LC-4: studentIdsForCharges()/chargeIdsForStudents()
-        // are read-only lookups for Payments' collections list.
+        // are read-only lookups for Payments' collections list. ORG.7G-1:
+        // campusAttributionQuery()/liveChargesQuery() are read-only Fees-owned
+        // subqueries Payments composes for Campus visibility and debtors.
         $this->assertFalse(method_exists(ChargeService::class, 'update'));
-        $this->assertSame(['assess', 'cancel', 'lockChargeForAllocation', 'liveAdjustmentTotalsFor', 'statementLinesForStudent', 'statementLinesForStudentWithin', 'statementLinesForCharges', 'lateFeeCandidates', 'lateFeeSource', 'uncancelledChargesForStudent', 'ledgerFacts', 'studentIdsForCharges', 'chargeIdsForStudents', 'collectionFacts', 'adjustmentLedgerFacts'], array_values(array_filter(
+        $this->assertSame(['assess', 'cancel', 'lockChargeForAllocation', 'liveAdjustmentTotalsFor', 'statementLinesForStudent', 'statementLinesForStudentWithin', 'statementLinesForCharges', 'lateFeeCandidates', 'lateFeeSource', 'uncancelledChargesForStudent', 'ledgerFacts', 'studentIdsForCharges', 'chargeIdsForStudents', 'collectionFacts', 'campusAttributionQuery', 'liveChargesQuery', 'adjustmentLedgerFacts'], array_values(array_filter(
             array_map(fn ($m) => $m->name, (new \ReflectionClass(ChargeService::class))->getMethods(\ReflectionMethod::IS_PUBLIC)),
             fn ($name) => $name !== '__construct',
         )));

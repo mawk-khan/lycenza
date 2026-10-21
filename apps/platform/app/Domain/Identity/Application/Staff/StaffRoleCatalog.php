@@ -162,6 +162,12 @@ final class StaffRoleCatalog
      * Campus scope
      * (otherwise the scoped grant would confer nothing, which is refused like
      * an empty role). The database scope trigger enforces the first part.
+     *
+     * ORG.7G-1 (ADR 0076 §50, G1-D10): nor any whole-School Finance authority
+     * (CampusScopeCatalogue::CAMPUS_INCOMPATIBLE -- ledger, accounts, periods,
+     * fee configuration, runs, charge management, concessions), decided by
+     * the authority the template holds, never by its name: `cashier` becomes
+     * Campus-scopable with the Finance read keys, `accountant` never does.
      */
     public static function campusScopable(Role $role): bool
     {
@@ -170,7 +176,8 @@ final class StaffRoleCatalog
         }
         $keys = $role->capabilities->pluck('key')->all();
         foreach ($keys as $key) {
-            if (in_array($key, [self::MEMBERS, self::ROLES, ...CapabilityClasses::GRANT_RIGHT_KEYS], true)) {
+            if (in_array($key, [self::MEMBERS, self::ROLES, ...CapabilityClasses::GRANT_RIGHT_KEYS], true)
+                || CampusScopeCatalogue::isCampusIncompatible($key)) {
                 return false;
             }
         }

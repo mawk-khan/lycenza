@@ -7,9 +7,10 @@ use App\Domain\Fees\Infrastructure\Charge;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Str;
 
 /**
  * Phase 0G.4 -- the sole authorized read path for `charges`, mirroring
@@ -18,10 +19,13 @@ use Illuminate\Pagination\LengthAwarePaginator;
  * a typed DTO (`ChargeSummary`/`ChargeDetail`), never the raw `Charge`
  * Eloquent model.
  *
- * Single capability, `finance.charges.view`, gates both read
- * operations here, checked BEFORE any query runs -- a caller lacking
- * the capability learns nothing about $school's charges, not even a
- * count.
+ * Single capability, `finance.charges.view`, checked BEFORE any query
+ * runs. ORG.7G-1 (ADR 0076 §50): it is Campus-adopted, so the check
+ * RESOLVES the actor's CampusScope (403 when they hold it nowhere) and both
+ * reads restrict to it in SQL, before any row is returned: a Campus scope
+ * reaches only Charges whose STORED Campus it covers (never a NULL-Campus,
+ * whole-School Charge, never by the Student's current Campus), and an
+ * out-of-scope Charge is the same "not found" as an unknown one.
  *
  * `charges` inherits Finance's existing Highly Sensitive classification
  * (docs/modules/FINANCE.md "Data classification" -- reconfirmed, not
@@ -31,7 +35,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
  */
 class ChargeReadService
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
     public const int MAX_PER_PAGE = 100;
 
@@ -45,11 +49,10 @@ class ChargeReadService
      */
     public function listCharges(School $school, ChargeQuery $query, User $actor): LengthAwarePaginator
     {
-        $this->authorizeCapabilityFor($actor, 'finance.charges.view', $school);
+        $scope = $this->authorizeCampusScopeFor($actor, 'finance.charges.view', $school);
 
-        return $this->context->withSchool($school, function () use ($school, $query, $actor) {
-            $builder = Charge::query()
-                ->where('school_id', $school->id)
+        return $this->context->withSchool($school, function () use ($school, $scope, $query, $actor) {
+            $builder = $scope->restrict(Charge::query()->where('school_id', $school->id))
                 ->when($query->studentId !== null, fn ($q) => $q->where('student_id', $query->studentId))
                 ->when($query->academicYearId !== null, fn ($q) => $q->where('academic_year_id', $query->academicYearId))
                 ->when(! $query->includeCancelled, fn ($q) => $q->whereNull('cancelled_at'))
@@ -76,10 +79,10 @@ class ChargeReadService
 
     public function getChargeDetail(School $school, string $chargeId, User $actor): ChargeDetail
     {
-        $this->authorizeCapabilityFor($actor, 'finance.charges.view', $school);
+        $scope = $this->authorizeCampusScopeFor($actor, 'finance.charges.view', $school);
 
-        return $this->context->withSchool($school, function () use ($school, $chargeId, $actor) {
-            $charge = Charge::query()->where('school_id', $school->id)->find($chargeId);
+        return $this->context->withSchool($school, function () use ($school, $scope, $chargeId, $actor) {
+            $charge = Str::isUuid($chargeId) ? $scope->restrict(Charge::query()->where('school_id', $school->id))->find($chargeId) : null;
 
             if ($charge === null) {
                 throw new ChargeNotFoundException($chargeId);

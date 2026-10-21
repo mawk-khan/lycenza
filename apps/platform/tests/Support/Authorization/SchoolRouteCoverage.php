@@ -19,6 +19,7 @@ use App\Domain\Documents\Application\DocumentListingService;
 use App\Domain\Documents\Application\DocumentReadService;
 use App\Domain\Documents\Application\DocumentService;
 use App\Domain\Examinations\Application\ExaminationPaperAccess;
+use App\Domain\Fees\Application\ChargeReadService;
 use App\Domain\Hostel\Application\HostelResidencyAccess;
 use App\Domain\HR\Application\EmployeeDirectoryService;
 use App\Domain\HR\Application\EmployeeOnboardingService;
@@ -44,6 +45,7 @@ use App\Domain\Library\Application\LibraryCirculationAccess;
 use App\Domain\LMS\Application\LmsAdministrationAccess;
 use App\Domain\LMS\Application\TeacherAssignmentAccess;
 use App\Domain\LMS\Application\TeacherLearningContentAccess;
+use App\Domain\Payments\Application\Access\FinanceCampusAccess;
 use App\Domain\Payments\Application\PaymentCorrectionService;
 use App\Domain\Payroll\Application\PayrollAccountingAdministrationService;
 use App\Domain\Payroll\Application\PayrollCompensationReadService;
@@ -173,6 +175,12 @@ final class SchoolRouteCoverage
             Coverage::campus('api.v1.schools.enrollments.index', 'enrollments.view', StudentAccess::class, 'enrollmentDirectory'),
             Coverage::campus('api.v1.schools.enrollments.show', 'enrollments.view', StudentAccess::class, 'enrollment'),
             Coverage::campus('api.v1.schools.enrollments.transfer', 'enrollments.manage', StudentAccess::class, 'enrollment'),
+            // ORG.7G-1 (ADR 0076 §50): Campus-aware Finance API reads.
+            Coverage::campus('api.v1.schools.charges.index', 'finance.charges.view', ChargeReadService::class, 'listCharges'),
+            Coverage::campus('api.v1.schools.charges.show', 'finance.charges.view', ChargeReadService::class, 'getChargeDetail'),
+            Coverage::campus('api.v1.schools.payments.index', 'finance.payments.view', FinanceCampusAccess::class, 'payments'),
+            Coverage::campus('api.v1.schools.payments.show', 'finance.payments.view', FinanceCampusAccess::class, 'payment'),
+            Coverage::campus('api.v1.schools.payments.receipt', 'finance.payments.view', FinanceCampusAccess::class, 'receipt'),
             Coverage::campus('api.v1.schools.students.enrollments.current', 'enrollments.view', StudentAccess::class, 'student'),
 
             // Domain\HR\Http\Controllers\EmployeeDocumentController
@@ -764,9 +772,7 @@ final class SchoolRouteCoverage
             Coverage::gate('app.finance.fee-setup.selections.withdraw', 'finance.fee_structures.manage'),
 
             // Http\Controllers\App\Finance\FeeAssessmentRunController
-            Coverage::gate('app.finance.fee-runs.index', 'finance.charges.view'),
             Coverage::gate('app.finance.fee-runs.store', 'finance.fee_assessments.run'),
-            Coverage::gate('app.finance.fee-runs.show', 'finance.charges.view'),
             Coverage::gate('app.finance.fee-runs.preview', 'finance.fee_assessments.run'),
             Coverage::gate('app.finance.fee-runs.items.exclude', 'finance.fee_assessments.run'),
             Coverage::gate('app.finance.fee-runs.items.decide', 'finance.fee_assessments.run')->validatesFirst(),
@@ -780,9 +786,7 @@ final class SchoolRouteCoverage
             Coverage::gate('app.finance.late-fees.rules.store', 'finance.fee_structures.manage'),
             Coverage::gate('app.finance.late-fees.rules.update', 'finance.fee_structures.manage'),
             Coverage::gate('app.finance.late-fees.rules.status', 'finance.fee_structures.manage'),
-            Coverage::gate('app.finance.late-fee-runs.index', 'finance.charges.view'),
             Coverage::gate('app.finance.late-fee-runs.store', 'finance.fee_assessments.run'),
-            Coverage::gate('app.finance.late-fee-runs.show', 'finance.charges.view'),
             Coverage::gate('app.finance.late-fee-runs.preview', 'finance.fee_assessments.run'),
             Coverage::gate('app.finance.late-fee-runs.execute', 'finance.fee_assessments.run'),
             Coverage::gate('app.finance.late-fee-runs.resume', 'finance.fee_assessments.run'),
@@ -816,9 +820,10 @@ final class SchoolRouteCoverage
             // Http\Controllers\App\Finance\ChargeController
             Coverage::gate('app.finance.charges.create', 'finance.charges.manage'),
             Coverage::gate('app.finance.charges.students.search', 'finance.charges.manage'),
-            Coverage::gate('app.finance.charges.index', 'finance.charges.view'),
+            // ORG.7G-1 (ADR 0076 §50): Campus-aware Finance reads (stored Charge Campus).
+            Coverage::campus('app.finance.charges.index', 'finance.charges.view', FinanceCampusAccess::class, 'charges'),
             Coverage::gate('app.finance.charges.store', 'finance.charges.manage'),
-            Coverage::gate('app.finance.charges.show', 'finance.charges.view'),
+            Coverage::campus('app.finance.charges.show', 'finance.charges.view', FinanceCampusAccess::class, 'charge'),
             Coverage::gate('app.finance.charges.cancel', 'finance.charges.manage'),
 
             // Http\Controllers\App\Finance\ManualPaymentController
@@ -827,18 +832,17 @@ final class SchoolRouteCoverage
             Coverage::gate('app.finance.payments.record.store', 'finance.payments.record'),
 
             // Http\Controllers\App\Finance\PaymentController
-            Coverage::gate('app.finance.payments.index', 'finance.payments.view'),
-            Coverage::gate('app.finance.payments.show', 'finance.payments.view'),
-            Coverage::gate('app.finance.payments.receipt', 'finance.payments.view'),
+            // ORG.7G-1: Payment visibility -- one stored Campus across every touched Charge, in scope.
+            Coverage::campus('app.finance.payments.index', 'finance.payments.view', FinanceCampusAccess::class, 'collections'),
+            Coverage::campus('app.finance.payments.show', 'finance.payments.view', FinanceCampusAccess::class, 'payment'),
+            Coverage::campus('app.finance.payments.receipt', 'finance.payments.view', FinanceCampusAccess::class, 'receipt'),
             Coverage::service('app.finance.payments.corrections.store', PaymentCorrectionService::class, 'correct')->validatesFirst(),
 
             // Http\Controllers\App\Finance\OutstandingFeesController
-            Coverage::gate('app.finance.outstanding.index', ['finance.charges.view', 'finance.payments.view']),
+            Coverage::campus('app.finance.outstanding.index', 'finance.charges.view', FinanceCampusAccess::class, 'outstandingFees'),
+            Coverage::campus('app.finance.debtors.search', 'finance.charges.view', FinanceCampusAccess::class, 'debtors'),
 
             // Http\Controllers\App\Finance\FeeStatementController
-            Coverage::gate('app.finance.fee-statements.index', ['finance.charges.view', 'finance.payments.view']),
-            Coverage::gate('app.finance.fee-statements.students.search', ['finance.charges.view', 'finance.payments.view']),
-            Coverage::gate('app.finance.fee-statements.show', ['finance.charges.view', 'finance.payments.view']),
 
             // Http\Controllers\App\HR\HrController
             Coverage::gate('app.hr.index', ['hr.employees.view', 'hr.employees.manage', 'hr.departments.view', 'hr.positions.view', 'hr.categories.view']),

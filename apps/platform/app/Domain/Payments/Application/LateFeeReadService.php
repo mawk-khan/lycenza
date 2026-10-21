@@ -2,6 +2,7 @@
 
 namespace App\Domain\Payments\Application;
 
+use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Payments\Application\Exceptions\LateFeeRunNotFoundException;
 use App\Domain\Payments\Infrastructure\LateFeeAssessment;
 use App\Domain\Payments\Infrastructure\LateFeeRun;
@@ -9,6 +10,7 @@ use App\Domain\Payments\Infrastructure\LateFeeRunItem;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -22,14 +24,17 @@ use Illuminate\Support\Str;
  */
 class LateFeeReadService
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope, AuthorizesCapability;
 
-    public function __construct(private readonly TenantContext $context) {}
+    public function __construct(
+        private readonly TenantContext $context,
+        private readonly ChargeService $charges,
+    ) {}
 
     /** @return Collection<int, LateFeeRun> */
     public function listRuns(School $school, User $actor): Collection
     {
-        $this->authorizeCapabilityFor($actor, 'finance.charges.view', $school);
+        $this->authorizeWholeSchoolScopeFor($actor, 'finance.charges.view', $school);
 
         return $this->context->withSchool($school, fn () => LateFeeRun::query()
             ->where('school_id', $school->id)
@@ -41,7 +46,7 @@ class LateFeeReadService
 
     public function getRun(School $school, string $runId, User $actor): LateFeeRun
     {
-        $this->authorizeCapabilityFor($actor, 'finance.charges.view', $school);
+        $this->authorizeWholeSchoolScopeFor($actor, 'finance.charges.view', $school);
 
         $run = Str::isUuid($runId)
             ? $this->context->withSchool($school, fn () => LateFeeRun::query()->where('school_id', $school->id)->find($runId))
@@ -71,11 +76,23 @@ class LateFeeReadService
      * The late-fee links of one charge in both directions: late fees raised
      * ON it (it is the source) and, if it is itself a late fee, its source.
      *
+     * ORG.7G-1 (ADR 0076 §50): under the reader's finance.charges.view
+     * CampusScope -- a charge outside it has no links to show. A late fee and
+     * its source always share their stored Campus
+     * (`late_fee_assessments_charge_campus_guard`), so every linked charge is
+     * in that same scope.
+     *
      * @return array{lateFees: Collection<int, LateFeeAssessment>, sourceOf: LateFeeAssessment|null}
      */
     public function linksForCharge(School $school, string $chargeId, User $actor): array
     {
-        $this->authorizeCapabilityFor($actor, 'finance.charges.view', $school);
+        $scope = $this->authorizeCampusScopeFor($actor, 'finance.charges.view', $school);
+        if (! Str::isUuid($chargeId)) {
+            return ['lateFees' => new Collection, 'sourceOf' => null];
+        }
+        if (! $scope->isWholeSchool() && ! $scope->covers($this->context->withSchool($school, fn () => $this->charges->campusAttributionQuery($school)->where('charges.id', $chargeId)->value('charges.campus_id')))) {
+            return ['lateFees' => new Collection, 'sourceOf' => null];
+        }
 
         return $this->context->withSchool($school, fn () => [
             'lateFees' => LateFeeAssessment::query()->where('source_charge_id', $chargeId)->orderBy('created_at')->get(),

@@ -3,13 +3,14 @@
 namespace App\Domain\Payments\Application\Collections;
 
 use App\Domain\Fees\Application\ChargeService;
+use App\Domain\Payments\Application\Access\PaymentCampusVisibility;
 use App\Domain\Payments\Infrastructure\Payment;
 use App\Domain\Payments\Infrastructure\PaymentAllocation;
 use App\Domain\Payments\Infrastructure\PaymentCorrection;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
@@ -42,7 +43,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
  */
 class DailyCollectionsReadService
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
     public const string CAPABILITY = 'finance.payments.view';
 
@@ -60,13 +61,21 @@ class DailyCollectionsReadService
         private readonly ChargeService $charges,
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly PaymentCampusVisibility $visibility,
     ) {}
 
+    /**
+     * ORG.7G-1 (ADR 0076 §50, G1-D6): the reader's CampusScope for
+     * finance.payments.view is resolved here. A Campus scope lists (and totals)
+     * only Campus-visible Payments (PaymentCampusVisibility): a mixed-Campus
+     * or NULL-touching Payment is in no Campus view, so no Payment is ever
+     * counted under two Campuses. Request filters only narrow it.
+     */
     public function list(School $school, User $actor, DailyCollectionsQuery $query): DailyCollections
     {
-        $this->authorizeCapabilityFor($actor, self::CAPABILITY, $school);
+        $scope = $this->authorizeCampusScopeFor($actor, self::CAPABILITY, $school);
 
-        return $this->context->withSchool($school, function () use ($school, $actor, $query): DailyCollections {
+        return $this->context->withSchool($school, function () use ($school, $actor, $scope, $query): DailyCollections {
             $timezone = SchoolTimezone::resolve($school);
             $start = CarbonImmutable::createFromFormat('!Y-m-d', $query->from, $timezone)->utc();
             $end = CarbonImmutable::createFromFormat('!Y-m-d', $query->to, $timezone)->addDay()->utc();
@@ -74,8 +83,7 @@ class DailyCollectionsReadService
             $chargeIds = $query->studentIds === null ? null : $this->charges->chargeIdsForStudents($school, $query->studentIds);
 
             /** @var Builder<Payment> $base */
-            $base = Payment::query()
-                ->where('payments.school_id', $school->id)
+            $base = $this->visibility->restrict(Payment::query()->where('payments.school_id', $school->id), $school, $scope)
                 ->where('payments.created_at', '>=', $start->toDateTimeString())
                 ->where('payments.created_at', '<', $end->toDateTimeString())
                 ->when($query->receipt !== null, fn (Builder $q) => $q->where(fn (Builder $w) => $w

@@ -2,11 +2,12 @@
 
 namespace App\Domain\Payments\Http\Controllers;
 
-use App\Domain\Payments\Application\PaymentReceiptReadService;
+use App\Domain\Payments\Application\Access\FinanceCampusAccess;
 use App\Domain\Payments\Application\ReceiptDocument;
 use App\Domain\Payments\Application\StudentFeeStatementReadService;
 use App\Http\Controllers\Controller;
 use App\Models\School;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -24,9 +25,16 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  */
 class PaymentReceiptController extends Controller
 {
-    public function receipt(Request $request, School $school, string $payment, PaymentReceiptReadService $receipts): JsonResponse
+    use AuthorizesCampusScope;
+
+    /**
+     * ORG.7G-1 (ADR 0076 §50): Campus-aware (C6) -- a receipt is visible
+     * exactly when its Payment is (FinanceCampusAccess, G1-D5).
+     */
+    public function receipt(Request $request, School $school, string $payment, FinanceCampusAccess $access): JsonResponse
     {
-        $document = $receipts->forPayment($school, $payment, $request->user());
+        $scope = $this->authorizeCampusScope('finance.payments.view', $school);
+        $document = $access->receipt($school, $payment, $request->user());
 
         return response()->json(['data' => [
             'id' => $document->receiptId,

@@ -137,6 +137,11 @@ final class StaffNavigation
             new E('staff-attendance', 'people', 'Staff attendance', 'app.staff-attendance.register', all: ['hr.staff_attendance.view'], activeWhen: ['app.staff-attendance.*']),
 
             new E('finance', 'finance', 'Finance', 'app.finance.index', any: ['finance.ledger.view', 'finance.charges.view', 'finance.payments.view', 'finance.payments.record', 'finance.fee_structures.view', 'finance.fee_concessions.view']),
+            // ORG.7G-1 (ADR 0076 §50): the Campus-aware Finance reads -- the landing
+            // entries a Campus-scoped Finance reader (e.g. cashier@Campus) gets;
+            // the Finance hub itself is whole-School.
+            new E('outstanding-fees', 'finance', 'Outstanding fees', 'app.finance.outstanding.index', all: ['finance.charges.view', 'finance.payments.view']),
+            new E('payments-received', 'finance', 'Payments received', 'app.finance.payments.index', all: ['finance.payments.view'], activeWhen: ['app.finance.payments.index', 'app.finance.payments.show', 'app.finance.payments.receipt']),
             // Statutory payroll stays a Payroll sub-link behind
             // payroll.statutory.view, which no role holds (E45).
             new E('payroll', 'finance', 'Payroll', 'app.payroll.index', any: ['payroll.structures.view', 'payroll.compensation.view', 'payroll.runs.view', 'payroll.periods.manage', 'payroll.accounting.manage']),

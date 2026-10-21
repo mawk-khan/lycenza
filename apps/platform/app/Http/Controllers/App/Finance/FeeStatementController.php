@@ -9,6 +9,7 @@ use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,7 +29,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  */
 class FeeStatementController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope, AuthorizesCapability;
 
     public function index(TenantContext $context): Response
     {
@@ -88,8 +89,11 @@ class FeeStatementController extends Controller
     private function authorizeBoth(TenantContext $context): School
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('finance.charges.view', $school);
-        $this->authorizeCapability('finance.payments.view', $school);
+        // ORG.7G-1 (ADR 0076 §50): a declared whole-School operation --
+        // finance.charges.view is the route floor, and the statement also
+        // needs WHOLE-SCHOOL finance.payments.view (it mixes every Campus,
+        // NULL-Campus charges and mixed-Campus Payments).
+        $this->authorizeWholeSchoolScopeFor($context->actor(), 'finance.payments.view', $school);
 
         return $school;
     }

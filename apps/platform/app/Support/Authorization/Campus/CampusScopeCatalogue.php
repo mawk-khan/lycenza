@@ -111,6 +111,35 @@ final class CampusScopeCatalogue
             'inactiveCampus' => 'A grant on an inactive Campus confers nothing, and an inactive Campus places nobody (its Students are whole-School only until it is reactivated). History is never rewritten.',
             'sharedLookups' => 'None. The Campus Directory is a SIS surface under students.view (StudentAccess), never the other domains\' internal purpose-limited Student picker (ADR 0076 §38.5). The full Profile (date of birth, Guardians and their contacts, account link, history), Enrollment history, rollover, Guardian authority and every Student and Enrollment write except the name edit, atomic onboarding and the dual-scope Campus transfer (ORG.7F-3) stay whole-School; no Guardian data appears on a Campus surface (owner decision F1-D2). Onboarding offers only active Sections of the active year on an in-scope active Campus (read-only labels); the Student number is allocated by the server.',
         ],
+        // ORG.7G-1 (ADR 0076 §50): Finance READ surfaces only.
+        'finance' => [
+            'label' => 'Finance reads: outstanding fees, charge history, payments received, receipts and the debtor lookup',
+            'nullCampus' => 'A Charge\'s financial Campus is the one STORED on it when it was assessed (charges.campus_id, frozen; ORG.7G-1A) -- never the Student\'s current Campus. A NULL-Campus Charge is whole-School only, never "every Campus". A Payment has no Campus: it is Campus-visible only when it has allocations and EVERY Charge it touches (original allocations and correction lines) carries the SAME non-NULL Campus in scope; a mixed-Campus or NULL-touching Payment, and its receipt and collections row, are whole-School only -- even for an actor holding every Campus it touches (owner decision G1-D4).',
+            'inactiveCampus' => 'A grant on an inactive Campus confers nothing (no Charge, Payment, receipt or debtor read); whole-School holders keep every record, and Charges keep their stored Campus.',
+            'sharedLookups' => 'The Finance debtor lookup (FinanceCampusAccess::debtors(): id, studentNumber, displayName only) answers a Campus-scoped finance.charges.view holder for Students with an OPEN Charge attributed in scope -- leavers and transferred Students included; never the SIS purpose-limited Student picker, the Campus Student Directory or the current Campus, and never Student Profile authority. An in-scope Charge shows its correct paid and outstanding amounts even when a contributing Payment is hidden (G1-D7): that Payment\'s amount on the Charge is shown without its id, receipt or other allocations. Fee configuration, fee and late-fee runs, manual Charges, concessions, payment entry and corrections, the ledger and the full Student fee statement stay whole-School.',
+        ],
+    ];
+
+    /**
+     * ORG.7G-1 (ADR 0076 §50, owner decision G1-D10): whole-School Finance
+     * authority. A role template holding ANY of these keys (an exact key, or a
+     * family ending in '.') is never Campus-scopable
+     * (StaffRoleCatalog::campusScopable()), whatever else it holds -- so
+     * adopting a Finance read key makes `cashier` Campus-grantable while
+     * `accountant` (ledger, accounts, fee configuration, runs, charge
+     * management, concessions) stays whole-School. Decided by authority held,
+     * never by role name.
+     *
+     * @var list<string>
+     */
+    public const CAMPUS_INCOMPATIBLE = [
+        'finance.ledger.',
+        'finance.accounts.manage',
+        'finance.periods.manage',
+        'finance.fee_structures.manage',
+        'finance.fee_assessments.run',
+        'finance.charges.manage',
+        'finance.fee_concessions.',
     ];
 
     /**
@@ -161,6 +190,11 @@ final class CampusScopeCatalogue
         // (§47, F3-D11): the dual-scope Campus transfer of the current placement.
         'students.manage' => 'students',
         'enrollments.manage' => 'students',
+        // ORG.7G-1 (ADR 0076 §50, owner decisions G1-D1..G1-D9): Finance READS
+        // only -- every Finance write, configuration, run, correction and the
+        // ledger stay whole-School (and their holders non-scopable).
+        'finance.charges.view' => 'finance',
+        'finance.payments.view' => 'finance',
     ];
 
     /**
@@ -311,6 +345,21 @@ final class CampusScopeCatalogue
         'app.students.status' => ['capability' => 'students.manage', 'reason' => 'Student status is lifecycle (owner decision F2-D4: whole-School).'],
         'app.students.store' => ['capability' => 'students.manage', 'reason' => 'Standalone create takes a typed Student number and makes a Student with no placement; Campus actors onboard atomically instead (F2-D5, F2-D8).'],
         'app.students.update' => ['capability' => 'students.manage', 'reason' => 'The full identity edit includes the Student number and date of birth (owner decisions F2-D3, F2-D5); Campus actors edit names only.'],
+        // ORG.7G-1 (ADR 0076 §50): Finance reads that stay whole-School.
+        'app.finance.fee-runs.index' => ['capability' => 'finance.charges.view', 'reason' => 'Fee and late-fee runs are School-wide Finance operations (every Student of a structure or rule, across Campuses); a Campus-scoped reader sees each resulting Charge through the Campus-aware Charge pages.'],
+        'app.finance.fee-runs.show' => ['capability' => 'finance.charges.view', 'reason' => 'Fee and late-fee runs are School-wide Finance operations (every Student of a structure or rule, across Campuses); a Campus-scoped reader sees each resulting Charge through the Campus-aware Charge pages.'],
+        'app.finance.late-fee-runs.index' => ['capability' => 'finance.charges.view', 'reason' => 'Fee and late-fee runs are School-wide Finance operations (every Student of a structure or rule, across Campuses); a Campus-scoped reader sees each resulting Charge through the Campus-aware Charge pages.'],
+        'app.finance.late-fee-runs.show' => ['capability' => 'finance.charges.view', 'reason' => 'Fee and late-fee runs are School-wide Finance operations (every Student of a structure or rule, across Campuses); a Campus-scoped reader sees each resulting Charge through the Campus-aware Charge pages.'],
+        'api.v1.schools.fee-assessment-runs.index' => ['capability' => 'finance.charges.view', 'reason' => 'Fee and late-fee runs are School-wide Finance operations (every Student of a structure or rule, across Campuses); a Campus-scoped reader sees each resulting Charge through the Campus-aware Charge pages.'],
+        'api.v1.schools.fee-assessment-runs.show' => ['capability' => 'finance.charges.view', 'reason' => 'Fee and late-fee runs are School-wide Finance operations (every Student of a structure or rule, across Campuses); a Campus-scoped reader sees each resulting Charge through the Campus-aware Charge pages.'],
+        'api.v1.schools.fee-assessment-runs.items' => ['capability' => 'finance.charges.view', 'reason' => 'Fee and late-fee runs are School-wide Finance operations (every Student of a structure or rule, across Campuses); a Campus-scoped reader sees each resulting Charge through the Campus-aware Charge pages.'],
+        'api.v1.schools.late-fee-runs.index' => ['capability' => 'finance.charges.view', 'reason' => 'Fee and late-fee runs are School-wide Finance operations (every Student of a structure or rule, across Campuses); a Campus-scoped reader sees each resulting Charge through the Campus-aware Charge pages.'],
+        'api.v1.schools.late-fee-runs.show' => ['capability' => 'finance.charges.view', 'reason' => 'Fee and late-fee runs are School-wide Finance operations (every Student of a structure or rule, across Campuses); a Campus-scoped reader sees each resulting Charge through the Campus-aware Charge pages.'],
+        'api.v1.schools.late-fee-runs.items' => ['capability' => 'finance.charges.view', 'reason' => 'Fee and late-fee runs are School-wide Finance operations (every Student of a structure or rule, across Campuses); a Campus-scoped reader sees each resulting Charge through the Campus-aware Charge pages.'],
+        'app.finance.fee-statements.index' => ['capability' => 'finance.charges.view', 'reason' => 'The full Student fee statement mixes every Campus, whole-School (NULL-Campus) Charges and mixed-Campus Payments, so a Campus slice would misstate the Student\'s position (owner rule G1 §14: deferred); it also requires whole-School finance.payments.view.'],
+        'app.finance.fee-statements.students.search' => ['capability' => 'finance.charges.view', 'reason' => 'The full Student fee statement mixes every Campus, whole-School (NULL-Campus) Charges and mixed-Campus Payments, so a Campus slice would misstate the Student\'s position (owner rule G1 §14: deferred); it also requires whole-School finance.payments.view.'],
+        'app.finance.fee-statements.show' => ['capability' => 'finance.charges.view', 'reason' => 'The full Student fee statement mixes every Campus, whole-School (NULL-Campus) Charges and mixed-Campus Payments, so a Campus slice would misstate the Student\'s position (owner rule G1 §14: deferred); it also requires whole-School finance.payments.view.'],
+        'api.v1.schools.students.fee-statement' => ['capability' => 'finance.charges.view', 'reason' => 'The full Student fee statement mixes every Campus, whole-School (NULL-Campus) Charges and mixed-Campus Payments, so a Campus slice would misstate the Student\'s position (owner rule G1 §14: deferred); it also requires whole-School finance.payments.view.'],
     ];
 
     /**
@@ -336,12 +385,31 @@ final class CampusScopeCatalogue
             'hr.employees.view' => 'The HR hub groups whole-School HR configuration and import links; a Campus-scoped reader uses the Campus-aware Staff directory entry.',
             'hr.employees.manage' => 'The HR hub groups whole-School HR configuration and import links; a Campus-scoped reader uses the Campus-aware Staff directory entry.',
         ],
+        // ORG.7G-1 (ADR 0076 §50): the Finance hub links fee configuration, runs,
+        // concessions, the ledger, periods and statements; Campus-scoped Finance
+        // readers land on the Outstanding fees and Payments received entries.
+        'finance' => [
+            'finance.charges.view' => 'The Finance hub groups whole-School fee configuration, runs, concessions, statements and ledger links; a Campus-scoped reader uses the Campus-aware Outstanding fees entry.',
+            'finance.payments.view' => 'The Finance hub groups whole-School fee configuration, runs, concessions, statements and ledger links; a Campus-scoped reader uses the Campus-aware Payments received entry.',
+        ],
         'data-health' => [
             'timetable.schedule.view' => 'Data Health is a School-wide report: its "Sections without a schedule" check lists every Section of the School, so it opens only on whole-School authority.',
             // ORG.7F-1 (ADR 0076 §45).
             'enrollments.view' => 'Data Health is a School-wide report: its placement checks list Students and placements of every Campus and year, so it opens only on whole-School authority.',
         ],
     ];
+
+    /** ORG.7G-1: whether $capability is whole-School Finance authority (CAMPUS_INCOMPATIBLE). */
+    public static function isCampusIncompatible(string $capability): bool
+    {
+        foreach (self::CAMPUS_INCOMPATIBLE as $key) {
+            if ($capability === $key || (str_ends_with($key, '.') && str_starts_with($capability, $key))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     public static function isAdopted(string $capability): bool
     {

@@ -6692,3 +6692,261 @@ pins:
 - **Static and frontend gates:** Pint, Larastan, vue-tsc, ESLint (3
   existing v-html warnings), Prettier and the build all pass.
 - **Full regression:** one exact-SHA full CI on the published candidate.
+
+## 50. ORG.7G-1 — Finance Campus read surfaces: stored Charge scope, atomic Payment visibility, debtor lookup (as built, 2026-10-21)
+
+Owner authorization: ORG.7G-1, decisions G1-D1 to G1-D12. Baseline
+`origin/main` = `62742f0d` (ORG.7G-1A, §49). No migration, no new
+capability, no Finance write made Campus-aware.
+
+    adopted              finance.charges.view, finance.payments.view (domain `finance`)
+    Charge               Campus reader sees it only by STORED charges.campus_id in scope;
+                         NULL = whole-School only
+    Payment / receipt /  Campus-visible only when EVERY Charge it touches (allocations AND
+    collections row      correction lines) has exactly ONE non-NULL Campus, in scope --
+                         atomic; A+B or NULL-touching = whole-School only, even for A+B
+    Charge balance       always correct (G1-D7); a hidden Payment shows as an amount only
+    debtors              OPEN in-scope Charge (leavers included); id/studentNumber/displayName
+    Campus persona       cashier only; accountant/school_admin never; principal holds no finance.*
+
+**50.1 Role eligibility (G1-D9..G1-D11).**
+- **Rule:** `CampusScopeCatalogue::CAMPUS_INCOMPATIBLE` (exact keys, plus
+  families ending in '.'):
+  - `finance.ledger.`
+  - `finance.accounts.manage`
+  - `finance.periods.manage`
+  - `finance.fee_structures.manage`
+  - `finance.fee_assessments.run`
+  - `finance.charges.manage`
+  - `finance.fee_concessions.`
+- **Effect:** `StaffRoleCatalog::campusScopable()` refuses any template
+  holding one, decided by authority held, never by role name. Every Campus
+  grant passes through `StaffAccessService::grantRole()` (invitations carry
+  no Campus), which already checks `campusScopable()`.
+  - The Staff accounts page and the service both refuse `accountant` +
+    Campus (`role_not_campus_scopable`, 422).
+  - The whole-School grant is unchanged.
+- **Before/after across all 17 templates:**
+  - Newly Campus-scopable: `cashier` only.
+  - Newly prohibited: none. `accountant` and `school_admin` were never
+    scopable; the rule now holds them out on Finance grounds too.
+  - Unchanged: every other template.
+- **Existing grants:** no active Campus grant of a Finance-bearing role
+  existed (DDEV and the test seed).
+- **cashier@Campus confers:** only `finance.charges.view` and
+  `finance.payments.view`. Its `finance.payments.record` is not adopted, so
+  it confers nothing; payment entry stays whole-School.
+- **CampusAdoptionImpactTest pins:**
+  - HOLDERS: `accountant` and `cashier` added; `school_admin` gains the two
+    keys.
+  - CAMPUS_SCOPABLE: `cashier` added.
+  - FINANCE_CAMPUS_CONFERRED: `{cashier: [charges.view, payments.view]}`.
+  - Every protected-authority holder is non-scopable.
+  - `principal` and the bounded-side-effect roles (Canteen, Library,
+    Transport, Hostel, Admissions, front office, stores, HR) hold no
+    `finance.*` key.
+  - The two keys are recorded as owner-approved HIGH_RISK.
+
+**50.2 Access architecture.**
+- **The read services stay authorization boundaries.** Each resolves the
+  actor's CampusScope itself (`authorizeCampusScopeFor`, 403 when held
+  nowhere) and applies it in SQL before any row returns:
+  - `ChargeReadService` (stored Campus);
+  - `OutstandingFeesReadService` (the intersection of both keys' scopes, a
+    new `CampusScope::intersect()`);
+  - `PaymentReadService`, `PaymentReceiptReadService`,
+    `DailyCollectionsReadService` (`PaymentCampusVisibility`);
+  - `PaymentCorrectionReadService` (refuses an invisible Payment);
+  - `LateFeeReadService::linksForCharge` (nothing for an out-of-scope
+    Charge).
+- **`FinanceCampusAccess` (Payments)** is the one access layer controllers
+  read through. It composes those services, adds the debtor lookup and the
+  per-Charge Payment split, and exposes `restrictCharges` and
+  `restrictPayments`.
+- **Rule 4:** Fees owns the Charge SQL (`campusAttributionQuery()`,
+  `liveChargesQuery()`); Payments never names `charges`.
+- **Whole-School-only service reads** use a new
+  `authorizeWholeSchoolScopeFor()`: fee and late-fee run reads, the fee
+  statement.
+
+**50.3 Surfaces (C6).**
+- **Web:**
+  - `app.finance.outstanding.index`, `.charges.index`, `.charges.show` and
+    the new `.debtors.search` (`capability:finance.charges.view,campus`);
+  - `.payments.index` (collections), `.payments.show`, `.payments.receipt`
+    (`capability:finance.payments.view,campus`).
+  - The read actions moved to `ChargeHistoryController`,
+    `PaymentRecordController` and `FinanceDebtorController`. Charge create,
+    assess and cancel, payment recording and corrections stay on their
+    whole-School controllers.
+- **API:** `api.v1.schools.charges.index/.show` (through
+  `ChargeReadService`) and `.payments.index/.show/.receipt` (through
+  `FinanceCampusAccess`) carry `,campus` floors.
+- **Navigation:** a Campus reader lands on the new "Outstanding fees" and
+  "Payments received" entries. The Finance hub is a declared whole-School
+  hub (`WHOLE_SCHOOL_HUBS['finance']`) and returns 403 to a Campus-only
+  reader.
+- **Ledger internals** (accounts, journal entry ids) are shown only to a
+  whole-School reader. Correction actions stay whole-School capability
+  checks, so a Campus reader sees history but no actions.
+
+**50.4 Declared whole-School operations (exact routes):**
+- Fee runs: `app.finance.fee-runs.index/.show`,
+  `api.v1.schools.fee-assessment-runs.index/.show/.items`.
+- Late-fee runs: `app.finance.late-fee-runs.index/.show`,
+  `api.v1.schools.late-fee-runs.index/.show/.items`.
+- The full Student fee statement (§50.6): `app.finance.fee-statements.index`,
+  `.students.search`, `.show`, and `api.v1.schools.students.fee-statement`.
+  - Floor `capability:finance.charges.view`; the service also requires
+    whole-School `finance.payments.view`.
+
+**50.5 Payment visibility SQL (G1-D4..G1-D6).**
+`PaymentCampusVisibility::restrict()` adds one correlated EXISTS per
+candidate Payment:
+
+```
+SELECT 1 FROM (allocations ∪ correction lines of this Payment) touched
+  JOIN Fees' (id, campus_id) ON id = touched.charge_id
+HAVING count(DISTINCT campus_id) = 1
+   AND bool_and(coalesce(campus_id = ANY(scope), false))
+```
+
+- A Payment with no touched rows yields no row, so it is invisible.
+- A NULL Campus fails `bool_and`, so it is invisible.
+- A+B gives `count = 2`, so it is invisible.
+- Whole School: no restriction. None: `1 = 0`.
+- Reallocated Payments count their destination Charges, so moving money onto
+  another Campus makes the Payment whole-School only.
+- Collections totals use the same restricted base, so no Payment is counted
+  under two Campuses.
+- Receipts keep the School-wide series. A Campus reader sees gaps, which
+  reveal only that other receipts exist (no amount, Student or Campus);
+  accepted (INFO).
+
+**50.6 Statement: DEFERRED (whole-School).** The Student fee statement
+totals every Charge, including other Campuses and NULL-Campus ones, and lists
+mixed-Campus Payments. A Campus slice would misstate the Student's position,
+so it stays declared whole-School. A Campus reader uses Outstanding fees and
+the Charge pages instead.
+
+**50.7 Filters.** Order: capability → `CampusScopeResolver` →
+`FinanceCampusAccess`/service SQL restriction → request filters (Student,
+standing, year, Grade/Section, Campus, receipt, method).
+- **Request filters only narrow.** An out-of-scope `campus_id` returns
+  nothing, and Campus options list only Campuses in scope.
+- **Grade/Section** means "in this class NOW" (the current placement). It
+  is offered only to a whole-School `enrollments.view` holder and never
+  re-attributes a Charge.
+- **Direct ids:** an out-of-scope, mixed or unknown Charge, Payment or
+  receipt is the same 404, revealing nothing.
+
+**50.8 Debtor lookup (G1-D8).**
+`FinanceCampusAccess::debtors()`:
+- **Eligibility:** Students with an uncancelled Charge in scope where
+  amount − live adjustments − `payments_effective_allocated()` > 0, in one
+  SQL statement. Active, transferred, inactive and leaver Students alike.
+- **Projection:** a new Students-owned `StudentIdentityLookup` (escaped
+  name/number search, at most 50 rows) returning `id`, `displayName`,
+  `studentNumber` only.
+- **Never used:** the SIS purpose lookup, the Campus Directory, a current
+  Campus or Profile authority.
+- **Audit:** `finance.debtor_lookup.viewed` (result count and scope).
+
+**50.9 Proven (`FinanceCampusReadTest`, `FinanceCampusRoleGrantTest`).**
+- **Outstanding (A, B, whole School):**
+  - A sees its Charge, the mover's old A debt and the leaver; B sees its
+    Charge and the mover's B debt; whole School sees all, the NULL debtor
+    included.
+  - The A balance includes a hidden mixed Payment's effect (55.00).
+- **Charges:**
+  - The A list holds exactly the A Charges.
+  - B, NULL and unknown Charges are 404.
+  - Visible Payment PA is listed and hidden PN is shown as 5.00 with no
+    ledger ids.
+- **Payments:** A sees PA; B sees PB; A+B sees PA and PB (not PAB or PN,
+  gross 90.00); whole School sees all four. Mixed Payments and their
+  receipts are 404 for A+B.
+- **API:** the same rules; the statement is 403.
+- **Debtors:** A finds the leaver; B never does; identity fields only.
+- **Refusals:**
+  - `principal`, librarian and canteen operator @Campus get 403 everywhere.
+  - Campus cashier gets 403 on the hub, statements, fee runs, recording,
+    corrections and charge creation.
+  - An inactive Campus or a disabled Fees module gives 403; reactivation
+    restores access.
+- **Grants:** `cashier@Campus` granted with scope on the two keys only;
+  `accountant@Campus` refused on the page and at the service.
+
+**50.10 Performance (EXPLAIN, DDEV).**
+- **Payment visibility:** walks the `(school_id, created_at)` index with one
+  subplan per candidate (allocation and correction-line `(school_id,
+  payment_id)` index probes): 3.2 ms for 25 rows.
+- **Debtors:** one semi-join over Students with
+  `charges(school_id, student_id)` probes: 12 ms, 36 Students.
+- **Outstanding:** filters `charges(school_id, campus_id)` (§49).
+- No index added: none of these plans showed a need.
+- Recorded: the Payment list is not date-bounded on the API, so its cost
+  grows with candidate Payments scanned (index probes per candidate). Revisit
+  with evidence at scale.
+
+**50.11 Unchanged.**
+- Payments (no Campus column), allocation, receipt numbering, provider
+  callbacks, async jobs and replay.
+- Every Finance write, configuration, run, concession, correction and the
+  ledger.
+- Student and Guardian authority, HR, Admissions conversion, LC-5..10.
+- E30, E31, E32 and E34 (no legal gate claimed closed).
+
+**50.12 G2 (Campus cashier writes) prerequisites (not built).**
+- **Entry:** adopt `finance.payments.record` only with owner approval. That
+  makes payment entry Campus-aware and nothing else.
+- **Authority:** under `ManualPaymentRecordingService`'s existing Charge FOR
+  UPDATE locks, every allocated Charge must have a non-NULL stored Campus,
+  ONE Campus, in scope. Mixed is refused generically, and a NULL Charge is
+  whole-School only.
+- **Picker:** reuse the debtor lookup and per-Student open-Charge lists
+  restricted by stored Campus.
+- **Replay:** the server-issued idempotency key must re-check the actor's
+  CURRENT Campus scope against the stored Payment's allocations before
+  returning a replay. A scope loss refuses rather than replays (rule 32).
+- **Receipt:** issued as today, School-wide series.
+- **Stays whole-School:** corrections, reversals and refunds.
+
+**50.13 Independent security review.** No HIGH and no MEDIUM finding.
+- **Fixed:**
+  - LOW-2: `FinanceCampusAccess::chargePayments()` now re-checks the Charge's
+    own finance.charges.view scope instead of trusting the caller.
+  - LOW-3: tests added for a reallocation onto another Campus (the Payment
+    becomes whole-School only), settled and cancelled debt never making a
+    debtor, and the Campus API Charge list.
+  - LOW-4: UUID guards before the Campus-path uuid comparisons.
+- **Owner decision (not built), LOW-1:** the accountant ban is enforced by
+  `StaffRoleCatalog::campusScopable()` on the one grant path
+  (`StaffAccessService::grantRole`, Staff accounts page and service).
+  - The database scope trigger still refuses only access-administration
+    roles.
+  - A direct runtime-role INSERT could create `accountant@Campus`. That
+    grant would confer only the adopted read keys, never ledger or write
+    authority.
+  - Extending `assert_membership_role_assignment_scope` to
+    CAMPUS_INCOMPATIBLE needs a migration and is recommended before G2.
+- **Accepted INFO:**
+  - School-wide receipt-number gaps (no amount, Student or Campus
+    disclosed).
+  - The debtor lookup reflecting settled state under
+    finance.charges.view (cashier holds both keys).
+  - `otherPaymentsAmount` revealing that hidden Payments exist and their
+    amount on an in-scope Charge (G1-D7, by design).
+
+**50.14 Validation.**
+- **Affected and shared suites** (every *Architecture*/*Guard* test, Fees,
+  Payments, Finance, Authorization, Identity, Students, Canteen, Library,
+  Transport, Hostel, Admissions, Postgres, App, Retention, Portal,
+  Platform/Modules): 4506 passed. 22 failures are environment-only: 5
+  real-MinIO, and 17 Identity tests that assert `APP_URL=localhost:8000`
+  under DDEV's `https://lycenza.ddev.site`.
+- **After the review fixes:** Finance, Fees, Payments, Campus authorization
+  and the role-grant tests: 648 passed.
+- **Static and frontend gates:** Pint, Larastan, vue-tsc, ESLint (3
+  existing warnings), Prettier and the build all pass.
+- **Full regression:** one exact-SHA full CI on the candidate.

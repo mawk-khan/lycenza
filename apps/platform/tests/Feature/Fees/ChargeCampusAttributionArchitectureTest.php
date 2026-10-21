@@ -125,19 +125,16 @@ class ChargeCampusAttributionArchitectureTest extends TestCase
     }
 
     #[Test]
-    public function no_finance_capability_or_finance_role_became_campus_aware(): void
+    public function only_the_finance_read_keys_are_campus_aware_and_accountant_stays_whole_school(): void
     {
-        foreach (array_keys(CampusScopeCatalogue::ADOPTED) as $key) {
-            $this->assertStringStartsNotWith('finance.', $key, 'no Finance key is Campus-adopted in ORG.7G-1A');
-        }
-        foreach (['cashier', 'accountant', 'principal'] as $roleKey) {
-            $role = Role::query()->with('capabilities')->where('key', $roleKey)->where('scope', Role::SCOPE_SCHOOL)->firstOrFail();
-            if ($roleKey === 'principal') {
-                $this->assertSame([], $role->capabilities->pluck('key')->filter(fn ($k) => str_starts_with($k, 'finance.'))->values()->all(), 'principal holds no Finance key');
-
-                continue;
-            }
-            $this->assertFalse(StaffRoleCatalog::campusScopable($role), "{$roleKey} is not Campus-grantable (G1A-D6, G1A-D7)");
-        }
+        // ORG.7G-1 (ADR 0076 §50) superseded ORG.7G-1A's "no Finance key adopted"
+        // pin with the owner-approved read adoption (G1-D9..G1-D11).
+        $finance = array_values(array_filter(array_keys(CampusScopeCatalogue::ADOPTED), fn (string $k) => str_starts_with($k, 'finance.')));
+        sort($finance);
+        $this->assertSame(['finance.charges.view', 'finance.payments.view'], $finance, 'no Finance write, configuration, run, correction or ledger key is Campus-adopted');
+        $roles = Role::query()->with('capabilities')->where('scope', Role::SCOPE_SCHOOL)->whereIn('key', ['cashier', 'accountant', 'principal'])->get()->keyBy('key');
+        $this->assertTrue(StaffRoleCatalog::campusScopable($roles['cashier']), 'cashier is the Campus Finance persona (G1-D9)');
+        $this->assertFalse(StaffRoleCatalog::campusScopable($roles['accountant']), 'accountant stays whole-School (G1-D10)');
+        $this->assertSame([], $roles['principal']->capabilities->pluck('key')->filter(fn ($k) => str_starts_with($k, 'finance.'))->values()->all(), 'principal holds no Finance key (G1-D11)');
     }
 }

@@ -23,8 +23,8 @@ interface PaymentDetail {
     recordedAt: string;
     amount: string;
     currency: string;
-    settlementLedgerAccountId: string;
-    journalEntryId: string;
+    settlementLedgerAccountId: string | null;
+    journalEntryId: string | null;
     settledAt: string;
     allocations: PaymentAllocation[];
     receiptNumber: string | null;
@@ -54,7 +54,7 @@ interface HistoryEntry {
     recordedAt: string;
     recordedOn: string;
     byName: string | null;
-    journalEntryId: string;
+    journalEntryId: string | null;
     refundMethodLabel: string | null;
     refundReference: string | null;
     refundedOn: string | null;
@@ -300,7 +300,7 @@ function submit(): void {
                 <dt class="text-slate-500">Provider reference</dt>
                 <dd class="break-all">{{ payment.providerPaymentReference }}</dd>
             </div>
-            <div>
+            <div v-if="payment.journalEntryId">
                 <dt class="text-slate-500">Settlement journal entry</dt>
                 <dd>
                     <a
@@ -406,12 +406,14 @@ function submit(): void {
                     <p class="mt-1 text-slate-500">
                         {{ entry.recordedOn
                         }}<template v-if="entry.byName"> · by {{ entry.byName }}</template>
-                        ·
-                        <a
-                            class="underline"
-                            :href="`/app/finance/journal-entries/${entry.journalEntryId}`"
-                            >journal entry</a
-                        >
+                        <template v-if="entry.journalEntryId">
+                            ·
+                            <a
+                                class="underline"
+                                :href="`/app/finance/journal-entries/${entry.journalEntryId}`"
+                                >journal entry</a
+                            >
+                        </template>
                     </p>
                     <p v-if="entry.kind === 'refund'" class="mt-1 text-slate-600">
                         Paid back by {{ entry.refundMethodLabel }} on {{ entry.refundedOn

@@ -29,6 +29,7 @@ use App\Domain\Students\Application\StudentEnrollmentFeeTargetReadService;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Authorization\Campus\CampusScope;
 use App\Support\Money\Money;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
@@ -623,14 +624,16 @@ class ChargeService
      *
      * ORG.7G-1A (ADR 0076 §49): `$campus` narrows by the STORED historical
      * Charge Campus in SQL (never re-derived, never the current Campus).
+     * ORG.7G-1 (§50): `$scope` is the reader's resolved CampusScope (the
+     * authority); `$campus` is only ever a request filter inside it.
      *
      * @return list<ChargeCollectionFact>
      */
-    public function collectionFacts(School $school, ?string $academicYearId = null, ?ChargeCampusFilter $campus = null): array
+    public function collectionFacts(School $school, CampusScope $scope, ?string $academicYearId = null, ?ChargeCampusFilter $campus = null): array
     {
-        return $this->context->withSchool($school, function () use ($school, $academicYearId, $campus) {
+        return $this->context->withSchool($school, function () use ($school, $scope, $academicYearId, $campus) {
             $facts = [];
-            foreach (Charge::query()->where('school_id', $school->id)->whereNull('cancelled_at')
+            foreach ($scope->restrict(Charge::query()->where('school_id', $school->id))->whereNull('cancelled_at')
                 ->when($academicYearId !== null, fn ($q) => $q->where('academic_year_id', $academicYearId))
                 ->when($campus !== null, fn ($q) => $campus->apply($q))
                 ->orderBy('id')->toBase()->select(['id', 'student_id', 'academic_year_id', 'amount', 'currency', 'due_date'])
@@ -647,6 +650,31 @@ class ChargeService
 
             return $facts;
         });
+    }
+
+    /**
+     * ORG.7G-1 (ADR 0076 §50): Fees' Charge -> stored Campus mapping for this
+     * School (`id`, `campus_id`), as a subquery Payments joins to decide which
+     * Payments are Campus-visible -- Payments never names `charges` itself
+     * (rule 4). Trusted, read-only, no capability check.
+     */
+    public function campusAttributionQuery(School $school): QueryBuilder
+    {
+        return DB::table('charges')->where('charges.school_id', $school->id)->select(['charges.id', 'charges.campus_id']);
+    }
+
+    /**
+     * ORG.7G-1 (ADR 0076 §50): this School's uncancelled Charges within
+     * `$scope` by STORED Campus (`id`, `student_id`, and `assessed_net` =
+     * amount less live adjustments), as a subquery: Payments subtracts the
+     * effective allocation to find OPEN debt (the Finance debtor lookup).
+     * Trusted, read-only, no capability check.
+     */
+    public function liveChargesQuery(School $school, CampusScope $scope): QueryBuilder
+    {
+        return $scope->restrict(DB::table('charges')->where('charges.school_id', $school->id)->whereNull('charges.cancelled_at'), 'charges.campus_id')
+            ->select(['charges.id', 'charges.student_id'])
+            ->selectRaw('charges.amount - coalesce((SELECT sum(fa.amount) FROM fee_adjustments fa WHERE fa.charge_id = charges.id AND fa.school_id = charges.school_id AND fa.cancelled_at IS NULL), 0) AS assessed_net');
     }
 
     /**

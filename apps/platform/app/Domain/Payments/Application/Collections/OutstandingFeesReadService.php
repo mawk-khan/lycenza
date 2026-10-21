@@ -8,7 +8,7 @@ use App\Domain\Payments\Application\Charges\ChargeStateReader;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Money\Money;
 use App\Support\Tenancy\SchoolTimezone;
 use Carbon\CarbonImmutable;
@@ -36,7 +36,7 @@ use Carbon\CarbonImmutable;
  */
 class OutstandingFeesReadService
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
     public const string OUTSTANDING = 'outstanding';
 
@@ -55,18 +55,24 @@ class OutstandingFeesReadService
      * 0076 §49): by the STORED Charge Campus, in SQL -- a narrowing filter,
      * never authority (a NULL-Campus Charge never matches a Campus).
      *
+     * ORG.7G-1 (§50): the reader's scope is resolved here for BOTH
+     * finance.charges.view and finance.payments.view (their intersection):
+     * a Campus scope sees only Charges whose STORED Campus it covers --
+     * leavers and moved Students included, NULL-Campus Charges never -- with
+     * each Charge's full post-correction balance (G1-D7).
+     *
      * @param  list<string>|null  $studentIds
      */
     public function list(School $school, User $actor, string $status = self::OUTSTANDING, ?string $academicYearId = null, ?array $studentIds = null, ?ChargeCampusFilter $campus = null): OutstandingFeesList
     {
-        $this->authorizeCapabilityFor($actor, 'finance.charges.view', $school);
-        $this->authorizeCapabilityFor($actor, 'finance.payments.view', $school);
+        $scope = $this->authorizeCampusScopeFor($actor, 'finance.charges.view', $school)
+            ->intersect($this->authorizeCampusScopeFor($actor, 'finance.payments.view', $school));
 
         $today = CarbonImmutable::now(SchoolTimezone::resolve($school))->toDateString();
         $only = $studentIds === null ? null : array_flip($studentIds);
 
         $facts = array_values(array_filter(
-            $this->charges->collectionFacts($school, $academicYearId, $campus),
+            $this->charges->collectionFacts($school, $scope, $academicYearId, $campus),
             fn ($f) => $only === null || isset($only[$f->studentId]),
         ));
         $states = $this->states->forCharges($school, array_map(fn ($f) => $f->id, $facts));

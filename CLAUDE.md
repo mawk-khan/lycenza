@@ -1438,3 +1438,23 @@ once several modules copy it.
          (`ChargeCampusAttributionArchitectureTest`).
        - Payments stay School-wide (no Payment Campus). No `finance.*` key
          is Campus-adopted, and `accountant` stays whole-School.
+     - **Finance Campus reads go through `FinanceCampusAccess`** (ORG.7G-1,
+       §50). Adopted: `finance.charges.view` and `finance.payments.view`
+       only.
+       - Charges are read by stored Campus; NULL is whole-School only.
+       - A Payment, its receipt and its collections row are Campus-visible
+         only when EVERY Charge it touches (allocations and correction
+         lines) has ONE non-NULL Campus in scope
+         (`PaymentCampusVisibility`). The Payment is atomic: A+B or
+         NULL-touching is whole-School, even for A+B.
+       - Charge balances stay whole; a hidden Payment shows as an amount
+         only.
+       - The read services resolve their own scope.
+       - The debtor lookup covers OPEN in-scope debt, leavers included, and
+         returns id, studentNumber and displayName only.
+       - A role holding any `CampusScopeCatalogue::CAMPUS_INCOMPATIBLE` key
+         (ledger, accounts, periods, fee configuration, runs, charge
+         management, concessions) is never Campus-scopable: `cashier` yes,
+         `accountant` never.
+       - Fee and late-fee runs, the fee statement, the Finance hub and every
+         Finance write stay whole-School (declared).

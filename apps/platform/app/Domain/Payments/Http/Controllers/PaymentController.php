@@ -2,12 +2,13 @@
 
 namespace App\Domain\Payments\Http\Controllers;
 
+use App\Domain\Payments\Application\Access\FinanceCampusAccess;
 use App\Domain\Payments\Application\PaymentDetail;
 use App\Domain\Payments\Application\PaymentQuery;
-use App\Domain\Payments\Application\PaymentReadService;
 use App\Domain\Payments\Application\PaymentSummary;
 use App\Http\Controllers\Controller;
 use App\Models\School;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -35,8 +36,17 @@ use Illuminate\Http\Request;
  */
 class PaymentController extends Controller
 {
-    public function index(Request $request, School $school, PaymentReadService $service): JsonResponse
+    use AuthorizesCampusScope;
+
+    /**
+     * ORG.7G-1 (ADR 0076 §50): Campus-aware (C6) under finance.payments.view
+     * through FinanceCampusAccess -- a Payment is visible to a Campus reader
+     * only when every Charge it touches has the same stored Campus in scope
+     * (G1-D4); otherwise it is the same not-found as an unknown one.
+     */
+    public function index(Request $request, School $school, FinanceCampusAccess $access): JsonResponse
     {
+        $scope = $this->authorizeCampusScope('finance.payments.view', $school);
         $validated = $request->validate([
             'provider_payment_reference' => ['sometimes', 'string', 'max:255'],
             'page' => ['sometimes', 'integer', 'min:1'],
@@ -49,7 +59,7 @@ class PaymentController extends Controller
             page: (int) ($validated['page'] ?? 1),
         );
 
-        $page = $service->listPayments($school, $query, $request->user());
+        $page = $access->payments($school, $query, $request->user());
 
         return response()->json([
             'data' => $page->getCollection()->map(fn (PaymentSummary $p) => $this->presentSummary($p))->all(),
@@ -61,11 +71,12 @@ class PaymentController extends Controller
         ]);
     }
 
-    public function show(Request $request, School $school, string $payment, PaymentReadService $service): JsonResponse
+    public function show(Request $request, School $school, string $payment, FinanceCampusAccess $access): JsonResponse
     {
-        $detail = $service->getPaymentDetail($school, $payment, $request->user());
+        $scope = $this->authorizeCampusScope('finance.payments.view', $school);
+        $detail = $access->payment($school, $payment, $request->user());
 
-        return response()->json(['data' => $this->presentDetail($detail)]);
+        return response()->json(['data' => $this->presentDetail($detail, $scope->isWholeSchool())]);
     }
 
     /**
@@ -88,7 +99,7 @@ class PaymentController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function presentDetail(PaymentDetail $payment): array
+    private function presentDetail(PaymentDetail $payment, bool $internals = true): array
     {
         return [
             'id' => $payment->paymentId,
@@ -100,8 +111,8 @@ class PaymentController extends Controller
             'recordedByUserId' => $payment->recordedByUserId,
             'amount' => $payment->amount,
             'currency' => $payment->currency,
-            'settlementLedgerAccountId' => $payment->settlementLedgerAccountId,
-            'journalEntryId' => $payment->journalEntryId,
+            'settlementLedgerAccountId' => $internals ? $payment->settlementLedgerAccountId : null,
+            'journalEntryId' => $internals ? $payment->journalEntryId : null,
             'settledAt' => $payment->settledAt->toIso8601String(),
             'recordedAt' => $payment->recordedAt->toIso8601String(),
             'allocations' => $payment->allocations,

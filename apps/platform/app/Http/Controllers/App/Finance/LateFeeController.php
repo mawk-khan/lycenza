@@ -106,7 +106,7 @@ class LateFeeController extends Controller
     public function runs(TenantContext $context, LateFeeReadService $reads, LateFeeRuleService $rules, CapabilityResolver $capabilities): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('finance.charges.view', $school);
+        // ORG.7G-1: finance.charges.view is the route floor (a declared whole-School operation).
         $actor = $context->actor();
         $canRun = $capabilities->canInSchool($actor, 'finance.fee_assessments.run', $school);
         $ruleNames = FeeLateFeeRule::query()->pluck('name', 'id');
@@ -147,7 +147,7 @@ class LateFeeController extends Controller
     public function showRun(Request $request, TenantContext $context, LateFeeReadService $reads, CapabilityResolver $capabilities, string $run): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('finance.charges.view', $school);
+        // ORG.7G-1: finance.charges.view is the route floor (a declared whole-School operation).
         $actor = $context->actor();
         $validated = $request->validate([
             'preview_result' => ['sometimes', 'string', Rule::in(LateFeeRunItem::PREVIEW_RESULTS)],

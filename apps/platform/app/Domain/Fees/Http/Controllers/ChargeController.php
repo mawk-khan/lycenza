@@ -12,6 +12,7 @@ use App\Domain\Fees\Application\ChargeResult;
 use App\Domain\Fees\Application\ChargeSummary;
 use App\Http\Controllers\Controller;
 use App\Models\School;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Money\Exceptions\InvalidMoneyException;
 use App\Support\Money\Money;
 use Illuminate\Http\JsonResponse;
@@ -41,8 +42,17 @@ use Illuminate\Validation\ValidationException;
  */
 class ChargeController extends Controller
 {
+    use AuthorizesCampusScope;
+
+    /**
+     * ORG.7G-1 (ADR 0076 §50): Campus-aware (C6) under finance.charges.view --
+     * ChargeReadService restricts to the reader's scope by STORED Charge
+     * Campus in SQL; an out-of-scope Charge is the same not-found as an
+     * unknown one, and a Campus reader gets no ledger internals.
+     */
     public function index(Request $request, School $school, ChargeReadService $service): JsonResponse
     {
+        $scope = $this->authorizeCampusScope('finance.charges.view', $school);
         $validated = $request->validate([
             'student_id' => ['sometimes', 'uuid'],
             'academic_year_id' => ['sometimes', 'uuid'],
@@ -73,9 +83,10 @@ class ChargeController extends Controller
 
     public function show(Request $request, School $school, string $charge, ChargeReadService $service): JsonResponse
     {
+        $scope = $this->authorizeCampusScope('finance.charges.view', $school);
         $detail = $service->getChargeDetail($school, $charge, $request->user());
 
-        return response()->json(['data' => $this->presentDetail($detail)]);
+        return response()->json(['data' => $this->presentDetail($detail, $scope->isWholeSchool())]);
     }
 
     public function store(Request $request, School $school, ChargeAdministrationService $service): JsonResponse
@@ -169,7 +180,7 @@ class ChargeController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function presentDetail(ChargeDetail $charge): array
+    private function presentDetail(ChargeDetail $charge, bool $internals = true): array
     {
         return [
             'id' => $charge->chargeId,
@@ -179,11 +190,11 @@ class ChargeController extends Controller
             'amount' => $charge->amount,
             'currency' => $charge->currency,
             'dueDate' => $charge->dueDate?->toDateString(),
-            'receivableLedgerAccountId' => $charge->receivableLedgerAccountId,
-            'revenueLedgerAccountId' => $charge->revenueLedgerAccountId,
-            'journalEntryId' => $charge->journalEntryId,
+            'receivableLedgerAccountId' => $internals ? $charge->receivableLedgerAccountId : null,
+            'revenueLedgerAccountId' => $internals ? $charge->revenueLedgerAccountId : null,
+            'journalEntryId' => $internals ? $charge->journalEntryId : null,
             'cancelledAt' => $charge->cancelledAt?->toIso8601String(),
-            'cancellationJournalEntryId' => $charge->cancellationJournalEntryId,
+            'cancellationJournalEntryId' => $internals ? $charge->cancellationJournalEntryId : null,
             'createdAt' => $charge->createdAt->toIso8601String(),
         ];
     }

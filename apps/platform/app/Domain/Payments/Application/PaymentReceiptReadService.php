@@ -4,6 +4,7 @@ namespace App\Domain\Payments\Application;
 
 use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Application\ChargeStatementLine;
+use App\Domain\Payments\Application\Access\PaymentCampusVisibility;
 use App\Domain\Payments\Application\Exceptions\PaymentReceiptNotFoundException;
 use App\Domain\Payments\Infrastructure\Payment;
 use App\Domain\Payments\Infrastructure\PaymentAllocation;
@@ -11,7 +12,7 @@ use App\Domain\Payments\Infrastructure\PaymentCorrection;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Str;
 
@@ -26,21 +27,27 @@ use Illuminate\Support\Str;
  */
 class PaymentReceiptReadService
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
     public function __construct(
         private readonly ChargeService $charges,
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly PaymentCampusVisibility $visibility,
     ) {}
 
+    /**
+     * ORG.7G-1 (ADR 0076 §50, G1-D5): a receipt is visible exactly when its
+     * Payment is (PaymentCampusVisibility) -- never by Student, sequence or
+     * Enrollment; an invisible one is the same "not found" as an unknown one.
+     */
     public function forPayment(School $school, string $paymentId, User $actor): ReceiptDocument
     {
-        $this->authorizeCapabilityFor($actor, 'finance.payments.view', $school);
+        $scope = $this->authorizeCampusScopeFor($actor, 'finance.payments.view', $school);
 
-        return $this->context->withSchool($school, function () use ($school, $paymentId, $actor) {
+        return $this->context->withSchool($school, function () use ($school, $scope, $paymentId, $actor) {
             $payment = Str::isUuid($paymentId)
-                ? Payment::query()->where('school_id', $school->id)->with(['receipt', 'allocations'])->find($paymentId)
+                ? $this->visibility->restrict(Payment::query()->where('payments.school_id', $school->id), $school, $scope)->with(['receipt', 'allocations'])->find($paymentId)
                 : null;
             $receipt = $payment?->receipt;
             if ($payment === null || $receipt === null) {

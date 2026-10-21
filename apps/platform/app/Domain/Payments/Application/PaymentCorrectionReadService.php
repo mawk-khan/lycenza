@@ -6,17 +6,20 @@ use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Application\ChargeStatementLine;
 use App\Domain\Finance\Application\LedgerAccountSummary;
 use App\Domain\Finance\Application\LedgerService;
+use App\Domain\Payments\Application\Access\PaymentCampusVisibility;
 use App\Domain\Payments\Application\Charges\ChargeStateReader;
+use App\Domain\Payments\Application\Exceptions\PaymentNotFoundException;
 use App\Domain\Payments\Domain\ManualPaymentMethod;
 use App\Domain\Payments\Infrastructure\PaymentCorrection;
 use App\Domain\Payments\Infrastructure\PaymentCorrectionLine;
 use App\Models\School;
 use App\Models\User;
-use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Str;
 
 /**
  * UAT-C3 (ADR 0075 §16): what the payment page shows about corrections --
@@ -25,10 +28,16 @@ use Carbon\CarbonImmutable;
  * offer. Read-only, under `finance.payments.view`; the choices are display
  * help only -- `PaymentCorrectionService` re-checks everything under its
  * locks.
+ *
+ * ORG.7G-1 (ADR 0076 §50): the reader's finance.payments.view CampusScope is
+ * resolved here, and a Payment it may not see (PaymentCampusVisibility) is
+ * "not found" -- so every Charge shown is in scope. The correction choices
+ * stay whole-School capability checks (a Campus reader gets none), and a
+ * Campus reader sees no journal entry ids.
  */
 class PaymentCorrectionReadService
 {
-    use AuthorizesCapability;
+    use AuthorizesCampusScope;
 
     public function __construct(
         private readonly PaymentApplicationReader $applications,
@@ -37,14 +46,18 @@ class PaymentCorrectionReadService
         private readonly LedgerService $ledger,
         private readonly CapabilityResolver $capabilities,
         private readonly TenantContext $context,
+        private readonly PaymentCampusVisibility $visibility,
     ) {}
 
     /** @return array<string, mixed> */
     public function forPayment(School $school, string $paymentId, string $paidOn, User $actor): array
     {
-        $this->authorizeCapabilityFor($actor, 'finance.payments.view', $school);
+        $scope = $this->authorizeCampusScopeFor($actor, 'finance.payments.view', $school);
+        if (! Str::isUuid($paymentId) || (! $scope->isWholeSchool() && $this->visibility->visibleAmong($school, $scope, [$paymentId]) === [])) {
+            throw new PaymentNotFoundException($paymentId);
+        }
 
-        return $this->context->withSchool($school, function () use ($school, $paymentId, $paidOn, $actor) {
+        return $this->context->withSchool($school, function () use ($school, $scope, $paymentId, $paidOn, $actor) {
             $corrections = PaymentCorrection::query()->where('school_id', $school->id)->where('payment_id', $paymentId)
                 ->with('lines')->orderBy('created_at')->orderBy('id')->get();
             $reversal = $corrections->firstWhere('kind', PaymentCorrection::REVERSAL);
@@ -101,7 +114,7 @@ class PaymentCorrectionReadService
                     'recordedAt' => CarbonImmutable::parse($c->created_at)->toIso8601String(),
                     'recordedOn' => CarbonImmutable::parse($c->created_at)->setTimezone($school->timezone)->toDateString(),
                     'byName' => User::query()->find($c->corrected_by_user_id)?->name,
-                    'journalEntryId' => $c->journal_entry_id,
+                    'journalEntryId' => $scope->isWholeSchool() ? $c->journal_entry_id : null,
                     'refundMethodLabel' => $c->refund_method === null ? null : ManualPaymentMethod::tryFrom($c->refund_method)?->label(),
                     'refundReference' => $c->refund_reference,
                     'refundedOn' => $c->refunded_on?->toDateString(),

@@ -51,11 +51,13 @@ use App\Http\Controllers\App\Examinations\TeacherStudentMarkController;
 use App\Http\Controllers\App\Fees\LibraryFineWebController;
 use App\Http\Controllers\App\Fees\OperationalFeeController;
 use App\Http\Controllers\App\Finance\ChargeController as FinanceChargeController;
+use App\Http\Controllers\App\Finance\ChargeHistoryController as FinanceChargeHistoryController;
 use App\Http\Controllers\App\Finance\FeeAssessmentRunController as FinanceFeeAssessmentRunController;
 use App\Http\Controllers\App\Finance\FeeConcessionController as FinanceFeeConcessionController;
 use App\Http\Controllers\App\Finance\FeeSetupController as FinanceFeeSetupController;
 use App\Http\Controllers\App\Finance\FeeStatementController as FinanceFeeStatementController;
 use App\Http\Controllers\App\Finance\FinanceController;
+use App\Http\Controllers\App\Finance\FinanceDebtorController;
 use App\Http\Controllers\App\Finance\FinancialPeriodController as FinanceFinancialPeriodController;
 use App\Http\Controllers\App\Finance\JournalEntryController as FinanceJournalEntryController;
 use App\Http\Controllers\App\Finance\LateFeeController as FinanceLateFeeController;
@@ -63,6 +65,7 @@ use App\Http\Controllers\App\Finance\LedgerAccountController as FinanceLedgerAcc
 use App\Http\Controllers\App\Finance\ManualPaymentController as FinanceManualPaymentController;
 use App\Http\Controllers\App\Finance\OutstandingFeesController as FinanceOutstandingFeesController;
 use App\Http\Controllers\App\Finance\PaymentController as FinancePaymentController;
+use App\Http\Controllers\App\Finance\PaymentRecordController as FinancePaymentRecordController;
 use App\Http\Controllers\App\Groups\GroupReportController;
 use App\Http\Controllers\App\Groups\SchoolGroupController;
 use App\Http\Controllers\App\GuardianAccountInvitationController;
@@ -1253,9 +1256,11 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         // finance.charges.view, every run action under
         // finance.fee_assessments.run, assessment void under
         // finance.charges.manage (controller + Application service).
-        Route::get('/fee-runs', [FinanceFeeAssessmentRunController::class, 'index'])->name('fee-runs.index');
+        // ORG.7G-1 (ADR 0076 §50): run reads are declared whole-School
+        // (finance.charges.view floor; CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS).
+        Route::get('/fee-runs', [FinanceFeeAssessmentRunController::class, 'index'])->middleware('capability:finance.charges.view')->name('fee-runs.index');
         Route::post('/fee-runs', [FinanceFeeAssessmentRunController::class, 'store'])->name('fee-runs.store');
-        Route::get('/fee-runs/{run}', [FinanceFeeAssessmentRunController::class, 'show'])->name('fee-runs.show');
+        Route::get('/fee-runs/{run}', [FinanceFeeAssessmentRunController::class, 'show'])->middleware('capability:finance.charges.view')->name('fee-runs.show');
         Route::post('/fee-runs/{run}/preview', [FinanceFeeAssessmentRunController::class, 'preview'])->name('fee-runs.preview');
         Route::post('/fee-runs/{run}/items/{item}/exclude', [FinanceFeeAssessmentRunController::class, 'exclude'])->name('fee-runs.items.exclude');
         Route::post('/fee-runs/{run}/items/{item}/decide', [FinanceFeeAssessmentRunController::class, 'decide'])->name('fee-runs.items.decide');
@@ -1272,9 +1277,9 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::post('/late-fees', [FinanceLateFeeController::class, 'storeRule'])->name('late-fees.rules.store');
         Route::post('/late-fees/{rule}', [FinanceLateFeeController::class, 'updateRule'])->name('late-fees.rules.update');
         Route::post('/late-fees/{rule}/status', [FinanceLateFeeController::class, 'ruleStatus'])->name('late-fees.rules.status');
-        Route::get('/late-fee-runs', [FinanceLateFeeController::class, 'runs'])->name('late-fee-runs.index');
+        Route::get('/late-fee-runs', [FinanceLateFeeController::class, 'runs'])->middleware('capability:finance.charges.view')->name('late-fee-runs.index');
         Route::post('/late-fee-runs', [FinanceLateFeeController::class, 'storeRun'])->name('late-fee-runs.store');
-        Route::get('/late-fee-runs/{run}', [FinanceLateFeeController::class, 'showRun'])->name('late-fee-runs.show');
+        Route::get('/late-fee-runs/{run}', [FinanceLateFeeController::class, 'showRun'])->middleware('capability:finance.charges.view')->name('late-fee-runs.show');
         Route::post('/late-fee-runs/{run}/preview', [FinanceLateFeeController::class, 'preview'])->name('late-fee-runs.preview');
         Route::post('/late-fee-runs/{run}/execute', [FinanceLateFeeController::class, 'execute'])->name('late-fee-runs.execute');
         Route::post('/late-fee-runs/{run}/resume', [FinanceLateFeeController::class, 'resume'])->name('late-fee-runs.resume');
@@ -1320,9 +1325,11 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         // 'journal-entries/create' above.
         Route::get('/charges/create', [FinanceChargeController::class, 'create'])->name('charges.create');
         Route::get('/charges/students/search', [FinanceChargeController::class, 'searchStudents'])->name('charges.students.search');
-        Route::get('/charges', [FinanceChargeController::class, 'index'])->name('charges.index');
+        // ORG.7G-1 (ADR 0076 §50): charge history is Campus-aware (C6, stored
+        // Charge Campus); creating and cancelling stay whole-School.
+        Route::get('/charges', [FinanceChargeHistoryController::class, 'index'])->middleware('capability:finance.charges.view,campus')->name('charges.index');
         Route::post('/charges', [FinanceChargeController::class, 'store'])->name('charges.store');
-        Route::get('/charges/{charge}', [FinanceChargeController::class, 'show'])->name('charges.show');
+        Route::get('/charges/{charge}', [FinanceChargeHistoryController::class, 'show'])->middleware('capability:finance.charges.view,campus')->name('charges.show');
         Route::post('/charges/{charge}/cancel', [FinanceChargeController::class, 'cancel'])->name('charges.cancel');
 
         // Phase 0O.11A (ADR 0031 implementation amendment): recording an
@@ -1337,12 +1344,15 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::post('/payments/record', [FinanceManualPaymentController::class, 'store'])
             ->middleware('throttle:finance-payment-recording')->name('payments.record.store');
 
-        Route::get('/payments', [FinancePaymentController::class, 'index'])->name('payments.index');
-        Route::get('/payments/{payment}', [FinancePaymentController::class, 'show'])->name('payments.show');
+        // ORG.7G-1 (ADR 0076 §50): collections, one Payment and its receipt are
+        // Campus-aware (C6): a Payment is Campus-visible only when every Charge
+        // it touches has the same stored Campus in scope (G1-D4).
+        Route::get('/payments', [FinancePaymentRecordController::class, 'index'])->middleware('capability:finance.payments.view,campus')->name('payments.index');
+        Route::get('/payments/{payment}', [FinancePaymentRecordController::class, 'show'])->middleware('capability:finance.payments.view,campus')->name('payments.show');
         // FEE.4 (ADR 0062 §17, §18): the printable payment acknowledgement
         // (finance.payments.view) and the staff Student fee statement
         // (finance.charges.view AND finance.payments.view).
-        Route::get('/payments/{payment}/receipt', [FinancePaymentController::class, 'receipt'])->name('payments.receipt');
+        Route::get('/payments/{payment}/receipt', [FinancePaymentRecordController::class, 'receipt'])->middleware('capability:finance.payments.view,campus')->name('payments.receipt');
         // UAT-C3 (ADR 0031 amendment §3, ADR 0075 §16): reallocate, reverse or
         // refund a posted Payment as a new linked correction -- never an edit.
         // Capabilities per kind and fresh MFA in the controller; re-checked in
@@ -1350,10 +1360,17 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::post('/payments/{payment}/corrections', [FinancePaymentController::class, 'correct'])
             ->middleware('throttle:finance-payment-recording')->name('payments.corrections.store');
         // UAT-C3 (UAT-FIN-08): who still owes what, for follow-up.
-        Route::get('/outstanding', [FinanceOutstandingFeesController::class, 'index'])->name('outstanding.index');
-        Route::get('/fee-statements', [FinanceFeeStatementController::class, 'index'])->name('fee-statements.index');
-        Route::get('/fee-statements/students/search', [FinanceFeeStatementController::class, 'searchStudents'])->name('fee-statements.students.search');
-        Route::get('/fee-statements/{student}', [FinanceFeeStatementController::class, 'show'])->name('fee-statements.show');
+        // ORG.7G-1 (ADR 0076 §50): Campus-aware (C6) by stored Charge Campus;
+        // finance.payments.view is required in the action too (both scopes).
+        Route::get('/outstanding', [FinanceOutstandingFeesController::class, 'index'])->middleware('capability:finance.charges.view,campus')->name('outstanding.index');
+        // ORG.7G-1 (G1-D8): the Finance debtor lookup (open in-scope debt only).
+        Route::get('/debtors/search', [FinanceDebtorController::class, 'search'])->middleware('capability:finance.charges.view,campus')->name('debtors.search');
+        // The full Student fee statement is declared whole-School (it mixes every
+        // Campus, NULL-Campus charges and mixed-Campus Payments); the statement
+        // service also requires whole-School finance.payments.view.
+        Route::get('/fee-statements', [FinanceFeeStatementController::class, 'index'])->middleware('capability:finance.charges.view')->name('fee-statements.index');
+        Route::get('/fee-statements/students/search', [FinanceFeeStatementController::class, 'searchStudents'])->middleware('capability:finance.charges.view')->name('fee-statements.students.search');
+        Route::get('/fee-statements/{student}', [FinanceFeeStatementController::class, 'show'])->middleware('capability:finance.charges.view')->name('fee-statements.show');
     });
 
     // Phase 8A closure correction (item 2) -- the HR administrative UI
