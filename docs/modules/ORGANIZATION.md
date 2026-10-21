@@ -275,3 +275,11 @@ School setting, a role, a navigation toggle or a commercial plan.
   accounts, periods, the ledger and the Finance hub. The legal reviews of
   receipts, late fees, RTE and Library fines (E30, E31, E32, E34) are
   unchanged and still block production use.
+- **ORG.7H (ADR 0076 §53)** closed the Campus programme. Fifteen areas
+  work by Campus, through 38 permissions, and the ten staff roles listed in
+  `docs/security/AUTHORIZATION.md` can be granted for a Campus. The School
+  administrator and the accountant never can. Every area deliberately kept
+  School-wide, and every later idea (moving staff between Campuses,
+  cross-Campus lending or riding, Campus fee statements, approvals), is
+  listed in §53 for a separate owner decision. The integrated test plan is
+  `docs/product/CAMPUS-INTEGRATED-UAT.md`.

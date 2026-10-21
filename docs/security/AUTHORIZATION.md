@@ -887,6 +887,15 @@ whole-School supersedes. A selected or current Campus
     reversal, refund), Charge management, runs, concessions, configuration,
     accounts, periods, ledger, the Finance hub and the (non-existent)
     payment API.
+- **ORG.7 closed (ORG.7H, §53, 2026-10-21):** 38 adopted keys in 15 domains
+  (`CampusScopeCatalogue::ADOPTED`), 192 Campus-scoped route contracts (C6),
+  134 declared whole-School operations and 3 whole-School hubs. Campus-
+  grantable roles: `principal`, `cashier`, `admissions_officer`,
+  `hr_officer`, `hostel_warden`, `canteen_operator`,
+  `transport_coordinator`, `librarian`, `front_office`, `stores_officer`;
+  never `school_admin`, `accountant` or a role with no adopted key. Any new
+  adoption is a new owner-approved phase; deferrals and residuals are in
+  ADR 0076 §53.
 - **Refusals look the same.** A Campus-scoped actor's refusals do not
   differ between an in-scope and an out-of-scope conflict (Visitor
   check-in: one generic refusal; the School-wide one-active-Visit rule

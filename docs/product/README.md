@@ -50,3 +50,8 @@ Contents:
 - the local-completion slice series LC-1 to LC-10.
 
 It records and classifies; it builds nothing.)*
+
+*(2026-10-21, ORG.7H: `CAMPUS-INTEGRATED-UAT.md` is the integrated Campus
+authorization UAT plan — personas, fixture, positive and mandatory negative
+cases across every Campus-scoped area (ADR 0076 §53). It is a plan, not
+evidence.)*

@@ -7216,13 +7216,13 @@ is adopted.
     ROLE          ADOPTED KEYS                 PROTECTED KEYS            CAMPUS-SCOPABLE  EXPECTED
     cashier       charges.view, payments.view, none                      yes              yes
                   payments.record
-    accountant    the three                    9 (ledger, accounts,      no               yes
+    accountant    the three                    8 (ledger, accounts,      no               yes
                                                charges.manage, runs, ...)
-    school_admin  the three                    12 (+ access admin)       no               yes
+    school_admin  the three                    11 (+ 5 access admin)     no               yes
     principal     none                         none                      n/a              yes
     other 13      none                         none                      n/a              yes
 
-No unexpected Campus Finance persona.
+No unexpected Campus Finance persona. *(ORG.7H correction, 2026-10-21: protected-key counts 8 and 11, §53.4.)*
 
 **52.4 Database role-guard closure.** `assert_membership_role_assignment_scope`
 refuses a Campus grant of a role holding a protected key, and
@@ -7401,3 +7401,405 @@ Payments, Finance, Campus authorization, the Finance role-grant and
 catalogue-snapshot tests: 1547 passed; 1 failure is environment-only (a
 real-MinIO Guardian purge test; DDEV has no real MinIO). Documentation guards: 22 passed.
 No full regression (documentation only); regression counter 0/5.
+
+## 53. ORG.7H — Campus authorization programme closure audit (read-only, 2026-10-21)
+
+Owner authorization: ORG.7H, programme closure / cross-domain audit / UAT
+readiness. Baseline `origin/main` = `a3f55cbb` (§52). No production code,
+schema, capability, catalogue, role, RLS or legal-gate change.
+Documentation only.
+
+    TECHNICAL (ORG.7, approved v1 scopes)   CLOSED
+    LOCAL / INTEGRATED UAT                  READY (docs/product/CAMPUS-INTEGRATED-UAT.md)
+    PRODUCTION                              BLOCKED by legal and release gates (53.15)
+
+**53.1 Top-level architecture (reconfirmed, no contradiction).** School is
+the only tenant (no `tenant_id`, `organisation_id`/`organization_id` or
+Branch entity was introduced; Campus is the canonical Branch). Campus is an
+intra-School authorization scope on School role assignments only. Role is
+not scope; platform authority is not School authority; capabilities are the
+security authority; navigation is a projection; module entitlement is
+separate. The evaluation order holds: platform/environment -> legal
+availability -> School lifecycle -> module entitlement -> role capability
+-> Campus scope -> ownership/relationship/domain validity -> request
+assurance (MFA, SoD, idempotency). `CampusScopeResolver` consults the
+entitled whole-School capabilities first, then Campus grants (active
+Campuses only, entitlement-intersected); ownership, Guardian, HR-self and
+reporting-line rules run after it, unchanged.
+
+**53.2 Phases.** 7A foundation + Visitor/Inventory (§33); 7B audit (§34);
+7C academic/SIS dependency audit (§35); 7D-0 prerequisite hardening (§36);
+7D-1 academic adoption (§37); 7D-2 Student Campus foundation (§38); 7D-3
+Hostel/Canteen/Admissions (§39); 7D-4 locked eligibility (§40); 7D-5
+Library/Transport (§41); 7E-0 HR foundation (§42); 7E-1 HR adoption (§43);
+7F-0 SIS audit (§44); 7F-1 SIS reads (§45); 7F-2 SIS narrow writes (§46);
+7F-3 Campus transfer (§47); 7G-0 Finance audit (§48); 7G-1A Charge Campus
+(§49); 7G-1 Finance reads (§50); 7G-2 payment entry (§51); 7G-3 Finance
+closure (§52).
+
+**53.3 Campus capability inventory (code truth, `CampusScopeCatalogue`).**
+38 adopted keys in 15 domains. C6 = route-coverage entries (web + API).
+
+    domain               keys                                                   C6 (api)  authority source
+    visitor              visitor.visits.view/.manage                             8 (4)    visit Campus (NOT NULL)
+    inventory            inventory.stock.view/.manage                           10 (5)    Location Campus (NULL = School-wide store)
+    timetable            timetable.schedule.view/.manage                        18 (9)    Offering/Section Campus
+    attendance           attendance.view/.manage                                13 (6)    register's stored Campus
+    curriculum_delivery  curriculum.delivery.view/.manage                        9 (5)    Offering Campus
+    lms                  lms.content.*, lms.assignments.* (view/manage)         22 (12)   Offering Campus
+    examination_papers   examinations.papers.view/.manage                        7 (4)    Offering Campus
+    hostel               hostel.residency.view/.manage                           9 (4)    Hostel Campus + Student current eligibility
+    canteen              canteen.orders.view/.manage                            13 (6)    Outlet Campus + Student current eligibility
+    admissions           admissions.view/.manage (pre-conversion)               12 (6)    application Campus
+    library              library.circulation.view/.manage                       10 (4)    copy Campus / loan stored Campus
+    transport            transport.routes.view, transport.assignments.*         15 (7)    route Campus + Student current eligibility
+    hr                   hr.employees.view/.manage, .assignments.view/.manage   17 (6)    union of current assignments
+    students             students.view/.manage, enrollments.view/.manage        14 (5)    current operational placement
+    finance              finance.charges.view, .payments.view, .payments.record 15 (5)    Charge stored Campus
+    total                38                                                    192 (88)
+- Every adopted key has an implemented contract (an access class plus a
+  catalogue policy); `hr.employees.assignments.view` has no route floor of
+  its own and is read inside `EmployeeOperationalOverviewService` and the
+  Profile workspace (§43).
+- No wildcard family is adopted; no deprecated key, no `*.teacher`,
+  `guardians.`, `portal.`, `school.`, marks, payroll, leave,
+  staff-attendance, sensitive-HR or protected Finance key
+  (`CampusScopeAdoptionArchitectureTest`, `CampusAdoptionImpactTest`).
+- Module entitlement: every adopted key maps to its optional module
+  (`ModuleCatalogueArchitectureTest`); a disabled module removes the
+  Campus effect exactly like the whole-School one.
+- High-risk owner approvals are recorded in
+  `CampusAdoptionImpactTest::OWNER_APPROVED_HIGH_RISK` (per adoption
+  section).
+
+**53.4 Role / persona matrix (seeded catalogue).** Campus eligibility is
+decided by authority held (`StaffRoleCatalog::campusScopable()`): never a
+role with access administration, a grant right or a `CAMPUS_INCOMPATIBLE`
+Finance key, and only a role holding at least one adopted key.
+
+    role                     Campus-grantable  adopted keys held                         why
+    school_admin             no                36 (all but hr.employees.assignments.*)   access administration (5 keys) + 11 protected Finance keys
+    principal                yes               33 (no finance.*, no hr assignments keys)  operational, no protected authority
+    cashier                  yes               3 finance                                  v1 Finance persona
+    accountant               no                3 finance                                  8 protected Finance keys
+    admissions_officer       yes               2 admissions                               —
+    hr_officer               yes               4 hr                                       —
+    hostel_warden            yes               2 hostel                                   —
+    canteen_operator         yes               2 canteen                                  —
+    transport_coordinator    yes               3 transport                                —
+    librarian                yes               2 library                                  —
+    front_office             yes               2 visitor                                  —
+    stores_officer           yes               2 inventory                                —
+    teacher, communications_coordinator, hr_sensitive_records, payroll_officer,
+    staff_self_service       no                0                                          nothing to confer (ownership/self rules apply)
+No unexpected Campus persona. `school_admin` stays whole-School with its
+authority unreduced, and no Campus grant ever satisfies access
+administration (whole-School paths read whole-School grants only; the
+scope trigger refuses access-administration roles). **principal@Campus**
+receives exactly: `visitor.visits.*`, `inventory.stock.*`,
+`timetable.schedule.*`, `attendance.*`, `curriculum.delivery.*`,
+`lms.content.*`, `lms.assignments.*`, `examinations.papers.*`,
+`hostel.residency.*`, `canteen.orders.*`, `admissions.*`,
+`library.circulation.*`, `transport.routes.view`,
+`transport.assignments.*`, `hr.employees.view/.manage`,
+`students.view/.manage`, `enrollments.view/.manage` — no Finance, no
+sensitive HR, no Student Profile/history. Finance persona: §52.3
+(correction: accountant holds 8 protected Finance keys, school_admin 11).
+
+**53.5 Assignment-scope contract.** `campus_id` NULL = the whole School,
+including future Campuses and NULL-Campus records where the domain allows;
+`campus_id` C = exactly C for adopted keys; several grants union;
+whole-School supersedes; a Campus grant never satisfies `can()`, the Gate,
+`schoolCapabilities()`, `capability:` floors, grant authority or the
+last-administrator count; no grant was reinterpreted except through an
+owner-approved adoption reported by `CampusAdoptionImpactTest`.
+
+**53.6 Inactive Campus.** `CapabilityResolver::campusCapabilities()` reads
+Campus status on every call: an inactive Campus confers nothing (reads and
+writes); new work on it is refused (`ActiveCampus`); history is kept;
+reactivation restores the grant's effect; nothing is rewritten. Domain
+detail: whole-School actors keep whole-School reads of inactive-Campus
+history; the transfer, onboarding and payment writes lock the Campus FOR
+SHARE so a concurrent deactivation is seen or waits.
+
+**53.7 NULL / shared resources.** `CampusScope::covers()` never covers NULL
+and `restrict()` uses `whereIn`, so NULL never means every Campus.
+
+    resource                NULL meaning           Campus read  Campus write  history
+    Visitor visit           not possible           in scope     in scope      stored Campus
+    Inventory Location      School-wide store      no           no            follows the Location's CURRENT Campus (53.13 ORG.7H-1)
+    Section/Offering/Room   not possible           in scope     in scope      fixed (composite FKs)
+    Attendance register     not possible           in scope     in scope      stored at write
+    Hostel                  not possible           in scope     in scope      Campus fixed once it has Rooms (app)
+    Canteen Outlet          School-wide outlet     no           no            Outlet Campus not editable (app)
+    Admission application   not possible           in scope     in scope      fixed at creation (no edit path)
+    Library copy            School-shared copy     no           no            move refused while on loan (DB)
+    Library loan            loan of a shared copy  no           no            frozen at checkout (DB)
+    Transport route         School-shared route    no           no            Campus fixed once used (app)
+    Transport vehicle       n/a                    not adopted  not adopted   —
+    Finance Charge          whole-School Charge    no           no            frozen (DB)
+    Payment                 has no Campus          one Campus only            derived from its Charges
+    HR assignment           School-wide placement  never shown  never         makes the Employee whole-School
+    HR Department           School-wide department label only  no            declared shared lookup (not authority)
+Intentional exception: NULL-Campus HR Departments are shown as reference
+labels (a declared shared lookup), never authority.
+
+**53.8 Current vs historical.** Students: current operational placement.
+HR: union of current assignments (School-local date). Library: loan's
+stored Campus (+ borrower's current Campus at checkout). Finance: Charge's
+stored Campus. Transport/Hostel/Canteen: resource Campus + the Student's
+current eligibility at write time. Attendance: register's stored Campus.
+Admissions: application Campus. Academic: Offering/Section Campus.
+Visitor/Inventory: resource Campus. Configuration, directories, runs,
+statements: whole-School. No current resolver overwrites stored
+provenance: placements (`student_enrollments_freeze_placement`), loans
+(`library_loans_campus_guard`) and Charges
+(`fees_reject_recognized_charge_mutation`) are DB-frozen; route, Hostel and
+Outlet Campuses are fixed in the application.
+
+**53.9 Domain closure (approved v1 scopes, all CLOSED).**
+- **Visitor / Inventory (§33–§34):** Campus scope, concealed conflicts,
+  minimal shared lookups; accepted: "busy somewhere", School-wide gate-pass
+  uniqueness.
+- **Academic (§37):** Timetable, Attendance administration, Curriculum
+  delivery, LMS administration, exam papers; TeachingOwnership unchanged
+  (no `*.teacher` key adopted); marks/results never adopted; Academic
+  Structure, bell schedule, syllabus, Examinations and grade scales
+  whole-School; active-Campus integrity for Rooms/Sections/Offerings.
+- **Admissions (§39):** application Campus-bound and fixed; Applicant
+  School-wide, reached only through an in-scope application; conversion,
+  Applicant directory, start, Guardian searches and the fee head
+  whole-School.
+- **Hostel / Canteen (§39–§40):** resource Campus authoritative; the
+  Student's current operational Campus must match, checked under the locked
+  eligibility proof; no cross-Campus boarding; fee intent and the Canteen
+  Charge are bounded side effects with no Finance authority.
+- **Transport (§40–§41):** route view and rider assignment; route Campus =
+  Student's current Campus; NULL routes, route/stop management, fleet and
+  fees whole-School; no cross-Campus riding for Campus staff.
+- **Library (§40–§41):** title School-wide, copy operational, loan Campus
+  frozen at checkout; Campus lending needs borrower current Campus = copy
+  Campus = scope; no cross-Campus lending/returns for Campus staff; NULL
+  copies whole-School; fines a bounded side effect.
+- **HR (§42–§43):** operational set = union of current assignments on the
+  School-local date on active Campuses; identity School-wide; sensitive HR,
+  Profile, history, self-service, reporting-manager leave, Payroll and
+  Staff Attendance unchanged/whole-School.
+- **SIS (§44–§47):** Directory, minimal overview, current placement, name
+  edits, atomic Campus onboarding and the named dual-scope transfer; Student
+  identity School-wide (no `students.campus_id`); full Profile, history,
+  rollover, lifecycle, reactivation, Guardians, bulk transfer, API
+  onboarding and conversion whole-School/deferred. Transfer: Student number
+  unchanged; history untouched; blocked by an active source-Campus Hostel
+  residency, Transport rider or elective; a Library loan neither blocks nor
+  moves; Canteen and Finance history kept; Guardians unchanged.
+- **Finance (§48–§52):** frozen v1 (§52).
+
+**53.10 Cross-domain order (representative).** Transfer, HR placement
+writes, Library checkout, Transport rider assignment and Finance payment
+entry all run: tenant (School context, RLS) -> legal/environment (none
+gate these in development) -> School operational guard -> entitlement
+(resolver) -> capability -> Campus scope (`authorizeCampusScope*`) ->
+domain validity under locks (eligibility, placement lock, Charge locks) ->
+fresh MFA where required (payment entry) and idempotency/replay re-check.
+No deviation found.
+
+**53.11 Routes and declarations.** 192 C6 entries (above), each with an
+adopted key, a `capability:<key>,campus` floor or an unconditional
+`authorizeCampusScope` in the action, and a named scoped access method
+(`CoverageGuard`). 134 exact `WHOLE_SCHOOL_OPERATIONS` (students 67, HR 24,
+Admissions 20, Finance 14, Transport 5, Hostel 4) plus 3 declared hubs
+(`hr`, `finance`, `data-health`); no wildcard; `adoptedWholeSchool()` fails
+any undeclared whole-School use of an adopted key and any stale entry.
+
+**53.12 Cross-cutting closure.** Ownership/relationship rules are
+independent (`CampusAdoptionImpactTest` forbids `*.teacher`, `guardians.`,
+`portal.`, `hr.leave.`, `hr.staff_attendance.`, `hr.employees.personal.`,
+`payroll.`; `GuardianStudentScope` and Leave code hold no Campus logic;
+`HrSelfAdministrationGuard` applies to every actor). Direct ids: out of
+scope = 404 (unknown-equivalent) everywhere; no scope at all = 403;
+declared whole-School operations = 403; writes use one generic refusal
+(`LIBRARY_CHECKOUT_UNAVAILABLE`, `TRANSPORT_ASSIGNMENT_UNAVAILABLE`,
+`HOSTEL_RESIDENCY_UNAVAILABLE`, `PAYMENT_UNAVAILABLE`, `TIMETABLE_SLOT_
+UNAVAILABLE`). A request `campus_id` filter only narrows (rule 101: a
+selected Campus is never authority).
+- **Purpose-limited lookups** (none is write-time proof; every Campus
+  write re-proves under `StudentOperationalEligibility::lockOperationalOn()`
+  or its domain locks): Library borrower, Transport rider, Hostel resident,
+  Canteen Student (`StudentPurposeLookup`: id, displayName, studentNumber;
+  limit 10, max 50); Finance debtors and collection debtors (open in-scope
+  debt; 20 / 10); transfer and onboarding destination Sections (page props,
+  scope-restricted); HR manager candidates (current in-scope assignments,
+  20); HR account candidates, Visitor hosts/directory, Timetable teachers
+  and Transport drivers (School-wide by declared contract).
+- **Search hygiene:** ORG.7 lookups and directories escape `%`, `_` and `\`
+  (`StudentSearch::escape`, `addcslashes`). Not escaped (hygiene, never a
+  cross-scope leak — bound parameters inside an already scope-bounded or
+  School-wide set): Visitor hosts/directory, Timetable pickers (web + API),
+  Inventory item search (also an ungrouped `orWhere` that can bypass the
+  active filter on the School-wide catalogue), Transport drivers.
+- **Replay:** `EnsureIdempotent` binds the actor's CURRENT CampusScope into
+  the request fingerprint (a changed scope is 409, never a stored body);
+  capability and entitlement are route floors re-checked on every request;
+  no stored "authorized" flag. Payment entry re-checks visibility under the
+  current scope before any replay (§51.5). Residual (LOW): with an
+  unchanged scope, an API replay returns the actor's own stored body even
+  if that record has since left scope. Web Campus writes (transfer,
+  onboarding, circulation, residency, riders, orders) use no idempotency
+  keys; domain locks and unique indexes prevent duplicates.
+
+**53.13 Security closure.** No HIGH finding in any ORG.7 phase. Every
+MEDIUM is closed:
+
+    id      phase  domain        finding                                           closed
+    37-M1   7D-1   Curriculum    out-of-scope not-found body differed              §37
+    37-M2   7D-1   cross-cut     replay across a scope change not re-authorized    §37 (scope in fingerprint)
+    38-M    7D-2   SIS           join could leak Campus columns to select *        §38 (EXISTS)
+    40-M    7D-4   Hostel        deadlock vs transfer/rollover                     §40 (FOR NO KEY UPDATE)
+    41-M    7D-5   Transport     rider refusal oracle                              §41
+    42-M1   7E-0   HR            write-target contract missing                     §42/§43
+    43-M1   7E-1   HR            ending an assignment cleared other-Campus reports §43
+    43-M2   7E-1   HR            set-primary race                                  §43
+    44 F-1  7F-0   SIS           Guardian contact under students.view              §45
+    44 F-2  7F-0   SIS           placements skipped active checks                  §46/§47
+    44 F-3  7F-0   SIS           enroll() capture path                             §46
+    44 F-4  7F-0   SIS           transfer left Hostel/Transport/electives          §47
+    48 F-1  7G-0   Finance       Charge Campus re-derived on read                  §49
+§35 R1–R5 closed (§36, §42); R6 pinned at every adoption; R7 accepted per
+domain; R8 partly closed (remaining LIKE/docblock/CHECK hygiene LOW).
+**New in this audit — ORG.7H-1 (LOW, owner decision):** an Inventory
+Location's Campus can be changed (or set to NULL) by
+`inventory.directory.manage`, a whole-School key, after it has stock
+movements; its balances and movement history then follow the new Campus.
+Not a Campus-actor bypass (whole-School authority, stock data only), but
+the one adopted domain without a "fixed once used" Campus rule (Library,
+Transport, Hostel and Canteen have one). Recommended: freeze a Location's
+Campus once it has movements or balances (a small hardening slice). Not a
+closure or UAT blocker. Accepted LOW/INFO residuals by domain remain as
+recorded in §33–§52 (Visitor busy-somewhere; Admissions no immutability
+trigger, fingerprint drift, F-9; Library audit outside transaction,
+`student_id` not frozen; Transport non-UUID 500, app-only route freeze,
+inactive stops; HR filter/summary/UTC items; SIS F-5–F-8, F-10, F-11; Hostel
+inference; Canteen Outlet app-only freeze; Finance §52.13; cross-cutting
+`CampusScope` constructor guard, 60 s grant cache).
+
+**53.14 Concurrency, tenancy, invariants.** Canonical locks: Student
+eligibility (active year -> Student -> current Enrollment -> Campus, FOR
+SHARE; exclusive Student locks FOR NO KEY UPDATE); transfer (Student-first,
+one direction); `EmployeePlacementLock` first for every HR placement
+writer; Library/Transport/Hostel/Canteen resource then eligibility; Finance
+Charges FOR UPDATE in id order then Campus FOR SHARE. No open deadlock
+finding; recorded: the `TransportFeeSelectionConcurrencyTest` fixture
+flake (local) and F-8 rollover locking (LOW). Tenancy: School is the only
+tenant, FORCE RLS on tenant tables, explicit School predicates in every
+Campus query, no runtime BYPASSRLS, composite `(id, school_id)` keys stop
+cross-School Campus references. DB invariants:
+
+    invariant                                   object                                              DB  app  test
+    grant Campus same-School, active            membership_role_assignments FK + scope trigger      yes yes  CampusScopeDatabaseTest-family
+    access-admin / Guardian / platform never Campus   assert_membership_role_assignment_scope      yes yes  Postgres guard tests
+    protected Finance role never Campus         same trigger (§51)                                  yes yes  FinanceRoleCampusScopeGuardTest
+    protected key never added to Campus role    role_capabilities_campus_finance_guard              yes —    FinanceRoleCampusScopeGuardTest
+    grantor counts whole-School grants only     trg_membership_role_assignments_grantor            yes yes  grantor tests
+    enrollment matches Section School/Year/Campus/Grade   composite FK (§36)                       yes yes  §36 tests
+    Timetable Room on the entry's Campus        composite FK (§36)                                  yes yes  §36 tests
+    placement immutable                         student_enrollments_freeze_placement               yes yes  transfer tests
+    loan Campus frozen; copy move guarded       library_loans_campus_guard, library_copies_campus_move_guard  yes yes  Library Campus tests
+    Charge Campus same-School, frozen, bound    charges_campus_fk, freeze trigger, *_charge_campus_guard  yes yes  ChargeCampusIntegrityTest
+    route / Hostel / Outlet Campus fixed        application under row locks                         no  yes  domain tests
+    RLS                                         TenantRls (FORCE)                                   yes —    RawIsolation tests
+Every ORG.7 migration has a working, rollback-proven `down()` (§36–§51).
+Grant, Charge and Student-number rollbacks refuse to destroy history
+(fail closed); the Library loan-Campus rollback (§41) drops the frozen loan
+Campus without a blocker (LOW, 53.13).
+
+**53.15 Legal / production blocker register (unchanged, nothing inferred).**
+
+    gate          subject                         status                                  production effect
+    E30           receipt form / GST              LEGAL_REVIEW_REQUIRED                   blocks; no code refusal
+    E31           late fees / in-year changes     LEGAL_REVIEW_REQUIRED                   blocks; no code refusal
+    E32           RTE / free seats                LEGAL_REVIEW_REQUIRED                   blocks; nothing to switch off
+    E34           Library fines                   LEGAL_REVIEW_REQUIRED                   blocks; no code refusal
+    E21           retention                       LEGAL_REVIEW_REQUIRED (ratification)    blocks O1 and launch
+    E02 / E15     release qualification / digest  GOVERNANCE_ / DEPLOYMENT_REQUIRED       blocks
+    E16           vulnerability exceptions        current through 2026-11-12 (time-bound) blocks if lapsed
+    O1            Phase 0O definition of done     defined, not satisfied (25 rows)        blocks go-live
+    E33/TCH-L1    teacher Attendance              APPROVED WITH CONDITIONS                no teacher grants before deployment re-verification
+    E36/E37/E42   marks / teachers / portal marks LEGAL_REVIEW_REQUIRED                   refused in code
+    E45 PAY-L1    ESI disability                  LEGAL_REVIEW_REQUIRED (not sent)        statutory payroll not reachable
+    HRX-L1..L4    health, biometrics, leave, LOP  OPEN / activation blocked               activation gated
+    E46 POR-L1    Guardian/Student portal         LEGAL_REVIEW_REQUIRED (not sent)        refused in code
+    E47 SR-L1     staff personas                  QUESTION DRAFTED (not sent)             owner decision OD-PPR-14c
+Approvers: Legal + Owner (Operator/Security for E02/E15/E16). None is
+Campus-specific; Campus scope never enables a gated feature.
+
+**53.16 Deferred-feature register.** No deferral blocks integrated UAT or
+production independently of the gates above; each is a deliberate
+whole-School boundary needing an owner decision before any build.
+
+    domain      feature                                                    class        future phase
+    HR          named Employee Campus move                                 product      later HR wave
+    HR          API onboarding (all-of C6 floor)                           security     C6 all-of floor work
+    HR          historical HR by Campus                                    product      later HR wave
+    HR          Visitor host lookup tightening                             security LOW hygiene slice
+    HR          Campus Leave / Staff Attendance / Payroll; rehire          product/sec  —
+    HR          Campus principal leave approval; cross-Campus managers     authority    ORG.8
+    SIS         API onboarding                                             security     later SIS wave
+    SIS         historical Enrollment by Campus                            product      later SIS wave
+    SIS         rollover, withdrawal/leaver, reactivation                  authority    ORG.8 (status approvals)
+    SIS         bulk transfer                                              parity       ORG.9
+    Admissions  Campus conversion; combined Applicant + Application start  product      ORG.7F-4 (optional)
+    Transport   shared-route management; transport.routes.manage;          product      later Transport wave
+                fleet/vehicle reference; cross-Campus riding
+    Library     cross-Campus lending/returns                               product      later Library wave
+    Finance     API payment entry; Campus fee statement; accountant@Campus;   product/authority  owner decision / ORG.8
+                corrections, refunds, reversals
+    Examinations Campus exam-papers hub (navigation gap)                   UX           academic UX follow-up
+    Marks       Campus adoption                                            legal        after RES gates
+    Inventory   Location Campus freeze (ORG.7H-1)                          integrity    hardening slice
+    cross-cut   R8 LIKE/docblock/CHECK remainder; C6 all-of floors          hygiene      hygiene slice
+    parity      Branch filters, reports, HR MIS (reference screenshots)   parity       ORG.9
+
+**53.17 Performance / residuals.** API Payment list not date-bounded (post-
+closure); 60 s grant cache can under-grant briefly after a grant (never
+over-grant beyond revocation handling, which forgets the cache); app-level
+freezes noted in 53.14.
+
+**53.18 Integrated UAT.** `docs/product/CAMPUS-INTEGRATED-UAT.md`: 16
+personas on actual role templates, one deterministic fixture (Campuses A,
+B, inactive C; current/transferred/leaver/unplaced/multi-year Students;
+A/B/A+B/unassigned/notice/separated Employees; every domain's current and
+historical records), 19 positive and 15 mandatory negative cases, and the
+navigation contract (Campus entries only when every named key is adopted
+and the route is not whole-School-only; Finance/HR/Data Health hubs
+hidden; UX residuals: exam-papers path, Campus admissions start, Record
+payment reached from Payments received). Finance detail: FINANCE.md.
+
+**53.19 Dependencies.** LC-5–LC-10 stay paused; none blocks ORG.7 closure,
+and none needs further ORG.7 work to resume (they need owner
+authorization only). Reference ERP evidence (Iris/MyClassboard Branch
+labels, broader reports, HR MIS/reporting screenshots, module grouping) is
+parity input for ORG.9, never an ORG.7 requirement.
+
+**53.20 ORG.8 handoff.** Objective: approval-authority completion under
+§16 — `.request/.approve/.reverse/.override` keys, approve never implied by
+manage, per-item SoD (holding both never satisfies it; DB maker-checker as
+the pattern), override with a closed reason, fresh MFA and audit, never
+bypassing a legal gate; approval may be Campus-scoped only where the domain
+adopted Campus scope. Open gaps: payment correction refund/reversal
+approver (amends ADR 0031), ledger post/reverse actor rule, Library fine
+void approval, attendance regularisation, Student status (inactive/
+reactivate) requests, fee unassignment, lesson-plan approval (no module),
+plus the HR Campus-principal leave and cross-Campus manager decisions and
+the reference approval functions in §11 parity notes. Domains: Finance/
+Payments/ledger, Fees, Library, Attendance, SIS, HR, Payroll, Exams.
+Prerequisite: ORG.2 (done) and a read-only ORG.8 contract audit first.
+ORG.7 closes first because approvals may be Campus-scoped and need the
+frozen scope model, adopted-key list and whole-School declarations as their
+base.
+
+**53.21 Validation.** Every *Architecture*, *Guard* and *Campus* test plus
+the Authorization suite (catalogue, adoption impact, route coverage and
+whole-School declaration guards, every domain's Campus tests): 1362 passed;
+1 failure is environment-only (a real-MinIO Guardian purge test).
+Documentation guards: 22 passed. No full regression (documentation only); counter 0/5.
