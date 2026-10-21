@@ -133,6 +133,19 @@ class ApprovalWorkflowRegistryTest extends TestCase
     }
 
     #[Test]
+    public function only_fee_concessions_declare_the_guardian_beneficiary_conflict_and_it_is_enforced(): void
+    {
+        $declared = array_filter(ApprovalWorkflowRegistry::WORKFLOWS, fn (array $w) => isset($w['relationshipConflict']));
+        $this->assertSame(['fee_concessions' => 'guardian_of_student_beneficiary'], array_map(fn (array $w) => $w['relationshipConflict'], $declared));
+
+        $source = (string) file_get_contents((string) (new ReflectionClass(ApprovalWorkflowRegistry::WORKFLOWS['fee_concessions']['service']))->getFileName());
+        $this->assertStringContainsString('beneficiary->isGuardianOf(', $source, 'the decision checks the beneficiary conflict');
+        $this->assertSame('O', DB::selectOne("select tgenabled from pg_trigger where tgname = 'fee_concessions_beneficiary_guardian_guard'")->tgenabled, 'and the database backs it');
+        $policy = (string) file_get_contents(app_path('Support/Approval/MakerCheckerPolicy.php'));
+        $this->assertStringNotContainsStringIgnoringCase('guardian', $policy, 'maker/checker stays generic');
+    }
+
+    #[Test]
     public function a_fresh_mfa_proof_is_minted_only_by_fresh_mfa_requirement(): void
     {
         $minters = [];

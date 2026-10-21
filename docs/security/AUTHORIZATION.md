@@ -1540,6 +1540,25 @@ UAT plan: `docs/product/APPROVAL-AUTHORITY-UAT.md`.
 - **`FreshMfaRequirement` returns a `FreshMfaProof`,** recorded as
   assurance. It is never authority, and only `FreshMfaRequirement` mints it.
 
+## Guardian beneficiary conflict and Guardian self-administration (ORG.8A-R1, ADR 0076 §59 — built 2026-10-21)
+
+- **No self-administration of one's own Guardian identity.** Nobody links,
+  unlinks or changes a Student relationship of a Guardian identity linked
+  to their own account (active or revoked link). Another authorized
+  administrator can.
+- **Concession beneficiary conflict.** Nobody approves or rejects a fee
+  concession for a Student whose current Guardian is linked to their own
+  account. The service refuses it, and the database refuses it on the
+  recorded decider.
+- **Other paths unchanged.** Requesting is unaffected, maker/checker stays
+  generic, and no permission, role or Campus scope changed.
+- **The self-administration rule is enforced by the application, not the
+  database.** A relationship row records no actor (§59.6).
+- **A Guardian is recognised only through an account link.** A staff
+  member is treated as a Guardian only when their account is linked to the
+  Guardian record. Someone who never links it is not detected (§59.7a,
+  awaiting an owner policy decision).
+
 ## What is NOT yet implemented
 
 Contracted by ADR 0076 (ORG.1, 2026-10-17) and not built:

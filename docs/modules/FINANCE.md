@@ -5661,3 +5661,17 @@ screen, API or internal call. The audit events record who requested and who
 decided, and whether a fresh MFA code was verified. They never record
 amounts, Student details or free text. Who may request or approve is
 unchanged. Revocation and adjustment cancellation are unchanged (G-3).
+
+## Concession beneficiary conflict (ORG.8A-R1, 2026-10-21, ADR 0076 §59)
+
+A person linked as a Guardian of the concession's Student cannot approve or
+reject it, even if a colleague requested it and even with a fresh MFA code.
+That covers any Guardian identity their account has ever been linked to,
+active or revoked. They may still request a concession; someone unrelated
+decides. The database refuses the same decision. Removing their own
+Guardian relationship to get round this is refused (Guardian
+self-administration). The rule recognises a staff member as a Guardian only through
+their account link to the Guardian record. Someone who never links their
+account, uses a separate account, or creates a second Guardian record is not
+detected. That limit is recorded for an owner policy decision (ADR 0076
+§59.7a), and the audit trail is the control for it.

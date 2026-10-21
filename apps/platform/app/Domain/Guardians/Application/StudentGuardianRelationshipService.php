@@ -51,6 +51,7 @@ class StudentGuardianRelationshipService
         private readonly TenantContext $context,
         private readonly StudentLockOrder $lockOrder,
         private readonly StudentProcessingAuthorizationReadService $authorizations,
+        private readonly GuardianSelfAdministrationGuard $selfAdministration,
     ) {}
 
     /**
@@ -68,6 +69,8 @@ class StudentGuardianRelationshipService
         if ($student->school_id !== $guardian->school_id) {
             throw new CrossSchoolRelationshipException;
         }
+        // ORG.8A-R1: never one's own Guardian identity.
+        $this->selfAdministration->refuseOwnGuardian($actor, $student->school, $guardian->id);
 
         return $this->context->withSchool($student->school, function () use ($student, $guardian, $type, $attributes, $actor) {
             try {
@@ -117,6 +120,8 @@ class StudentGuardianRelationshipService
      */
     public function update(StudentGuardianRelationship $relationship, array $attributes, ?User $actor = null): StudentGuardianRelationship
     {
+        $this->selfAdministration->refuseOwnGuardian($actor, $relationship->school, $relationship->guardian_id);
+
         return $this->context->withSchool($relationship->school, fn () => DB::transaction(function () use ($relationship, $attributes, $actor) {
             // S5: Student first (ADR 0038 order) -- `is_legal_guardian` decides whether a consent grant qualifies.
             $this->lockOrder->holdStudent($relationship->school, $relationship->student_id);
@@ -146,6 +151,8 @@ class StudentGuardianRelationshipService
      */
     public function setPrimary(StudentGuardianRelationship $relationship, ?User $actor = null): StudentGuardianRelationship
     {
+        $this->selfAdministration->refuseOwnGuardian($actor, $relationship->school, $relationship->guardian_id);
+
         return $this->context->withSchool($relationship->school, function () use ($relationship, $actor) {
             try {
                 return DB::transaction(function () use ($relationship, $actor) {
@@ -191,6 +198,9 @@ class StudentGuardianRelationshipService
      */
     public function unlink(StudentGuardianRelationship $relationship, ?User $actor = null): void
     {
+        // ORG.8A-R1: never one's own Guardian identity (no unlink -> decide -> relink).
+        $this->selfAdministration->refuseOwnGuardian($actor, $relationship->school, $relationship->guardian_id);
+
         $this->context->withSchool($relationship->school, function () use ($relationship, $actor) {
             DB::transaction(function () use ($relationship, $actor) {
                 // S5: Student first (ADR 0038 order): the DELETE's RESTRICT check reaches the grants after the

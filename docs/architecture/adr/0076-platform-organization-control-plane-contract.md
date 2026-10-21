@@ -8729,3 +8729,122 @@ decision, not part of 8A.
 **58.6 Unchanged / open.** G-2 (payroll participation) MEDIUM, next phase
 ORG.8B; G-3 LOW; G-4..G-6, OD-8.1..OD-8.9; ORG.7 residuals; LC-5–LC-10
 paused; ORG.9 parity.
+
+## 59. ORG.8A-R1 — Guardian beneficiary conflict and Guardian self-administration guard (as built, 2026-10-21)
+
+Owner decision: OPTION 1 (self-link / self-unlink guard). Option 2
+(relationship history) not authorized; option 3 (accept the residual)
+rejected. Baseline `origin/main` = `f2b04e22` (§58). Closes ORG.8A G-7.
+
+**59.0 Status.** G-7 CLOSED for account-linked Guardians (the owner's
+contract); the unlinked-identity residual M-1 is recorded in 59.7a for an
+owner policy decision.
+
+**59.1 Reproduction (before R1, committed tests failing first).** A
+non-requesting approver linked as a Guardian of the Student approved the
+concession; the same approver unlinked their own Guardian↔Student
+relationship and relinked it with no refusal.
+
+**59.2 Identity and relationship model (structural, School-scoped).**
+User → `school_memberships` (one per User and School) →
+`student_guardian_account_links` (Guardian kind: `guardian_id` set;
+`active`/`revoked`, never deleted; revoked = unlinked, no error marker, so
+it is history of ownership) → `guardians` → `student_guardian_relationships`
+(any type; hard DELETE on unlink, no history, no actor column). RLS forced
+on all of them. One Guardian may relate to several Students and a Student
+to several Guardians; one membership may be both staff and Guardian, so
+persona never matters.
+
+**59.3 Rule B — no self-administration (Guardians).**
+`GuardianSelfAdministrationGuard` refuses link, update, set-primary and
+unlink in `StudentGuardianRelationshipService` (the only application writer;
+web, API and Admissions conversion all pass the acting User — pinned) when
+the Guardian identity belongs to the actor: any account link of their
+membership in that School, active or revoked
+(`GuardianAccountOwnership`, a Guardians port answered by Identity's
+`GuardianAccountOwnershipReader`, bound in `AppServiceProvider` — Guardians
+never depends on Identity). 403 `GUARDIAN_SELF_ADMINISTRATION`, fixed text.
+Another authorized administrator, and the actor on unrelated Guardians, are
+unaffected; `guardians.manage`/`students.manage`, `GuardianStudentScope` and
+portal authority are unchanged. A null actor is a trusted internal path.
+
+**59.4 Rule A — beneficiary conflict (Fees).** In the locked decision,
+after fresh authority and the shared maker/checker,
+`GuardianBeneficiaryRelationship::isGuardianOf()` refuses approve AND reject
+when any Guardian identity that belongs to the decider (active or revoked
+link) has a CURRENT relationship to the concession's Student: 403
+`FEE_CONCESSION_DECISION_CONFLICT`, generic text, nothing written (no
+decision, adjustment, journal or success audit). Per Student; requesting is
+unaffected; an unrelated approver decides. `MakerCheckerPolicy` is
+unchanged (no Guardian semantics); no generic conflict-of-interest
+framework; the rule is the concession's own (`relationshipConflict:
+guardian_of_student_beneficiary` in the registry, pinned).
+
+**59.5 Database backstop (Rule A).** `fee_concessions_beneficiary_guardian_guard`
+(BEFORE UPDATE OF status, decided_by_user_id; pending -> approved/rejected)
+refuses a decision whose RECORDED decider is such a Guardian — the same
+recorded-actor pattern as `fee_concessions_sod_check` (kept). SECURITY
+INVOKER, pinned search_path, not PUBLIC-executable; reads only the decision's
+own School. Proven as the runtime role: approve and reject refused (revoked
+link included), requester still refused by the SoD check, an unrelated
+decider stands, another School's link never counts. Rollback + re-apply
+IDENTICAL (65 schema lines); `verify-database` failed=0.
+
+**59.6 Rule B at the database: application-enforced, stated plainly.** A
+relationship row records no actor and the repository has no trusted
+database actor context, so a database self-administration rule would need a
+caller-supplied actor (spoofable) — not built. Revoking runtime INSERT/DELETE
+would need a definer function with the same spoofable parameter. The
+runtime role can therefore still write relationships by raw SQL; that is the
+same trust boundary as every recorded-actor rule here (raw runtime SQL could
+equally record a different `decided_by_user_id`), and it gives a raw-SQL
+actor nothing beyond what raw SQL already has. Every application path goes
+through the guarded service (pinned by `GuardianSelfAdministrationTest`).
+
+**59.7 Concurrency.** An independent administrator's unlink held open:
+the uncommitted DELETE is still the committed relationship, so the Guardian
+approver is refused; once it commits, the current-relationship contract
+applies and the approver may decide (two-process test). The approver's own
+unlink is refused, so no race they control lifts the conflict. No new lock;
+ORG.8A races (approve/approve, approve/reject, approve/withdraw, grant
+revocation) unchanged.
+
+**59.7a Security review** (independent): no HIGH. MEDIUM M-1, recorded
+for the owner, a limit of the approved structural contract (no name or
+contact matching, §59.2). Rule A sees a decider's Guardian identity only
+through an account link of their membership. A staff parent can stay
+invisible by:
+- never linking their account to their Guardian identity, or deciding
+  before they link it;
+- using a separate User account for the portal;
+- creating a duplicate Guardian record for another child (refused only if
+  that record is linked to their account; one active link per membership).
+
+What R1 does close: the owner's G-7 sequence (unlink -> decide -> relink for
+an account-linked Guardian) and every self-administration of an owned
+identity. The detective control for the rest is the audit trail: the same
+actor creating or linking the Guardian and later deciding. Closing it
+structurally needs a policy (e.g. staff must link their own Guardian
+identities, or a declared-relationship register) — an owner decision, not
+built.
+
+LOW fixed: the "every caller names the acting User" pin now finds every
+receiver of the service (typed variables, properties, inline container
+resolution).
+
+LOW accepted:
+- A revoked link counts forever and has no correction path. An
+  administrator could link and revoke a colleague to disqualify them, which
+  is audited; the owner chose revoked = owned.
+- A null actor (internal path) skips Rule B; every application caller
+  passes one (pinned).
+- revoke and adjustment cancellation stay outside Rule A (G-3).
+- A Student-kind account link (a staff member who is the Student) is not
+  treated as a beneficiary.
+
+**59.8 Unchanged.** MFA (approve fresh code), fresh authority, entitlement,
+lifecycle, Campus (none), roles, capabilities, `CampusScopeCatalogue`,
+G-3 (revoke/cancel), G-2 (Payroll), ORG.8-P1 ledger. Queue unchanged: a
+conflicted approver may still see the pending item; the decision refuses
+(future UX: disable it). Module directions: Fees → Guardians (new, no cycle);
+Guardians ← Identity through the port.

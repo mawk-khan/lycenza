@@ -5,6 +5,7 @@ namespace App\Domain\Fees\Application;
 use App\Domain\Fees\Application\Exceptions\AcademicYearNotFoundException;
 use App\Domain\Fees\Application\Exceptions\ChargeAlreadyCancelledException;
 use App\Domain\Fees\Application\Exceptions\ChargeNotFoundException;
+use App\Domain\Fees\Application\Exceptions\ConcessionDecisionConflictException;
 use App\Domain\Fees\Application\Exceptions\FeeConcessionIdempotencyConflictException;
 use App\Domain\Fees\Application\Exceptions\FeeConcessionIllegalTransitionException;
 use App\Domain\Fees\Application\Exceptions\FeeConcessionNotFoundException;
@@ -19,6 +20,7 @@ use App\Domain\Fees\Infrastructure\Charge;
 use App\Domain\Fees\Infrastructure\FeeAdjustment;
 use App\Domain\Fees\Infrastructure\FeeConcession;
 use App\Domain\Fees\Infrastructure\FeeHead;
+use App\Domain\Guardians\Application\GuardianBeneficiaryRelationship;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Approval\ApprovalDecisionAuthority;
@@ -67,7 +69,9 @@ use Illuminate\Support\Str;
  * the only User who shapes a concession -- its terms and requester are
  * DB-immutable, so drift is impossible) -> transition -> adjustment (approve,
  * same transaction) -> audit with `ApprovalProvenance`. Withdraw, revoke and
- * adjustment cancellation are outside the pilot (G-3).
+ * adjustment cancellation are outside the pilot (G-3). ORG.8A-R1 (§59) adds
+ * the beneficiary conflict after maker/checker: a Guardian of the Student
+ * never decides (approve or reject).
  */
 class FeeConcessionService
 {
@@ -88,6 +92,7 @@ class FeeConcessionService
         private readonly TenantContext $context,
         private readonly ApprovalDecisionAuthority $authority,
         private readonly MakerCheckerPolicy $makerChecker,
+        private readonly GuardianBeneficiaryRelationship $beneficiary,
     ) {}
 
     /** The concession's material participants, from its own immutable columns. */
@@ -254,7 +259,10 @@ class FeeConcessionService
 
     /**
      * Under the concession lock: the decider's current whole-School authority,
-     * then maker/checker (backed by `fee_concessions_sod_check`).
+     * then maker/checker (backed by `fee_concessions_sod_check`), then the
+     * concession's own beneficiary conflict -- ORG.8A-R1 Rule A: never a
+     * Guardian of the Student (backed by `fee_concessions_beneficiary_guardian_guard`).
+     * The decider cannot remove that relationship themselves (Rule B).
      */
     private function assertMayDecide(School $school, FeeConcession $concession, User $actor): void
     {
@@ -262,6 +270,10 @@ class FeeConcessionService
 
         if (! $this->makerChecker->permits($actor, self::participants($concession))) {
             throw new SelfApprovalNotAllowedException($concession->id);
+        }
+
+        if ($this->beneficiary->isGuardianOf($actor, $school, $concession->student_id)) {
+            throw new ConcessionDecisionConflictException($concession->id);
         }
     }
 

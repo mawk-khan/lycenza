@@ -24,6 +24,7 @@ namespace App\Support\Approval;
  *   drift            'immutable_terms' | 'fingerprint' | 'frozen_at_approval'
  *   freshMfa         decisions needing FreshMfaRequirement
  *   compatibility    'pilot' | 'as_is' | 'adapter' | 'special_rules' | 'not_applicable'
+ *   relationshipConflict  (optional) a domain-specific decider conflict beyond maker/checker
  */
 final class ApprovalWorkflowRegistry
 {
@@ -43,6 +44,9 @@ final class ApprovalWorkflowRegistry
             'drift' => 'immutable_terms',
             'freshMfa' => ['approve'],
             'compatibility' => 'pilot',
+            // ORG.8A-R1 (§59): the concession's own beneficiary conflict, after maker/checker; backed by
+            // fee_concessions_beneficiary_guardian_guard; the decider cannot edit the relationship (Rule B).
+            'relationshipConflict' => 'guardian_of_student_beneficiary',
             'note' => 'ORG.8A pilot. Request terms and requester are DB-immutable; revoke and adjustment cancellation stay outside the pilot (G-3).',
         ],
         'communication_approvals' => [

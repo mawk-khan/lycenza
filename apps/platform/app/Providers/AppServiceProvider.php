@@ -4,8 +4,10 @@ namespace App\Providers;
 
 use App\Domain\Finance\Application\Periods\FinancialPeriodCloseParticipant;
 use App\Domain\Finance\Application\Retention\FinanceRetentionParticipant;
+use App\Domain\Guardians\Application\GuardianAccountOwnership;
 use App\Domain\Hostel\Application\HostelTransferBlocker;
 use App\Domain\HR\Application\EmploymentEndParticipant;
+use App\Domain\Identity\Application\GuardianAccountOwnershipReader;
 use App\Domain\Leave\Application\AttendancePresenceConflictReader;
 use App\Domain\Payments\Application\ChargePeriodStateParticipant;
 use App\Domain\Payments\Application\Retention\ChargeRetentionParticipant;
@@ -131,6 +133,8 @@ class AppServiceProvider extends ServiceProvider
         // Attendance. Bound here, not in Leave, so Leave never references the
         // module that depends on it.
         $this->app->bind(AttendancePresenceConflictReader::class, StaffAttendancePresenceReader::class);
+        // ORG.8A-R1 (ADR 0076 §59): Guardians' port, answered by Identity's account links (no Guardians -> Identity dependency).
+        $this->app->bind(GuardianAccountOwnership::class, GuardianAccountOwnershipReader::class);
 
         // Phase 0O.1: no (string) cast -- a missing key stays missing and
         // AiContextTokenService refuses to sign or verify with it.

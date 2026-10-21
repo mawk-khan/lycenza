@@ -1506,3 +1506,14 @@ once several modules copy it.
        - Its database maker/checker backstop stays at least as strict.
      - **Fresh MFA:** a `FreshMfaProof` comes only from
        `FreshMfaRequirement` and is provenance, never authority.
+     - **Beneficiary conflict and Guardian self-administration (ORG.8A-R1,
+       §59).**
+       - A fee concession is never decided by a Guardian of its Student:
+         any account link of the decider (active or revoked) to a Guardian
+         currently related to the Student. Enforced in the service and in
+         the database on the recorded decider.
+       - Nobody links, unlinks or changes the Student relationships of a
+         Guardian identity linked to their own account. Enforced in the
+         service (`GuardianSelfAdministrationGuard`).
+       - Maker/checker stays generic; there is no generic
+         conflict-of-interest framework.

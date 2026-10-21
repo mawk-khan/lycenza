@@ -5,17 +5,22 @@ namespace Tests\Feature\Fees;
 use App\Domain\Fees\Application\Exceptions\AdjustmentExceedsOutstandingException;
 use App\Domain\Fees\Application\Exceptions\ChargeAlreadyCancelledException;
 use App\Domain\Fees\Application\Exceptions\ChargeHasActiveAdjustmentsException;
+use App\Domain\Fees\Application\Exceptions\ConcessionDecisionConflictException;
 use App\Domain\Fees\Application\Exceptions\FeeAdjustmentAlreadyCancelledException;
 use App\Domain\Fees\Application\Exceptions\FeeConcessionIllegalTransitionException;
 use App\Domain\Fees\Infrastructure\FeeConcession;
+use App\Domain\Guardians\Application\Exceptions\GuardianSelfAdministrationException;
+use App\Domain\Identity\Application\AccountLinkService;
 use App\Domain\Payments\Application\Exceptions\ChargeAllocationExceedsChargeAmountException;
 use App\Domain\Payments\Infrastructure\PaymentAllocation;
 use App\Models\School;
+use App\Models\SchoolMembership;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Symfony\Component\Process\Process;
 use Tests\Concerns\ForcesConcurrentOverlap;
 use Tests\Feature\Fees\Concerns\CreatesFeeConcessionFixtures;
 use Tests\TestCase;
@@ -38,6 +43,11 @@ use Tests\TestCase;
  *    adjustment only when the approval won; a revocation of the approver's
  *    grants committed first -> the waiting approval re-reads current
  *    authority and is refused.
+ * 7. ORG.8A-R1 (ADR 0076 §59): an independent administrator's unlink of a
+ *    Guardian approver's relationship, held open, leaves the committed
+ *    relationship in force (the approver is still refused); once it commits
+ *    the current-relationship contract applies. The approver's own unlink is
+ *    refused outright, so no race of theirs can lift the conflict.
  */
 class FeeConcessionConcurrencyTest extends TestCase
 {
@@ -344,5 +354,48 @@ class FeeConcessionConcurrencyTest extends TestCase
         $this->assertSame('rejected:'.AuthorizationException::class, $contender, 'current authority, read after the revocation committed');
         $this->assertSame(FeeConcession::STATUS_PENDING, $this->statusOf($w, $concession));
         $this->assertCount(0, $this->adjustmentsOf($w));
+    }
+
+    private function runOp(array $command, array $env = []): string
+    {
+        $process = new Process($command, null, $env);
+        $process->setTimeout(120);
+        $process->run();
+
+        return $process->getOutput();
+    }
+
+    #[Test]
+    public function an_independent_unlink_held_open_still_conflicts_and_once_committed_the_current_contract_applies(): void
+    {
+        [$w, $concession] = $this->pending();
+        $approver = $this->createUserWithCapabilities($w['school'], ['finance.fee_concessions.approve', 'students.manage', 'guardians.manage']);
+        $admin = $this->createUserWithCapabilities($w['school'], ['students.manage', 'guardians.manage']);
+        $guardian = $this->createGuardian($w['school']);
+        $relationship = $this->createStudentGuardianRelationship($w['student'], $guardian);
+        $membership = $this->inSchool($w['school'], fn () => SchoolMembership::query()->where('user_id', $approver->id)->where('school_id', $w['school']->id)->firstOrFail());
+        $this->inSchool($w['school'], fn () => app(AccountLinkService::class)->linkGuardian($w['school'], $guardian, $membership, $w['recorder']));
+
+        $this->assertSame('rejected:'.GuardianSelfAdministrationException::class, $this->runOp($this->concession($w, 'unlink-relationship', $approver->id, $relationship->id)), 'the approver cannot lift their own conflict');
+
+        $dir = sys_get_temp_dir().'/race_'.bin2hex(random_bytes(8));
+        mkdir($dir);
+        $holder = new Process($this->concession($w, 'unlink-relationship', $admin->id, $relationship->id), null, ['CONCURRENCY_HOLD_DIR' => $dir]);
+        $holder->setTimeout(120);
+        $holder->start();
+        $deadline = microtime(true) + 90;
+        while (! file_exists($dir.'/acted')) {
+            $this->assertTrue($holder->isRunning() && microtime(true) < $deadline, 'the unlink reached its held delete: '.$holder->getOutput().$holder->getErrorOutput());
+            usleep(2_000);
+        }
+
+        $during = $this->runOp($this->concession($w, 'approve', $approver->id, $concession->id));
+        touch($dir.'/release');
+        $holder->wait();
+
+        $this->assertSame('rejected:'.ConcessionDecisionConflictException::class, $during, 'an uncommitted unlink never reads as "not related"');
+        $this->assertSame('unlinked', $holder->getOutput());
+        $this->assertSame('approved', $this->runOp($this->concession($w, 'approve', $approver->id, $concession->id)), 'after a legitimate unlink commits, the current relationship decides');
+        $this->assertCount(1, $this->adjustmentsOf($w));
     }
 }

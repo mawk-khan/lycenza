@@ -65,7 +65,7 @@ recovery code per action); there is no other mechanism.
 | G-4 | LOW | `hr.leave.manage` holders allocate, adjust, assign policy, submit on behalf and administratively cancel for their OWN employment without a self-refusal (only decisions are self-guarded). | ORG.8D: extend the HR self-administration rule (rule 95) to own leave balance writes. |
 | G-5 | LOW (platform) | Group governance writes need no fresh MFA, confirmation or reason; the self-grant refusal is a plain validation error and is not audited. | Owner decision; platform hygiene slice, not tenant approval. |
 | G-6 | LOW | Student status toggle: no row lock, no reason, no `students.status` CHECK; enrollment end dates free (backdatable) with no reason. | ORG.8E with D-13. |
-| G-7 | LOW (pre-existing, ORG.8A review) | Maker/checker excludes the requester only; a staff member who is also the Student's linked Guardian can approve a colleague's concession for that Student. | Owner decision: an optional beneficiary-relationship participation class on the shared foundation. |
+| G-7 | MEDIUM (owner-raised) — **CLOSED by ORG.8A-R1 for account-linked Guardians (ADR 0076 §59); residual M-1 (a staff parent who never links their account) recorded for an owner policy decision** | Maker/checker excludes the requester only; a staff member who is also the Student's linked Guardian can approve a colleague's concession for that Student. | Owner decision: an optional beneficiary-relationship participation class on the shared foundation. |
 
 ## 4. Proposed new capability families (names only; none created)
 

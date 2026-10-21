@@ -3,6 +3,8 @@
 use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Application\FeeAssessmentItemExecutor;
 use App\Domain\Fees\Application\FeeConcessionService;
+use App\Domain\Guardians\Application\StudentGuardianRelationshipService;
+use App\Domain\Guardians\Infrastructure\StudentGuardianRelationship;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
@@ -20,6 +22,7 @@ use Tests\Support\Concurrency\HeldTransaction;
 //   php race-fee-concession.php reject <schoolId> <userId> <concessionId>
 //   php race-fee-concession.php withdraw <schoolId> <userId> <concessionId>
 //   php race-fee-concession.php revoke-grants <schoolId> <userId>
+//   php race-fee-concession.php unlink-relationship <schoolId> <userId> <relationshipId>
 //   php race-fee-concession.php revoke <schoolId> <userId> <concessionId>
 //   php race-fee-concession.php cancel-adjustment <schoolId> <userId> <adjustmentId>
 //   php race-fee-concession.php cancel-charge <schoolId> <chargeId>
@@ -46,6 +49,15 @@ try {
             'reject' => $concessions->reject($school, $args[2], User::query()->findOrFail($args[1]))->status,
             'withdraw' => $concessions->withdraw($school, $args[2], User::query()->findOrFail($args[1]))->status,
             'revoke' => $concessions->revoke($school, $args[2], User::query()->findOrFail($args[1]))->status,
+            // ORG.8A-R1: a Guardian<->Student relationship removed through the canonical service by <userId>.
+            'unlink-relationship' => (function () use ($app, $school, $args): string {
+                $app->make(StudentGuardianRelationshipService::class)->unlink(
+                    StudentGuardianRelationship::query()->where('school_id', $school->id)->findOrFail($args[2]),
+                    User::query()->findOrFail($args[1]),
+                );
+
+                return 'unlinked';
+            })(),
             // ORG.8A: the User's whole-School grants revoked by a plain runtime UPDATE (row locks, as the staff path takes).
             'revoke-grants' => (string) DB::table('membership_role_assignments')
                 ->whereIn('school_membership_id', DB::table('school_memberships')->where('school_id', $school->id)->where('user_id', $args[1])->pluck('id'))
