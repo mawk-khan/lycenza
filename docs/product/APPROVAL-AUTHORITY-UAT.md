@@ -99,3 +99,34 @@ Matrix: `docs/security/APPROVAL-AUTHORITY-MATRIX.md`.
   subject display label, amount where the domain is Finance, Campus label
   where scoped, requested-at. Never a full Student, Guardian or Employee
   profile, contact value or HR-sensitive field.
+
+## Payment corrections (ORG.8C, ADR 0076 §61 — built 2026-10-22)
+
+Personas from the seeded catalogue: Requester A = `accountant`; Approver
+B and Dual-holder D = `school_admin` (two different people); a Guardian
+approver G = `school_admin` whose account is linked to a current Guardian
+of the fixture Student (link it, then revoke it, for the revoked-link case).
+Fixture: the Finance fixture above, one Student with two open Charges, a
+second "sibling" Student, and one family Payment allocated across both.
+
+| # | Actor | Action | Expected |
+|---|---|---|---|
+| PC1 | A | Payment page → Request correction → Move to another charge (no code) | "Correction requested"; balances unchanged; the request is listed pending |
+| PC2 | B | approve PC1 with a fresh code | "Correction approved and recorded"; balances move once; history names B |
+| PC3 | B | approve without a code / with a used code | refused; nothing recorded |
+| PC4 | A then B | request and approve a reversal (confirm box) | reversal recorded once; receipt kept and marked reversed |
+| PC5 | A then B | request and approve a refund (account, method, date, reference) | refund recorded; the charge is owed again for that amount |
+| PC6 | D | approve or reject D's own request | refused ("another person must decide it") |
+| PC7 | B | withdraw A's request | refused; A withdraws it, then nobody can decide it |
+| PC8 | G | approve or reject any kind on the fixture Student's Payment (active link, then revoked link) | refused with a generic message; nothing recorded |
+| PC9 | G (Guardian of the sibling only) | approve a refund that names the first Student's charge on the family Payment | refused (any Student the Payment touches) |
+| PC10 | B | approve request 2 after request 1 on the same Payment was approved | refused as stale; request 2 stays pending; B may reject it |
+| PC11 | B | approve a refund larger than what the Payment has on the charge | form error; request stays pending |
+| PC12 | `cashier`, `principal`, a viewer | open the queue, request, approve | refused (no button, and a direct POST is 403) |
+| PC13 | anyone | POST the old `/app/finance/payments/{id}/corrections` | 404 (the direct route no longer exists) |
+| PC14 | B | the queue (Finance → Payment corrections) | Payment amount, kind, amount, requester, status only; no Student or Guardian data |
+
+Related-party limit (M-1, unchanged): a staff parent whose account was
+never linked to their Guardian record is not detected; the audit trail is
+the detective control. Production stays blocked by E30/E31 and the general
+gates.

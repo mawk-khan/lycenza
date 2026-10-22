@@ -12,6 +12,7 @@ use App\Domain\Finance\Domain\JournalSide;
 use App\Domain\Payments\Application\Charges\ChargeStateReader;
 use App\Domain\Payments\Application\Exceptions\PaymentCorrectionIdempotencyConflictException;
 use App\Domain\Payments\Application\Exceptions\PaymentCorrectionRefusedException;
+use App\Domain\Payments\Application\Exceptions\PaymentCorrectionRequestStaleException;
 use App\Domain\Payments\Application\Exceptions\PaymentNotFoundException;
 use App\Domain\Payments\Infrastructure\Payment;
 use App\Domain\Payments\Infrastructure\PaymentCorrection;
@@ -95,12 +96,42 @@ class PaymentCorrectionService
         };
     }
 
-    /** @return array{correctionId: string, replayed: bool} */
+    /**
+     * The trusted correction core with its kind's capabilities checked first.
+     * Since ORG.8C no human route calls it: a human correction is requested
+     * and executed on approval (`executeApproved()`, through
+     * `PaymentCorrectionRequestService`); internal and test callers keep it.
+     *
+     * @return array{correctionId: string, replayed: bool}
+     */
     public function correct(School $school, PaymentCorrectionData $data, User $actor): array
     {
         foreach (self::capabilitiesFor($data->kind) as $capability) {
             $this->authorizeCapabilityFor($actor, $capability, $school);
         }
+
+        return $this->run($school, $data, $actor, null);
+    }
+
+    /**
+     * ORG.8C (ADR 0076 §61): executes an APPROVED correction request. Its
+     * authority is the approval (`finance.payment_corrections.approve`, read
+     * fresh by the request service, with maker/checker and the beneficiary
+     * conflict); the same locks, plans, ledger and audit as `correct()`. Under
+     * the Payment lock the Payment must still have exactly
+     * `$priorCorrections` corrections: anything executed since the request
+     * makes it stale. Called only by `PaymentCorrectionRequestService` (pinned).
+     *
+     * @return array{correctionId: string, replayed: bool}
+     */
+    public function executeApproved(School $school, PaymentCorrectionData $data, User $approver, int $priorCorrections): array
+    {
+        return $this->run($school, $data, $approver, $priorCorrections);
+    }
+
+    /** @return array{correctionId: string, replayed: bool} */
+    private function run(School $school, PaymentCorrectionData $data, User $actor, ?int $priorCorrections): array
+    {
         $reason = trim($data->reason);
         if (mb_strlen($reason) < 5 || mb_strlen($reason) > 500) {
             throw PaymentCorrectionRefusedException::reasonRequired();
@@ -112,7 +143,7 @@ class PaymentCorrectionService
             throw PaymentCorrectionRefusedException::invalidMethod();
         }
 
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $data, $actor, $reason) {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $data, $actor, $reason, $priorCorrections) {
             $this->guard->requireOperational($school->id);
             DB::select('SELECT pg_advisory_xact_lock(hashtextextended(?, 0))', ["payments.correction:{$school->id}:{$data->idempotencyKey}"]);
 
@@ -126,6 +157,10 @@ class PaymentCorrectionService
                 ?? throw new PaymentNotFoundException($data->paymentId);
             if (PaymentCorrection::query()->where('payment_id', $payment->id)->where('kind', PaymentCorrection::REVERSAL)->exists()) {
                 throw PaymentCorrectionRefusedException::alreadyReversed();
+            }
+            // ORG.8C: an approved request executes only against the Payment it was requested on.
+            if ($priorCorrections !== null && PaymentCorrection::query()->where('school_id', $school->id)->where('payment_id', $payment->id)->count() !== $priorCorrections) {
+                throw new PaymentCorrectionRequestStaleException($payment->id);
             }
 
             $current = $this->applications->forPayment($school, $payment->id);

@@ -5412,6 +5412,11 @@ settlement report.
 
 ### Payment corrections (UAT-FIN-05/24/27)
 
+*(Superseded by ORG.8C, 2026-10-22, ADR 0076 §61: every kind is now
+requested and executed only by another person's approval -- see "Payment
+correction approval (ORG.8C)" below. The "Who" list describes UAT-C3 as
+built.)*
+
 - **Where.** The payment page: Correct this payment → move to another
   charge, reverse, or refund.
 - **Who.**
@@ -5675,3 +5680,27 @@ their account link to the Guardian record. Someone who never links their
 account, uses a separate account, or creates a second Guardian record is not
 detected. That limit is recorded for an owner policy decision (ADR 0076
 §59.7a), and the audit trail is the control for it.
+
+## Payment correction approval (ORG.8C, 2026-10-22, ADR 0076 §61)
+
+- **Where.** The payment page: Request correction → move to another
+  charge, reverse, or refund, with a reason (5–500 characters). No code is
+  needed to request: nothing changes yet. Finance → Payment corrections
+  lists requests (pending by default; approved, rejected, withdrawn, all).
+- **Who.** `accountant` views and requests; `school_admin` views, requests
+  and approves. Nobody else (no cashier, principal, Campus Finance, teacher
+  or platform role).
+- **Decision.** Someone other than the requester approves (fresh MFA code)
+  or rejects (no code). Approval records the correction at once, through
+  the same correction core (`PaymentCorrectionService`): its own journal
+  entry, history, receipt marking. Only the requester withdraws a pending
+  request. A decided or withdrawn request is final.
+- **Guardian conflict.** Nobody linked (now or ever) as a Guardian of any
+  Student the Payment or the request touches may approve or reject it. The
+  same account-link limit as concessions applies (M-1).
+- **Stale requests.** A request is tied to the Payment as it was when
+  requested. If another correction is recorded first, approval is refused;
+  reject it and request again.
+- **Unchanged.** Posted Payments, allocations and receipts never change;
+  corrections stay whole-School; production stays blocked by E30/E31 and
+  the general gates.

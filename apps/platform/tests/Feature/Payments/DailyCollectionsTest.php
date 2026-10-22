@@ -193,8 +193,8 @@ class DailyCollectionsTest extends TestCase
         $this->assertSame([$mine->paymentId], array_column($this->page()['payments']['data'], 'id'));
         $this->get("/app/finance/payments/{$theirs->paymentId}")->assertNotFound();
 
-        // The Cashier corrects nothing: reversal and refund stay with School Admin.
-        $this->post("/app/finance/payments/{$mine->paymentId}/corrections", ['kind' => 'reversal', 'reason' => 'Not my job here', 'idempotency_key' => (string) Str::uuid()])
+        // The Cashier corrects nothing: corrections are requested (ORG.8C) by accountant or School Admin only.
+        $this->post("/app/finance/payments/{$mine->paymentId}/correction-requests", ['kind' => 'reversal', 'reason' => 'Not my job here', 'idempotency_key' => (string) Str::uuid()])
             ->assertForbidden();
         $this->assertFalse(app(CapabilityResolver::class)->canInSchool($cashier, 'finance.ledger.reverse', $w['school']));
 

@@ -26,14 +26,15 @@ recovery code per action); there is no other mechanism.
 | Marks corrections | `examinations.marks.correction.request` | `.approve` | approval applies the change in the same transaction | FORBIDDEN (service + `student_mark_corrections_maker_checker_check`) | approve, reject, lock | closed `reason_code` required | one pending per mark; decided rows immutable | COMPLETE; production refused in code (E36/E37) |
 | Leave | `hr.leave.self` / `hr.leave.manage` (on behalf) | `hr.leave.approve` (current direct manager) or `hr.leave.manage` (administrative) | approval writes consumption in the same transaction | FORBIDDEN on decide (service + `leave_decisions_no_self_decision`) | none | rejection/closing closed codes required; request reason optional | request content DB-immutable; manager re-resolved under lock at decision | COMPLETE for v1 (gaps G-4) |
 | Payroll runs (ORG.8B: shared foundation) | `payroll.runs.prepare` (create, calculate, overrides, deltas) | `payroll.runs.approve` | `payroll.runs.post` (separate step) | creator != approver (service + `payroll_runs_sod_check`); contributors unchecked; approver may post | approve, post, reverse, compensation | override/delta free text required; reverse optional | results and HRX inputs frozen at approval | PARTIAL (gap G-2) |
+| Payment corrections (ORG.8C: shared foundation, ADR 0076 §61) | `finance.payment_corrections.request` (accountant, school_admin) | `finance.payment_corrections.approve` (school_admin): approve, reject | approval executes the correction in the same transaction (`PaymentCorrectionService::executeApproved`) | requester FORBIDDEN (service + `payment_correction_requests_sod_check`); Guardian of any affected Student FORBIDDEN (service + `payment_correction_requests_beneficiary_guardian_guard`) | approve only | free text 5-500 (DB) | terms DB-immutable; bound to the Payment's correction count (stale refused, service + DB) | COMPLETE (M-1 applies) |
 | Erasure cases | compliance request | compliance decision | executing -> completed | n/a (platform/compliance) | per ADR 0059/E21 | closed decision reason | state machine | COMPLETE (out of ORG.8 business scope) |
 
 ## 2. Direct privileged operations (no request object)
 
 | Operation | Capability | Holders (templates) | Fresh MFA | Reason | Campus | Recommended v1 |
 |---|---|---|---|---|---|---|
-| Payment reallocation | `finance.payments.record` + `finance.charges.manage` | school_admin, accountant | yes | free text 5-500 (DB) | whole-School | NO_APPROVAL; keep |
-| Payment reversal / recorded refund | `finance.ledger.reverse` + `finance.payments.view` | school_admin | yes | free text 5-500 (DB) | whole-School | APPROVAL: request -> approve (approval executes); FORBIDDEN self; ON_APPROVAL; closed reason + text; amends ADR 0031 |
+| ~~Payment reallocation~~ | — | — | — | — | — | **Moved to §1 by ORG.8C (§61):** requested and approved like reversal and refund (owner decision OD-8.1, Option 1 for all three kinds) |
+| ~~Payment reversal / recorded refund~~ | — | — | — | — | — | **Moved to §1 by ORG.8C (§61):** request -> approve (approval executes); self FORBIDDEN; fresh MFA on approval; free-text reason (no closed reason code in v1) |
 | Ledger post | `finance.ledger.post` | school_admin, accountant | yes | description | whole-School | NO_APPROVAL; keep |
 | Ledger reverse | `finance.ledger.reverse` | school_admin | yes | optional text | whole-School | NO_APPROVAL; a subledger-owned entry is refused since ORG.8-P1 (G-1 closed); open: a reverser != poster rule for manual entries (owner decision, ADR 0071 §26.13) |
 | Period close | `finance.periods.manage` | school_admin | yes + typed key | none | whole-School | NO_APPROVAL; keep (irreversible, no reopen) |
@@ -65,7 +66,7 @@ recovery code per action); there is no other mechanism.
 | G-4 | LOW | `hr.leave.manage` holders allocate, adjust, assign policy, submit on behalf and administratively cancel for their OWN employment without a self-refusal (only decisions are self-guarded). | ORG.8D: extend the HR self-administration rule (rule 95) to own leave balance writes. |
 | G-5 | LOW (platform) | Group governance writes need no fresh MFA, confirmation or reason; the self-grant refusal is a plain validation error and is not audited. | Owner decision; platform hygiene slice, not tenant approval. |
 | G-6 | LOW | Student status toggle: no row lock, no reason, no `students.status` CHECK; enrollment end dates free (backdatable) with no reason. | ORG.8E with D-13. |
-| G-7 | MEDIUM (owner-raised) — **CLOSED by ORG.8A-R1 for account-linked Guardians (ADR 0076 §59); residual M-1 (a staff parent who never links their account) recorded for an owner policy decision** | Maker/checker excludes the requester only; a staff member who is also the Student's linked Guardian can approve a colleague's concession for that Student. | Owner decision: an optional beneficiary-relationship participation class on the shared foundation. |
+| G-7 | MEDIUM (owner-raised) — **CLOSED by ORG.8A-R1 for account-linked Guardians (ADR 0076 §59); residual M-1 (a staff parent who never links their account) recorded for an owner policy decision; since ORG.8C (§61) M-1 also bounds Payment correction decisions** | Maker/checker excludes the requester only; a staff member who is also the Student's linked Guardian can approve a colleague's concession for that Student. | Owner decision: an optional beneficiary-relationship participation class on the shared foundation. |
 
 ## 4. Proposed new capability families (names only; none created)
 
@@ -74,8 +75,9 @@ Only where a genuine maker/checker split is recommended. Each is classed
 
 | Proposed key | Purpose | Would be held by | Campus |
 |---|---|---|---|
-| `finance.payment_corrections.request` | propose a reversal or refund | school_admin, accountant | whole-School (CAMPUS_INCOMPATIBLE family) |
-| `finance.payment_corrections.approve` | decide another person's reversal/refund request | school_admin (and any future finance-controller persona, owner decision) | whole-School |
+| `finance.payment_corrections.request` | **BUILT (ORG.8C):** request any of the three kinds | school_admin, accountant | whole-School (never adopted; not listed in `CAMPUS_INCOMPATIBLE`, see ADR 0076 §61.9) |
+| `finance.payment_corrections.approve` | **BUILT (ORG.8C):** decide another person's request | school_admin | whole-School |
+| `finance.payment_corrections.view` | **BUILT (ORG.8C):** the queue and the Payment's requests | school_admin, accountant | whole-School |
 | `library.fine_voids.request` (optional) | librarian proposes a void; `library.fines.void` stays the decision authority | librarian | Library fines whole-School; a Campus request would follow the stored loan Campus only if later adopted |
 | `students.status.request` / `.approve` (optional, D-13) | Campus staff request inactivation/leaver; whole-School approves | request: principal (Campus-adoptable); approve: school_admin | request may be Campus-scoped; approve whole-School |
 

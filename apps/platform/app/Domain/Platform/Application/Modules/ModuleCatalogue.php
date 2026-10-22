@@ -46,7 +46,7 @@ final class ModuleCatalogue
         'lms' => ['label' => 'Learning (LMS)', 'core' => false, 'dependsOn' => [], 'prefixes' => ['lms.'], 'description' => 'Learning content and assignments.'],
         'examinations' => ['label' => 'Examinations', 'core' => false, 'dependsOn' => [], 'prefixes' => ['examinations.'], 'description' => 'Examinations, papers, grade scales and marks.'],
         'finance' => ['label' => 'Finance', 'core' => false, 'dependsOn' => [], 'prefixes' => ['finance.ledger.', 'finance.accounts.', 'finance.periods.'], 'description' => 'The double-entry ledger, accounts and financial periods.'],
-        'fees' => ['label' => 'Fees & Payments', 'core' => false, 'dependsOn' => ['finance'], 'prefixes' => ['finance.fee_', 'finance.charges.', 'finance.payments.'], 'description' => 'Fee setup, charges, concessions, late fees and payments.'],
+        'fees' => ['label' => 'Fees & Payments', 'core' => false, 'dependsOn' => ['finance'], 'prefixes' => ['finance.fee_', 'finance.charges.', 'finance.payments.', 'finance.payment_corrections.'], 'description' => 'Fee setup, charges, concessions, late fees and payments.'],
         'leave' => ['label' => 'Leave', 'core' => false, 'dependsOn' => [], 'prefixes' => ['hr.leave.'], 'description' => 'Staff leave configuration, requests and approvals.'],
         'staff_attendance' => ['label' => 'Staff Attendance', 'core' => false, 'dependsOn' => ['leave'], 'prefixes' => ['hr.staff_attendance.'], 'description' => 'Daily staff presence evidence.'],
         'payroll' => ['label' => 'Payroll', 'core' => false, 'dependsOn' => ['finance'], 'prefixes' => ['payroll.'], 'description' => 'Salary structures, compensation, payroll runs and payslips.'],

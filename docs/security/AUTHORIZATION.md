@@ -1573,6 +1573,33 @@ UAT plan: `docs/product/APPROVAL-AUTHORITY-UAT.md`.
   60-second cache.
 - **Unchanged:** permissions, roles and School-wide scope.
 
+## Payment correction approval (ORG.8C, ADR 0076 §61 — built 2026-10-22)
+
+- **A Payment correction is requested, then approved by someone else.**
+  Reallocation, reversal and recorded refund are REQUESTED
+  (`finance.payment_corrections.request`) and decided
+  (`finance.payment_corrections.approve`); approval records the correction
+  at once, in the same transaction. There is no direct human correction
+  route any more.
+- **Who holds what:** `accountant` views and requests; `school_admin` views,
+  requests and approves. `cashier`, `principal`, Campus Finance, teachers
+  and platform roles hold none. Whole-School only (never Campus-adopted).
+- **Maker/checker:** the requester never approves or rejects their own
+  request (service + `payment_correction_requests_sod_check`). Only the
+  requester withdraws a pending request.
+- **Beneficiary conflict:** nobody approves or rejects a correction when
+  their account is (or was) linked to a current Guardian of ANY Student the
+  Payment or the request touches. Service and database (recorded decider).
+  The account-link limit of ORG.8A-R1 (M-1) applies here too.
+- **Fresh MFA on approval only** (it moves money). Requesting and rejecting
+  move nothing.
+- **Staleness:** a request executes only against the Payment it was made
+  on. If another correction executed in between, approval is refused
+  (`PAYMENT_CORRECTION_REQUEST_STALE`); request it again.
+- **The old correction capabilities** (`finance.payments.record` +
+  `finance.charges.manage`; `finance.ledger.reverse` + `finance.payments.view`)
+  no longer correct a Payment from any route.
+
 ## What is NOT yet implemented
 
 Contracted by ADR 0076 (ORG.1, 2026-10-17) and not built:

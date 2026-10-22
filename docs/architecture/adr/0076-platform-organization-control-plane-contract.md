@@ -8959,3 +8959,150 @@ payroll stays whole-School; MFA unchanged (approve, post, reverse need a
 fresh code; create, calculate and adjustments do not); legal gates HRX-L1..L4,
 E45/PAY-L1 unchanged (technical only, no production effect); registry: Payroll
 now `shared` with its participant sources and backstop.
+
+## 61. ORG.8C — Payment correction approval (as built, 2026-10-22)
+
+Owner authorization: ORG.8C (second brief), owner decision OD-8.1 **Option 1**:
+the Guardian-beneficiary conflict applies uniformly to reallocation,
+reversal and recorded refund, for approve and reject (refund-only and
+"accept the residual" rejected). Baseline `origin/main` = `f2242d5e` (§60).
+The first ORG.8C brief stopped on its related-party stop condition; this one
+authorizes the conflict.
+
+**61.1 Reproduction (before 8C).** At `f2242d5e` an accountant reallocated
+and a School Admin reversed and refunded a Payment directly, alone, from
+the Payment page (`PaymentCorrectionWebTest`, 7 green tests = the evidence
+of single-actor execution).
+
+**61.2 Workflow.** `payment_correction_requests` (Payments-owned, FORCE RLS,
+no runtime DELETE): `pending -> approved | rejected | withdrawn`, final.
+- **Request** (`finance.payment_corrections.request`, no MFA): the full
+  correction terms (kind, charge, destination, amount, refund account /
+  method / date / reference, reason 5–500), the requester, a server-issued
+  idempotency key (unique per School; same User + same terms replays,
+  anything else `PAYMENT_CORRECTION_REQUEST_KEY_CONFLICT`) and
+  `prior_correction_count` = the Payment's corrections, read under the
+  Payment's correction lock. The page sends the count it showed
+  (`correction_count`); a request made from a page older than a recorded
+  correction is refused as stale, so a request never binds a Payment state
+  its requester did not see. A reversed Payment cannot be requested
+  against; a charge or account outside the School is a form error.
+- **Approve** (`.approve`, fresh MFA via `FreshMfaRequirement`, after the
+  capability, outside the transaction): request FOR UPDATE → pending →
+  `ApprovalDecisionAuthority::requireCurrent` (operational School,
+  whole-School capability and Fees module read fresh) → shared
+  `MakerCheckerPolicy` over `participants()` (the requester, the only author
+  of the frozen terms) → the beneficiary conflict → executes through
+  `PaymentCorrectionService::executeApproved()` (idempotency key = request
+  id; corrected_by = approver) → records the decision and the correction id
+  → audit with `ApprovalProvenance`. One transaction: any refusal (stale,
+  capacity, account, date, reversed) rolls the decision back; nothing is
+  ever approved without its correction.
+- **Reject** (`.approve`, no MFA): same checks, nothing executes.
+- **Withdraw** (`.request`): the requester only, recorded as
+  `withdrawn_by_user_id` (`payment_correction_requests_withdrawer_check`).
+- **No executor capability**, no thresholds, delegation, multi-level or
+  separate execution step.
+
+**61.3 Direct execution removed.** `POST /app/finance/payments/{payment}/
+corrections` and its controller (`App\Http\Controllers\App\Finance\
+PaymentController`, whose only action it was) are deleted. The Payment page
+form is "Request correction"; requests and decisions show on the Payment
+page; Finance → Payment corrections is the whole-School queue (Payment
+amount, kind, amount, requester, status; no Student, Guardian or charge
+data). Pinned: only `PaymentCorrectionRequestService` holds the correction
+core or calls `executeApproved()`; every payment-correction route resolves
+to `PaymentCorrectionRequestController`; the Finance HTTP guard lists the
+exact Payment mutation routes. `PaymentCorrectionService` stays the only
+writer of `payment_corrections` (its per-kind `correct()` remains a trusted
+internal core for fixtures, with no product caller).
+
+**61.4 Capabilities and roles.** New `finance.payment_corrections.view`,
+`.request`, `.approve` (class `financial`, module `fees`): `accountant` view
++ request; `school_admin` all three. No change to `cashier`, `principal`,
+Campus Finance, teachers or platform roles (snapshot updated). Not
+Campus-adopted; `CampusScopeCatalogue` and `FinanceCampusAccess` unchanged
+(see 61.9).
+
+**61.5 Beneficiary conflict (Option 1).** Nobody whose account has any
+Guardian-kind link (active or revoked) to a Guardian currently related to
+ANY affected Student decides, for every kind, approve and reject. Affected
+Students = the Students of every Charge in the Payment's allocations, its
+earlier correction lines, and the request's own source/destination Charges
+(`affectedStudentIds`, and the same set in SQL:
+`payment_correction_request_student_ids`). The refusal text is generic
+(`PAYMENT_CORRECTION_DECISION_CONFLICT`, no relationship oracle). Reuses the
+R1 structural model (`GuardianBeneficiaryRelationship::isGuardianOfAny`, the
+`GuardianAccountOwnership` port, `fees_concession_decider_is_beneficiary_guardian`);
+Rule B (§59) keeps the decider from editing the relationship. A Guardian may
+request.
+
+**61.6 Payment-state binding.** Correction rows are append-only and
+allocations immutable, so the Payment's correction count is its allocation
+generation. Under the Payment advisory lock `executeApproved()` refuses a
+count other than `prior_correction_count` (`PAYMENT_CORRECTION_REQUEST_STALE`,
+409); Charge state is still revalidated by the existing plans under Charge
+locks. Several pending requests may coexist; once one executes the rest are
+stale (they can still be rejected or withdrawn).
+
+**61.7 Database backstop** (recorded columns; the database has no actor
+context):
+- `payment_correction_requests_sod_check`: decider ≠ requester;
+- `payment_correction_requests_guard`: born pending; every term, the
+  requester, Payment, generation and key immutable; non-pending is final;
+- `payment_correction_requests_approval_guard` (pending → approved): names a
+  `payment_corrections` row of the same School, Payment and kind, keyed by
+  the request id (amount equal where set), and the Payment has exactly
+  `prior_correction_count + 1` corrections;
+- `payment_correction_requests_beneficiary_guardian_guard` (pending →
+  approved/rejected): the recorded decider is no Guardian of any affected
+  Student;
+- CHECKs: kind shape, status shape, reason 5–500, INR.
+All functions SECURITY INVOKER, pinned `search_path`, no PUBLIC execute.
+- `payment_correction_requests_withdrawer_check`: the recorded withdrawer
+  is the requester (status shape requires one on withdrawal).
+Proven as the runtime role (`PaymentCorrectionRequestDbTest`).
+
+**61.8 Concurrency** (two processes, contender observed blocked):
+approve/approve → one correction; approve (held) vs reject → decided;
+withdraw (held) vs approve → nothing executes; approve refund 1 (held) vs
+approve refund 2 on the same Payment → stale; core reversal (held) vs
+approve → refused (reversed). Lock order: request row → (correction key
+advisory) → Payment advisory → Charges ascending; decisions on different
+requests meet only at the Payment lock; no deadlock path.
+
+**61.9 Unchanged / residual.**
+- ORG.8-P1 untouched: correction journal entries stay subledger-owned.
+- M-1 (§59.7a) now also bounds Payment correction decisions.
+- The new keys are not in `CAMPUS_INCOMPATIBLE` (catalogue changes not
+  authorized). A Campus grant of them is inert: they are checked only by
+  the whole-School Gate, which never counts a Campus grant (rule 101), and
+  both holders already carry incompatible keys.
+- Rule 29: approve/reject/withdraw are not `idempotent`-routed; a retried
+  decision finds the request decided (409), never a second execution.
+- Retention: an unexecuted request leaves with its Payment/Charge
+  (cascade); an approved one keeps its correction (RESTRICT), and a
+  corrected Payment never expires (§3 of ADR 0031's amendment).
+
+**61.10 Security review** (independent): no HIGH, no MEDIUM. LOW fixed:
+- the generation is bound to the requester's page (`correction_count`,
+  stale at request time) and read under the Payment correction lock;
+- a resubmitted key with a changed refund reference fails closed instead of
+  replaying;
+- withdrawal records its actor and the database checks it is the requester;
+- an unknown or cross-School charge/account on a request is a form error
+  (422), not a 500 from the composite key.
+
+LOW accepted:
+- `PaymentCorrectionService::correct()` (the per-kind trusted core) has no
+  database "must come from an approved request" backstop: it has no
+  product caller (architecture-pinned), and a raw runtime-role insert is
+  the recorded-actor trust boundary every domain shares (§59.6).
+- An unexecuted (rejected/withdrawn/pending) request leaves with either
+  Charge it names under Finance retention (cascade); it is history of that
+  Payment/Charge only, and executed history is kept by RESTRICT.
+- The requester is not Guardian-checked (owner contract: the conflict binds
+  the decider; the approver is the control), as in the concession pilot.
+
+Rollback + re-apply IDENTICAL (344 schema lines removed; `verify-database`
+failed=0) on a clean test database, after the fixes.

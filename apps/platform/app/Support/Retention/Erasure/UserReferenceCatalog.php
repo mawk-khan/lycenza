@@ -111,6 +111,8 @@ final class UserReferenceCatalog
         'payments' => ['recorded_by_user_id' => self::RETAIN_REFERENCE],
         // UAT-C3: who corrected a payment is kept with the Finance correction it attributes.
         'payment_corrections' => ['corrected_by_user_id' => self::RETAIN_REFERENCE],
+        // ORG.8C: who requested, decided or withdrew a payment correction is approval provenance.
+        'payment_correction_requests' => ['decided_by_user_id' => self::RETAIN_REFERENCE, 'requested_by_user_id' => self::RETAIN_REFERENCE, 'withdrawn_by_user_id' => self::RETAIN_REFERENCE],
         'payroll_adjustments' => ['actor_user_id' => self::RETAIN_REFERENCE],
         'payroll_run_postings' => ['actor_user_id' => self::RETAIN_REFERENCE],
         'payroll_runs' => ['approved_by_user_id' => self::RETAIN_REFERENCE, 'posted_by_user_id' => self::RETAIN_REFERENCE, 'prepared_by_user_id' => self::RETAIN_REFERENCE],

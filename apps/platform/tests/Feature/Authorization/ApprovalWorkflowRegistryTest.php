@@ -103,7 +103,7 @@ class ApprovalWorkflowRegistryTest extends TestCase
     public function a_shared_workflow_decides_through_the_shared_foundation_and_only_it_does(): void
     {
         $shared = array_filter(ApprovalWorkflowRegistry::WORKFLOWS, fn (array $w) => $w['makerChecker'] === 'shared');
-        $this->assertSame(['fee_concessions', 'payroll_runs'], array_keys($shared), 'ORG.8A pilot + ORG.8B Payroll');
+        $this->assertSame(['fee_concessions', 'payment_corrections', 'payroll_runs'], array_keys($shared), 'ORG.8A pilot + ORG.8C Payment corrections + ORG.8B Payroll');
 
         $allowed = [];
         foreach ($shared as $key => $workflow) {
@@ -141,14 +141,25 @@ class ApprovalWorkflowRegistryTest extends TestCase
     }
 
     #[Test]
-    public function only_fee_concessions_declare_the_guardian_beneficiary_conflict_and_it_is_enforced(): void
+    public function only_fee_concessions_and_payment_corrections_declare_the_guardian_beneficiary_conflict_and_it_is_enforced(): void
     {
         $declared = array_filter(ApprovalWorkflowRegistry::WORKFLOWS, fn (array $w) => isset($w['relationshipConflict']));
-        $this->assertSame(['fee_concessions' => 'guardian_of_student_beneficiary'], array_map(fn (array $w) => $w['relationshipConflict'], $declared));
+        $this->assertSame(
+            ['fee_concessions' => 'guardian_of_student_beneficiary', 'payment_corrections' => 'guardian_of_student_beneficiary'],
+            array_map(fn (array $w) => $w['relationshipConflict'], $declared),
+        );
 
-        $source = (string) file_get_contents((string) (new ReflectionClass(ApprovalWorkflowRegistry::WORKFLOWS['fee_concessions']['service']))->getFileName());
-        $this->assertStringContainsString('beneficiary->isGuardianOf(', $source, 'the decision checks the beneficiary conflict');
-        $this->assertSame('O', DB::selectOne("select tgenabled from pg_trigger where tgname = 'fee_concessions_beneficiary_guardian_guard'")->tgenabled, 'and the database backs it');
+        $enforcement = [
+            // ORG.8A-R1 (§59): one beneficiary Student.
+            'fee_concessions' => ['beneficiary->isGuardianOf(', 'fee_concessions_beneficiary_guardian_guard'],
+            // ORG.8C (§61): every Student the Payment or the request touches.
+            'payment_corrections' => ['beneficiary->isGuardianOfAny(', 'payment_correction_requests_beneficiary_guardian_guard'],
+        ];
+        foreach ($enforcement as $key => [$check, $trigger]) {
+            $source = (string) file_get_contents((string) (new ReflectionClass(ApprovalWorkflowRegistry::WORKFLOWS[$key]['service']))->getFileName());
+            $this->assertStringContainsString($check, $source, "{$key}: the decision checks the beneficiary conflict");
+            $this->assertSame('O', DB::selectOne('select tgenabled from pg_trigger where tgname = ?', [$trigger])->tgenabled, "{$key}: and the database backs it");
+        }
         $policy = (string) file_get_contents(app_path('Support/Approval/MakerCheckerPolicy.php'));
         $this->assertStringNotContainsStringIgnoringCase('guardian', $policy, 'maker/checker stays generic');
     }

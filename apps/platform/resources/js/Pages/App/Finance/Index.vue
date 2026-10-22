@@ -11,6 +11,7 @@ interface Props {
         viewFeeSetup: boolean;
         viewFeeRuns: boolean;
         viewConcessions: boolean;
+        viewPaymentCorrections: boolean;
         viewStatements: boolean;
         viewLateFeeRules: boolean;
         viewLateFeeRuns: boolean;
@@ -123,6 +124,17 @@ defineProps<Props>();
                     Payment records and how each was applied to charges.
                 </p>
             </li>
+            <li v-if="can.viewPaymentCorrections" class="px-4 py-3">
+                <a
+                    class="text-sm font-medium underline"
+                    href="/app/finance/payment-correction-requests"
+                    >Payment corrections</a
+                >
+                <p class="mt-1 text-sm text-slate-500">
+                    Requested reallocations, reversals and refunds: each waits for someone else's
+                    approval, which records it.
+                </p>
+            </li>
             <li v-if="can.recordPayments" class="px-4 py-3">
                 <a class="text-sm font-medium underline" href="/app/finance/payments/record"
                     >Record an offline payment</a
@@ -140,7 +152,8 @@ defineProps<Props>();
                 !can.viewPayments &&
                 !can.recordPayments &&
                 !can.viewFeeSetup &&
-                !can.viewConcessions
+                !can.viewConcessions &&
+                !can.viewPaymentCorrections
             "
             class="mt-6 text-sm text-slate-500"
         >

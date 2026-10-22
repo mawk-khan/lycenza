@@ -740,3 +740,34 @@ The rest of rule 91 stands.
   - a Guardian-visible correction history beyond net amounts.
 - **Rollback.** `down()` refuses while any correction exists. Otherwise it
   restores the capacity, cancellation and retention function bodies.
+
+## Amendment §4 — corrections are requested and approved (ORG.8C, 2026-10-22)
+
+Owner decision OD-8.1 (ADR 0076 §56.29), Option 1, built in ADR 0076 §61.
+It amends the **Authorization** bullet of Amendment §3; everything else in
+§3 stands (kinds, effective allocation, database rules, the executor's lock
+order and idempotency, audit, receipts, scope).
+
+- **No direct human correction.** All three kinds (reallocation, reversal,
+  recorded refund) are requested (`finance.payment_corrections.request`:
+  Accountant, School Admin) and executed only when another person approves
+  (`finance.payment_corrections.approve`: School Admin), in the approval's
+  own transaction. `POST /app/finance/payments/{payment}/corrections` no
+  longer exists.
+- **The executor is unchanged.** `PaymentCorrectionService` stays the only
+  writer of `payment_corrections`; the approval calls
+  `executeApproved()` (the approval is its authority), keyed by the request
+  id. `correct()` (the old per-kind capabilities) remains a trusted internal
+  core with no route, job or command caller (pinned by an architecture
+  test).
+- **Fresh MFA moves from the request to the approval.** Requesting and
+  rejecting need none.
+- **Binding.** A request records the Payment's correction count; approval,
+  under the Payment advisory lock, refuses a request whose Payment was
+  corrected since (`PAYMENT_CORRECTION_REQUEST_STALE`).
+- **Maker/checker and beneficiary conflict.** The requester never decides;
+  nobody linked as a Guardian of any Student the Payment or the request
+  touches decides. Both are repeated in the database on the recorded
+  decider.
+- **Rollback.** The request table's `down()` refuses while any request
+  exists.

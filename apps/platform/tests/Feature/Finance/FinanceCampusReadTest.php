@@ -243,9 +243,12 @@ class FinanceCampusReadTest extends TestCase
         $this->as($cashierA)->get('/app/finance/fee-statements')->assertForbidden();
         $this->as($cashierA)->get('/app/finance/fee-runs')->assertForbidden();
         // ORG.7G-2 opened payment ENTRY only (FinanceCampusPaymentEntryTest); corrections stay whole-School.
-        $this->as($cashierA)->post("/app/finance/payments/{$w['PA']}/corrections", ['kind' => 'reversal'])->assertForbidden();
-        $this->as($cashierA)->post("/app/finance/payments/{$w['PA']}/corrections", ['kind' => 'reallocation'])->assertForbidden();
-        $this->as($cashierA)->post("/app/finance/payments/{$w['PA']}/corrections", ['kind' => 'refund'])->assertForbidden();
+        // ORG.8C: a correction is only requested (the direct route is gone), and a cashier requests nothing.
+        foreach (['reversal', 'reallocation', 'refund'] as $kind) {
+            $this->as($cashierA)->post("/app/finance/payments/{$w['PA']}/correction-requests", ['kind' => $kind])->assertForbidden();
+            $this->as($cashierA)->post("/app/finance/payments/{$w['PA']}/corrections", ['kind' => $kind])->assertNotFound();
+        }
+        $this->as($cashierA)->get('/app/finance/payment-correction-requests')->assertForbidden();
         $this->as($cashierA)->post('/app/finance/charges', [])->assertForbidden();
     }
 

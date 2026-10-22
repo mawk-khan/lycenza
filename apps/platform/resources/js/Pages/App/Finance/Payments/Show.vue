@@ -82,13 +82,35 @@ interface Corrections {
     methods: { value: string; label: string }[];
     refundEarliest: string;
     today: string;
+    requests: CorrectionRequest[] | null;
+}
+
+interface CorrectionRequest {
+    id: string;
+    kind: CorrectionKind;
+    status: 'pending' | 'approved' | 'rejected' | 'withdrawn';
+    amount: string | null;
+    reason: string;
+    chargeDescription: string | null;
+    toChargeDescription: string | null;
+    refundMethodLabel: string | null;
+    refundReference: string | null;
+    refundedOn: string | null;
+    requestedByName: string | null;
+    requestedOn: string;
+    decidedByName: string | null;
+    decidedOn: string | null;
+    isMine: boolean;
+    canDecide: boolean;
+    canWithdraw: boolean;
 }
 
 interface Props {
     payment: PaymentDetail;
     recordedOutcome: 'recorded' | 'duplicate_replay' | null;
     corrections: Corrections;
-    correctedOutcome: 'recorded' | 'duplicate_replay' | null;
+    correctedOutcome:
+        'requested' | 'duplicate_replay' | 'approved' | 'rejected' | 'withdrawn' | null;
     correctionKey: string;
     hasMfaFactor: boolean;
 }
@@ -99,6 +121,12 @@ const kindLabel: Record<CorrectionKind, string> = {
     reallocation: 'Reallocated',
     reversal: 'Reversed',
     refund: 'Refunded',
+};
+
+const requestKindLabel: Record<CorrectionKind, string> = {
+    reallocation: 'Move to another charge',
+    reversal: 'Reverse this payment',
+    refund: 'Refund money paid back',
 };
 
 const choices = computed(() => {
@@ -137,7 +165,8 @@ const form = useForm({
     refunded_on: props.corrections.today,
     reference: '',
     confirm: false,
-    mfa_code: '',
+    // The Payment as this page saw it: a correction recorded since makes the request stale.
+    correction_count: props.corrections.history.length,
 });
 
 const opened = ref(false);
@@ -154,6 +183,13 @@ const destinations = computed(() =>
     ),
 );
 
+// A decision on this page reloads its props: request against what is shown now.
+watch(
+    () => props.corrections.history.length,
+    (count) => {
+        form.correction_count = count;
+    },
+);
 watch(
     () => form.kind,
     () => {
@@ -174,17 +210,37 @@ watch(
 );
 
 function submit(): void {
-    form.post(`/app/finance/payments/${props.payment.id}/corrections`, {
+    form.post(`/app/finance/payments/${props.payment.id}/correction-requests`, {
         preserveScroll: true,
-        onError: () => form.reset('mfa_code'),
         onSuccess: () => {
-            // A recorded (or replayed) correction is finished: the next one
+            // A submitted (or replayed) request is finished: the next one
             // needs the fresh key the reloaded page carries, never this one.
             form.reset();
             form.kind = '';
             form.idempotency_key = props.correctionKey;
             form.refunded_on = props.corrections.today;
+            form.correction_count = props.corrections.history.length;
             opened.value = false;
+        },
+    });
+}
+
+// ORG.8C: someone other than the requester approves (which executes the
+// correction, after a fresh code) or rejects; the requester may withdraw.
+const decision = useForm({ mfa_code: '' });
+const approvingId = ref<string | null>(null);
+// A refused decision (self-decision, conflict, stale, decided) comes back on this key.
+const decisionError = computed(
+    () => (decision.errors as Record<string, string | undefined>).correction_request,
+);
+
+function decide(request: CorrectionRequest, action: 'approve' | 'reject' | 'withdraw'): void {
+    decision.post(`/app/finance/payment-correction-requests/${request.id}/${action}`, {
+        preserveScroll: true,
+        onError: () => decision.reset('mfa_code'),
+        onSuccess: () => {
+            decision.reset();
+            approvingId.value = null;
         },
     });
 }
@@ -209,19 +265,34 @@ function submit(): void {
             This payment was already recorded -- nothing new was created.
         </p>
         <p
-            v-if="correctedOutcome === 'recorded'"
+            v-if="correctedOutcome === 'requested'"
             role="status"
             class="mt-4 rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"
         >
-            Correction recorded. The original payment is unchanged; the correction is listed below
-            with its own journal entry.
+            Correction requested. Nothing has changed yet: someone else must approve it, and it is
+            recorded only then.
+        </p>
+        <p
+            v-else-if="correctedOutcome === 'approved'"
+            role="status"
+            class="mt-4 rounded border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"
+        >
+            Correction approved and recorded. The original payment is unchanged; the correction is
+            listed below with its own journal entry.
+        </p>
+        <p
+            v-else-if="correctedOutcome === 'rejected' || correctedOutcome === 'withdrawn'"
+            role="status"
+            class="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"
+        >
+            Correction request {{ correctedOutcome }}. Nothing was changed.
         </p>
         <p
             v-else-if="correctedOutcome === 'duplicate_replay'"
             role="status"
             class="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700"
         >
-            This correction was already recorded -- nothing new was created.
+            This correction was already requested -- nothing new was created.
         </p>
 
         <div
@@ -442,11 +513,11 @@ function submit(): void {
         </section>
 
         <section v-if="choices.length > 0" class="mt-8 border-t border-slate-200 pt-6">
-            <h2 class="text-sm font-medium text-slate-900">Correct this payment</h2>
+            <h2 class="text-sm font-medium text-slate-900">Request a correction</h2>
             <p class="mt-1 text-sm text-slate-500">
-                A correction never changes or deletes this payment. It is recorded as a new entry
-                with its own journal entry and your reason. Fee concessions are not used for
-                corrections.
+                A correction never changes or deletes this payment. You request it with your reason;
+                someone else approves or rejects it, and only an approval records it as a new entry
+                with its own journal entry. Fee concessions are not used for corrections.
             </p>
             <button
                 v-if="!opened"
@@ -454,7 +525,7 @@ function submit(): void {
                 class="mt-3 rounded border border-slate-300 px-4 py-2 text-sm"
                 @click="opened = true"
             >
-                Correct this payment…
+                Request correction…
             </button>
 
             <form v-else class="mt-4 space-y-4" @submit.prevent="submit">
@@ -669,21 +740,13 @@ function submit(): void {
                         class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                     ></textarea>
                     <p class="mt-1 text-xs text-slate-500">
-                        Required. Kept with the correction for anyone reviewing it later.
+                        Required. The approver sees it, and it is kept with the correction for
+                        anyone reviewing it later.
                     </p>
                     <p v-if="form.errors.reason" class="mt-1 text-sm text-red-700">
                         {{ form.errors.reason }}
                     </p>
                 </div>
-
-                <MfaCodeField
-                    v-if="form.kind !== ''"
-                    id="payment-correction-mfa"
-                    v-model="form.mfa_code"
-                    :has-mfa-factor="hasMfaFactor"
-                    action="Correcting a payment"
-                    :error="form.errors.mfa_code"
-                />
 
                 <p v-if="form.errors.idempotency_key" class="text-sm text-red-700">
                     {{ form.errors.idempotency_key }}
@@ -692,10 +755,10 @@ function submit(): void {
                 <div class="flex flex-wrap gap-3">
                     <button
                         type="submit"
-                        :disabled="form.processing || form.kind === '' || !hasMfaFactor"
+                        :disabled="form.processing || form.kind === ''"
                         class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                     >
-                        Record correction
+                        Submit request
                     </button>
                     <button
                         type="button"
@@ -707,6 +770,110 @@ function submit(): void {
                     </button>
                 </div>
             </form>
+        </section>
+
+        <section
+            v-if="corrections.requests && corrections.requests.length > 0"
+            class="mt-8 border-t border-slate-200 pt-6"
+        >
+            <h2 class="text-sm font-medium text-slate-900">Correction requests</h2>
+            <p class="mt-1 text-sm text-slate-500">
+                A request changes nothing until someone other than its requester approves it.
+                Approving records the correction at once.
+            </p>
+            <p v-if="decisionError" class="mt-2 text-sm text-red-700">
+                {{ decisionError }}
+            </p>
+            <ol class="mt-3 space-y-3">
+                <li
+                    v-for="r in corrections.requests"
+                    :key="r.id"
+                    class="rounded border border-slate-200 p-3 text-sm"
+                >
+                    <p class="font-medium">
+                        {{ requestKindLabel[r.kind] }}
+                        <template v-if="r.amount">
+                            · {{ formatMoney(r.amount, payment.currency) }}</template
+                        >
+                        <span class="ml-1 text-slate-500">({{ r.status }})</span>
+                    </p>
+                    <p v-if="r.chargeDescription" class="text-slate-600">
+                        From {{ r.chargeDescription
+                        }}<template v-if="r.toChargeDescription">
+                            to {{ r.toChargeDescription }}</template
+                        >
+                    </p>
+                    <p v-if="r.refundMethodLabel" class="text-slate-600">
+                        Paid back by {{ r.refundMethodLabel }} on {{ r.refundedOn
+                        }}<template v-if="r.refundReference"> · {{ r.refundReference }}</template>
+                    </p>
+                    <p class="mt-1 text-slate-700">{{ r.reason }}</p>
+                    <p class="mt-1 text-xs text-slate-500">
+                        Requested by {{ r.requestedByName ?? 'unknown' }} on {{ r.requestedOn
+                        }}<template v-if="r.decidedOn">
+                            · {{ r.status }}
+                            <template v-if="r.decidedByName">by {{ r.decidedByName }}</template>
+                            on {{ r.decidedOn }}</template
+                        >
+                    </p>
+
+                    <div v-if="r.canDecide" class="mt-3 space-y-3">
+                        <template v-if="approvingId === r.id">
+                            <MfaCodeField
+                                :id="`payment-correction-approve-mfa-${r.id}`"
+                                v-model="decision.mfa_code"
+                                :has-mfa-factor="hasMfaFactor"
+                                action="Approving a payment correction"
+                                :error="decision.errors.mfa_code"
+                            />
+                            <div class="flex flex-wrap gap-3">
+                                <button
+                                    type="button"
+                                    :disabled="decision.processing || !hasMfaFactor"
+                                    class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                                    @click="decide(r, 'approve')"
+                                >
+                                    Approve and record
+                                </button>
+                                <button
+                                    type="button"
+                                    :disabled="decision.processing"
+                                    class="rounded border border-slate-300 px-4 py-2 text-sm disabled:opacity-50"
+                                    @click="approvingId = null"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </template>
+                        <div v-else class="flex flex-wrap gap-3">
+                            <button
+                                type="button"
+                                class="rounded border border-slate-300 px-4 py-2 text-sm"
+                                @click="approvingId = r.id"
+                            >
+                                Approve…
+                            </button>
+                            <button
+                                type="button"
+                                :disabled="decision.processing"
+                                class="rounded border border-slate-300 px-4 py-2 text-sm disabled:opacity-50"
+                                @click="decide(r, 'reject')"
+                            >
+                                Reject
+                            </button>
+                        </div>
+                    </div>
+                    <button
+                        v-if="r.canWithdraw"
+                        type="button"
+                        :disabled="decision.processing"
+                        class="mt-3 rounded border border-slate-300 px-4 py-2 text-sm disabled:opacity-50"
+                        @click="decide(r, 'withdraw')"
+                    >
+                        Withdraw request
+                    </button>
+                </li>
+            </ol>
         </section>
     </main>
 </template>

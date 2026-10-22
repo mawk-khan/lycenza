@@ -546,6 +546,12 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'finance.fee_concessions.view', 'label' => 'View fee concessions, scholarships and waivers', 'namespace' => 'school'],
             ['key' => 'finance.fee_concessions.request', 'label' => 'Request and withdraw fee concessions', 'namespace' => 'school'],
             ['key' => 'finance.fee_concessions.approve', 'label' => 'Approve, reject and revoke fee concessions (never one\'s own request)', 'namespace' => 'school'],
+            // ORG.8C (ADR 0076 §61): Payment corrections (reallocation, reversal,
+            // recorded refund) are requested, then decided by someone else; an
+            // approval executes the correction. Whole-School; never Campus-adopted.
+            ['key' => 'finance.payment_corrections.view', 'label' => 'View payment correction requests', 'namespace' => 'school'],
+            ['key' => 'finance.payment_corrections.request', 'label' => 'Request and withdraw payment corrections', 'namespace' => 'school'],
+            ['key' => 'finance.payment_corrections.approve', 'label' => 'Approve or reject payment corrections (never one\'s own request); approval executes the correction', 'namespace' => 'school'],
 
             // Phase 10D (docs/modules/HOSTEL.md "Capabilities") --
             // mirrors Visitor's directory/visits split exactly:
@@ -1178,6 +1184,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     // holds every concession capability; the database still
                     // refuses self-approval. Never Principal.
                     'finance.fee_concessions.view', 'finance.fee_concessions.request', 'finance.fee_concessions.approve',
+                    // ORG.8C: requests and decides payment corrections; never one's own, never as a Guardian of the Student.
+                    'finance.payment_corrections.view', 'finance.payment_corrections.request', 'finance.payment_corrections.approve',
                     // Phase 10D: same day-to-day operational parity
                     // reasoning as Visitor/Transport/Library above --
                     // managing Hostel structure and Student residency
@@ -1644,6 +1652,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     'finance.fee_assessments.run', 'finance.fee_concessions.view',
                     'finance.fee_concessions.request', 'finance.payments.view',
                     'finance.payments.record',
+                    // ORG.8C: requests payment corrections; never approves them.
+                    'finance.payment_corrections.view', 'finance.payment_corrections.request',
                 ],
             ],
             'cashier' => [ // ADR 0071 §4.5

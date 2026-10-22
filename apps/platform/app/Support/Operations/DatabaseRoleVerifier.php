@@ -56,6 +56,8 @@ class DatabaseRoleVerifier
         'financial_period_expiries', 'journal_entries', 'journal_lines', 'charges', 'payments', 'payment_allocations', 'payment_receipts',
         // UAT-C3: payment corrections are append-only Finance history.
         'payment_corrections', 'payment_correction_lines',
+        // ORG.8C (ADR 0076 §61): correction requests are approval history; unexecuted ones leave only with their Payment.
+        'payment_correction_requests',
         // E21.3B: Student consent evidence leaves only with its core record, through its retention function.
         'communication_domain_consent_events',
         // E21.3F: posted payroll adjustments and postings leave only through the payroll retention functions.

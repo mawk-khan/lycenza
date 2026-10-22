@@ -956,8 +956,11 @@ docs/roadmap             MASTER-ROADMAP.md
     Payments, allocations and receipts are immutable. The ONLY correction
     path is `PaymentCorrectionService` (UAT-C3, ADR 0031 amendment §3):
     reallocation, reversal (once, final) or recorded refund, each a new
-    linked `payment_corrections` row with its own journal entry, a reason,
-    fresh MFA and a server-issued key. Never add an edit, delete, void,
+    linked `payment_corrections` row with its own journal entry, a reason
+    and a server-issued key. Since ORG.8C (ADR 0031 amendment §4, ADR 0076
+    §61) a human correction is only ever REQUESTED and executed by another
+    person's approval (fresh MFA) through `executeApproved()`; there is no
+    direct correction route. Never add an edit, delete, void,
     negative Payment, gateway refund or a further correction kind without
     amending that contract. Never use a concession as a correction, and
     never reverse a Payment's own journal entry
@@ -1525,3 +1528,17 @@ once several modules copy it.
          are refused.
        - Calculate, adjustments and approve all lock the run row.
        - `payroll_runs_participant_approval_guard` backs it in the database.
+     - **Payment corrections (ORG.8C, §61)** decide on the shared foundation.
+       - Reallocation, reversal and recorded refund are requested
+         (`finance.payment_corrections.request`) and executed only by
+         another person's approval (`.approve`, fresh MFA), in the same
+         transaction, through `PaymentCorrectionService::executeApproved()`
+         -- whose only caller is `PaymentCorrectionRequestService`. Never
+         add a direct human correction route.
+       - The decider is never the requester, nor a Guardian (any account
+         link, active or revoked) of ANY Student the Payment or request
+         touches. Service and database (recorded decider).
+       - A request is bound to the Payment's correction count when made;
+         approval under the Payment lock refuses a stale one.
+       - Terms are immutable and decisions final in the database
+         (`payment_correction_requests_*` guards).

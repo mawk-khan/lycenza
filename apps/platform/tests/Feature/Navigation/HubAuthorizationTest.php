@@ -35,6 +35,7 @@ class HubAuthorizationTest extends TestCase
             'finance.payments.record' => 'recordPayments',
             'finance.fee_structures.view' => 'viewFeeSetup',
             'finance.fee_concessions.view' => 'viewConcessions',
+            'finance.payment_corrections.view' => 'viewPaymentCorrections',
         ]],
         'hr' => ['/app/hr', [
             'hr.employees.view' => 'viewEmployees',

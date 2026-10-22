@@ -64,7 +64,7 @@ use App\Http\Controllers\App\Finance\LateFeeController as FinanceLateFeeControll
 use App\Http\Controllers\App\Finance\LedgerAccountController as FinanceLedgerAccountController;
 use App\Http\Controllers\App\Finance\ManualPaymentController as FinanceManualPaymentController;
 use App\Http\Controllers\App\Finance\OutstandingFeesController as FinanceOutstandingFeesController;
-use App\Http\Controllers\App\Finance\PaymentController as FinancePaymentController;
+use App\Http\Controllers\App\Finance\PaymentCorrectionRequestController as FinancePaymentCorrectionRequestController;
 use App\Http\Controllers\App\Finance\PaymentRecordController as FinancePaymentRecordController;
 use App\Http\Controllers\App\Groups\GroupReportController;
 use App\Http\Controllers\App\Groups\SchoolGroupController;
@@ -1355,12 +1355,23 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         // (finance.payments.view) and the staff Student fee statement
         // (finance.charges.view AND finance.payments.view).
         Route::get('/payments/{payment}/receipt', [FinancePaymentRecordController::class, 'receipt'])->middleware('capability:finance.payments.view,campus')->name('payments.receipt');
-        // UAT-C3 (ADR 0031 amendment §3, ADR 0075 §16): reallocate, reverse or
-        // refund a posted Payment as a new linked correction -- never an edit.
-        // Capabilities per kind and fresh MFA in the controller; re-checked in
-        // PaymentCorrectionService.
-        Route::post('/payments/{payment}/corrections', [FinancePaymentController::class, 'correct'])
-            ->middleware('throttle:finance-payment-recording')->name('payments.corrections.store');
+        // UAT-C3 (ADR 0031 amendment §3, ADR 0075 §16) + ORG.8C (ADR 0076
+        // §61): a reallocation, reversal or refund of a posted Payment is a
+        // new linked correction -- never an edit -- and since ORG.8C it is
+        // REQUESTED here and executed only when someone else approves it
+        // (there is no direct correction route). Whole-School; every check is
+        // repeated in PaymentCorrectionRequestService.
+        Route::post('/payments/{payment}/correction-requests', [FinancePaymentCorrectionRequestController::class, 'store'])
+            ->middleware(['capability:finance.payment_corrections.request', 'throttle:finance-payment-recording'])->name('payments.correction_requests.store');
+        Route::get('/payment-correction-requests', [FinancePaymentCorrectionRequestController::class, 'index'])
+            ->middleware('capability:finance.payment_corrections.view')->name('payment_correction_requests.index');
+        // Approval executes the correction (fresh MFA in the controller).
+        Route::post('/payment-correction-requests/{correctionRequest}/approve', [FinancePaymentCorrectionRequestController::class, 'approve'])
+            ->middleware(['capability:finance.payment_corrections.approve', 'throttle:finance-payment-recording'])->name('payment_correction_requests.approve');
+        Route::post('/payment-correction-requests/{correctionRequest}/reject', [FinancePaymentCorrectionRequestController::class, 'reject'])
+            ->middleware(['capability:finance.payment_corrections.approve', 'throttle:finance-payment-recording'])->name('payment_correction_requests.reject');
+        Route::post('/payment-correction-requests/{correctionRequest}/withdraw', [FinancePaymentCorrectionRequestController::class, 'withdraw'])
+            ->middleware(['capability:finance.payment_corrections.request', 'throttle:finance-payment-recording'])->name('payment_correction_requests.withdraw');
         // UAT-C3 (UAT-FIN-08): who still owes what, for follow-up.
         // ORG.7G-1 (ADR 0076 §50): Campus-aware (C6) by stored Charge Campus;
         // finance.payments.view is required in the action too (both scopes).

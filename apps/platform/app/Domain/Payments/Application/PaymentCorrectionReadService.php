@@ -10,15 +10,19 @@ use App\Domain\Payments\Application\Access\PaymentCampusVisibility;
 use App\Domain\Payments\Application\Charges\ChargeStateReader;
 use App\Domain\Payments\Application\Exceptions\PaymentNotFoundException;
 use App\Domain\Payments\Domain\ManualPaymentMethod;
+use App\Domain\Payments\Infrastructure\Payment;
 use App\Domain\Payments\Infrastructure\PaymentCorrection;
 use App\Domain\Payments\Infrastructure\PaymentCorrectionLine;
+use App\Domain\Payments\Infrastructure\PaymentCorrectionRequest;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Str;
 
 /**
@@ -27,7 +31,9 @@ use Illuminate\Support\Str;
  * (only for an actor who may correct) the choices the correction forms
  * offer. Read-only, under `finance.payments.view`; the choices are display
  * help only -- `PaymentCorrectionService` re-checks everything under its
- * locks.
+ * locks. ORG.8C (ADR 0076 §61): the forms REQUEST a correction
+ * (`finance.payment_corrections.request`), and the Payment's correction
+ * requests are listed only for `finance.payment_corrections.view`.
  *
  * ORG.7G-1 (ADR 0076 §50): the reader's finance.payments.view CampusScope is
  * resolved here, and a Payment it may not see (PaymentCampusVisibility) is
@@ -38,6 +44,7 @@ use Illuminate\Support\Str;
 class PaymentCorrectionReadService
 {
     use AuthorizesCampusScope;
+    use AuthorizesCapability;
 
     public function __construct(
         private readonly PaymentApplicationReader $applications,
@@ -63,8 +70,10 @@ class PaymentCorrectionReadService
             $reversal = $corrections->firstWhere('kind', PaymentCorrection::REVERSAL);
             $current = $this->applications->forPayment($school, $paymentId);
 
-            $canReallocate = $reversal === null && $this->holdsAll($actor, $school, PaymentCorrectionService::REALLOCATE_CAPABILITIES);
-            $canReverseOrRefund = $reversal === null && $this->holdsAll($actor, $school, PaymentCorrectionService::REVERSE_REFUND_CAPABILITIES);
+            // ORG.8C: every kind is requested under one whole-School capability.
+            $canRequest = $reversal === null && $this->capabilities->canInSchool($actor, PaymentCorrectionRequestService::REQUEST, $school);
+            $canReallocate = $canRequest;
+            $canReverseOrRefund = $canRequest;
 
             $chargeIds = array_keys($current);
             foreach ($corrections as $correction) {
@@ -137,19 +146,86 @@ class PaymentCorrectionReadService
                 'methods' => $canReverseOrRefund ? ManualPaymentRecordingService::methodOptions() : [],
                 'refundEarliest' => $paidOn,
                 'today' => CarbonImmutable::now($school->timezone)->toDateString(),
+                'requests' => $this->capabilities->canInSchool($actor, PaymentCorrectionRequestService::VIEW, $school)
+                    ? $this->presentRequests($school, $actor, PaymentCorrectionRequest::query()->where('school_id', $school->id)->where('payment_id', $paymentId)
+                        ->orderByDesc('created_at')->orderByDesc('id')->get(), $lines->map(fn (ChargeStatementLine $l) => $l->description)->all())
+                    : null,
             ];
         });
     }
 
-    /** @param list<string> $capabilities */
-    private function holdsAll(User $actor, School $school, array $capabilities): bool
+    /**
+     * ORG.8C (ADR 0076 §61): the whole-School correction-request queue, newest
+     * first (`finance.payment_corrections.view`). Minimal: the Payment's
+     * amount, the requested terms, who asked and who decided -- no
+     * Student, Guardian or charge detail (those stay on the Payment page,
+     * under its own visibility).
+     *
+     * @return LengthAwarePaginator<int, non-empty-array<string, mixed>>
+     */
+    public function requestQueue(School $school, User $actor, ?string $status, int $page): LengthAwarePaginator
     {
-        foreach ($capabilities as $capability) {
-            if (! $this->capabilities->canInSchool($actor, $capability, $school)) {
-                return false;
-            }
-        }
+        $this->authorizeCapabilityFor($actor, PaymentCorrectionRequestService::VIEW, $school);
 
-        return true;
+        return $this->context->withSchool($school, function () use ($school, $actor, $status, $page): LengthAwarePaginator {
+            $paginator = PaymentCorrectionRequest::query()->where('school_id', $school->id)
+                ->when($status !== null, fn ($q) => $q->where('status', $status))
+                ->orderByDesc('created_at')->orderByDesc('id')
+                ->paginate(25, ['*'], 'page', max(1, $page))
+                ->withQueryString();
+            $requests = collect($paginator->items());
+            $payments = Payment::query()->where('school_id', $school->id)->whereIn('id', $requests->pluck('payment_id')->unique()->all())->get()->keyBy('id');
+
+            $rows = collect($this->presentRequests($school, $actor, $requests, []))->mapWithKeys(fn (array $r): array => [$r['id'] => [
+                ...$r,
+                'paymentAmount' => $payments->get($r['paymentId'])?->amount,
+                'paymentCurrency' => $payments->get($r['paymentId'])?->currency,
+            ]]);
+
+            return $paginator->through(fn (PaymentCorrectionRequest $r): array => $rows[$r->id]);
+        });
+    }
+
+    /**
+     * The display choices are help only: the service re-checks authority,
+     * maker/checker and the beneficiary conflict under its locks.
+     *
+     * @param  iterable<PaymentCorrectionRequest>  $requests
+     * @param  array<string, string|null>  $chargeDescriptions
+     * @return list<array<string, mixed>>
+     */
+    private function presentRequests(School $school, User $actor, iterable $requests, array $chargeDescriptions): array
+    {
+        $requests = collect($requests);
+        $people = User::query()->whereIn('id', $requests->pluck('requested_by_user_id')->merge($requests->pluck('decided_by_user_id'))->filter()->unique()->all())->pluck('name', 'id');
+        $canApprove = $this->capabilities->canInSchool($actor, PaymentCorrectionRequestService::APPROVE, $school);
+        $canRequest = $this->capabilities->canInSchool($actor, PaymentCorrectionRequestService::REQUEST, $school);
+
+        return $requests->map(function (PaymentCorrectionRequest $r) use ($school, $actor, $people, $canApprove, $canRequest, $chargeDescriptions): array {
+            $pending = $r->status === PaymentCorrectionRequest::PENDING;
+            $mine = $r->requested_by_user_id === $actor->id;
+
+            return [
+                'id' => $r->id,
+                'paymentId' => $r->payment_id,
+                'kind' => $r->kind,
+                'status' => $r->status,
+                'amount' => $r->amount,
+                'reason' => $r->reason,
+                'chargeDescription' => $r->charge_id === null ? null : ($chargeDescriptions[$r->charge_id] ?? null),
+                'toChargeDescription' => $r->to_charge_id === null ? null : ($chargeDescriptions[$r->to_charge_id] ?? null),
+                'refundMethodLabel' => $r->refund_method === null ? null : ManualPaymentMethod::tryFrom($r->refund_method)?->label(),
+                'refundReference' => $r->refund_reference,
+                'refundedOn' => $r->refunded_on?->toDateString(),
+                'requestedByName' => $people[$r->requested_by_user_id] ?? null,
+                'requestedOn' => CarbonImmutable::parse($r->created_at)->setTimezone($school->timezone)->toDateString(),
+                'decidedByName' => $r->decided_by_user_id === null ? null : ($people[$r->decided_by_user_id] ?? null),
+                'decidedOn' => $r->decided_at === null ? ($r->withdrawn_at === null ? null : CarbonImmutable::parse($r->withdrawn_at)->setTimezone($school->timezone)->toDateString())
+                    : CarbonImmutable::parse($r->decided_at)->setTimezone($school->timezone)->toDateString(),
+                'isMine' => $mine,
+                'canDecide' => $pending && $canApprove && ! $mine,
+                'canWithdraw' => $pending && $mine && $canRequest,
+            ];
+        })->values()->all();
     }
 }

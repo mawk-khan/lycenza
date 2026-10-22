@@ -25,6 +25,20 @@ final class GuardianBeneficiaryRelationship
 
     public function isGuardianOf(User $user, School $school, string $studentId): bool
     {
+        return $this->isGuardianOfAny($user, $school, [$studentId]);
+    }
+
+    /**
+     * ORG.8C (ADR 0076 §61): the same question for several Students at once (a
+     * Payment can touch more than one); true if the User is a Guardian of ANY.
+     *
+     * @param  list<string>  $studentIds
+     */
+    public function isGuardianOfAny(User $user, School $school, array $studentIds): bool
+    {
+        if ($studentIds === []) {
+            return false;
+        }
         $guardianIds = $this->ownership->guardianIdsOwnedBy($user, $school);
         if ($guardianIds === []) {
             return false;
@@ -32,7 +46,7 @@ final class GuardianBeneficiaryRelationship
 
         return $this->context->withSchool($school, fn (): bool => DB::table('student_guardian_relationships')
             ->where('school_id', $school->id)
-            ->where('student_id', $studentId)
+            ->whereIn('student_id', $studentIds)
             ->whereIn('guardian_id', $guardianIds)
             ->exists());
     }

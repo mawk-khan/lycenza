@@ -69,6 +69,9 @@ final class TenantRetentionCatalog
             // UAT-C3 (ADR 0031 amendment §3): payment corrections. The D8 unit refuses a corrected Payment or charge;
             // no unit deletes a correction yet.
             'payment_corrections', 'payment_correction_lines',
+            // ORG.8C (ADR 0076 §61): correction requests. An unexecuted one leaves with its Payment or Charge (cascade);
+            // an approved one keeps its correction (RESTRICT), so its Payment is a corrected one and never expires.
+            'payment_correction_requests',
             'payment_receipt_counters', 'canteen_orders', 'canteen_order_lines', 'canteen_order_stock_consumptions',
             // OPF.1 (ADR 0067 §21): provenance of Transport-recorded fee selections, retained with them.
             'transport_fee_selections',

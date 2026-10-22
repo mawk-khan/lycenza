@@ -44,7 +44,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * Collection totals add up only the visible Payments, so none is counted
  * under two Campuses. The School-wide receipt series is unchanged.
  * Recording and correcting payments stay whole-School (ManualPaymentController,
- * PaymentController).
+ * PaymentCorrectionRequestController, ORG.8C).
  */
 class PaymentRecordController extends Controller
 {
@@ -135,16 +135,17 @@ class PaymentRecordController extends Controller
         }
 
         $outcome = $request->session()->get(ManualPaymentController::RECORDED_SESSION_KEY);
-        $corrected = $request->session()->get(PaymentController::CORRECTED_SESSION_KEY);
+        $corrected = $request->session()->get(PaymentCorrectionRequestController::OUTCOME_SESSION_KEY);
         $presented = $this->presentDetail($detail, $school, $scope);
 
         return Inertia::render('App/Finance/Payments/Show', [
             'payment' => $presented,
             'recordedOutcome' => in_array($outcome, ['recorded', 'duplicate_replay'], true) ? $outcome : null,
             'corrections' => $corrections->forPayment($school, $detail->paymentId, $presented['occurredOn'], $context->actor()),
-            'correctedOutcome' => in_array($corrected, ['recorded', 'duplicate_replay'], true) ? $corrected : null,
+            // ORG.8C: what happened to the last correction request on this page.
+            'correctedOutcome' => in_array($corrected, ['requested', 'duplicate_replay', 'approved', 'rejected', 'withdrawn'], true) ? $corrected : null,
             // A fresh key per page load: a double-submitted form replays, a
-            // second correction needs the page reloaded (rules 29-31).
+            // second correction request needs the page reloaded (rules 29-31).
             'correctionKey' => (string) Str::uuid(),
             'hasMfaFactor' => $mfa->hasActiveFactor($context->actor()),
         ]);

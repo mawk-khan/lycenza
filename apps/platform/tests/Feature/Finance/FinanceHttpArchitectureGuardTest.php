@@ -31,8 +31,9 @@ class FinanceHttpArchitectureGuardTest extends TestCase
             $base.'/app/Domain/Fees/Http/Controllers/ChargeController.php',
             $base.'/app/Domain/Payments/Http/Controllers/PaymentController.php',
             // Phase 0O.11A: the browser Payments controllers, including the
-            // one human payment write (manual/offline recording).
-            $base.'/app/Http/Controllers/App/Finance/PaymentController.php',
+            // one human payment write (manual/offline recording). ORG.8C: the
+            // correction-request controller replaced the direct-correction one.
+            $base.'/app/Http/Controllers/App/Finance/PaymentCorrectionRequestController.php',
             $base.'/app/Http/Controllers/App/Finance/ManualPaymentController.php',
         ], 'file_exists');
     }
@@ -129,22 +130,28 @@ class FinanceHttpArchitectureGuardTest extends TestCase
     }
 
     #[Test]
-    public function the_only_payment_mutation_routes_are_browser_recording_and_correction(): void
+    public function the_only_payment_mutation_routes_are_browser_recording_and_correction_requests(): void
     {
         $routes = collect(Route::getRoutes())
-            ->filter(fn ($route) => str_contains($route->uri(), 'payments'))
+            ->filter(fn ($route) => str_contains($route->uri(), 'payments') || str_contains($route->uri(), 'payment-correction-requests'))
             ->filter(fn ($route) => array_intersect(['POST', 'PUT', 'PATCH', 'DELETE'], $route->methods()) !== [])
             ->values();
 
         // Phase 0O.11A (ADR 0031 implementation amendment section 9): recording
         // an offline payment from a School browser session. UAT-C3 (ADR 0031
         // amendment §3): correcting one (reallocate, reverse, refund) as a new
-        // linked record. No /api/v1 write, no edit/delete, no provider
-        // callback; finance.payments.manage still does not exist.
+        // linked record -- since ORG.8C (ADR 0076 §61) only by REQUEST, executed
+        // when someone else approves it; there is no direct correction route.
+        // No /api/v1 write, no edit/delete, no provider callback;
+        // finance.payments.manage still does not exist.
         $this->assertSame(
-            ['app.finance.payments.corrections.store', 'app.finance.payments.record.store'],
+            [
+                'app.finance.payment_correction_requests.approve', 'app.finance.payment_correction_requests.reject',
+                'app.finance.payment_correction_requests.withdraw', 'app.finance.payments.correction_requests.store',
+                'app.finance.payments.record.store',
+            ],
             $routes->map(fn ($route) => $route->getName())->sort()->values()->all(),
-            'Only the recording and correction Payment mutation routes may exist.',
+            'Only the recording and correction-request Payment mutation routes may exist.',
         );
         foreach ($routes as $route) {
             $this->assertSame(['POST'], $route->methods());

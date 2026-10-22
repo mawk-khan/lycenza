@@ -136,7 +136,7 @@ final class StaffNavigation
             new E('leave-approvals', 'people', 'Leave approvals', 'app.leave.approvals', all: ['hr.leave.approve'], activeWhen: ['app.leave.approvals*']),
             new E('staff-attendance', 'people', 'Staff attendance', 'app.staff-attendance.register', all: ['hr.staff_attendance.view'], activeWhen: ['app.staff-attendance.*']),
 
-            new E('finance', 'finance', 'Finance', 'app.finance.index', any: ['finance.ledger.view', 'finance.charges.view', 'finance.payments.view', 'finance.payments.record', 'finance.fee_structures.view', 'finance.fee_concessions.view']),
+            new E('finance', 'finance', 'Finance', 'app.finance.index', any: ['finance.ledger.view', 'finance.charges.view', 'finance.payments.view', 'finance.payments.record', 'finance.fee_structures.view', 'finance.fee_concessions.view', 'finance.payment_corrections.view']),
             // ORG.7G-1 (ADR 0076 §50): the Campus-aware Finance reads -- the landing
             // entries a Campus-scoped Finance reader (e.g. cashier@Campus) gets;
             // the Finance hub itself is whole-School.

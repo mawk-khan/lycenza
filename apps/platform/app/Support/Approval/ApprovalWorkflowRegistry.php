@@ -50,6 +50,26 @@ final class ApprovalWorkflowRegistry
             'relationshipConflict' => 'guardian_of_student_beneficiary',
             'note' => 'ORG.8A pilot. Request terms and requester are DB-immutable; revoke and adjustment cancellation stay outside the pilot (G-3).',
         ],
+        'payment_corrections' => [
+            'domain' => 'Payments',
+            'tables' => ['payment_correction_requests'],
+            'request' => ['finance.payment_corrections.request'],
+            'decide' => ['finance.payment_corrections.approve'],
+            'participants' => ['payment_correction_requests.requested_by_user_id'],
+            'decider' => 'payment_correction_requests.decided_by_user_id',
+            'dbBackstop' => 'payment_correction_requests_sod_check',
+            'makerChecker' => 'shared',
+            'service' => 'App\Domain\Payments\Application\PaymentCorrectionRequestService',
+            'decisions' => ['approve', 'reject'],
+            'execution' => 'immediate',
+            'drift' => 'immutable_terms',
+            'freshMfa' => ['approve'],
+            'compatibility' => 'as_is',
+            // ORG.8C (§61): never a Guardian of any Student the Payment or the request touches; backed by
+            // payment_correction_requests_beneficiary_guardian_guard; Rule B (§59) keeps the link un-editable by the decider.
+            'relationshipConflict' => 'guardian_of_student_beneficiary',
+            'note' => 'ORG.8C. Reallocation, reversal and recorded refund; approval executes through PaymentCorrectionService::executeApproved() against the requested correction generation (stale otherwise); no direct human correction route.',
+        ],
         'communication_approvals' => [
             'domain' => 'Communications',
             'tables' => ['communication_approval_requests'],
