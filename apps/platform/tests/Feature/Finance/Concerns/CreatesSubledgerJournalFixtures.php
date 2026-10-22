@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Finance\Concerns;
 
-use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Infrastructure\Charge;
 use App\Domain\Fees\Infrastructure\FeeAdjustment;
 use App\Domain\Payments\Application\PaymentCorrectionData;
@@ -36,7 +35,7 @@ trait CreatesSubledgerJournalFixtures
         $cancelledAdjustment = $this->concessions()->cancelAdjustment($w['school'], $this->adjustmentsOf($w, $cancelledAdjustmentCharge->id)->sole()->id, $w['checker'], 'entered twice');
 
         $toCancel = $this->assessCharge($w['school'], $w['student'], $w['year'], $w['receivable'], $w['revenue'], '200.00');
-        app(ChargeService::class)->cancel($w['school'], $toCancel->id, $w['recorder']);
+        $this->cancelChargeAs($w['school'], $toCancel->id, $w['recorder']);
 
         $paid = $this->assessCharge($w['school'], $w['student'], $w['year'], $w['receivable'], $w['revenue'], '400.00');
         $payment = $this->recordManualPayment($w['school'], $w['recorder'], $w['settlement']->id, [[$paid, '150.00']], '150.00');

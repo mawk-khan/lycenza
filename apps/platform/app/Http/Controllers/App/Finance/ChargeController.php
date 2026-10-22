@@ -7,6 +7,7 @@ use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\Fees\Application\AssessChargeData;
 use App\Domain\Fees\Application\ChargeAdministrationService;
 use App\Domain\Fees\Application\ChargeCampusAttribution;
+use App\Domain\Fees\Application\ChargeCancellationReason;
 use App\Domain\Fees\Application\Exceptions\AcademicYearNotFoundException;
 use App\Domain\Fees\Application\Exceptions\ChargeHasPaymentAllocationsException;
 use App\Domain\Fees\Application\Exceptions\ChargeNotFoundException;
@@ -19,6 +20,7 @@ use App\Domain\Finance\Application\LedgerAccountSummary;
 use App\Domain\Students\Application\StudentSearch;
 use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Money\Exceptions\InvalidMoneyException;
 use App\Support\Money\Money;
@@ -28,6 +30,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -189,12 +192,15 @@ class ChargeController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability('finance.charges.manage', $school);
 
+        // ORG.8G (ADR 0076 §65): a listed reason (the note for `other`) and a fresh MFA code.
         $validated = $request->validate([
-            'reason' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'reason_code' => ['required', 'string', Rule::in(ChargeCancellationReason::CODES[ChargeCancellationReason::CANCEL])],
+            'reason' => ['nullable', 'required_if:reason_code,other', 'string', 'max:255'],
         ]);
+        $proof = app(FreshMfaRequirement::class)->requireForAction($request, $context->actor());
 
         try {
-            $service->cancel($school, $charge, $context->actor(), $validated['reason'] ?? null);
+            $service->cancel($school, $charge, $context->actor(), $validated['reason_code'], $validated['reason'] ?? null, $proof);
         } catch (ChargeNotFoundException) {
             throw new NotFoundHttpException;
         } catch (ChargeHasPaymentAllocationsException) {

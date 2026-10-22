@@ -262,7 +262,7 @@ class ChargeServiceTest extends TestCase
         $revenue = $this->createLedgerAccount($school, ['type' => 'income']);
         $charge = $this->assessCharge($school, $student, $year, $receivable, $revenue, '500.00');
 
-        $result = $this->service()->cancel($school, $charge->id);
+        $result = $this->cancelChargeAs($school, $charge->id);
 
         $this->assertNotNull($result->cancelledAt);
         $this->assertNotNull($result->cancellationJournalEntryId);
@@ -290,12 +290,12 @@ class ChargeServiceTest extends TestCase
         $revenue = $this->createLedgerAccount($school, ['type' => 'income']);
         $charge = $this->assessCharge($school, $student, $year, $receivable, $revenue);
 
-        $first = $this->service()->cancel($school, $charge->id);
+        $first = $this->cancelChargeAs($school, $charge->id);
 
         $this->expectException(ChargeAlreadyCancelledException::class);
 
         try {
-            $this->service()->cancel($school, $charge->id);
+            $this->cancelChargeAs($school, $charge->id);
         } finally {
             $reversalCount = app(TenantContext::class)->withSchool(
                 $school,
@@ -314,7 +314,7 @@ class ChargeServiceTest extends TestCase
 
         $this->expectException(ChargeNotFoundException::class);
 
-        $this->service()->cancel($school, (string) Str::uuid());
+        $this->cancelChargeAs($school, (string) Str::uuid());
     }
 
     #[Test]
@@ -330,6 +330,6 @@ class ChargeServiceTest extends TestCase
 
         $this->expectException(ChargeNotFoundException::class);
 
-        $this->service()->cancel($school, $chargeInOtherSchool->id);
+        $this->cancelChargeAs($school, $chargeInOtherSchool->id);
     }
 }

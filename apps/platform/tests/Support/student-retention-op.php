@@ -14,7 +14,7 @@ use Tests\Support\Concurrency\HeldTransaction;
 //
 // Usage:
 //   php student-retention-op.php re-enroll  <schoolId> <studentId> <sectionId>
-//   php student-retention-op.php reactivate <schoolId> <studentId>
+//   php student-retention-op.php reactivate <schoolId> <studentId> <actorUserId>   (ORG.8G: with its lifecycle event)
 //   php student-retention-op.php core-prune <schoolId> <cutoffDate>
 //   php student-retention-op.php operational-prune <schoolId> <cutoffDate>   (E21.3B: deleted Library-loan units)
 //   php student-retention-op.php record-authorization <schoolId> <studentId> <userId>   (E21.3B)
@@ -43,7 +43,11 @@ try {
 
                 return 're-enrolled';
             }),
-            'reactivate' => $context->withSchool($school, function () use ($args): string {
+            'reactivate' => $context->withSchool($school, function () use ($school, $args): string {
+                DB::table('student_lifecycle_events')->insert([
+                    'id' => (string) Str::uuid7(), 'school_id' => $school->id, 'student_id' => $args[1],
+                    'action' => 'student_reactivated', 'reason_code' => 'returned_to_school', 'acted_by_user_id' => $args[2],
+                ]);
                 DB::table('students')->where('id', $args[1])->update(['status' => 'active', 'updated_at' => now()]);
 
                 return 'reactivated';

@@ -6,6 +6,7 @@ use App\Domain\Payments\Application\LateFeeItemExecutor;
 use App\Models\User;
 use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\Feature\Fees\Concerns\CreatesLateFeeFixtures;
 use Tests\TestCase;
 
@@ -16,7 +17,7 @@ use Tests\TestCase;
  */
 class LateFeeApiTest extends TestCase
 {
-    use CreatesLateFeeFixtures;
+    use CreatesLateFeeFixtures, ProvidesSensitiveActionMfa;
 
     private function as(array $w, User $actor): static
     {
@@ -66,7 +67,9 @@ class LateFeeApiTest extends TestCase
         app(LateFeeItemExecutor::class)->executeBatch($w['school'], $previewed->id);
         $link = $this->lateFees($w)->sole();
         $this->as($w, $this->createUserWithCapabilities($w['school'], ['finance.fee_assessments.run']))->postJson("{$b}/late-fee-assessments/{$link->id}/void")->assertForbidden();
-        $this->as($w, $this->createUserWithCapabilities($w['school'], ['finance.charges.manage']))->postJson("{$b}/late-fee-assessments/{$link->id}/void", ['reason' => 'test'])
+        $voider = $this->createUserWithCapabilities($w['school'], ['finance.charges.manage']);
+        $this->as($w, $voider)->postJson("{$b}/late-fee-assessments/{$link->id}/void", ['reason' => 'test'])->assertStatus(422);
+        $this->as($w, $voider)->postJson("{$b}/late-fee-assessments/{$link->id}/void", ['reason_code' => 'late_fee_in_error', 'reason' => 'test', 'mfa_code' => $this->freshMfaCode($voider)])
             ->assertOk()->assertJsonPath('data.chargeId', $link->charge_id);
     }
 

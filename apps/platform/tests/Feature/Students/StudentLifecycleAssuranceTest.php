@@ -111,7 +111,7 @@ class StudentLifecycleAssuranceTest extends TestCase
         }
 
         // Completion stays an ordinary action (no reason, no event).
-        $this->assertSame('completed', $enrollments->complete($third, '2027-03-31', $w['admin'])->status);
+        $this->assertSame('completed', $this->completeEnrollment($third, $w['admin'])->status);
         $this->assertSame(2, $this->events($w));
     }
 

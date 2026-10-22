@@ -144,7 +144,7 @@ class FeeConcessionStandingApplicationTest extends TestCase
         $assessment = $this->inSchool($w['school'], fn () => FeeAssessment::query()->sole());
 
         try {
-            app(FeeAssessmentService::class)->void($w['school'], $assessment->id, $w['actor']);
+            app(FeeAssessmentService::class)->void($w['school'], $assessment->id, $w['actor'], 'assessment_error', null, $this->freshProof($w['actor']));
             $this->fail('A live adjustment blocks the void (its charge cannot be cancelled).');
         } catch (ChargeHasActiveAdjustmentsException) {
             $this->addToAssertionCount(1);
@@ -152,7 +152,7 @@ class FeeConcessionStandingApplicationTest extends TestCase
         $this->assertNull($this->inSchool($w['school'], fn () => $assessment->refresh()->voided_at), 'The void rolled back.');
 
         $this->concessions()->cancelAdjustment($w['school'], $this->adjustmentsOf($w)->sole()->id, $w['checker']);
-        app(FeeAssessmentService::class)->void($w['school'], $assessment->id, $w['actor']);
+        app(FeeAssessmentService::class)->void($w['school'], $assessment->id, $w['actor'], 'assessment_error', null, $this->freshProof($w['actor']));
 
         $this->executedRun($w);
         $this->assertCount(2, $this->adjustmentsOf($w), 'Re-assessment applies the still-approved concession to the new charge.');

@@ -136,7 +136,7 @@ class StudentGuardianAudienceServiceTest extends TestCase
         );
 
         // Became inactive after authoring, before publish -- re-validated at resolve time.
-        app(TenantContext::class)->withSchool($school, fn () => $student->update(['status' => 'inactive']));
+        $this->forceStudentStatus($student, 'inactive');
 
         $this->expectException(EmptyAudienceException::class);
         $this->service()->publish($announcement, $creator);

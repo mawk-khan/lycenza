@@ -205,3 +205,20 @@ No request/approve workflow; each action is direct with assurance.
 | DA11 | School Admin | Reactivate an inactive Student (returned to school / deactivated in error, confirm, code) | active; the reason is in the Student's history |
 | DA12 | School Admin | Void a fine without a fresh code | refused; the fine stays |
 | DA13 | API client (School Admin token) | Change status / withdraw / cancel without `reason_code` or `mfa_code` | 422 / refused; nothing recorded |
+| DA14 | School Admin | Withdraw a placement dated tomorrow, or after the academic year ends | refused ("must not be in the future" / "after the academic year's end"); nothing changes |
+
+## Charge cancel and void (ORG.8G, ADR 0076 §65 — built 2026-10-22)
+
+Personas: Accountant A (`accountant`) whose account is linked to a Guardian
+of Student S; School Admin B (unrelated). Fixture: a manual Charge on S, a
+fee run with one executed assessment, one late fee.
+
+| # | Actor | Action | Expected |
+|---|---|---|---|
+| CG1 | B | Charge page → cancel without a reason / with `other` and no note / without a code | refused; the Charge stays live |
+| CG2 | A | cancel S's Charge with a reason and a fresh code | refused generically ("must be cancelled by someone else"); also after A's link is revoked |
+| CG3 | B | cancel with a listed reason and a fresh code | cancelled once; reversing journal entry; the reason and B recorded on the Charge |
+| CG4 | B | cancel it again | "already been cancelled"; still one reversal |
+| CG5 | B | fee run → Void an assessment (reason + code) | assessment voided, its Charge cancelled with the reason |
+| CG6 | B | late-fee run → Void (reason + code) | late fee voided, its Charge reversed |
+| CG7 | A or B | cancel a fee-assessed Charge or a Library fine Charge from the Charge page | refused (void the assessment / void at the source) |

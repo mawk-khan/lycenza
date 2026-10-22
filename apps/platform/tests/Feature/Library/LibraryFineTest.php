@@ -280,7 +280,7 @@ class LibraryFineTest extends TestCase
         [$unpaid, $paid] = $this->fines($w)->all();
 
         // Finance's generic cancel cannot cancel a fine's charge: only the source void can.
-        $this->assertThrows(fn () => app(ChargeAdministrationService::class)->cancel($w['school'], $unpaid->charge_id, $w['financeOfficer']), ChargeIsSourceChargeException::class);
+        $this->assertThrows(fn () => app(ChargeAdministrationService::class)->cancel($w['school'], $unpaid->charge_id, $w['financeOfficer'], 'charged_in_error', null, $this->freshProof($w['financeOfficer'])), ChargeIsSourceChargeException::class);
 
         app(LibraryFineService::class)->void($w['school'], $unpaid->id, 'assessed_in_error', 'Returned through the drop box before due', $w['finesOfficer'], new FreshMfaProof($w['finesOfficer']->id, CarbonImmutable::now()));
         $this->assertNotNull($this->inSchool($w['school'], fn () => Charge::query()->findOrFail($unpaid->charge_id))->cancelled_at);
@@ -358,7 +358,7 @@ class LibraryFineTest extends TestCase
         }
 
         // Library staff get no Finance power: no generic charge cancellation, no assessment run, no concession approval.
-        $this->assertThrows(fn () => app(ChargeAdministrationService::class)->cancel($w['school'], $fine->charge_id, $w['finesOfficer']), AuthorizationException::class);
+        $this->assertThrows(fn () => app(ChargeAdministrationService::class)->cancel($w['school'], $fine->charge_id, $w['finesOfficer'], 'charged_in_error', null, $this->freshProof($w['finesOfficer'])), AuthorizationException::class);
         $this->assertThrows(fn () => $this->runs()->create($w['school'], (string) Str::uuid7(), 'T1', $w['finesOfficer']), AuthorizationException::class);
         $this->assertThrows(fn () => $this->concessions()->approve($w['school'], $this->requestTargeted($w, '5.00', 'waiver', $this->inSchool($w['school'], fn () => Charge::query()->findOrFail($fine->charge_id)))->id, $w['finesOfficer']), AuthorizationException::class);
 

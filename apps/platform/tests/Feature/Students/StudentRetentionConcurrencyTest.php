@@ -112,7 +112,7 @@ class StudentRetentionConcurrencyTest extends TestCase
 
         $this->backdateEndRecording();
         [$holder, $contender] = $this->raceWithHeldHolder(
-            $this->script('reactivate', $school->id, $student->id),
+            $this->script('reactivate', $school->id, $student->id, $this->createUser()->id),
             $this->script('core-prune', $school->id, '2060-01-01'),
         );
 

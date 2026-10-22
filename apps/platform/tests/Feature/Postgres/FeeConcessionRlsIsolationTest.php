@@ -228,6 +228,7 @@ class FeeConcessionRlsIsolationTest extends TestCase
     public function adjustments_are_immutable_except_one_true_cancellation_and_block_charge_cancel(): void
     {
         $w = $this->postedWorld();
+        $by = $this->schoolAdminFor($w['school']); // ORG.8G: a recorded reason and a member actor reach the domain guard
         $this->setSchool($w['school']->id);
         $id = $w['adjustment']->id;
 
@@ -236,7 +237,7 @@ class FeeConcessionRlsIsolationTest extends TestCase
             'cancelled_at' => now(), 'cancellation_journal_entry_id' => $w['charge']->journal_entry_id,
         ]), 'A cancellation must be a true reversal.');
         $this->assertRejectedBy('has active fee adjustments; cancel them first', fn () => DB::table('charges')->where('id', $w['charge']->id)->update([
-            'cancelled_at' => now(), 'cancellation_journal_entry_id' => $w['charge']->journal_entry_id,
+            'cancelled_at' => now(), 'cancellation_journal_entry_id' => $w['charge']->journal_entry_id, 'cancellation_reason_code' => 'charged_in_error', 'cancelled_by_user_id' => $by->id,
         ]), 'A charge with a live adjustment cannot be cancelled.');
         $this->assertRejectedBy('fee_adjustments_one_live_per_concession_charge', fn () => DB::table('fee_adjustments')->insert($this->adjustmentRow($w, $w['concession']->id, '1.00')), 'One live adjustment per concession and charge.');
     }

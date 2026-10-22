@@ -6,7 +6,9 @@ use App\Domain\Payments\Application\LateFeeItemExecutor;
 use App\Domain\Payments\Application\LateFeeRunService;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
 use Tests\Support\Concurrency\HeldTransaction;
 
@@ -36,8 +38,9 @@ try {
         return match ($operation) {
             'execute-item' => $app->make(LateFeeItemExecutor::class)->executeItem($school, $args[1], $args[2]),
             'create-run' => $app->make(LateFeeRunService::class)->create($school, $args[2], $args[3], User::query()->findOrFail($args[1])) ? 'created' : 'no',
-            'void' => $app->make(LateFeeAssessmentService::class)->void($school, $args[2], User::query()->findOrFail($args[1])) ? 'voided' : 'no',
-            'void-source' => $app->make(FeeAssessmentService::class)->void($school, $args[2], User::query()->findOrFail($args[1])) ? 'voided' : 'no',
+            // ORG.8G: a listed reason and the actor's fresh-MFA proof.
+            'void' => $app->make(LateFeeAssessmentService::class)->void($school, $args[2], User::query()->findOrFail($args[1]), 'late_fee_in_error', null, new FreshMfaProof($args[1], CarbonImmutable::now())) ? 'voided' : 'no',
+            'void-source' => $app->make(FeeAssessmentService::class)->void($school, $args[2], User::query()->findOrFail($args[1]), 'assessment_error', null, new FreshMfaProof($args[1], CarbonImmutable::now())) ? 'voided' : 'no',
             default => throw new InvalidArgumentException("Unknown operation {$operation}"),
         };
     });

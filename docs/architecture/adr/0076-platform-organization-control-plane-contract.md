@@ -9744,3 +9744,214 @@ items remain. Required follow-up, one narrow slice (ORG.8G, owner
 authorization): G-6 structural Student invariants (no decision needed) and,
 once the owner decides OD-8.3, G-8 Charge cancel/void assurance. ORG.9 waits
 for that slice and the owner's approval.
+
+## 65. ORG.8G — Final ORG.8 technical closure: G-6 and G-8 (as built, 2026-10-22)
+
+Owner authorization: ORG.8G. Baseline `origin/main` = `5be69549`. Owner
+decisions in the brief: **OD-8.3 CLOSED** — human Charge cancel/void stays
+DIRECT_WITH_ASSURANCE, no request/approve workflow and no
+`finance.charge_cancellations.*` key; the **academic-year upper bound** for a
+placement's end is approved; **M-1** now also covers human Charge
+cancel/void.
+
+**65.1 Data audit.** The committed demo data (fresh `ddev demo-reset`) and
+the canonical seeds hold no Student status other than `active`, no unknown
+placement status, no terminal placement without `ends_on`, no `ends_on`
+before `starts_on` or after the year, no future withdrawal/cancellation and
+no evidence-less inactive Student or ended placement. Nothing was repaired.
+Every product writer was inventoried: Students are created only by
+`StudentService::create` (`active`), placements only by
+`StudentEnrollmentService::createEnrollmentRow` (`active`); `students.status`
+changes only in `StudentService::changeStatus`; terminal placement states
+only in `StudentEnrollmentService` (complete, withdraw, cancel, transfer).
+
+**65.2 G-6 — Student lifecycle database integrity (CLOSED).** Migration
+`2027_01_05_090000_harden_student_lifecycle_structure`:
+- `students_status_check` (`active`, `inactive`) and
+  `student_enrollments_status_check` (`active`, `completed`, `withdrawn`,
+  `transferred`, `cancelled`); `Student::STATUSES` /
+  `StudentEnrollment::STATUSES` mirror them (`StudentLifecycleStructureTest`
+  fails on drift).
+- **Born active** (`students_born_active`, `student_enrollments_born_active`):
+  a Student or placement is INSERTed `active` only; every ended state is
+  reached by its transition, where its evidence is checked (brief option B:
+  no legitimate path inserts a terminal row; chosen on the product audit,
+  not fixtures).
+- `students_lifecycle_evidence`: a status change needs, in the same
+  transaction, a `student_lifecycle_events` row for the same School and
+  Student, no placement, the direction's action (`student_deactivated` /
+  `student_reactivated`) and `occurred_at = now()` — the existing
+  `student_enrollments_lifecycle_evidence` pattern. The event's
+  `student_id` is the explicit relation to the changed row; `now()` binds it
+  to this transaction. (A link column on `students` was not added: a
+  current-row pointer cannot stop one event being reused within a
+  transaction either, so it would add a column without adding a guarantee.)
+- `student_enrollments_end_shape_check`: `(status = 'active') = (ends_on IS
+  NULL)`; the existing `ends_on >= starts_on` CHECK stays (ending on the
+  start day stays allowed).
+- `student_enrollments_end_within_year`: `ends_on` never passes the
+  placement's academic-year end (year dates are frozen at creation, so the
+  bound is stable).
+- Rollback drops only these rules; every row valid under them is valid
+  under the previous schema, so nothing is stranded or lost.
+
+**Actor boundary (unchanged, explicit).** The database proves an evidence
+row exists for this transaction; it cannot prove the named
+`acted_by_user_id` is the human who acted. No session-variable "actor" was
+introduced. The services supply the real actor, and only `StudentService` /
+`StudentEnrollmentService` write these states.
+
+**65.3 Temporal contract (G-6b structural part CLOSED).** There is no
+designed future-effective termination (no feature, ADR or doc; V11 D-13
+deferred effective dates). So **no withdrawal, cancellation or completion
+is dated after the School-local date** (`SchoolTimezone::today`), and
+**every terminal transition and transfer ends within its academic year**
+(service and database). **Completion is the placement running its normal
+course:** it ends exactly on its academic year's last day (database:
+`student_enrollments_end_within_year`) and only once that day has come
+(service). Ending a placement earlier is a withdrawal or cancellation, with
+its reason, fresh code and lifecycle event — closing the bypass the
+security review found (M2: an ordinary "completion" dated mid-year or in
+the future ended a placement without any of them). The Student page
+prefills the year's last day; closed-year closure already used it. Section
+transfers inside the year keep their effective-date design. End dates are
+compared as calendar dates (normalized), never as the caller's string.
+Residual LOW: "not in the future" is a clock rule enforced by the service,
+not the database.
+
+**65.4 Fixtures.** No invariant was weakened and no test bypass exists.
+Factories reach ended states the way the database requires
+(`Database\Factories\StudentLifecycleFixture`: insert `active`, then the
+evidenced transition in one transaction); `forceStudentStatus`,
+`plantEndedPlacement` and the race scripts do the same; fixtures that wrote
+invalid states (a Student `withdrawn`, ended rows outside their year) now
+write real ones. `AcademicYearFactory` is deterministic (2026-06-01 to
+2027-05-31): a random 2024-2030 year made every fixture that ends a
+placement on a fixed date pass or fail by chance under the year bound.
+
+**65.5 G-8 — Charge cancel/void assurance (CLOSED; OD-8.3).**
+
+| Operation | Entry | Class |
+|---|---|---|
+| Manual Charge cancel | web + API `charges/{id}/cancel` → `ChargeAdministrationService::cancel` | HUMAN_DIRECT_HIGH_IMPACT |
+| Fee-assessment void (tuition; Transport/Hostel/Admissions fee heads bill through fee runs) | web + API `fee-assessments/{id}/void` → `FeeAssessmentService::void` | HUMAN_DIRECT_HIGH_IMPACT |
+| Late-fee void | web + API `late-fee-assessments/{id}/void` → `LateFeeAssessmentService::void` | HUMAN_DIRECT_HIGH_IMPACT |
+| Library fine void's Charge | `LibraryFineService::void` → `FeeSourceChargeService::cancelForSource` | DOMAIN_OWNED_SPECIAL_FLOW (human; assured in Library and the Charge core) |
+| Canteen order Charge | no Canteen void after fulfilment; the generic cancel (above) | HUMAN_DIRECT_HIGH_IMPACT via the generic path |
+| Fee-run / late-fee-run cancel | before execution, no Charges | OUT_OF_SCOPE |
+| Concession revoke / adjustment cancel | adjustments, not Charges (G-3) | OUT_OF_SCOPE |
+| Finance retention expiry | privileged retention identity, closed periods | SYSTEM_INTERNAL (no cancellation) |
+
+No automated or system Charge cancellation exists; every cancellation is
+human. Source ownership is structural and unchanged: a fee-assessed Charge
+ends only through its assessment void, a late fee only through its void,
+a Library fine Charge only at its source (database guards).
+
+- **One assured core:** `ChargeService::cancel(School, chargeId, User actor,
+  action, reasonCode, note, FreshMfaProof, capability)`: the closed
+  `ChargeCancellationReason` for the action (`other` needs the note), the
+  actor's own proof, then under the Charge `FOR UPDATE` lock
+  `ApprovalDecisionAuthority::requireCurrent` (user, membership, module,
+  School, exact capability, whole-School grants only — fresh, uncached) and
+  `GuardianBeneficiaryRelationship::isGuardianOf` (any account link, active
+  or revoked, to a Guardian currently related to the Charge's one Student —
+  `charges.student_id` is single). Accounting is unchanged: Fees reverses
+  its own recognition entry (ORG.8-P1 accepts it); nothing deletes a
+  Charge or reverses its journal directly.
+- **Callers:** exactly the four entry points
+  (`ApprovalWorkflowRegistry::DIRECT_ASSURED[ChargeService]['entryPoints']`,
+  pinned by `ApprovalWorkflowRegistryTest`); `cancelForSource` only from
+  `LibraryFineService` (capability `library.fines.void`).
+- **Transport:** all six routes validate `reason_code` (`Rule::in` of the
+  action's list), the note when `other`, and `FreshMfaRequirement`.
+- **Reasons (code-owned, error/correction only):** cancel —
+  `charged_in_error`, `duplicate_charge`, `wrong_student_or_amount`,
+  `service_not_provided`, `other`; assessment void — `assessment_error`,
+  `duplicate_assessment`, `wrong_placement`, `other`; late-fee void —
+  `late_fee_in_error`, `payment_was_on_time`, `other`; source void —
+  `source_voided` (the source keeps its own reason).
+- **Cancellation vs waiver:** a waiver (a valid Charge the School chooses
+  not to collect) is a fee concession (maker/checker), never a cancel
+  reason; the pages say so. A person can still choose an error reason for
+  what is really a waiver — the closed reason, fresh code, Guardian refusal
+  and audit make that a recorded, attributable act (accepted LOW, like any
+  correction).
+- **Database** (`2027_01_05_090100_record_charge_cancellation_assurance`):
+  `charges.cancellation_reason_code` (closed CHECK) and
+  `cancelled_by_user_id` (users RESTRICT, retained in
+  `UserReferenceCatalog`); `charges_cancellation_shape_check` (no facts on a
+  live Charge); `charges_cancellation_evidence`: a new cancellation needs
+  both, the actor must be a member of the School, and a linked Guardian of
+  the Student is refused (`charges_cancellation_beneficiary_guardian_guard`,
+  the ORG.8A-R1 predicate); both are final. Cancellations before ORG.8G
+  keep NULLs. Rollback refuses while any reason is recorded.
+- **Audit** `charge.cancelled`: Charge, Student id, action, actor, reason
+  code, live → cancelled, `freshMfa`; never the note.
+- **Idempotency/concurrency:** a repeat is 409 `CHARGE_ALREADY_CANCELLED`
+  with one reversal; the existing two-process races (cancel vs cancel,
+  cancel vs allocation, cancel vs manual payment, cancel vs concession,
+  late-fee void vs source void, subledger reversal) run on the new path.
+- **Campus, roles, capabilities:** unchanged (`finance.charges.manage`:
+  school_admin, accountant; CAMPUS_INCOMPATIBLE; no platform role).
+- **M-1:** an undeclared staff parent is still invisible; scope now
+  includes Charge cancel/void.
+
+**65.5a Security review (independent).** No HIGH. Two MEDIUM, both G-6:
+- **M1 (not a gap, now pinned):** "an ended placement can be reopened,
+  re-dated or re-labelled" — already refused for the runtime role by
+  `retention_guard_end_record` ("an ended record keeps its end and
+  status"), and with `end_shape_check` every ended row has an end, so every
+  ended row is final. `StudentLifecycleStructureTest` now asserts it.
+- **M2 (fixed):** completion as an assurance bypass — see 65.3.
+
+LOW fixed: end dates normalized before comparison (L1); the Charge
+trigger requires an ACTIVE membership of the canceller (L3). LOW accepted
+and recorded:
+- one evidence row can satisfy several flips within one transaction, and the
+  lifecycle triggers do not check the actor's membership (actor boundary);
+- the Charge reason CHECK lists the union of codes, not per action (the
+  service pairs them);
+- a reason code is an attestation: a waiver mis-labelled as an error is one
+  person's recorded act (OD-8.3 residual; report cancellations by reason and
+  actor);
+- the cancellation note becomes the reversing journal entry's description
+  (as before ORG.8G);
+- a fresh code is spent before a 404/409/conflict (the SR.4 pattern; retries
+  never duplicate a reversal);
+- the Charge-then-authority lock order differs from Payment corrections'
+  (share locks; PostgreSQL would abort one side, availability only);
+- the entry-point guard is a source scan (a tripwire);
+- the Charge rollback guard sees rows because the migration role bypasses
+  RLS (the same as earlier migrations);
+- "born active" has no owner exemption: a future historical import must
+  replay transitions with evidence.
+
+**65.6 Registry.** `DIRECT_ASSURED` now carries metadata (capability,
+action, fresh authority, fresh MFA, reason, evidence, relationship conflict,
+DB guard, accounting owner, entry points) for StudentService,
+StudentEnrollmentService, LibraryFineService and ChargeService; none uses
+maker/checker, participants or provenance.
+
+**65.7 Residual identifiers.** §64 used "G-10" for two LOW findings. The
+register (matrix §3) now has G-10 = Communications approval database SoD
+backstop and **G-11** = Admissions decision reasons/status shape.
+
+**65.8 Evidence.** Runtime-role proofs: `StudentLifecycleStructureTest`
+(the ORG.8F probes now refused; existing refusals kept; the services' date
+bounds) and `ChargeCancellationAssuranceTest` (reasons, proof, fresh
+authority, linked Guardian active and revoked, database refusals and
+finality, web/API). Rollback and re-apply of both migrations: identical
+schema, `platform:verify-database` failed=0. DDEV smoke over real HTTP:
+Charge 7/7 (no reason, unlisted reason and no code refused; a linked staff
+Guardian refused; an unrelated School Admin cancels once with one reversal;
+a repeat refused) and lifecycle 5/5 (no reason, no code, tomorrow and
+after-year refused; a valid withdrawal succeeds; the first run's two
+"failures" were the smoke script using the UTC date while the School's IST
+date had already advanced). The local full suite ran before the M2 change;
+the exact-SHA CI gate of this candidate is its canonical regression.
+
+**65.9 Verdict.** G-6 and G-8 are closed, OD-8.3 is closed as
+DIRECT_WITH_ASSURANCE, and no HIGH or MEDIUM ORG.8 finding remains: **ORG.8
+is technically closed.** Production stays blocked by M-1, OD-8.4, OD-8.9/G-5
+and the legal and release gates (§64.23). ORG.9 waits for the owner's
+approval.

@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Finance;
 
-use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Finance\Application\Exceptions\FinancialPeriodClosedException;
 use App\Domain\Finance\Application\Exceptions\FinancialPeriodCloseRefusedException;
 use App\Domain\Finance\Application\Exceptions\FinancialPeriodNotFoundException;
@@ -80,7 +79,7 @@ class FinancialPeriodCloseTest extends TestCase
         // A charge, an adjustment and a journal entry of the closed year are
         // corrected now: each correction is a new posting in 2026-27, linked
         // to its original; the originals keep their closed period.
-        app(ChargeService::class)->cancel($w['school'], $w['c2']->id, $w['actor'], 'billed twice');
+        $this->cancelChargeAs($w['school'], $w['c2']->id, $w['actor'], 'billed twice');
         $this->concessions()->cancelAdjustment($w['school'], $w['a3']->id, $w['checker'], 'entered twice');
         $reversal = app(LedgerService::class)->reverseById($w['school'], $w['manual']->id, null, 'wrong account');
         $this->pay($w, '10.00', null, $w['c1']);

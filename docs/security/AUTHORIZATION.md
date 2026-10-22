@@ -1517,7 +1517,7 @@ UAT plan: `docs/product/APPROVAL-AUTHORITY-UAT.md`.
   entries (MEDIUM) is CLOSED by ORG.8-P1 (§57: the generic reversal and the
   database refuse any entry another domain owns); G-2 payroll SoD checks
   only the run creator (MEDIUM) is CLOSED by ORG.8B (§60); G-4 is CLOSED by
-  ORG.8D. The current residual register (G-3, G-5, G-6, G-8..G-10, M-1) is
+  ORG.8D. The current residual register (G-3, G-5, G-6b, G-9..G-11, M-1) is
   the matrix §3, reconciled by ORG.8F (§64).
 
 ## Shared approval foundation (ORG.8A, ADR 0076 §58 — built 2026-10-21)
@@ -1655,9 +1655,14 @@ UAT plan: `docs/product/APPROVAL-AUTHORITY-UAT.md`.
   existence of an evidence row, a terminal state needing an end date), it
   does. Only the identity of the acting User is an accepted application
   trust boundary. "Trust boundary" is never a blanket exemption.
-- **Open before ORG.8 technical closure:** G-6 (MEDIUM: Student status and
-  placement structural invariants) and G-8 (MEDIUM: Charge cancel/void
-  assurance, owner decision OD-8.3).
+- **ORG.8 is technically closed (ORG.8G, ADR 0076 §65).** G-6: the database
+  refuses unknown Student and placement statuses, an evidence-less Student
+  status change, an ended row inserted as such, a terminal placement without
+  an end date, and an end after the placement's year. G-8 / OD-8.3: every
+  human end of a Charge (cancel, fee-assessment void, late-fee void, the
+  Library fine void's Charge) is a direct action with a listed reason, a
+  fresh code, current authority under the Charge lock and a refusal for a
+  linked Guardian of the Student, recorded and refused in the database too.
 - **Production prerequisites:** M-1, OD-8.4, OD-8.9/G-5 and the legal gates
   (matrix §5, §6).
 

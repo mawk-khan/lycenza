@@ -99,7 +99,7 @@ class ChargeCancellationAtomicityTest extends TestCase
 
         try {
             $this->withFailingUpdateTrigger('charges', function () use ($charge) {
-                app(ChargeService::class)->cancel($this->school, $charge->id);
+                $this->cancelChargeAs($this->school, $charge->id);
             });
             $this->fail('Expected the injected charges UPDATE failure to propagate as a QueryException.');
         } catch (QueryException) {

@@ -226,7 +226,7 @@ class LibraryFineService
             throw new LogicException('The fresh MFA proof belongs to another User.');
         }
 
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $fineId, $reasonCode, $reason, $actor): LibraryFine {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $fineId, $reasonCode, $reason, $actor, $mfa): LibraryFine {
             $fine = LibraryFine::query()->where('school_id', $school->id)->find($fineId) ?? throw new LibraryFineNotFoundException;
             // The loan row serializes every write about its fine (the fine itself is insert-only).
             LibraryLoan::query()->whereKey($fine->library_loan_id)->lockForUpdate()->firstOrFail();
@@ -248,7 +248,7 @@ class LibraryFineService
             }
 
             try {
-                $this->fees->cancelForSource($school, $fine->charge_id, FeeChargeSource::libraryFine($fine->id), $actor, $void->reason);
+                $this->fees->cancelForSource($school, $fine->charge_id, FeeChargeSource::libraryFine($fine->id), $actor, $void->reason, $mfa, 'library.fines.void');
             } catch (ChargeHasPaymentAllocationsException) {
                 throw new LibraryFineNotVoidableException('its charge has payments allocated');
             } catch (ChargeHasActiveAdjustmentsException) {

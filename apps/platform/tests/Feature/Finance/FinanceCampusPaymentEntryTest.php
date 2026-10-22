@@ -83,7 +83,7 @@ class FinanceCampusPaymentEntryTest extends TestCase
         $this->inSchool($w['school'], fn () => app(StudentEnrollmentService::class)->transferPlacement(StudentEnrollment::query()->findOrFail($moveA->id), $sectionB, '91', '2026-08-01'));
         $this->travelTo(CarbonImmutable::parse('2026-09-01T06:00:00Z'));
         $w['cMoveB'] = $charge($w['sMove'], '400.00');
-        $this->inSchool($w['school'], fn () => DB::table('students')->where('id', $w['sLeaver']->id)->update(['status' => 'inactive']));
+        $this->forceStudentStatusOf($w['school'], $w['sLeaver']->id, 'inactive');
         $this->travelTo(CarbonImmutable::parse('2026-09-15T06:00:00Z'));
 
         $this->w = $w;

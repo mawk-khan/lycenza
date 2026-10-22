@@ -1568,5 +1568,14 @@ once several modules copy it.
        PostgreSQL can enforce a structural rule without knowing which human
        acted (a status domain, an evidence row's existence, a terminal
        state's end date), enforce it in the database; only the acting
-       User's identity stays an application boundary. Open: G-6 and G-8
-       (ORG.8G) before ORG.8 is technically closed.
+       User's identity stays an application boundary.
+     - **ORG.8 is technically closed (ORG.8G, §65).** Students and
+       placements are INSERTed `active` only; a Student status change needs
+       its lifecycle event; statuses are CHECKed; a terminal placement has an
+       `ends_on` within its academic year (withdraw/cancel never in the
+       future). Every human end of a Charge goes through
+       `ChargeService::cancel()` (closed `ChargeCancellationReason`,
+       `FreshMfaProof`, current authority under the Charge lock, never a
+       linked Guardian of the Student; DB: `charges_cancellation_evidence`).
+       Never add a Charge cancel/void caller outside its declared entry
+       points, and never a waiver reason (waivers are concessions).

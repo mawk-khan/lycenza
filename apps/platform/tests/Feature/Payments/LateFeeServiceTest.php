@@ -323,7 +323,7 @@ class LateFeeServiceTest extends TestCase
         $link = $this->lateFees($w)->sole();
         $voids = app(LateFeeAssessmentService::class);
 
-        $voided = $voids->void($w['school'], $link->id, $w['actor'], 'waived at the counter');
+        $voided = $voids->void($w['school'], $link->id, $w['actor'], 'payment_was_on_time', null, $this->freshProof($w['actor']));
         $this->assertNotNull($voided->voided_at);
         $fee = $this->chargeOf($w, $link->charge_id);
         $this->assertNotNull($fee->cancelled_at);
@@ -331,7 +331,7 @@ class LateFeeServiceTest extends TestCase
         $this->assertSame(1, $this->auditCount($w['school'], 'late_fee_assessment.voided'));
 
         try {
-            $voids->void($w['school'], $link->id, $w['actor']);
+            $voids->void($w['school'], $link->id, $w['actor'], 'late_fee_in_error', null, $this->freshProof($w['actor']));
             $this->fail('A void happens once.');
         } catch (LateFeeAssessmentAlreadyVoidedException) {
             $this->addToAssertionCount(1);
@@ -350,7 +350,7 @@ class LateFeeServiceTest extends TestCase
         $link = $this->lateFees($w)->sole();
 
         try {
-            app(ChargeService::class)->cancel($w['school'], $link->charge_id, $w['actor']);
+            $this->cancelChargeAs($w['school'], $link->charge_id, $w['actor']);
             $this->fail('A late fee is cancelled only by its void.');
         } catch (ChargeIsLateFeeException) {
             $this->addToAssertionCount(1);
@@ -358,7 +358,7 @@ class LateFeeServiceTest extends TestCase
 
         $assessment = $this->inSchool($w['school'], fn () => FeeAssessment::query()->sole());
         try {
-            app(FeeAssessmentService::class)->void($w['school'], $assessment->id, $w['actor']);
+            app(FeeAssessmentService::class)->void($w['school'], $assessment->id, $w['actor'], 'assessment_error', null, $this->freshProof($w['actor']));
             $this->fail('The source waits until its late fee is voided.');
         } catch (ChargeHasLiveLateFeeException) {
             $this->addToAssertionCount(1);
@@ -368,7 +368,7 @@ class LateFeeServiceTest extends TestCase
         // A payment on the late fee blocks its void (no payment reversal exists).
         $this->pay($w, '10.00', '2026-06-20', $this->chargeOf($w, $link->charge_id));
         $this->expectException(ChargeHasPaymentAllocationsException::class);
-        app(LateFeeAssessmentService::class)->void($w['school'], $link->id, $w['actor']);
+        app(LateFeeAssessmentService::class)->void($w['school'], $link->id, $w['actor'], 'late_fee_in_error', null, $this->freshProof($w['actor']));
     }
 
     // --- Authorization ------------------------------------------------------
@@ -389,7 +389,7 @@ class LateFeeServiceTest extends TestCase
             fn () => $this->lateRuns()->preview($w['school'], $run->id, $viewer),
             fn () => $this->lateRuns()->execute($w['school'], $run->id, $viewer),
             fn () => $this->lateRuns()->cancel($w['school'], $run->id, $viewer),
-            fn () => app(LateFeeAssessmentService::class)->void($w['school'], (string) Str::uuid(), $viewer),
+            fn () => app(LateFeeAssessmentService::class)->void($w['school'], (string) Str::uuid(), $viewer, 'late_fee_in_error', null, $this->freshProof($viewer)),
             fn () => $this->lateRules()->list($w['school'], $w['maker']),
             fn () => app(LateFeeReadService::class)->listRuns($w['school'], $w['maker']),
         ];

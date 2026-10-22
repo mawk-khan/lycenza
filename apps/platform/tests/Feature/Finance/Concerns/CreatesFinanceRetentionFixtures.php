@@ -61,7 +61,7 @@ trait CreatesFinanceRetentionFixtures
 
         $this->travelTo(Carbon::parse('2015-11-10 06:00:00', 'UTC'));
         $w['p2'] = $this->pay($w, '700.00', null, $w['c1'])->paymentId;
-        app(ChargeService::class)->cancel($w['school'], $w['c2']->id, $w['actor'], 'billed twice');
+        $this->cancelChargeAs($w['school'], $w['c2']->id, $w['actor'], 'billed twice');
         if ($inFirstYear !== null) {
             $inFirstYear($w);
         }

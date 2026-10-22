@@ -121,7 +121,7 @@ class PlacementValidityTest extends TestCase
         $this->assertSame('active', $this->inSchool(fn () => $placement->fresh())->status, 'the source placement is untouched (one transaction)');
 
         $this->inSchool(fn () => Campus::query()->whereKey($this->b->id)->update(['status' => 'active']));
-        $this->inSchool(fn () => Student::query()->whereKey($student->id)->update(['status' => 'inactive']));
+        $this->forceStudentStatus($student, 'inactive');
         $this->refusedWith(PlacementTargetUnavailableException::STUDENT_INACTIVE, fn () => app(StudentEnrollmentService::class)->transferPlacement($this->inSchool(fn () => $placement->fresh()), $this->sectionB, '2', '2026-08-01'));
     }
 
@@ -151,7 +151,7 @@ class PlacementValidityTest extends TestCase
         foreach ($this->inSchool(fn () => EnrollmentRolloverItem::query()->where('plan_id', $plan->id)->get()) as $item) {
             $plans->setItemDecision($this->inSchool(fn () => $plan->fresh()), $item, 'promote', null, 'preserve_source');
         }
-        $this->inSchool(fn () => Student::query()->whereKey($leaver->id)->update(['status' => 'inactive']));
+        $this->forceStudentStatus($leaver, 'inactive');
 
         app(EnrollmentRolloverDryRunService::class)->run($this->inSchool(fn () => $plan->fresh()));
         $results = $this->inSchool(fn () => EnrollmentRolloverItem::query()->where('plan_id', $plan->id)->get()->keyBy('student_id'));

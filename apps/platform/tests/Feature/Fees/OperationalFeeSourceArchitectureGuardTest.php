@@ -42,6 +42,8 @@ class OperationalFeeSourceArchitectureGuardTest extends TestCase
     private const APPROVED_CHARGE_SEAM_CALLERS = [
         'Domain/Library/Application/LibraryFinePolicyService.php',
         'Domain/Library/Application/LibraryFineService.php',
+        // ORG.8G (ADR 0076 §65): names the seam as a declared entry point of the assured Charge core; calls nothing.
+        'Support/Approval/ApprovalWorkflowRegistry.php',
     ];
 
     /** The one caller that may assess or cancel through the event-charge seam. */

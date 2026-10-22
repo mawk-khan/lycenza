@@ -14,6 +14,9 @@ use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Admissions\Infrastructure\AdmissionApplication;
 use App\Domain\Admissions\Infrastructure\Applicant;
 use App\Domain\Documents\Infrastructure\Document;
+use App\Domain\Fees\Application\ChargeCancellationReason;
+use App\Domain\Fees\Application\ChargeResult;
+use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Guardians\Application\GuardianContactService;
 use App\Domain\Guardians\Infrastructure\ContactType;
 use App\Domain\Guardians\Infrastructure\Guardian;
@@ -74,6 +77,7 @@ use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\LocalCatalogueFixtures;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -483,6 +487,29 @@ trait CreatesTenancyFixtures
         return $this->lifecycleAdmins[$school->id] ??= $this->createUserWithCapabilities($school, ['students.manage', 'enrollments.manage']);
     }
 
+    /** @var array<string, User> ORG.8G: one Charge canceller per School. */
+    private array $chargeCancellers = [];
+
+    /**
+     * ORG.8G (ADR 0076 §65): ends a Charge the only way the product can -- a
+     * listed reason (`other` + the note when one is given), a fresh-MFA proof
+     * and a current whole-School `finance.charges.manage` holder who is no
+     * Guardian of the Student (default: a `school_admin` member).
+     */
+    protected function cancelChargeAs(School $school, string $chargeId, ?User $actor = null, ?string $note = null): ChargeResult
+    {
+        $actor ??= $this->chargeCancellers[$school->id] ??= $this->schoolAdminFor($school);
+
+        return app(ChargeService::class)->cancel($school, $chargeId, $actor, ChargeCancellationReason::CANCEL,
+            $note === null ? 'charged_in_error' : 'other', $note, $this->freshProof($actor));
+    }
+
+    /** A fresh-MFA proof for direct service calls (the product mints it only through FreshMfaRequirement). */
+    protected function freshProof(User $actor): FreshMfaProof
+    {
+        return new FreshMfaProof($actor->id, CarbonImmutable::now());
+    }
+
     /** A `school_admin` system-role member (no fixture role: safe for committed race fixtures). */
     protected function schoolAdminFor(School $school): User
     {
@@ -516,14 +543,84 @@ trait CreatesTenancyFixtures
     protected function forceEnrollmentStatus(StudentEnrollment $enrollment, string $status, array $columns = []): void
     {
         $actor = $this->lifecycleAdmin($enrollment->school);
-        app(TenantContext::class)->withSchool($enrollment->school, function () use ($enrollment, $status, $columns, $actor) {
+        app(TenantContext::class)->withSchool($enrollment->school, fn () => DB::transaction(function () use ($enrollment, $status, $columns, $actor) {
             StudentLifecycleEvent::query()->create([
                 'school_id' => $enrollment->school_id, 'student_id' => $enrollment->student_id, 'student_enrollment_id' => $enrollment->id,
                 'action' => $status === 'withdrawn' ? 'enrollment_withdrawn' : 'enrollment_cancelled',
                 'reason_code' => $status === 'withdrawn' ? 'left_school' : 'entered_in_error', 'acted_by_user_id' => $actor->id,
             ]);
-            StudentEnrollment::query()->whereKey($enrollment->id)->update(['status' => $status] + $columns);
-        });
+            // ORG.8G: an ended placement has an end date (default: its start day, always within its year).
+            $default = $status === 'completed' ? $enrollment->academicYear()->firstOrFail()->ends_on : $enrollment->starts_on;
+            StudentEnrollment::query()->whereKey($enrollment->id)->update(['status' => $status] + $columns + ['ends_on' => $default->toDateString()]);
+        }));
+    }
+
+    /**
+     * ORG.8G (ADR 0076 §65): plants an ENDED placement row the way the database
+     * allows one to exist -- inserted `active`, then ended (with its lifecycle
+     * event when withdrawn/cancelled). For tests that build legacy or
+     * overlapping history; plant it before the Student's live placement in the
+     * same year (one active placement per Student and year).
+     *
+     * @param  array<string, mixed>  $row  full row incl. status and ends_on
+     */
+    protected function plantEndedPlacement(School $school, array $row): string
+    {
+        $id = (string) ($row['id'] ?? Str::uuid7());
+        ['status' => $status, 'ends_on' => $endsOn] = $row;
+        $actor = $this->lifecycleAdmin($school);
+        app(TenantContext::class)->withSchool($school, fn () => DB::transaction(function () use ($school, $row, $id, $status, $endsOn, $actor) {
+            DB::table('student_enrollments')->insert(['id' => $id, 'school_id' => $school->id, 'created_at' => now(), 'updated_at' => now(), ...$row, 'status' => 'active', 'ends_on' => null]);
+            if (in_array($status, ['withdrawn', 'cancelled'], true)) {
+                StudentLifecycleEvent::query()->create([
+                    'school_id' => $school->id, 'student_id' => $row['student_id'], 'student_enrollment_id' => $id,
+                    'action' => $status === 'withdrawn' ? 'enrollment_withdrawn' : 'enrollment_cancelled',
+                    'reason_code' => $status === 'withdrawn' ? 'left_school' : 'entered_in_error', 'acted_by_user_id' => $actor->id,
+                ]);
+            }
+            DB::table('student_enrollments')->where('id', $id)->update(['status' => $status, 'ends_on' => $endsOn]);
+        }));
+
+        return $id;
+    }
+
+    /** ORG.8G: a raw Student status fixture WITH the lifecycle event the database requires. */
+    protected function forceStudentStatus(Student $student, string $status): void
+    {
+        $actor = $this->lifecycleAdmin($student->school);
+        app(TenantContext::class)->withSchool($student->school, fn () => DB::transaction(function () use ($student, $status, $actor) {
+            StudentLifecycleEvent::query()->create([
+                'school_id' => $student->school_id, 'student_id' => $student->id,
+                'action' => $status === 'inactive' ? 'student_deactivated' : 'student_reactivated',
+                'reason_code' => $status === 'inactive' ? 'left_school' : 'returned_to_school', 'acted_by_user_id' => $actor->id,
+            ]);
+            Student::query()->whereKey($student->id)->update(['status' => $status]);
+        }));
+    }
+
+    /**
+     * ORG.8G (ADR 0076 §65): completes a placement the only way the product
+     * can -- on its academic year's last day, once that day has come (the
+     * clock is moved there for the call only, then restored).
+     */
+    protected function completeEnrollment(StudentEnrollment $enrollment, ?User $actor = null): StudentEnrollment
+    {
+        $yearEnd = app(TenantContext::class)->withSchool($enrollment->school, fn () => $enrollment->academicYear()->firstOrFail()->ends_on->toDateString());
+        $previous = CarbonImmutable::getTestNow();
+        CarbonImmutable::setTestNow(CarbonImmutable::parse($yearEnd.' 12:00:00', $enrollment->school->timezone));
+        Carbon::setTestNow(Carbon::parse($yearEnd.' 12:00:00', $enrollment->school->timezone));
+        try {
+            return app(StudentEnrollmentService::class)->complete($enrollment, $yearEnd, $actor);
+        } finally {
+            CarbonImmutable::setTestNow($previous);
+            Carbon::setTestNow($previous === null ? null : Carbon::instance($previous));
+        }
+    }
+
+    /** ORG.8G: forceStudentStatus() for a Student known only by id. */
+    protected function forceStudentStatusOf(School $school, string $studentId, string $status): void
+    {
+        $this->forceStudentStatus(app(TenantContext::class)->withSchool($school, fn () => Student::query()->findOrFail($studentId)), $status);
     }
 
     protected function changeStudentStatus(Student $student, string $status, ?User $actor = null): Student

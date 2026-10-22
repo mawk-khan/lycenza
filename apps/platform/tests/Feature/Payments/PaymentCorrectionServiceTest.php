@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Payments;
 
-use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Application\Exceptions\ChargeHasPaymentAllocationsException;
 use App\Domain\Fees\Infrastructure\Charge;
 use App\Domain\Finance\Application\LedgerBalanceReader;
@@ -148,7 +147,7 @@ class PaymentCorrectionServiceTest extends TestCase
         $foreign = $this->concessionWorld();
         $paymentId = $this->pay($w, '500.00')->paymentId;
         $cancelled = $this->secondCharge($w, '100.00');
-        app(ChargeService::class)->cancel($w['school'], $cancelled->id);
+        $this->cancelChargeAs($w['school'], $cancelled->id);
 
         $cases = [
             'exceeds' => [['charge' => $w['charge']->id, 'to' => $b->id, 'amount' => '600.00'], 'PAYMENT_CORRECTION_EXCEEDS_PAYMENT'],
@@ -267,7 +266,7 @@ class PaymentCorrectionServiceTest extends TestCase
 
         // 1. Move the money onto the real charge; 2. cancel the duplicate.
         $this->correct($w, $paymentId, PaymentCorrection::REALLOCATION, ['charge' => $duplicate->id, 'to' => $real->id, 'amount' => '250.00', 'reason' => 'Duplicate charge; money belongs on the real one']);
-        app(ChargeService::class)->cancel($w['school'], $duplicate->id, $w['actor'], 'Duplicate charge');
+        $this->cancelChargeAs($w['school'], $duplicate->id, $w['actor'], 'Duplicate charge');
 
         $this->assertSame('750.00', $this->owed($w, $real));
         $this->assertSame('0.00', $this->owed($w, $duplicate));
@@ -284,20 +283,20 @@ class PaymentCorrectionServiceTest extends TestCase
         $paymentId = $this->pay($w, '100.00', null, $b)->paymentId;
 
         try {
-            app(ChargeService::class)->cancel($w['school'], $b->id);
+            $this->cancelChargeAs($w['school'], $b->id);
             $this->fail('Cancelling a charge with money on it must be refused.');
         } catch (ChargeHasPaymentAllocationsException) {
         }
 
         $this->correct($w, $paymentId, PaymentCorrection::REALLOCATION, ['charge' => $b->id, 'to' => $w['charge']->id, 'amount' => '60.00']);
         try {
-            app(ChargeService::class)->cancel($w['school'], $b->id);
+            $this->cancelChargeAs($w['school'], $b->id);
             $this->fail('Still 40.00 on it.');
         } catch (ChargeHasPaymentAllocationsException) {
         }
 
         $this->correct($w, $paymentId, PaymentCorrection::REALLOCATION, ['charge' => $b->id, 'to' => $w['charge']->id, 'amount' => '40.00']);
-        app(ChargeService::class)->cancel($w['school'], $b->id);
+        $this->cancelChargeAs($w['school'], $b->id);
         $this->assertSame('900.00', $this->owed($w, $w['charge']));
     }
 

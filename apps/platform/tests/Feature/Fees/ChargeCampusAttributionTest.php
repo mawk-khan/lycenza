@@ -149,7 +149,7 @@ class ChargeCampusAttributionTest extends TestCase
         $this->assertSame($b->id, $this->campusOf($w, $chargeB->id));
 
         // A leaver keeps it, and so does a deactivated Campus.
-        $this->inSchool($w['school'], fn () => DB::table('students')->where('id', $student->id)->update(['status' => 'inactive']));
+        $this->forceStudentStatusOf($w['school'], $student->id, 'inactive');
         $this->inSchool($w['school'], fn () => DB::table('campuses')->where('id', $b->id)->update(['status' => 'inactive']));
         $this->assertSame($b->id, $this->campusOf($w, $chargeB->id));
         $this->assertSame($a->id, $this->campusOf($w, $chargeA->id));

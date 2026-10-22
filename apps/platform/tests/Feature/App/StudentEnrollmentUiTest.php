@@ -16,6 +16,7 @@ use App\Models\SchoolAuditEvent;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\LocalCatalogueFixtures;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -367,12 +368,16 @@ class StudentEnrollmentUiTest extends TestCase
         $this->assignSchoolRole($membership, 'school_admin');
         $this->activate($user, $school);
 
-        $response = $this->post("/app/enrollments/{$enrollment->id}/complete", ['ends_on' => '2027-04-30']);
+        // ORG.8G (ADR 0076 §65): completion is on the year's last day, once it has come.
+        $yearEnd = app(TenantContext::class)->withSchool($school, fn () => $enrollment->academicYear()->firstOrFail()->ends_on->toDateString());
+        $this->post("/app/enrollments/{$enrollment->id}/complete", ['ends_on' => '2026-10-01'])->assertSessionHasErrors('ends_on');
+        $this->travelTo(CarbonImmutable::parse($yearEnd.' 12:00', $school->timezone));
+        $response = $this->post("/app/enrollments/{$enrollment->id}/complete", ['ends_on' => $yearEnd]);
 
         $response->assertRedirect("/app/students/{$student->id}");
         $fresh = app(TenantContext::class)->withSchool($school, fn () => $enrollment->fresh());
         $this->assertSame('completed', $fresh->status);
-        $this->assertSame('2027-04-30', $fresh->ends_on->toDateString());
+        $this->assertSame($yearEnd, $fresh->ends_on->toDateString());
         $studentFresh = app(TenantContext::class)->withSchool($school, fn () => $student->fresh());
         $this->assertSame('S-1001', $studentFresh->student_number);
     }
@@ -433,7 +438,7 @@ class StudentEnrollmentUiTest extends TestCase
     {
         ['school' => $school, 'section' => $section, 'student' => $student] = $this->buildPlacementContext();
         $enrollment = $this->service()->enroll($student, $section, '01', '2026-06-01');
-        $this->service()->complete($enrollment, '2027-04-30');
+        $this->completeEnrollment($enrollment);
         [$user] = $this->createSchoolAdmin('school_admin');
         $membership = $this->createMembership($user, $school);
         $this->assignSchoolRole($membership, 'school_admin');
@@ -624,7 +629,7 @@ class StudentEnrollmentUiTest extends TestCase
         $sectionThree = $this->createSection($year, $campus, $grade, ['name' => 'C', 'code' => 'C']);
 
         $completed = $this->service()->enroll($student, $sectionOne, '01', '2026-01-01');
-        $this->service()->complete($completed, '2026-03-01');
+        $this->completeEnrollment($completed);
         $reEnrolled = $this->service()->enroll($student, $sectionTwo, '02', '2026-03-02');
         $this->service()->transferPlacement($reEnrolled, $sectionThree, '03', '2026-04-01');
         app(TenantContext::class)->withSchool($school, fn () => $year->update(['status' => 'active']));

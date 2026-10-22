@@ -39,6 +39,9 @@ class Student extends Model
 {
     use BelongsToSchool, GeneratesUuidV7, HasFactory;
 
+    /** Mirrors `students_status_check` (ORG.8G; StudentLifecycleStructureTest pins the two). */
+    public const STATUSES = ['active', 'inactive'];
+
     protected $table = 'students';
 
     protected $fillable = [

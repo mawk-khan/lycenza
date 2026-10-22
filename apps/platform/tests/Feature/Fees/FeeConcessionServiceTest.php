@@ -458,14 +458,14 @@ class FeeConcessionServiceTest extends TestCase
         $this->concessions()->approve($w['school'], $concession->id, $w['checker']);
 
         try {
-            app(ChargeService::class)->cancel($w['school'], $w['charge']->id, $w['actor']);
+            $this->cancelChargeAs($w['school'], $w['charge']->id, $w['actor']);
             $this->fail('Live adjustments block charge cancellation.');
         } catch (ChargeHasActiveAdjustmentsException) {
             $this->addToAssertionCount(1);
         }
 
         $this->concessions()->cancelAdjustment($w['school'], $this->adjustmentsOf($w)->sole()->id, $w['checker']);
-        app(ChargeService::class)->cancel($w['school'], $w['charge']->id, $w['actor']);
+        $this->cancelChargeAs($w['school'], $w['charge']->id, $w['actor']);
         $this->assertNotNull($this->inSchool($w['school'], fn () => Charge::query()->findOrFail($w['charge']->id)->cancelled_at));
     }
 

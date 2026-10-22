@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Fees\Application\ChargeCancellationReason;
 use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Application\FeeAssessmentItemExecutor;
 use App\Domain\Fees\Application\FeeConcessionService;
@@ -7,7 +8,9 @@ use App\Domain\Guardians\Application\StudentGuardianRelationshipService;
 use App\Domain\Guardians\Infrastructure\StudentGuardianRelationship;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
 use Tests\Support\Concurrency\HeldTransaction;
@@ -25,7 +28,7 @@ use Tests\Support\Concurrency\HeldTransaction;
 //   php race-fee-concession.php unlink-relationship <schoolId> <userId> <relationshipId>
 //   php race-fee-concession.php revoke <schoolId> <userId> <concessionId>
 //   php race-fee-concession.php cancel-adjustment <schoolId> <userId> <adjustmentId>
-//   php race-fee-concession.php cancel-charge <schoolId> <chargeId>
+//   php race-fee-concession.php cancel-charge <schoolId> <chargeId> <actorUserId>   (ORG.8G)
 //   php race-fee-concession.php execute-item <schoolId> <runId> <itemId>
 
 require __DIR__.'/../../vendor/autoload.php';
@@ -64,7 +67,7 @@ try {
                 ->whereNull('revoked_at')
                 ->update(['revoked_at' => now(), 'revocation_reason' => 'revoked']),
             'cancel-adjustment' => $concessions->cancelAdjustment($school, $args[2], User::query()->findOrFail($args[1])) ? 'cancelled' : 'no',
-            'cancel-charge' => $app->make(ChargeService::class)->cancel($school, $args[1]) ? 'cancelled' : 'no',
+            'cancel-charge' => $app->make(ChargeService::class)->cancel($school, $args[1], User::query()->findOrFail($args[2]), ChargeCancellationReason::CANCEL, 'charged_in_error', null, new FreshMfaProof($args[2], CarbonImmutable::now())) ? 'cancelled' : 'no',
             'execute-item' => $app->make(FeeAssessmentItemExecutor::class)->executeItem($school, $args[1], $args[2]),
             default => throw new InvalidArgumentException("Unknown operation {$operation}"),
         };

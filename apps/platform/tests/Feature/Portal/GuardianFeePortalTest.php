@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Portal;
 
-use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Identity\Application\Portal\ActingGuardianResolver;
 use App\Domain\Identity\Application\Portal\GuardianOffboardingService;
 use App\Domain\Identity\Application\Portal\GuardianPortalAccessDeniedException;
@@ -58,7 +57,7 @@ class GuardianFeePortalTest extends TestCase
 
         $w['a1'] = $this->assessCharge($w['school'], $a, $w['year'], $w['receivable'], $w['revenue'], '1000.00', description: 'Tuition A');
         $w['a2'] = $this->assessCharge($w['school'], $a, $w['year'], $w['receivable'], $w['revenue'], '75.00', description: 'Cancelled A');
-        app(ChargeService::class)->cancel($w['school'], $w['a2']->id);
+        $this->cancelChargeAs($w['school'], $w['a2']->id);
         $w['a3'] = $this->assessCharge($w['school'], $a, $w['year'], $w['receivable'], $w['revenue'], '300.00', description: 'Transport A');
         $w['b1'] = $this->assessCharge($w['school'], $b, $w['year'], $w['receivable'], $w['revenue'], '640.00', description: 'Sibling fee B');
         $w['b2'] = $this->assessCharge($w['school'], $b, $w['year'], $w['receivable'], $w['revenue'], '50.00', description: 'Sibling fee B2');
@@ -216,7 +215,7 @@ class GuardianFeePortalTest extends TestCase
         $school = $w['school'];
         $nonLegal = $this->createStudent($school);
         $this->createStudentGuardianRelationship($nonLegal, $w['g']['guardian'], ['is_legal_guardian' => false]);
-        $withdrawn = $this->createStudent($school, ['status' => 'withdrawn']);
+        $withdrawn = $this->createStudent($school, ['status' => 'inactive']); // ORG.8G: the Student state (withdrawn is a placement state)
         $this->createStudentGuardianRelationship($withdrawn, $w['g']['guardian'], ['is_legal_guardian' => true]);
         $elsewhere = $this->createSchool();
         $foreign = $this->portalGuardian($elsewhere)['student'];

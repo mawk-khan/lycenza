@@ -117,7 +117,7 @@ class StudentService
      */
     public function changeStatus(Student $student, string $status, string $reasonCode, User $actor, FreshMfaProof $mfa): Student
     {
-        if (! in_array($status, ['active', 'inactive'], true)) {
+        if (! in_array($status, Student::STATUSES, true)) {
             throw new InvalidStudentStatusException($status);
         }
         if (! $mfa->isFor($actor->id)) {

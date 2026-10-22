@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { formatDateTime } from '../../../../datetime';
-import { router } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import ChargeEndForm from '../../../../Components/ChargeEndForm.vue';
 import { formatMoney } from '../../../../money';
 
 interface ChargeDetail {
@@ -47,33 +46,12 @@ interface Props {
     payments: Array<{ paymentId: string; amount: string }> | null;
     /** ORG.7G-1: the amount on this charge from payments a Campus reader cannot open. */
     otherPaymentsAmount: string | null;
+    /** ORG.8G: the listed cancel reasons and whether a fresh code can be given. */
+    cancelReasons: string[];
+    hasMfaFactor: boolean;
 }
 
-const props = defineProps<Props>();
-
-const cancelling = ref(false);
-const reason = ref('');
-const cancelError = ref('');
-
-function cancel(): void {
-    const confirmed = window.confirm(
-        'Cancel this charge? This creates a reversing journal entry and preserves the original charge -- it is not deleted.',
-    );
-    if (!confirmed) return;
-
-    cancelling.value = true;
-    cancelError.value = '';
-    router.post(
-        `/app/finance/charges/${props.charge.id}/cancel`,
-        { reason: reason.value || undefined },
-        {
-            onError: (errors) => {
-                cancelError.value = errors.cancellation ?? 'That charge could not be cancelled.';
-            },
-            onFinish: () => (cancelling.value = false),
-        },
-    );
-}
+defineProps<Props>();
 </script>
 
 <template>
@@ -106,13 +84,6 @@ function cancel(): void {
                 >Assessed</span
             >
         </div>
-
-        <p
-            v-if="cancelError"
-            class="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700"
-        >
-            {{ cancelError }}
-        </p>
 
         <dl class="mt-6 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
             <div>
@@ -281,26 +252,19 @@ function cancel(): void {
                 cancel this charge.
             </p>
             <template v-else>
-                <div class="mt-3">
-                    <label class="block text-sm text-slate-600" for="reason"
-                        >Reason (optional)</label
-                    >
-                    <input
-                        id="reason"
-                        v-model="reason"
-                        type="text"
-                        maxlength="255"
-                        class="mt-1 w-full max-w-md rounded border border-slate-300 px-3 py-2 text-sm"
-                    />
-                </div>
-                <button
-                    type="button"
-                    :disabled="cancelling"
-                    class="mt-3 rounded border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-                    @click="cancel"
-                >
-                    Cancel charge
-                </button>
+                <p class="mt-2 text-sm text-slate-500">
+                    Cancel only a charge that should not stand. To excuse a valid charge, request a
+                    concession instead.
+                </p>
+                <ChargeEndForm
+                    id="cancel-charge"
+                    :url="`/app/finance/charges/${charge.id}/cancel`"
+                    :reasons="cancelReasons"
+                    :has-mfa-factor="hasMfaFactor"
+                    action="Cancelling a charge"
+                    submit-label="Cancel charge"
+                    confirmation="Cancel this charge? This creates a reversing journal entry and preserves the original charge -- it is not deleted."
+                />
             </template>
         </section>
     </main>

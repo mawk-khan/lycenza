@@ -5723,3 +5723,25 @@ detected. That limit is recorded for an owner policy decision (ADR 0076
 - **M-1** (a staff parent who never links their account) is a production
   policy prerequisite for concession, correction and (if adopted) Charge
   cancel decisions.
+
+## Charge cancel and void assurance (ORG.8G, 2026-10-22, ADR 0076 §65)
+
+Closes G-8 (owner decision OD-8.3: a direct action with assurance, no
+approval workflow).
+- **One path.** Cancelling a charge, voiding a fee assessment, voiding a late
+  fee and voiding a Library fine all end the Charge through
+  `ChargeService::cancel()`.
+- **What it needs:** a listed reason for that action (`other` needs a note),
+  a fresh authentication code, the person's current School-wide
+  `finance.charges.manage` (read fresh, under the Charge lock), and the
+  person must not be a linked Guardian of the Student (an active or revoked
+  account link).
+- **What it records:** the reason code and who cancelled, on the Charge;
+  the database requires both and refuses a linked Guardian. The audit
+  event never carries the note.
+- **Reasons are errors and corrections only.** To excuse a valid charge,
+  request a concession (another person approves).
+- **Accounting is unchanged:** Fees reverses its own recognition entry; a
+  repeat is refused with one reversal.
+- **M-1:** a staff parent who never linked their account is not detected
+  (production policy).

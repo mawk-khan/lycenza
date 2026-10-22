@@ -2915,3 +2915,20 @@ operational Student of a Campus.
   academic year (even far in the future). That can only delay the retention
   clock, never shorten it, but date-based fee and Campus attribution treat
   the placement as running until then. Bound the end date to the year.
+
+## Lifecycle database integrity (ORG.8G, 2026-10-22, ADR 0076 §65)
+
+Closes G-6.
+- **Status values:** Student status is `active` or `inactive`; a placement is
+  `active`, `completed`, `withdrawn`, `transferred` or `cancelled`. Any other
+  value is refused by the database.
+- **Born active:** Students and placements are created `active`; an ended
+  state is reached only by its transition.
+- **Evidence:** a Student status change needs its lifecycle event in the
+  same transaction (as withdraw/cancel already did).
+- **End dates:** an ended placement always has an end date, on or after its
+  start, and never after its academic year ends. A withdrawal or
+  cancellation is never dated in the future (School-local date); there is
+  no scheduled termination.
+- **Actor boundary:** the database proves the evidence exists, not who acted;
+  only the Student services write these states.

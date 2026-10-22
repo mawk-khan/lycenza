@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Postgres;
 
-use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Infrastructure\Charge;
 use App\Domain\Finance\Application\LedgerService;
 use App\Domain\Finance\Infrastructure\JournalEntry;
@@ -360,12 +359,13 @@ class FeesRawIsolationTest extends TestCase
             fn () => JournalEntry::query()->findOrFail($charge->journal_entry_id),
         );
         $realReversal = app(LedgerService::class)->reverse($originalEntry);
+        $by = $this->schoolAdminFor($school); // ORG.8G: the cancellation records its reason and a member actor
 
         $this->setSchool($school->id);
 
         $affected = DB::connection('pgsql')->update(
-            'update charges set cancelled_at = now(), cancellation_journal_entry_id = ? where id = ?',
-            [$realReversal->journalEntryId, $charge->id],
+            "update charges set cancelled_at = now(), cancellation_journal_entry_id = ?, cancellation_reason_code = 'charged_in_error', cancelled_by_user_id = ? where id = ?",
+            [$realReversal->journalEntryId, $by->id, $charge->id],
         );
 
         $this->assertSame(1, $affected, 'A cancellation naming the TRUE reversal of its own recognition journal must be accepted.');
@@ -382,7 +382,7 @@ class FeesRawIsolationTest extends TestCase
         $receivable = $this->createLedgerAccount($school, ['type' => 'asset']);
         $revenue = $this->createLedgerAccount($school, ['type' => 'income']);
         $charge = $this->assessCharge($school, $student, $year, $receivable, $revenue);
-        app(ChargeService::class)->cancel($school, $charge->id);
+        $this->cancelChargeAs($school, $charge->id);
 
         $this->setSchool($school->id);
 
@@ -403,7 +403,7 @@ class FeesRawIsolationTest extends TestCase
         $receivable = $this->createLedgerAccount($school, ['type' => 'asset']);
         $revenue = $this->createLedgerAccount($school, ['type' => 'income']);
         $charge = $this->assessCharge($school, $student, $year, $receivable, $revenue);
-        app(ChargeService::class)->cancel($school, $charge->id);
+        $this->cancelChargeAs($school, $charge->id);
         $unrelatedJournal = $this->postBalancedJournalEntry($school, $receivable, $revenue, '1.00');
 
         $this->setSchool($school->id);
@@ -467,7 +467,7 @@ class FeesRawIsolationTest extends TestCase
         $revenue = $this->createLedgerAccount($school, ['type' => 'income']);
         $chargeA = $this->assessCharge($school, $studentA, $year, $receivable, $revenue, '50.00');
         $chargeB = $this->assessCharge($school, $studentB, $year, $receivable, $revenue, '75.00');
-        app(ChargeService::class)->cancel($school, $chargeA->id);
+        $this->cancelChargeAs($school, $chargeA->id);
         $chargeAReloaded = app(TenantContext::class)->withSchool(
             $school,
             fn () => Charge::query()->findOrFail($chargeA->id),

@@ -62,7 +62,7 @@ class ChargeConcurrencyTest extends TestCase
         $charge = $this->assessCharge($this->school, $student, $year, $receivable, $revenue, '100.00');
 
         $script = __DIR__.'/../../Support/cancel-charge.php';
-        $args = [$this->school->id, $charge->id];
+        $args = [$this->school->id, $charge->id, $this->schoolAdminFor($this->school)->id];
         $processA = new Process(['php', $script, ...$args]);
         $processB = new Process(['php', $script, ...$args]);
         $processA->start();

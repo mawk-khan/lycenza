@@ -157,8 +157,9 @@ class LateFeeRlsIsolationTest extends TestCase
         // A genuine reversal, so only the late-fee guard can refuse the cancel.
         $fee = $this->chargeOf($w, $w['link']->charge_id);
         $reversal = $this->inSchool($w['school'], fn () => DB::transaction(fn () => app(LedgerService::class)->reverseById($w['school'], $fee->journal_entry_id)))->journalEntryId;
+        $by = $this->schoolAdminFor($w['school']); // ORG.8G: a recorded reason and a member actor reach the domain guard
         $this->setSchool($w['school']->id);
-        $this->assertRejectedBy('is a late fee; void its late-fee assessment', fn () => DB::table('charges')->where('id', $fee->id)->update(['cancelled_at' => now(), 'cancellation_journal_entry_id' => $reversal]), 'A live late fee is cancelled only by its void.');
+        $this->assertRejectedBy('is a late fee; void its late-fee assessment', fn () => DB::table('charges')->where('id', $fee->id)->update(['cancelled_at' => now(), 'cancellation_journal_entry_id' => $reversal, 'cancellation_reason_code' => 'charged_in_error', 'cancelled_by_user_id' => $by->id]), 'A live late fee is cancelled only by its void.');
         $this->assertRejectedBy('permission denied', fn () => DB::table('late_fee_assessments')->where('id', $w['link']->id)->delete(), 'Links are never deleted.');
     }
 }

@@ -4,6 +4,7 @@ namespace App\Domain\Fees\Application;
 
 use App\Domain\Fees\Application\Exceptions\AcademicYearNotFoundException;
 use App\Domain\Fees\Application\Exceptions\ChargeAlreadyCancelledException;
+use App\Domain\Fees\Application\Exceptions\ChargeCancellationConflictException;
 use App\Domain\Fees\Application\Exceptions\ChargeHasActiveAdjustmentsException;
 use App\Domain\Fees\Application\Exceptions\ChargeHasLiveLateFeeException;
 use App\Domain\Fees\Application\Exceptions\ChargeHasPaymentAllocationsException;
@@ -25,10 +26,13 @@ use App\Domain\Finance\Application\JournalLineData;
 use App\Domain\Finance\Application\LedgerService;
 use App\Domain\Finance\Application\PostJournalEntryData;
 use App\Domain\Finance\Domain\JournalSide;
+use App\Domain\Guardians\Application\GuardianBeneficiaryRelationship;
 use App\Domain\Students\Application\StudentEnrollmentFeeTargetReadService;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Approval\ApprovalDecisionAuthority;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Authorization\Campus\CampusScope;
 use App\Support\Money\Money;
 use App\Support\Tenancy\SchoolTimezone;
@@ -39,6 +43,7 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 
 /**
  * Phase 0G.4: the only sanctioned write path for `charges` -- never
@@ -88,7 +93,12 @@ class ChargeService
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly StudentEnrollmentFeeTargetReadService $placements,
+        private readonly ApprovalDecisionAuthority $authority,
+        private readonly GuardianBeneficiaryRelationship $beneficiary,
     ) {}
+
+    /** The whole-School Charge authority every Fees cancel/void path re-reads (ORG.8G). */
+    public const CANCEL_CAPABILITY = 'finance.charges.manage';
 
     /**
      * Recognition is IMMEDIATE (docs/modules/FINANCE.md 0G.4 as-built,
@@ -226,10 +236,20 @@ class ChargeService
      * own typed error; Fees' PHP code never reads `payment_allocations`
      * directly (CLAUDE.md rule 4).
      */
-    public function cancel(School $school, string $chargeId, ?User $actor = null, ?string $reason = null): ChargeResult
+    public function cancel(School $school, string $chargeId, User $actor, string $action, string $reasonCode, ?string $note, FreshMfaProof $mfa, string $capability = self::CANCEL_CAPABILITY): ChargeResult
     {
-        return $this->context->withSchool($school, function () use ($school, $chargeId, $actor, $reason) {
-            return DB::transaction(function () use ($school, $chargeId, $actor, $reason) {
+        // ORG.8G (ADR 0076 §65, OD-8.3): every human end of a Charge is a
+        // DIRECT_WITH_ASSURANCE action -- a listed reason, the actor's fresh
+        // MFA proof, their CURRENT whole-School authority under the Charge
+        // lock, and never a Guardian of the Charge's Student.
+        if (! $mfa->isFor($actor->id)) {
+            throw new LogicException('Ending a Charge needs its actor\'s fresh MFA proof.');
+        }
+        ChargeCancellationReason::require($action, $reasonCode, $note);
+        $note = $note === null || trim($note) === '' ? null : mb_substr(trim($note), 0, 255);
+
+        return $this->context->withSchool($school, function () use ($school, $chargeId, $actor, $action, $reasonCode, $note, $capability) {
+            return DB::transaction(function () use ($school, $chargeId, $actor, $action, $reasonCode, $note, $capability) {
                 $charge = Charge::query()->where('school_id', $school->id)->lockForUpdate()->find($chargeId);
 
                 if ($charge === null) {
@@ -240,8 +260,13 @@ class ChargeService
                     throw new ChargeAlreadyCancelledException($chargeId);
                 }
 
+                $this->authority->requireCurrent($actor, $capability, $school);
+                if ($this->beneficiary->isGuardianOf($actor, $school, $charge->student_id)) {
+                    throw new ChargeCancellationConflictException($charge->id);
+                }
+
                 try {
-                    $reversal = $this->ledger->reverseById($school, $charge->journal_entry_id, $actor, $reason);
+                    $reversal = $this->ledger->reverseById($school, $charge->journal_entry_id, $actor, $note);
                 } catch (JournalEntryAlreadyReversedException) {
                     throw new ChargeAlreadyCancelledException($charge->id);
                 }
@@ -253,11 +278,17 @@ class ChargeService
                         ->update([
                             'cancelled_at' => now(),
                             'cancellation_journal_entry_id' => $reversal->journalEntryId,
+                            'cancellation_reason_code' => $reasonCode,
+                            'cancelled_by_user_id' => $actor->id,
                         ]);
                 } catch (QueryException $e) {
                     if ($this->violatesConstraint($e, 'charges_payment_allocation_guard_trigger')
                         || str_contains($e->getMessage(), 'recognized payment allocations exist')) {
                         throw new ChargeHasPaymentAllocationsException($charge->id);
+                    }
+
+                    if (str_contains($e->getMessage(), 'charges_cancellation_beneficiary_guardian_guard')) {
+                        throw new ChargeCancellationConflictException($charge->id);
                     }
 
                     // FEE.5 (ADR 0062 §16.3): a late fee is cancelled only by
@@ -297,6 +328,12 @@ class ChargeService
 
                 $this->audit->school($school, 'charge.cancelled', actor: $actor, subject: $charge, metadata: [
                     'cancellationJournalEntryId' => $reversal->journalEntryId,
+                    'studentId' => $charge->student_id,
+                    'action' => $action,
+                    'reasonCode' => $reasonCode,
+                    'previousState' => 'live',
+                    'newState' => 'cancelled',
+                    'freshMfa' => true,
                 ]);
 
                 event(new ChargeCancelled($school->id, $charge->id, $reversal->journalEntryId, $charge->journal_entry_id));

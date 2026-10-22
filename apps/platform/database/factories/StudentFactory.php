@@ -25,4 +25,11 @@ class StudentFactory extends Factory
             'status' => 'active',
         ];
     }
+
+    /** ORG.8G: an ended state is reached by its evidenced transition (StudentLifecycleFixture). */
+    public function configure(): static
+    {
+        return $this->afterMaking(fn (Student $student) => StudentLifecycleFixture::deferStudent($student))
+            ->afterCreating(fn (Student $student) => StudentLifecycleFixture::completeStudent($student));
+    }
 }

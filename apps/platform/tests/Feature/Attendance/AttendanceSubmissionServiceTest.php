@@ -17,7 +17,7 @@ use App\Domain\Attendance\Application\Exceptions\TimetableEntryNotSchedulableExc
 use App\Domain\Attendance\Infrastructure\AttendanceRecord;
 use App\Domain\Attendance\Infrastructure\AttendanceSession;
 use App\Domain\Students\Application\Exceptions\AmbiguousHistoricalEnrollmentException;
-use App\Domain\Students\Infrastructure\StudentEnrollment;
+use App\Domain\Students\Application\StudentEnrollmentService;
 use App\Domain\Timetable\Application\TimetableScheduleService;
 use App\Models\SchoolAuditEvent;
 use Illuminate\Support\Facades\DB;
@@ -314,15 +314,15 @@ class AttendanceSubmissionServiceTest extends TestCase
     public function ambiguous_overlapping_historical_placements_are_rejected(): void
     {
         $w = $this->attendanceWorld();
-        $a = $this->enrollStudent($w['section'], '1', '2026-06-01');
-
+        // ORG.8G: an ended row is born active and ended, so it is planted before the live placement.
         // A second, terminal placement for the SAME Student in the SAME
         // Section whose interval also contains the attendance date.
         // Only reachable through bad/backdated data -- the partial
         // unique index constrains ACTIVE rows only.
-        $this->inSchool($w['school'], fn () => StudentEnrollment::query()->create([
+        $aStudent = $this->createStudent($w['school']);
+        $this->plantEndedPlacement($w['school'], [
             'school_id' => $w['school']->id,
-            'student_id' => $a->student_id,
+            'student_id' => $aStudent->id,
             'academic_year_id' => $w['year']->id,
             'campus_id' => $w['campus']->id,
             'grade_level_id' => $w['grade']->id,
@@ -331,7 +331,8 @@ class AttendanceSubmissionServiceTest extends TestCase
             'status' => 'withdrawn',
             'starts_on' => '2026-06-01',
             'ends_on' => '2027-01-01',
-        ]));
+        ]);
+        $a = app(StudentEnrollmentService::class)->enroll($aStudent, $w['section'], '1', '2026-06-01');
 
         $this->expectException(AmbiguousHistoricalEnrollmentException::class);
         $this->submit($w, $this->registerPayload([$a->id => 'present']));

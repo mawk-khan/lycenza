@@ -265,7 +265,7 @@ class EnrollmentRolloverItemExecutionServiceTest extends TestCase
         ['school' => $school, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan] = $ctx;
         $student = $this->createStudent($school, ['student_number' => 'S-3001']);
         $sourceEnrollment = $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
-        $this->enrollmentService()->complete($sourceEnrollment, '2027-04-30');
+        $this->completeEnrollment($sourceEnrollment);
         $this->planService()->upsertMapping($plan, $sourceGrade, null, $targetGrade, $targetSection);
 
         $item = $this->itemFor($plan, $student);

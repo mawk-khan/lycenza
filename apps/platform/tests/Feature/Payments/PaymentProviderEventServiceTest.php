@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Payments;
 
-use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Application\Exceptions\ChargeNotFoundException;
 use App\Domain\Finance\Application\Exceptions\LedgerAccountNotFoundException;
 use App\Domain\Finance\Infrastructure\JournalEntry;
@@ -277,7 +276,7 @@ class PaymentProviderEventServiceTest extends TestCase
         $settlement = $this->createLedgerAccount($school, ['type' => 'asset']);
         $charge = $this->assessCharge($school, $student, $year, $receivable, $revenue, '500.00');
 
-        app(ChargeService::class)->cancel($school, $charge->id);
+        $this->cancelChargeAs($school, $charge->id);
 
         $this->expectException(ChargeIsCancelledException::class);
         $this->recordSettlement($school, $settlement->id, [[$charge, '500.00']], '500.00');

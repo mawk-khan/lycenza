@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Payments;
 
-use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Application\Exceptions\ChargeNotFoundException;
 use App\Domain\Finance\Infrastructure\JournalEntry;
 use App\Domain\Finance\Infrastructure\JournalLine;
@@ -369,7 +368,7 @@ class ManualPaymentRecordingServiceTest extends TestCase
     public function a_cancelled_charge_cannot_receive_a_manual_payment(): void
     {
         [$school, $recorder, $settlement, $charge] = $this->setUpSchool();
-        app(ChargeService::class)->cancel($school, $charge->id);
+        $this->cancelChargeAs($school, $charge->id);
 
         $this->expectException(ChargeIsCancelledException::class);
         $this->recordManualPayment($school, $recorder, $settlement->id, [[$charge, '10.00']], '10.00');

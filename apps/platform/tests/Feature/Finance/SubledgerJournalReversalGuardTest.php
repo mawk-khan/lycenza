@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Finance;
 
-use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Application\Exceptions\ChargeAlreadyCancelledException;
 use App\Domain\Fees\Infrastructure\Charge;
 use App\Domain\Fees\Infrastructure\FeeAdjustment;
@@ -78,7 +77,7 @@ class SubledgerJournalReversalGuardTest extends TestCase
         $w = $this->ownedJournalWorld();
         $this->assertCommitWouldSucceed($w['school']);
 
-        $cancelled = app(ChargeService::class)->cancel($w['school'], $w['charge']->id, $w['recorder'], 'billed in error');
+        $cancelled = $this->cancelChargeAs($w['school'], $w['charge']->id, $w['recorder'], 'billed in error');
         $this->assertSame($w['entries']['charge'], $this->inSchool($w['school'], fn () => JournalEntry::query()->findOrFail($cancelled->cancellationJournalEntryId)->reversal_of_journal_entry_id));
 
         $adjustmentId = $this->inSchool($w['school'], fn () => FeeAdjustment::query()->where('journal_entry_id', $w['entries']['fee_adjustment'])->value('id'));
@@ -87,7 +86,7 @@ class SubledgerJournalReversalGuardTest extends TestCase
         $this->assertCommitWouldSucceed($w['school']);
 
         $this->expectException(ChargeAlreadyCancelledException::class);
-        app(ChargeService::class)->cancel($w['school'], $w['charge']->id, $w['recorder']);
+        $this->cancelChargeAs($w['school'], $w['charge']->id, $w['recorder']);
     }
 
     #[Test]

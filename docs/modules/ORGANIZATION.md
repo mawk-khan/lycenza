@@ -310,3 +310,11 @@ School setting, a role, a navigation toggle or a commercial plan.
   technically closed (Student database invariants, G-6; Charge cancel and
   void assurance, G-8 / OD-8.3) and several production prerequisites (M-1,
   OD-8.4, OD-8.9).
+
+- **ORG.8 technically closed (ORG.8G, ADR 0076 §65).** Student and placement
+  states are now protected in the database (no invented statuses, no ended
+  record without its evidence or end date, no end after its year).
+  Cancelling or voiding a charge needs a listed reason, a fresh code and
+  current authority, and a staff parent linked to the Student's Guardian
+  record cannot do it. Production still waits on M-1, OD-8.4, OD-8.9 and the
+  legal gates.

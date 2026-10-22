@@ -175,10 +175,10 @@ class HostelCampusScopeTest extends TestCase
         $this->assertCount(2, $this->getJson('/app/hostel-residency/search/students?q=Pupil')->json('data'), 'both are eligible when picked');
 
         // Before submit: Mover's active-year placement moves to Campus B; Leaver leaves.
-        app(TenantContext::class)->withSchool($this->school, function () use ($mover, $leaver): void {
+        app(TenantContext::class)->withSchool($this->school, function () use ($mover): void {
             StudentEnrollment::query()->where('student_id', $mover->id)->update(['status' => 'transferred', 'ends_on' => now()->toDateString()]);
-            $leaver->forceFill(['status' => 'inactive'])->save();
         });
+        $this->forceStudentStatus($leaver, 'inactive');
         $this->createStudentEnrollment($mover, $this->at['b']['section'], ['status' => 'active']);
 
         $this->assign($user, $mover, 'a', 'hostel-mover')->assertStatus(422)->assertJsonPath('error.code', 'HOSTEL_RESIDENCY_UNAVAILABLE');

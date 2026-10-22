@@ -166,16 +166,47 @@ final class ApprovalWorkflowRegistry
     ];
 
     /**
-     * ORG.8E (ADR 0076 §63): DIRECT high-impact actions with assurance -- NOT
-     * request/approve workflows (owner decisions 8E-D1..D3). They reuse only
-     * `ApprovalDecisionAuthority` (the fresh, whole-School authority read);
-     * never maker/checker, participants or approval provenance. Service =>
-     * [capability, actions].
+     * ORG.8E/ORG.8G (ADR 0076 §63, §65): DIRECT high-impact actions with
+     * assurance -- NOT request/approve workflows (owner decisions 8E-D1..D3,
+     * OD-8.3). Each re-reads current whole-School authority
+     * (`ApprovalDecisionAuthority`) under its row lock, takes the actor's
+     * `FreshMfaProof` and a closed code-owned reason, and writes database-
+     * required evidence; never maker/checker, participants or approval
+     * provenance. `relationshipConflict` names a beneficiary rule the class
+     * enforces (service + `dbGuard`); `entryPoints` are the only callers.
+     *
+     * @var array<class-string, array{capability: string, action: string, freshAuthority: true, freshMfa: true, reason: string, evidence: string, relationshipConflict: string|null, dbGuard?: array{trigger: string, refusal: string}, accountingOwner?: string, entryPoints?: list<string>}>
      */
     public const DIRECT_ASSURED = [
-        'App\Domain\Students\Application\StudentService' => ['students.manage', 'student status change (closed reason, fresh MFA, lifecycle event)'],
-        'App\Domain\Students\Application\StudentEnrollmentService' => ['enrollments.manage', 'placement withdraw / cancel (closed reason, fresh MFA, lifecycle event)'],
-        'App\Domain\Library\Application\LibraryFineService' => ['library.fines.void', 'fine void (closed reason code, note, fresh MFA)'],
+        'App\Domain\Students\Application\StudentService' => [
+            'capability' => 'students.manage', 'action' => 'Student status change',
+            'freshAuthority' => true, 'freshMfa' => true, 'reason' => 'StudentLifecycleReason (closed)',
+            'evidence' => 'student_lifecycle_events (DB-required: students_lifecycle_evidence)', 'relationshipConflict' => null,
+        ],
+        'App\Domain\Students\Application\StudentEnrollmentService' => [
+            'capability' => 'enrollments.manage', 'action' => 'placement withdraw / cancel',
+            'freshAuthority' => true, 'freshMfa' => true, 'reason' => 'StudentLifecycleReason (closed)',
+            'evidence' => 'student_lifecycle_events (DB-required on the placement status change)', 'relationshipConflict' => null,
+        ],
+        'App\Domain\Library\Application\LibraryFineService' => [
+            'capability' => 'library.fines.void', 'action' => 'Library fine void (its Charge through ChargeService)',
+            'freshAuthority' => true, 'freshMfa' => true, 'reason' => 'LibraryFineVoid::REASON_CODES + note',
+            'evidence' => 'library_fine_voids.reason_code (DB-required)', 'relationshipConflict' => null,
+        ],
+        'App\Domain\Fees\Application\ChargeService' => [
+            'capability' => 'finance.charges.manage', 'action' => 'Charge cancel, fee-assessment void, late-fee void, source void (OD-8.3)',
+            'freshAuthority' => true, 'freshMfa' => true, 'reason' => 'ChargeCancellationReason (closed; note for other)',
+            'evidence' => 'charges.cancellation_reason_code + cancelled_by_user_id (DB-required: charges_cancellation_evidence)',
+            'relationshipConflict' => 'guardian_of_student_beneficiary',
+            'dbGuard' => ['trigger' => 'charges_cancellation_evidence', 'refusal' => 'charges_cancellation_beneficiary_guardian_guard'],
+            'accountingOwner' => 'Fees: ChargeService reverses its own recognition entry (ORG.8-P1 accepts it)',
+            'entryPoints' => [
+                'App\Domain\Fees\Application\ChargeAdministrationService',
+                'App\Domain\Fees\Application\FeeAssessmentService',
+                'App\Domain\Payments\Application\LateFeeAssessmentService',
+                'App\Domain\Fees\Application\Sources\FeeSourceChargeService',
+            ],
+        ],
     ];
 
     /**

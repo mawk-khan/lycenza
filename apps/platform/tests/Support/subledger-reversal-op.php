@@ -1,12 +1,15 @@
 <?php
 
+use App\Domain\Fees\Application\ChargeCancellationReason;
 use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Finance\Infrastructure\FinancialPeriod;
 use App\Domain\Payroll\Application\PayrollPostingService;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -60,7 +63,8 @@ try {
                 return 'ok';
             case 'cancel-charge':
                 [$chargeId, $actorId] = $args;
-                $app->make(ChargeService::class)->cancel($school, $chargeId, User::query()->findOrFail($actorId));
+                $actor = User::query()->findOrFail($actorId);
+                $app->make(ChargeService::class)->cancel($school, $chargeId, $actor, ChargeCancellationReason::CANCEL, 'charged_in_error', null, new FreshMfaProof($actor->id, CarbonImmutable::now()));
 
                 return 'ok';
             case 'reverse-payroll':

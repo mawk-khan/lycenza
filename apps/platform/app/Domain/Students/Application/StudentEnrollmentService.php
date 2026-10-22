@@ -19,6 +19,7 @@ use App\Models\User;
 use App\Support\Approval\ApprovalDecisionAuthority;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Auth\Mfa\FreshMfaProof;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
@@ -273,6 +274,7 @@ class StudentEnrollmentService
                             "Transfer effective date must be after the source Enrollment's start date ({$lockedSource->starts_on->toDateString()})."
                         );
                     }
+                    $this->assertEndsWithinYear($lockedSource, $sourceEndsOn);
 
                     $affected = StudentEnrollment::query()
                         ->whereKey($lockedSource->id)
@@ -339,12 +341,16 @@ class StudentEnrollmentService
      * MFA proof] for the high-impact withdraw and cancel. They also re-read the
      * actor's CURRENT whole-School `enrollments.manage` under the Enrollment
      * lock and write the lifecycle event the database requires
-     * (`student_enrollments_lifecycle_evidence`). Completion stays ordinary.
+     * (`student_enrollments_lifecycle_evidence`). Completion stays ordinary
+     * but, since ORG.8G (ADR 0076 §65), only on the year's last day once it
+     * has come; no end is ever dated in the future.
      *
      * @param  array{0: string, 1: string, 2: FreshMfaProof}|null  $assurance
      */
     private function transitionToTerminalStatus(StudentEnrollment $enrollment, string $newStatus, string $endedOn, string $eventType, ?User $actor, ?array $assurance = null): StudentEnrollment
     {
+        // ORG.8G: compare calendar dates, never the caller's string format.
+        $endedOn = Carbon::parse($endedOn)->toDateString();
         if ($assurance !== null) {
             [$action, $reasonCode, $mfa] = $assurance;
             if ($actor === null || ! $mfa->isFor($actor->id)) {
@@ -371,6 +377,21 @@ class StudentEnrollmentService
                 throw new InvalidEnrollmentDateRangeException(
                     "End date must not be before the Enrollment's start date ({$locked->starts_on->toDateString()})."
                 );
+            }
+
+            // ORG.8G (ADR 0076 §65): a placement never outlives its year
+            // (the database refuses it too), and a withdrawal or
+            // cancellation is never dated in the future -- there is no
+            // scheduled termination.
+            $this->assertEndsWithinYear($locked, $endedOn);
+            if ($endedOn > SchoolTimezone::today($locked->school)) {
+                throw new InvalidEnrollmentDateRangeException('End date must not be in the future.');
+            }
+            // Completion is the placement running its normal course: it ends on
+            // its academic year's last day, once that day has come. Leaving
+            // earlier is a withdrawal or cancellation (reason, fresh code).
+            if ($newStatus === 'completed' && $endedOn !== $locked->academicYear()->firstOrFail()->ends_on->toDateString()) {
+                throw new InvalidEnrollmentDateRangeException("A placement completes on its academic year's last day ({$locked->academicYear()->firstOrFail()->ends_on->toDateString()}); to end it earlier, withdraw or cancel it.");
             }
 
             $event = null;
@@ -400,6 +421,15 @@ class StudentEnrollmentService
 
             return $locked->refresh();
         }));
+    }
+
+    /** ORG.8G: the clean translation of `student_enrollments_end_within_year`. */
+    private function assertEndsWithinYear(StudentEnrollment $placement, string $endsOn): void
+    {
+        $yearEnd = $placement->academicYear()->firstOrFail()->ends_on->toDateString();
+        if ($endsOn > $yearEnd) {
+            throw new InvalidEnrollmentDateRangeException("End date must not be after the academic year's end ({$yearEnd}).");
+        }
     }
 
     /**

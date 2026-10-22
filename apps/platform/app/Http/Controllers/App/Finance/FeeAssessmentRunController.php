@@ -4,6 +4,7 @@ namespace App\Http\Controllers\App\Finance;
 
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
+use App\Domain\Fees\Application\ChargeCancellationReason;
 use App\Domain\Fees\Application\Exceptions\FeeAssessmentNotFoundException;
 use App\Domain\Fees\Application\Exceptions\FeeAssessmentRunItemNotFoundException;
 use App\Domain\Fees\Application\Exceptions\FeeAssessmentRunNotFoundException;
@@ -27,6 +28,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
@@ -170,6 +172,9 @@ class FeeAssessmentRunController extends Controller
                 'proposedDueDate' => $proposals[$i->id]['dueDate'] ?? null,
             ])->appends($request->only('preview_result')),
             'filters' => ['preview_result' => $validated['preview_result'] ?? ''],
+            // ORG.8G (ADR 0076 §65): the listed void reasons and whether a fresh code can be given.
+            'voidReasons' => ChargeCancellationReason::CODES[ChargeCancellationReason::ASSESSMENT_VOID],
+            'hasMfaFactor' => app(FreshMfaRequirement::class)->hasActiveFactor($actor),
             'canRun' => $capabilities->canInSchool($actor, 'finance.fee_assessments.run', $school),
             'canVoid' => $capabilities->canInSchool($actor, 'finance.charges.manage', $school),
         ]);
@@ -212,10 +217,15 @@ class FeeAssessmentRunController extends Controller
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('finance.charges.manage', $school);
-        $validated = $request->validate(['reason' => ['nullable', 'string', 'max:255']]);
+        // ORG.8G (ADR 0076 §65): a listed reason (the note for `other`) and a fresh MFA code.
+        $validated = $request->validate([
+            'reason_code' => ['required', 'string', Rule::in(ChargeCancellationReason::CODES[ChargeCancellationReason::ASSESSMENT_VOID])],
+            'reason' => ['nullable', 'required_if:reason_code,other', 'string', 'max:255'],
+        ]);
+        $proof = app(FreshMfaRequirement::class)->requireForAction($request, $context->actor());
 
         try {
-            $assessments->void($school, $assessment, $context->actor(), $validated['reason'] ?? null);
+            $assessments->void($school, $assessment, $context->actor(), $validated['reason_code'], $validated['reason'] ?? null, $proof);
         } catch (FeeAssessmentNotFoundException) {
             throw new NotFoundHttpException;
         } catch (FeesException $e) {

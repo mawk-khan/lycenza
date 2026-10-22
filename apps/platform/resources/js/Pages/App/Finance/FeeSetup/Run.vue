@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { router, usePage } from '@inertiajs/vue3';
-import { computed, onBeforeUnmount, onMounted } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import ChargeEndForm from '../../../../Components/ChargeEndForm.vue';
 import Pagination from '../../../../Components/Pagination.vue';
 import { formatCalendarDate } from '../../../../datetime';
 import { formatMoney } from '../../../../money';
@@ -72,9 +73,13 @@ interface Props {
     filters: { preview_result: string };
     canRun: boolean;
     canVoid: boolean;
+    /** ORG.8G: the listed void reasons and whether a fresh code can be given. */
+    voidReasons: string[];
+    hasMfaFactor: boolean;
 }
 
 const props = defineProps<Props>();
+const voidingId = ref<string | null>(null);
 const page = usePage();
 const actionError = computed(() => (page.props.errors as Record<string, string>).action);
 const base = computed(() => `/app/finance/fee-runs/${props.run.id}`);
@@ -268,6 +273,33 @@ onBeforeUnmount(() => clearInterval(timer));
                 {{ run.previewedAt ? 'No items.' : 'Preview the run to see its items.' }}
             </p>
 
+            <section
+                v-if="voidingId"
+                class="mt-6 rounded border border-red-200 bg-red-50/40 p-4"
+                aria-label="Void"
+            >
+                <h2 class="text-sm font-medium text-slate-900">
+                    Void this assessment and cancel its charge
+                </h2>
+                <p class="mt-1 text-sm text-slate-500">
+                    Void only what should not stand. To excuse a valid charge, request a concession
+                    instead.
+                </p>
+                <ChargeEndForm
+                    id="void-item"
+                    :key="voidingId"
+                    :url="`/app/finance/fee-assessments/${voidingId}/void`"
+                    :reasons="voidReasons"
+                    :has-mfa-factor="hasMfaFactor"
+                    action="Voiding a fee assessment"
+                    submit-label="Void"
+                    confirmation="Void this assessment and cancel its charge? Refused if a payment is allocated to it."
+                    @done="voidingId = null"
+                />
+                <button type="button" class="mt-2 text-sm underline" @click="voidingId = null">
+                    Keep it
+                </button>
+            </section>
             <table v-else class="mt-3 w-full text-left text-sm">
                 <thead>
                     <tr class="border-b border-slate-200 text-xs text-slate-500">
@@ -398,12 +430,7 @@ onBeforeUnmount(() => clearInterval(timer));
                                 "
                                 type="button"
                                 class="underline"
-                                @click="
-                                    post(
-                                        `/app/finance/fee-assessments/${i.feeAssessmentId}/void`,
-                                        'Void this assessment and cancel its charge? Refused if a payment is allocated to it.',
-                                    )
-                                "
+                                @click="voidingId = i.feeAssessmentId"
                             >
                                 Void
                             </button>

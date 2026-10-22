@@ -9,6 +9,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Testing\LocalCatalogueFixtures;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\Feature\Fees\Concerns\CreatesFeeAssessmentFixtures;
 use Tests\TestCase;
 
@@ -22,7 +23,7 @@ use Tests\TestCase;
  */
 class FeeAssessmentRunUiTest extends TestCase
 {
-    use CreatesFeeAssessmentFixtures;
+    use CreatesFeeAssessmentFixtures, ProvidesSensitiveActionMfa;
 
     private function memberWith(array $capabilities, School $school): User
     {
@@ -107,7 +108,9 @@ class FeeAssessmentRunUiTest extends TestCase
         $this->assertSame([$keep->student_id], $this->inSchool($w['school'], fn () => Charge::query()->pluck('student_id')->all()));
 
         $assessmentId = $this->itemFor($w, $run, $keep->student_id)->fee_assessment_id;
-        $this->post("/app/finance/fee-assessments/{$assessmentId}/void", ['reason' => 'wrong'])->assertRedirect();
+        $this->post("/app/finance/fee-assessments/{$assessmentId}/void", ['reason' => 'wrong'])->assertSessionHasErrors('reason_code');
+        $this->assertNull($this->inSchool($w['school'], fn () => Charge::query()->sole()->cancelled_at), 'ORG.8G: no void without a listed reason and a fresh code');
+        $this->post("/app/finance/fee-assessments/{$assessmentId}/void", ['reason_code' => 'assessment_error', 'reason' => 'wrong', 'mfa_code' => $this->freshMfaCode(auth()->user())])->assertRedirect()->assertSessionHasNoErrors();
         $this->assertNotNull($this->inSchool($w['school'], fn () => Charge::query()->sole()->cancelled_at));
     }
 

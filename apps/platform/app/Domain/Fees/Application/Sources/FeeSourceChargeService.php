@@ -3,6 +3,7 @@
 namespace App\Domain\Fees\Application\Sources;
 
 use App\Domain\Fees\Application\AssessChargeData;
+use App\Domain\Fees\Application\ChargeCancellationReason;
 use App\Domain\Fees\Application\ChargeResult;
 use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Application\Exceptions\InvalidChargeException;
@@ -11,6 +12,7 @@ use App\Domain\Fees\Infrastructure\FeeHead;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
@@ -82,11 +84,15 @@ class FeeSourceChargeService
         }));
     }
 
-    /** Cancels a source's own event charge as part of its void (the source records the void first). */
-    public function cancelForSource(School $school, string $chargeId, FeeChargeSource $source, ?User $actor, string $reason): ChargeResult
+    /**
+     * Cancels a source's own event charge as part of its void (the source records the void first).
+     * ORG.8G (ADR 0076 §65): the source's own authority (`$capability`) is re-read under the Charge
+     * lock, the actor's fresh MFA proof is required, and a Guardian of the Student is refused.
+     */
+    public function cancelForSource(School $school, string $chargeId, FeeChargeSource $source, User $actor, string $reason, FreshMfaProof $mfa, string $capability): ChargeResult
     {
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $chargeId, $source, $actor, $reason): ChargeResult {
-            $charge = $this->charges->cancel($school, $chargeId, $actor, $reason);
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $chargeId, $source, $actor, $reason, $mfa, $capability): ChargeResult {
+            $charge = $this->charges->cancel($school, $chargeId, $actor, ChargeCancellationReason::SOURCE_VOID, 'source_voided', $reason, $mfa, $capability);
 
             $this->audit->school($school, 'charge.source_cancelled', actor: $actor, metadata: [
                 'chargeId' => $charge->chargeId,

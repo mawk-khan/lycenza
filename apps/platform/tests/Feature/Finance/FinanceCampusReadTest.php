@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Finance;
 
-use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Payments\Application\PaymentCorrectionData;
 use App\Domain\Payments\Application\PaymentCorrectionService;
 use App\Domain\Payments\Infrastructure\PaymentCorrection;
@@ -80,7 +79,7 @@ class FinanceCampusReadTest extends TestCase
         $this->inSchool($w['school'], fn () => app(StudentEnrollmentService::class)->transferPlacement(StudentEnrollment::query()->findOrFail($moveA->id), $sectionB, '91', '2026-08-01'));
         $this->travelTo(CarbonImmutable::parse('2026-09-01T06:00:00Z'));
         $w['cMoveB'] = $charge($w['sMove'], '400.00');
-        $this->inSchool($w['school'], fn () => DB::table('students')->where('id', $w['sLeaver']->id)->update(['status' => 'inactive']));
+        $this->forceStudentStatusOf($w['school'], $w['sLeaver']->id, 'inactive');
 
         $pay = fn (array $lines, string $amount) => $this->recordManualPayment($w['school'], $w['recorder'], $w['settlement']->id, $lines, $amount)->paymentId;
         $w['PA'] = $pay([[$w['cA'], '40.00']], '40.00');
@@ -315,7 +314,7 @@ class FinanceCampusReadTest extends TestCase
         $paidCharge = $this->assessCharge($this->school, $paid, $w['year'], $w['receivable'], $w['revenue'], '30.00');
         $this->recordManualPayment($this->school, $w['recorder'], $w['settlement']->id, [[$paidCharge, '30.00']], '30.00');
         $voided = $this->assessCharge($this->school, $cancelled, $w['year'], $w['receivable'], $w['revenue'], '30.00');
-        app(ChargeService::class)->cancel($this->school, $voided->id, null, 'recorded in error');
+        $this->cancelChargeAs($this->school, $voided->id, null, 'recorded in error');
 
         $cashierA = $this->staff('cashier', [$this->a->id]);
         $found = collect($this->as($cashierA)->getJson('/app/finance/debtors/search')->assertOk()->json('data'))->pluck('id')->all();

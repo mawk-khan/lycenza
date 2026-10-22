@@ -15,7 +15,11 @@ class AcademicYearFactory extends Factory
 
     public function definition(): array
     {
-        $startYear = fake()->numberBetween(2024, 2030);
+        // ORG.8G (ADR 0076 §65): deterministic. A placement may no longer end
+        // after its year, so a random year (2024-2030) made every fixture that
+        // ends a placement on a fixed date pass or fail by chance. Tests that
+        // need another year pass explicit dates.
+        $startYear = 2026;
         $startsOn = "{$startYear}-06-01";
         $endsOn = ($startYear + 1).'-05-31';
 

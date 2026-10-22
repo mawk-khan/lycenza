@@ -193,15 +193,51 @@ class ApprovalWorkflowRegistryTest extends TestCase
     #[Test]
     public function direct_assured_actions_are_not_workflows_and_use_only_the_fresh_authority_read(): void
     {
-        foreach (ApprovalWorkflowRegistry::DIRECT_ASSURED as $class => [$capability]) {
+        foreach (ApprovalWorkflowRegistry::DIRECT_ASSURED as $class => $meta) {
             $source = (string) file_get_contents((string) (new ReflectionClass($class))->getFileName());
+            $this->assertTrue($meta['freshAuthority'] && $meta['freshMfa'], $class);
             $this->assertStringContainsString('authority->requireCurrent(', $source, "{$class} re-reads current authority");
-            $this->assertStringContainsString("'{$capability}'", $source);
+            $this->assertStringContainsString("'{$meta['capability']}'", $source);
             $this->assertStringContainsString('FreshMfaProof $mfa', $source, "{$class} requires the fresh-MFA proof");
             foreach (['MakerCheckerPolicy', 'ApprovalProvenance', 'ApprovalParticipants'] as $part) {
                 $this->assertStringNotContainsString($part, $source, "{$class} is direct, not a workflow");
             }
             $this->assertNotContains($class, array_column(ApprovalWorkflowRegistry::WORKFLOWS, 'service'));
+
+            if ($meta['relationshipConflict'] !== null) {
+                $this->assertSame('guardian_of_student_beneficiary', $meta['relationshipConflict']);
+                $this->assertStringContainsString('beneficiary->isGuardianOf(', $source, "{$class} checks the beneficiary conflict");
+                $this->assertSame('O', DB::selectOne('select tgenabled from pg_trigger where tgname = ?', [$meta['dbGuard']['trigger']])->tgenabled, "{$class}: the database backs it");
+                $this->assertStringContainsString($meta['dbGuard']['refusal'], (string) DB::selectOne(
+                    'select p.prosrc from pg_trigger t join pg_proc p on p.oid = t.tgfoid where t.tgname = ?', [$meta['dbGuard']['trigger']],
+                )->prosrc);
+            }
         }
+    }
+
+    #[Test]
+    public function every_charge_cancellation_enters_through_a_declared_assured_entry_point(): void
+    {
+        // ORG.8G (ADR 0076 §65): ChargeService::cancel() is the one assured core; only its declared
+        // entry points call it, and only the Library fine void reaches the source-charge cancel.
+        $callers = [];
+        foreach (Finder::create()->files()->name('*.php')->in(app_path()) as $file) {
+            $code = $file->getContents();
+            if (preg_match('/(?<![A-Za-z])ChargeService(\s+\$|::class)/', $code) === 1 && str_contains($code, '->cancel(')) {
+                $callers[] = 'App\\'.str_replace(['/', '.php'], ['\\', ''], $file->getRelativePathname());
+            }
+        }
+        sort($callers);
+        $declared = ApprovalWorkflowRegistry::DIRECT_ASSURED['App\\Domain\\Fees\\Application\\ChargeService']['entryPoints'];
+        sort($declared);
+        $this->assertSame($declared, $callers);
+
+        $source = [];
+        foreach (Finder::create()->files()->name('*.php')->in(app_path())->notName('FeeSourceChargeService.php') as $file) {
+            if (str_contains($file->getContents(), 'cancelForSource(') && str_contains($file->getContents(), 'FeeSourceChargeService')) {
+                $source[] = $file->getRelativePathname();
+            }
+        }
+        $this->assertSame(['Domain/Library/Application/LibraryFineService.php'], $source);
     }
 }

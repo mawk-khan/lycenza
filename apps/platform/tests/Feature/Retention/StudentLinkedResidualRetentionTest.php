@@ -79,6 +79,8 @@ class StudentLinkedResidualRetentionTest extends TestCase
         $year = $this->createAcademicYear($school, ['starts_on' => '2026-04-01', 'ends_on' => '2027-03-31', 'status' => 'active', 'code' => 'AY26']);
         $old = $this->createAcademicYear($school, ['starts_on' => '2000-04-01', 'ends_on' => '2001-03-31', 'status' => 'closed', 'code' => 'AY00']);
         $next = $this->createAcademicYear($school, ['starts_on' => '2027-04-01', 'ends_on' => '2028-03-31', 'status' => 'draft', 'code' => 'AY27']);
+        // ORG.8G: a placement ends within its own year, so a 2020 exit needs a 2019-20 year.
+        $recentYear = $this->createAcademicYear($school, ['starts_on' => '2019-04-01', 'ends_on' => '2020-03-31', 'status' => 'closed', 'code' => 'AY19']);
         $route = $this->createTransportRoute($school);
         $room = $this->createHostelRoom($this->createHostel($school, $campus));
 
@@ -87,6 +89,7 @@ class StudentLinkedResidualRetentionTest extends TestCase
             'section' => $this->createSection($year, $campus, $grade, ['code' => 'A']),
             'oldSection' => $this->createSection($old, $campus, $grade, ['code' => 'O']),
             'nextSection' => $this->createSection($next, $campus, $grade, ['code' => 'N']),
+            'recentSection' => $this->createSection($recentYear, $campus, $grade, ['code' => 'R']),
             'title' => $this->createLibraryTitle($school), 'route' => $route, 'room' => $room,
         ];
     }
@@ -95,8 +98,12 @@ class StudentLinkedResidualRetentionTest extends TestCase
     private function leaver(array $w, string $endsOn = '2026-09-30', string $studentStatus = 'inactive'): Student
     {
         $student = $this->createStudent($w['school'], ['status' => $studentStatus]);
-        $section = $endsOn < '2026-01-01' ? $w['oldSection'] : $w['section'];
-        $this->createStudentEnrollment($student, $section, ['status' => 'withdrawn', 'starts_on' => $endsOn < '2026-01-01' ? '2000-06-01' : '2026-06-01', 'ends_on' => $endsOn]);
+        [$section, $startsOn] = match (true) {
+            $endsOn < '2002-01-01' => [$w['oldSection'], '2000-06-01'],
+            $endsOn < '2026-01-01' => [$w['recentSection'], '2019-06-01'],
+            default => [$w['section'], '2026-06-01'],
+        };
+        $this->createStudentEnrollment($student, $section, ['status' => 'withdrawn', 'starts_on' => $startsOn, 'ends_on' => $endsOn]);
 
         // E21-RH.6: the end was also RECORDED back then (the database counts from the later of the two).
         if (method_exists($this, 'backdateEndRecording')) {

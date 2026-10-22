@@ -66,7 +66,7 @@ class StudentEnrollmentReadServiceTest extends TestCase
         $section = $this->createSection($year, $campus, $grade);
         $student = $this->createStudent($school, ['student_number' => 'S-1001']);
         $enrollment = $this->writeService()->enroll($student, $section, '12', '2026-06-01');
-        $this->writeService()->complete($enrollment, '2027-04-30');
+        $this->completeEnrollment($enrollment);
 
         $current = app(TenantContext::class)->withSchool($school, fn () => $this->readService()->currentFor($student, $year));
 
@@ -124,7 +124,7 @@ class StudentEnrollmentReadServiceTest extends TestCase
         $student = $this->createStudent($school, ['student_number' => 'S-1001']);
 
         $completed = $this->writeService()->enroll($student, $sectionOne, '12', '2025-06-01');
-        $this->writeService()->complete($completed, '2026-04-30');
+        $this->completeEnrollment($completed);
         $transferredOriginal = $this->writeService()->enroll($student, $sectionTwoA, '07', '2026-06-01');
         $active = $this->writeService()->transferPlacement($transferredOriginal, $sectionTwoB, '08', '2026-09-15');
 

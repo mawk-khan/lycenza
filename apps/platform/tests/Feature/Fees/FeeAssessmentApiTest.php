@@ -8,6 +8,7 @@ use App\Jobs\ExecuteFeeAssessmentRunJob;
 use App\Models\User;
 use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\Feature\Fees\Concerns\CreatesFeeAssessmentFixtures;
 use Tests\TestCase;
 
@@ -19,7 +20,7 @@ use Tests\TestCase;
  */
 class FeeAssessmentApiTest extends TestCase
 {
-    use CreatesFeeAssessmentFixtures;
+    use CreatesFeeAssessmentFixtures, ProvidesSensitiveActionMfa;
 
     private function as(array $w, User $actor): static
     {
@@ -74,8 +75,10 @@ class FeeAssessmentApiTest extends TestCase
         $assessment = $this->inSchool($w['school'], fn () => FeeAssessment::query()->first());
         $this->as($w, $this->createUserWithCapabilities($w['school'], ['finance.fee_assessments.run']))
             ->postJson("{$b}/fee-assessments/{$assessment->id}/void")->assertForbidden();
-        $this->as($w, $this->createUserWithCapabilities($w['school'], ['finance.charges.manage']))
-            ->postJson("{$b}/fee-assessments/{$assessment->id}/void", ['reason' => 'test'])->assertOk()->assertJsonPath('data.id', $assessment->id);
+        $voider = $this->createUserWithCapabilities($w['school'], ['finance.charges.manage']);
+        $this->as($w, $voider)->postJson("{$b}/fee-assessments/{$assessment->id}/void", ['reason' => 'test'])->assertStatus(422);
+        $this->as($w, $voider)
+            ->postJson("{$b}/fee-assessments/{$assessment->id}/void", ['reason_code' => 'assessment_error', 'reason' => 'test', 'mfa_code' => $this->freshMfaCode($voider)])->assertOk()->assertJsonPath('data.id', $assessment->id);
     }
 
     #[Test]

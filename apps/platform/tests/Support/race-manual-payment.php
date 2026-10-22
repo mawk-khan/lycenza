@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\Fees\Application\ChargeCancellationReason;
 use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Payments\Application\ChargeAllocationInput;
 use App\Domain\Payments\Application\ManualPaymentRecordingService;
@@ -7,8 +8,10 @@ use App\Domain\Payments\Application\RecordManualPaymentData;
 use App\Domain\Payments\Domain\ManualPaymentMethod;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +24,7 @@ use Tests\Support\Concurrency\HeldTransaction;
 //
 // Usage:
 //   php race-manual-payment.php record <schoolId> <userId> <accountId> <key> <amount> <chargeId:amount,...> [method]
-//   php race-manual-payment.php cancel <schoolId> <chargeId>
+//   php race-manual-payment.php cancel <schoolId> <chargeId> <actorUserId>   (ORG.8G)
 //   php race-manual-payment.php suspend <schoolId>
 
 require __DIR__.'/../../vendor/autoload.php';
@@ -61,8 +64,9 @@ try {
 
                 return $result->outcome->value.':'.$result->paymentId;
             case 'cancel':
-                [$schoolId, $chargeId] = $args;
-                $app->make(ChargeService::class)->cancel(School::query()->findOrFail($schoolId), $chargeId);
+                [$schoolId, $chargeId, $actorId] = $args;
+                $actor = User::query()->findOrFail($actorId);
+                $app->make(ChargeService::class)->cancel(School::query()->findOrFail($schoolId), $chargeId, $actor, ChargeCancellationReason::CANCEL, 'charged_in_error', null, new FreshMfaProof($actor->id, CarbonImmutable::now()));
 
                 return 'cancelled';
             case 'suspend':

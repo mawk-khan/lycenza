@@ -190,7 +190,7 @@ class FeeRunOverlapReviewTest extends TestCase
         $student = $this->student($w);
 
         $cancelled = $this->adHoc($w, $student->id, 'Term 1 tuition fee 2026-27', '25000.00', '2026-07-30');
-        app(ChargeAdministrationService::class)->cancel($w['school'], $cancelled->id, $w['actor'], 'wrong');
+        app(ChargeAdministrationService::class)->cancel($w['school'], $cancelled->id, $w['actor'], 'other', 'wrong', $this->freshProof($w['actor']));
         $this->adHoc($w, $student->id, 'Lab breakage', '300.00', '2026-07-01', $otherIncome->id);           // another purpose, another account
         $this->adHoc($w, $student->id, 'Tuition arrears 2025-26', '4000.00', '2026-12-01');                  // tuition account, due in Term 2
         $this->adHoc($w, $student->id, 'Term 1 tuition fee 2027-28', '25000.00', '2027-07-30', null, $nextYear->id); // another year

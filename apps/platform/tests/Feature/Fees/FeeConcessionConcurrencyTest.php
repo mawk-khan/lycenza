@@ -237,7 +237,7 @@ class FeeConcessionConcurrencyTest extends TestCase
         $concession = $this->requestTargeted($w, '100.00');
 
         [$holder, $contender] = $this->raceWithHeldHolder(
-            $this->concession($w, 'cancel-charge', $w['charge']->id),
+            $this->concession($w, 'cancel-charge', $w['charge']->id, $this->schoolAdminFor($w['school'])->id),
             $this->concession($w, 'approve', $w['checker']->id, $concession->id),
         );
 
@@ -255,7 +255,7 @@ class FeeConcessionConcurrencyTest extends TestCase
 
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->concession($w, 'approve', $w['checker']->id, $concession->id),
-            $this->concession($w, 'cancel-charge', $w['charge']->id),
+            $this->concession($w, 'cancel-charge', $w['charge']->id, $this->schoolAdminFor($w['school'])->id),
         );
 
         $this->assertSame('approved', $holder);

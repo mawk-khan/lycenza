@@ -66,6 +66,7 @@ final class UserReferenceCatalog
         // ORG.8E: who corrected a Student's attendance, and who took a high-impact lifecycle action.
         'attendance_record_corrections' => ['corrected_by_user_id' => self::RETAIN_REFERENCE],
         'student_lifecycle_events' => ['acted_by_user_id' => self::RETAIN_REFERENCE],
+        'charges' => ['cancelled_by_user_id' => self::RETAIN_REFERENCE],
         // HRX.5 (ADR 0065 §26.8): who calculated the run that captured the HRX evidence.
         'payroll_run_hrx_inputs' => ['captured_by_user_id' => self::RETAIN_REFERENCE],
         'payroll_run_calculations' => ['calculated_by_user_id' => self::RETAIN_REFERENCE],

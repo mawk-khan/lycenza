@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Payments;
 
-use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Infrastructure\FeeAssessment;
 use App\Domain\Fees\Infrastructure\FeeConcession;
 use App\Domain\Payments\Application\StudentFeeStatementReadService;
@@ -52,7 +51,7 @@ class StudentFeeStatementTest extends TestCase
 
         // Charge B (assessed T1 5000.00): unpaid. Charge C: cancelled.
         $cancelled = $this->assessCharge($w['school'], $w['student'], $w['year'], $w['receivable'], $w['revenue'], '75.00');
-        app(ChargeService::class)->cancel($w['school'], $cancelled->id);
+        $this->cancelChargeAs($w['school'], $cancelled->id);
 
         $statement = $this->statements()->statementFor($w['school'], $student, null, $this->viewer($w));
         $lines = collect($statement->lines)->keyBy('chargeId');

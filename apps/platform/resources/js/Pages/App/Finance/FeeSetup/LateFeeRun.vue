@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { router, usePage } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+import ChargeEndForm from '../../../../Components/ChargeEndForm.vue';
 import Pagination from '../../../../Components/Pagination.vue';
 import { formatMoney } from '../../../../money';
 
@@ -60,9 +61,13 @@ interface Props {
     filters: { preview_result: string };
     canRun: boolean;
     canVoid: boolean;
+    /** ORG.8G: the listed void reasons and whether a fresh code can be given. */
+    voidReasons: string[];
+    hasMfaFactor: boolean;
 }
 
 const props = defineProps<Props>();
+const voidingId = ref<string | null>(null);
 const page = usePage();
 const actionError = computed(() => (page.props.errors as Record<string, string>).action);
 const base = `/app/finance/late-fee-runs/${props.run.id}`;
@@ -70,20 +75,6 @@ const base = `/app/finance/late-fee-runs/${props.run.id}`;
 function act(action: string, question?: string): void {
     if (question && !window.confirm(question)) return;
     router.post(`${base}/${action}`, {}, { preserveScroll: true });
-}
-
-function voidLateFee(item: Item): void {
-    if (
-        window.confirm(
-            'Void this late fee? Its charge is reversed; refused if a payment was applied to it.',
-        )
-    ) {
-        router.post(
-            `/app/finance/late-fee-assessments/${item.lateFeeAssessmentId}/void`,
-            {},
-            { preserveScroll: true },
-        );
-    }
 }
 
 function filter(result: string): void {
@@ -202,6 +193,33 @@ function filter(result: string): void {
             </button>
         </div>
 
+        <section
+            v-if="voidingId"
+            class="mt-6 rounded border border-red-200 bg-red-50/40 p-4"
+            aria-label="Void"
+        >
+            <h2 class="text-sm font-medium text-slate-900">
+                Void this late fee and reverse its charge
+            </h2>
+            <p class="mt-1 text-sm text-slate-500">
+                Void only what should not stand. To excuse a valid charge, request a concession
+                instead.
+            </p>
+            <ChargeEndForm
+                id="void-item"
+                :key="voidingId"
+                :url="`/app/finance/late-fee-assessments/${voidingId}/void`"
+                :reasons="voidReasons"
+                :has-mfa-factor="hasMfaFactor"
+                action="Voiding a late fee"
+                submit-label="Void"
+                confirmation="Void this late fee? Its charge is reversed; refused if a payment was applied to it."
+                @done="voidingId = null"
+            />
+            <button type="button" class="mt-2 text-sm underline" @click="voidingId = null">
+                Keep it
+            </button>
+        </section>
         <table class="mt-4 w-full text-left text-sm">
             <thead>
                 <tr class="border-b border-slate-200 text-xs text-slate-500">
@@ -260,7 +278,7 @@ function filter(result: string): void {
                             v-else-if="canVoid && i.lateFeeAssessmentId"
                             type="button"
                             class="block text-red-700 underline"
-                            @click="voidLateFee(i)"
+                            @click="voidingId = i.lateFeeAssessmentId"
                         >
                             Void
                         </button>

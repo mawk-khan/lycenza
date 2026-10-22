@@ -171,7 +171,7 @@ class ManualPaymentConcurrencyTest extends TestCase
     {
         [$holder, $contender] = $this->raceWithHeldHolder(
             $this->record($this->alice, (string) Str::uuid(), '100.00', "{$this->chargeX->id}:100.00"),
-            ['php', __DIR__.'/../../Support/race-manual-payment.php', 'cancel', $this->school->id, $this->chargeX->id],
+            ['php', __DIR__.'/../../Support/race-manual-payment.php', 'cancel', $this->school->id, $this->chargeX->id, $this->schoolAdminFor($this->school)->id],
         );
 
         $this->assertStringStartsWith('recorded:', $holder);
@@ -183,7 +183,7 @@ class ManualPaymentConcurrencyTest extends TestCase
     public function a_cancellation_holding_the_charge_wins_over_a_racing_recording(): void
     {
         [$holder, $contender] = $this->raceWithHeldHolder(
-            ['php', __DIR__.'/../../Support/race-manual-payment.php', 'cancel', $this->school->id, $this->chargeX->id],
+            ['php', __DIR__.'/../../Support/race-manual-payment.php', 'cancel', $this->school->id, $this->chargeX->id, $this->schoolAdminFor($this->school)->id],
             $this->record($this->alice, (string) Str::uuid(), '100.00', "{$this->chargeX->id}:100.00"),
         );
 

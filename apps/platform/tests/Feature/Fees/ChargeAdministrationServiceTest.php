@@ -145,7 +145,7 @@ class ChargeAdministrationServiceTest extends TestCase
         $actor = $this->createUserWithCapabilities($school, ['finance.charges.manage']);
         $charge = $this->assessCharge($school, $student, $year, $receivable, $revenue);
 
-        $result = $this->service()->cancel($school, $charge->id, $actor);
+        $result = $this->service()->cancel($school, $charge->id, $actor, 'charged_in_error', null, $this->freshProof($actor));
 
         $this->assertNotNull($result->cancelledAt);
     }
@@ -164,7 +164,7 @@ class ChargeAdministrationServiceTest extends TestCase
         $this->expectException(AuthorizationException::class);
 
         try {
-            $this->service()->cancel($school, $charge->id, $actor);
+            $this->service()->cancel($school, $charge->id, $actor, 'charged_in_error', null, $this->freshProof($actor));
         } finally {
             $reloaded = app(TenantContext::class)->withSchool($school, fn () => Charge::query()->findOrFail($charge->id));
             $this->assertNull($reloaded->cancelled_at, 'A denied cancellation must leave the charge untouched.');
@@ -189,7 +189,7 @@ class ChargeAdministrationServiceTest extends TestCase
 
         $this->expectException(AuthorizationException::class);
 
-        $this->service()->cancel($school, $charge->id, $actor);
+        $this->service()->cancel($school, $charge->id, $actor, 'charged_in_error', null, $this->freshProof($actor));
     }
 
     #[Test]
@@ -206,6 +206,6 @@ class ChargeAdministrationServiceTest extends TestCase
 
         $this->expectException(AuthorizationException::class);
 
-        $this->service()->cancel($school, $charge->id, $actor);
+        $this->service()->cancel($school, $charge->id, $actor, 'charged_in_error', null, $this->freshProof($actor));
     }
 }

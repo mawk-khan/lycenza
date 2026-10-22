@@ -66,7 +66,7 @@ class ChargeCancellationInterlockTest extends TestCase
         $this->recordSettlement($this->school, $settlement->id, [[$charge, '500.00']], '500.00');
 
         $this->expectException(ChargeHasPaymentAllocationsException::class);
-        app(ChargeService::class)->cancel($this->school, $charge->id);
+        $this->cancelChargeAs($this->school, $charge->id);
     }
 
     #[Test]
@@ -80,7 +80,7 @@ class ChargeCancellationInterlockTest extends TestCase
         $revenue = $this->createLedgerAccount($this->school, ['type' => 'income']);
         $charge = $this->assessCharge($this->school, $student, $year, $receivable, $revenue, '500.00');
 
-        app(ChargeService::class)->cancel($this->school, $charge->id);
+        $this->cancelChargeAs($this->school, $charge->id);
 
         $reloaded = $context->withSchool($this->school, fn () => Charge::query()->findOrFail($charge->id));
         $this->assertNotNull($reloaded->cancelled_at);
@@ -102,7 +102,7 @@ class ChargeCancellationInterlockTest extends TestCase
         $cancelScript = __DIR__.'/../../Support/cancel-charge.php';
 
         $allocateProcess = new Process(['php', $allocateScript, $this->school->id, $charge->id, $settlement->id, '500.00']);
-        $cancelProcess = new Process(['php', $cancelScript, $this->school->id, $charge->id]);
+        $cancelProcess = new Process(['php', $cancelScript, $this->school->id, $charge->id, $this->schoolAdminFor($this->school)->id]);
         $allocateProcess->start();
         $cancelProcess->start();
         $allocateProcess->wait();

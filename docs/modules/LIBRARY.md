@@ -558,3 +558,9 @@ wave is frozen.
 Library fine void assurance is complete for v1 (listed reason, note, fresh
 code, current authority, at most once, through the Fees source seam).
 Production execution stays gated by E34.
+
+## Fine void and Guardian conflict (ORG.8G, 2026-10-22, ADR 0076 §65)
+
+A fine void ends its Charge through the assured Charge core, so it is now
+also refused for a staff member who is a linked Guardian (active or revoked
+link) of the Student, in the service and in the database.

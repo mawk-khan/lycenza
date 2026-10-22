@@ -68,7 +68,9 @@ class StudentRetentionPruneTest extends TestCase
     private function leaver(array $w, string $endsOn, string $status = 'withdrawn', string $studentStatus = 'inactive'): Student
     {
         $student = $this->createStudent($w['school'], ['status' => $studentStatus]);
-        $this->createStudentEnrollment($student, $w['section'], ['status' => $status, 'starts_on' => '2026-06-01', 'ends_on' => $endsOn]);
+        // ORG.8G: a placement ends within its own year.
+        [$section, $startsOn] = $endsOn > '2027-03-31' ? [$w['sectionNext'], '2027-04-01'] : [$w['section'], '2026-06-01'];
+        $this->createStudentEnrollment($student, $section, ['status' => $status, 'starts_on' => $startsOn, 'ends_on' => $endsOn]);
 
         // E21-RH.6: the end was also RECORDED back then (the database counts from the later of the two).
         if (method_exists($this, 'backdateEndRecording')) {
@@ -153,7 +155,7 @@ class StudentRetentionPruneTest extends TestCase
             $w['actor'],
         ))));
         $this->withdrawEnrollment($leaving, '2026-09-30');
-        $this->inSchool($w['school'], fn () => DB::table('students')->where('id', $leaving->student_id)->update(['status' => 'inactive']));
+        $this->forceStudentStatusOf($w['school'], $leaving->student_id, 'inactive');
         $student = $this->inSchool($w['school'], fn () => Student::query()->findOrFail($leaving->student_id));
         $guardianId = $this->guardianOf($student);
         $plan = $this->createEnrollmentRolloverPlan($w['year'], $w['yearNext']);
@@ -189,7 +191,9 @@ class StudentRetentionPruneTest extends TestCase
         $this->createStudentEnrollment($reEnrolled, $w['sectionNext'], ['status' => 'active', 'starts_on' => '2027-04-01', 'ends_on' => null]);
         $reactivated = $this->leaver($w, '2026-09-30', studentStatus: 'active');
         $returnedAndLeft = $this->leaver($w, '2026-09-30');
-        $this->createStudentEnrollment($returnedAndLeft, $w['sectionNext'], ['status' => 'completed', 'starts_on' => '2027-04-01', 'ends_on' => '2030-03-31']);
+        // ORG.8G: the 2030 departure belongs to a 2029-30 year.
+        $year29 = $this->createAcademicYear($w['school'], ['starts_on' => '2029-04-01', 'ends_on' => '2030-03-31', 'status' => 'draft', 'code' => 'AY29']);
+        $this->createStudentEnrollment($returnedAndLeft, $this->createSection($year29, $w['campus'], $w['grade'], ['status' => 'active', 'code' => 'Z']), ['status' => 'completed', 'starts_on' => '2029-04-01', 'ends_on' => '2030-03-31']);
         foreach ([$reEnrolled, $reactivated, $returnedAndLeft] as $student) {
             $this->guardianOf($student);
         }

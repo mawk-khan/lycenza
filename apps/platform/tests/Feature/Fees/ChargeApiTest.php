@@ -9,6 +9,7 @@ use Tests\Concerns\CreatesFeesFixtures;
 use Tests\Concerns\CreatesFinanceFixtures;
 use Tests\Concerns\CreatesPaymentsFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -20,7 +21,7 @@ use Tests\TestCase;
  */
 class ChargeApiTest extends TestCase
 {
-    use CreatesFeesFixtures, CreatesFinanceFixtures, CreatesPaymentsFixtures, CreatesTenancyFixtures;
+    use CreatesFeesFixtures, CreatesFinanceFixtures, CreatesPaymentsFixtures, CreatesTenancyFixtures, ProvidesSensitiveActionMfa;
 
     private function token($user): string
     {
@@ -153,11 +154,13 @@ class ChargeApiTest extends TestCase
         $charge = $this->assessCharge($school, $student, $year, $receivable, $revenue, '500.00');
         $client = $this->withHeader('Authorization', 'Bearer '.$this->token($user));
 
-        $cancel = $client->postJson("/api/v1/schools/{$school->id}/charges/{$charge->id}/cancel");
+        // ORG.8G: a listed reason and a fresh code, as on the web.
+        $client->postJson("/api/v1/schools/{$school->id}/charges/{$charge->id}/cancel")->assertStatus(422);
+        $cancel = $client->postJson("/api/v1/schools/{$school->id}/charges/{$charge->id}/cancel", ['reason_code' => 'duplicate_charge', 'mfa_code' => $this->freshMfaCode($user)]);
         $cancel->assertOk();
         $this->assertNotNull($cancel->json('data.cancelledAt'));
 
-        $repeat = $client->postJson("/api/v1/schools/{$school->id}/charges/{$charge->id}/cancel");
+        $repeat = $client->postJson("/api/v1/schools/{$school->id}/charges/{$charge->id}/cancel", ['reason_code' => 'duplicate_charge', 'mfa_code' => $this->freshMfaCode($user)]);
         $repeat->assertStatus(409);
         $this->assertSame('CHARGE_ALREADY_CANCELLED', $repeat->json('error.code'));
     }
@@ -175,7 +178,7 @@ class ChargeApiTest extends TestCase
         $this->recordSettlement($school, $settlement->id, [[$charge, '500.00']], '500.00');
 
         $response = $this->withHeader('Authorization', 'Bearer '.$this->token($user))
-            ->postJson("/api/v1/schools/{$school->id}/charges/{$charge->id}/cancel");
+            ->postJson("/api/v1/schools/{$school->id}/charges/{$charge->id}/cancel", ['reason_code' => 'charged_in_error', 'mfa_code' => $this->freshMfaCode($user)]);
 
         $response->assertStatus(409);
         $this->assertSame('CHARGE_HAS_PAYMENT_ALLOCATIONS', $response->json('error.code'));
@@ -194,7 +197,7 @@ class ChargeApiTest extends TestCase
 
         $client = $this->withHeader('Authorization', 'Bearer '.$this->token($userA));
         $client->getJson("/api/v1/schools/{$schoolA->id}/charges/{$chargeB->id}")->assertNotFound();
-        $client->postJson("/api/v1/schools/{$schoolA->id}/charges/{$chargeB->id}/cancel")->assertNotFound();
+        $client->postJson("/api/v1/schools/{$schoolA->id}/charges/{$chargeB->id}/cancel", ['reason_code' => 'charged_in_error', 'mfa_code' => $this->freshMfaCode($userA)])->assertNotFound();
     }
 
     #[Test]

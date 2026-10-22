@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Payments;
 
-use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Finance\Application\Exceptions\JournalEntryNotReversibleException;
 use App\Domain\Finance\Application\LedgerAdministrationService;
 use App\Domain\Finance\Infrastructure\JournalEntry;
@@ -96,7 +95,7 @@ class PaymentJournalReversalGuardTest extends TestCase
     {
         [$school, $admin, , , $unpaid] = $this->world();
 
-        $cancelled = app(ChargeService::class)->cancel($school, $unpaid->id, $admin);
+        $cancelled = $this->cancelChargeAs($school, $unpaid->id, $admin);
         $this->assertNotNull($cancelled->cancellationJournalEntryId);
 
         $cash = $this->createLedgerAccount($school, ['type' => 'asset']);

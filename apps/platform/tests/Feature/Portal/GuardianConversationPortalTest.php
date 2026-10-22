@@ -299,7 +299,7 @@ class GuardianConversationPortalTest extends TestCase
         $this->reply($thread, 'In scope')->assertRedirect()->assertSessionHasNoErrors();
         $this->assertSame([$student->id], json_decode($this->audits($w['school'], 'communication.guardian.replied')->sole()->metadata, true)['studentIds']);
 
-        app(TenantContext::class)->withSchool($w['school'], fn () => DB::table('students')->where('id', $student->id)->update(['status' => 'withdrawn']));
+        $this->forceStudentStatusOf($w['school'], $student->id, 'inactive'); // ORG.8G: a real Student state (withdrawn is a placement state)
 
         $this->get("/app/portal/conversations/{$thread->id}")->assertNotFound();
         $this->reply($thread, 'Out of scope')->assertNotFound();

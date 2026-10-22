@@ -185,10 +185,11 @@ class FeeAssessmentRlsIsolationTest extends TestCase
     {
         $w = $this->executedWorld();
         $charge = $this->inSchool($w['school'], fn () => Charge::query()->sole());
+        $by = $this->schoolAdminFor($w['school']); // ORG.8G: a recorded reason and a member actor reach the domain guard
         $this->setSchool($w['school']->id);
 
         $this->assertRejectedBy('is fee-assessed; void its fee assessment', fn () => DB::table('charges')->where('id', $charge->id)
-            ->update(['cancelled_at' => now(), 'cancellation_journal_entry_id' => $charge->journal_entry_id]), 'A fee-assessed charge is cancelled only through the void.');
+            ->update(['cancelled_at' => now(), 'cancellation_journal_entry_id' => $charge->journal_entry_id, 'cancellation_reason_code' => 'charged_in_error', 'cancelled_by_user_id' => $by->id]), 'A fee-assessed charge is cancelled only through the void.');
 
         $this->assertRejectedBy('was voided but its charge', function () use ($w) {
             DB::table('fee_assessments')->where('id', $w['assessment']->id)->update(['voided_at' => now(), 'void_reason' => 'x']);

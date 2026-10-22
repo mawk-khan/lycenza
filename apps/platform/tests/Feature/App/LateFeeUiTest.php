@@ -9,6 +9,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Testing\LocalCatalogueFixtures;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\Feature\Fees\Concerns\CreatesLateFeeFixtures;
 use Tests\TestCase;
 
@@ -20,7 +21,7 @@ use Tests\TestCase;
  */
 class LateFeeUiTest extends TestCase
 {
-    use CreatesLateFeeFixtures;
+    use CreatesLateFeeFixtures, ProvidesSensitiveActionMfa;
 
     private function memberWith(array $capabilities, School $school): User
     {
@@ -91,7 +92,8 @@ class LateFeeUiTest extends TestCase
         $this->assertSame('300.00', $lines[$lateFee->charge_id]['outstanding'], 'A late fee is an ordinary statement line.');
         $this->assertSame('5300.00', $statement->totals['outstanding']);
 
-        $this->post("/app/finance/late-fee-assessments/{$lateFee->id}/void")->assertRedirect()->assertSessionHasNoErrors();
+        $this->post("/app/finance/late-fee-assessments/{$lateFee->id}/void")->assertSessionHasErrors('reason_code');
+        $this->post("/app/finance/late-fee-assessments/{$lateFee->id}/void", ['reason_code' => 'payment_was_on_time', 'mfa_code' => $this->freshMfaCode(auth()->user())])->assertRedirect()->assertSessionHasNoErrors();
         $this->assertNotNull($this->lateFees($w)->sole()->voided_at);
     }
 

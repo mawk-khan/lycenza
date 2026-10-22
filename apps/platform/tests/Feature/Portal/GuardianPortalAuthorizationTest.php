@@ -106,7 +106,7 @@ class GuardianPortalAuthorizationTest extends TestCase
         $this->assertNull($this->resolver()->resolve($q['user'], $school), 'is_legal_guardian is the fail-closed default (POR-L1 pending).');
 
         // Only an inactive Student.
-        $r = $this->portalGuardian($school, studentStatus: 'withdrawn');
+        $r = $this->portalGuardian($school, studentStatus: 'inactive');
         $this->assertNull($this->resolver()->resolve($r['user'], $school), 'Only active Students qualify until POR-L1.');
 
         // Inactive persona.

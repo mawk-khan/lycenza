@@ -5,7 +5,6 @@ namespace Tests\Feature\Fees;
 use App\Domain\Fees\Application\ChargeDetail;
 use App\Domain\Fees\Application\ChargeQuery;
 use App\Domain\Fees\Application\ChargeReadService;
-use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Application\ChargeSummary;
 use App\Domain\Fees\Application\Exceptions\ChargeNotFoundException;
 use App\Domain\Fees\Infrastructure\Charge;
@@ -123,7 +122,7 @@ class ChargeReadServiceTest extends TestCase
         $receivable = $this->createLedgerAccount($school, ['type' => 'asset']);
         $revenue = $this->createLedgerAccount($school, ['type' => 'income']);
         $charge = $this->assessCharge($school, $student, $year, $receivable, $revenue);
-        app(ChargeService::class)->cancel($school, $charge->id);
+        $this->cancelChargeAs($school, $charge->id);
         $actor = $this->createUserWithCapabilities($school, ['finance.charges.view']);
 
         $default = $this->service()->listCharges($school, new ChargeQuery, $actor);

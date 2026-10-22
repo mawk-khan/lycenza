@@ -252,7 +252,7 @@ class FeeAssessmentRunServiceTest extends TestCase
         $w = $this->assessmentWorld();
         $cancelled = $this->enroll($w, '2026-06-01', ['status' => 'cancelled', 'ends_on' => '2026-08-01']);
         $inactive = $this->enroll($w);
-        $this->inSchool($w['school'], fn () => $inactive->student->forceFill(['status' => 'inactive'])->save());
+        $this->forceStudentStatus($this->inSchool($w['school'], fn () => $inactive->student), 'inactive');
 
         $run = $this->previewedRun($w);
 
@@ -595,18 +595,18 @@ class FeeAssessmentRunServiceTest extends TestCase
         $assessment = $this->assessments($w)->sole();
 
         try {
-            app(ChargeAdministrationService::class)->cancel($w['school'], $charge->id, $w['actor']);
+            app(ChargeAdministrationService::class)->cancel($w['school'], $charge->id, $w['actor'], 'charged_in_error', null, $this->freshProof($w['actor']));
             $this->fail('A direct cancel of a fee-assessed charge must be refused.');
         } catch (ChargeIsFeeAssessedException) {
             $this->addToAssertionCount(1);
         }
 
-        app(FeeAssessmentService::class)->void($w['school'], $assessment->id, $w['actor'], 'wrong grade');
+        app(FeeAssessmentService::class)->void($w['school'], $assessment->id, $w['actor'], 'assessment_error', 'wrong grade', $this->freshProof($w['actor']));
         $this->assertNotNull($this->inSchool($w['school'], fn () => $charge->refresh()->cancelled_at));
         $this->assertSame(1, $this->auditCount($w['school'], 'fee_assessment.voided'));
 
         try {
-            app(FeeAssessmentService::class)->void($w['school'], $assessment->id, $w['actor']);
+            app(FeeAssessmentService::class)->void($w['school'], $assessment->id, $w['actor'], 'assessment_error', null, $this->freshProof($w['actor']));
             $this->fail('A voided assessment cannot be voided again.');
         } catch (FeeAssessmentAlreadyVoidedException) {
             $this->addToAssertionCount(1);
@@ -649,7 +649,7 @@ class FeeAssessmentRunServiceTest extends TestCase
         $runner = $this->createUserWithCapabilities($w['school'], ['finance.fee_assessments.run']);
 
         $this->expectException(AuthorizationException::class);
-        app(FeeAssessmentService::class)->void($w['school'], $assessment->id, $runner);
+        app(FeeAssessmentService::class)->void($w['school'], $assessment->id, $runner, 'assessment_error', null, $this->freshProof($runner));
     }
 
     #[Test]

@@ -71,7 +71,7 @@ class ChargeCampusIntegrityTest extends TestCase
         }
 
         $manual = $this->assessCharge($w['school'], $this->createStudent($w['school']), $w['year'], $w['receivable'], $w['revenue'], '10.00');
-        app(ChargeService::class)->cancel($w['school'], $manual->id, null, 'recorded in error');
+        $this->cancelChargeAs($w['school'], $manual->id, null, 'recorded in error');
         $cancelled = $this->inSchool($w['school'], fn () => Charge::query()->findOrFail($manual->id));
         $this->assertNotNull($cancelled->cancelled_at, 'the one-time cancellation still works');
         $this->assertSame($manual->campus_id, $cancelled->campus_id);

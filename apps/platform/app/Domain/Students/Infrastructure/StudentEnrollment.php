@@ -45,6 +45,9 @@ class StudentEnrollment extends Model
 {
     use BelongsToSchool, GeneratesUuidV7, HasFactory;
 
+    /** Mirrors `student_enrollments_status_check` (ORG.8G; StudentLifecycleStructureTest pins the two). */
+    public const STATUSES = ['active', 'completed', 'withdrawn', 'transferred', 'cancelled'];
+
     protected $table = 'student_enrollments';
 
     protected $fillable = [

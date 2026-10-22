@@ -5,7 +5,7 @@ namespace Tests\Feature\App;
 use App\Domain\Attendance\Application\AttendanceSubmissionService;
 use App\Domain\Attendance\Infrastructure\AttendanceRecord;
 use App\Domain\Attendance\Infrastructure\AttendanceSession;
-use App\Domain\Students\Infrastructure\StudentEnrollment;
+use App\Domain\Students\Application\StudentEnrollmentService;
 use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
@@ -181,11 +181,11 @@ class AttendanceAdminUiTest extends TestCase
     public function an_ambiguous_roster_is_surfaced_on_the_page_rather_than_crashing(): void
     {
         $w = $this->attendanceWorld();
-        $a = $this->enrollStudent($w['section'], '1', '2026-06-01');
-
-        $this->inSchool($w['school'], fn () => StudentEnrollment::query()->create([
+        // ORG.8G: an ended row is born active and ended, so it is planted before the live placement.
+        $aStudent = $this->createStudent($w['school']);
+        $this->plantEndedPlacement($w['school'], [
             'school_id' => $w['school']->id,
-            'student_id' => $a->student_id,
+            'student_id' => $aStudent->id,
             'academic_year_id' => $w['year']->id,
             'campus_id' => $w['campus']->id,
             'grade_level_id' => $w['grade']->id,
@@ -194,7 +194,8 @@ class AttendanceAdminUiTest extends TestCase
             'status' => 'withdrawn',
             'starts_on' => '2026-06-01',
             'ends_on' => '2027-01-01',
-        ]));
+        ]);
+        $a = app(StudentEnrollmentService::class)->enroll($aStudent, $w['section'], '1', '2026-06-01');
 
         $this->actor($w)->get('/app/attendance/take?attendance_date='.self::MONDAY."&timetable_entry_id={$w['entry']->id}")
             ->assertOk()

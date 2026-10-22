@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Finance;
 
-use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Application\Exceptions\ChargeAlreadyCancelledException;
 use App\Domain\Fees\Infrastructure\Charge;
 use App\Domain\Finance\Application\LedgerAdministrationService;
@@ -61,7 +60,7 @@ class SubledgerJournalReversalConcurrencyTest extends TestCase
     {
         parent::setUp();
         $this->school = $this->createSchool();
-        $this->actor = $this->createUser();
+        $this->actor = $this->schoolAdminFor($this->school); // ORG.8G: a current finance.charges.manage member
         $this->userIds[] = $this->actor->id;
         $this->receivable = $this->createLedgerAccount($this->school, ['type' => 'asset']);
         $this->charge = $this->assessCharge($this->school, $this->createStudent($this->school), $this->createAcademicYear($this->school),
@@ -182,6 +181,6 @@ class SubledgerJournalReversalConcurrencyTest extends TestCase
 
         // The entry keeps its one historical reversal, so the canonical cancellation stays refused (ADR 0076 §57.9).
         $this->expectException(ChargeAlreadyCancelledException::class);
-        app(ChargeService::class)->cancel($this->school, $this->charge->id, $this->actor);
+        $this->cancelChargeAs($this->school, $this->charge->id, $this->actor);
     }
 }

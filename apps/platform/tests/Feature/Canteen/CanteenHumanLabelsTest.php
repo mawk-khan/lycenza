@@ -6,7 +6,6 @@ use App\Domain\Canteen\Application\CanteenChargeDescription;
 use App\Domain\Canteen\Infrastructure\CanteenItem;
 use App\Domain\Canteen\Infrastructure\CanteenOrder;
 use App\Domain\Canteen\Infrastructure\CanteenOrderLine;
-use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Infrastructure\Charge;
 use App\Domain\Finance\Infrastructure\JournalEntry;
 use App\Domain\Payments\Application\StudentFeeStatementReadService;
@@ -89,7 +88,7 @@ class CanteenHumanLabelsTest extends TestCase
         $this->assertSame([$charge->description], array_column($statement->lines, 'description'));
 
         // Cancelling it reverses with a readable narrative too.
-        app(ChargeService::class)->cancel($w['school'], $charge->id);
+        $this->cancelChargeAs($w['school'], $charge->id);
         $reversal = $this->inSchool($w['school'], fn () => JournalEntry::query()->where('reversal_of_journal_entry_id', $journal->id)->firstOrFail());
         $this->assertSame('Reversal of: '.$charge->description, $reversal->description);
         Carbon::setTestNow();

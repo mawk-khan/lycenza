@@ -44,7 +44,7 @@ class StudentEnrollmentRosterReadServiceTest extends TestCase
         $cancelled = $this->enrollStudent($w['section'], '4', '2026-06-01');
 
         $service = app(StudentEnrollmentService::class);
-        $service->complete($completed, '2026-10-01', $w['actor']);
+        $this->completeEnrollment($completed, $w['actor']);
         $this->withdrawEnrollment($withdrawn, '2026-10-01');
         $this->cancelEnrollment($cancelled, '2026-10-01');
 
@@ -110,11 +110,10 @@ class StudentEnrollmentRosterReadServiceTest extends TestCase
     public function overlapping_placements_for_one_student_are_rejected_not_deduplicated(): void
     {
         $w = $this->attendanceWorld();
-        $first = $this->enrollStudent($w['section'], '1', '2026-06-01');
-
-        $this->inSchool($w['school'], fn () => StudentEnrollment::query()->create([
-            'school_id' => $w['school']->id,
-            'student_id' => $first->student_id,
+        // ORG.8G: an ended row is born active and ended, so it is planted before the live placement.
+        $student = $this->createStudent($w['school']);
+        $this->plantEndedPlacement($w['school'], [
+            'student_id' => $student->id,
             'academic_year_id' => $w['year']->id,
             'campus_id' => $w['campus']->id,
             'grade_level_id' => $w['grade']->id,
@@ -123,7 +122,8 @@ class StudentEnrollmentRosterReadServiceTest extends TestCase
             'status' => 'transferred',
             'starts_on' => '2026-06-01',
             'ends_on' => '2026-12-31',
-        ]));
+        ]);
+        $first = app(StudentEnrollmentService::class)->enroll($student, $w['section'], '1', '2026-06-01');
 
         try {
             $this->roster($w, self::MONDAY);

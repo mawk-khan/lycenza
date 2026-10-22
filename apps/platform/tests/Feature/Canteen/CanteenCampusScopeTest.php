@@ -181,10 +181,10 @@ class CanteenCampusScopeTest extends TestCase
         $leaver = $this->pupil('Leaver', 'a');
         $this->assertCount(2, $this->api($user)->getJson($this->url('/canteen-orders/search/students?q=Pupil'))->json('data'));
 
-        app(TenantContext::class)->withSchool($this->school, function () use ($mover, $leaver): void {
+        app(TenantContext::class)->withSchool($this->school, function () use ($mover): void {
             StudentEnrollment::query()->where('student_id', $mover->id)->update(['status' => 'transferred', 'ends_on' => now()->toDateString()]);
-            $leaver->forceFill(['status' => 'inactive'])->save();
         });
+        $this->forceStudentStatus($leaver, 'inactive');
         $this->createStudentEnrollment($mover, $this->at['b']['section'], ['status' => 'active']);
 
         $this->place($user, $mover->id, $this->at['a']['outlet'], 'canteen-mover')->assertNotFound()->assertJsonPath('error.code', 'CANTEEN_STUDENT_NOT_FOUND');

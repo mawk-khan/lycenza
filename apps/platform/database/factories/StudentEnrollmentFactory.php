@@ -47,4 +47,11 @@ class StudentEnrollmentFactory extends Factory
             'ends_on' => null,
         ];
     }
+
+    /** ORG.8G: an ended placement is reached by its evidenced transition (StudentLifecycleFixture). */
+    public function configure(): static
+    {
+        return $this->afterMaking(fn (StudentEnrollment $placement) => StudentLifecycleFixture::deferPlacement($placement))
+            ->afterCreating(fn (StudentEnrollment $placement) => StudentLifecycleFixture::completePlacement($placement));
+    }
 }

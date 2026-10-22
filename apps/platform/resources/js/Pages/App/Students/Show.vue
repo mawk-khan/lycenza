@@ -208,6 +208,10 @@ const LIFECYCLE_LABELS: Record<LifecycleAction, string> = {
 function startLifecycleAction(action: LifecycleAction): void {
     lifecycleForm.reset();
     lifecycleForm.clearErrors();
+    // ORG.8G: a placement completes on its academic year's last day.
+    if (action === 'complete' && props.currentEnrollment) {
+        lifecycleForm.ends_on = props.currentEnrollment.academicYear.endsOn;
+    }
     activeLifecycleAction.value = action;
 }
 

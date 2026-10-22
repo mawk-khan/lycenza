@@ -4,7 +4,7 @@ namespace Tests\Feature\Attendance;
 
 use App\Domain\Attendance\Infrastructure\AttendanceRecord;
 use App\Domain\Attendance\Infrastructure\AttendanceSession;
-use App\Domain\Students\Infrastructure\StudentEnrollment;
+use App\Domain\Students\Application\StudentEnrollmentService;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Feature\Attendance\Concerns\CreatesAttendanceFixtures;
@@ -331,11 +331,11 @@ class AttendanceApiTest extends TestCase
     public function the_ambiguous_history_guard_surfaces_as_a_typed_conflict(): void
     {
         $w = $this->attendanceWorld();
-        $a = $this->enrollStudent($w['section'], '1', '2026-06-01');
-
-        $this->inSchool($w['school'], fn () => StudentEnrollment::query()->create([
+        // ORG.8G: an ended row is born active and ended, so it is planted before the live placement.
+        $aStudent = $this->createStudent($w['school']);
+        $this->plantEndedPlacement($w['school'], [
             'school_id' => $w['school']->id,
-            'student_id' => $a->student_id,
+            'student_id' => $aStudent->id,
             'academic_year_id' => $w['year']->id,
             'campus_id' => $w['campus']->id,
             'grade_level_id' => $w['grade']->id,
@@ -344,7 +344,8 @@ class AttendanceApiTest extends TestCase
             'status' => 'cancelled',
             'starts_on' => '2026-06-01',
             'ends_on' => '2027-01-01',
-        ]));
+        ]);
+        $a = app(StudentEnrollmentService::class)->enroll($aStudent, $w['section'], '1', '2026-06-01');
 
         $this->submitViaApi($w, $this->registerPayload([$a->id => 'present']))->assertStatus(409);
         $this->assertSame(0, $this->inSchool($w['school'], fn () => AttendanceSession::query()->count()));

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Payments\Http\Controllers;
 
+use App\Domain\Fees\Application\ChargeCancellationReason;
 use App\Domain\Payments\Application\Exceptions\InvalidLateFeeRunException;
 use App\Domain\Payments\Application\LateFeeAssessmentService;
 use App\Domain\Payments\Application\LateFeeReadService;
@@ -11,6 +12,7 @@ use App\Domain\Payments\Infrastructure\LateFeeRun;
 use App\Domain\Payments\Infrastructure\LateFeeRunItem;
 use App\Http\Controllers\Controller;
 use App\Models\School;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -152,8 +154,13 @@ class LateFeeRunController extends Controller
 
     public function void(Request $request, School $school, string $assessment, LateFeeAssessmentService $assessments): JsonResponse
     {
-        $validated = $request->validate(['reason' => ['nullable', 'string', 'max:255']]);
+        // ORG.8G (ADR 0076 §65): a listed reason (the note for `other`) and a fresh MFA code.
+        $validated = $request->validate([
+            'reason_code' => ['required', 'string', Rule::in(ChargeCancellationReason::CODES[ChargeCancellationReason::LATE_FEE_VOID])],
+            'reason' => ['nullable', 'required_if:reason_code,other', 'string', 'max:255'],
+        ]);
+        $proof = app(FreshMfaRequirement::class)->requireForAction($request, $request->user());
 
-        return response()->json(['data' => self::presentAssessment($assessments->void($school, $assessment, $request->user(), $validated['reason'] ?? null))]);
+        return response()->json(['data' => self::presentAssessment($assessments->void($school, $assessment, $request->user(), $validated['reason_code'], $validated['reason'] ?? null, $proof))]);
     }
 }

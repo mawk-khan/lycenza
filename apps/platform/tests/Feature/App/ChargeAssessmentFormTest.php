@@ -3,7 +3,6 @@
 namespace Tests\Feature\App;
 
 use App\Domain\Admissions\Infrastructure\Applicant;
-use App\Domain\Fees\Application\ChargeService;
 use App\Domain\Fees\Infrastructure\Charge;
 use App\Models\School;
 use App\Models\User;
@@ -140,7 +139,7 @@ class ChargeAssessmentFormTest extends TestCase
         $this->assessCharge($w['school'], $w['student'], $w['closed'], $w['receivable'], $w['revenue'], '12500.00', description: 'Term 2 Tuition Fee');
         $this->assessCharge($w['school'], $this->createStudent($w['school']), $w['active'], $w['receivable'], $w['revenue'], '12500.00', description: 'Term 2 Tuition Fee');
         $cancelled = $this->assessCharge($w['school'], $w['student'], $w['active'], $w['receivable'], $w['revenue'], '12500.00', description: 'Term 2 Tuition Fee');
-        $this->within($w['school'], fn () => app(ChargeService::class)->cancel($w['school'], $cancelled->id));
+        $this->within($w['school'], fn () => $this->cancelChargeAs($w['school'], $cancelled->id));
 
         $this->post('/app/finance/charges', $this->assessPayload($w))->assertRedirect()->assertSessionHasNoErrors();
     }

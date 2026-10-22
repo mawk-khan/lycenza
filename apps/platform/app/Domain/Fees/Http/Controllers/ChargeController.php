@@ -5,6 +5,7 @@ namespace App\Domain\Fees\Http\Controllers;
 use App\Domain\Fees\Application\AssessChargeData;
 use App\Domain\Fees\Application\ChargeAdministrationService;
 use App\Domain\Fees\Application\ChargeCampusAttribution;
+use App\Domain\Fees\Application\ChargeCancellationReason;
 use App\Domain\Fees\Application\ChargeDetail;
 use App\Domain\Fees\Application\ChargeQuery;
 use App\Domain\Fees\Application\ChargeReadService;
@@ -12,11 +13,13 @@ use App\Domain\Fees\Application\ChargeResult;
 use App\Domain\Fees\Application\ChargeSummary;
 use App\Http\Controllers\Controller;
 use App\Models\School;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Money\Exceptions\InvalidMoneyException;
 use App\Support\Money\Money;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -118,11 +121,14 @@ class ChargeController extends Controller
 
     public function cancel(Request $request, School $school, string $charge, ChargeAdministrationService $service): JsonResponse
     {
+        // ORG.8G (ADR 0076 §65): a listed reason (the note for `other`) and a fresh MFA code, as on the web.
         $validated = $request->validate([
-            'reason' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'reason_code' => ['required', 'string', Rule::in(ChargeCancellationReason::CODES[ChargeCancellationReason::CANCEL])],
+            'reason' => ['nullable', 'required_if:reason_code,other', 'string', 'max:255'],
         ]);
+        $proof = app(FreshMfaRequirement::class)->requireForAction($request, $request->user());
 
-        $result = $service->cancel($school, $charge, $request->user(), $validated['reason'] ?? null);
+        $result = $service->cancel($school, $charge, $request->user(), $validated['reason_code'], $validated['reason'] ?? null, $proof);
 
         return response()->json(['data' => $this->presentResult($result)]);
     }

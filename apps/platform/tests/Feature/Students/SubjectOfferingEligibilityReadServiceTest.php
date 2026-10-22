@@ -158,7 +158,7 @@ class SubjectOfferingEligibilityReadServiceTest extends TestCase
     {
         $w = $this->world();
         $prior = $this->place($w, $w['a1'], '2026-06-01');
-        app(StudentEnrollmentService::class)->complete($prior, '2027-03-31');
+        $this->completeEnrollment($prior);
         $promoted = $this->place($w, $w['n1'], '2027-06-01');
 
         $this->assertEligible($this->ask($w, $w['reqA'], '2026-10-01'), E::SOURCE_REQUIRED, $prior->id, $w['a1']->id);
@@ -305,13 +305,14 @@ class SubjectOfferingEligibilityReadServiceTest extends TestCase
     public function overlapping_history_or_a_year_mismatch_is_ambiguous_or_inconsistent_never_guessed(): void
     {
         $w = $this->world();
-        $placement = $this->place($w, $w['a1'], '2026-06-01');
         // A backdated terminal placement overlapping the real one: two places on one date.
-        $this->plant($w, 'student_enrollments', [
+        // (ORG.8G: an ended row is born active and ended, so it precedes the live placement.)
+        $this->plantEndedPlacement($w['school'], [
             'student_id' => $w['student']->id, 'academic_year_id' => $w['year']->id, 'campus_id' => $w['campusA']->id,
             'grade_level_id' => $w['g5']->id, 'section_id' => $w['a2']->id, 'roll_number' => '900', 'status' => 'cancelled',
             'starts_on' => '2026-08-01', 'ends_on' => '2026-08-31',
         ]);
+        $placement = $this->place($w, $w['a1'], '2026-06-01');
         $this->assertNotEligible($this->ask($w, $w['reqA'], '2026-08-15'), E::AMBIGUOUS_HISTORY);
         $this->assertEligible($this->ask($w, $w['reqA'], '2026-09-01'), E::SOURCE_REQUIRED, $placement->id, $w['a1']->id);
 

@@ -288,7 +288,7 @@ class AdmissionApplicationReadServiceTest extends TestCase
         ]));
 
         // The Student's CURRENT status is irrelevant to the historical read.
-        $this->withCtx($school, fn () => $student->update(['status' => 'inactive']));
+        $this->forceStudentStatus($student, 'inactive');
 
         $found = $this->withCtx($school, fn () => $this->readService()->detail($application->id));
 

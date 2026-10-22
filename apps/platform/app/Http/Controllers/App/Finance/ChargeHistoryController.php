@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\App\Finance;
 
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
+use App\Domain\Fees\Application\ChargeCancellationReason;
 use App\Domain\Fees\Application\ChargeDetail;
 use App\Domain\Fees\Application\ChargeQuery;
 use App\Domain\Fees\Application\ChargeSummary;
@@ -15,6 +16,7 @@ use App\Domain\Payments\Application\Access\FinanceCampusAccess;
 use App\Domain\Payments\Application\LateFeeReadService;
 use App\Domain\Students\Application\StudentIdentityLookup;
 use App\Http\Controllers\Controller;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Authorization\Campus\CampusScope;
 use App\Support\Authorization\CapabilityResolver;
@@ -110,6 +112,9 @@ class ChargeHistoryController extends Controller
                 'academicYearName' => $academicYear?->name,
             ],
             'canManage' => $capabilities->canInSchool($actor, 'finance.charges.manage', $school),
+            // ORG.8G (ADR 0076 §65): the listed cancel reasons and whether a fresh code can be given.
+            'cancelReasons' => ChargeCancellationReason::CODES[ChargeCancellationReason::CANCEL],
+            'hasMfaFactor' => app(FreshMfaRequirement::class)->hasActiveFactor($actor),
             // Phase 0O.11A: a link to record an offline payment for this
             // Charge's Student; the recording route re-checks everything.
             // ORG.7G-2: also a Campus recorder, for a Charge of a Campus it collects for.

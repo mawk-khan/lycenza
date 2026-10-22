@@ -8,6 +8,7 @@ use App\Domain\Finance\Application\LedgerAccountSummary;
 use App\Domain\Finance\Application\LedgerService;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
@@ -121,10 +122,11 @@ class ChargeAdministrationService
         return $this->ledger->activeAccountsOfType($school, $type)->map(fn (LedgerAccountSummary $a) => $a->ledgerAccountId);
     }
 
-    public function cancel(School $school, string $chargeId, User $actor, ?string $reason = null): ChargeResult
+    /** ORG.8G (ADR 0076 §65): a listed reason, the note for `other`, and the actor's fresh MFA proof. */
+    public function cancel(School $school, string $chargeId, User $actor, string $reasonCode, ?string $note, FreshMfaProof $mfa): ChargeResult
     {
-        $this->authorizeCapabilityFor($actor, 'finance.charges.manage', $school);
+        $this->authorizeCapabilityFor($actor, ChargeService::CANCEL_CAPABILITY, $school);
 
-        return $this->charges->cancel($school, $chargeId, $actor, $reason);
+        return $this->charges->cancel($school, $chargeId, $actor, ChargeCancellationReason::CANCEL, $reasonCode, $note, $mfa);
     }
 }

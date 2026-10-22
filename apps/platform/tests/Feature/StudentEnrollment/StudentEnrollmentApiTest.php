@@ -16,6 +16,7 @@ use App\Models\SchoolAuditEvent;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\LocalCatalogueFixtures;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
@@ -291,7 +292,7 @@ class StudentEnrollmentApiTest extends TestCase
 
         $this->service()->enroll($studentA, $sectionFive, '01', '2026-06-01');
         $enrollmentB = $this->service()->enroll($studentB, $sectionSix, '02', '2026-06-01');
-        $this->service()->complete($enrollmentB, '2026-12-01');
+        $this->completeEnrollment($enrollmentB);
 
         [$user] = $this->createSchoolAdmin('school_admin');
         $membership = $this->createMembership($user, $school);
@@ -361,7 +362,7 @@ class StudentEnrollmentApiTest extends TestCase
         $sectionThree = $this->createSection($year, $campus, $grade, ['name' => 'C', 'code' => 'C']);
 
         $completed = $this->service()->enroll($student, $sectionOne, '01', '2026-01-01');
-        $this->service()->complete($completed, '2026-03-01');
+        $this->completeEnrollment($completed);
 
         $reEnrolled = $this->service()->enroll($student, $sectionTwo, '02', '2026-03-02');
         $this->service()->transferPlacement($reEnrolled, $sectionThree, '03', '2026-04-01');
@@ -386,7 +387,7 @@ class StudentEnrollmentApiTest extends TestCase
         ['school' => $school, 'campus' => $campus, 'year' => $year, 'grade' => $grade, 'section' => $sectionOne, 'student' => $student] = $this->buildPlacementContext();
         $sectionTwo = $this->createSection($year, $campus, $grade, ['name' => 'B', 'code' => 'B']);
         $completed = $this->service()->enroll($student, $sectionOne, '01', '2026-01-01');
-        $this->service()->complete($completed, '2026-03-01');
+        $this->completeEnrollment($completed);
         $this->service()->enroll($student, $sectionTwo, '02', '2026-03-02');
         app(TenantContext::class)->withSchool($school, fn () => $year->update(['status' => 'active']));
 
@@ -636,13 +637,18 @@ class StudentEnrollmentApiTest extends TestCase
         $membership = $this->createMembership($user, $school);
         $this->assignSchoolRole($membership, 'school_admin');
 
+        // ORG.8G (ADR 0076 §65): completion is on the year's last day, once it has come.
+        $yearEnd = app(TenantContext::class)->withSchool($school, fn () => $enrollment->academicYear()->firstOrFail()->ends_on->toDateString());
+        $this->asUser($user)->withHeader('Idempotency-Key', 'complete-000')
+            ->postJson("/api/v1/schools/{$school->id}/enrollments/{$enrollment->id}/complete", ['ends_on' => '2026-10-01'])->assertStatus(422);
+        $this->travelTo(CarbonImmutable::parse($yearEnd.' 12:00', $school->timezone));
         $response = $this->asUser($user)
             ->withHeader('Idempotency-Key', 'complete-001')
-            ->postJson("/api/v1/schools/{$school->id}/enrollments/{$enrollment->id}/complete", ['ends_on' => '2027-04-30']);
+            ->postJson("/api/v1/schools/{$school->id}/enrollments/{$enrollment->id}/complete", ['ends_on' => $yearEnd]);
 
         $response->assertOk();
         $this->assertSame('completed', $response->json('data.status'));
-        $this->assertSame('2027-04-30', $response->json('data.endsOn'));
+        $this->assertSame($yearEnd, $response->json('data.endsOn'));
         $this->assertSame($section->id, $response->json('data.section.id'));
     }
 
@@ -685,7 +691,7 @@ class StudentEnrollmentApiTest extends TestCase
     {
         ['school' => $school, 'section' => $section, 'student' => $student] = $this->buildPlacementContext();
         $enrollment = $this->service()->enroll($student, $section, '01', '2026-06-01');
-        $this->service()->complete($enrollment, '2027-04-30');
+        $this->completeEnrollment($enrollment);
         [$user] = $this->createSchoolAdmin('school_admin');
         $membership = $this->createMembership($user, $school);
         $this->assignSchoolRole($membership, 'school_admin');

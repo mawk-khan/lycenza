@@ -392,8 +392,8 @@ class FinanceUiTest extends TestCase
         $charge = $this->assessCharge($school, $student, $year, $receivable, $revenue, '10.00');
         $this->memberWith(['finance.charges.manage'], $school);
 
-        $this->post("/app/finance/charges/{$charge->id}/cancel")->assertRedirect();
-        $second = $this->post("/app/finance/charges/{$charge->id}/cancel");
+        $this->post("/app/finance/charges/{$charge->id}/cancel", ['reason_code' => 'charged_in_error', 'mfa_code' => $this->freshMfaCode(auth()->user())])->assertRedirect()->assertSessionHasNoErrors();
+        $second = $this->post("/app/finance/charges/{$charge->id}/cancel", ['reason_code' => 'charged_in_error', 'mfa_code' => $this->freshMfaCode(auth()->user())]);
         $second->assertSessionHasErrors('cancellation');
     }
 
@@ -410,7 +410,7 @@ class FinanceUiTest extends TestCase
         $this->recordSettlement($school, $settlement->id, [[$charge, '10.00']], '10.00');
         $this->memberWith(['finance.charges.manage'], $school);
 
-        $response = $this->post("/app/finance/charges/{$charge->id}/cancel");
+        $response = $this->post("/app/finance/charges/{$charge->id}/cancel", ['reason_code' => 'charged_in_error', 'mfa_code' => $this->freshMfaCode(auth()->user())]);
         $response->assertSessionHasErrors('cancellation');
     }
 

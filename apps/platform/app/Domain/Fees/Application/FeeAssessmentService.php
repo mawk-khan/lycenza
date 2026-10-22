@@ -8,6 +8,7 @@ use App\Domain\Fees\Infrastructure\FeeAssessment;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
@@ -35,12 +36,14 @@ class FeeAssessmentService
         private readonly TenantContext $context,
     ) {}
 
-    public function void(School $school, string $feeAssessmentId, User $actor, ?string $reason = null): FeeAssessment
+    /** ORG.8G (ADR 0076 §65): a listed reason, the note for `other`, and the actor's fresh MFA proof. */
+    public function void(School $school, string $feeAssessmentId, User $actor, string $reasonCode, ?string $reason, FreshMfaProof $mfa): FeeAssessment
     {
-        $this->authorizeCapabilityFor($actor, 'finance.charges.manage', $school);
+        $this->authorizeCapabilityFor($actor, ChargeService::CANCEL_CAPABILITY, $school);
+        ChargeCancellationReason::require(ChargeCancellationReason::ASSESSMENT_VOID, $reasonCode, $reason);
 
-        return $this->context->withSchool($school, function () use ($school, $feeAssessmentId, $actor, $reason) {
-            return DB::transaction(function () use ($school, $feeAssessmentId, $actor, $reason) {
+        return $this->context->withSchool($school, function () use ($school, $feeAssessmentId, $actor, $reasonCode, $reason, $mfa) {
+            return DB::transaction(function () use ($school, $feeAssessmentId, $actor, $reasonCode, $reason, $mfa) {
                 $assessment = FeeAssessment::query()->where('school_id', $school->id)->lockForUpdate()->find($feeAssessmentId);
 
                 if ($assessment === null) {
@@ -54,10 +57,10 @@ class FeeAssessmentService
                 $assessment->forceFill([
                     'voided_at' => now(),
                     'voided_by_user_id' => $actor->id,
-                    'void_reason' => $reason === null || trim($reason) === '' ? 'voided' : mb_substr(trim($reason), 0, 255),
+                    'void_reason' => $reason === null || trim($reason) === '' ? $reasonCode : mb_substr(trim($reason), 0, 255),
                 ])->save();
 
-                $this->charges->cancel($school, $assessment->charge_id, $actor, $reason);
+                $this->charges->cancel($school, $assessment->charge_id, $actor, ChargeCancellationReason::ASSESSMENT_VOID, $reasonCode, $reason, $mfa);
 
                 $this->audit->school($school, 'fee_assessment.voided', actor: $actor, subject: $assessment, metadata: [
                     'feeAssessmentId' => $assessment->id,

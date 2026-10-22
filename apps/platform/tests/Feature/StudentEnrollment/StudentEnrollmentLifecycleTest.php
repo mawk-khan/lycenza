@@ -74,10 +74,10 @@ class StudentEnrollmentLifecycleTest extends TestCase
         ['school' => $school, 'student' => $student, 'section' => $section] = $this->buildActiveEnrollmentContext();
         $enrollment = $this->freshEnrollment($school, $this->findEnrollmentId($school, $student));
 
-        $completed = $this->service()->complete($enrollment, '2027-04-30');
+        $completed = $this->completeEnrollment($enrollment);
 
         $this->assertSame('completed', $completed->status);
-        $this->assertSame('2027-04-30', $completed->ends_on->toDateString());
+        $this->assertSame(app(TenantContext::class)->withSchool($school, fn () => $completed->academicYear()->firstOrFail()->ends_on->toDateString()), $completed->ends_on->toDateString(), 'ORG.8G: completion ends on the year\'s last day');
         $this->assertSame($section->id, $completed->section_id);
         $this->assertSame($section->academic_year_id, $completed->academic_year_id);
         $this->assertSame($section->campus_id, $completed->campus_id);
@@ -93,10 +93,10 @@ class StudentEnrollmentLifecycleTest extends TestCase
     {
         ['school' => $school, 'student' => $student] = $this->buildActiveEnrollmentContext();
         $enrollment = $this->freshEnrollment($school, $this->findEnrollmentId($school, $student));
-        $completed = $this->service()->complete($enrollment, '2027-04-30');
+        $completed = $this->completeEnrollment($enrollment);
 
         $this->expectException(InvalidEnrollmentTransitionException::class);
-        $this->service()->complete($completed, '2027-05-01');
+        $this->completeEnrollment($completed);
     }
 
     #[Test]
@@ -104,7 +104,7 @@ class StudentEnrollmentLifecycleTest extends TestCase
     {
         ['school' => $school, 'student' => $student] = $this->buildActiveEnrollmentContext();
         $enrollment = $this->freshEnrollment($school, $this->findEnrollmentId($school, $student));
-        $completed = $this->service()->complete($enrollment, '2027-04-30');
+        $completed = $this->completeEnrollment($enrollment);
 
         $this->expectException(InvalidEnrollmentTransitionException::class);
         $this->withdrawEnrollment($completed, '2027-05-01');
@@ -144,7 +144,7 @@ class StudentEnrollmentLifecycleTest extends TestCase
         $withdrawn = $this->withdrawEnrollment($enrollment, '2026-09-15');
 
         $this->expectException(InvalidEnrollmentTransitionException::class);
-        $this->service()->complete($withdrawn, '2026-10-01');
+        $this->completeEnrollment($withdrawn);
     }
 
     // ==================================================================
@@ -178,7 +178,7 @@ class StudentEnrollmentLifecycleTest extends TestCase
         $cancelled = $this->cancelEnrollment($enrollment, '2026-06-05');
 
         $this->expectException(InvalidEnrollmentTransitionException::class);
-        $this->service()->complete($cancelled, '2026-07-01');
+        $this->completeEnrollment($cancelled);
     }
 
     // ==================================================================
@@ -367,7 +367,7 @@ class StudentEnrollmentLifecycleTest extends TestCase
         // row via a SEPARATE call to the sanctioned service, after
         // $staleEnrollment was read -- $staleEnrollment's in-memory
         // ->status still reads 'active'.
-        $this->service()->complete($this->freshEnrollment($school, $enrollmentId), '2027-04-30');
+        $this->completeEnrollment($this->freshEnrollment($school, $enrollmentId));
         $this->assertSame('active', $staleEnrollment->status, 'Sanity check: the in-memory model must still be stale.');
 
         // If the service trusted $staleEnrollment->status instead of

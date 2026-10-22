@@ -197,7 +197,7 @@ class EnrollmentRolloverDryRunServiceTest extends TestCase
         ['school' => $school, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan] = $this->buildContext();
         $student = $this->createStudent($school, ['student_number' => 'S-1001']);
         $enrollment = $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
-        $this->enrollmentService()->complete($enrollment, '2027-04-30');
+        $this->completeEnrollment($enrollment);
         $this->planService()->upsertMapping($plan, $sourceGrade, null, $targetGrade, null);
         $item = $this->itemFor($plan, $student);
         app(TenantContext::class)->withSchool($school, fn () => $item->update(['decision' => 'promote', 'target_section_id' => $targetSection->id, 'roll_number_strategy' => 'preserve_source']));
@@ -234,7 +234,7 @@ class EnrollmentRolloverDryRunServiceTest extends TestCase
         $sourceSectionB = $this->createSection($sourceYear, $campus, $sourceGrade, ['name' => '5B', 'code' => '5B']);
         $student = $this->createStudent($school, ['student_number' => 'S-1001']);
         $first = $this->enrollmentService()->enroll($student, $sourceSectionA, '01', '2026-06-01');
-        $this->enrollmentService()->complete($first, '2026-12-01');
+        $this->completeEnrollment($first);
         $this->enrollmentService()->enroll($student, $sourceSectionB, '02', '2026-12-02'); // 2nd row, same year, now active
 
         $this->dryRun()->run($this->freshPlan($plan));
@@ -1291,12 +1291,13 @@ class EnrollmentRolloverDryRunServiceTest extends TestCase
     {
         ['school' => $school, 'sourceYear' => $sourceYear, 'sourceGrade' => $sourceGrade, 'targetGrade' => $targetGrade, 'sourceSection' => $sourceSection, 'targetSection' => $targetSection, 'plan' => $plan, 'sourceOffering' => $sourceOffering, 'targetOffering' => $targetOffering] = $this->buildSubjectContext();
         $student = $this->createStudent($school, ['student_number' => 'S-1001']);
-        $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
         // A second, non-active StudentEnrollment for the SAME source year --
         // excluded from placement's own active/completed candidacy check,
         // but it still counts toward the legacy rule's "exactly one
-        // candidate, of any status" proof.
-        $this->createStudentEnrollment($student, $sourceSection, ['roll_number' => '02', 'status' => 'withdrawn']);
+        // candidate, of any status" proof. (ORG.8G: an ended placement is
+        // born active and ended, so it precedes the live one.)
+        $this->createStudentEnrollment($student, $sourceSection, ['roll_number' => '02', 'status' => 'withdrawn', 'starts_on' => '2026-06-01', 'ends_on' => '2026-06-01']);
+        $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
         app(TenantContext::class)->withSchool($school, fn () => StudentSubjectEnrollment::factory()->create([
             'school_id' => $school->id,
             'student_id' => $student->id,

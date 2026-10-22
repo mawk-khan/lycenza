@@ -156,7 +156,7 @@ class GuardianAttendancePortalTest extends TestCase
 
         $nonLegal = $this->createStudent($school);
         $this->createStudentGuardianRelationship($nonLegal, $g['guardian'], ['is_legal_guardian' => false]);
-        $withdrawn = $this->createStudent($school, ['status' => 'withdrawn']);
+        $withdrawn = $this->createStudent($school, ['status' => 'inactive']); // ORG.8G: the Student state (withdrawn is a placement state)
         $this->createStudentGuardianRelationship($withdrawn, $g['guardian'], ['is_legal_guardian' => true]);
         $revoked = $this->createStudent($school);
         $this->createStudentGuardianRelationship($revoked, $g['guardian'], ['is_legal_guardian' => true]);
