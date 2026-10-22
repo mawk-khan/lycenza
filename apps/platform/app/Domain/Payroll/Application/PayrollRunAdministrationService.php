@@ -8,7 +8,11 @@ use App\Domain\Payroll\Application\Exceptions\PayrollSelfAdministrationException
 use App\Domain\Payroll\Infrastructure\PayrollPeriod;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
 use App\Models\User;
+use App\Support\Approval\ApprovalDecisionAuthority;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Phase 9.7 (corrected at its own authorization review) -- the
@@ -44,6 +48,8 @@ class PayrollRunAdministrationService
     public function __construct(
         private readonly PayrollRunService $runs,
         private readonly HrSelfAdministrationGuard $selfAdministration,
+        private readonly ApprovalDecisionAuthority $authority,
+        private readonly TenantContext $context,
     ) {}
 
     public function createRun(PayrollPeriod $period, User $actor): PayrollRun
@@ -100,10 +106,18 @@ class PayrollRunAdministrationService
      * `payroll.runs.prepare` as an alternative. An actor is never
      * authorized to approve merely because they can prepare payroll.
      */
-    public function approve(PayrollRun $run, User $approver): PayrollRun
+    public function approve(PayrollRun $run, User $approver, ?FreshMfaProof $mfa = null): PayrollRun
     {
         $this->authorizeCapabilityFor($approver, 'payroll.runs.approve', $run->school);
 
-        return $this->runs->approve($run, $approver);
+        // ORG.8B (ADR 0076 §60): under the run lock, the approver's CURRENT authority (fresh grant,
+        // module and School read), then the core decision (participants, results, transition) in the
+        // same transaction.
+        return $this->context->withSchool($run->school, fn (): PayrollRun => DB::transaction(function () use ($run, $approver, $mfa): PayrollRun {
+            PayrollRun::query()->whereKey($run->id)->lockForUpdate()->firstOrFail();
+            $this->authority->requireCurrent($approver, 'payroll.runs.approve', $run->school);
+
+            return $this->runs->approve($run, $approver, $mfa);
+        }));
     }
 }

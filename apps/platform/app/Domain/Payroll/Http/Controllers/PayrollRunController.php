@@ -129,8 +129,8 @@ class PayrollRunController extends Controller
         $run = PayrollRun::query()->findOrFail($payrollRun);
         // SR.4 (ADR 0071 §26.7): `mfa_code` re-verified now; a refusal is a
         // deterministic 422 for this Idempotency-Key (retry with a new key).
-        $mfa->requireForAction($request, $request->user());
-        $run = $service->approve($run, $request->user());
+        $proof = $mfa->requireForAction($request, $request->user());
+        $run = $service->approve($run, $request->user(), $proof);
 
         return response()->json(['data' => $this->present(PayrollRunSummary::fromModel($run))]);
     }

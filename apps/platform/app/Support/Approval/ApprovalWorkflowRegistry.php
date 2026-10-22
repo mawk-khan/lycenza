@@ -20,6 +20,7 @@ namespace App\Support\Approval;
  *   dbBackstop       the database maker/checker constraint (null: none)
  *   makerChecker     'shared' (MakerCheckerPolicy + ApprovalDecisionAuthority) or 'domain'
  *   service / decisions  the deciding class and methods (null for isolated Marks code)
+ *   authorityService (optional) the authorized entry that takes the decider's current authority
  *   execution        'immediate' (the decision executes in its transaction) or 'separate'
  *   drift            'immutable_terms' | 'fingerprint' | 'frozen_at_approval'
  *   freshMfa         decisions needing FreshMfaRequirement
@@ -104,20 +105,24 @@ final class ApprovalWorkflowRegistry
         ],
         'payroll_runs' => [
             'domain' => 'Payroll',
-            'tables' => ['payroll_runs'],
+            'tables' => ['payroll_runs', 'payroll_run_calculations'],
             'request' => ['payroll.runs.prepare'],
             'decide' => ['payroll.runs.approve'],
-            'participants' => ['payroll_runs.prepared_by_user_id'],
+            // ORG.8B (§60): every material preparer -- creator, every recorded calculator, every adjustment author.
+            'participants' => ['payroll_runs.prepared_by_user_id', 'payroll_run_calculations.calculated_by_user_id', 'payroll_adjustments.actor_user_id'],
             'decider' => 'payroll_runs.approved_by_user_id',
-            'dbBackstop' => 'payroll_runs_sod_check',
-            'makerChecker' => 'domain',
+            'otherDecisionColumns' => ['payroll_runs.posted_by_user_id'],
+            'dbBackstop' => 'payroll_runs_participant_approval_guard',
+            'makerChecker' => 'shared',
             'service' => 'App\Domain\Payroll\Application\PayrollRunService',
+            // The decider's current authority is taken by the authorized entry, in the same transaction.
+            'authorityService' => 'App\Domain\Payroll\Application\PayrollRunAdministrationService',
             'decisions' => ['approve'],
             'execution' => 'separate',
             'drift' => 'frozen_at_approval',
             'freshMfa' => ['approve'],
-            'compatibility' => 'adapter',
-            'note' => 'G-2 open (ORG.8B): only the run creator is excluded; override/delta authors (payroll_adjustments.actor_user_id) and recalculators are not.',
+            'compatibility' => 'as_is',
+            'note' => 'Approve freezes the results (calculated -> approved); posting is a separate step the approver may also take (OD-8.4); stale results (an adjustment after the last recorded calculation) are refused.',
         ],
         'erasure_cases' => [
             'domain' => 'Compliance',

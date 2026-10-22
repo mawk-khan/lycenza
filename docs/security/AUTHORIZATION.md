@@ -1559,6 +1559,20 @@ UAT plan: `docs/product/APPROVAL-AUTHORITY-UAT.md`.
   Guardian record. Someone who never links it is not detected (§59.7a,
   awaiting an owner policy decision).
 
+## Payroll approval participation (ORG.8B, ADR 0076 §60 — built 2026-10-22)
+
+- **Nobody who prepared a payroll run approves it.** That covers the run's
+  creator, anyone who calculated or recalculated it, and anyone who recorded
+  an override or correction delta on it. It is per run and permanent: later
+  changes never remove a participant.
+- **Enforcement:** the shared maker/checker rule, plus a database rule on
+  the recorded approver.
+- **Approval covers calculated results only.** Recalculate after any
+  adjustment before approving.
+- **The approver's authority is re-read at decision time,** not from the
+  60-second cache.
+- **Unchanged:** permissions, roles and School-wide scope.
+
 ## What is NOT yet implemented
 
 Contracted by ADR 0076 (ORG.1, 2026-10-17) and not built:

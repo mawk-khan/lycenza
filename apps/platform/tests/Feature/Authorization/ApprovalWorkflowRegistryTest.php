@@ -61,7 +61,7 @@ class ApprovalWorkflowRegistryTest extends TestCase
                 $this->assertNotNull(DB::selectOne('select 1 as ok from information_schema.columns where table_name = ? and column_name = ?', [$table, $name]), "{$key}: column {$column}");
             }
             if ($workflow['dbBackstop'] !== null) {
-                $this->assertNotNull(DB::selectOne('select 1 as ok from pg_constraint where conname = ?', [$workflow['dbBackstop']]), "{$key}: backstop {$workflow['dbBackstop']}");
+                $this->assertNotNull(DB::selectOne('select 1 as ok from pg_constraint where conname = ? union all select 1 from pg_trigger where tgname = ? and not tgisinternal', [$workflow['dbBackstop'], $workflow['dbBackstop']]), "{$key}: backstop {$workflow['dbBackstop']} (a constraint or a trigger)");
             }
             if ($workflow['service'] === null) {
                 $this->assertSame('student_mark_corrections', $key, 'only isolated Marks code is registered without naming its class (ADR 0068 §19.2)');
@@ -103,21 +103,28 @@ class ApprovalWorkflowRegistryTest extends TestCase
     public function a_shared_workflow_decides_through_the_shared_foundation_and_only_it_does(): void
     {
         $shared = array_filter(ApprovalWorkflowRegistry::WORKFLOWS, fn (array $w) => $w['makerChecker'] === 'shared');
-        $this->assertSame(['fee_concessions'], array_keys($shared), 'ORG.8A pilots exactly one workflow');
+        $this->assertSame(['fee_concessions', 'payroll_runs'], array_keys($shared), 'ORG.8A pilot + ORG.8B Payroll');
 
+        $allowed = [];
         foreach ($shared as $key => $workflow) {
             $class = new ReflectionClass($workflow['service']);
             $source = (string) file_get_contents((string) $class->getFileName());
+            $authority = isset($workflow['authorityService'])
+                ? (string) file_get_contents((string) (new ReflectionClass($workflow['authorityService']))->getFileName())
+                : $source;
             $this->assertStringContainsString('makerChecker->permits(', $source, "{$key} decides through MakerCheckerPolicy");
+            $this->assertStringContainsString('authority->requireCurrent(', $authority, "{$key} re-checks current authority");
+            $this->assertStringContainsString('ApprovalProvenance::metadata(', $source, "{$key} records approval provenance");
+            $this->assertMatchesRegularExpression('/public (static )?function participants\(/', $source, "{$key} exposes its participant set");
+            $this->assertDoesNotMatchRegularExpression('/(requested_by_user_id|prepared_by_user_id)\s*===\s*\$(actor|approver)->id\)\s*\{\s*throw new SelfApprovalNotAllowedException/', $source, "{$key} has no private single-actor maker/checker");
             foreach ($workflow['decisions'] as $decision) {
                 $method = $class->getMethod($decision);
                 $body = implode('', array_slice(file((string) $class->getFileName()), $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
-                $this->assertStringContainsString('$this->assertMayDecide(', $body, "{$key}::{$decision} decides through the shared authority + maker/checker");
+                $this->assertStringContainsString('$this->assertMayDecide(', $body, "{$key}::{$decision} decides through the shared maker/checker");
             }
-            $this->assertStringContainsString('authority->requireCurrent(', $source, "{$key} re-checks current authority");
-            $this->assertStringContainsString('ApprovalProvenance::metadata(', $source, "{$key} records approval provenance");
-            $this->assertMatchesRegularExpression('/public static function participants\(/', $source, "{$key} exposes its participant set");
-            $this->assertDoesNotMatchRegularExpression('/requested_by_user_id\s*===\s*\$actor->id\)\s*\{\s*throw new SelfApprovalNotAllowedException/', $source, "{$key} has no private requester-only maker/checker");
+            foreach (array_filter([$workflow['service'], $workflow['authorityService'] ?? null]) as $service) {
+                $allowed[] = substr((string) (new ReflectionClass($service))->getFileName(), strlen(app_path()) + 1);
+            }
         }
 
         foreach (['MakerCheckerPolicy', 'ApprovalDecisionAuthority', 'ApprovalProvenance', 'ApprovalParticipants'] as $part) {
@@ -128,7 +135,8 @@ class ApprovalWorkflowRegistryTest extends TestCase
                     $users[] = $file->getRelativePathname();
                 }
             }
-            $this->assertSame(['Domain/Fees/Application/FeeConcessionService.php'], $users, "only registered shared workflows use {$part}");
+            $this->assertNotEmpty($users, "{$part} is used");
+            $this->assertSame([], array_values(array_diff($users, $allowed)), "only registered shared workflows use {$part}");
         }
     }
 

@@ -1517,3 +1517,11 @@ once several modules copy it.
          service (`GuardianSelfAdministrationGuard`).
        - Maker/checker stays generic; there is no generic
          conflict-of-interest framework.
+     - **Payroll (ORG.8B, §60)** decides on the shared foundation.
+       - Participants: the run's creator, every recorded calculator
+         (`payroll_run_calculations`, append-only) and every adjustment
+         author never approve it.
+       - Stale results (an adjustment after the last recorded calculation)
+         are refused.
+       - Calculate, adjustments and approve all lock the run row.
+       - `payroll_runs_participant_approval_guard` backs it in the database.

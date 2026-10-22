@@ -8848,3 +8848,114 @@ G-3 (revoke/cancel), G-2 (Payroll), ORG.8-P1 ledger. Queue unchanged: a
 conflicted approver may still see the pending item; the decision refuses
 (future UX: disable it). Module directions: Fees → Guardians (new, no cycle);
 Guardians ← Identity through the port.
+
+## 60. ORG.8B — Payroll approval participation (as built, 2026-10-22)
+
+Owner authorization: ORG.8B, closing ORG.8 G-2 on the ORG.8A foundation.
+Baseline `origin/main` = `260a7c4b` (§59). No capability, role, Campus,
+delegation, threshold or multi-level change; M-1 and G-3 untouched.
+
+**60.1 Reproduction (before 8B, committed tests failing first).** The creator
+was refused; a User who recalculated another preparer's run approved it, and
+so did a User who recorded a manual override on it.
+
+**60.2 State machine (unchanged).** `draft -> calculated -> approved ->
+posted`, forward only (transition trigger). Create (`payroll.runs.prepare`,
+no MFA); calculate/recalculate (`.prepare`, replaces the whole result set,
+draft or calculated only); manual override / correction delta (`.prepare`,
+append-only `payroll_adjustments`, draft or calculated only); approve
+(`.approve`, fresh MFA, results/HRX inputs frozen); post and reverse
+(`.post`/`.reverse`, fresh MFA, Payroll-owned journals, P1). No reopen,
+cancel or payment release. Holders: prepare = school_admin, payroll_officer;
+approve/post/reverse = school_admin.
+
+**60.3 Material participants (structural, per run, monotonic).**
+- creator: `payroll_runs.prepared_by_user_id`;
+- every calculator and recalculator: NEW `payroll_run_calculations`
+  (append-only, School- and run-bound, RLS forced, `calculated_by_user_id`
+  RESTRICT; a calculation replaced the results and recorded no actor, so
+  nothing durable named a calculator before);
+- every override and delta author: `payroll_adjustments.actor_user_id`
+  (append-only; an override is never edited or deleted, a new value is a
+  new row).
+Viewers, posters and HR editors of master data are not participants:
+compensation is read at calculation time, so the calculator is the
+participant who materialises it. No system job calculates or approves
+payroll. `PayrollRunService::participants()` is the one set; no caller
+supplies it.
+
+**60.4 Decision (shared foundation).** `PayrollRunAdministrationService::approve`
+locks the run, takes the approver's CURRENT authority
+(`ApprovalDecisionAuthority`: operational School, `payroll.runs.approve`
+whole-School now, Payroll module), then `PayrollRunService::approve` (run
+locked) refuses any participant through the shared `MakerCheckerPolicy`
+(`SelfApprovalNotAllowedException`) and refuses stale results: no recorded
+calculation, or an adjustment recorded after the latest one
+(`RunRecalculationRequiredException`, 409). Approval provenance (participants,
+decider, `school`, fresh-MFA fact) is added to `payroll.run.approved` — ids
+only, no amounts. A direct core call still enforces maker/checker and
+staleness (the authority read is the authorized entry's, like every other
+Payroll capability).
+
+**60.5 Database backstop.** `payroll_runs_participant_approval_guard`
+(BEFORE UPDATE of status/approved_by, calculated -> approved; every role):
+the recorded approver is no participant (creator, any calculation, any
+adjustment) and the results are not stale. `payroll_runs_sod_check` stays.
+`payroll_run_calculations` refuses a row for a decided run and an
+`adjustment_count` that is not the run's real count. Proven as the runtime
+role. `payroll_run_calculations` is in `verify-database`'s no-runtime-UPDATE/DELETE
+lists. Rollback + re-apply IDENTICAL (see 60.8a); `verify-database`
+failed=0. A raw-SQL calculation that skips recording its calculator is the
+recorded-actor trust boundary of §59.6 (the database has no actor context).
+
+**60.6 Concurrency (two processes, contender observed blocked).**
+calculate, every adjustment and approve lock the run row, so: a recalculator
+waiting to approve is refused once their recalculation commits; a
+recalculation or override waiting on an approval finds the run decided; an
+approval waiting on an override needs a recalculation; two approvals make
+one. No approval ever covers results a concurrent change alters. Lock order
+(run, then the approver's membership/grants FOR SHARE) shares no row with
+staff revocation (membership, grants) or posting (run after approval); no
+deadlock.
+
+**60.7 Existing runs.** No backfill: earlier calculators are not recorded
+anywhere structural. A run calculated before 8B fails closed (approval needs
+a recorded recalculation). Development data: one calculated demo run, no
+adjustments; no production data exists.
+
+**60.8a Security review** (independent): no HIGH.
+- **MEDIUM, fixed (M1, pre-existing, made reachable by the staleness gate).**
+  A recalculation of a calculated run that left an employment unresolved
+  kept the status (no calculated -> draft), so a payroll missing that
+  employment was approvable. Now each calculation records a per-run
+  `ordinal` and whether it was `complete` (every employment resolved, at
+  least one result). Approval requires the LATEST calculation to be complete
+  and of every recorded adjustment, in the service and in the database.
+- **LOW, fixed:**
+  - Who approved, and when, is frozen once the run is decided
+    (`payroll_runs_freeze_approval`).
+  - The calculation guard and a new adjustment guard share-lock the run and
+    refuse anything but a run being prepared.
+  - The new table is in the `verify-database` lists.
+  - An architecture pin makes `PayrollRunAdministrationService` the only
+    application caller of the core approval, with a race through that
+    entry.
+  - A correction-delta author is tested.
+- **LOW, recorded:**
+  - Statutory calculation (`StatutoryPayrollCalculationService`) has no
+    route or CLI and is legally gated. When it is wired up, its actor must
+    join the participant set and statutory results must count toward
+    staleness.
+  - Compensation editors are not participants: the approved output is the
+    frozen calculation, and the calculator is the one who materialised it.
+  - `payroll_run_hrx_inputs` is missing from the verifier lists
+    (pre-existing).
+
+Rollback + re-apply IDENTICAL after the fixes (268 schema lines, on a clean test database).
+
+**60.8 Unchanged / open.** Approver may also post (OD-8.4); posting and
+reversal have no participant rule (OD-8.4, a later Payroll follow-up);
+payroll stays whole-School; MFA unchanged (approve, post, reverse need a
+fresh code; create, calculate and adjustments do not); legal gates HRX-L1..L4,
+E45/PAY-L1 unchanged (technical only, no production effect); registry: Payroll
+now `shared` with its participant sources and backstop.

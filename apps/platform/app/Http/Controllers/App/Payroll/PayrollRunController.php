@@ -160,8 +160,8 @@ class PayrollRunController extends Controller
         $run = PayrollRun::query()->findOrFail($payrollRun);
         // SR.4 (ADR 0071 §26.7): capability first, then a fresh code, outside the approval transaction.
         $this->authorizeCapability('payroll.runs.approve', $school);
-        $mfa->requireForAction($request, $context->actor());
-        $service->approve($run, $context->actor());
+        $proof = $mfa->requireForAction($request, $context->actor());
+        $service->approve($run, $context->actor(), $proof);
 
         return redirect("/app/payroll/runs/{$run->id}");
     }

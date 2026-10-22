@@ -11,6 +11,7 @@ use App\Domain\Payroll\Application\Exceptions\InvalidRunTransitionException;
 use App\Domain\Payroll\Application\Exceptions\NegativeNetPayException;
 use App\Domain\Payroll\Application\Exceptions\PeriodNotOpenException;
 use App\Domain\Payroll\Application\Exceptions\RunNotEditableException;
+use App\Domain\Payroll\Application\Exceptions\RunRecalculationRequiredException;
 use App\Domain\Payroll\Application\Exceptions\SelfApprovalNotAllowedException;
 use App\Domain\Payroll\Application\Exceptions\ZeroEffectCorrectionException;
 use App\Domain\Payroll\Events\PayrollRunApproved;
@@ -21,6 +22,7 @@ use App\Domain\Payroll\Infrastructure\EmployeeCompensationAssignment;
 use App\Domain\Payroll\Infrastructure\PayrollAdjustment;
 use App\Domain\Payroll\Infrastructure\PayrollPeriod;
 use App\Domain\Payroll\Infrastructure\PayrollRun;
+use App\Domain\Payroll\Infrastructure\PayrollRunCalculation;
 use App\Domain\Payroll\Infrastructure\PayrollRunHrxInput;
 use App\Domain\Payroll\Infrastructure\PayrollRunPosting;
 use App\Domain\Payroll\Infrastructure\PayrollRunResult;
@@ -30,7 +32,11 @@ use App\Domain\StaffAttendance\Application\Payroll\PayrollAbsenceEvidence;
 use App\Domain\StaffAttendance\Application\Payroll\PayrollAbsenceEvidenceReader;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Approval\ApprovalParticipants;
+use App\Support\Approval\ApprovalProvenance;
+use App\Support\Approval\MakerCheckerPolicy;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -64,7 +70,26 @@ class PayrollRunService
         private readonly CompensationService $compensation,
         private readonly PayrollCalculationEngine $engine,
         private readonly PayrollAbsenceEvidenceReader $hrx,
+        private readonly MakerCheckerPolicy $makerChecker,
     ) {}
+
+    public const WORKFLOW = 'payroll_runs';
+
+    /**
+     * ORG.8B (ADR 0076 §60): every User who materially prepared the run, from
+     * durable rows only -- its creator, every recorded calculator (append-only
+     * `payroll_run_calculations`) and every override/delta author
+     * (append-only `payroll_adjustments`). Monotonic: nothing removes a
+     * participant. Bounded to the one run (two indexed queries).
+     */
+    public function participants(PayrollRun $run): ApprovalParticipants
+    {
+        return $this->context->withSchool($run->school, fn (): ApprovalParticipants => new ApprovalParticipants(self::WORKFLOW, $run->id, array_filter([
+            'creator' => [$run->prepared_by_user_id],
+            'calculator' => PayrollRunCalculation::query()->where('school_id', $run->school_id)->where('payroll_run_id', $run->id)->distinct()->pluck('calculated_by_user_id')->all(),
+            'adjustment_author' => PayrollAdjustment::query()->where('school_id', $run->school_id)->where('payroll_run_id', $run->id)->distinct()->pluck('actor_user_id')->all(),
+        ])));
+    }
 
     public function createRun(PayrollPeriod $period, User $actor): PayrollRun
     {
@@ -181,6 +206,7 @@ class PayrollRunService
 
         $this->context->withSchool($school, function () use ($school, $run, $employmentRecord, $lines, $reason, $actor) {
             DB::transaction(function () use ($school, $run, $employmentRecord, $lines, $reason, $actor) {
+                $this->lockEditableRun($run);
                 foreach ($lines as $line) {
                     PayrollAdjustment::query()->create([
                         'school_id' => $school->id,
@@ -233,6 +259,7 @@ class PayrollRunService
 
         $this->context->withSchool($school, function () use ($school, $run, $employmentRecord, $componentAmounts, $reason, $actor) {
             DB::transaction(function () use ($school, $run, $employmentRecord, $componentAmounts, $reason, $actor) {
+                $this->lockEditableRun($run);
                 foreach ($componentAmounts as $componentId => $amount) {
                     PayrollAdjustment::query()->create([
                         'school_id' => $school->id,
@@ -292,6 +319,19 @@ class PayrollRunService
                     DB::table('payroll_runs')->where('id', $run->id)->update(['status' => 'calculated']);
                     $transitioned = true;
                 }
+
+                // ORG.8B: the calculator is a participant of this run for good (append-only), and the
+                // adjustment count says whether these results include every recorded adjustment.
+                PayrollRunCalculation::query()->create([
+                    'school_id' => $school->id,
+                    'payroll_run_id' => $run->id,
+                    'calculated_by_user_id' => $actor->id,
+                    'ordinal' => 1 + PayrollRunCalculation::query()->where('school_id', $school->id)->where('payroll_run_id', $run->id)->count(),
+                    'adjustment_count' => PayrollAdjustment::query()->where('school_id', $school->id)->where('payroll_run_id', $run->id)->count(),
+                    // A recalculation of a calculated run that leaves an employment unresolved keeps the
+                    // status (no calculated -> draft), so completeness is recorded and checked at approval.
+                    'complete' => empty($unresolved) && ! empty($resolved),
+                ]);
 
                 $this->audit->school($school, 'payroll.run.calculated', actor: $actor, subject: $run, metadata: [
                     'resolvedCount' => count($resolved),
@@ -452,8 +492,15 @@ class PayrollRunService
      * independently. An approver may also post (Checkpoint 9.5) -- no
      * repository precedent requires further restriction, and no
      * emergency override exists.
+     *
+     * ORG.8B (ADR 0076 §60): the run row is now locked first (calculate()
+     * and every adjustment lock it too), and maker/checker covers every
+     * participant -- creator, calculators, adjustment authors -- through
+     * the shared `MakerCheckerPolicy` (`assertMayDecide()`), with stale
+     * results refused. The conditional UPDATE stays. `$mfa` is the fresh
+     * code the transport verified, recorded as approval provenance.
      */
-    public function approve(PayrollRun $run, User $approver): PayrollRun
+    public function approve(PayrollRun $run, User $approver, ?FreshMfaProof $mfa = null): PayrollRun
     {
         $school = $run->school;
 
@@ -461,12 +508,16 @@ class PayrollRunService
             throw new InvalidRunTransitionException($run->status, 'approved');
         }
 
-        if ($run->prepared_by_user_id === $approver->id) {
-            throw new SelfApprovalNotAllowedException($run->id);
-        }
+        return $this->context->withSchool($school, function () use ($school, $run, $approver, $mfa) {
+            return DB::transaction(function () use ($school, $run, $approver, $mfa) {
+                // ORG.8B: the run row is locked, so no calculation or adjustment (both lock it) can change
+                // the participants or the results between this decision and its commit.
+                $locked = PayrollRun::query()->whereKey($run->id)->lockForUpdate()->firstOrFail();
+                if ($locked->status !== 'calculated') {
+                    throw new ConcurrentRunApprovalConflictException($run->id);
+                }
+                $participants = $this->assertMayDecide($locked, $approver);
 
-        return $this->context->withSchool($school, function () use ($school, $run, $approver) {
-            return DB::transaction(function () use ($school, $run, $approver) {
                 $affected = PayrollRun::query()
                     ->where('id', $run->id)
                     ->where('status', 'calculated')
@@ -482,6 +533,7 @@ class PayrollRunService
 
                 $this->audit->school($school, 'payroll.run.approved', actor: $approver, subject: $run, metadata: [
                     'preparedByUserId' => $run->prepared_by_user_id,
+                    ...ApprovalProvenance::metadata($participants, ApprovalProvenance::APPROVED, $approver, 'school', $mfa),
                 ]);
 
                 event(new PayrollRunApproved($school->id, $run->id, $approver->id, $run->prepared_by_user_id));
@@ -489,6 +541,39 @@ class PayrollRunService
                 return $run->fresh();
             });
         });
+    }
+
+    /**
+     * ORG.8B (ADR 0076 §60), under the run lock: no participant approves
+     * (shared `MakerCheckerPolicy` over `participants()`, backed by
+     * `payroll_runs_participant_approval_guard`), and the results are the
+     * LATEST recorded calculation, complete (every employment resolved, at
+     * least one result) and of every recorded adjustment. The decider's current authority is
+     * `PayrollRunAdministrationService`'s, in the same transaction.
+     */
+    private function assertMayDecide(PayrollRun $run, User $approver): ApprovalParticipants
+    {
+        $participants = $this->participants($run);
+        if (! $this->makerChecker->permits($approver, $participants)) {
+            throw new SelfApprovalNotAllowedException($run->id);
+        }
+
+        $latest = PayrollRunCalculation::query()->where('school_id', $run->school_id)->where('payroll_run_id', $run->id)->orderByDesc('ordinal')->first();
+        $adjustments = PayrollAdjustment::query()->where('school_id', $run->school_id)->where('payroll_run_id', $run->id)->count();
+        if ($latest === null || ! $latest->complete || $latest->adjustment_count < $adjustments) {
+            throw new RunRecalculationRequiredException($run->id);
+        }
+
+        return $participants;
+    }
+
+    /** ORG.8B: adjustments serialize with calculate() and approve() on the run row; a decided run is not editable. */
+    private function lockEditableRun(PayrollRun $run): void
+    {
+        $locked = PayrollRun::query()->whereKey($run->id)->lockForUpdate()->firstOrFail();
+        if (! in_array($locked->status, ['draft', 'calculated'], true)) {
+            throw new RunNotEditableException($run->id, $locked->status);
+        }
     }
 
     private function resolveEmploymentRecord(PayrollRun $run, PayrollPeriod $period, EmploymentRecord $employmentRecord): ?CalculatedResult

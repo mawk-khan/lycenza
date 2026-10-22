@@ -87,6 +87,8 @@ final class TenantRetentionCatalog
             'payroll_statutory_calculation_results', 'payroll_statutory_run_postings', 'payroll_adjustments', 'payroll_lwf_annual_charges',
             // HRX.5 (ADR 0065 §26.12): the HRX evidence snapshot leaves with its result (FK cascade inside the same privileged expiry).
             'payroll_run_hrx_inputs',
+            // ORG.8B (ADR 0076 §60): who calculated a run (approval provenance) leaves with its run (FK cascade).
+            'payroll_run_calculations',
         ]],
         'payroll_calendar' => [self::TENANT_LIFETIME, 'E21.3F: monthly payroll period headers (dates and status; no personal data, no amount), School payroll configuration kept with the School', ['payroll_periods']],
         'finance_configuration' => [self::TENANT_LIFETIME, 'interprets the retained ledger', [

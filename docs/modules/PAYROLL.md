@@ -1016,3 +1016,15 @@ holding both `payroll.runs.prepare` and `.approve` can record overrides or
 deltas on, or recalculate, another preparer's run and then approve it.
 Recommended fix (ORG.8B): no prior participant decides. The approver's own
 pay and approve != post stay owner decision OD-8.4.
+
+## Approval participation (ORG.8B, 2026-10-22, ADR 0076 §60)
+
+Closes G-2. Nobody who created, calculated, recalculated, or recorded a
+manual override or correction delta on a payroll run can approve that run.
+Every calculation is now recorded in `payroll_run_calculations`, so a
+recalculation never hides an earlier calculator. A run whose adjustments
+changed after its last calculation must be recalculated before approval:
+the approve endpoint answers 409 `PAYROLL_RUN_RECALCULATION_REQUIRED`. A run
+calculated before this change also needs a fresh calculation. The database
+enforces the same rule on the recorded approver. The approver may still post
+the run; that is open owner decision OD-8.4.

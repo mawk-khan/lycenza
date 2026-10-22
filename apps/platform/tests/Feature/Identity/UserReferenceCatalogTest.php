@@ -53,13 +53,13 @@ class UserReferenceCatalogTest extends TestCase
         sort($catalog);
 
         $this->assertSame($this->live(), $catalog, 'a new, renamed or dropped foreign key to users must be classified in UserReferenceCatalog');
-        $this->assertCount(115, $catalog, 'E21.4: 87; HRX.1: +8 Leave actor references; HRX.1 correction: +1 (leave_year_start_changes); HRX.2: +4 (requests, decisions, closes, reconciliations); HRX.3: +2 (staff attendance recorder, corrector); HRX.5: +1 (HRX input capturer); OPF.4: +3 (Library fine policy publisher, fine assessor, voider); RES.2: +2 (StudentMark writer, mark revision writer); RES.3: +3 (marks locker, correction requester, decider); TCH-E: +2 (elective assignment creator, ender); UAT-C3: +1 (payment correction actor); UAT-C6: +1 (fee-run overlap decider)');
+        $this->assertCount(116, $catalog, 'E21.4: 87; HRX.1: +8 Leave actor references; HRX.1 correction: +1 (leave_year_start_changes); HRX.2: +4 (requests, decisions, closes, reconciliations); HRX.3: +2 (staff attendance recorder, corrector); HRX.5: +1 (HRX input capturer); OPF.4: +3 (Library fine policy publisher, fine assessor, voider); RES.2: +2 (StudentMark writer, mark revision writer); RES.3: +3 (marks locker, correction requester, decider); TCH-E: +2 (elective assignment creator, ender); UAT-C3: +1 (payment correction actor); UAT-C6: +1 (fee-run overlap decider); ORG.8B: +1 (payroll run calculator)');
         $this->assertSame([], UserReferenceCatalog::unclassified($this->live()));
 
         $counts = array_count_values(UserReferenceCatalog::treatments());
         $this->assertSame(6, $counts[UserReferenceCatalog::ACTIVE_PURPOSE_BLOCKER]);
         $this->assertSame(4, $counts[UserReferenceCatalog::DELETE_CHILD]);
-        $this->assertSame(105, $counts[UserReferenceCatalog::RETAIN_REFERENCE], 'OPF.4 adds three retained Library fine actor references; RES.2 two StudentMark writer references; RES.3 three lock/correction actors; TCH-E two elective assignment actors; UAT-C3 the payment correction actor; UAT-C6 the fee-run overlap decider');
+        $this->assertSame(106, $counts[UserReferenceCatalog::RETAIN_REFERENCE], 'OPF.4 adds three retained Library fine actor references; RES.2 two StudentMark writer references; RES.3 three lock/correction actors; TCH-E two elective assignment actors; UAT-C3 the payment correction actor; UAT-C6 the fee-run overlap decider; ORG.8B the payroll run calculator');
         // Audit, D6 authority and Finance/Payroll operator references are kept, never nulled.
         foreach (['school_audit_events.actor_user_id', 'platform_audit_events.actor_user_id', 'membership_role_assignments.assigned_by_user_id',
             'platform_role_assignments.granted_by_user_id', 'school_elevations.actor_user_id', 'payroll_runs.posted_by_user_id', 'payments.recorded_by_user_id',

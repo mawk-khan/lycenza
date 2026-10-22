@@ -62,6 +62,8 @@ class DatabaseRoleVerifier
         'payroll_adjustments', 'payroll_run_postings', 'payroll_statutory_run_postings',
         // E21-RH.1: posted LWF annual charges leave only through retention_expire_payroll_employee_evidence.
         'payroll_lwf_annual_charges',
+        // ORG.8B (ADR 0076 §60): who calculated a run is approval provenance; it leaves only with its run.
+        'payroll_run_calculations',
         // E21.4 (F1): a User is never hard-deleted; a raw delete would null audit/grant actors and cascade memberships.
         'users',
         // OPF.1 (ADR 0067 §12): Transport's fee-selection provenance is insert-only Finance evidence.
@@ -89,6 +91,8 @@ class DatabaseRoleVerifier
     public const NO_RUNTIME_UPDATE = [
         // E21-RH.1: posted LWF annual charges are insert-once evidence.
         'payroll_lwf_annual_charges',
+        // ORG.8B (ADR 0076 §60): a recorded calculation never changes.
+        'payroll_run_calculations',
         // OPF.1 (ADR 0067 §12): Transport's fee-selection provenance is insert-only.
         'transport_fee_selections',
         // OPF.2 (ADR 0067 §28): so is Hostel's.
