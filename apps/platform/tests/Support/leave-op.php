@@ -1,5 +1,7 @@
 <?php
 
+use App\Domain\HR\Application\ReportingHierarchyService;
+use App\Domain\HR\Infrastructure\EmployeeAssignment;
 use App\Domain\Leave\Application\Exceptions\LeaveException;
 use App\Domain\Leave\Application\LeaveLedgerService;
 use App\Domain\Leave\Application\LeaveRequestService;
@@ -28,6 +30,7 @@ use Tests\Support\Concurrency\HeldTransaction;
 //   php leave-op.php submit-own <schoolId> <typeId> <from> <to> <actorId>          (HRX.4 self-service)
 //   php leave-op.php withdraw-own|cancel-own <schoolId> <requestId> <actorId>     (HRX.4 self-service)
 //   php leave-op.php manager-approve <schoolId> <requestId> <actorId>             (HRX.2 manager path)
+//   php leave-op.php set-manager <schoolId> <subordinateAssignmentId> <managerAssignmentId|none> <actorId>   (ORG.8D: HR moves the line)
 
 require __DIR__.'/../../vendor/autoload.php';
 
@@ -57,6 +60,11 @@ try {
         'withdraw-own' => 'ok:'.$requests->withdrawOwn($school, $args[1], 'plans_changed', User::query()->findOrFail($args[2]))->status,
         'cancel-own' => 'ok:'.$requests->cancelOwn($school, $args[1], 'plans_changed', User::query()->findOrFail($args[2]))->status,
         'manager-approve' => 'ok:'.$requests->approveAsManager($school, $args[1], User::query()->findOrFail($args[2]))->status,
+        'set-manager' => 'ok:'.($app->make(ReportingHierarchyService::class)->setManager(
+            EmployeeAssignment::query()->findOrFail($args[1]),
+            $args[2] === 'none' ? null : EmployeeAssignment::query()->findOrFail($args[2]),
+            User::query()->findOrFail($args[3]),
+        )->manager_assignment_id ?? 'none'),
         'close' => 'ok:'.$app->make(LeaveYearCloseService::class)->execute($school, $args[1], User::query()->findOrFail($args[2]))->item_count,
         'monday' => (function () use ($app, $school, $args) {
             $app->make(StaffCalendarService::class)->setWeeklyPattern($school, [1 => $args[1], 2 => 'full', 3 => 'full', 4 => 'full', 5 => 'full', 6 => 'off', 7 => 'off'], User::query()->findOrFail($args[2]));

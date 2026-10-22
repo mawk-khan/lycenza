@@ -88,6 +88,58 @@ class LeaveRequestConcurrencyTest extends TestCase
         return (string) DB::connection('pgsql_admin')->table('leave_requests')->where('id', $requestId)->value('status');
     }
 
+    /** ORG.8D: a requester (with an assignment) reporting to `manager`, `other` as the next manager, and an HR administrator to move the line. */
+    private function teamWorld(): array
+    {
+        $w = $this->world();
+        $requester = $this->staffMember($w['school']);
+        app(LeavePolicyAssignmentService::class)->assign($w['school'], $requester['employment']->id, $w['policy']->id, '2026-04-01', null, $w['admin']);
+        $this->allocate($w, 24, null, $requester['employment']);
+        $w['employment'] = $requester['employment'];
+        $w['line'] = $requester['assignment'];
+        $w['manager'] = $this->staffMember($w['school'], ['hr.leave.approve']);
+        $w['other'] = $this->staffMember($w['school'], ['hr.leave.approve']);
+        $w['hr'] = $this->createUserWithCapabilities($w['school'], ['hr.employees.assignments.manage']);
+        $this->reportTo($w['line'], $w['manager']['assignment']);
+
+        return $w;
+    }
+
+    #[Test]
+    public function an_approval_waiting_on_a_reporting_change_is_decided_by_the_committed_line(): void
+    {
+        $w = $this->teamWorld();
+        $id = $this->submitLeave($w, '2026-10-12', '2026-10-12')->id;
+
+        // HR moves the line (held); the former manager's approval waits on the line, then finds it moved.
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->script('set-manager', $w['school']->id, $w['line']->id, $w['other']['assignment']->id, $w['hr']->id),
+            $this->script('manager-approve', $w['school']->id, $id, $w['manager']['user']->id),
+        );
+
+        $this->assertSame('ok:'.$w['other']['assignment']->id, $holder);
+        $this->assertSame('rejected:ModelNotFoundException', $contender, 'the former manager: the private 404');
+        $this->assertSame('submitted', $this->requestStatus($id));
+        $this->assertSame(0, $this->rows($w, 'leave_decisions'));
+    }
+
+    #[Test]
+    public function a_reporting_change_waiting_on_an_approval_lands_after_it(): void
+    {
+        $w = $this->teamWorld();
+        $id = $this->submitLeave($w, '2026-10-12', '2026-10-12')->id;
+
+        // The current manager approves (held, line share-locked); the change waits, then commits.
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->script('manager-approve', $w['school']->id, $id, $w['manager']['user']->id),
+            $this->script('set-manager', $w['school']->id, $w['line']->id, $w['other']['assignment']->id, $w['hr']->id),
+        );
+
+        $this->assertSame(['ok:approved', 'ok:'.$w['other']['assignment']->id], [$holder, $contender]);
+        $this->assertSame(1, $this->rows($w, 'leave_decisions'));
+        $this->assertSame($w['manager']['user']->id, DB::connection('pgsql_admin')->table('leave_decisions')->where('leave_request_id', $id)->value('decided_by_user_id'), 'history keeps who actually decided');
+    }
+
     #[Test]
     public function two_overlapping_submissions_cannot_both_succeed(): void
     {

@@ -69,7 +69,7 @@ class LeaveRequestApiTest extends TestCase
         $this->submit($w, $viewer, '2026-10-12')->assertForbidden();
         $this->submit($w, $approver, '2026-10-12')->assertForbidden();
         $this->submit($w, $configurer, '2026-10-12')->assertForbidden();
-        $id = $this->submit($w, $w['admin'], '2026-10-12')->assertCreated()->assertJsonPath('data.status', 'submitted')->assertJsonPath('data.submittedUnits', 2)->json('data.id');
+        $id = $this->submit($w, $this->leaveClerk($w['school']), '2026-10-12')->assertCreated()->assertJsonPath('data.status', 'submitted')->assertJsonPath('data.submittedUnits', 2)->json('data.id');
 
         $this->as($viewer)->getJson($this->url($w, '/requests'))->assertOk()->assertHeader('Cache-Control', 'no-store, private')->assertJsonPath('data.0.id', $id);
         $this->as($approver)->getJson($this->url($w, '/requests'))->assertForbidden();
@@ -80,6 +80,8 @@ class LeaveRequestApiTest extends TestCase
         $this->as($approver)->postJson($this->url($w, "/approvals/{$id}/approve"))->assertNotFound();
         $this->as($viewer)->getJson($this->url($w, "/year-closes/preview?leave_year_id={$w['year']->id}"))->assertForbidden();
 
+        // ORG.8D: whoever entered the request never decides it, through the API either.
+        $this->as($this->leaveClerk($w['school']))->postJson($this->url($w, "/requests/{$id}/approve"))->assertForbidden()->assertJsonPath('error.code', 'LEAVE_PARTICIPANT_DECISION');
         $this->as($w['admin'])->postJson($this->url($w, "/requests/{$id}/approve"))->assertOk()->assertJsonPath('data.status', 'approved');
         $this->as($viewer)->getJson($this->url($w, "/requests/{$id}"))->assertOk()
             ->assertJsonPath('data.days.0.units', 2)->assertJsonPath('data.decisions.0.path', 'administrative')->assertJsonPath('data.ledgerEntries.0.kind', 'consumption');
@@ -89,7 +91,7 @@ class LeaveRequestApiTest extends TestCase
     public function ledger_affecting_commands_replay_on_retry_and_refuse_a_reused_key_with_a_different_payload(): void
     {
         $w = $this->world();
-        $id = $this->submit($w, $w['admin'], '2026-10-12')->json('data.id');
+        $id = $this->submit($w, $this->leaveClerk($w['school']), '2026-10-12')->json('data.id');
         $key = (string) Str::uuid();
 
         $this->as($w['admin'], $key)->postJson($this->url($w, "/requests/{$id}/approve"))->assertOk();
@@ -114,13 +116,13 @@ class LeaveRequestApiTest extends TestCase
         $this->as($w['admin'])->postJson($this->url($w, '/requests'), ['employment_record_id' => $w['employment']->id, 'leave_type_id' => $w['type']->id, 'starts_on' => '2026-10-12', 'start_portion' => 'full', 'ends_on' => '2026-10-12', 'end_portion' => 'full', 'reason_code' => 'medical'])->assertStatus(422);
         $this->as($w['admin'])->postJson($this->url($w, '/requests'), ['employment_record_id' => $w['employment']->id, 'leave_type_id' => $w['type']->id, 'starts_on' => '2026-10-12', 'start_portion' => 'first_half', 'ends_on' => '2026-10-13', 'end_portion' => 'full'])
             ->assertStatus(422)->assertJsonPath('error.code', 'LEAVE_REQUEST_SHAPE_INVALID');
-        $id = $this->submit($w, $w['admin'], '2026-10-12')->json('data.id');
+        $id = $this->submit($w, $this->leaveClerk($w['school']), '2026-10-12')->json('data.id');
         $this->as($w['admin'])->postJson($this->url($w, "/requests/{$id}/reject"), ['reason_code' => 'too busy'])->assertStatus(422);
 
         $foreign = $this->submit($other, $other['admin'], '2026-10-12')->json('data.id');
         $this->as($w['admin'])->getJson($this->url($w, "/requests/{$foreign}"))->assertNotFound();
         $this->as($w['admin'])->postJson($this->url($w, "/requests/{$foreign}/approve"))->assertNotFound();
-        $this->submit($w, $w['admin'], '2026-10-13', $other['employment']->id)->assertNotFound();
+        $this->submit($w, $this->leaveClerk($w['school']), '2026-10-13', $other['employment']->id)->assertNotFound();
         $this->as($w['admin'])->getJson($this->url($w, '/requests/not-a-uuid'))->assertNotFound();
     }
 
@@ -134,8 +136,8 @@ class LeaveRequestApiTest extends TestCase
         app(LeavePolicyAssignmentService::class)->assign($w['school'], $report['employment']->id, $w['policy']->id, '2026-04-01', null, $w['admin']);
         $this->allocate($w, 24, null, $report['employment']);
 
-        $mine = $this->submit($w, $w['admin'], '2026-10-12', $report['employment']->id)->json('data.id');
-        $notMine = $this->submit($w, $w['admin'], '2026-10-12')->json('data.id');
+        $mine = $this->submit($w, $this->leaveClerk($w['school']), '2026-10-12', $report['employment']->id)->json('data.id');
+        $notMine = $this->submit($w, $this->leaveClerk($w['school']), '2026-10-12')->json('data.id');
 
         $this->as($manager['user'])->getJson($this->url($w, '/approvals'))->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $mine);
         $this->as($manager['user'])->getJson($this->url($w, "/approvals/{$notMine}"))->assertNotFound();

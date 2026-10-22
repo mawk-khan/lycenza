@@ -1600,6 +1600,26 @@ UAT plan: `docs/product/APPROVAL-AUTHORITY-UAT.md`.
   `finance.charges.manage`; `finance.ledger.reverse` + `finance.payments.view`)
   no longer correct a Payment from any route.
 
+## Leave decision authority (ORG.8D, ADR 0076 §62 — built 2026-10-22)
+
+- **Two paths, single level.** A reporting manager decides through the
+  current reporting line (`hr.leave.approve` granted for the whole School,
+  AND the manager of the request's employment today, read at decision
+  time). HR decides any request through `hr.leave.manage`, the fallback
+  when there is no manager or the manager is absent.
+- **Never the requester, never the submitter.** The Employee who requests,
+  and whoever entered the request (on the Employee's behalf or as the
+  Employee), never approve or reject it. Enforced in the service and in the
+  database.
+- **Authority is re-read at decision time,** not from the 60-second cache.
+- **No one administers their own leave** through the administrative path
+  (allocations, adjustments, policies, entering, withdrawing or cancelling
+  their own requests). Their own leave goes through self-service.
+- **Campus does not decide Leave authority.** A Campus-scoped grant (for
+  example principal at one Campus) gives no Leave decision authority today.
+  Whether it should is an open owner decision (OD-8.8).
+- **No fresh MFA** for Leave decisions (unchanged).
+
 ## What is NOT yet implemented
 
 Contracted by ADR 0076 (ORG.1, 2026-10-17) and not built:

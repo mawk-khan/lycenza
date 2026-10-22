@@ -9106,3 +9106,168 @@ LOW accepted:
 
 Rollback + re-apply IDENTICAL (344 schema lines removed; `verify-database`
 failed=0) on a clean test database, after the fixes.
+
+## 62. ORG.8D — HR Leave approval authority (as built, 2026-10-22)
+
+Owner authorization: ORG.8D (contract reconciliation + narrow Leave
+implementation). Baseline `origin/main` = `fa13aef5` (§61). OD-8.8 is NOT
+decided (62.3); only contract already frozen in ADR 0065, ADR 0076 §42.7 and
+the ORG.8 v1 contract (§56) was implemented.
+
+**62.1 What G-4 and OD-8.8 are (repository truth).**
+- **G-4** (LOW, §56.25, matrix §3): `hr.leave.manage` holders could
+  allocate, adjust, assign or end a leave policy, submit on behalf, and
+  administratively withdraw or cancel for their OWN employment; only
+  approve/reject were self-guarded (Employee identity, service + CHECK).
+  Recommended handling: extend the HR self-administration rule (rule 95) to
+  own leave writes.
+- **OD-8.8** (§42.7, §53.16, §56.25, §56.29): two open owner decisions --
+  whether a Campus-only principal (a Campus-scoped grant of
+  `hr.leave.approve`) still approves through the reporting relationship, and
+  how cross-Campus managers are treated.
+
+**62.2 The v1 contract (frozen, ADR 0065 §6, §11, §23.5–§23.7).**
+- Request: self-service `hr.leave.self` (ActingEmployee owns the
+  employment) or administrative `hr.leave.manage` on the Employee's behalf.
+- Decide (approve/reject), single level, either path final:
+  - **manager path**: `hr.leave.approve` AND the acting Employee is the
+    requester's CURRENT manager -- `ReportingLine::holdManagerOf` (FOR
+    SHARE, at decision time): the requester's assignment open today (the
+    primary one when several) → its `manager_assignment_id`, also open
+    today → that assignment's Employee. Never snapshotted; a former manager
+    gets the private 404 at once. Structural only (no department, title,
+    role name or Campus).
+  - **administrative path**: `hr.leave.manage`, any request of the School
+    (no manager, manager absent or separated, escalation). It is the
+    fallback; it is not an "override" of a manager decision (a decided
+    request is final; an approved one can only be cancelled).
+- Withdraw (submitted) and cancel (approved; self-service only before it
+  starts, administrative at any time) are not decisions.
+- No multi-level, delegation, proxy or acting manager (out of v1). One
+  manager per request (the primary assignment's line).
+- No fresh MFA on Leave decisions (`NONE`, §56.25); unchanged.
+
+**62.3 OD-8.8: STOP (owner decision), current behaviour pinned.** The
+capability check on both paths is the whole-School Gate, and the fresh
+re-read (`holdsInSchoolNow`) counts whole-School grants only, so today:
+- a whole-School `hr.leave.approve` holder who is the current reporting
+  manager decides a report on ANY Campus (no Campus logic) -- YES;
+- a Campus-scoped grant (e.g. `principal` at Campus A) confers no Leave
+  decision authority on either path, even to the report's reporting manager
+  -- NO (fail closed);
+- principal status itself never grants anything; the seeded `principal`
+  role holds `hr.leave.approve`, which only counts when granted whole-School.
+Options for the owner (none built):
+- **A — keep (recommended for v1):** Leave decisions need whole-School
+  grants; Campus-scoped principals route Leave to a whole-School manager or
+  HR.
+- **B — relationship-sufficient:** a Campus grant of `hr.leave.approve`
+  counts on the manager path only, whenever the actor is the current
+  reporting manager, whatever the report's Campus.
+- **C — intersection (§42.7):** a Campus grant counts on the manager path
+  only when the actor is the reporting manager AND the report's current
+  operational Campus set (`CurrentEmployeeAssignments`) lies in the grant's
+  Campuses; a Campus-granted cross-Campus manager is refused.
+B and C need a relationship-scoped capability path in `CapabilityResolver`
+(not the whole-School Gate) and a `CampusScopeCatalogue` decision.
+
+**62.4 Built.**
+- **Shared foundation for decisions.** `LeaveRequestService::decide()`, the
+  single decision core behind approve / approveAsManager / reject /
+  rejectAsManager, runs under the request lock: ownership (manager line or
+  private 404) → Employee self-decision → state → `assertMayDecide`:
+  `ApprovalDecisionAuthority::requireCurrent` (the path's whole-School
+  capability, Leave module, operational School, read fresh) → shared
+  `MakerCheckerPolicy` over `participants()` → domain validity (balance,
+  years, calendar, attendance conflict) → decision → status → audit with
+  `ApprovalProvenance` (scope `reporting_line` or `school`).
+- **Participants.** The submitter (`submitted_by_user_id`): the Employee
+  through self-service, or the administrator who entered it. A submitter
+  never approves or rejects (`LEAVE_PARTICIPANT_DECISION`); withdrawal stays
+  theirs. The requester Employee stays excluded by identity (persona-proof:
+  the decider's Employee is derived from the User link, service and CHECK).
+- **G-4 closed.** The administrative path refuses the actor's OWN
+  employment (`LEAVE_SELF_ADMINISTRATION`, via
+  `HrSelfAdministrationGuard::ownsEmployment`): explicit allocation,
+  adjustment, policy assign and end, submit on behalf, administrative
+  withdraw and cancel. Self-service (submit, withdraw, cancel before start)
+  stays theirs. The annual allocation run and the year close are
+  policy-driven and exempt (recorded).
+- **Administrative withdraw/cancel** also re-read authority fresh.
+- **Database.** `leave_decisions_participant_guard` (BEFORE INSERT, after
+  the Employee-deriving guard): an approved/rejected decision recorded for
+  the request's submitter is refused. With `leave_decisions_no_self_decision`
+  (Employees derived by trigger) and the existing one-decision indexes,
+  conditional transitions, append-only decisions and evidence trigger.
+  The manager relationship is application-enforced (the database has no
+  actor context; a raw runtime insert with path `manager` and a forged
+  decider is the recorded-actor trust boundary of §59.6).
+- **Registry.** `leave_requests` is now `shared`
+  (`special_rules`; decisions `decide`; no step-up).
+
+**62.5 Races (two processes, contender observed blocked).** Existing:
+approve/approve (consume once), last-units, approve vs reject vs withdraw,
+calendar, cancel/cancel, year close. New: a reporting change (held) vs the
+former manager's approval → private 404, nothing decided; the current
+manager's approval (held) vs a reporting change → the change waits and lands
+after; history keeps who decided. Lock order unchanged (§23.10): School →
+request → HR rows (ActingEmployee, reporting line FOR SHARE) → membership
+and grants FOR SHARE (fresh authority) → Leave locks. `setManager` takes
+Employees FOR SHARE, then the two assignments FOR UPDATE in id order, and
+never a request or membership lock. One pre-existing (HRX.2) edge remains
+(62.7): a decision share-locks the subordinate's assignment and then its
+manager's, so an inverted or repeated `setManager` on the same pair whose
+manager row sorts first can deadlock with it; PostgreSQL aborts one side
+(fail safe, no integrity effect).
+
+**62.6 Assignment changes.** Authority follows the requester's primary open
+assignment's line only; a second (non-primary) assignment on another Campus
+changes nothing (tested); only `ReportingHierarchyService::setManager`
+(audited, self-administration-guarded) moves it.
+
+**62.7 Security review** (independent): no HIGH, no MEDIUM.
+- **LOW fixed:** the registry names the decision core `decide()`; a test now
+  pins that every public method that approves or rejects goes through it,
+  that only `recordDecision()` writes a decision, and that
+  `trg_leave_decisions_participant_guard` is installed.
+- **LOW recorded (pre-existing, HRX.2):** the `setManager` / decision
+  lock-order edge in 62.5 -- a deadlock abort (a 500 for one side), never a
+  wrong decision. A fix (no-op early return and cycle check before locking
+  in `ReportingHierarchyService`, or id-ordered locking in `ReportingLine`)
+  is an HR follow-up.
+- **LOW accepted:** G-4 is application-enforced (`ownsEmployment`, an
+  unlocked read); the ledger and policy-assignment actor columns are
+  caller-recorded, so a database rule would sit on the recorded-actor trust
+  boundary (§59.6). Self-made allocations or policies from before ORG.8D are
+  not re-checked (development data only).
+- **LOW accepted:** fresh authority is re-read for decisions and for
+  administrative withdraw/cancel; other administrative Leave writes keep the
+  Gate floor (a revocation clears the cache; only an in-flight race is
+  exposed).
+
+**62.8 Unchanged.** Capabilities and role templates (approve: school_admin,
+principal; manage: school_admin, principal, hr_officer; self:
+staff_self_service, school_admin); `CampusScopeCatalogue`; MFA (NONE);
+Payroll/ORG.8B, Payment corrections/ORG.8C, fee concessions/R1, Finance
+roles; HRX-L1..L4 and other HR legal gates (development/UAT only, no
+production effect); M-1 (Finance only).
+
+**62.9 DDEV smoke (real HTTP through nginx/php-fpm, `ddev demo-reset --build`
+on the candidate tree; logins with the demo personas; local demo data
+only).**
+- **Deferred ORG.8C smoke (closes §61's evidence gap), 12/12:**
+  - the accountant opens a Payment (200) and requests a reversal without a
+    code (pending);
+  - the old `/corrections` URL is 404;
+  - the queue lists the request with no Student fields; principal 403;
+  - the accountant cannot approve (403) and withdraws (withdrawn);
+  - the School Admin rejects (nothing recorded); approving without a code
+    is refused; approving with a fresh code records the reversal;
+  - with the School Admin's account linked to a Guardian of the second
+    Payment's Student, approve and reject are both refused with the generic
+    "must be decided by someone else" text, and nothing is recorded.
+- **ORG.8D, 4/4** (Leave configured for the demo teacher through the real
+  services first; the demo seeds no Leave types): the HR officer opens
+  Leave requests (200) and enters leave for the teacher; the HR officer
+  cannot approve it (`LEAVE_PARTICIPANT_DECISION`); the School Admin
+  approves it on the administrative path.

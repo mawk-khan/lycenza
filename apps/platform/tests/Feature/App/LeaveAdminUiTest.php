@@ -81,7 +81,9 @@ class LeaveAdminUiTest extends TestCase
         $this->actor($w)->post('/app/leave/requests', ['employment_record_id' => $w['employment']->id, 'leave_type_id' => $w['type']->id, 'starts_on' => '2026-10-13', 'start_portion' => 'full', 'ends_on' => '2026-10-13', 'end_portion' => 'full'])
             ->assertSessionHasErrors('leave');
 
-        $this->actor($w)->post("/app/leave/requests/{$id}/approve")->assertSessionHasNoErrors();
+        // ORG.8D: the administrator who entered it never decides it; a second administrator does.
+        $this->actor($w)->post("/app/leave/requests/{$id}/approve")->assertSessionHasErrors('leave');
+        $this->actor($w, $this->leaveAdmin($w['school']))->post("/app/leave/requests/{$id}/approve")->assertSessionHasNoErrors();
         $this->actor($w)->get("/app/leave/requests/{$id}")->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->component('App/Leave/RequestShow')
             ->has('request.days', 2)->where('request.status', 'approved'));
         $this->actor($w)->post("/app/leave/requests/{$id}/cancel", ['reason_code' => 'not a code'])->assertSessionHasErrors('reason_code');

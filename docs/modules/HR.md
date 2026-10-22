@@ -4159,3 +4159,19 @@ are Campus-adopted through `App\Domain\HR\Application\HrEmployeeAccess`.
   links, import, employment create/update/end/separate and rehire.
 - **Unchanged:** self-service and the self-administration guard, leave
   approval by reporting line, Leave, Staff Attendance and Payroll.
+
+## Leave approval authority (ORG.8D, 2026-10-22, ADR 0076 §62)
+
+- A leave decision (approve or reject) re-reads the decider's authority at
+  that moment: a revoked grant or a disabled Leave module refuses it even if
+  a cached answer says otherwise.
+- Whoever entered a request (an administrator on the Employee's behalf, or
+  the Employee) never decides it; another manager or administrator does.
+- Leave administrators never administer their own leave through the
+  administration pages (allocations, adjustments, policies, entering,
+  withdrawing or cancelling their own requests); they use My Leave like any
+  Employee.
+- The reporting manager is the manager on the Employee's primary current
+  assignment, read when the decision is made. Campus never decides Leave
+  authority; whether a Campus-only principal should approve through the
+  reporting line is an open owner decision (OD-8.8).

@@ -126,7 +126,8 @@ class LeaveApprovalAuthorizationTest extends TestCase
 
         $this->assertSame('LEAVE_SELF_DECISION', $this->code(fn () => $requests->approve($t['school'], $own->id, $self['user'])), 'the administrative path is no override');
         $this->assertSame('LEAVE_SELF_DECISION', $this->code(fn () => $requests->reject($t['school'], $own->id, 'other', $self['user'])));
-        $this->assertSame('withdrawn', $requests->withdraw($t['school'], $own->id, 'plans_changed', $self['user'])->status, 'withdrawing one\'s own request is allowed');
+        // ORG.8D (G-4): their own request is withdrawn through self-service, never the administrative path.
+        $this->assertSame('LEAVE_SELF_ADMINISTRATION', $this->code(fn () => $requests->withdraw($t['school'], $own->id, 'plans_changed', $self['user'])));
 
         // Raw SQL with the runtime role: the database derives both Employees and refuses.
         $raw = $this->submitLeave($t, '2026-10-13', '2026-10-13', 'full', null, $self['employment']);

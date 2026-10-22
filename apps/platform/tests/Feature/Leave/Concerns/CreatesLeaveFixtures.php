@@ -96,9 +96,18 @@ trait CreatesLeaveFixtures
         app(LeaveLedgerService::class)->allocate($w['school'], ($employment ?? $w['employment'])->id, $w['type']->id, ($year ?? $w['year'])->id, $units, $w['admin']);
     }
 
+    /** @var array<string, User> School id => the on-behalf submitter (ORG.8D: a submitter never decides) */
+    private array $leaveClerks = [];
+
+    /** A second leave administrator who submits on the Employee's behalf, so `$w['admin']` may decide (ORG.8D). */
+    protected function leaveClerk(School $school): User
+    {
+        return $this->leaveClerks[$school->id] ??= $this->leaveAdmin($school);
+    }
+
     protected function submitLeave(array $w, string $from, string $to, string $startPortion = 'full', ?string $endPortion = null, ?EmploymentRecord $employment = null, ?LeaveType $type = null): LeaveRequest
     {
-        return app(LeaveRequestService::class)->submitOnBehalf($w['school'], ($employment ?? $w['employment'])->id, ($type ?? $w['type'])->id, $from, $startPortion, $to, $endPortion ?? $startPortion, null, $w['admin']);
+        return app(LeaveRequestService::class)->submitOnBehalf($w['school'], ($employment ?? $w['employment'])->id, ($type ?? $w['type'])->id, $from, $startPortion, $to, $endPortion ?? $startPortion, null, $this->leaveClerk($w['school']));
     }
 
     /** @return array{school: School, admin: User, type: LeaveType, policy: LeavePolicy, year: LeaveYear, employment: EmploymentRecord} */

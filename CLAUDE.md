@@ -1542,3 +1542,14 @@ once several modules copy it.
          approval under the Payment lock refuses a stale one.
        - Terms are immutable and decisions final in the database
          (`payment_correction_requests_*` guards).
+     - **Leave (ORG.8D, §62)** decides on the shared foundation through
+       `LeaveRequestService::decide()`.
+       - Manager path: whole-School `hr.leave.approve` AND the current
+         reporting line (`ReportingLine::holdManagerOf`, FOR SHARE, at
+         decision time). Administrative path: `hr.leave.manage`.
+       - Neither the requester Employee nor the submitter decides (service +
+         `leave_decisions_no_self_decision` +
+         `leave_decisions_participant_guard`).
+       - The administrative path never writes the actor's own leave (G-4).
+       - Never let a Campus grant decide Leave until owner decision OD-8.8
+         says so.

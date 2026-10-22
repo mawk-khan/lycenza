@@ -29,6 +29,16 @@ class LeaveException extends RuntimeException
         return new self(403, $code, $message);
     }
 
+    /**
+     * ORG.8D (ADR 0076 §62, closes G-4): an administrative leave write on the
+     * actor's OWN employment -- another leave administrator makes it (the
+     * HR self-administration rule, rule 95, applied to leave).
+     */
+    public static function selfAdministration(): self
+    {
+        return new self(403, 'LEAVE_SELF_ADMINISTRATION', 'You cannot administer your own leave. Another leave administrator must do this.');
+    }
+
     public static function invalid(string $code, string $message): self
     {
         return new self(422, $code, $message);

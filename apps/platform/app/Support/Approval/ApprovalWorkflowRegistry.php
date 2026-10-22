@@ -110,18 +110,20 @@ final class ApprovalWorkflowRegistry
             'tables' => ['leave_requests', 'leave_decisions'],
             'request' => ['hr.leave.self', 'hr.leave.manage'],
             'decide' => ['hr.leave.approve', 'hr.leave.manage'],
+            // The submitter (User) is the shared participant; the requester Employee is excluded by identity (DB CHECK).
             'participants' => ['leave_requests.employee_id', 'leave_requests.submitted_by_user_id', 'leave_decisions.requester_employee_id'],
             'decider' => 'leave_decisions.decided_by_user_id',
             'otherDecisionColumns' => ['leave_decisions.decider_employee_id'],
             'dbBackstop' => 'leave_decisions_no_self_decision',
-            'makerChecker' => 'domain',
+            'makerChecker' => 'shared',
             'service' => 'App\Domain\Leave\Application\LeaveRequestService',
-            'decisions' => ['approve', 'approveAsManager', 'reject', 'rejectAsManager'],
+            // approve/approveAsManager/reject/rejectAsManager all decide through decide().
+            'decisions' => ['decide'],
             'execution' => 'immediate',
             'drift' => 'immutable_terms',
             'freshMfa' => [],
             'compatibility' => 'special_rules',
-            'note' => 'Participation is by Employee identity (trigger-derived), the manager path needs the current reporting line, and the self path is only withdraw/cancel.',
+            'note' => 'ORG.8D (§62). Two paths: manager = whole-School hr.leave.approve AND the current reporting line (ReportingLine::holdManagerOf, FOR SHARE, read at decision time); administrative = hr.leave.manage (any request, fallback). Authority read fresh; the submitter and the requester Employee never decide (service + leave_decisions_no_self_decision + leave_decisions_participant_guard). No Campus logic; Campus-granted managers and cross-Campus managers are owner decision OD-8.8 (not built). No step-up (NONE). Administrative writes never touch the actor\'s own employment (G-4).',
         ],
         'payroll_runs' => [
             'domain' => 'Payroll',

@@ -6,6 +6,7 @@ use App\Domain\HR\Application\ActingEmployee;
 use App\Domain\HR\Application\ActingEmployeeResolver;
 use App\Domain\HR\Application\EmploymentCoverage;
 use App\Domain\HR\Application\Exceptions\ActingEmployeeUnavailableException;
+use App\Domain\HR\Application\HrSelfAdministrationGuard;
 use App\Domain\HR\Application\ReportingLine;
 use App\Domain\Leave\Application\Exceptions\LeaveException;
 use App\Domain\Leave\Events\LeaveRequestApproved;
@@ -19,6 +20,10 @@ use App\Domain\Leave\Infrastructure\LeaveType;
 use App\Domain\Leave\Infrastructure\LeaveYear;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Approval\ApprovalDecisionAuthority;
+use App\Support\Approval\ApprovalParticipants;
+use App\Support\Approval\ApprovalProvenance;
+use App\Support\Approval\MakerCheckerPolicy;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\SchoolOperationalGuard;
@@ -52,6 +57,20 @@ use Illuminate\Support\Facades\DB;
  * - **Nobody** approves or rejects their own request, on any path
  *   (service check plus database CHECK).
  *
+ * ORG.8D (ADR 0076 §62): approve and reject (both paths) decide on the
+ * shared approval foundation under the request lock -- the decider's CURRENT
+ * authority (`ApprovalDecisionAuthority`: the path's whole-School capability,
+ * Leave module and operational School read fresh), then the shared
+ * `MakerCheckerPolicy` over `participants()` (whoever submitted the request,
+ * on the Employee's behalf or as the Employee), next to the Employee-identity
+ * rule above. `leave_decisions_participant_guard` repeats the submitter rule
+ * in the database. The administrative path never acts on the actor's OWN
+ * employment (submit on behalf, withdraw, cancel; G-4) -- their own leave
+ * goes through self-service. Campus never decides authority here: the
+ * manager path is the whole-School `hr.leave.approve` grant AND the current
+ * reporting line (whether a Campus grant should count is owner decision
+ * OD-8.8, not built).
+ *
  * Approval is one transaction:
  * - the chargeable-day evidence is computed from the staff working calendar
  *   held under its shared lock;
@@ -83,6 +102,8 @@ class LeaveRequestService
 {
     use AuthorizesCapability;
 
+    public const string WORKFLOW = 'leave_requests';
+
     public function __construct(
         private readonly TenantContext $context,
         private readonly AuditRecorder $audit,
@@ -94,7 +115,21 @@ class LeaveRequestService
         private readonly LeaveLedgerService $ledger,
         private readonly LeaveYearCloseService $closes,
         private readonly AttendancePresenceConflictReader $presence,
+        private readonly HrSelfAdministrationGuard $selfAdministration,
+        private readonly ApprovalDecisionAuthority $authority,
+        private readonly MakerCheckerPolicy $makerChecker,
     ) {}
+
+    /**
+     * The request's User participants: whoever submitted it (the Employee
+     * through self-service, or an administrator on their behalf). The
+     * requester Employee is excluded separately by identity (service +
+     * `leave_decisions_no_self_decision`).
+     */
+    public static function participants(LeaveRequest $request): ApprovalParticipants
+    {
+        return new ApprovalParticipants(self::WORKFLOW, $request->id, ['submitter' => [$request->submitted_by_user_id]]);
+    }
 
     /** An administrator submits on an employee's behalf. HRX.4's self-service reuses submit(). */
     public function submitOnBehalf(School $school, string $employmentRecordId, string $leaveTypeId, string $startsOn, string $startPortion, string $endsOn, string $endPortion, ?string $reasonCode, User $actor): LeaveRequest
@@ -189,6 +224,10 @@ class LeaveRequestService
             if ($request->status !== 'approved') {
                 throw LeaveException::conflict('LEAVE_REQUEST_NOT_APPROVED', 'Only an approved request can be cancelled.');
             }
+            if ($path === 'administrative') {
+                $this->authority->requireCurrent($actor, LeaveCapabilities::MANAGE, $school);
+                $this->refuseOwnEmployment($school, $actor, $request->employment_record_id);
+            }
             if ($owner !== null && $owner->asOf >= $request->starts_on->toDateString()) {
                 throw LeaveException::conflict('LEAVE_SELF_CANCEL_STARTED', 'Leave that has started can only be cancelled by an administrator.');
             }
@@ -242,6 +281,9 @@ class LeaveRequestService
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $employmentRecordId, $leaveTypeId, $shape, $reasonCode, $actor) {
             $this->guard->requireOperational($school->id);
             $source = $employmentRecordId === null ? 'self_service' : 'administrative';
+            if ($employmentRecordId !== null) {
+                $this->refuseOwnEmployment($school, $actor, $employmentRecordId);
+            }
             // Self-service: the employment is the acting Employee's own, held FOR SHARE (HR rows), never client-supplied.
             $employmentRecordId ??= $this->holdActing($school, $actor)->employmentRecordId;
             $type = LeaveType::query()->where('school_id', $school->id)->sharedLock()->findOrFail($leaveTypeId);
@@ -315,6 +357,12 @@ class LeaveRequestService
             if ($request->status !== 'submitted') {
                 throw LeaveException::conflict('LEAVE_REQUEST_NOT_SUBMITTED', 'This request has already been decided.');
             }
+            if (in_array($decision, ['approved', 'rejected'], true)) {
+                $this->assertMayDecide($school, $request, $path, $actor);
+            } elseif ($path === 'administrative') {
+                $this->authority->requireCurrent($actor, LeaveCapabilities::MANAGE, $school);
+                $this->refuseOwnEmployment($school, $actor, $request->employment_record_id);
+            }
 
             $days = $decision === 'approved' ? $this->charge($school, $request, $actor) : [];
             $this->recordDecision($school, $request, $decision, $path, $reasonCode, $actor);
@@ -324,7 +372,9 @@ class LeaveRequestService
                 'path' => $path, 'reasonCode' => $reasonCode,
                 'days' => $decision === 'approved' ? $days : null,
                 'units' => $decision === 'approved' ? array_sum(array_column($days, 'units')) : null,
-            ], fn ($v) => $v !== null));
+            ], fn ($v) => $v !== null) + (in_array($decision, ['approved', 'rejected'], true)
+                ? ApprovalProvenance::metadata(self::participants($request), $decision, $actor, $path === 'manager' ? 'reporting_line' : 'school')
+                : []));
             if ($decision === 'approved') {
                 $type = LeaveType::query()->where('school_id', $school->id)->findOrFail($request->leave_type_id);
                 event(new LeaveRequestApproved($school->id, $request->id, $request->employment_record_id, $request->employee_id, $request->leave_type_id, $type->is_paid, $type->tracks_balance, $days));
@@ -415,6 +465,28 @@ class LeaveRequestService
         return $days;
     }
 
+    /**
+     * ORG.8D: under the request lock, after ownership and state -- the
+     * decider's CURRENT authority for the path (never the 60 s cache), then
+     * the shared maker/checker over the request's participants.
+     */
+    private function assertMayDecide(School $school, LeaveRequest $request, string $path, User $actor): void
+    {
+        $this->authority->requireCurrent($actor, $path === 'manager' ? LeaveCapabilities::APPROVE : LeaveCapabilities::MANAGE, $school);
+
+        if (! $this->makerChecker->permits($actor, self::participants($request))) {
+            throw LeaveException::forbidden('LEAVE_PARTICIPANT_DECISION', 'You submitted this request; another person must decide it.');
+        }
+    }
+
+    /** G-4: the administrative path never acts on the actor's own employment (self-service does). */
+    private function refuseOwnEmployment(School $school, User $actor, string $employmentRecordId): void
+    {
+        if ($this->selfAdministration->ownsEmployment($actor, $school, $employmentRecordId)) {
+            throw LeaveException::selfAdministration();
+        }
+    }
+
     /** The manager path's ownership: the acting Employee IS the requester's current manager, or the private 404. */
     private function requireManager(School $school, LeaveRequest $request, User $actor): string
     {
@@ -473,6 +545,9 @@ class LeaveRequestService
         } catch (QueryException $e) {
             if (str_contains($e->getMessage(), 'leave_decisions_no_self_decision')) {
                 throw LeaveException::forbidden('LEAVE_SELF_DECISION', 'Nobody approves or rejects their own leave request.');
+            }
+            if (str_contains($e->getMessage(), 'leave_decisions_participant_guard')) {
+                throw LeaveException::forbidden('LEAVE_PARTICIPANT_DECISION', 'You submitted this request; another person must decide it.');
             }
             throw $e;
         }

@@ -3,6 +3,7 @@
 namespace App\Domain\Leave\Application;
 
 use App\Domain\HR\Application\EmploymentCoverage;
+use App\Domain\HR\Application\HrSelfAdministrationGuard;
 use App\Domain\Leave\Application\Exceptions\LeaveException;
 use App\Domain\Leave\Infrastructure\LeaveAllocationRun;
 use App\Domain\Leave\Infrastructure\LeaveLedgerEntry;
@@ -52,6 +53,7 @@ class LeaveLedgerService
         private readonly AuditRecorder $audit,
         private readonly SchoolOperationalGuard $guard,
         private readonly EmploymentCoverage $coverage,
+        private readonly HrSelfAdministrationGuard $selfAdministration,
     ) {}
 
     public function allocate(School $school, string $employmentRecordId, string $leaveTypeId, string $leaveYearId, int $units, User $actor): LeaveLedgerEntry
@@ -64,6 +66,7 @@ class LeaveLedgerService
             $this->requireUnits($type, $units);
             // The employment first: another School's id is the same 404 as an unknown one.
             $this->requireEmployment($school, $employmentRecordId, $year);
+            $this->refuseOwnEmployment($school, $actor, $employmentRecordId);
             $assignment = $this->assignmentFor($school, $employmentRecordId, $type, $year)
                 ?? throw LeaveException::conflict('LEAVE_NO_POLICY_ASSIGNMENT', 'The employment has no policy of this leave type in that leave year.');
             $this->lockKey($school, $employmentRecordId, $type->id, $year->id);
@@ -169,6 +172,7 @@ class LeaveLedgerService
             [$type, $year] = $this->typeAndYear($school, $leaveTypeId, $leaveYearId);
             $this->requireUnits($type, $units);
             $this->requireEmployment($school, $employmentRecordId, $year);
+            $this->refuseOwnEmployment($school, $actor, $employmentRecordId);
             $this->lockKey($school, $employmentRecordId, $type->id, $year->id);
             if (! $this->hasAllocation($school, $employmentRecordId, $type->id, $year->id)) {
                 throw LeaveException::conflict('LEAVE_NOT_ALLOCATED', 'An adjustment changes an existing allocation; allocate first.');
@@ -185,6 +189,19 @@ class LeaveLedgerService
 
             return $entry;
         }));
+    }
+
+    /**
+     * ORG.8D (ADR 0076 §62, G-4): an explicit grant or adjustment is never
+     * made to the actor's own balance. The annual run is policy-driven (the
+     * policy's allocation for every eligible employment, the actor's own
+     * included) and stays outside this rule.
+     */
+    private function refuseOwnEmployment(School $school, User $actor, string $employmentRecordId): void
+    {
+        if ($this->selfAdministration->ownsEmployment($actor, $school, $employmentRecordId)) {
+            throw LeaveException::selfAdministration();
+        }
     }
 
     /**

@@ -130,3 +130,23 @@ Related-party limit (M-1, unchanged): a staff parent whose account was
 never linked to their Guardian record is not detected; the audit trail is
 the detective control. Production stays blocked by E30/E31 and the general
 gates.
+
+## Leave (ORG.8D, ADR 0076 §62 — built 2026-10-22)
+
+Personas: Requester R = a staff member with `staff_self_service`; Manager M =
+R's reporting manager holding a whole-School `hr.leave.approve`; HR clerk C
+and HR approver H = two `hr.leave.manage` holders; a Campus principal P =
+`principal` granted at one Campus only and set as R's reporting manager.
+
+| # | Actor | Action | Expected |
+|---|---|---|---|
+| LV1 | R | My Leave → request leave | submitted |
+| LV2 | M | Leave approvals → approve | approved once; decided as `manager` |
+| LV3 | C | enter leave for R, then approve it | refused: another person must decide it |
+| LV4 | H | approve or reject C's entry | allowed; decided as `administrative` |
+| LV5 | HR changes R's manager while a request is pending | former manager opens it | not found; the new manager decides |
+| LV6 | C or H, for their OWN employment | allocate, adjust, assign or end a policy, enter, withdraw or cancel administratively | refused; their own leave goes through My Leave |
+| LV7 | M on another Campus than R (whole-School grant) | approve | allowed (no Campus rule) |
+| LV8 | P | approve R's leave | refused (Campus grants decide no Leave; OD-8.8 open) |
+| LV9 | M after their grant is revoked | approve | refused at once (fresh authority) |
+| LV10 | anyone | approve one's own leave on any path | refused |

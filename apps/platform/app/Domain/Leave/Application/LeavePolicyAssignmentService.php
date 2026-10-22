@@ -3,6 +3,7 @@
 namespace App\Domain\Leave\Application;
 
 use App\Domain\HR\Application\EmploymentCoverage;
+use App\Domain\HR\Application\HrSelfAdministrationGuard;
 use App\Domain\Leave\Application\Exceptions\LeaveException;
 use App\Domain\Leave\Infrastructure\LeavePolicy;
 use App\Domain\Leave\Infrastructure\LeavePolicyAssignment;
@@ -36,6 +37,7 @@ class LeavePolicyAssignmentService
         private readonly AuditRecorder $audit,
         private readonly SchoolOperationalGuard $guard,
         private readonly EmploymentCoverage $coverage,
+        private readonly HrSelfAdministrationGuard $selfAdministration,
     ) {}
 
     public function assign(School $school, string $employmentRecordId, string $policyId, string $from, ?string $to, User $actor): LeavePolicyAssignment
@@ -52,6 +54,7 @@ class LeavePolicyAssignmentService
                 throw LeaveException::conflict('LEAVE_POLICY_RETIRED', 'A retired policy cannot be assigned.');
             }
             $this->requireEmployment($school, $employmentRecordId, $from, $to);
+            $this->refuseOwnEmployment($school, $actor, $employmentRecordId);
 
             try {
                 $assignment = LeavePolicyAssignment::query()->create([
@@ -79,6 +82,7 @@ class LeavePolicyAssignmentService
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $assignmentId, $to, $actor) {
             $this->guard->requireOperational($school->id);
             $assignment = LeavePolicyAssignment::query()->where('school_id', $school->id)->lockForUpdate()->findOrFail($assignmentId);
+            $this->refuseOwnEmployment($school, $actor, $assignment->employment_record_id);
             if ($assignment->ended_at !== null) {
                 throw LeaveException::conflict('LEAVE_ASSIGNMENT_ENDED', 'This assignment has already ended.');
             }
@@ -92,6 +96,14 @@ class LeavePolicyAssignmentService
 
             return $assignment;
         }));
+    }
+
+    /** ORG.8D (ADR 0076 §62, G-4): nobody sets or ends the leave policy of their own employment. */
+    private function refuseOwnEmployment(School $school, User $actor, string $employmentRecordId): void
+    {
+        if ($this->selfAdministration->ownsEmployment($actor, $school, $employmentRecordId)) {
+            throw LeaveException::selfAdministration();
+        }
     }
 
     private function requireEmployment(School $school, string $employmentRecordId, string $from, ?string $to): void

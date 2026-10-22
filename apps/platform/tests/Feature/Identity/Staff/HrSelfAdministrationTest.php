@@ -168,8 +168,11 @@ class HrSelfAdministrationTest extends TestCase
         app(LeavePolicyAssignmentService::class)->assign($school, $mine->id, $policy->id, '2026-04-01', null, $peer);
         app(LeaveLedgerService::class)->allocate($school, $mine->id, $type->id, $year->id, 24, $peer);
 
+        // ORG.8D (G-4): the officer cannot even enter their own leave administratively.
+        $this->assertSame('LEAVE_SELF_ADMINISTRATION', $this->refusal(fn () => app(LeaveRequestService::class)
+            ->submitOnBehalf($school, $mine->id, $type->id, '2026-10-12', 'full', '2026-10-12', 'full', null, $officer)));
         $leave = app(TenantContext::class)->withSchool($school, fn () => app(LeaveRequestService::class)
-            ->submitOnBehalf($school, $mine->id, $type->id, '2026-10-12', 'full', '2026-10-12', 'full', null, $officer));
+            ->submitOnBehalf($school, $mine->id, $type->id, '2026-10-12', 'full', '2026-10-12', 'full', null, $peer));
         $this->assertSame('LEAVE_SELF_DECISION', $this->refusal(fn () => app(LeaveRequestService::class)->approve($school, $leave->id, $officer)));
 
         // The pre-SR.4 bypass: drop the link so neither the service nor the
@@ -179,8 +182,10 @@ class HrSelfAdministrationTest extends TestCase
         $this->assertSame($officer->id, $this->reload($school, $employee)->user_id);
         $this->assertSame('LEAVE_SELF_DECISION', $this->refusal(fn () => app(LeaveRequestService::class)->approve($school, $leave->id, $officer)));
 
-        // A peer decides it.
-        $this->assertSame('allowed', $this->refusal(fn () => app(LeaveRequestService::class)->approve($school, $leave->id, $peer)));
+        // A peer who did not submit it decides it (ORG.8D: the submitter never decides).
+        $this->assertSame('LEAVE_PARTICIPANT_DECISION', $this->refusal(fn () => app(LeaveRequestService::class)->approve($school, $leave->id, $peer)));
+        $third = $this->createUserWithCapabilities($school, ['hr.leave.view', 'hr.leave.manage']);
+        $this->assertSame('allowed', $this->refusal(fn () => app(LeaveRequestService::class)->approve($school, $leave->id, $third)));
     }
 
     #[Test]
