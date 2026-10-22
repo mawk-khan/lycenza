@@ -145,7 +145,7 @@ class StudentCampusTransferConcurrencyTest extends TestCase
     private function other(string $name): array
     {
         return match ($name) {
-            'inactivate' => $this->op('student-inactivate', $this->student->id),
+            'inactivate' => $this->op('student-inactivate', $this->student->id, $this->admin->id),
             'year' => $this->op('year-activate', $this->next->id),
             'campus' => $this->op('campus-inactivate', $this->admin->id, $this->b->id),
             'transfer' => $this->transfer(),

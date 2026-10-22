@@ -801,3 +801,14 @@ no staff service is bypassed or reused.
   - "Already submitted" is judged per in-scope class.
 - **Roster:** the Section's own (`StudentEnrollmentRosterReadService`).
   There is no Student Campus resolution and no Student search.
+
+## Correction reasons (ORG.8E, 2026-10-22, ADR 0076 §63)
+
+- Changing a recorded status is a correction and names one of three reasons:
+  entered in error, information received after the register, administrative
+  review. They say why the record changed, never why the Student was absent
+  (the module still stores no reason, note or health detail about an
+  absence). Each correction is kept in `attendance_record_corrections`, and
+  the database refuses a status change without it.
+- First-time entry needs no reason. Who may correct is unchanged. No
+  approval and no time limit.

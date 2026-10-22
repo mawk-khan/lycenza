@@ -139,7 +139,7 @@ class ChargeCampusAttributionTest extends TestCase
 
         // G0 F-1: cancelling the B placement no longer re-homes the B debt to A.
         $this->at('2026-09-15');
-        $this->inSchool($w['school'], fn () => app(StudentEnrollmentService::class)->cancel($onB->fresh(), '2026-09-15'));
+        $this->cancelEnrollment($this->inSchool($w['school'], fn () => $onB->fresh()), '2026-09-15');
         $this->assertSame($b->id, $this->campusOf($w, $chargeB->id), 'never falls back to A after the B placement is cancelled');
         $this->assertSame($a->id, $this->campusOf($w, $chargeA->id));
 

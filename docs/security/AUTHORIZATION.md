@@ -1620,6 +1620,26 @@ UAT plan: `docs/product/APPROVAL-AUTHORITY-UAT.md`.
   Whether it should is an open owner decision (OD-8.8).
 - **No fresh MFA** for Leave decisions (unchanged).
 
+## Direct high-impact actions (ORG.8E, ADR 0076 §63 — built 2026-10-22)
+
+- **No approval workflow** for Student status, ending a placement,
+  attendance corrections or Library fine voids. Each stays a direct action
+  under its existing capability.
+- **Student status and ending a placement** (withdraw, cancel) need a
+  listed reason, a fresh authentication code, the actor's current
+  whole-School authority (re-read at that moment) and, on the web, an
+  explicit confirmation. A Campus-only grant never reaches them. Completing
+  a placement stays ordinary.
+- **Attendance corrections** need a listed reason that says why the record
+  changed (never why a Student was absent). First-time entry needs none.
+  Who may correct is unchanged (administrators by Campus, teachers by
+  ownership).
+- **Library fine voids** need a listed reason, the note, a fresh code and the
+  current `library.fines.void` authority. A waiver is a Fees concession,
+  never a void.
+- **OD-8.8 closed:** Leave decisions need whole-School authority (ORG.8D
+  Option A).
+
 ## What is NOT yet implemented
 
 Contracted by ADR 0076 (ORG.1, 2026-10-17) and not built:

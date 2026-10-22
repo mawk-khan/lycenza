@@ -2889,3 +2889,14 @@ operational Student of a Campus.
   `StudentPurposeLookup` are never write-time proof.
 - **Consumers:** the Hostel, Canteen, Library circulation (ORG.7D-5) and
   Transport rider Campus write guards.
+
+## High-impact lifecycle assurance (ORG.8E, 2026-10-22, ADR 0076 §63)
+
+- Withdrawing or cancelling a placement needs a listed reason (withdraw:
+  left school, transferred out, guardian request; cancel: did not join,
+  duplicate placement, entered in error), a fresh authentication code, the
+  actor's current whole-School `enrollments.manage` and, on the web, an
+  explicit confirmation. Each is recorded in `student_lifecycle_events`, and
+  the database refuses a withdrawn or cancelled placement without it.
+- Completing a placement (and closed-year completion and rollover) is
+  unchanged.

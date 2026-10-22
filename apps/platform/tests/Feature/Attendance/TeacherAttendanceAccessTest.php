@@ -65,7 +65,7 @@ class TeacherAttendanceAccessTest extends TestCase
         $record = $this->inSchool($w['school'], fn () => $session->records()->orderBy('id')->firstOrFail());
 
         return $this->as($user)->postJson($this->base($w)."/attendance-records/{$record->id}/correct", [
-            'expected_status' => $record->status, 'new_status' => $record->status === 'present' ? 'absent' : 'present',
+            'expected_status' => $record->status, 'new_status' => $record->status === 'present' ? 'absent' : 'present', 'reason_code' => 'entered_in_error',
         ]);
     }
 
@@ -296,7 +296,7 @@ class TeacherAttendanceAccessTest extends TestCase
         }
 
         $this->correctFirst($w, $user, $theirs)->assertNotFound();
-        $this->as($user)->postJson($this->base($w).'/attendance-records/'.Str::uuid7().'/correct', ['expected_status' => 'present', 'new_status' => 'absent'])->assertNotFound();
+        $this->as($user)->postJson($this->base($w).'/attendance-records/'.Str::uuid7().'/correct', ['expected_status' => 'present', 'new_status' => 'absent', 'reason_code' => 'entered_in_error'])->assertNotFound();
     }
 
     #[Test]
@@ -312,7 +312,7 @@ class TeacherAttendanceAccessTest extends TestCase
         $unknown = (string) Str::uuid7();
 
         $unowned = $body($this->correctFirst($w, $user, $theirs));
-        $this->assertSame($body($this->as($user)->postJson($this->base($w)."/attendance-records/{$unknown}/correct", ['expected_status' => 'present', 'new_status' => 'absent'])), $unowned);
+        $this->assertSame($body($this->as($user)->postJson($this->base($w)."/attendance-records/{$unknown}/correct", ['expected_status' => 'present', 'new_status' => 'absent', 'reason_code' => 'entered_in_error'])), $unowned);
         $this->assertStringNotContainsString($theirs->id, (string) json_encode($unowned));
 
         $this->assertSame(

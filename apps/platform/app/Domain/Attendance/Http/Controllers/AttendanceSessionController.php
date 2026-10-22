@@ -7,6 +7,7 @@ use App\Domain\Attendance\Application\AttendanceAdministrationAccess;
 use App\Domain\Attendance\Application\AttendanceCorrectionService;
 use App\Domain\Attendance\Application\AttendanceSubmissionService;
 use App\Domain\Attendance\Infrastructure\AttendanceRecord;
+use App\Domain\Attendance\Infrastructure\AttendanceRecordCorrection;
 use App\Domain\Attendance\Infrastructure\AttendanceSession;
 use App\Domain\Students\Application\SectionRosterMember;
 use App\Domain\Students\Application\StudentEnrollmentRosterReadService;
@@ -181,6 +182,8 @@ class AttendanceSessionController extends Controller
         $validated = $request->validate([
             'expected_status' => ['required', Rule::in(AttendanceRecord::STATUSES)],
             'new_status' => ['required', Rule::in(AttendanceRecord::STATUSES)],
+            // ORG.8E (ADR 0076 §63): a correction names its closed reason.
+            'reason_code' => ['required', 'string', Rule::in(AttendanceRecordCorrection::REASONS)],
         ]);
 
         $record = $service->correct(
@@ -188,6 +191,7 @@ class AttendanceSessionController extends Controller
             $attendanceRecord,
             $validated['expected_status'],
             $validated['new_status'],
+            $validated['reason_code'],
             $request->user(),
             $access->writeGuard($scope),
         );

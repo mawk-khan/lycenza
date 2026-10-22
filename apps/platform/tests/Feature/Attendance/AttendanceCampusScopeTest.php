@@ -176,9 +176,9 @@ class AttendanceCampusScopeTest extends TestCase
             'timetable_entry_id' => $b['entry']->id, 'attendance_date' => self::NEXT_MONDAY,
             'records' => $this->registerPayload([$b['enrollment']->id => 'present']),
         ])->assertNotFound();
-        $this->api($user)->postJson($this->url("/attendance-records/{$b['record']->id}/correct"), ['expected_status' => 'absent', 'new_status' => 'present'])->assertNotFound();
+        $this->api($user)->postJson($this->url("/attendance-records/{$b['record']->id}/correct"), ['expected_status' => 'absent', 'new_status' => 'present', 'reason_code' => 'entered_in_error'])->assertNotFound();
         $this->signIn($user);
-        $this->post("/app/attendance/records/{$b['record']->id}/correct", ['expected_status' => 'absent', 'new_status' => 'present'])->assertNotFound();
+        $this->post("/app/attendance/records/{$b['record']->id}/correct", ['expected_status' => 'absent', 'new_status' => 'present', 'reason_code' => 'entered_in_error'])->assertNotFound();
         $this->post('/app/attendance', ['timetable_entry_id' => $b['entry']->id, 'attendance_date' => self::NEXT_MONDAY, 'records' => $this->registerPayload([$b['enrollment']->id => 'present'])])->assertNotFound();
         $this->assertSame([$before, 'absent'], [$this->sessionCount(), $this->recordStatus('b')]);
 
@@ -187,7 +187,7 @@ class AttendanceCampusScopeTest extends TestCase
             'timetable_entry_id' => $this->at['a']['entry']->id, 'attendance_date' => self::NEXT_MONDAY,
             'records' => $this->registerPayload([$this->at['a']['enrollment']->id => 'present']),
         ])->assertCreated();
-        $this->api($user)->postJson($this->url('/attendance-records/'.$this->at['a']['record']->id.'/correct'), ['expected_status' => 'absent', 'new_status' => 'late'])->assertOk();
+        $this->api($user)->postJson($this->url('/attendance-records/'.$this->at['a']['record']->id.'/correct'), ['expected_status' => 'absent', 'new_status' => 'late', 'reason_code' => 'entered_in_error'])->assertOk();
         $this->assertSame('late', $this->recordStatus('a'));
     }
 
@@ -212,8 +212,8 @@ class AttendanceCampusScopeTest extends TestCase
         $south = $this->principal([$this->b->id]);
         $this->assertSame($this->sessions('a'), $this->apiSessionIds($north));
         $this->assertSame($this->sessions('b'), $this->apiSessionIds($south));
-        $this->api($south)->postJson($this->url('/attendance-records/'.$this->at['a']['record']->id.'/correct'), ['expected_status' => 'absent', 'new_status' => 'present'])->assertNotFound();
-        $this->api($north)->postJson($this->url('/attendance-records/'.$this->at['a']['record']->id.'/correct'), ['expected_status' => 'absent', 'new_status' => 'present'])->assertOk();
+        $this->api($south)->postJson($this->url('/attendance-records/'.$this->at['a']['record']->id.'/correct'), ['expected_status' => 'absent', 'new_status' => 'present', 'reason_code' => 'entered_in_error'])->assertNotFound();
+        $this->api($north)->postJson($this->url('/attendance-records/'.$this->at['a']['record']->id.'/correct'), ['expected_status' => 'absent', 'new_status' => 'present', 'reason_code' => 'entered_in_error'])->assertOk();
     }
 
     #[Test]

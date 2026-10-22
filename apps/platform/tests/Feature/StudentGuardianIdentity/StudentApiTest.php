@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -23,6 +24,7 @@ use Tests\TestCase;
 class StudentApiTest extends TestCase
 {
     use CreatesTenancyFixtures;
+    use ProvidesSensitiveActionMfa;
 
     private function token(User $user): string
     {
@@ -358,7 +360,7 @@ class StudentApiTest extends TestCase
 
         $response = $this->asUser($user)
             ->withHeader('Idempotency-Key', 'status-student-001')
-            ->postJson("/api/v1/schools/{$school->id}/students/{$student->id}/status", ['status' => 'inactive']);
+            ->postJson("/api/v1/schools/{$school->id}/students/{$student->id}/status", ['status' => 'inactive', 'reason_code' => 'left_school', 'mfa_code' => $this->freshMfaCode($user)]);
 
         $response->assertOk();
         $this->assertSame('inactive', $response->json('data.status'));

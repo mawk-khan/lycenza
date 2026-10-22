@@ -23,9 +23,9 @@ use Illuminate\Support\Facades\DB;
  *   register header (Section, offering, teacher, period), not a Student
  *   record. D7 does not govern it: A1 does, once it is empty
  *   (AttendanceSessionRetentionService, E21.3D).
- * - Corrections overwrite `status`; their prior values live only in the
- *   audit ledger, which expires on its own D1 clock. Nothing is copied
- *   into new audit events.
+ * - Corrections overwrite `status`; since ORG.8E each one also has an
+ *   `attendance_record_corrections` row (reason, from/to), which cascades
+ *   with its record. Nothing is copied into new audit events.
  * - Locking, the exit recheck and per-Student transactions come from
  *   StudentRetentionEligibility::purgeExitedBefore(). A row another table
  *   still references is never cascaded away (`dependency_blocked`).
@@ -60,7 +60,8 @@ final class AttendanceRetentionService
             $dryRun,
             fn (Builder $students) => $students->whereExists(fn (Builder $q) => $q->selectRaw('1')->from('attendance_records as r')
                 ->join('student_enrollments as e', 'e.id', '=', 'r.student_enrollment_id')->whereColumn('e.student_id', 'students.id')),
-            fn (string $studentId): array => array_filter([$this->references->first('attendance_records', $school->id, $records($studentId)->pluck('id')->all())]),
+            // ORG.8E: correction evidence cascades with its record.
+            fn (string $studentId): array => array_filter([$this->references->first('attendance_records', $school->id, $records($studentId)->pluck('id')->all(), ['attendance_record_corrections'])]),
             fn (string $studentId): ?array => $records($studentId)->delete() > 0 ? [] : null,
             $only,
         );

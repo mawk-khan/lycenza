@@ -45,12 +45,15 @@ use App\Domain\Library\Infrastructure\LibraryLoan;
 use App\Domain\Library\Infrastructure\LibraryTitle;
 use App\Domain\LMS\Infrastructure\Assignment;
 use App\Domain\LMS\Infrastructure\LearningContent;
+use App\Domain\Students\Application\StudentEnrollmentService;
+use App\Domain\Students\Application\StudentService;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverMapping;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverSubjectMapping;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
+use App\Domain\Students\Infrastructure\StudentLifecycleEvent;
 use App\Domain\Students\Infrastructure\StudentSubjectEnrollment;
 use App\Domain\Transport\Infrastructure\TransportRoute;
 use App\Domain\Transport\Infrastructure\TransportRouteAssignment;
@@ -66,9 +69,11 @@ use App\Models\Role;
 use App\Models\School;
 use App\Models\SchoolMembership;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\LocalCatalogueFixtures;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -463,6 +468,69 @@ trait CreatesTenancyFixtures
                 'section_id' => $section->id,
             ], $attributes)),
         );
+    }
+
+    // --- ORG.8E (ADR 0076 §63): high-impact Student lifecycle fixtures ----
+    // Through the real services, with a whole-School holder and a fresh-MFA
+    // proof (as the transport would mint one), for tests that only need the
+    // resulting state. Tests of the assurance itself call the services.
+
+    /** @var array<string, User> School id => the fixture lifecycle administrator */
+    private array $lifecycleAdmins = [];
+
+    protected function lifecycleAdmin(School $school): User
+    {
+        return $this->lifecycleAdmins[$school->id] ??= $this->createUserWithCapabilities($school, ['students.manage', 'enrollments.manage']);
+    }
+
+    /** A `school_admin` system-role member (no fixture role: safe for committed race fixtures). */
+    protected function schoolAdminFor(School $school): User
+    {
+        $user = $this->createUser();
+        $this->assignSchoolRole($this->createMembership($user, $school), 'school_admin');
+
+        return $user;
+    }
+
+    protected function withdrawEnrollment(StudentEnrollment $enrollment, string $endedOn, ?User $actor = null, string $reason = 'left_school'): StudentEnrollment
+    {
+        $actor ??= $this->lifecycleAdmin($enrollment->school);
+
+        return app(StudentEnrollmentService::class)->withdraw($enrollment, $endedOn, $reason, $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()));
+    }
+
+    protected function cancelEnrollment(StudentEnrollment $enrollment, string $endedOn, ?User $actor = null, string $reason = 'entered_in_error'): StudentEnrollment
+    {
+        $actor ??= $this->lifecycleAdmin($enrollment->school);
+
+        return app(StudentEnrollmentService::class)->cancel($enrollment, $endedOn, $reason, $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()));
+    }
+
+    /**
+     * A raw end-of-placement fixture (status, and any other columns) WITH the
+     * lifecycle event the database requires (ORG.8E), for tests whose subject
+     * is not the lifecycle action itself.
+     *
+     * @param  array<string, mixed>  $columns
+     */
+    protected function forceEnrollmentStatus(StudentEnrollment $enrollment, string $status, array $columns = []): void
+    {
+        $actor = $this->lifecycleAdmin($enrollment->school);
+        app(TenantContext::class)->withSchool($enrollment->school, function () use ($enrollment, $status, $columns, $actor) {
+            StudentLifecycleEvent::query()->create([
+                'school_id' => $enrollment->school_id, 'student_id' => $enrollment->student_id, 'student_enrollment_id' => $enrollment->id,
+                'action' => $status === 'withdrawn' ? 'enrollment_withdrawn' : 'enrollment_cancelled',
+                'reason_code' => $status === 'withdrawn' ? 'left_school' : 'entered_in_error', 'acted_by_user_id' => $actor->id,
+            ]);
+            StudentEnrollment::query()->whereKey($enrollment->id)->update(['status' => $status] + $columns);
+        });
+    }
+
+    protected function changeStudentStatus(Student $student, string $status, ?User $actor = null): Student
+    {
+        $actor ??= $this->lifecycleAdmin($student->school);
+
+        return app(StudentService::class)->changeStatus($student, $status, $status === 'inactive' ? 'left_school' : 'returned_to_school', $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()));
     }
 
     // --- Phase 1C.1: Student Subject Enrollment fixtures ------------------

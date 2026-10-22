@@ -189,7 +189,15 @@ class RetentionDeleteBoundaryTest extends TestCase
         $runtime = fn (array $values) => $this->refusal('pgsql', $school, fn () => DB::table('student_enrollments')->where('id', $enrollment->id)->update($values));
 
         $this->assertStringContainsString('ends only with a terminal status', $runtime(['ends_on' => '1991-01-01']));
-        $this->assertSame('', $runtime(['status' => 'withdrawn', 'ends_on' => '1991-01-01']));
+        // ORG.8E: a withdrawal also needs its lifecycle event, in the same transaction.
+        $actorId = $this->lifecycleAdmin($school)->id;
+        $this->assertSame('', $this->refusal('pgsql', $school, function () use ($school, $student, $enrollment, $actorId): void {
+            DB::table('student_lifecycle_events')->insert([
+                'id' => (string) Str::uuid7(), 'school_id' => $school->id, 'student_id' => $student->id, 'student_enrollment_id' => $enrollment->id,
+                'action' => 'enrollment_withdrawn', 'reason_code' => 'left_school', 'acted_by_user_id' => $actorId,
+            ]);
+            DB::table('student_enrollments')->where('id', $enrollment->id)->update(['status' => 'withdrawn', 'ends_on' => '1991-01-01']);
+        }));
         $this->assertStringContainsString('keeps its end and status', $runtime(['ends_on' => '1990-07-01']));
         $this->assertStringContainsString('keeps its end and status', $runtime(['status' => 'active', 'ends_on' => null]));
 

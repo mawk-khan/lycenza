@@ -10,6 +10,7 @@ use App\Domain\Fees\Infrastructure\Charge;
 use App\Domain\Library\Application\Exceptions\InvalidLibraryFinePolicyException;
 use App\Domain\Library\Application\Exceptions\LibraryFineAlreadyVoidedException;
 use App\Domain\Library\Application\Exceptions\LibraryFineNotVoidableException;
+use App\Domain\Library\Application\Exceptions\LibraryFineVoidReasonException;
 use App\Domain\Library\Application\Exceptions\LoanAlreadyReturnedException;
 use App\Domain\Library\Application\LibraryFinePolicyService;
 use App\Domain\Library\Application\LibraryFineService;
@@ -20,6 +21,8 @@ use App\Domain\Library\Infrastructure\LibraryFineVoid;
 use App\Domain\Library\Infrastructure\LibraryLoan;
 use App\Models\SchoolAuditEvent;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
+use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
@@ -29,6 +32,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\AssertsTenantRlsIsolation;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\Feature\Fees\Concerns\CreatesFeeConcessionFixtures;
 use Tests\TestCase;
 
@@ -46,6 +50,7 @@ class LibraryFineTest extends TestCase
 {
     use AssertsTenantRlsIsolation;
     use CreatesFeeConcessionFixtures;
+    use ProvidesSensitiveActionMfa;
 
     /** @return array<string, mixed> */
     private function world(): array
@@ -261,7 +266,7 @@ class LibraryFineTest extends TestCase
         $this->assertSame('25.00', $this->inSchool($w['school'], fn () => $charge->refresh()->amount), 'the charge itself is never rewritten');
 
         // A waived fine is not erroneous-and-unpaid: the void path refuses and records nothing.
-        $this->assertThrows(fn () => app(LibraryFineService::class)->void($w['school'], $fine->id, 'mistake', $w['finesOfficer']), LibraryFineNotVoidableException::class);
+        $this->assertThrows(fn () => app(LibraryFineService::class)->void($w['school'], $fine->id, 'assessed_in_error', 'mistake', $w['finesOfficer'], new FreshMfaProof($w['finesOfficer']->id, CarbonImmutable::now())), LibraryFineNotVoidableException::class);
         $this->assertSame(0, $this->inSchool($w['school'], fn () => LibraryFineVoid::query()->count()));
     }
 
@@ -277,18 +282,18 @@ class LibraryFineTest extends TestCase
         // Finance's generic cancel cannot cancel a fine's charge: only the source void can.
         $this->assertThrows(fn () => app(ChargeAdministrationService::class)->cancel($w['school'], $unpaid->charge_id, $w['financeOfficer']), ChargeIsSourceChargeException::class);
 
-        app(LibraryFineService::class)->void($w['school'], $unpaid->id, 'Returned through the drop box before due', $w['finesOfficer']);
+        app(LibraryFineService::class)->void($w['school'], $unpaid->id, 'assessed_in_error', 'Returned through the drop box before due', $w['finesOfficer'], new FreshMfaProof($w['finesOfficer']->id, CarbonImmutable::now()));
         $this->assertNotNull($this->inSchool($w['school'], fn () => Charge::query()->findOrFail($unpaid->charge_id))->cancelled_at);
         $void = $this->inSchool($w['school'], fn () => LibraryFineVoid::query()->where('library_fine_id', $unpaid->id)->sole());
         $this->assertSame([$w['finesOfficer']->id, 'Returned through the drop box before due'], [$void->voided_by_user_id, $void->reason]);
         $this->assertNotNull($this->inSchool($w['school'], fn () => LibraryFine::query()->find($unpaid->id)), 'the fine evidence is kept');
         $this->assertSame(1, $this->audits($w, 'library.fine.voided')->count());
         $this->assertSame(1, $this->audits($w, 'charge.source_cancelled')->count());
-        $this->assertThrows(fn () => app(LibraryFineService::class)->void($w['school'], $unpaid->id, 'again', $w['finesOfficer']), LibraryFineAlreadyVoidedException::class);
+        $this->assertThrows(fn () => app(LibraryFineService::class)->void($w['school'], $unpaid->id, 'assessed_in_error', 'again', $w['finesOfficer'], new FreshMfaProof($w['finesOfficer']->id, CarbonImmutable::now())), LibraryFineAlreadyVoidedException::class);
 
         // A paid fine is refused; nothing is recorded, cancelled or refunded.
         $this->recordManualPayment($w['school'], $w['recorder'], $w['settlement']->id, [[$this->inSchool($w['school'], fn () => Charge::query()->findOrFail($paid->charge_id)), '30.00']], '30.00');
-        $this->assertThrows(fn () => app(LibraryFineService::class)->void($w['school'], $paid->id, 'mistake', $w['finesOfficer']), LibraryFineNotVoidableException::class);
+        $this->assertThrows(fn () => app(LibraryFineService::class)->void($w['school'], $paid->id, 'assessed_in_error', 'mistake', $w['finesOfficer'], new FreshMfaProof($w['finesOfficer']->id, CarbonImmutable::now())), LibraryFineNotVoidableException::class);
         $this->assertNull($this->inSchool($w['school'], fn () => Charge::query()->findOrFail($paid->charge_id))->cancelled_at);
         $this->assertSame(1, $this->inSchool($w['school'], fn () => LibraryFineVoid::query()->count()));
         $this->assertSame(0, (int) DB::connection('pgsql_admin')->table('payments')->where('school_id', $w['school']->id)->where('amount', '<', 0)->count(), 'no refund');
@@ -318,7 +323,7 @@ class LibraryFineTest extends TestCase
 
         // A void without cancelling its charge cannot commit.
         $this->assertThrows(fn () => $this->inSchool($w['school'], fn () => DB::transaction(function () use ($w, $fine): void {
-            DB::table('library_fine_voids')->insert(['id' => (string) Str::uuid7(), 'school_id' => $w['school']->id, 'library_fine_id' => $fine->id, 'reason' => 'x', 'created_at' => now()]);
+            DB::table('library_fine_voids')->insert(['id' => (string) Str::uuid7(), 'school_id' => $w['school']->id, 'library_fine_id' => $fine->id, 'reason' => 'x', 'reason_code' => 'assessed_in_error', 'created_at' => now()]);
             DB::statement('SET CONSTRAINTS library_fine_voids_require_cancelled_charge IMMEDIATE');
         })), QueryException::class, 'was not cancelled in the same transaction');
         $this->assertSame('returned', $loan->status);
@@ -358,7 +363,7 @@ class LibraryFineTest extends TestCase
         $this->assertThrows(fn () => $this->concessions()->approve($w['school'], $this->requestTargeted($w, '5.00', 'waiver', $this->inSchool($w['school'], fn () => Charge::query()->findOrFail($fine->charge_id)))->id, $w['finesOfficer']), AuthorizationException::class);
 
         // A merely pending waiver changes nothing yet, so the fines officer may still void the erroneous fine.
-        $as($w['finesOfficer'])->withHeader('Idempotency-Key', (string) Str::uuid())->postJson("{$base}/library-fines/{$fine->id}/void", ['reason' => 'Returned before due'])
+        $as($w['finesOfficer'])->withHeader('Idempotency-Key', (string) Str::uuid())->postJson("{$base}/library-fines/{$fine->id}/void", ['reason_code' => 'returned_before_due', 'reason' => 'Returned before due', 'mfa_code' => $this->freshMfaCode($w['finesOfficer'])])
             ->assertOk()->assertJsonPath('data.status', 'voided');
 
         // Another School reads nothing.
@@ -385,7 +390,7 @@ class LibraryFineTest extends TestCase
         // Another School's administrator holds library.fines.void in their own School only: the fine is not found there.
         [$otherAdmin, $other] = $this->createSchoolAdmin();
         $this->actingAs($otherAdmin)->withHeader('X-School-Id', $other->id)->withHeader('Idempotency-Key', (string) Str::uuid())
-            ->postJson("/api/v1/schools/{$other->id}/library-fines/{$fine->id}/void", ['reason' => 'x'])->assertNotFound()
+            ->postJson("/api/v1/schools/{$other->id}/library-fines/{$fine->id}/void", ['reason_code' => 'assessed_in_error', 'reason' => 'x', 'mfa_code' => $this->freshMfaCode($otherAdmin)])->assertNotFound()
             ->assertJsonPath('error.code', 'LIBRARY_FINE_NOT_FOUND');
         $this->assertSame(0, $this->inSchool($w['school'], fn () => LibraryFineVoid::query()->count()));
         $this->assertNull($this->inSchool($w['school'], fn () => Charge::query()->findOrFail($fine->charge_id))->cancelled_at);
@@ -398,7 +403,7 @@ class LibraryFineTest extends TestCase
         $w = $this->world();
         $this->publish($w);
         $this->returnAt($w, $this->loan($w), '2026-07-15 09:00:00');
-        app(LibraryFineService::class)->void($w['school'], $this->fines($w)->sole()->id, 'Returned before due', $w['finesOfficer']);
+        app(LibraryFineService::class)->void($w['school'], $this->fines($w)->sole()->id, 'assessed_in_error', 'Returned before due', $w['finesOfficer'], new FreshMfaProof($w['finesOfficer']->id, CarbonImmutable::now()));
         $other = $this->createSchool();
 
         $this->assertTenantRlsIsolation([
@@ -424,7 +429,7 @@ class LibraryFineTest extends TestCase
         $this->assertThrows(fn () => $insert(['charge_id' => $w['charge']->id]), QueryException::class, "the charge is not this fine's Student, year, amount and fee head accounts");
 
         // A cancelled charge (the fine voided) can never be named again.
-        app(LibraryFineService::class)->void($w['school'], $fine->id, 'Returned before due', $w['finesOfficer']);
+        app(LibraryFineService::class)->void($w['school'], $fine->id, 'assessed_in_error', 'Returned before due', $w['finesOfficer'], new FreshMfaProof($w['finesOfficer']->id, CarbonImmutable::now()));
         $this->assertThrows(fn () => $insert([]), QueryException::class, "the charge is not this fine's Student, year, amount and fee head accounts");
     }
 
@@ -459,5 +464,47 @@ class LibraryFineTest extends TestCase
             $this->assertFalse(Gate::forUser($librarian)->allows('capability', [$capability, $w['school']]), $capability);
         }
         $api()->getJson("/api/v1/schools/{$w['school']->id}/library-loans/{$loanId}/fine")->assertForbidden();
+    }
+
+    #[Test]
+    public function a_void_needs_a_closed_reason_current_authority_and_a_fresh_code(): void
+    {
+        // ORG.8E (ADR 0076 §63, 8E-D3): a direct privileged void, never a waiver.
+        $w = $this->world();
+        $this->publish($w);
+        $this->returnAt($w, $this->loan($w), '2026-07-15 09:00:00');
+        $fine = $this->fines($w)->sole();
+        $fines = app(LibraryFineService::class);
+        $proof = fn (User $u) => new FreshMfaProof($u->id, CarbonImmutable::now());
+
+        $this->assertThrows(fn () => $fines->void($w['school'], $fine->id, 'waived', 'Kind gesture', $w['finesOfficer'], $proof($w['finesOfficer'])), LibraryFineVoidReasonException::class);
+        $this->assertThrows(fn () => $fines->void($w['school'], $fine->id, 'assessed_in_error', 'Wrong', $w['finesOfficer'], $proof($this->createUser())), \LogicException::class);
+
+        // A grant revoked behind the warm cache refuses the void at execution.
+        $revoked = $this->createUserWithCapabilities($w['school'], ['library.fines.view', 'library.fines.void']);
+        $this->assertTrue(Gate::forUser($revoked)->allows('capability', ['library.fines.void', $w['school']]));
+        $this->inSchool($w['school'], fn () => DB::table('membership_role_assignments')
+            ->whereIn('school_membership_id', DB::table('school_memberships')->where('user_id', $revoked->id)->pluck('id'))
+            ->update(['revoked_at' => now(), 'revocation_reason' => 'revoked']));
+        $this->assertThrows(fn () => $fines->void($w['school'], $fine->id, 'assessed_in_error', 'Wrong', $revoked, $proof($revoked)), AuthorizationException::class);
+        $this->assertSame(0, $this->inSchool($w['school'], fn () => LibraryFineVoid::query()->count()));
+
+        // The database refuses a void row without its code.
+        try {
+            $this->inSchool($w['school'], fn () => DB::transaction(fn () => DB::table('library_fine_voids')->insert([
+                'id' => (string) Str::uuid7(), 'school_id' => $w['school']->id, 'library_fine_id' => $fine->id, 'reason' => 'raw', 'voided_by_user_id' => $w['finesOfficer']->id,
+                'created_at' => now(),
+            ])));
+            $this->fail('A void names its reason code.');
+        } catch (QueryException $e) {
+            $this->assertStringContainsString('library_fine_voids_require_reason_code', $e->getMessage());
+        }
+
+        $fines->void($w['school'], $fine->id, 'returned_before_due', 'Drop box', $w['finesOfficer'], $proof($w['finesOfficer']));
+        $void = $this->inSchool($w['school'], fn () => LibraryFineVoid::query()->sole());
+        $this->assertSame(['returned_before_due', 'Drop box'], [$void->reason_code, $void->reason]);
+        $audit = $this->audits($w, 'library.fine.voided')->sole()->metadata;
+        $this->assertSame(['returned_before_due', true], [$audit['reasonCode'], $audit['freshMfa']]);
+        $this->assertStringNotContainsString('Drop box', (string) json_encode($audit), 'the note is never audited');
     }
 }

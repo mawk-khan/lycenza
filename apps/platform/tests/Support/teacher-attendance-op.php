@@ -60,7 +60,7 @@ try {
                 [$schoolId, $userId, $recordId, $expected, $new] = $args;
                 $school = School::query()->findOrFail($schoolId);
                 $user = User::query()->findOrFail($userId);
-                $app->make(AttendanceCorrectionService::class)->correct($school, $recordId, $expected, $new, $user, $access->guard($user));
+                $app->make(AttendanceCorrectionService::class)->correct($school, $recordId, $expected, $new, 'entered_in_error', $user, $access->guard($user));
 
                 return 'corrected';
         }

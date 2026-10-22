@@ -58,6 +58,8 @@ class DatabaseRoleVerifier
         'payment_corrections', 'payment_correction_lines',
         // ORG.8C (ADR 0076 §61): correction requests are approval history; unexecuted ones leave only with their Payment.
         'payment_correction_requests',
+        // ORG.8E (ADR 0076 §63): lifecycle and attendance-correction evidence is append-only; it leaves only with its parent.
+        'student_lifecycle_events', 'attendance_record_corrections',
         // E21.3B: Student consent evidence leaves only with its core record, through its retention function.
         'communication_domain_consent_events',
         // E21.3F: posted payroll adjustments and postings leave only through the payroll retention functions.
@@ -95,6 +97,8 @@ class DatabaseRoleVerifier
         'payroll_lwf_annual_charges',
         // ORG.8B (ADR 0076 §60): a recorded calculation never changes.
         'payroll_run_calculations',
+        // ORG.8E (ADR 0076 §63): evidence rows are never rewritten.
+        'student_lifecycle_events', 'attendance_record_corrections',
         // OPF.1 (ADR 0067 §12): Transport's fee-selection provenance is insert-only.
         'transport_fee_selections',
         // OPF.2 (ADR 0067 §28): so is Hostel's.

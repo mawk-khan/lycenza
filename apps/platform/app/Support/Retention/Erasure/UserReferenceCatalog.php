@@ -63,6 +63,9 @@ final class UserReferenceCatalog
         // HRX.3 (ADR 0065 §24.13): who recorded and who corrected staff attendance.
         'staff_attendance_records' => ['recorded_by_user_id' => self::RETAIN_REFERENCE],
         'staff_attendance_corrections' => ['corrected_by_user_id' => self::RETAIN_REFERENCE],
+        // ORG.8E: who corrected a Student's attendance, and who took a high-impact lifecycle action.
+        'attendance_record_corrections' => ['corrected_by_user_id' => self::RETAIN_REFERENCE],
+        'student_lifecycle_events' => ['acted_by_user_id' => self::RETAIN_REFERENCE],
         // HRX.5 (ADR 0065 §26.8): who calculated the run that captured the HRX evidence.
         'payroll_run_hrx_inputs' => ['captured_by_user_id' => self::RETAIN_REFERENCE],
         'payroll_run_calculations' => ['calculated_by_user_id' => self::RETAIN_REFERENCE],

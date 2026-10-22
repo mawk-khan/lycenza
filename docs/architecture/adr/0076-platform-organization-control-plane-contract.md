@@ -9271,3 +9271,140 @@ only).**
   Leave requests (200) and enters leave for the teacher; the HR officer
   cannot approve it (`LEAVE_PARTICIPANT_DECISION`); the School Admin
   approves it on the administrative path.
+
+**62.10 OD-8.8 decided (owner, 2026-10-22, recorded in ORG.8E).** Option A
+adopted: Leave decisions require whole-School authority; a Campus-scoped
+Leave grant (e.g. principal at one Campus) never becomes decision
+authority. This is exactly the behaviour 62.3 pinned; no code change.
+
+## 63. ORG.8E — High-impact direct action assurance (as built, 2026-10-22)
+
+Owner authorization: ORG.8E. Baseline `origin/main` = `1b331263` (§62).
+Owner decisions frozen in the brief:
+- **8E-D1** Student lifecycle has no request/approve workflow in v1
+  (OD-8.7 CLOSED: no `students.status.request/.approve`).
+- **8E-D2** Student Attendance correction stays direct; no approval and no
+  time window (OD-8.6 CLOSED).
+- **8E-D3** Library fine void stays a direct `library.fines.void` action; no
+  librarian void-request workflow (OD-8.5 CLOSED).
+- **OD-8.8** CLOSED as Option A (62.10).
+
+**63.1 Inventory and classification.**
+
+| Operation | Entry points | Class |
+|---|---|---|
+| Student status active ⇄ inactive (`StudentService::changeStatus`) | web, API | HIGH_IMPACT_LIFECYCLE |
+| Enrollment withdraw / cancel | web (current + closed-year placement), API | HIGH_IMPACT_LIFECYCLE |
+| Enrollment complete; closed-year bulk completion; rollover | web, API, bulk service | INITIAL/ORDINARY (normal end of a placement) |
+| Section transfer; Campus transfer (ORG.7F-3) | web, API | TRANSFER (unchanged) |
+| Elective (subject) enrollment withdraw / cancel | web, API | NOT_APPLICABLE (not a Student lifecycle) |
+| Student Attendance register submission | web, API (admin + teacher) | INITIAL (an existing session/slot is refused, never overwritten) |
+| Student Attendance correction (`AttendanceCorrectionService::correct`) | admin web/API, teacher web/API | CORRECTION (no bulk path exists) |
+| Library fine assessment (at check-in) | system | SYSTEM_ONLY |
+| Library fine void (`LibraryFineService::void`) | web, API | HIGH_IMPACT (financial, error correction only) |
+
+Staff Attendance is untouched (its own closed-reason design, HRX.3).
+
+**63.2 Student lifecycle (8E-D1).**
+- **Capabilities and roles unchanged:** `students.manage` /
+  `enrollments.manage` (school_admin, principal), used whole-School only.
+- **Assurance, in the services** (`StudentService::changeStatus`,
+  `StudentEnrollmentService::withdraw/cancel`):
+  - a closed reason per action (`StudentLifecycleReason`):
+    - deactivate: left_school, transferred_out, completed_studies,
+      duplicate_record, entered_in_error;
+    - reactivate: returned_to_school, deactivated_in_error;
+    - withdraw: left_school, transferred_out, guardian_request;
+    - cancel: did_not_join, duplicate_placement, entered_in_error;
+    - no `other` and no free text;
+  - a `FreshMfaProof` for the actor (required, so no caller skips it);
+  - the actor's CURRENT whole-School authority
+    (`ApprovalDecisionAuthority::requireCurrent`: capability, module,
+    School, read fresh) under the row lock. A Campus grant (e.g.
+    principal@Campus) never reaches these: whole-School only, as before;
+  - one append-only `student_lifecycle_events` row (action, reason, actor,
+    `occurred_at` = the transaction timestamp) and the audit event
+    (previous/new status, reasonCode, `freshMfa`; never DOB or contact).
+- **Transport:** web needs reason + explicit confirmation + fresh code
+  (`FreshMfaRequirement`); the API needs reason + fresh code (no
+  confirmation flag: explicit action endpoints).
+- **Idempotency:** a no-op status change is refused
+  (`STUDENT_STATUS_UNCHANGED`, nothing recorded); a non-active placement
+  cannot be withdrawn/cancelled again (existing transition rule).
+- **Locks:** status change takes the Student row FOR NO KEY UPDATE
+  (rule 101), which conflicts with the FOR SHARE every placement writer
+  takes first; placements keep Section → Enrollment ordering.
+- **Database:** `student_lifecycle_events` (FORCE RLS, append-only, reason
+  CHECK per action, same-School keys; School/User RESTRICT; Student and
+  Enrollment cascade -- the event is part of the D7 core record and is
+  declared handled by the Student core purge). Trigger
+  `student_enrollments_lifecycle_evidence`: an Enrollment becomes
+  withdrawn/cancelled only with its event in the same transaction.
+  `students.status` has no database evidence rule (test fixtures and other
+  modules write it directly; a raw runtime UPDATE is the recorded-actor
+  trust boundary, §59.6).
+
+**63.3 Student Attendance correction (8E-D2).**
+- Initial entry = a submitted register (refused if the session/slot already
+  exists); correction = `AttendanceCorrectionService::correct` on an
+  existing record. Only corrections need a reason.
+- Reasons (`AttendanceRecordCorrection::REASONS`): entered_in_error,
+  late_information, administrative_review -- why the RECORD changed, never
+  why a Student was absent (the AttendanceArchitectureGuardTest privacy
+  rule: no reason/note/medical/evidence field; the guard now admits exactly
+  this closed code); the Staff Attendance set.
+- Each correction writes an append-only `attendance_record_corrections` row
+  (from, to, reason, who); trigger `attendance_records_correction_evidence`
+  refuses a status change without its row. Audit adds `reasonCode`.
+- Authority unchanged: Tier 1 `attendance.manage` (Campus-adopted, ORG.7D-1),
+  Tier 2 teacher ownership (TCH.4). The reason narrows an authorized edit;
+  it grants nothing. No MFA, no approval, no window.
+
+**63.4 Library fine void (8E-D3).**
+- A void cancels an erroneous fine's unpaid Charge through FEE's canonical
+  source seam (unchanged; a paid or concession-adjusted fine is refused).
+  Waivers are Fees concessions and never a void reason. No Charge deletion,
+  no journal edit; ORG.8-P1 intact.
+- Now: a closed `reason_code` (assessed_in_error, loan_record_corrected,
+  returned_before_due, other) plus the existing bounded note (1-255, never
+  audited), a `FreshMfaProof`, and current whole-School `library.fines.void`
+  (school_admin) under the loan lock. `library_fine_voids_require_reason_code`
+  (BEFORE INSERT) refuses a void without a code; voids before ORG.8E keep a
+  NULL code. At most once (existing unique), races unchanged.
+- E34 unchanged (development/UAT only).
+
+**63.5 Registry and unchanged scope.** The three services are declared
+in `ApprovalWorkflowRegistry::DIRECT_ASSURED` (service => capability,
+action), NOT in `WORKFLOWS`: `ApprovalWorkflowRegistryTest` lets them use
+`ApprovalDecisionAuthority` only, and fails if one uses maker/checker,
+participants or approval provenance, or drops the fresh-MFA proof or the
+current-authority read.
+Unchanged: capabilities, role templates, `CampusScopeCatalogue`, the
+registered workflows, M-1, G-3,
+OD-8.2..OD-8.4, Payroll (8B), Payment corrections (8C), Leave (8D), Staff
+Attendance, legal gates (E34, Attendance/teacher, Student privacy, E21).
+
+**63.6 Security review** (independent): no HIGH, no MEDIUM.
+- **LOW fixed:**
+  - the fine-void migration's `down()` now refuses while ORG.8E reason codes
+    exist (like the other two);
+  - web withdraw/cancel look the placement up before spending a fresh code;
+  - a mislabelled `DatabaseRoleVerifier` comment;
+  - an explicit two-School raw-SQL isolation test for both new tables
+    (`LifecycleEvidenceRlsIsolationTest`, rule 28).
+- **Recorded trust boundaries** (the database has no actor context; it
+  proves evidence exists, never who was authorized, §59.6):
+  - `students.status` has no database evidence rule;
+  - a withdrawn/cancelled placement INSERTED directly carries no event (the
+    rule is on the status UPDATE; ~40 test fixtures insert terminal rows;
+    no product path does);
+  - the runtime role can insert an event, correction or void row naming any
+    acting User (`voided_by_user_id` stays nullable for pre-ORG.8E rows);
+  - within one transaction a correction row satisfies a later raw UPDATE of
+    the same from/to (`now()` is constant).
+  Every application path goes through the services, which check authority,
+  reason and the fresh code.
+- **Notes:** Attendance correction keeps no fresh-authority re-read or MFA
+  (owner decision 8E-D2; the Campus and teacher guards run inside the
+  transaction); withdraw/cancel check status and dates before authority
+  (error ordering only).

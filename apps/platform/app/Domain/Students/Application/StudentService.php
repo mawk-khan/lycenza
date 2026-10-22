@@ -4,13 +4,18 @@ namespace App\Domain\Students\Application;
 
 use App\Domain\Students\Application\Exceptions\DuplicateStudentNumberException;
 use App\Domain\Students\Application\Exceptions\InvalidStudentStatusException;
+use App\Domain\Students\Application\Exceptions\StudentStatusUnchangedException;
 use App\Domain\Students\Infrastructure\Student;
+use App\Domain\Students\Infrastructure\StudentLifecycleEvent;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Approval\ApprovalDecisionAuthority;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 
 /**
  * The only sanctioned write path for Student identity (Phase 1A.4) --
@@ -41,6 +46,7 @@ class StudentService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly ApprovalDecisionAuthority $authority,
     ) {}
 
     /**
@@ -98,22 +104,51 @@ class StudentService
         });
     }
 
-    public function changeStatus(Student $student, string $status, ?User $actor = null): Student
+    /**
+     * ORG.8E (ADR 0076 §63, 8E-D1): deactivating or reactivating a Student is
+     * a direct, whole-School, high-impact action. Under the Student row lock
+     * (FOR NO KEY UPDATE, rule 101): the actor's CURRENT whole-School
+     * `students.manage` (and the module and School, read fresh) -> a real
+     * change (the same status is refused, never a second record) -> a closed
+     * reason for that direction -> the event row -> the status -> audit. The
+     * caller verified a fresh MFA code for $actor first (FreshMfaRequirement);
+     * the proof is required here so no caller can skip it. No Campus scope:
+     * a Campus grant of `students.manage` never reaches this.
+     */
+    public function changeStatus(Student $student, string $status, string $reasonCode, User $actor, FreshMfaProof $mfa): Student
     {
         if (! in_array($status, ['active', 'inactive'], true)) {
             throw new InvalidStudentStatusException($status);
         }
+        if (! $mfa->isFor($actor->id)) {
+            throw new LogicException('The fresh MFA proof belongs to another User.');
+        }
+        $action = $status === 'inactive' ? StudentLifecycleReason::DEACTIVATE : StudentLifecycleReason::REACTIVATE;
+        StudentLifecycleReason::require($action, $reasonCode);
 
-        return $this->context->withSchool($student->school, fn () => DB::transaction(function () use ($student, $status, $actor) {
-            $previousStatus = $student->status;
-            $student->update(['status' => $status]);
+        return $this->context->withSchool($student->school, fn () => DB::transaction(function () use ($student, $status, $reasonCode, $action, $actor) {
+            $locked = Student::query()->whereKey($student->id)->lock('for no key update')->firstOrFail();
+            $this->authority->requireCurrent($actor, 'students.manage', $student->school);
+            $previousStatus = $locked->status;
+            if ($previousStatus === $status) {
+                throw new StudentStatusUnchangedException($status);
+            }
 
-            $this->audit->school($student->school, 'student.status_changed', actor: $actor, subject: $student, metadata: [
+            $event = StudentLifecycleEvent::query()->create([
+                'school_id' => $locked->school_id, 'student_id' => $locked->id, 'action' => $action,
+                'reason_code' => $reasonCode, 'acted_by_user_id' => $actor->id,
+            ]);
+            $locked->update(['status' => $status]);
+
+            $this->audit->school($student->school, 'student.status_changed', actor: $actor, subject: $locked, metadata: [
                 'previousStatus' => $previousStatus,
                 'newStatus' => $status,
+                'reasonCode' => $reasonCode,
+                'lifecycleEventId' => $event->id,
+                'freshMfa' => true,
             ]);
 
-            return $student->refresh();
+            return $locked->refresh();
         }));
     }
 }

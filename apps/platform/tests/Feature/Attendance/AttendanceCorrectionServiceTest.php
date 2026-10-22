@@ -7,7 +7,6 @@ use App\Domain\Attendance\Application\AttendanceSubmissionService;
 use App\Domain\Attendance\Application\Exceptions\AttendanceCorrectionNoOpException;
 use App\Domain\Attendance\Application\Exceptions\AttendanceRecordStatusChangedException;
 use App\Domain\Attendance\Infrastructure\AttendanceRecord;
-use App\Domain\Students\Application\StudentEnrollmentService;
 use App\Domain\Timetable\Application\TimetableScheduleService;
 use App\Models\SchoolAuditEvent;
 use Illuminate\Support\Facades\DB;
@@ -45,7 +44,7 @@ class AttendanceCorrectionServiceTest extends TestCase
     private function correct(array $w, string $expected, string $new, ?string $recordId = null): AttendanceRecord
     {
         return app(AttendanceCorrectionService::class)->correct(
-            $w['school'], $recordId ?? $w['record']->id, $expected, $new, $w['actor'],
+            $w['school'], $recordId ?? $w['record']->id, $expected, $new, 'entered_in_error', $w['actor'],
         );
     }
 
@@ -129,7 +128,7 @@ class AttendanceCorrectionServiceTest extends TestCase
     public function a_correction_still_succeeds_after_the_student_is_withdrawn(): void
     {
         $w = $this->world();
-        app(StudentEnrollmentService::class)->withdraw($w['enrollment'], '2026-09-01', $w['actor']);
+        $this->withdrawEnrollment($w['enrollment'], '2026-09-01');
 
         $this->assertSame('excused', $this->correct($w, 'absent', 'excused')->status);
     }

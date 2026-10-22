@@ -85,7 +85,7 @@ class ChargeCampusMigrationTest extends TestCase
         // The B placement is cancelled after the Charge: today's stored Campus
         // is still B, the old runtime derivation would now say A.
         $this->travelTo(CarbonImmutable::parse('2026-09-20T06:00:00Z'));
-        $this->inSchool($w['school'], fn () => app(StudentEnrollmentService::class)->cancel($onB->fresh(), '2026-09-20'));
+        $this->cancelEnrollment($this->inSchool($w['school'], fn () => $onB->fresh()), '2026-09-20');
 
         $this->assertSame('a placement in effect when it was created has since changed', $this->derived($w)[$charge->id]->ambiguity, 'a backfill would abort here, never guess');
         $this->assertSame(1, $this->blockers($w), 'rolling back would re-home this debt to A, so down() refuses');

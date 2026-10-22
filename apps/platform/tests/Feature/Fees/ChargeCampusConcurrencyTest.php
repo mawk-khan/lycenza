@@ -90,7 +90,7 @@ class ChargeCampusConcurrencyTest extends TestCase
     #[Test]
     public function a_charge_that_locks_first_keeps_the_placement_it_saw(): void
     {
-        [$charge, $cancel] = $this->raceWithHeldHolder($this->charge(), $this->op('enrollment-cancel', $this->onB->id));
+        [$charge, $cancel] = $this->raceWithHeldHolder($this->charge(), $this->op('enrollment-cancel', $this->onB->id, $this->schoolAdminFor($this->school)->id));
 
         $this->assertSame(['ok', 'ok'], [$charge, $cancel]);
         $this->assertSame($this->b->id, $this->storedCampus(), 'B was the valid placement when the Charge was created, and the later cancellation never moves it');
@@ -99,7 +99,7 @@ class ChargeCampusConcurrencyTest extends TestCase
     #[Test]
     public function a_cancellation_that_locks_first_is_seen_by_the_charge(): void
     {
-        [$cancel, $charge] = $this->raceWithHeldHolder($this->op('enrollment-cancel', $this->onB->id), $this->charge());
+        [$cancel, $charge] = $this->raceWithHeldHolder($this->op('enrollment-cancel', $this->onB->id, $this->schoolAdminFor($this->school)->id), $this->charge());
 
         $this->assertSame(['ok', 'ok'], [$cancel, $charge]);
         $this->assertNull($this->storedCampus(), 'no valid placement that day: whole-School, never the cancelled B');

@@ -218,7 +218,7 @@ class AttendanceHistoricalProvenanceTest extends TestCase
             ->where('attendance_session_id', $w['session']->id)->firstOrFail());
 
         $corrected = app(AttendanceCorrectionService::class)
-            ->correct($w['school'], $record->id, 'absent', 'present', $w['actor']);
+            ->correct($w['school'], $record->id, 'absent', 'present', 'entered_in_error', $w['actor']);
 
         $this->assertSame('present', $corrected->status);
         $this->assertNotNull($corrected->corrected_at);
@@ -230,7 +230,7 @@ class AttendanceHistoricalProvenanceTest extends TestCase
         $w = $this->submitted();
         $before = $this->register($w);
 
-        app(StudentEnrollmentService::class)->withdraw($w['enrollment'], '2026-08-03', $w['actor']);
+        $this->withdrawEnrollment($w['enrollment'], '2026-08-03');
 
         $this->assertSame($before, $this->register($w));
     }
@@ -241,7 +241,7 @@ class AttendanceHistoricalProvenanceTest extends TestCase
         $w = $this->submitted();
         $before = $this->register($w);
 
-        app(StudentEnrollmentService::class)->cancel($w['enrollment'], '2026-08-03', $w['actor']);
+        $this->cancelEnrollment($w['enrollment'], '2026-08-03');
 
         $this->assertSame($before, $this->register($w));
     }

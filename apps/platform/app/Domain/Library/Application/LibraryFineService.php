@@ -13,13 +13,16 @@ use App\Domain\Fees\Application\Sources\FeeSourceChargeService;
 use App\Domain\Library\Application\Exceptions\LibraryFineAlreadyVoidedException;
 use App\Domain\Library\Application\Exceptions\LibraryFineNotFoundException;
 use App\Domain\Library\Application\Exceptions\LibraryFineNotVoidableException;
+use App\Domain\Library\Application\Exceptions\LibraryFineVoidReasonException;
 use App\Domain\Library\Infrastructure\LibraryFine;
 use App\Domain\Library\Infrastructure\LibraryFinePolicy;
 use App\Domain\Library\Infrastructure\LibraryFineVoid;
 use App\Domain\Library\Infrastructure\LibraryLoan;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Approval\ApprovalDecisionAuthority;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
@@ -80,6 +83,7 @@ class LibraryFineService
         private readonly CurrentAcademicYearResolver $years,
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly ApprovalDecisionAuthority $authority,
     ) {}
 
     /**
@@ -202,13 +206,31 @@ class LibraryFineService
         return $fine;
     }
 
-    /** D4: voids an erroneously assessed, still unpaid and unwaived fine, and cancels its charge. Never a refund. */
-    public function void(School $school, string $fineId, string $reason, ?User $actor): LibraryFine
+    /**
+     * D4: voids an erroneously assessed, still unpaid and unwaived fine, and
+     * cancels its charge. Never a refund, never a waiver.
+     *
+     * ORG.8E (ADR 0076 §63, 8E-D3): a direct privileged action -- a closed
+     * reason code plus the bounded note, the actor's CURRENT
+     * `library.fines.void` (whole-School, module and School read fresh, under
+     * the loan lock) and a fresh MFA code the transport verified (`$mfa`,
+     * required so no caller can skip it). At most once (the void row is
+     * unique per fine); the Charge is cancelled only through FEE's seam.
+     */
+    public function void(School $school, string $fineId, string $reasonCode, string $reason, User $actor, FreshMfaProof $mfa): LibraryFine
     {
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $fineId, $reason, $actor): LibraryFine {
+        if (! in_array($reasonCode, LibraryFineVoid::REASON_CODES, true)) {
+            throw new LibraryFineVoidReasonException;
+        }
+        if (! $mfa->isFor($actor->id)) {
+            throw new LogicException('The fresh MFA proof belongs to another User.');
+        }
+
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $fineId, $reasonCode, $reason, $actor): LibraryFine {
             $fine = LibraryFine::query()->where('school_id', $school->id)->find($fineId) ?? throw new LibraryFineNotFoundException;
             // The loan row serializes every write about its fine (the fine itself is insert-only).
             LibraryLoan::query()->whereKey($fine->library_loan_id)->lockForUpdate()->firstOrFail();
+            $this->authority->requireCurrent($actor, 'library.fines.void', $school);
             if (LibraryFineVoid::query()->where('library_fine_id', $fine->id)->exists()) {
                 throw new LibraryFineAlreadyVoidedException;
             }
@@ -218,7 +240,8 @@ class LibraryFineService
                     'school_id' => $school->id,
                     'library_fine_id' => $fine->id,
                     'reason' => mb_substr(trim($reason), 0, 255),
-                    'voided_by_user_id' => $actor?->id,
+                    'reason_code' => $reasonCode,
+                    'voided_by_user_id' => $actor->id,
                 ]));
             } catch (UniqueConstraintViolationException) {
                 throw new LibraryFineAlreadyVoidedException;
@@ -238,6 +261,8 @@ class LibraryFineService
                 'studentId' => $fine->student_id,
                 'chargeId' => $fine->charge_id,
                 'libraryFineVoidId' => $void->id,
+                'reasonCode' => $reasonCode,
+                'freshMfa' => true,
             ]);
 
             return $fine;

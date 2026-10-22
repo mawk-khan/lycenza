@@ -28,7 +28,7 @@ $context->set($school);
 try {
     $actor = User::query()->findOrFail($actorId);
     $record = $app->make(AttendanceCorrectionService::class)
-        ->correct($school, $recordId, $expectedStatus, $newStatus, $actor);
+        ->correct($school, $recordId, $expectedStatus, $newStatus, 'entered_in_error', $actor);
 
     echo 'corrected:'.$record->status;
 } catch (Throwable $e) {

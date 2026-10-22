@@ -6,7 +6,6 @@ use App\Domain\Attendance\Application\AttendanceSubmissionService;
 use App\Domain\Documents\Infrastructure\Document;
 use App\Domain\Guardians\Infrastructure\ContactType;
 use App\Domain\Students\Application\Retention\StudentRetentionEligibility;
-use App\Domain\Students\Application\StudentEnrollmentService;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\School;
 use App\Support\Retention\RetentionExpiry;
@@ -153,7 +152,7 @@ class StudentRetentionPruneTest extends TestCase
             [['student_enrollment_id' => $leaving->id, 'status' => 'present'], ['student_enrollment_id' => $staying->id, 'status' => 'absent']],
             $w['actor'],
         ))));
-        app(StudentEnrollmentService::class)->withdraw($leaving, '2026-09-30');
+        $this->withdrawEnrollment($leaving, '2026-09-30');
         $this->inSchool($w['school'], fn () => DB::table('students')->where('id', $leaving->student_id)->update(['status' => 'inactive']));
         $student = $this->inSchool($w['school'], fn () => Student::query()->findOrFail($leaving->student_id));
         $guardianId = $this->guardianOf($student);

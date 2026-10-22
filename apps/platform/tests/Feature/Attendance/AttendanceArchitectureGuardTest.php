@@ -3,6 +3,7 @@
 namespace Tests\Feature\Attendance;
 
 use App\Domain\Attendance\Infrastructure\AttendanceRecord;
+use App\Domain\Attendance\Infrastructure\AttendanceRecordCorrection;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -132,6 +133,21 @@ class AttendanceArchitectureGuardTest extends TestCase
             // Strip docblock/inline comments: the explanatory prose
             // legitimately explains WHY these fields are absent.
             $code = preg_replace('#/\*.*?\*/|//[^\n]*#s', '', $source);
+            // ORG.8E (ADR 0076 §63, 8E-D2): the one exception is the correction
+            // record's closed `reason_code` -- why the RECORD changed, never why
+            // a Student was absent. Its codes are pinned below and carry none of
+            // the forbidden meanings.
+            if (str_contains(basename($migration), 'create_attendance_record_corrections')) {
+                $this->assertSame(1, substr_count($code, "\$table->string('reason_code', 32)"));
+                $this->assertSame(['entered_in_error', 'late_information', 'administrative_review'], AttendanceRecordCorrection::REASONS);
+                foreach (AttendanceRecordCorrection::REASONS as $reason) {
+                    $this->assertStringContainsString("'{$reason}'", $code, 'the database mirrors the closed list');
+                    foreach (['medical', 'health', 'evidence', 'certificate', 'sick', 'illness', 'note'] as $sensitive) {
+                        $this->assertStringNotContainsString($sensitive, $reason);
+                    }
+                }
+                $code = str_replace("\$table->string('reason_code', 32)", '', $code);
+            }
 
             foreach ($forbidden as $word) {
                 $this->assertStringNotContainsStringIgnoringCase(

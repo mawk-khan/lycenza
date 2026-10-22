@@ -250,7 +250,7 @@ class EnrollmentRolloverDryRunServiceTest extends TestCase
         ['school' => $school, 'sourceSection' => $sourceSection, 'plan' => $plan] = $this->buildContext();
         $student = $this->createStudent($school, ['student_number' => 'S-1001']);
         $enrollment = $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
-        $this->enrollmentService()->withdraw($enrollment, '2026-09-01');
+        $this->withdrawEnrollment($enrollment, '2026-09-01');
 
         $this->dryRun()->run($this->freshPlan($plan));
 
@@ -264,7 +264,7 @@ class EnrollmentRolloverDryRunServiceTest extends TestCase
         ['school' => $school, 'sourceSection' => $sourceSection, 'plan' => $plan] = $this->buildContext();
         $student = $this->createStudent($school, ['student_number' => 'S-1001']);
         $enrollment = $this->enrollmentService()->enroll($student, $sourceSection, '01', '2026-06-01');
-        $this->enrollmentService()->cancel($enrollment, '2026-06-05');
+        $this->cancelEnrollment($enrollment, '2026-06-05');
 
         $this->dryRun()->run($this->freshPlan($plan));
 

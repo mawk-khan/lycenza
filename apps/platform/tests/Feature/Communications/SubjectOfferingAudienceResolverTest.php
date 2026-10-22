@@ -238,7 +238,7 @@ class SubjectOfferingAudienceResolverTest extends TestCase
         // from the underlying StudentEnrollment (not the offering
         // itself) AFTER the draft was created.
         app(TenantContext::class)->withSchool($school, function () use ($enrollment): void {
-            $enrollment->update(['status' => 'withdrawn']);
+            $this->forceEnrollmentStatus($enrollment, 'withdrawn');
         });
 
         $published = $this->announcements()->publish($announcement, $admin);

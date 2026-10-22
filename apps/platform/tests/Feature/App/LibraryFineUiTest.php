@@ -15,6 +15,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\Feature\Fees\Concerns\CreatesFeeConcessionFixtures;
 use Tests\TestCase;
 
@@ -27,6 +28,7 @@ use Tests\TestCase;
 class LibraryFineUiTest extends TestCase
 {
     use CreatesFeeConcessionFixtures;
+    use ProvidesSensitiveActionMfa;
 
     /** @return array<string, mixed> */
     private function world(): array
@@ -140,11 +142,14 @@ class LibraryFineUiTest extends TestCase
         $this->as($w, $w['librarian'])->post("/app/library/circulation/{$loan->id}/check-in");
         $fine = $this->inSchool($w['school'], fn () => LibraryFine::query()->where('library_loan_id', $loan->id)->firstOrFail());
 
-        $this->as($w, $w['officer'])->post("/app/library/fines/{$fine->id}/void", ['reason' => ''])->assertSessionHasErrors('reason');
+        $this->as($w, $w['officer'])->post("/app/library/fines/{$fine->id}/void", ['reason_code' => 'assessed_in_error', 'reason' => ''])->assertSessionHasErrors('reason');
+        // ORG.8E: a closed reason code and a fresh code.
+        $this->as($w, $w['officer'])->post("/app/library/fines/{$fine->id}/void", ['reason' => 'Waived'])->assertSessionHasErrors('reason_code');
+        $this->as($w, $w['officer'])->post("/app/library/fines/{$fine->id}/void", ['reason_code' => 'returned_before_due', 'reason' => 'No code'])->assertSessionHasErrors('mfa_code');
         $this->as($w, $w['librarian'])->post("/app/library/fines/{$fine->id}/void", ['reason' => 'Lost in post'])->assertForbidden();
-        $this->as($w, $w['officer'])->post("/app/library/fines/{$fine->id}/void", ['reason' => 'Book returned to the drop box on time'])
+        $this->as($w, $w['officer'])->post("/app/library/fines/{$fine->id}/void", ['reason_code' => 'returned_before_due', 'reason' => 'Book returned to the drop box on time', 'mfa_code' => $this->freshMfaCode($w['officer'])])
             ->assertRedirect(route('app.library.circulation.show', $loan->id))->assertSessionHasNoErrors();
-        $this->as($w, $w['officer'])->post("/app/library/fines/{$fine->id}/void", ['reason' => 'Again'])
+        $this->as($w, $w['officer'])->post("/app/library/fines/{$fine->id}/void", ['reason_code' => 'assessed_in_error', 'reason' => 'Again', 'mfa_code' => $this->freshMfaCode($w['officer'])])
             ->assertSessionHasErrors(['reason' => 'This Library fine has already been voided.']);
 
         $this->assertSame(1, $this->inSchool($w['school'], fn () => LibraryFineVoid::query()->where('library_fine_id', $fine->id)->count()));
@@ -167,7 +172,7 @@ class LibraryFineUiTest extends TestCase
         $foreignOfficer = $this->createUserWithCapabilities($other['school'], ['library.circulation.view', 'library.fines.view', 'library.fines.void']);
         $this->actingAs($foreignOfficer)->post("/app/schools/{$other['school']->id}/activate");
         $this->assertSame(404, $this->actingAs($foreignOfficer)->get("/app/library/circulation/{$loan->id}")->getStatusCode());
-        $this->assertSame(404, $this->actingAs($foreignOfficer)->post("/app/library/fines/{$fine->id}/void", ['reason' => 'x'])->getStatusCode());
+        $this->assertSame(404, $this->actingAs($foreignOfficer)->post("/app/library/fines/{$fine->id}/void", ['reason_code' => 'assessed_in_error', 'reason' => 'x', 'mfa_code' => $this->freshMfaCode($foreignOfficer)])->getStatusCode());
         $this->assertSame(0, $this->inSchool($w['school'], fn () => LibraryFineVoid::query()->count()));
 
         $nobody = $this->createUserWithCapabilities($w['school'], []);

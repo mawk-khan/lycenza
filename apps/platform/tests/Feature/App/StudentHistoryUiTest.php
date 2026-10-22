@@ -55,8 +55,8 @@ class StudentHistoryUiTest extends TestCase
         $first = $enrollments->enroll($student, $a, '4', '2026-06-01', $writer);
         $second = $enrollments->transferPlacement($first, $b, '9', '2026-08-01', $writer);
         app(StudentGuardianRelationshipService::class)->link($student, $this->createGuardian($school), RelationshipType::Mother, [], $writer);
-        app(StudentService::class)->changeStatus($student, 'inactive', $writer);
-        $enrollments->withdraw($second, '2026-09-30', $writer);
+        $this->changeStudentStatus($student, 'inactive');
+        $this->withdrawEnrollment($second, '2026-09-30');
 
         return ['school' => $school, 'student' => $student, 'writer' => $writer, 'sections' => compact('a', 'b')];
     }

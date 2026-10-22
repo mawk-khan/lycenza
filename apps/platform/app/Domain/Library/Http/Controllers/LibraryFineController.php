@@ -10,6 +10,7 @@ use App\Domain\Library\Infrastructure\LibraryFineVoid;
 use App\Domain\Library\Infrastructure\LibraryLoan;
 use App\Http\Controllers\Controller;
 use App\Models\School;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -75,11 +76,14 @@ class LibraryFineController extends Controller
     {
         $this->authorizeCapability('library.fines.void', $school);
 
+        // ORG.8E (ADR 0076 §63): a closed reason code, the bounded note and a fresh MFA code (as on the web).
         $validated = $request->validate([
+            'reason_code' => ['required', 'string', Rule::in(LibraryFineVoid::REASON_CODES)],
             'reason' => ['required', 'string', 'max:255'],
         ]);
+        $proof = app(FreshMfaRequirement::class)->requireForAction($request, $request->user());
 
-        $fine = $fines->void($school, $libraryFine, $validated['reason'], $request->user());
+        $fine = $fines->void($school, $libraryFine, $validated['reason_code'], $validated['reason'], $request->user(), $proof);
 
         return response()->json(['data' => $this->presentFine($fine)]);
     }

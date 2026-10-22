@@ -7,11 +7,13 @@ use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\Students\Application\StudentEnrollmentReadService;
 use App\Domain\Students\Application\StudentEnrollmentService;
+use App\Domain\Students\Application\StudentLifecycleReason;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Models\School;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -132,9 +134,14 @@ class StudentEnrollmentController extends Controller
         abort_if(! Str::isUuid($enrollment), 404);
         $model = StudentEnrollment::query()->findOrFail($enrollment);
 
-        $validated = $request->validate(['ends_on' => ['required', 'date']]);
+        // ORG.8E (ADR 0076 §63): a closed reason and a fresh MFA code (as on the web).
+        $validated = $request->validate([
+            'ends_on' => ['required', 'date'],
+            'reason_code' => ['required', 'string', Rule::in(StudentLifecycleReason::CODES[StudentLifecycleReason::WITHDRAW_ENROLLMENT])],
+        ]);
+        $proof = app(FreshMfaRequirement::class)->requireForAction($request, $request->user());
 
-        $withdrawn = $service->withdraw($model, $validated['ends_on'], $request->user());
+        $withdrawn = $service->withdraw($model, $validated['ends_on'], $validated['reason_code'], $request->user(), $proof);
 
         return response()->json(['data' => $this->presentDetail($withdrawn->load(['student', 'academicYear', 'campus', 'gradeLevel', 'section']))]);
     }
@@ -147,9 +154,14 @@ class StudentEnrollmentController extends Controller
         abort_if(! Str::isUuid($enrollment), 404);
         $model = StudentEnrollment::query()->findOrFail($enrollment);
 
-        $validated = $request->validate(['ends_on' => ['required', 'date']]);
+        // ORG.8E (ADR 0076 §63): a closed reason and a fresh MFA code (as on the web).
+        $validated = $request->validate([
+            'ends_on' => ['required', 'date'],
+            'reason_code' => ['required', 'string', Rule::in(StudentLifecycleReason::CODES[StudentLifecycleReason::CANCEL_ENROLLMENT])],
+        ]);
+        $proof = app(FreshMfaRequirement::class)->requireForAction($request, $request->user());
 
-        $cancelled = $service->cancel($model, $validated['ends_on'], $request->user());
+        $cancelled = $service->cancel($model, $validated['ends_on'], $validated['reason_code'], $request->user(), $proof);
 
         return response()->json(['data' => $this->presentDetail($cancelled->load(['student', 'academicYear', 'campus', 'gradeLevel', 'section']))]);
     }

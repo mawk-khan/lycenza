@@ -11,6 +11,7 @@ use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\LocalCatalogueFixtures;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -25,6 +26,7 @@ use Tests\TestCase;
 class StudentAdminUiTest extends TestCase
 {
     use CreatesTenancyFixtures;
+    use ProvidesSensitiveActionMfa;
 
     private function activate(User $user, School $school): void
     {
@@ -260,7 +262,7 @@ class StudentAdminUiTest extends TestCase
         $this->activate($user, $school);
         $student = $this->createStudent($school, ['student_number' => 'S-1001']);
 
-        $ok = $this->post("/app/students/{$student->id}/status", ['status' => 'inactive']);
+        $ok = $this->post("/app/students/{$student->id}/status", ['status' => 'inactive', 'reason_code' => 'left_school', 'confirm' => '1', 'mfa_code' => $this->freshMfaCode(auth()->user())]);
         $ok->assertRedirect("/app/students/{$student->id}");
         $fresh = app(TenantContext::class)->withSchool($school, fn () => $student->fresh());
         $this->assertSame('inactive', $fresh->status);

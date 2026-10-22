@@ -11,6 +11,7 @@ use App\Domain\Library\Infrastructure\LibraryFineVoid;
 use App\Http\Controllers\App\Concerns\MapsDomainRefusals;
 use App\Http\Controllers\Controller;
 use App\Models\School;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Authorization\CapabilityResolver;
@@ -117,6 +118,9 @@ class LibraryFineWebController extends Controller
             'fine' => $fine === null ? null : $this->presentFine($school, $fine),
             'canViewFines' => $canViewFines,
             'canVoid' => $canViewFines && $this->can($school, 'library.fines.void'),
+            // ORG.8E (ADR 0076 §63): the closed void reasons and whether a fresh code can be given.
+            'voidReasons' => LibraryFineVoid::REASON_CODES,
+            'hasMfaFactor' => app(FreshMfaRequirement::class)->hasActiveFactor($context->actor()),
         ]);
     }
 
@@ -125,8 +129,13 @@ class LibraryFineWebController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability('library.fines.void', $school);
 
-        $validated = $request->validate(['reason' => ['required', 'string', 'max:255']]);
-        $fine = $this->withFormErrors('reason', fn () => $fines->void($school, $libraryFine, $validated['reason'], $context->actor()));
+        // ORG.8E (ADR 0076 §63): a closed reason code, the bounded note and a fresh MFA code.
+        $validated = $request->validate([
+            'reason_code' => ['required', 'string', Rule::in(LibraryFineVoid::REASON_CODES)],
+            'reason' => ['required', 'string', 'max:255'],
+        ]);
+        $proof = app(FreshMfaRequirement::class)->requireForAction($request, $context->actor());
+        $fine = $this->withFormErrors('reason', fn () => $fines->void($school, $libraryFine, $validated['reason_code'], $validated['reason'], $context->actor(), $proof));
 
         return redirect()->route('app.library.circulation.show', $fine->library_loan_id);
     }

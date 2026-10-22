@@ -11,6 +11,7 @@ use App\Domain\Attendance\Application\TeacherAttendanceAccess;
 use App\Domain\Attendance\Application\TeacherAttendanceReadAudit;
 use App\Domain\Attendance\Application\TeacherAttendanceScope;
 use App\Domain\Attendance\Infrastructure\AttendanceRecord;
+use App\Domain\Attendance\Infrastructure\AttendanceRecordCorrection;
 use App\Domain\Attendance\Infrastructure\AttendanceSession;
 use App\Domain\HR\Application\Exceptions\ActingEmployeeUnavailableException;
 use App\Domain\Students\Application\Exceptions\AmbiguousHistoricalEnrollmentException;
@@ -178,6 +179,8 @@ class MyAttendanceController extends Controller
         $audit->sessionViewed($school, $request->user(), $scope, $session, TeacherAttendanceReadAudit::SURFACE_WEB);
 
         return Inertia::render('App/Attendance/Show', [
+            // ORG.8E (ADR 0076 §63): the closed correction reasons.
+            'correctionReasons' => AttendanceRecordCorrection::REASONS,
             'session' => $this->presentDetail($session),
             'statuses' => AttendanceRecord::STATUSES,
             'canManage' => true,
@@ -225,11 +228,13 @@ class MyAttendanceController extends Controller
         $validated = $request->validate([
             'expected_status' => ['required', Rule::in(AttendanceRecord::STATUSES)],
             'new_status' => ['required', Rule::in(AttendanceRecord::STATUSES)],
+            // ORG.8E (ADR 0076 §63): a correction names its closed reason.
+            'reason_code' => ['required', 'string', Rule::in(AttendanceRecordCorrection::REASONS)],
         ]);
 
         try {
             $record = $service->correct(
-                $school, $attendanceRecord, $validated['expected_status'], $validated['new_status'], $request->user(),
+                $school, $attendanceRecord, $validated['expected_status'], $validated['new_status'], $validated['reason_code'], $request->user(),
                 $access->guard($request->user()),
             );
         } catch (ActingEmployeeUnavailableException) {

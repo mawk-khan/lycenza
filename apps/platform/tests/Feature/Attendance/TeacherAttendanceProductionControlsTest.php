@@ -98,7 +98,7 @@ class TeacherAttendanceProductionControlsTest extends TestCase
         $this->web($w, $user, assured: false)->post('/app/my-attendance', [
             'timetable_entry_id' => $w['entry']->id, 'attendance_date' => '2026-09-14', 'records' => $this->allPresent($w['studentsA']),
         ])->assertUnauthorized();
-        $this->web($w, $user, assured: false)->post("/app/my-attendance/records/{$record->id}/correct", ['expected_status' => 'present', 'new_status' => 'late'])
+        $this->web($w, $user, assured: false)->post("/app/my-attendance/records/{$record->id}/correct", ['expected_status' => 'present', 'new_status' => 'late', 'reason_code' => 'entered_in_error'])
             ->assertUnauthorized();
 
         $this->assertSame(1, $this->inSchool($w['school'], fn () => AttendanceSession::query()->count()), 'nothing was submitted without MFA');
@@ -107,7 +107,7 @@ class TeacherAttendanceProductionControlsTest extends TestCase
 
         // With MFA the same teacher operates normally.
         $this->web($w, $user)->get("/app/my-attendance/{$mine->id}")->assertOk();
-        $this->web($w, $user)->post("/app/my-attendance/records/{$record->id}/correct", ['expected_status' => 'present', 'new_status' => 'late'])
+        $this->web($w, $user)->post("/app/my-attendance/records/{$record->id}/correct", ['expected_status' => 'present', 'new_status' => 'late', 'reason_code' => 'entered_in_error'])
             ->assertRedirect("/app/my-attendance/{$mine->id}");
     }
 

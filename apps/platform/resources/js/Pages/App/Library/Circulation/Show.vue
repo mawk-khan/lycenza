@@ -8,6 +8,7 @@ import { formatCalendarDate, formatDate } from '../../../../datetime';
 import { Head, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import ConfirmDialog from '../../../../Components/ConfirmDialog.vue';
+import MfaCodeField from '../../../../Components/MfaCodeField.vue';
 import TextField from '../../../../Components/Form/TextField.vue';
 import { feeHeadText, type FeeHeadLabel } from '../../../../support/feeIntent';
 
@@ -37,13 +38,26 @@ const props = defineProps<{
     } | null;
     canViewFines: boolean;
     canVoid: boolean;
+    // ORG.8E (ADR 0076 §63): a void names a closed reason and needs a fresh code.
+    voidReasons: string[];
+    hasMfaFactor: boolean;
 }>();
 
-const form = useForm({ reason: '' });
+const VOID_REASON_LABELS: Record<string, string> = {
+    assessed_in_error: 'Assessed in error',
+    loan_record_corrected: 'Loan record corrected',
+    returned_before_due: 'Returned before it was due',
+    other: 'Other (explain in the note)',
+};
+
+const form = useForm({ reason_code: '', reason: '', mfa_code: '' });
 const dialog = ref<InstanceType<typeof ConfirmDialog> | null>(null);
 function voidFine() {
     if (!props.fine) return;
-    form.post(`/app/library/fines/${props.fine.id}/void`, { preserveScroll: true });
+    form.post(`/app/library/fines/${props.fine.id}/void`, {
+        preserveScroll: true,
+        onError: () => form.reset('mfa_code'),
+    });
 }
 </script>
 
@@ -103,19 +117,51 @@ function voidFine() {
                     class="mt-4 flex flex-wrap items-end gap-3"
                     @submit.prevent="dialog?.open()"
                 >
+                    <div class="w-72">
+                        <label class="block text-sm text-slate-700" for="void-reason-code"
+                            >Why is it voided?</label
+                        >
+                        <select
+                            id="void-reason-code"
+                            v-model="form.reason_code"
+                            required
+                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        >
+                            <option value="" disabled>Choose a reason</option>
+                            <option v-for="r in props.voidReasons" :key="r" :value="r">
+                                {{ VOID_REASON_LABELS[r] ?? r }}
+                            </option>
+                        </select>
+                        <p v-if="form.errors.reason_code" class="mt-1 text-sm text-red-700">
+                            {{ form.errors.reason_code }}
+                        </p>
+                    </div>
                     <div class="w-96">
                         <TextField
                             id="void-reason"
                             v-model="form.reason"
-                            label="Reason for voiding"
+                            label="Note"
                             required
                             :maxlength="255"
                             :error="form.errors.reason"
                         />
                     </div>
+                    <MfaCodeField
+                        id="void-mfa"
+                        v-model="form.mfa_code"
+                        class="w-72"
+                        :has-mfa-factor="props.hasMfaFactor"
+                        action="Voiding a fine"
+                        :error="form.errors.mfa_code"
+                    />
                     <button
                         type="submit"
-                        :disabled="form.processing || !form.reason"
+                        :disabled="
+                            form.processing ||
+                            !form.reason ||
+                            !form.reason_code ||
+                            !props.hasMfaFactor
+                        "
                         class="rounded bg-red-700 px-3 py-2 text-white disabled:opacity-50"
                     >
                         Void fine

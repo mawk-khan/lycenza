@@ -3,8 +3,10 @@
 namespace App\Domain\Attendance\Application;
 
 use App\Domain\Attendance\Application\Exceptions\AttendanceCorrectionNoOpException;
+use App\Domain\Attendance\Application\Exceptions\AttendanceCorrectionReasonException;
 use App\Domain\Attendance\Application\Exceptions\AttendanceRecordStatusChangedException;
 use App\Domain\Attendance\Infrastructure\AttendanceRecord;
+use App\Domain\Attendance\Infrastructure\AttendanceRecordCorrection;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
@@ -47,6 +49,14 @@ use Illuminate\Support\Facades\DB;
  * Only `status` and `corrected_at` ever change. Nothing here can touch
  * a Session column, a structural context column, or
  * `student_enrollment_id`, and there is no delete.
+ *
+ * ORG.8E (ADR 0076 §63, 8E-D2): every correction names a closed reason
+ * (AttendanceRecordCorrection::REASONS) and writes an
+ * `attendance_record_corrections` row (from, to, reason, who) before the
+ * status changes; the database refuses a status change without it. No
+ * approval and no time window. First-time entry (a submitted register) is
+ * not a correction and is unaffected. The reason narrows an authorized edit;
+ * it never grants one (the tiers above are unchanged).
  */
 class AttendanceCorrectionService
 {
@@ -60,10 +70,15 @@ class AttendanceCorrectionService
         string $attendanceRecordId,
         string $expectedStatus,
         string $newStatus,
+        string $reasonCode,
         User $actor,
         ?AttendanceWriteGuard $guard = null,
     ): AttendanceRecord {
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $attendanceRecordId, $expectedStatus, $newStatus, $actor, $guard) {
+        if (! in_array($reasonCode, AttendanceRecordCorrection::REASONS, true)) {
+            throw new AttendanceCorrectionReasonException;
+        }
+
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $attendanceRecordId, $expectedStatus, $newStatus, $reasonCode, $actor, $guard) {
             // TCH.4 Tier 2 only: identity and ownership of the register's
             // class ON its attendance_date, held before the record lock. A
             // Session is immutable, so the unlocked read cannot go stale.
@@ -101,6 +116,10 @@ class AttendanceCorrectionService
 
             $previous = $record->status;
 
+            $correction = AttendanceRecordCorrection::query()->create([
+                'school_id' => $school->id, 'attendance_record_id' => $record->id, 'from_status' => $previous,
+                'to_status' => $newStatus, 'reason_code' => $reasonCode, 'corrected_by_user_id' => $actor->id,
+            ]);
             $record->forceFill([
                 'status' => $newStatus,
                 'corrected_at' => now(),
@@ -111,6 +130,8 @@ class AttendanceCorrectionService
                 'sessionId' => $record->attendance_session_id,
                 'previousStatus' => $previous,
                 'newStatus' => $newStatus,
+                'reasonCode' => $reasonCode,
+                'correctionId' => $correction->id,
             ]);
 
             return $record->refresh();

@@ -4,7 +4,10 @@ use App\Domain\Library\Application\LibraryFineService;
 use App\Domain\Library\Application\LibraryLoanService;
 use App\Domain\Library\Infrastructure\LibraryLoan;
 use App\Models\School;
+use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
 use Tests\Support\Concurrency\HeldTransaction;
 
@@ -35,7 +38,9 @@ try {
             return 'returned:'.$app->make('db')->table('library_fines')->where('library_loan_id', $loan->id)->count();
         }
 
-        $app->make(LibraryFineService::class)->void($school, $argv[3], 'Race', null);
+        // ORG.8E: a current library.fines.void holder (argv[4]), a closed reason and a fresh-MFA proof.
+        $actor = User::query()->findOrFail($argv[4]);
+        $app->make(LibraryFineService::class)->void($school, $argv[3], 'assessed_in_error', 'Race', $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()));
 
         return 'voided';
     });

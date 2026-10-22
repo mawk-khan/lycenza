@@ -37,9 +37,11 @@ use App\Domain\Transport\Application\TransportStudentAssignmentService;
 use App\Domain\Transport\Infrastructure\TransportRoute;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Authorization\Campus\CampusScopeResolver;
 use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -61,8 +63,9 @@ use Tests\Support\Concurrency\HeldTransaction;
 //   php student-eligibility-op.php transport-assign <schoolId> <userId> <studentId> <routeId>
 //   php student-eligibility-op.php route-campus <schoolId> <adminUserId> <routeId> <campusId>
 //   php student-eligibility-op.php transfer <schoolId> <enrollmentId> <sectionId>
-//   php student-eligibility-op.php withdraw <schoolId> <enrollmentId>
-//   php student-eligibility-op.php student-inactivate <schoolId> <studentId>
+//   php student-eligibility-op.php withdraw <schoolId> <enrollmentId> <actorId>              (ORG.8E: a whole-School actor)
+//   php student-eligibility-op.php student-inactivate <schoolId> <studentId> <actorId>       (ORG.8E)
+//   php student-eligibility-op.php enrollment-cancel <schoolId> <enrollmentId> <actorId>     (ORG.8E)
 //   php student-eligibility-op.php year-activate <schoolId> <yearId>
 //   php student-eligibility-op.php year-close <schoolId> <yearId>
 //   php student-eligibility-op.php campus-inactivate <schoolId> <adminUserId> <campusId>
@@ -142,7 +145,8 @@ try {
 
                 return 'ok';
             case 'withdraw':
-                $app->make(StudentEnrollmentService::class)->withdraw(StudentEnrollment::query()->findOrFail($args[0]), now()->toDateString());
+                $actor = User::query()->findOrFail($args[1]);
+                $app->make(StudentEnrollmentService::class)->withdraw(StudentEnrollment::query()->findOrFail($args[0]), now()->toDateString(), 'left_school', $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()));
 
                 return 'ok';
             case 'year-close':
@@ -155,7 +159,8 @@ try {
 
                 return 'ok';
             case 'student-inactivate':
-                $app->make(StudentService::class)->changeStatus(Student::query()->findOrFail($args[0]), 'inactive');
+                $actor = User::query()->findOrFail($args[1]);
+                $app->make(StudentService::class)->changeStatus(Student::query()->findOrFail($args[0]), 'inactive', 'left_school', $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()));
 
                 return 'ok';
             case 'year-activate':
@@ -223,7 +228,8 @@ try {
 
                 return 'ok';
             case 'enrollment-cancel':
-                $app->make(StudentEnrollmentService::class)->cancel(StudentEnrollment::query()->findOrFail($args[0]), now()->toDateString());
+                $actor = User::query()->findOrFail($args[1]);
+                $app->make(StudentEnrollmentService::class)->cancel(StudentEnrollment::query()->findOrFail($args[0]), now()->toDateString(), 'entered_in_error', $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()));
 
                 return 'ok';
             case 'section-inactivate':

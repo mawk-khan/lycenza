@@ -175,14 +175,14 @@ class SubjectOfferingEligibilityReadServiceTest extends TestCase
     {
         $w = $this->world();
         $withdrawn = $this->place($w, $w['a1'], '2026-06-01');
-        app(StudentEnrollmentService::class)->withdraw($withdrawn, '2026-10-15');
+        $this->withdrawEnrollment($withdrawn, '2026-10-15');
         $this->assertEligible($this->ask($w, $w['reqA'], '2026-10-15'), E::SOURCE_REQUIRED, $withdrawn->id, $w['a1']->id);
         $this->assertNotEligible($this->ask($w, $w['reqA'], '2026-10-16'), E::NO_PLACEMENT);
 
         // ADR 0068 §5.5, confirmed: a cancelled placement counts for its interval, exactly as membersAsOf() does.
         $other = $this->createStudent($w['school']);
         $cancelled = $this->place($w, $w['a1'], '2026-06-01', $other);
-        app(StudentEnrollmentService::class)->cancel($cancelled, '2026-07-31');
+        $this->cancelEnrollment($cancelled, '2026-07-31');
         $this->assertEligible($this->ask($w, $w['reqA'], '2026-07-31', $other), E::SOURCE_REQUIRED, $cancelled->id, $w['a1']->id);
         $this->assertNotEligible($this->ask($w, $w['reqA'], '2026-08-01', $other), E::NO_PLACEMENT);
     }
@@ -243,7 +243,7 @@ class SubjectOfferingEligibilityReadServiceTest extends TestCase
         $w = $this->world();
         // A brief, cancelled Grade 6 placement, then the real Grade 5 one; the planted elective names the wrong one.
         $wrong = $this->place($w, $w['a6'], '2026-06-01');
-        app(StudentEnrollmentService::class)->cancel($wrong, '2026-06-02');
+        $this->cancelEnrollment($wrong, '2026-06-02');
         $this->place($w, $w['a1'], '2026-06-03');
         $this->plant($w, 'student_subject_enrollments', [
             'student_id' => $w['student']->id, 'student_enrollment_id' => $wrong->id, 'subject_offering_id' => $w['elA']->id,

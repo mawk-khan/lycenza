@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
  * @property string $school_id
  * @property string $library_fine_id
  * @property string $reason
+ * @property string|null $reason_code ORG.8E: closed reason (NULL only for voids before ORG.8E)
  * @property string|null $voided_by_user_id
  * @property Carbon|null $created_at
  */
@@ -28,5 +29,8 @@ class LibraryFineVoid extends Model
 
     protected $table = 'library_fine_voids';
 
-    protected $fillable = ['school_id', 'library_fine_id', 'reason', 'voided_by_user_id'];
+    /** ORG.8E (ADR 0076 §63): closed, code-owned; mirrored by `library_fine_voids_reason_code_check`. Never a waiver. */
+    public const array REASON_CODES = ['assessed_in_error', 'loan_record_corrected', 'returned_before_due', 'other'];
+
+    protected $fillable = ['school_id', 'library_fine_id', 'reason', 'reason_code', 'voided_by_user_id'];
 }

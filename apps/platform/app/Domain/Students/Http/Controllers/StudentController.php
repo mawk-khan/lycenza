@@ -2,10 +2,12 @@
 
 namespace App\Domain\Students\Http\Controllers;
 
+use App\Domain\Students\Application\StudentLifecycleReason;
 use App\Domain\Students\Application\StudentService;
 use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Models\School;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -101,11 +103,14 @@ class StudentController extends Controller
         abort_if(! Str::isUuid($student), 404);
         $model = Student::query()->findOrFail($student);
 
+        // ORG.8E (ADR 0076 §63): a closed reason and a fresh MFA code (as on the web).
         $validated = $request->validate([
             'status' => ['required', Rule::in(['active', 'inactive'])],
+            'reason_code' => ['required', 'string', Rule::in(StudentLifecycleReason::CODES[$request->input('status') === 'inactive' ? StudentLifecycleReason::DEACTIVATE : StudentLifecycleReason::REACTIVATE])],
         ]);
+        $proof = app(FreshMfaRequirement::class)->requireForAction($request, $request->user());
 
-        $updated = $service->changeStatus($model, $validated['status'], $request->user());
+        $updated = $service->changeStatus($model, $validated['status'], $validated['reason_code'], $request->user(), $proof);
 
         return response()->json(['data' => $this->presentDetail($updated)]);
     }

@@ -157,8 +157,8 @@ class StudentEligibilityConcurrencyTest extends TestCase
     {
         return [
             'transfer' => $this->op('transfer', $this->placement->id, $this->sectionB->id),
-            'withdraw' => $this->op('withdraw', $this->placement->id),
-            'inactivate' => $this->op('student-inactivate', $this->student->id),
+            'withdraw' => $this->op('withdraw', $this->placement->id, $this->admin->id),
+            'inactivate' => $this->op('student-inactivate', $this->student->id, $this->admin->id),
             'year' => $this->op('year-activate', $this->nextYear->id),
             'close' => $this->op('year-close', $this->year->id),
             'campus' => $this->op('campus-inactivate', $this->admin->id, $this->a->id),

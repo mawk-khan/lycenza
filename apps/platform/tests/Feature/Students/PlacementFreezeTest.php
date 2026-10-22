@@ -76,6 +76,9 @@ class PlacementFreezeTest extends TestCase
     #[Test]
     public function the_named_lifecycle_still_ends_a_placement_and_roll_number_is_not_frozen(): void
     {
+        // ORG.8E: a withdrawal needs its lifecycle event in the same transaction.
+        $this->runtime("INSERT INTO student_lifecycle_events (id, school_id, student_id, student_enrollment_id, action, reason_code, acted_by_user_id) VALUES (?, ?, ?, ?, 'enrollment_withdrawn', 'left_school', ?)",
+            [(string) Str::uuid7(), $this->school->id, $this->placement->student_id, $this->placement->id, $this->lifecycleAdmin($this->school)->id]);
         $this->runtime("UPDATE student_enrollments SET status = 'withdrawn', ends_on = '2026-09-01' WHERE id = ?", [$this->placement->id]);
         $this->runtime("UPDATE student_enrollments SET roll_number = '2' WHERE id = ?", [$this->placement->id]);
 

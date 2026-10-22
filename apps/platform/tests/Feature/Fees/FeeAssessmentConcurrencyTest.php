@@ -144,7 +144,7 @@ class FeeAssessmentConcurrencyTest extends TestCase
         $item = $this->items($w, $run)->sole();
 
         [$holder, $contender] = $this->raceWithHeldHolder(
-            ['php', $this->script('withdraw-student-enrollment'), $w['school']->id, $enrollment->id, '2026-08-31'],
+            ['php', $this->script('withdraw-student-enrollment'), $w['school']->id, $enrollment->id, '2026-08-31', $this->schoolAdminFor($w['school'])->id],
             ['php', $this->script('execute-fee-assessment-item'), $w['school']->id, $run->id, $item->id],
         );
 

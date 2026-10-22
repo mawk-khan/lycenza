@@ -6,7 +6,9 @@ use App\Domain\Students\Application\Exceptions\DuplicateStudentNumberException;
 use App\Domain\Students\Application\Exceptions\InvalidStudentStatusException;
 use App\Domain\Students\Application\StudentService;
 use App\Domain\Students\Infrastructure\Student;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
 use Tests\TestCase;
@@ -116,10 +118,10 @@ class StudentServiceTest extends TestCase
         $school = $this->createSchool();
         $student = $this->createStudent($school, ['student_number' => 'S-1001']);
 
-        $inactive = app(StudentService::class)->changeStatus($student, 'inactive');
+        $inactive = $this->changeStudentStatus($student, 'inactive');
         $this->assertFalse($inactive->isActive());
 
-        $active = app(StudentService::class)->changeStatus($inactive, 'active');
+        $active = $this->changeStudentStatus($inactive, 'active');
         $this->assertTrue($active->isActive());
     }
 
@@ -131,6 +133,7 @@ class StudentServiceTest extends TestCase
 
         $this->expectException(InvalidStudentStatusException::class);
 
-        app(StudentService::class)->changeStatus($student, 'graduated');
+        $actor = $this->lifecycleAdmin($school);
+        app(StudentService::class)->changeStatus($student, 'graduated', 'left_school', $actor, new FreshMfaProof($actor->id, CarbonImmutable::now()));
     }
 }

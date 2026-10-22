@@ -127,6 +127,9 @@ class ApprovalWorkflowRegistryTest extends TestCase
             }
         }
 
+        // ORG.8E: declared direct-assured actions reuse the fresh authority read only.
+        $direct = array_map(fn (string $class) => substr((string) (new ReflectionClass($class))->getFileName(), strlen(app_path()) + 1), array_keys(ApprovalWorkflowRegistry::DIRECT_ASSURED));
+
         foreach (['MakerCheckerPolicy', 'ApprovalDecisionAuthority', 'ApprovalProvenance', 'ApprovalParticipants'] as $part) {
             $users = [];
             foreach (Finder::create()->files()->name('*.php')->in(app_path())->notPath('Support/Approval') as $file) {
@@ -136,7 +139,7 @@ class ApprovalWorkflowRegistryTest extends TestCase
                 }
             }
             $this->assertNotEmpty($users, "{$part} is used");
-            $this->assertSame([], array_values(array_diff($users, $allowed)), "only registered shared workflows use {$part}");
+            $this->assertSame([], array_values(array_diff($users, $part === 'ApprovalDecisionAuthority' ? [...$allowed, ...$direct] : $allowed)), "only registered shared workflows use {$part}");
         }
     }
 
@@ -185,5 +188,20 @@ class ApprovalWorkflowRegistryTest extends TestCase
             $this->assertDoesNotMatchRegularExpression('/DB::|::query\(\)|extends Model|Schema::/', $source, "{$file->getFilename()}: the shared toolkit never reads or writes business data");
         }
         $this->assertNull(DB::selectOne("select to_regclass('public.approval_requests') as t")->t, 'no generic approval table');
+    }
+
+    #[Test]
+    public function direct_assured_actions_are_not_workflows_and_use_only_the_fresh_authority_read(): void
+    {
+        foreach (ApprovalWorkflowRegistry::DIRECT_ASSURED as $class => [$capability]) {
+            $source = (string) file_get_contents((string) (new ReflectionClass($class))->getFileName());
+            $this->assertStringContainsString('authority->requireCurrent(', $source, "{$class} re-reads current authority");
+            $this->assertStringContainsString("'{$capability}'", $source);
+            $this->assertStringContainsString('FreshMfaProof $mfa', $source, "{$class} requires the fresh-MFA proof");
+            foreach (['MakerCheckerPolicy', 'ApprovalProvenance', 'ApprovalParticipants'] as $part) {
+                $this->assertStringNotContainsString($part, $source, "{$class} is direct, not a workflow");
+            }
+            $this->assertNotContains($class, array_column(ApprovalWorkflowRegistry::WORKFLOWS, 'service'));
+        }
     }
 }

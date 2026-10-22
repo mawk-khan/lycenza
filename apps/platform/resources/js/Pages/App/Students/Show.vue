@@ -3,6 +3,7 @@ import SearchCombobox from '../../../Components/Form/SearchCombobox.vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
+import MfaCodeField from '../../../Components/MfaCodeField.vue';
 import RelationshipFlags from '../../../Components/RelationshipFlags.vue';
 import StatusBadge from '../../../Components/StatusBadge.vue';
 import { RELATIONSHIP_TYPES } from '../../../relationshipTypes';
@@ -77,6 +78,10 @@ interface Props {
     // optional.
     canViewEnrollments: boolean;
     canManageEnrollments?: boolean;
+    // ORG.8E (ADR 0076 §63): the closed reasons per high-impact action and
+    // whether the actor can give a fresh code.
+    lifecycleReasons: Record<string, string[]>;
+    hasMfaFactor: boolean;
     currentEnrollment?: Enrollment | null;
     enrollmentHistory?: Enrollment[];
 }
@@ -137,12 +142,62 @@ function unlinkAccount(): void {
     });
 }
 
+// --- ORG.8E: high-impact lifecycle assurance ----------------------------
+// Deactivate/reactivate, withdraw and cancel need a closed reason, an
+// explicit confirmation and a fresh authentication code; the server
+// re-checks all of it. Completion stays an ordinary action.
+
+const REASON_LABELS: Record<string, string> = {
+    left_school: 'Left the School',
+    transferred_out: 'Transferred to another school',
+    completed_studies: 'Completed studies',
+    duplicate_record: 'Duplicate record',
+    entered_in_error: 'Entered in error',
+    returned_to_school: 'Returned to the School',
+    deactivated_in_error: 'Deactivated in error',
+    guardian_request: 'Guardian request',
+    did_not_join: 'Did not join',
+    duplicate_placement: 'Duplicate placement',
+};
+
+function reasonsFor(action: string): string[] {
+    return props.lifecycleReasons[action] ?? [];
+}
+
+const statusForm = useForm({ status: '', reason_code: '', mfa_code: '', confirm: false });
+const statusOpen = ref(false);
+const statusAction = computed(() =>
+    props.student.status === 'active' ? 'student_deactivated' : 'student_reactivated',
+);
+
+function openStatusChange(): void {
+    statusForm.reset();
+    statusForm.clearErrors();
+    statusForm.status = props.student.status === 'active' ? 'inactive' : 'active';
+    statusOpen.value = true;
+}
+
+function submitStatusChange(): void {
+    statusForm.post(`/app/students/${props.student.id}/status`, {
+        preserveScroll: true,
+        onError: () => statusForm.reset('mfa_code'),
+        onSuccess: () => {
+            statusOpen.value = false;
+        },
+    });
+}
+
 // --- Enrollment lifecycle (inline) -------------------------------------
 
 type LifecycleAction = 'complete' | 'withdraw' | 'cancel';
 
+const LIFECYCLE_REASON_ACTION: Record<string, string> = {
+    withdraw: 'enrollment_withdrawn',
+    cancel: 'enrollment_cancelled',
+};
+
 const activeLifecycleAction = ref<LifecycleAction | null>(null);
-const lifecycleForm = useForm({ ends_on: '' });
+const lifecycleForm = useForm({ ends_on: '', reason_code: '', mfa_code: '', confirm: false });
 
 const LIFECYCLE_LABELS: Record<LifecycleAction, string> = {
     complete: 'Complete enrollment',
@@ -151,14 +206,15 @@ const LIFECYCLE_LABELS: Record<LifecycleAction, string> = {
 };
 
 function startLifecycleAction(action: LifecycleAction): void {
+    lifecycleForm.reset();
     lifecycleForm.clearErrors();
-    lifecycleForm.ends_on = '';
     activeLifecycleAction.value = action;
 }
 
 function submitLifecycleAction(enrollmentId: string): void {
     if (!activeLifecycleAction.value) return;
     lifecycleForm.post(`/app/enrollments/${enrollmentId}/${activeLifecycleAction.value}`, {
+        onError: () => lifecycleForm.reset('mfa_code'),
         onSuccess: () => {
             activeLifecycleAction.value = null;
         },
@@ -174,7 +230,7 @@ function submitLifecycleAction(enrollmentId: string): void {
 type HistoricalAction = 'complete' | 'withdraw';
 
 const historical = ref<{ id: string; action: HistoricalAction } | null>(null);
-const historicalForm = useForm({ ends_on: '' });
+const historicalForm = useForm({ ends_on: '', reason_code: '', mfa_code: '', confirm: false });
 const historicalDone = ref<string | null>(null);
 
 const HISTORICAL_HELP: Record<HistoricalAction, string> = {
@@ -188,6 +244,7 @@ function isOpenInClosedYear(e: Enrollment): boolean {
 }
 
 function startHistorical(e: Enrollment, action: HistoricalAction): void {
+    historicalForm.reset();
     historicalForm.clearErrors();
     historicalForm.ends_on = action === 'complete' ? e.academicYear.endsOn : '';
     historicalDone.value = null;
@@ -199,6 +256,7 @@ function submitHistorical(e: Enrollment): void {
     const action = historical.value.action;
     historicalForm.post(`/app/enrollments/${e.id}/${action}`, {
         preserveScroll: true,
+        onError: () => historicalForm.reset('mfa_code'),
         // Keep this local confirmation across the redirect back to this page
         // (it does not rely on flashed messages, X-01).
         preserveState: true,
@@ -221,11 +279,6 @@ function fullName(): string {
 
 function guardianName(g: Relationship['guardian']): string {
     return [g.firstName, g.middleName, g.lastName].filter(Boolean).join(' ');
-}
-
-function toggleStatus(): void {
-    const next = props.student.status === 'active' ? 'inactive' : 'active';
-    router.post(`/app/students/${props.student.id}/status`, { status: next });
 }
 
 // --- Edit relationship (inline) --------------------------------------
@@ -298,12 +351,72 @@ function unlink(r: Relationship): void {
                 <button
                     type="button"
                     class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
-                    @click="toggleStatus"
+                    @click="openStatusChange"
                 >
-                    {{ student.status === 'active' ? 'Mark inactive' : 'Mark active' }}
+                    {{ student.status === 'active' ? 'Mark inactive…' : 'Mark active…' }}
                 </button>
             </div>
         </div>
+
+        <form
+            v-if="statusOpen"
+            class="mt-4 rounded border border-amber-300 bg-amber-50 p-4"
+            @submit.prevent="submitStatusChange"
+        >
+            <p class="text-sm font-medium text-slate-800">
+                {{
+                    statusForm.status === 'inactive'
+                        ? 'Mark this Student inactive'
+                        : 'Mark this Student active'
+                }}
+            </p>
+            <p class="mt-1 text-sm text-slate-600">
+                This changes the Student's status for the whole School. Enrollments are not changed.
+            </p>
+            <div class="mt-2">
+                <label class="block text-sm text-slate-600" for="status-change-reason"
+                    >Reason</label
+                >
+                <select
+                    id="status-change-reason"
+                    v-model="statusForm.reason_code"
+                    required
+                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm sm:w-72"
+                >
+                    <option value="" disabled>Choose a reason</option>
+                    <option v-for="r in reasonsFor(statusAction)" :key="r" :value="r">
+                        {{ REASON_LABELS[r] ?? r }}
+                    </option>
+                </select>
+                <p class="mt-1 text-sm text-red-600">{{ statusForm.errors.reason_code }}</p>
+            </div>
+            <MfaCodeField
+                id="status-change-mfa"
+                v-model="statusForm.mfa_code"
+                class="mt-2"
+                :has-mfa-factor="hasMfaFactor"
+                action="This change"
+                :error="statusForm.errors.mfa_code"
+            />
+            <label class="mt-2 flex items-start gap-2 text-sm text-slate-700">
+                <input v-model="statusForm.confirm" type="checkbox" class="mt-0.5" />
+                <span>I confirm this change. It is recorded with my name and the reason.</span>
+            </label>
+            <p class="mt-1 text-sm text-red-600">{{ statusForm.errors.confirm }}</p>
+            <p class="mt-1 text-sm text-red-600">{{ statusForm.errors.status }}</p>
+            <div class="mt-3 flex items-center gap-3">
+                <button
+                    type="submit"
+                    :disabled="statusForm.processing || !hasMfaFactor"
+                    class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                >
+                    Confirm change
+                </button>
+                <button type="button" class="text-sm underline" @click="statusOpen = false">
+                    Cancel
+                </button>
+            </div>
+        </form>
 
         <!-- Identity -->
         <section class="mt-8">
@@ -429,6 +542,49 @@ function unlink(r: Relationship): void {
                             {{ lifecycleForm.errors.ends_on }}
                         </p>
                     </div>
+                    <template v-if="activeLifecycleAction !== 'complete'">
+                        <div class="mt-2">
+                            <label class="block text-sm text-slate-600" for="lifecycle-reason"
+                                >Reason</label
+                            >
+                            <select
+                                id="lifecycle-reason"
+                                v-model="lifecycleForm.reason_code"
+                                required
+                                class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm sm:w-72"
+                            >
+                                <option value="" disabled>Choose a reason</option>
+                                <option
+                                    v-for="r in reasonsFor(
+                                        LIFECYCLE_REASON_ACTION[activeLifecycleAction],
+                                    )"
+                                    :key="r"
+                                    :value="r"
+                                >
+                                    {{ REASON_LABELS[r] ?? r }}
+                                </option>
+                            </select>
+                            <p class="mt-1 text-sm text-red-600">
+                                {{ lifecycleForm.errors.reason_code }}
+                            </p>
+                        </div>
+                        <MfaCodeField
+                            id="lifecycle-mfa"
+                            v-model="lifecycleForm.mfa_code"
+                            class="mt-2"
+                            :has-mfa-factor="hasMfaFactor"
+                            action="This change"
+                            :error="lifecycleForm.errors.mfa_code"
+                        />
+                        <label class="mt-2 flex items-start gap-2 text-sm text-slate-700">
+                            <input v-model="lifecycleForm.confirm" type="checkbox" class="mt-0.5" />
+                            <span
+                                >I confirm this change. It is recorded with my name and the
+                                reason.</span
+                            >
+                        </label>
+                        <p class="mt-1 text-sm text-red-600">{{ lifecycleForm.errors.confirm }}</p>
+                    </template>
                     <div class="mt-3 flex items-center gap-3">
                         <button
                             type="submit"
@@ -525,6 +681,53 @@ function unlink(r: Relationship): void {
                                 {{ historicalForm.errors.ends_on }}
                             </p>
                         </div>
+                        <template v-if="historical.action === 'withdraw'">
+                            <div class="mt-2">
+                                <label class="block text-sm text-slate-600" for="historical-reason"
+                                    >Reason</label
+                                >
+                                <select
+                                    id="historical-reason"
+                                    v-model="historicalForm.reason_code"
+                                    required
+                                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm sm:w-72"
+                                >
+                                    <option value="" disabled>Choose a reason</option>
+                                    <option
+                                        v-for="r in reasonsFor('enrollment_withdrawn')"
+                                        :key="r"
+                                        :value="r"
+                                    >
+                                        {{ REASON_LABELS[r] ?? r }}
+                                    </option>
+                                </select>
+                                <p class="mt-1 text-sm text-red-600">
+                                    {{ historicalForm.errors.reason_code }}
+                                </p>
+                            </div>
+                            <MfaCodeField
+                                id="historical-mfa"
+                                v-model="historicalForm.mfa_code"
+                                class="mt-2"
+                                :has-mfa-factor="hasMfaFactor"
+                                action="This change"
+                                :error="historicalForm.errors.mfa_code"
+                            />
+                            <label class="mt-2 flex items-start gap-2 text-sm text-slate-700">
+                                <input
+                                    v-model="historicalForm.confirm"
+                                    type="checkbox"
+                                    class="mt-0.5"
+                                />
+                                <span
+                                    >I confirm this change. It is recorded with my name and the
+                                    reason.</span
+                                >
+                            </label>
+                            <p class="mt-1 text-sm text-red-600">
+                                {{ historicalForm.errors.confirm }}
+                            </p>
+                        </template>
                         <div class="mt-2 flex items-center gap-3">
                             <button
                                 type="submit"

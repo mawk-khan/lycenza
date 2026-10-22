@@ -222,7 +222,7 @@ class AttendanceApiTest extends TestCase
         $recordId = $data['records'][0]['id'];
 
         $ok = $this->as($w)->postJson($this->base($w)."/attendance-records/{$recordId}/correct", [
-            'expected_status' => 'absent', 'new_status' => 'present',
+            'expected_status' => 'absent', 'new_status' => 'present', 'reason_code' => 'entered_in_error',
         ]);
         $ok->assertOk();
         $this->assertSame('present', $ok->json('data.status'));
@@ -230,12 +230,12 @@ class AttendanceApiTest extends TestCase
 
         // A stale expected_status now conflicts.
         $this->as($w)->postJson($this->base($w)."/attendance-records/{$recordId}/correct", [
-            'expected_status' => 'absent', 'new_status' => 'excused',
+            'expected_status' => 'absent', 'new_status' => 'excused', 'reason_code' => 'entered_in_error',
         ])->assertStatus(409);
 
         // A no-op is a validation-level rejection.
         $this->as($w)->postJson($this->base($w)."/attendance-records/{$recordId}/correct", [
-            'expected_status' => 'present', 'new_status' => 'present',
+            'expected_status' => 'present', 'new_status' => 'present', 'reason_code' => 'entered_in_error',
         ])->assertStatus(422);
     }
 
@@ -258,7 +258,7 @@ class AttendanceApiTest extends TestCase
         $this->as($w, $outsider)->withHeader('Idempotency-Key', 'attendance-deny-key')
             ->postJson($this->base($w).'/attendance-sessions', $this->submitPayload($w, []))->assertForbidden();
         $this->as($w, $outsider)->postJson($this->base($w)."/attendance-records/{$data['records'][0]['id']}/correct", [
-            'expected_status' => 'absent', 'new_status' => 'present',
+            'expected_status' => 'absent', 'new_status' => 'present', 'reason_code' => 'entered_in_error',
         ])->assertForbidden();
     }
 
@@ -277,7 +277,7 @@ class AttendanceApiTest extends TestCase
         $this->as($w, $viewer)->withHeader('Idempotency-Key', 'attendance-viewer-key')
             ->postJson($this->base($w).'/attendance-sessions', $this->submitPayload($w, []))->assertForbidden();
         $this->as($w, $viewer)->postJson($this->base($w)."/attendance-records/{$data['records'][0]['id']}/correct", [
-            'expected_status' => 'absent', 'new_status' => 'present',
+            'expected_status' => 'absent', 'new_status' => 'present', 'reason_code' => 'entered_in_error',
         ])->assertForbidden();
 
         // The helpers require `.manage` -- they exist to prepare a write.
@@ -321,7 +321,7 @@ class AttendanceApiTest extends TestCase
 
         $this->actingAs($other['actor'])->withHeader('X-School-Id', $other['school']->id)
             ->postJson("/api/v1/schools/{$other['school']->id}/attendance-records/{$recordId}/correct", [
-                'expected_status' => 'absent', 'new_status' => 'present',
+                'expected_status' => 'absent', 'new_status' => 'present', 'reason_code' => 'entered_in_error',
             ])->assertNotFound();
 
         $this->assertSame('absent', $this->inSchool($w['school'], fn () => AttendanceRecord::query()->findOrFail($recordId)->status));

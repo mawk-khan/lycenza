@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\App;
 
-use App\Domain\Students\Application\StudentEnrollmentService;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Models\School;
 use App\Models\SchoolAuditEvent;
@@ -12,6 +11,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -22,7 +22,7 @@ use Tests\TestCase;
  */
 class HistoricalPlacementClosureUiTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, ProvidesSensitiveActionMfa;
 
     private const array MANAGER = ['students.view', 'enrollments.view', 'enrollments.manage'];
 
@@ -124,9 +124,12 @@ class HistoricalPlacementClosureUiTest extends TestCase
     {
         $w = $this->world();
         [$stale] = $this->leftover($w);
-        $this->member($w['school'], self::MANAGER);
+        $manager = $this->member($w['school'], self::MANAGER);
 
-        $this->post("/app/enrollments/{$stale->id}/withdraw", ['ends_on' => '2025-12-15'])->assertRedirect();
+        // ORG.8E (ADR 0076 §63): a closed-year withdrawal carries the same reason, confirmation and fresh code.
+        $this->post("/app/enrollments/{$stale->id}/withdraw", ['ends_on' => '2025-12-15'])->assertSessionHasErrors(['reason_code', 'confirm']);
+        $this->assertSame('active', $this->fresh($stale)->status);
+        $this->post("/app/enrollments/{$stale->id}/withdraw", ['ends_on' => '2025-12-15', 'reason_code' => 'left_school', 'confirm' => '1', 'mfa_code' => $this->freshMfaCode($manager)])->assertRedirect();
 
         $this->assertSame('withdrawn', $this->fresh($stale)->status);
         $this->assertSame(1, $this->auditCount('student_enrollment.withdrawn', $stale));
@@ -137,12 +140,12 @@ class HistoricalPlacementClosureUiTest extends TestCase
     {
         $w = $this->world();
         [$stale] = $this->leftover($w);
-        $this->member($w['school'], self::MANAGER);
+        $manager = $this->member($w['school'], self::MANAGER);
 
         $this->post("/app/enrollments/{$stale->id}/complete", ['ends_on' => '2026-03-31'])->assertRedirect();
         // Second click / another tab: already completed.
         $this->post("/app/enrollments/{$stale->id}/complete", ['ends_on' => '2026-03-31'])->assertSessionHasErrors('ends_on');
-        $this->post("/app/enrollments/{$stale->id}/withdraw", ['ends_on' => '2026-03-31'])->assertSessionHasErrors('ends_on');
+        $this->post("/app/enrollments/{$stale->id}/withdraw", ['ends_on' => '2026-03-31', 'reason_code' => 'left_school', 'confirm' => '1', 'mfa_code' => $this->freshMfaCode($manager)])->assertSessionHasErrors('ends_on');
 
         $this->assertSame('completed', $this->fresh($stale)->status);
         $this->assertSame(1, $this->auditCount('student_enrollment.completed', $stale));
@@ -281,7 +284,7 @@ class HistoricalPlacementClosureUiTest extends TestCase
         [$b] = $this->leftover($w, '2');
         $manager = $this->member($w['school'], self::MANAGER);
         // Someone withdraws $a on the Student page between preview and confirm.
-        app(StudentEnrollmentService::class)->withdraw($a, '2025-12-01', $manager);
+        $this->withdrawEnrollment($a, '2025-12-01');
 
         $this->post('/app/enrollments/closed-year-placements/complete', [
             'academic_year_id' => $w['closed']->id, 'enrollment_ids' => [$a->id, $b->id], 'confirm' => true,

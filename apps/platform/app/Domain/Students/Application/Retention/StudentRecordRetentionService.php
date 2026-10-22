@@ -69,7 +69,9 @@ final class StudentRecordRetentionService
     ];
 
     /** Dependents the core purge removes itself (or that it verified above). */
-    private const CORE_HANDLED = ['student_enrollments', 'student_subject_enrollments', 'documents', 'student_guardian_account_links', 'student_processing_authorizations'];
+    private const CORE_HANDLED = ['student_enrollments', 'student_subject_enrollments', 'documents', 'student_guardian_account_links', 'student_processing_authorizations',
+        // ORG.8E (ADR 0076 §63): lifecycle evidence cascades with its Student and Enrollments.
+        'student_lifecycle_events'];
 
     public function __construct(
         private readonly StudentRetentionEligibility $students,

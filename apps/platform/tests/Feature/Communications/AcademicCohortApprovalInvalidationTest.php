@@ -172,7 +172,7 @@ class AcademicCohortApprovalInvalidationTest extends TestCase
         $this->approvals()->approve($request, $approver);
 
         app(TenantContext::class)->withSchool($school, function () use ($enrollment): void {
-            $enrollment->update(['status' => 'withdrawn']);
+            $this->forceEnrollmentStatus($enrollment, 'withdrawn');
         });
 
         $fresh = app(TenantContext::class)->withSchool($school, fn () => $announcement->fresh());

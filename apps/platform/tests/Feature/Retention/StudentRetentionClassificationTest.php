@@ -26,6 +26,8 @@ class StudentRetentionClassificationTest extends TestCase
     /** parent => referencing table => how D7 treats it */
     public const CLASSIFICATION = [
         'students' => [
+            // ORG.8E (ADR 0076 §63): high-impact lifecycle evidence; part of the core record, cascades with it (handled).
+            'student_lifecycle_events' => 'D7 core: lifecycle evidence, removed with its Student (cascade)',
             'student_enrollments' => 'D7 core (25 y): placements, purged with the Student',
             'student_subject_enrollments' => 'D7 core (25 y): subject history, purged with the Student',
             'documents' => 'D5 inherits the Student: purged with it (DocumentParentRetention)',
@@ -60,6 +62,8 @@ class StudentRetentionClassificationTest extends TestCase
             'student_mark_corrections' => 'retained, blocks: RES-L8 unresolved (ADR 0068 §12): StudentMark evidence has no adopted period and no retention participant yet',
         ],
         'student_enrollments' => [
+            // ORG.8E: a withdrawal/cancellation event cascades with its Enrollment.
+            'student_lifecycle_events' => 'D7 core: lifecycle evidence, removed with its Enrollment (cascade)',
             'student_subject_enrollments' => 'D7 core: purged first, with the Student',
             'attendance_records' => 'D7 operational (7 y): Attendance',
             'enrollment_rollover_items' => 'D7 operational (7 y)',
@@ -78,7 +82,10 @@ class StudentRetentionClassificationTest extends TestCase
         'student_guardian_relationships' => [
             'student_processing_authorizations' => 'D7 core: a relationship an authorization names is its evidence and goes with the core record (E21.3B); the operational phase leaves it',
         ],
-        'attendance_records' => [],
+        'attendance_records' => [
+            // ORG.8E: correction evidence cascades with its record (handled by the attendance unit).
+            'attendance_record_corrections' => 'D7 cascade: correction evidence, removed with its record by the attendance unit',
+        ],
         'enrollment_rollover_items' => [],
         'documents' => [],
         // E21.3B: the rows that go with the Student, and what may reference them.

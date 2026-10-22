@@ -9,6 +9,7 @@ use App\Domain\Attendance\Application\AttendanceCorrectionService;
 use App\Domain\Attendance\Application\AttendanceSubmissionService;
 use App\Domain\Attendance\Application\Exceptions\AttendanceException;
 use App\Domain\Attendance\Infrastructure\AttendanceRecord;
+use App\Domain\Attendance\Infrastructure\AttendanceRecordCorrection;
 use App\Domain\Attendance\Infrastructure\AttendanceSession;
 use App\Domain\Students\Application\Exceptions\AmbiguousHistoricalEnrollmentException;
 use App\Domain\Students\Application\SectionRosterMember;
@@ -169,6 +170,8 @@ class AttendanceController extends Controller
         // A register is correctable only where the actor manages Attendance
         // for the register's own (stored) Campus.
         return Inertia::render('App/Attendance/Show', [
+            // ORG.8E (ADR 0076 §63): the closed correction reasons.
+            'correctionReasons' => AttendanceRecordCorrection::REASONS,
             'session' => $this->presentDetail($session),
             'statuses' => AttendanceRecord::STATUSES,
             'canManage' => $scopes->campusScope($context->actor(), 'attendance.manage', $school)->covers($session->campus_id),
@@ -219,11 +222,13 @@ class AttendanceController extends Controller
         $validated = $request->validate([
             'expected_status' => ['required', Rule::in(AttendanceRecord::STATUSES)],
             'new_status' => ['required', Rule::in(AttendanceRecord::STATUSES)],
+            // ORG.8E (ADR 0076 §63): a correction names its closed reason.
+            'reason_code' => ['required', 'string', Rule::in(AttendanceRecordCorrection::REASONS)],
         ]);
 
         try {
             $record = $service->correct(
-                $school, $attendanceRecord, $validated['expected_status'], $validated['new_status'], $context->actor(), $guard,
+                $school, $attendanceRecord, $validated['expected_status'], $validated['new_status'], $validated['reason_code'], $context->actor(), $guard,
             );
         } catch (AttendanceException $e) {
             throw ValidationException::withMessages(['new_status' => $e->getMessage()]);

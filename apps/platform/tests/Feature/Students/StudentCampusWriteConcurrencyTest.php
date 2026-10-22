@@ -111,7 +111,7 @@ class StudentCampusWriteConcurrencyTest extends TestCase
     {
         return [
             'transfer' => $this->op('transfer', $this->placement->id, $this->sectionB->id),
-            'inactivate' => $this->op('student-inactivate', $this->student->id),
+            'inactivate' => $this->op('student-inactivate', $this->student->id, $this->admin->id),
             'year' => $this->op('year-activate', $this->nextYear->id),
             'campus' => $this->op('campus-inactivate', $this->admin->id, $this->a->id),
         ];

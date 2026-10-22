@@ -86,7 +86,7 @@ class AttendanceAdminUiTest extends TestCase
             ->where('student_enrollment_id', $b->id)->firstOrFail());
 
         $this->actor($w)->post("/app/attendance/records/{$record->id}/correct", [
-            'expected_status' => 'absent', 'new_status' => 'excused',
+            'expected_status' => 'absent', 'new_status' => 'excused', 'reason_code' => 'entered_in_error',
         ])->assertRedirect();
 
         $this->assertSame('excused', $this->inSchool($w['school'], fn () => $record->fresh()->status));
@@ -116,12 +116,12 @@ class AttendanceAdminUiTest extends TestCase
             ->where('attendance_session_id', $session->id)->firstOrFail());
 
         $this->actor($w)->post("/app/attendance/records/{$record->id}/correct", [
-            'expected_status' => 'absent', 'new_status' => 'present',
+            'expected_status' => 'absent', 'new_status' => 'present', 'reason_code' => 'entered_in_error',
         ])->assertRedirect();
 
         // A second tab still showing `absent`.
         $this->actor($w)->post("/app/attendance/records/{$record->id}/correct", [
-            'expected_status' => 'absent', 'new_status' => 'late',
+            'expected_status' => 'absent', 'new_status' => 'late', 'reason_code' => 'entered_in_error',
         ])->assertSessionHasErrors('new_status');
 
         $this->assertSame('present', $this->inSchool($w['school'], fn () => $record->fresh()->status));
@@ -146,11 +146,11 @@ class AttendanceAdminUiTest extends TestCase
         $record = $this->inSchool($w['school'], fn () => AttendanceRecord::query()
             ->where('attendance_session_id', $session->id)->firstOrFail());
         $this->actor($w)->post("/app/attendance/records/{$record->id}/correct", [
-            'expected_status' => 'absent', 'new_status' => 'present',
+            'expected_status' => 'absent', 'new_status' => 'present', 'reason_code' => 'entered_in_error',
         ]);
 
         $this->actor($w)->from("/app/attendance/{$session->id}")->followingRedirects()
-            ->post("/app/attendance/records/{$record->id}/correct", ['expected_status' => 'absent', 'new_status' => 'late'])
+            ->post("/app/attendance/records/{$record->id}/correct", ['expected_status' => 'absent', 'new_status' => 'late', 'reason_code' => 'entered_in_error'])
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->component('App/Attendance/Show')
                 ->where('errors.new_status', fn ($message) => str_contains((string) $message, "now 'present'")));
@@ -240,7 +240,7 @@ class AttendanceAdminUiTest extends TestCase
 
         $this->actor($w, $viewer)->get('/app/attendance/take')->assertForbidden();
         $this->actor($w, $viewer)->post("/app/attendance/records/{$record->id}/correct", [
-            'expected_status' => 'absent', 'new_status' => 'present',
+            'expected_status' => 'absent', 'new_status' => 'present', 'reason_code' => 'entered_in_error',
         ])->assertForbidden();
     }
 }

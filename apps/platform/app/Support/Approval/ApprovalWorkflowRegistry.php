@@ -166,6 +166,19 @@ final class ApprovalWorkflowRegistry
     ];
 
     /**
+     * ORG.8E (ADR 0076 §63): DIRECT high-impact actions with assurance -- NOT
+     * request/approve workflows (owner decisions 8E-D1..D3). They reuse only
+     * `ApprovalDecisionAuthority` (the fresh, whole-School authority read);
+     * never maker/checker, participants or approval provenance. Service =>
+     * [capability, actions].
+     */
+    public const DIRECT_ASSURED = [
+        'App\Domain\Students\Application\StudentService' => ['students.manage', 'student status change (closed reason, fresh MFA, lifecycle event)'],
+        'App\Domain\Students\Application\StudentEnrollmentService' => ['enrollments.manage', 'placement withdraw / cancel (closed reason, fresh MFA, lifecycle event)'],
+        'App\Domain\Library\Application\LibraryFineService' => ['library.fines.void', 'fine void (closed reason code, note, fresh MFA)'],
+    ];
+
+    /**
      * Decision-shaped columns or capabilities that are NOT approval workflows,
      * with the reason. Anything else decision-shaped must be a workflow.
      */

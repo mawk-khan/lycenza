@@ -266,7 +266,7 @@ class AcademicCohortAudienceResolverTest extends TestCase
         // §3: NEVER frozen at scheduling/draft time -- the Student
         // leaves the Grade (withdrawn) AFTER the draft was created.
         app(TenantContext::class)->withSchool($school, function () use ($enrollment): void {
-            $enrollment->update(['status' => 'withdrawn']);
+            $this->forceEnrollmentStatus($enrollment, 'withdrawn');
         });
 
         $published = $this->announcements()->publish($announcement, $admin);

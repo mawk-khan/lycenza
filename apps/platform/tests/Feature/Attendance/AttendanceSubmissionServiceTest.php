@@ -17,7 +17,6 @@ use App\Domain\Attendance\Application\Exceptions\TimetableEntryNotSchedulableExc
 use App\Domain\Attendance\Infrastructure\AttendanceRecord;
 use App\Domain\Attendance\Infrastructure\AttendanceSession;
 use App\Domain\Students\Application\Exceptions\AmbiguousHistoricalEnrollmentException;
-use App\Domain\Students\Application\StudentEnrollmentService;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Domain\Timetable\Application\TimetableScheduleService;
 use App\Models\SchoolAuditEvent;
@@ -361,7 +360,7 @@ class AttendanceSubmissionServiceTest extends TestCase
         $leaver = $this->enrollStudent($w['section'], '2', '2026-06-01');
 
         // Withdrawn AFTER the attendance date -- historically present.
-        app(StudentEnrollmentService::class)->withdraw($leaver, '2026-10-01', $w['actor']);
+        $this->withdrawEnrollment($leaver, '2026-10-01');
 
         $session = $this->submit($w, $this->registerPayload([
             $stayer->id => 'present', $leaver->id => 'absent',
@@ -379,7 +378,7 @@ class AttendanceSubmissionServiceTest extends TestCase
         $gone = $this->enrollStudent($w['section'], '2', '2026-06-01');
 
         // ends_on is INCLUSIVE, so an end one day before MONDAY excludes.
-        app(StudentEnrollmentService::class)->withdraw($gone, '2026-08-30', $w['actor']);
+        $this->withdrawEnrollment($gone, '2026-08-30');
 
         $session = $this->submit($w, $this->registerPayload([$stayer->id => 'present']));
 
@@ -392,7 +391,7 @@ class AttendanceSubmissionServiceTest extends TestCase
     {
         $w = $this->attendanceWorld();
         $boundary = $this->enrollStudent($w['section'], '1', '2026-06-01');
-        app(StudentEnrollmentService::class)->withdraw($boundary, self::MONDAY, $w['actor']);
+        $this->withdrawEnrollment($boundary, self::MONDAY);
 
         $session = $this->submit($w, $this->registerPayload([$boundary->id => 'present']));
 

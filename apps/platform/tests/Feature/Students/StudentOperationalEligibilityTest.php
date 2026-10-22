@@ -83,7 +83,7 @@ class StudentOperationalEligibilityTest extends TestCase
         $this->assertFalse($this->eligible($unplaced->id, $this->a->id), 'no current placement');
 
         $left = $this->placed();
-        $this->inSchool(fn () => StudentEnrollment::query()->where('student_id', $left->id)->update(['status' => 'withdrawn', 'ends_on' => now()->toDateString()]));
+        $this->inSchool(fn () => StudentEnrollment::query()->where('student_id', $left->id)->get())->each(fn (StudentEnrollment $e) => $this->forceEnrollmentStatus($e, 'withdrawn', ['ends_on' => now()->toDateString()]));
         $this->assertFalse($this->eligible($left->id, $this->a->id), 'ended placement');
 
         $draft = $this->createAcademicYear($this->school, ['code' => 'E2', 'name' => 'E2', 'status' => 'draft']);

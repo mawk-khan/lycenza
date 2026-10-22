@@ -89,7 +89,7 @@ class LibraryFineConcurrencyTest extends TestCase
     {
         $w = $this->world();
         $fine = $this->returned($w);
-        $args = ['void', $w['school']->id, $fine->id];
+        $args = ['void', $w['school']->id, $fine->id, $this->schoolAdminFor($w['school'])->id];
 
         [$holder, $contender] = $this->raceWithHeldHolder($this->op(...$args), $this->op(...$args));
 

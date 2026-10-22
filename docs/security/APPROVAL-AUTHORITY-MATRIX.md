@@ -40,11 +40,11 @@ recovery code per action); there is no other mechanism.
 | Period close | `finance.periods.manage` | school_admin | yes + typed key | none | whole-School | NO_APPROVAL; keep (irreversible, no reopen) |
 | Charge cancel / assessment void / late-fee void | `finance.charges.manage` | school_admin, accountant | no | optional text | whole-School | NO_APPROVAL; recommend REASON_REQUIRED (closed) and ON_EXECUTION step-up |
 | Fee-run cancel | `finance.fee_assessments.run` | school_admin, accountant | no | none | whole-School | NO_APPROVAL (pre-execution only) |
-| Library fine void | `library.fines.void` | school_admin | no | free text required (DB) | whole-School | NO_APPROVAL for the holder; optional librarian request (`library.fine_voids.request`) only if the owner wants it; REASON_REQUIRED closed |
-| Student Attendance correction | `attendance.manage` (Campus-adopted) / `attendance.teacher` (ownership) | school_admin, principal; teacher (own registers) | no | none | Campus by stored register Campus | NO_APPROVAL; REASON_REQUIRED (closed); any late-correction approval window is a School-configurable business policy (owner decision) |
+| Library fine void (ORG.8E: DIRECT_WITH_ASSURANCE, ADR 0076 §63) | `library.fines.void` | school_admin | **yes** (fresh code) | closed `reason_code` + bounded note (DB) | whole-School | NO_APPROVAL (OD-8.5 closed: no librarian request); current authority re-read; at most once; FEE source seam only |
+| Student Attendance correction (ORG.8E: DIRECT_WITH_ASSURANCE, §63) | `attendance.manage` (Campus-adopted) / `attendance.teacher` (ownership) | school_admin, principal; teacher (own registers) | no | closed `reason_code` (entered_in_error, late_information, administrative_review; never why a Student was absent) + correction row (DB) | Campus by stored register Campus | NO_APPROVAL; no time window (OD-8.6 closed) |
 | Staff Attendance correction | `hr.staff_attendance.manage` | school_admin, principal, hr_officer | no | closed code required | whole-School | NO_APPROVAL; keep (self refused) |
-| Student status active <-> inactive | `students.manage` | school_admin, principal | no | none | whole-School (declared) | NO_APPROVAL in v1 + REASON_REQUIRED + confirmation (LC-8 STU-14); request/approve only on owner decision D-13 |
-| Enrollment complete / withdraw / cancel | `enrollments.manage` | school_admin, principal | no | none | whole-School (declared) | as Student status |
+| Student status active <-> inactive (ORG.8E: DIRECT_WITH_ASSURANCE, §63) | `students.manage` | school_admin, principal (whole-School grants only) | **yes** | closed reason per direction + lifecycle event | whole-School (declared) | NO_APPROVAL (OD-8.7 closed); confirmation (web), current authority, row lock, no-op refused |
+| Enrollment withdraw / cancel (ORG.8E: DIRECT_WITH_ASSURANCE, §63); complete stays ordinary | `enrollments.manage` | school_admin, principal (whole-School grants only) | **yes** (withdraw/cancel) | closed reason + lifecycle event (DB-required) | whole-School (declared) | NO_APPROVAL; confirmation (web), current authority |
 | Campus transfer | `enrollments.manage` over both Campuses | school_admin, principal (whole-School, or a grant covering both Campuses) | no | none | dual-scope | NO_APPROVAL (dual-scope authority, blockers, immutable audit already) |
 | Admissions accept / reject | `admissions.manage` (Campus-adopted) | school_admin, principal, admissions_officer | no | optional note, not audited | application Campus | NO_APPROVAL; recommend a closed rejection reason |
 | Admissions conversion | `admissions.manage` | as above | no | none | whole-School (declared) | NO_APPROVAL |
@@ -65,7 +65,7 @@ recovery code per action); there is no other mechanism.
 | G-3 | LOW (open; outside the ORG.8A pilot) | Fee concession revoke and adjustment cancellation have no SoD check; reject and withdraw need no fresh MFA. | Pilot retrofit (ORG.8A): closed reason on revoke/cancel; SoD CONDITIONAL (owner decision); reject stays NONE step-up. |
 | G-4 | LOW — **CLOSED by ORG.8D (ADR 0076 §62)** | `hr.leave.manage` holders allocate, adjust, assign policy, submit on behalf and administratively cancel for their OWN employment without a self-refusal (only decisions are self-guarded). | ORG.8D: extend the HR self-administration rule (rule 95) to own leave balance writes. |
 | G-5 | LOW (platform) | Group governance writes need no fresh MFA, confirmation or reason; the self-grant refusal is a plain validation error and is not audited. | Owner decision; platform hygiene slice, not tenant approval. |
-| G-6 | LOW | Student status toggle: no row lock, no reason, no `students.status` CHECK; enrollment end dates free (backdatable) with no reason. | ORG.8E with D-13. |
+| G-6 | LOW — **mostly CLOSED by ORG.8E (§63)**: row lock, closed reasons, fresh MFA and lifecycle events added; open: no `students.status` CHECK and no end-date bound | Student status toggle: no row lock, no reason, no `students.status` CHECK; enrollment end dates free (backdatable) with no reason. | ORG.8E with D-13. |
 | G-7 | MEDIUM (owner-raised) — **CLOSED by ORG.8A-R1 for account-linked Guardians (ADR 0076 §59); residual M-1 (a staff parent who never links their account) recorded for an owner policy decision; since ORG.8C (§61) M-1 also bounds Payment correction decisions** | Maker/checker excludes the requester only; a staff member who is also the Student's linked Guardian can approve a colleague's concession for that Student. | Owner decision: an optional beneficiary-relationship participation class on the shared foundation. |
 
 ## 4. Proposed new capability families (names only; none created)
@@ -103,3 +103,12 @@ proposed.
 
 An approval, override or administrative decision never opens a legal gate,
 in any environment.
+
+## 6. Owner decisions closed in ORG.8D/ORG.8E (2026-10-22)
+
+| Decision | Outcome |
+|---|---|
+| OD-8.5 librarian fine-void request | CLOSED: none in v1; void stays direct with assurance (ORG.8E) |
+| OD-8.6 attendance correction window | CLOSED: no time-based approval window in v1 (ORG.8E) |
+| OD-8.7 Student status requests (D-13) | CLOSED: no request/approve workflow in v1 (ORG.8E) |
+| OD-8.8 Campus principal / cross-Campus Leave authority | CLOSED: Option A, Leave decisions need whole-School authority (ORG.8D, ADR 0076 §62.10) |

@@ -45,8 +45,8 @@ class StudentEnrollmentRosterReadServiceTest extends TestCase
 
         $service = app(StudentEnrollmentService::class);
         $service->complete($completed, '2026-10-01', $w['actor']);
-        $service->withdraw($withdrawn, '2026-10-01', $w['actor']);
-        $service->cancel($cancelled, '2026-10-01', $w['actor']);
+        $this->withdrawEnrollment($withdrawn, '2026-10-01');
+        $this->cancelEnrollment($cancelled, '2026-10-01');
 
         // All four intervals contain the date, so all four appear --
         // three of them are terminal.

@@ -4,13 +4,17 @@ namespace App\Http\Controllers\App;
 
 use App\Domain\Identity\Application\AccountLinkService;
 use App\Domain\Students\Application\Exceptions\DuplicateStudentNumberException;
+use App\Domain\Students\Application\Exceptions\StudentLifecycleReasonException;
+use App\Domain\Students\Application\Exceptions\StudentStatusUnchangedException;
 use App\Domain\Students\Application\StudentAccess;
 use App\Domain\Students\Application\StudentActivityHistoryService;
 use App\Domain\Students\Application\StudentEnrollmentReadService;
+use App\Domain\Students\Application\StudentLifecycleReason;
 use App\Domain\Students\Application\StudentService;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Http\Controllers\Controller;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\SchoolTimezone;
@@ -191,6 +195,10 @@ class StudentController extends Controller
             $props['canViewEnrollments'] = false;
         }
 
+        // ORG.8E (ADR 0076 §63): the closed reasons of the high-impact actions, and whether a fresh code can be given.
+        $props['lifecycleReasons'] = StudentLifecycleReason::CODES;
+        $props['hasMfaFactor'] = app(FreshMfaRequirement::class)->hasActiveFactor($actor);
+
         return Inertia::render('App/Students/Show', $props);
     }
 
@@ -234,9 +242,15 @@ class StudentController extends Controller
         return redirect("/app/students/{$model->id}");
     }
 
-    public function changeStatus(Request $request, TenantContext $context, StudentService $service, string $student): RedirectResponse
+    /**
+     * ORG.8E (ADR 0076 §63): deactivate / reactivate -- a closed reason, an
+     * explicit confirmation (UX only) and a fresh MFA code (after the route
+     * capability, outside the transaction); the service re-checks current
+     * whole-School authority and records the lifecycle event.
+     */
+    public function changeStatus(Request $request, TenantContext $context, StudentService $service, FreshMfaRequirement $mfa, string $student): RedirectResponse
     {
-        $school = $context->requireSchool();
+        $context->requireSchool();
         // ORG.7F-2: students.manage is Campus-adopted; this whole-School-only
         // operation's floor is its route `capability:students.manage` (declared).
 
@@ -244,9 +258,17 @@ class StudentController extends Controller
 
         $validated = $request->validate([
             'status' => ['required', Rule::in(['active', 'inactive'])],
-        ]);
+            'reason_code' => ['required', 'string', Rule::in(StudentLifecycleReason::CODES[$request->input('status') === 'inactive' ? StudentLifecycleReason::DEACTIVATE : StudentLifecycleReason::REACTIVATE])],
+            'confirm' => ['accepted'],
+        ], ['confirm.accepted' => 'Confirm this change to the Student\'s status.']);
 
-        $service->changeStatus($model, $validated['status'], $context->actor());
+        $proof = $mfa->requireForAction($request, $context->actor());
+
+        try {
+            $service->changeStatus($model, $validated['status'], $validated['reason_code'], $context->actor(), $proof);
+        } catch (StudentStatusUnchangedException|StudentLifecycleReasonException $e) {
+            throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
+        }
 
         return redirect("/app/students/{$model->id}");
     }

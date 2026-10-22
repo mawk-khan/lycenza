@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -35,6 +36,7 @@ use Tests\TestCase;
 class StudentEnrollmentApiTest extends TestCase
 {
     use CreatesTenancyFixtures;
+    use ProvidesSensitiveActionMfa;
 
     private function token(User $user): string
     {
@@ -655,7 +657,7 @@ class StudentEnrollmentApiTest extends TestCase
 
         $response = $this->asUser($user)
             ->withHeader('Idempotency-Key', 'withdraw-001')
-            ->postJson("/api/v1/schools/{$school->id}/enrollments/{$enrollment->id}/withdraw", ['ends_on' => '2026-09-01']);
+            ->postJson("/api/v1/schools/{$school->id}/enrollments/{$enrollment->id}/withdraw", ['ends_on' => '2026-09-01', 'reason_code' => 'left_school', 'mfa_code' => $this->freshMfaCode($user)]);
 
         $response->assertOk();
         $this->assertSame('withdrawn', $response->json('data.status'));
@@ -672,7 +674,7 @@ class StudentEnrollmentApiTest extends TestCase
 
         $response = $this->asUser($user)
             ->withHeader('Idempotency-Key', 'cancel-001')
-            ->postJson("/api/v1/schools/{$school->id}/enrollments/{$enrollment->id}/cancel", ['ends_on' => '2026-06-05']);
+            ->postJson("/api/v1/schools/{$school->id}/enrollments/{$enrollment->id}/cancel", ['ends_on' => '2026-06-05', 'reason_code' => 'did_not_join', 'mfa_code' => $this->freshMfaCode($user)]);
 
         $response->assertOk();
         $this->assertSame('cancelled', $response->json('data.status'));
@@ -690,7 +692,7 @@ class StudentEnrollmentApiTest extends TestCase
 
         $response = $this->asUser($user)
             ->withHeader('Idempotency-Key', 'withdraw-conflict-001')
-            ->postJson("/api/v1/schools/{$school->id}/enrollments/{$enrollment->id}/withdraw", ['ends_on' => '2027-05-01']);
+            ->postJson("/api/v1/schools/{$school->id}/enrollments/{$enrollment->id}/withdraw", ['ends_on' => '2027-05-01', 'reason_code' => 'left_school', 'mfa_code' => $this->freshMfaCode($user)]);
 
         $response->assertStatus(422);
         $this->assertSame('INVALID_ENROLLMENT_TRANSITION', $response->json('error.code'));

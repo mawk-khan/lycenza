@@ -19,6 +19,7 @@ use App\Support\Testing\LocalCatalogueFixtures;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -35,6 +36,7 @@ use Tests\TestCase;
 class StudentEnrollmentUiTest extends TestCase
 {
     use CreatesTenancyFixtures;
+    use ProvidesSensitiveActionMfa;
 
     private function activate(User $user, School $school): void
     {
@@ -385,7 +387,7 @@ class StudentEnrollmentUiTest extends TestCase
         $this->assignSchoolRole($membership, 'school_admin');
         $this->activate($user, $school);
 
-        $this->post("/app/enrollments/{$enrollment->id}/withdraw", ['ends_on' => '2026-09-01'])
+        $this->post("/app/enrollments/{$enrollment->id}/withdraw", ['ends_on' => '2026-09-01', 'reason_code' => 'left_school', 'confirm' => '1', 'mfa_code' => $this->freshMfaCode(auth()->user())])
             ->assertRedirect("/app/students/{$student->id}");
 
         $fresh = app(TenantContext::class)->withSchool($school, fn () => $enrollment->fresh());
@@ -404,7 +406,7 @@ class StudentEnrollmentUiTest extends TestCase
         $this->assignSchoolRole($membership, 'school_admin');
         $this->activate($user, $school);
 
-        $this->post("/app/enrollments/{$enrollment->id}/cancel", ['ends_on' => '2026-06-05'])
+        $this->post("/app/enrollments/{$enrollment->id}/cancel", ['ends_on' => '2026-06-05', 'reason_code' => 'did_not_join', 'confirm' => '1', 'mfa_code' => $this->freshMfaCode(auth()->user())])
             ->assertRedirect("/app/students/{$student->id}");
 
         $fresh = app(TenantContext::class)->withSchool($school, fn () => $enrollment->fresh());
@@ -437,7 +439,7 @@ class StudentEnrollmentUiTest extends TestCase
         $this->assignSchoolRole($membership, 'school_admin');
         $this->activate($user, $school);
 
-        $response = $this->post("/app/enrollments/{$enrollment->id}/withdraw", ['ends_on' => '2027-05-01']);
+        $response = $this->post("/app/enrollments/{$enrollment->id}/withdraw", ['ends_on' => '2027-05-01', 'reason_code' => 'left_school', 'confirm' => '1', 'mfa_code' => $this->freshMfaCode(auth()->user())]);
 
         $response->assertSessionHasErrors('ends_on');
     }

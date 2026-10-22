@@ -14,12 +14,16 @@ use App\Domain\Students\Application\Exceptions\InvalidEnrollmentTransitionExcept
 use App\Domain\Students\Application\Exceptions\PlacementTargetUnavailableException;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
+use App\Domain\Students\Infrastructure\StudentLifecycleEvent;
 use App\Models\User;
+use App\Support\Approval\ApprovalDecisionAuthority;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 use Throwable;
 
 /**
@@ -97,6 +101,7 @@ class StudentEnrollmentService
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly ActiveCampus $campuses,
+        private readonly ApprovalDecisionAuthority $authority,
     ) {}
 
     /**
@@ -158,9 +163,9 @@ class StudentEnrollmentService
      * unless an already-accepted Student-domain rule says otherwise
      * (none does today).
      */
-    public function withdraw(StudentEnrollment $enrollment, string $endedOn, ?User $actor = null): StudentEnrollment
+    public function withdraw(StudentEnrollment $enrollment, string $endedOn, string $reasonCode, User $actor, FreshMfaProof $mfa): StudentEnrollment
     {
-        return $this->transitionToTerminalStatus($enrollment, 'withdrawn', $endedOn, 'student_enrollment.withdrawn', $actor);
+        return $this->transitionToTerminalStatus($enrollment, 'withdrawn', $endedOn, 'student_enrollment.withdrawn', $actor, [StudentLifecycleReason::WITHDRAW_ENROLLMENT, $reasonCode, $mfa]);
     }
 
     /**
@@ -172,9 +177,9 @@ class StudentEnrollmentService
      * the narrow interpretation this checkpoint adopts in the absence
      * of any existing product rule distinguishing the two.
      */
-    public function cancel(StudentEnrollment $enrollment, string $endedOn, ?User $actor = null): StudentEnrollment
+    public function cancel(StudentEnrollment $enrollment, string $endedOn, string $reasonCode, User $actor, FreshMfaProof $mfa): StudentEnrollment
     {
-        return $this->transitionToTerminalStatus($enrollment, 'cancelled', $endedOn, 'student_enrollment.cancelled', $actor);
+        return $this->transitionToTerminalStatus($enrollment, 'cancelled', $endedOn, 'student_enrollment.cancelled', $actor, [StudentLifecycleReason::CANCEL_ENROLLMENT, $reasonCode, $mfa]);
     }
 
     /**
@@ -329,9 +334,26 @@ class StudentEnrollmentService
      * hold the WRONG Section's lock, so the transition is refused
      * rather than proceeding unserialized against Attendance.
      */
-    private function transitionToTerminalStatus(StudentEnrollment $enrollment, string $newStatus, string $endedOn, string $eventType, ?User $actor): StudentEnrollment
+    /**
+     * ORG.8E (ADR 0076 §63, 8E-D1): `$assurance` = [action, reason code, fresh
+     * MFA proof] for the high-impact withdraw and cancel. They also re-read the
+     * actor's CURRENT whole-School `enrollments.manage` under the Enrollment
+     * lock and write the lifecycle event the database requires
+     * (`student_enrollments_lifecycle_evidence`). Completion stays ordinary.
+     *
+     * @param  array{0: string, 1: string, 2: FreshMfaProof}|null  $assurance
+     */
+    private function transitionToTerminalStatus(StudentEnrollment $enrollment, string $newStatus, string $endedOn, string $eventType, ?User $actor, ?array $assurance = null): StudentEnrollment
     {
-        return $this->context->withSchool($enrollment->school, fn () => DB::transaction(function () use ($enrollment, $newStatus, $endedOn, $eventType, $actor) {
+        if ($assurance !== null) {
+            [$action, $reasonCode, $mfa] = $assurance;
+            if ($actor === null || ! $mfa->isFor($actor->id)) {
+                throw new LogicException('A high-impact Enrollment action needs its actor\'s fresh MFA proof.');
+            }
+            StudentLifecycleReason::require($action, $reasonCode);
+        }
+
+        return $this->context->withSchool($enrollment->school, fn () => DB::transaction(function () use ($enrollment, $newStatus, $endedOn, $eventType, $actor, $assurance) {
             $discovered = StudentEnrollment::query()->whereKey($enrollment->id)->firstOrFail();
             $this->lockSections([$discovered->section_id]);
 
@@ -351,6 +373,15 @@ class StudentEnrollmentService
                 );
             }
 
+            $event = null;
+            if ($assurance !== null && $actor !== null) {
+                $this->authority->requireCurrent($actor, 'enrollments.manage', $locked->school);
+                $event = StudentLifecycleEvent::query()->create([
+                    'school_id' => $locked->school_id, 'student_id' => $locked->student_id, 'student_enrollment_id' => $locked->id,
+                    'action' => $assurance[0], 'reason_code' => $assurance[1], 'acted_by_user_id' => $actor->id,
+                ]);
+            }
+
             $affected = StudentEnrollment::query()
                 ->whereKey($locked->id)
                 ->where('status', 'active')
@@ -365,7 +396,7 @@ class StudentEnrollmentService
                 'academicYearId' => $locked->academic_year_id,
                 'sectionId' => $locked->section_id,
                 'endsOn' => $endedOn,
-            ]);
+            ] + ($event === null ? [] : ['reasonCode' => $event->reason_code, 'lifecycleEventId' => $event->id, 'freshMfa' => true]));
 
             return $locked->refresh();
         }));

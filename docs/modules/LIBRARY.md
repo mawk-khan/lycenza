@@ -544,3 +544,11 @@ wave is frozen.
 - **Fines.** A Campus-scoped check-in still assesses the overdue fine
   (owner-approved bounded side effect); the librarian gains no Fees or
   fines authority.
+
+## Fine void assurance (ORG.8E, 2026-10-22, ADR 0076 §63)
+
+- Voiding a fine needs a listed reason (assessed in error, loan record
+  corrected, returned before it was due, other), the note, a fresh
+  authentication code and the current `library.fines.void` authority. The
+  fine's charge is cancelled through Fees, once. A waiver is a Fees
+  concession, never a void. Production stays gated by E34.

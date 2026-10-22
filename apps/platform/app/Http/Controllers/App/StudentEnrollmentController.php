@@ -13,11 +13,14 @@ use App\Domain\Students\Application\Exceptions\InvalidEnrollmentRollNumberExcept
 use App\Domain\Students\Application\Exceptions\InvalidEnrollmentTransitionException;
 use App\Domain\Students\Application\StudentEnrollmentReadService;
 use App\Domain\Students\Application\StudentEnrollmentService;
+use App\Domain\Students\Application\StudentLifecycleReason;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Models\School;
+use App\Support\Auth\Mfa\FreshMfaProof;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
@@ -99,14 +102,41 @@ class StudentEnrollmentController extends Controller
         return $this->transition($request, $context, $enrollment, fn (StudentEnrollment $e, string $endsOn) => $service->complete($e, $endsOn, $context->actor()));
     }
 
-    public function withdraw(Request $request, TenantContext $context, StudentEnrollmentService $service, string $enrollment): RedirectResponse
+    /** ORG.8E (ADR 0076 §63): a closed reason, confirmation and a fresh MFA code; the service re-checks current authority. */
+    public function withdraw(Request $request, TenantContext $context, StudentEnrollmentService $service, FreshMfaRequirement $mfa, string $enrollment): RedirectResponse
     {
-        return $this->transition($request, $context, $enrollment, fn (StudentEnrollment $e, string $endsOn) => $service->withdraw($e, $endsOn, $context->actor()));
+        // An unknown placement is the 404 before a code is spent.
+        StudentEnrollment::query()->findOrFail($enrollment);
+        $assured = $this->assured($request, $context, $mfa, StudentLifecycleReason::WITHDRAW_ENROLLMENT);
+
+        return $this->transition($request, $context, $enrollment, fn (StudentEnrollment $e, string $endsOn) => $service->withdraw($e, $endsOn, $assured[0], $context->actor(), $assured[1]));
     }
 
-    public function cancel(Request $request, TenantContext $context, StudentEnrollmentService $service, string $enrollment): RedirectResponse
+    public function cancel(Request $request, TenantContext $context, StudentEnrollmentService $service, FreshMfaRequirement $mfa, string $enrollment): RedirectResponse
     {
-        return $this->transition($request, $context, $enrollment, fn (StudentEnrollment $e, string $endsOn) => $service->cancel($e, $endsOn, $context->actor()));
+        // An unknown placement is the 404 before a code is spent.
+        StudentEnrollment::query()->findOrFail($enrollment);
+        $assured = $this->assured($request, $context, $mfa, StudentLifecycleReason::CANCEL_ENROLLMENT);
+
+        return $this->transition($request, $context, $enrollment, fn (StudentEnrollment $e, string $endsOn) => $service->cancel($e, $endsOn, $assured[0], $context->actor(), $assured[1]));
+    }
+
+    /**
+     * The reason and confirmation are validated first, then the fresh code
+     * (outside the transaction).
+     *
+     * @return array{0: string, 1: FreshMfaProof}
+     */
+    private function assured(Request $request, TenantContext $context, FreshMfaRequirement $mfa, string $action): array
+    {
+        $context->requireSchool();
+        $validated = $request->validate([
+            'ends_on' => ['required', 'date'],
+            'reason_code' => ['required', 'string', Rule::in(StudentLifecycleReason::CODES[$action])],
+            'confirm' => ['accepted'],
+        ], ['confirm.accepted' => 'Confirm that this placement ends.']);
+
+        return [$validated['reason_code'], $mfa->requireForAction($request, $context->actor())];
     }
 
     /**

@@ -81,7 +81,7 @@ class MyAttendanceUiTest extends TestCase
 
         $session = $this->inSchool($w['school'], fn () => AttendanceSession::query()->where('section_id', $w['section']->id)->firstOrFail());
         $record = $this->inSchool($w['school'], fn () => $session->records()->firstOrFail());
-        $this->actor($w, $user)->post("/app/my-attendance/records/{$record->id}/correct", ['expected_status' => 'present', 'new_status' => 'late'])
+        $this->actor($w, $user)->post("/app/my-attendance/records/{$record->id}/correct", ['expected_status' => 'present', 'new_status' => 'late', 'reason_code' => 'entered_in_error'])
             ->assertRedirect("/app/my-attendance/{$session->id}");
 
         $this->actor($w, $user)->get("/app/my-attendance/{$theirs->id}")->assertNotFound();

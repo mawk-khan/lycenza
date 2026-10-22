@@ -1503,3 +1503,12 @@ picker:
 ## Guardian self-administration (ORG.8A-R1, 2026-10-21, ADR 0076 §59)
 
 Nobody can link, unlink or change the Student relationships of a Guardian identity linked to their own account (active or revoked link). The JSON API answers 403 `GUARDIAN_SELF_ADMINISTRATION` and the browser answers 403. Another administrator with the usual permissions makes the change. This stops a staff member who is also a Guardian from removing their own relationship to approve their child's concession and then restoring it. Relationship rows record no actor, so the rule lives in `StudentGuardianRelationshipService`, not the database.
+
+## Student status assurance (ORG.8E, 2026-10-22, ADR 0076 §63)
+
+- Marking a Student inactive or active is a whole-School action that needs a
+  listed reason for that direction, a fresh authentication code, the actor's
+  current `students.manage` and, on the web, an explicit confirmation. It
+  takes the Student row lock; marking a Student with the status they already
+  have is refused. Each change is recorded in `student_lifecycle_events` (no
+  free text, no date of birth or contact details in the audit).

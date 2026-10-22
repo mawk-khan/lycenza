@@ -150,3 +150,20 @@ and HR approver H = two `hr.leave.manage` holders; a Campus principal P =
 | LV8 | P | approve R's leave | refused (Campus grants decide no Leave; OD-8.8 open) |
 | LV9 | M after their grant is revoked | approve | refused at once (fresh authority) |
 | LV10 | anyone | approve one's own leave on any path | refused |
+
+## Direct high-impact actions (ORG.8E, ADR 0076 §63 — built 2026-10-22)
+
+No request/approve workflow; each action is direct with assurance.
+
+| # | Actor | Action | Expected |
+|---|---|---|---|
+| DA1 | School Admin (MFA enrolled) | Student page → Mark inactive… without a reason / without confirming / without a code | refused, nothing changes |
+| DA2 | School Admin | Mark inactive with reason, confirmation and a fresh code | inactive; the reason is in the Student's history |
+| DA3 | School Admin | Mark inactive again (stale tab) | "already inactive", nothing recorded |
+| DA4 | principal at one Campus | Mark a Student inactive, withdraw or cancel a placement | refused (whole-School only) |
+| DA5 | School Admin | Withdraw / cancel the current placement (reason, confirm, code) | ended once; completion needs no reason |
+| DA6 | Admin or teacher | Take a register for the first time | no reason asked |
+| DA7 | Admin or owning teacher | Change a recorded status | needs a reason (entered in error / information received later / administrative review); never asks why the Student was absent |
+| DA8 | Teacher | Correct a register outside their ownership | not found (unchanged) |
+| DA9 | School Admin | Void a fine: reason code + note + fresh code | voided once; the charge is cancelled; a second void refused |
+| DA10 | Librarian, Finance staff | Void a fine | refused (no `library.fines.void`) |

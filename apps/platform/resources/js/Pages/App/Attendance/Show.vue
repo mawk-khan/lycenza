@@ -50,6 +50,8 @@ interface Props {
     session: SessionDetail;
     statuses: string[];
     canManage: boolean;
+    // ORG.8E (ADR 0076 §63): the closed reasons a correction must name.
+    correctionReasons: string[];
     // TCH.4: "My Attendance" reuses this page under its own URL.
     baseUrl?: string;
 }
@@ -77,17 +79,29 @@ const correcting = ref<string | null>(null);
 // back on `new_status`/`expected_status` and nothing rendered it.
 const page = usePage<{ errors?: Record<string, string> }>();
 const correctionError = computed(
-    () => page.props.errors?.new_status ?? page.props.errors?.expected_status ?? null,
+    () =>
+        page.props.errors?.new_status ??
+        page.props.errors?.expected_status ??
+        page.props.errors?.reason_code ??
+        null,
 );
 
+// ORG.8E: changing a recorded status is a correction and names its reason.
+const REASON_LABELS: Record<string, string> = {
+    entered_in_error: 'Entered in error',
+    late_information: 'Information received after the register',
+    administrative_review: 'Administrative review',
+};
+const reasonCode = ref('');
+
 function correct(record: RecordRow, newStatus: string): void {
-    if (newStatus === record.status) {
+    if (newStatus === record.status || reasonCode.value === '') {
         return;
     }
     correcting.value = record.id;
     router.post(
         `${props.baseUrl}/records/${record.id}/correct`,
-        { expected_status: record.status, new_status: newStatus },
+        { expected_status: record.status, new_status: newStatus, reason_code: reasonCode.value },
         { onFinish: () => (correcting.value = null) },
     );
 }
@@ -119,6 +133,25 @@ function correct(record: RecordRow, newStatus: string): void {
             to see the register as it is now.
         </p>
 
+        <div v-if="canManage" class="mt-6">
+            <label class="block text-sm text-slate-600" for="correction-reason">
+                Reason for correction
+            </label>
+            <select
+                id="correction-reason"
+                v-model="reasonCode"
+                class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm sm:w-72"
+            >
+                <option value="" disabled>Choose a reason before correcting</option>
+                <option v-for="r in correctionReasons" :key="r" :value="r">
+                    {{ REASON_LABELS[r] ?? r }}
+                </option>
+            </select>
+            <p class="mt-1 text-xs text-slate-500">
+                Changing a recorded status is kept with this reason and your name.
+            </p>
+        </div>
+
         <table class="mt-6 w-full border-collapse text-sm">
             <thead>
                 <tr class="border-b border-slate-200 text-left text-slate-500">
@@ -148,7 +181,11 @@ function correct(record: RecordRow, newStatus: string): void {
                             :key="status"
                             type="button"
                             class="mr-2 rounded border border-slate-300 px-2 py-1 text-xs capitalize disabled:opacity-40"
-                            :disabled="status === record.status || correcting === record.id"
+                            :disabled="
+                                status === record.status ||
+                                correcting === record.id ||
+                                reasonCode === ''
+                            "
                             @click="correct(record, status)"
                         >
                             {{ status }}

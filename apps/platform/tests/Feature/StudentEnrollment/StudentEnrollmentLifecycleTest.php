@@ -107,7 +107,7 @@ class StudentEnrollmentLifecycleTest extends TestCase
         $completed = $this->service()->complete($enrollment, '2027-04-30');
 
         $this->expectException(InvalidEnrollmentTransitionException::class);
-        $this->service()->withdraw($completed, '2027-05-01');
+        $this->withdrawEnrollment($completed, '2027-05-01');
     }
 
     // ==================================================================
@@ -120,7 +120,7 @@ class StudentEnrollmentLifecycleTest extends TestCase
         ['school' => $school, 'student' => $student, 'section' => $section] = $this->buildActiveEnrollmentContext();
         $enrollment = $this->freshEnrollment($school, $this->findEnrollmentId($school, $student));
 
-        $withdrawn = $this->service()->withdraw($enrollment, '2026-09-15');
+        $withdrawn = $this->withdrawEnrollment($enrollment, '2026-09-15');
 
         $this->assertSame('withdrawn', $withdrawn->status);
         $this->assertSame('2026-09-15', $withdrawn->ends_on->toDateString());
@@ -141,7 +141,7 @@ class StudentEnrollmentLifecycleTest extends TestCase
     {
         ['school' => $school, 'student' => $student] = $this->buildActiveEnrollmentContext();
         $enrollment = $this->freshEnrollment($school, $this->findEnrollmentId($school, $student));
-        $withdrawn = $this->service()->withdraw($enrollment, '2026-09-15');
+        $withdrawn = $this->withdrawEnrollment($enrollment, '2026-09-15');
 
         $this->expectException(InvalidEnrollmentTransitionException::class);
         $this->service()->complete($withdrawn, '2026-10-01');
@@ -157,7 +157,7 @@ class StudentEnrollmentLifecycleTest extends TestCase
         ['school' => $school, 'student' => $student, 'section' => $section] = $this->buildActiveEnrollmentContext();
         $enrollment = $this->freshEnrollment($school, $this->findEnrollmentId($school, $student));
 
-        $cancelled = $this->service()->cancel($enrollment, '2026-06-05');
+        $cancelled = $this->cancelEnrollment($enrollment, '2026-06-05');
 
         $this->assertSame('cancelled', $cancelled->status);
         $this->assertSame($section->id, $cancelled->section_id, 'Placement must be retained on a cancelled row.');
@@ -175,7 +175,7 @@ class StudentEnrollmentLifecycleTest extends TestCase
     {
         ['school' => $school, 'student' => $student] = $this->buildActiveEnrollmentContext();
         $enrollment = $this->freshEnrollment($school, $this->findEnrollmentId($school, $student));
-        $cancelled = $this->service()->cancel($enrollment, '2026-06-05');
+        $cancelled = $this->cancelEnrollment($enrollment, '2026-06-05');
 
         $this->expectException(InvalidEnrollmentTransitionException::class);
         $this->service()->complete($cancelled, '2026-07-01');
@@ -374,7 +374,7 @@ class StudentEnrollmentLifecycleTest extends TestCase
         // reloading+locking the authoritative row, this would succeed
         // and silently double-process the transition.
         $this->expectException(InvalidEnrollmentTransitionException::class);
-        $this->service()->withdraw($staleEnrollment, '2027-05-01');
+        $this->withdrawEnrollment($staleEnrollment, '2027-05-01');
     }
 
     private function findEnrollmentId(School $school, Student $student): string

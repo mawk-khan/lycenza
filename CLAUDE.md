@@ -1551,5 +1551,16 @@ once several modules copy it.
          `leave_decisions_no_self_decision` +
          `leave_decisions_participant_guard`).
        - The administrative path never writes the actor's own leave (G-4).
-       - Never let a Campus grant decide Leave until owner decision OD-8.8
-         says so.
+       - Never let a Campus grant decide Leave (OD-8.8 closed as Option A:
+         whole-School authority only).
+     - **Direct high-impact actions (ORG.8E, §63) are not workflows.**
+       Student status changes and Enrollment withdraw/cancel need a closed
+       `StudentLifecycleReason`, a `FreshMfaProof`, current whole-School
+       authority under the row lock and a `student_lifecycle_events` row
+       (DB-required for Enrollments). Attendance corrections need a closed,
+       absence-neutral reason and an `attendance_record_corrections` row
+       (DB-required). Library fine voids need a closed `reason_code`, the
+       note, a `FreshMfaProof` and current `library.fines.void`. They are declared in
+       `ApprovalWorkflowRegistry::DIRECT_ASSURED`, never as workflows. Never
+       add a caller that skips the proof or reason, and never add a
+       free-text or health reason to Attendance.
