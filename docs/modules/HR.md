@@ -4173,5 +4173,5 @@ are Campus-adopted through `App\Domain\HR\Application\HrEmployeeAccess`.
   Employee.
 - The reporting manager is the manager on the Employee's primary current
   assignment, read when the decision is made. Campus never decides Leave
-  authority; whether a Campus-only principal should approve through the
-  reporting line is an open owner decision (OD-8.8).
+  authority: a Campus-only principal does not approve through the reporting
+  line (OD-8.8 closed as Option A, ADR 0076 §62.10).

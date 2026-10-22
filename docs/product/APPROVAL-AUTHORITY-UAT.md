@@ -147,7 +147,7 @@ and HR approver H = two `hr.leave.manage` holders; a Campus principal P =
 | LV5 | HR changes R's manager while a request is pending | former manager opens it | not found; the new manager decides |
 | LV6 | C or H, for their OWN employment | allocate, adjust, assign or end a policy, enter, withdraw or cancel administratively | refused; their own leave goes through My Leave |
 | LV7 | M on another Campus than R (whole-School grant) | approve | allowed (no Campus rule) |
-| LV8 | P | approve R's leave | refused (Campus grants decide no Leave; OD-8.8 open) |
+| LV8 | P | approve R's leave | refused (Campus grants decide no Leave; OD-8.8 closed as Option A) |
 | LV9 | M after their grant is revoked | approve | refused at once (fresh authority) |
 | LV10 | anyone | approve one's own leave on any path | refused |
 

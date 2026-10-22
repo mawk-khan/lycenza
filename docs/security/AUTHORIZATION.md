@@ -1616,8 +1616,9 @@ UAT plan: `docs/product/APPROVAL-AUTHORITY-UAT.md`.
   (allocations, adjustments, policies, entering, withdrawing or cancelling
   their own requests). Their own leave goes through self-service.
 - **Campus does not decide Leave authority.** A Campus-scoped grant (for
-  example principal at one Campus) gives no Leave decision authority today.
-  Whether it should is an open owner decision (OD-8.8).
+  example principal at one Campus) gives no Leave decision authority. OD-8.8
+  closed as Option A (ADR 0076 §62.10): Leave decisions need whole-School
+  authority.
 - **No fresh MFA** for Leave decisions (unchanged).
 
 ## Direct high-impact actions (ORG.8E, ADR 0076 §63 — built 2026-10-22)
