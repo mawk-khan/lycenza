@@ -2900,3 +2900,18 @@ operational Student of a Campus.
   the database refuses a withdrawn or cancelled placement without it.
 - Completing a placement (and closed-year completion and rollover) is
   unchanged.
+
+## ORG.8 closure audit (ORG.8F, 2026-10-22, ADR 0076 §64)
+
+- **G-6 (MEDIUM, follow-up ORG.8G).** The application paths are assured, but
+  the database still accepts, from the runtime role, a Student status change
+  with no lifecycle event, unknown Student and placement status values, a
+  directly inserted withdrawn/cancelled placement with no event and a
+  terminal placement with no end date. These are structural rules
+  PostgreSQL can enforce without knowing who acted (as it already does for
+  withdraw/cancel); only the acting person's identity stays an application
+  trust boundary.
+- **G-6b (LOW).** Withdraw, cancel and complete accept an end date after the
+  academic year (even far in the future). That can only delay the retention
+  clock, never shorten it, but date-based fee and Campus attribution treat
+  the placement as running until then. Bound the end date to the year.

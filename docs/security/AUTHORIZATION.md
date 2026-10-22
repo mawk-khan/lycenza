@@ -1484,7 +1484,7 @@ No new capability.
   evaluates. No menu configuration is ever stored as authorization or
   entitlement state.
 
-## Approval authority (ORG.8 contract audit, ADR 0076 §56 — contract, not built)
+## Approval authority (ORG.8 contract audit, ADR 0076 §56 — since built by ORG.8-P1..8E; closure ORG.8F §64)
 
 Read-only audit, 2026-10-21. Matrix: `docs/security/APPROVAL-AUTHORITY-MATRIX.md`;
 UAT plan: `docs/product/APPROVAL-AUTHORITY-UAT.md`.
@@ -1498,8 +1498,8 @@ UAT plan: `docs/product/APPROVAL-AUTHORITY-UAT.md`.
   validity. No approval or override opens a legal gate.
 - **No generic workflow engine.** Approval stays module-owned (§16).
   Existing workflows: fee concessions, Communications approval, marks
-  corrections, Leave, payroll runs. Everything else is a direct
-  privileged operation.
+  corrections, Leave, payroll runs, Payment corrections (ORG.8C), erasure
+  cases (compliance CLI). Everything else is a direct privileged operation.
 - **Maker/checker is per item and per actor**, extended to prior
   participation (creator, calculator, amender never decide). Holding both
   keys never satisfies it.
@@ -1516,7 +1516,9 @@ UAT plan: `docs/product/APPROVAL-AUTHORITY-UAT.md`.
 - **Recorded gaps:** G-1 direct ledger reversal of subledger-owned journal
   entries (MEDIUM) is CLOSED by ORG.8-P1 (§57: the generic reversal and the
   database refuse any entry another domain owns); G-2 payroll SoD checks
-  only the run creator (MEDIUM, open); G-3..G-6 LOW.
+  only the run creator (MEDIUM) is CLOSED by ORG.8B (§60); G-4 is CLOSED by
+  ORG.8D. The current residual register (G-3, G-5, G-6, G-8..G-10, M-1) is
+  the matrix §3, reconciled by ORG.8F (§64).
 
 ## Shared approval foundation (ORG.8A, ADR 0076 §58 — built 2026-10-21)
 
@@ -1641,16 +1643,30 @@ UAT plan: `docs/product/APPROVAL-AUTHORITY-UAT.md`.
 - **OD-8.8 closed:** Leave decisions need whole-School authority (ORG.8D
   Option A).
 
+## ORG.8 closure audit (ORG.8F, ADR 0076 §64 — 2026-10-22, documentation only)
+
+- **Final v1 model:** domain-owned workflows over the small shared toolkit
+  (`MakerCheckerPolicy`, `ApprovalParticipants`, `ApprovalDecisionAuthority`,
+  `ApprovalProvenance`, `FreshMfaProof`, `ApprovalWorkflowRegistry`), plus
+  declared DIRECT_ASSURED actions. No generic engine, no tenant-defined
+  topology, no generic reason taxonomy.
+- **Prefer database enforcement for structural invariants.** If PostgreSQL
+  can enforce a rule without knowing which human acted (a status domain, the
+  existence of an evidence row, a terminal state needing an end date), it
+  does. Only the identity of the acting User is an accepted application
+  trust boundary. "Trust boundary" is never a blanket exemption.
+- **Open before ORG.8 technical closure:** G-6 (MEDIUM: Student status and
+  placement structural invariants) and G-8 (MEDIUM: Charge cancel/void
+  assurance, owner decision OD-8.3).
+- **Production prerequisites:** M-1, OD-8.4, OD-8.9/G-5 and the legal gates
+  (matrix §5, §6).
+
 ## What is NOT yet implemented
 
-Contracted by ADR 0076 (ORG.1, 2026-10-17) and not built:
-- the Platform Manager role;
-- Campus-scoped School role assignments;
-- per-School module entitlements;
-- the School Registry read model.
-
-ADR 0076 §17 gives the authorization evaluation order those phases must
-follow. Also not implemented: tenant-custom roles (role *assignment* exists: Settings → Staff accounts
+The ADR 0076 ORG.1 items once listed here (the Platform Manager role,
+Campus-scoped School role assignments, per-School module entitlements, the
+School Registry read model) are built by ORG.3-ORG.7 (rules 99-101). Not
+implemented: tenant-custom roles (role *assignment* exists: Settings → Staff accounts
 grants and revokes School roles from the closed catalog, ADR 0059; role
 *creation* does not; ADR 0071 keeps it that way and instead contracts a
 fixed operational catalogue), ownership-based authorization beyond the four TCH

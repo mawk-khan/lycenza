@@ -9408,3 +9408,339 @@ Attendance, legal gates (E34, Attendance/teacher, Student privacy, E21).
   (owner decision 8E-D2; the Campus and teacher guards run inside the
   transaction); withdraw/cancel check status and dates before authority
   (error ordering only).
+
+## 64. ORG.8F — Approval programme closure audit (read-only, 2026-10-22)
+
+Owner authorization: ORG.8F, documentation only. Baseline `origin/main` =
+`e43b1a94`; latest code `9e10de3d` (exact-SHA CI: 9,357 cases, 9,356
+passed, 1 ESI-12 skip). No production code, schema, capability, role,
+catalogue or legal gate changed. Runtime-role probes ran in the isolated
+test database inside rolled-back transactions; the probe was never
+committed. Historical sections (§56 audit, §56.29 "recorded, open") stay
+as written; this section supersedes their status labels.
+
+**64.1 Phase verification.** All published, each with a green exact-SHA
+CI gate: ORG.8-P1 `db9a654a` (§57, G-1 closed), ORG.8A `f2b04e22` (§58),
+ORG.8A-R1 `260a7c4b` (§59, G-7 closed for account-linked Guardians),
+ORG.8B `f2242d5e` (§60, G-2 closed), ORG.8C `fa13aef5` (§61, OD-8.1
+closed), ORG.8D `1b331263` (§62, G-4 closed, OD-8.8 closed as Option A),
+ORG.8E `9e10de3d` + docs `e43b1a94` (§63; OD-8.5/8.6/8.7 closed).
+Recorded here for §63, which omitted them: ORG.8E's DDEV smoke passed
+15/15 over real HTTP (status change, reactivation, withdrawal, Attendance
+correction, fine void, each refused without its reason, confirmation or
+code; evidence rows and audit `reasonCode`/`freshMfa` read back), and its
+exact-SHA CI is the run above (the first candidate failed two
+`HistoricalPlacementClosureUiTest` cases, fixed before publication).
+
+**64.2 Final v1 architecture (confirmed).**
+- **Domain-owned workflows.** Each domain owns its request rows, states,
+  queue, decision and execution transaction.
+- **Small shared toolkit**, used only where proven: `MakerCheckerPolicy`,
+  `ApprovalParticipants`, `ApprovalDecisionAuthority` (fresh, whole-School,
+  module and School read via `CapabilityResolver::holdsInSchoolNow`),
+  `ApprovalProvenance`, `FreshMfaProof` (minted only by
+  `FreshMfaRequirement`), `ApprovalWorkflowRegistry`. Stateless; there is
+  no `approval_requests` table (`ApprovalWorkflowRegistryTest`).
+- **DIRECT_WITH_ASSURANCE** (`ApprovalWorkflowRegistry::DIRECT_ASSURED`):
+  Student status, Enrollment withdraw/cancel, Library fine void. They may
+  use `ApprovalDecisionAuthority` only.
+- **No generic workflow engine** and no tenant-defined approval topology,
+  thresholds, delegation or multi-level approval; none is needed for v1.
+
+**64.3 Workflow inventory.**
+
+| Workflow | Requester | Decider | Executor | Scope | Maker/checker | Related party | Fresh MFA | Reason | DB backstop | Legal gate | v1 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Fee concessions | `finance.fee_concessions.request` (school_admin, accountant) | `.approve` (school_admin) | approval posts the adjustment, same txn | whole-School (CAMPUS_INCOMPATIBLE) | shared | Guardian of the Student refused (service + `fee_concessions_beneficiary_guardian_guard`) | approve, revoke, cancel-adjustment | none on decisions (owner decision M); category closed | `fee_concessions_sod_check`, transition/finality trigger | E32 | COMPLETE (G-3 LOW) |
+| Payment corrections | `finance.payment_corrections.request` (school_admin, accountant) | `.approve` (school_admin) | `executeApproved`, same txn | whole-School | shared | Guardian of any affected Student refused (service + DB) | approve | free text 5-500 (DB) | `_sod_check`, `_withdrawer_check`, `_guard`, `_approval_guard`, `_beneficiary_guardian_guard` | E30 (receipts) | COMPLETE (M-1) |
+| Communications approval | `communications.announce` | `communications.approve` (school_admin, principal) | publish re-checks the fingerprint | whole-School | domain, service only | none | emergency publish only | reject: free text required | status/fingerprint checks; no SoD CHECK (G-10) | general | COMPLETE |
+| Marks corrections | `examinations.marks.correction.request` | `.approve` (school_admin, principal) | approval applies, same txn | whole-School | domain (Marks isolation) | none | approve, reject, lock | closed `reason_code` | `student_mark_corrections_maker_checker_check`, guard triggers | E36/E37 (refused in code) | COMPLETE, production-refused |
+| Leave | `hr.leave.self` / `.manage` | `hr.leave.approve` + current reporting line, or `.manage` | approval writes consumption, same txn | whole-School only (OD-8.8 A) | shared | requester Employee and submitter refused | none (by design) | closed rejection/closing codes | `leave_decisions_no_self_decision`, `trg_leave_decisions_participant_guard` | HRX-L1, HRX-L3 | COMPLETE (G-9 LOW) |
+| Payroll runs | `payroll.runs.prepare` (school_admin, payroll_officer) | `.approve` (school_admin) | `.post` separate (school_admin) | whole-School | shared (creator, calculators, adjustment authors) | none (OD-8.4) | approve, post, reverse | override/delta free text; reverse optional | `payroll_runs_sod_check`, `payroll_runs_participant_approval_guard`, approval freeze | HRX-L4, E45 | COMPLETE (OD-8.4 production policy) |
+| Erasure cases | data-subject request | operator CLI | executing -> completed | School / platform | n/a | n/a | CLI confirmation | closed decision reason | `erasure_cases_shape_check` | E21 | COMPLETE (outside ORG.8 business scope) |
+
+Direct-assured: Student status (`students.manage`), Enrollment
+withdraw/cancel (`enrollments.manage`), both school_admin and principal,
+whole-School grants only, fresh MFA, closed reason, lifecycle event; Student
+Attendance correction (`attendance.manage` Campus-adopted / `attendance.teacher`
+ownership), closed neutral reason and correction row, no MFA; Library fine
+void (`library.fines.void`, school_admin), closed `reason_code` + note,
+fresh MFA, E34.
+
+**64.4 Capabilities and Campus.** Holders (seeder): concession and
+correction `.approve`, `payroll.runs.approve/.post/.reverse`,
+`library.fines.void`, `finance.ledger.reverse` = school_admin only;
+`hr.leave.approve`, `communications.approve`, marks correction keys,
+`students.manage`, `enrollments.manage`, `attendance.manage` = school_admin +
+principal; `finance.charges.manage`, `finance.ledger.post` = school_admin +
+accountant. Platform roles hold only `platform.*` keys, structurally
+(`trg_role_capabilities_scope`). No approval key is Campus-adopted
+(`ApprovalWorkflowRegistryTest`); `ApprovalDecisionAuthority` counts only
+whole-School grants, so principal@Campus decides no Leave and no lifecycle
+action, and a cross-Campus manager decides Leave only with a whole-School
+`hr.leave.approve`. Attendance keeps its ORG.7D-1 Campus/teacher ownership;
+`CampusScopeCatalogue` was not changed by ORG.8. `finance.payment_corrections.*`
+is not in CAMPUS_INCOMPATIBLE (inert: both holders are already
+incompatible; §61.9).
+
+**64.5 Owner-decision register (one state each).** OD-8.1 CLOSED (8C).
+OD-8.2 DEFERRED (future Finance hardening; needs a structural
+`posted_by_user_id` first). OD-8.3 TECHNICAL_FOLLOW_UP_REQUIRED (G-8).
+OD-8.4 PRODUCTION_POLICY_PREREQUISITE. OD-8.5, OD-8.6, OD-8.7 CLOSED (8E).
+OD-8.8 CLOSED (Option A). OD-8.9 PRODUCTION_POLICY_PREREQUISITE. M-1
+PRODUCTION_POLICY_PREREQUISITE. Current registers now say so (matrix §6,
+AUTHORIZATION.md, module docs).
+
+**64.6 G-3 (concession revoke / adjustment cancel).** Initial decisions
+(approve/reject) use the shared foundation. After approval: revoke
+(standing concessions; stops future application, no ledger effect) and
+adjustment cancellation (reversal through Fees' own `reverseById`, accepted
+by the ORG.8-P1 deferred guard) need `.approve` (school_admin only) and a
+fresh code, but read authority from the cache, have no maker/checker, no
+provenance and only an optional note (cancel). Both move value towards the
+School, not a beneficiary. **Classification: A, LOW acceptable v1
+residual**, with a future Finance hardening option (current-authority
+re-read, closed reason; SoD stays an owner decision).
+
+**64.7 M-1 (related-party completeness).** Scope frozen: fee concession
+decisions and Payment correction decisions (and, if OD-8.3 adopts the
+recommendation, Charge cancel/void). Protection: an account link of the
+decider (active or revoked) to a Guardian currently related to the affected
+Student refuses the decision, in service and database. Limit: an
+undisclosed relationship (a staff parent who never links) cannot be
+inferred, and must not be inferred from PII (names, phones, addresses).
+**PRODUCTION_POLICY_PREREQUISITE.** The eventual decision is the governed
+source of truth: (a) a mandatory staff related-party declaration, recorded
+as a structural link reviewed by a second person (recommended), or (b)
+mandatory Guardian account linkage for staff parents, or (c) a formal
+related-party register maintained by HR. Any option feeds the existing
+structural check; none needs a new framework.
+
+**64.8 OD-8.2 (manual ledger).** Post: `finance.ledger.post`
+(school_admin, accountant), fresh MFA, required description, audited.
+Reverse: `finance.ledger.reverse` (school_admin), fresh MFA, optional text,
+audited; ledger-native entries only (ORG.8-P1). The poster is NOT stored on
+`journal_entries` (audit event only); the same actor may post and reverse.
+Maker/checker would need the column first. **DEFERRED, LOW**: fresh MFA on
+both sides, the subledger guard and the audit trail bound v1.
+
+**64.9 OD-8.3 (Charge cancel / void) → new G-8, MEDIUM.**
+`ChargeAdministrationService::cancel`, fee-assessment item void and
+late-fee void use `finance.charges.manage` (school_admin, accountant;
+CAMPUS_INCOMPATIBLE, whole-School) through the cached Gate, with no fresh
+MFA, an optional free-text reason (not DB-enforced) and no canceller column
+(audit only). Accounting is sound: Fees reverses its own recognition entry
+(ORG.8-P1 accepts it) and the database refuses cancelling a Charge with
+allocations, late fees, adjustments or a fee-run origin through this path.
+**Gap:** there is no Guardian-beneficiary refusal, so an account-linked
+staff Guardian can cancel or void their own child's unpaid Charge alone;
+the concession and correction paths refuse exactly this. Recommended v1
+contract: **DIRECT_WITH_ASSURANCE**, not a workflow: a closed code-owned
+reason, fresh MFA, `ApprovalDecisionAuthority::requireCurrent` under the
+Charge lock, and the existing Guardian-beneficiary check. Needs the owner
+decision OD-8.3, then a narrow slice. Admissions accept/reject is separated
+from OD-8.3: Campus-scoped `admissions.manage`, no money effect, optional
+unaudited note, no status CHECK or decider column — LOW (G-10).
+
+**64.10 OD-8.4 (Payroll).** (A) The approver may post: post/reverse need
+`payroll.runs.post/.reverse` (school_admin) and fresh MFA but no
+participant check and no fresh-authority read; reverse takes optional free
+text. (B) Own pay: nobody sets their own compensation, overrides or deltas
+(rule 95), and adjustment authors cannot approve, but nothing refuses
+approving or posting a run that contains one's own result.
+**PRODUCTION_POLICY_PREREQUISITE** (Payroll production is already gated by
+HRX-L4/E45). Recommended v1 policy: approver != poster, refuse approval of a
+run with the approver's own result, closed reverse reason.
+
+**64.11 OD-8.9 / G-5 (Group governance).** Create, rename, archive, add or
+remove School, grant and revoke Group roles: root-only
+(`platform.school_groups.manage`, `.school_group_grants.manage`), audited
+on the platform ledger, but no fresh MFA, confirmation or reason, and the
+self-grant refusal is an unaudited 422 (database CHECK backs it). A Group
+grant confers School elevation, and every comparable platform mutation
+already steps up. Platform roles hold no tenant business capability.
+**PRODUCTION_POLICY_PREREQUISITE** (platform hygiene), not an ORG.8
+technical blocker.
+
+**64.12 G-6 — runtime-database reproduction and classification.** As
+`school_os_app`, under the School's RLS context:
+- `students.status` active -> inactive with no lifecycle event: ACCEPTED;
+  `students.status` = an arbitrary value: ACCEPTED (no CHECK).
+- INSERT a `withdrawn` placement with no event: ACCEPTED; INSERT or UPDATE
+  `student_enrollments.status` to an arbitrary value: ACCEPTED (no CHECK).
+- UPDATE active -> withdrawn / cancelled with no event, or with the wrong
+  action's event: REFUSED (`student_enrollments_lifecycle_evidence`).
+- An event naming an unrelated User, then withdraw: ACCEPTED (actor
+  identity is the caller's claim).
+- UPDATE/DELETE of `student_lifecycle_events`: REFUSED (append-only).
+- A `student_deactivated` event with no status change: ACCEPTED.
+- Reopening an ended placement: REFUSED (retention eligibility guard).
+- active -> completed / transferred with no event: ACCEPTED (ordinary ends,
+  by design).
+
+Application writers: only `StudentService` writes `students.status` and only
+`StudentEnrollmentService` writes terminal placement states; the only
+placement INSERT writes `active`. So raw SQL reaches states no canonical
+service can create (an evidence-less inactive Student, unknown status
+values, an evidence-less terminal placement, a terminal placement with no
+end date). PostgreSQL can require the evidence row and the status domains
+without knowing who acted — the enrollment trigger already does. Only the
+acting User's identity (any User id is accepted in the actor column) is a
+genuine actor-context boundary. ORG.8E's reason for omitting the
+`students.status` rule (test fixtures write it directly) is a fixture
+convenience, not an architectural boundary. **Classification: MEDIUM
+integrity gap** (structural invariants enforceable without an actor;
+rule 11's Student-status audit can be skipped by a direct write; no
+canonical path is affected). Not exploitable through the application;
+it is a defence-in-depth gap of the kind this repository otherwise closes
+in the database (rule 25). **ORG.8 is not cleanly technically closed until
+the narrow follow-up (ORG.8G) lands**: status-domain CHECKs on both tables,
+an evidence trigger for `students.status` changes (the enrollment pattern),
+evidence or refusal for terminal INSERTs, and a terminal state requiring
+`ends_on`. Fixture impact (to scope it): ~26 files update
+`students.status` directly, ~83 sites insert inactive Students, ~36 insert
+terminal placements.
+
+**64.13 Student temporal state (G-6b, LOW).** Service rule: `ends_on` >=
+`starts_on` only (`StudentEnrollmentService`; the DB CHECK
+`student_enrollments_date_range_check` agrees). Reproduced: the canonical
+withdraw accepts an `ends_on` far after the academic year end (2099) and one
+backdated to the start. Raw SQL additionally accepts a completed placement
+with `ends_on` after the year end and a terminal placement with a NULL
+`ends_on`, and an INSERT of a placement starting after its year ends. The
+retention guard already refuses an end on a non-terminal row, a changed
+start and reopening. Effects: the retention exit date is the later of
+`ends_on` and the recorded date, so a backdated end never shortens retention
+but a far-future one defers it (over-retention); date-based fee targeting
+and manual Charge Campus attribution treat the placement as running until
+`ends_on`. **LOW (data quality)**; bound `ends_on` to the placement's year
+(optionally inside ORG.8G).
+
+**64.14 G-9 `setManager` deadlock (LOW).** A manager-path Leave decision
+locks the subordinate's assignments FOR SHARE then the manager assignment;
+`setManager` locks the two assignments FOR UPDATE in id order. A repeated
+or inverted `setManager` on exactly the pair a pending decision is reading
+can form a cycle; PostgreSQL aborts one transaction (40P01). Everything,
+including audit and outbox, rolls back; the user sees a generic 500; the
+idempotency key is released so a retry is safe; no state can be corrupted.
+HR post-v1 hardening (no-op early return or consistent lock order; optional
+409 translation). Not an ORG.8 blocker.
+
+**64.15 Raw-SQL trust-boundary register.**
+
+| Domain | Raw SQL can | Application can | DB backstop | Acceptable? | Severity / follow-up |
+|---|---|---|---|---|---|
+| Recorded actor columns (all workflows) | name any User as requester/decider/actor | no | maker/checker CHECKs compare the recorded ids | yes: the DB has no trusted actor context | LOW, accepted |
+| Guardian self-administration (8A-R1 Rule B) | change a relationship of one's own Guardian | no | none (relationship rows record no actor) | yes: needs the acting User | LOW, accepted |
+| Payroll calculator provenance (8B) | record a calculation under any actor | no | append-only calculations; participant guard on the recorded ids | yes | LOW, accepted |
+| `PaymentCorrectionService` core (8C) | call the internal core shape directly | only via `executeApproved` | request guards; approval guard binds count | yes | LOW, accepted |
+| Leave relationship authority (8D) | decide as a non-manager | no | self/submitter guards only | yes: reporting authority needs the acting User | LOW, accepted |
+| Student lifecycle (8E) | change `students.status` with no event; any status value; INSERT terminal placement with no event | no | enrollment UPDATE evidence trigger only | **no**: structural, enforceable without actor | **MEDIUM G-6 → ORG.8G** |
+| Attendance correction (8E) | reuse one correction row for a second raw UPDATE in the same transaction | no | evidence trigger, shape CHECK, append-only | yes: same-transaction `now()` | LOW, accepted |
+| Library fine void (8E) | name any voider | no | reason trigger, at most once | yes | LOW, accepted |
+| Communications approval | decider = requester | no (service) | none | **no**: both columns exist; a CHECK is actor-free | LOW G-10, future |
+| Charge cancel | (application path, not raw) | yes, by a related party | none | — | MEDIUM G-8 → OD-8.3 / ORG.8G |
+
+**64.16 Database privilege principle.** Prefer database enforcement for any
+structural invariant PostgreSQL can check without the human actor; keep
+only actor-identity checks in the application. Violations found: G-6
+(Student status domain, evidence, terminal shape) and G-10 (Communications
+SoD CHECK, Admissions status domain). No privilege change was made.
+
+**64.17 Fresh authority.** Uncached (`requireCurrent`): concession
+approve/reject, Payment correction approve/reject, Payroll approve, Leave
+decisions and administrative Leave writes, Student status,
+Enrollment withdraw/cancel, Library fine void. Still cached: ledger post
+and reverse, period close, Charge cancel/voids (G-8), concession revoke and
+adjustment cancel (G-3), Payroll post/reverse (OD-8.4), Communications
+approve, Marks decisions, Attendance correction (Campus/teacher guards in
+the transaction), Admissions, Group governance (G-5). LOW except where
+listed under G-8.
+
+**64.18 Fresh MFA.** Required: concession approve, revoke,
+adjustment cancel; Payment correction approve; Payroll approve, post,
+reverse, compensation; Marks approve, reject, lock; ledger post, reverse;
+period close; Student status, Enrollment withdraw/cancel; Library fine
+void; emergency publish; manual payment record. No step-up: concession
+reject/withdraw, correction request/reject/withdraw, Leave decisions,
+Communications approve, Attendance correction (owner decision 8E-D2),
+Charge cancel/voids (G-8), Admissions, Group governance (G-5).
+Inconsistencies needing owner decisions: G-8 (OD-8.3), G-5 (OD-8.9).
+
+**64.19 Reasons.** Structured code-owned: Student lifecycle, Attendance
+correction, Library fine void (+ bounded note), Leave rejection/closing,
+Marks corrections, erasure. Mandatory free text: Payment correction
+(5-500, DB), Communications rejection, Payroll overrides/deltas, ledger
+post description. Optional note: ledger reverse, Payroll reverse,
+adjustment cancel, Charge cancel/voids, Admissions accept/reject. None:
+concession decisions (owner decision M), concession revoke, Group
+governance. Remaining high-risk direct actions without an adequate reason:
+Charge cancel/voids (G-8); lower: ledger and Payroll reverse (OD-8.2,
+OD-8.4), Group governance (G-5).
+
+**64.20 Registry completeness.** `WORKFLOWS`: fee_concessions,
+payment_corrections, leave_requests, payroll_runs (shared);
+communication_approvals, student_mark_corrections, erasure_cases (domain).
+`DIRECT_ASSURED`: the three ORG.8E services. `NOT_WORKFLOWS`: four
+preview/submission columns. The test catches every decision-shaped actor
+column and every request/approve-shaped capability; it cannot see
+single-actor decisions without an actor column (admission decisions,
+employee certification verification). Those are direct actions, not
+workflows, and are recorded here. No direct-assured service uses
+`MakerCheckerPolicy`, `ApprovalProvenance` or `ApprovalParticipants`.
+
+**64.21 Concurrency.** Real two-process tests: concessions (decision
+races, concession vs application lock), Payment corrections (stale count
+binding under the Payment lock), Payroll (run-row locks; calculate vs
+approve), Leave (decision races, manager change, G-9 noted), Student
+lifecycle (double deactivation, withdraw vs transfer both orders, withdraw
+vs cancel), Attendance (expected-status compare-and-set), fine void (at
+most once). No HIGH/MEDIUM race missing.
+
+**64.22 UAT.** `docs/product/APPROVAL-AUTHORITY-UAT.md` now has concrete
+cases for every built flow: FC1-FC8 (concessions, Rules A/B), PR1-PR7
+(Payroll), PC1-PC14, LV1-LV11, DA1-DA13. DDEV evidence: ORG.8C 12/12,
+ORG.8D 4/4 (§62.9), ORG.8E 15/15 (§64.1). UAT-ready for local/UAT use;
+production blocked as in 64.23.
+
+**64.23 Production gates (unchanged).** The authoritative register is ADR
+0058 §6 (E01-E47). For ORG.8: E30 (receipts/corrections) and E31 (late
+fees), E32 (concessions/RTE), E34 (fine void), E21, E02/E15, E16, O1 block
+production with no code refusal; E33/TCH-L1 is determined with conditions
+(production teacher grants after re-verification); E36/E37 refused in code
+outside local/testing, E42 blocks design; HRX-L1..L4 and E45 gate Leave
+and Payroll money/statutory effects; E46 refused in code; E47 owner call.
+M-1, OD-8.4, OD-8.9 are owner production prerequisites. Recorded drift for
+the owner's gate register (not changed here): ADR 0058 §6's E16 row still
+names the 2026-10-11 decision (the current one is OWNER-0O-E16-2026-10-16,
+valid through 2026-11-12); §53.15 groups E42 with "refused in code" and
+says E45 makes statutory payroll unreachable (the register: E42 blocks
+design; E45 only the ESI disability branch); ADR 0058 §7 rows on manual
+payment corrections and subledger reversals are superseded by ORG.8C and
+ORG.8-P1.
+
+**64.24 LC-5..LC-10** stay paused; none depends on ORG.8 closure (§56.33).
+ORG.8E delivered parts of LC-8 STU-14 (Student status confirmation) and
+LC-6 ATT-06 (correction reason); LC-5 "undo deactivation" now goes through
+the reactivation assurance.
+
+**64.25 ORG.9 handoff (not started).** Inputs, to be received only:
+`Menu_Permissions_Master.xlsx` (§31.8, owner-held), the reference ERP and
+HR MIS screenshots, and the candidates already recorded (§31.8, §53.16,
+§56.33): offline-payment approval, bank reconciliation, voucher and petty
+cash approvals, bulk refunds, report-card publish controls, transfer
+certificates, bulk Campus transfer, staff Attendance modification
+approval, approval ageing. Each needs its own contract against this
+section's model (domain-owned workflow or DIRECT_WITH_ASSURANCE).
+
+**64.26 Findings.** HIGH: none. MEDIUM: G-6 (structural Student
+invariants), G-8 (Charge cancel/void related party and assurance). LOW:
+G-3, G-5, G-6b, G-9, G-10, OD-8.2, fresh-authority cache on 64.17's list,
+the stale `LeaveRequestService` docblock on OD-8.8 (code comment, left for
+the next code slice), M-1 (production policy).
+
+**64.27 Verdict.** ORG.8 is **not yet technically closed**: two MEDIUM
+items remain. Required follow-up, one narrow slice (ORG.8G, owner
+authorization): G-6 structural Student invariants (no decision needed) and,
+once the owner decides OD-8.3, G-8 Charge cancel/void assurance. ORG.9 waits
+for that slice and the owner's approval.

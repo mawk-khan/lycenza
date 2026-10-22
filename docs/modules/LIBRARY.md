@@ -552,3 +552,9 @@ wave is frozen.
   authentication code and the current `library.fines.void` authority. The
   fine's charge is cancelled through Fees, once. A waiver is a Fees
   concession, never a void. Production stays gated by E34.
+
+## ORG.8 closure audit (ORG.8F, 2026-10-22, ADR 0076 §64)
+
+Library fine void assurance is complete for v1 (listed reason, note, fresh
+code, current authority, at most once, through the Fees source seam).
+Production execution stays gated by E34.

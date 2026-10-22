@@ -630,8 +630,8 @@ Recorded, **not** O1 blockers, and **not** fixed opportunistically:
 | AI context-token debt (ADR 0023: no `kid`/rotation); unknown AI agent/tool answers 500 | ADR 0053 §12 and amendment; `docs/ai/AI-PLATFORM.md` | AI is disabled (§4.9); Phase 0M blocked |
 | Self-service lost-MFA recovery | ADR 0056 §12, §17 item 5 | Operator `platform.users.mfa.reset` path exists |
 | Signed-in password-change UI | ADR 0056 §17 item 3 | Recovery and the operator reset exist; a future flow must use `CredentialChangeService` |
-| Manual-payment correction | §4.15 | Owner froze immutable v1 records |
-| Other subledger journal entries reversible through the generic action | Readiness §39 | Existing ledger behaviour; Finance follow-up |
+| Manual-payment correction | §4.15 | Owner froze immutable v1 records. **Superseded:** corrections built (UAT-C3) and made request -> approve by ORG.8C (ADR 0076 §61, §64) |
+| Other subledger journal entries reversible through the generic action | Readiness §39 | **Closed by ORG.8-P1** (ADR 0076 §57): the generic reversal and the database refuse any entry another domain owns |
 | LMS interoperability | ADR 0057 | Cancelled |
 | Person-counting Analytics | `ANALYTICS.md`; ADR 0048 | Its own gate stays fail-closed (no cohort default) |
 | Malware scanning | ADR 0011; `DOCUMENTS.md` | Documented deferral remains accepted. Any feature that depends on scanning (e.g. LMS Submission uploads) stays blocked by its own gate |

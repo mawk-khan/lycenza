@@ -299,3 +299,14 @@ School setting, a role, a navigation toggle or a commercial plan.
   and the order of future work are in
   `docs/security/APPROVAL-AUTHORITY-MATRIX.md`; the test plan is
   `docs/product/APPROVAL-AUTHORITY-UAT.md`.
+- **ORG.8 built (ORG.8-P1 to ORG.8E, ADR 0076 §57-§63; closure audit ORG.8F
+  §64).** Ledger reversal of another area's journal entries is refused;
+  fee concessions, payroll runs, Payment corrections and Leave decisions use
+  the shared maker/checker foundation; Student status, placement withdrawal
+  and cancellation, Attendance corrections and Library fine voids are direct
+  actions with a listed reason, recorded evidence and (except Attendance) a
+  fresh code. Every approval permission is still School-wide; a Campus
+  grant decides nothing. ORG.8F found two items to finish before ORG.8 is
+  technically closed (Student database invariants, G-6; Charge cancel and
+  void assurance, G-8 / OD-8.3) and several production prerequisites (M-1,
+  OD-8.4, OD-8.9).

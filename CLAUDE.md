@@ -1564,3 +1564,9 @@ once several modules copy it.
        `ApprovalWorkflowRegistry::DIRECT_ASSURED`, never as workflows. Never
        add a caller that skips the proof or reason, and never add a
        free-text or health reason to Attendance.
+     - **Trust boundary is never a blanket exemption (ORG.8F, §64).** If
+       PostgreSQL can enforce a structural rule without knowing which human
+       acted (a status domain, an evidence row's existence, a terminal
+       state's end date), enforce it in the database; only the acting
+       User's identity stays an application boundary. Open: G-6 and G-8
+       (ORG.8G) before ORG.8 is technically closed.

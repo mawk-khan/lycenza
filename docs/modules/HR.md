@@ -4175,3 +4175,12 @@ are Campus-adopted through `App\Domain\HR\Application\HrEmployeeAccess`.
   assignment, read when the decision is made. Campus never decides Leave
   authority: a Campus-only principal does not approve through the reporting
   line (OD-8.8 closed as Option A, ADR 0076 §62.10).
+
+## ORG.8 closure audit (ORG.8F, 2026-10-22, ADR 0076 §64)
+
+- Leave decisions are complete for v1 (whole-School authority, OD-8.8
+  Option A).
+- **G-9 (LOW):** changing a reporting manager while a manager-path Leave
+  decision reads the same pair can deadlock; PostgreSQL aborts one side,
+  everything rolls back and the user sees an error (retry is safe). HR
+  post-v1 hardening.

@@ -1028,3 +1028,13 @@ the approve endpoint answers 409 `PAYROLL_RUN_RECALCULATION_REQUIRED`. A run
 calculated before this change also needs a fresh calculation. The database
 enforces the same rule on the recorded approver. The approver may still post
 the run; that is open owner decision OD-8.4.
+
+## ORG.8 closure audit (ORG.8F, 2026-10-22, ADR 0076 §64)
+
+- **OD-8.4 is a production policy prerequisite.** The approver may still
+  post and reverse, and nothing refuses approving or posting a run that
+  contains the approver's own result (nobody can set their own pay,
+  overrides or deltas, and adjustment authors cannot approve). Recommended
+  before Payroll production (already gated by HRX-L4 and E45): approver !=
+  poster, refuse approval of a run with one's own result, and a listed
+  reverse reason.

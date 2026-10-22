@@ -1,9 +1,11 @@
 # Approval authority UAT plan (ORG.8, 2026-10-21)
 
-Status: **plan, not evidence.** It defines the fixtures and cases every
-future approval phase (ADR 0076 §56.30) must satisfy before it is called
-done. Nothing here is built by ORG.8. Cases for a workflow apply only once
-that workflow's phase is authorized and implemented. No legal gate is
+Status: **UAT plan for the built ORG.8 flows** (ORG.8-P1, 8A-8E; closure
+audited by ORG.8F, ADR 0076 §64). It is a plan, not evidence: the recorded
+local evidence is the DDEV smoke of each phase (ADR 0076 §62.9: ORG.8C
+12/12, ORG.8D 4/4; §64.22: ORG.8E 15/15) and each phase's exact-SHA CI run.
+The generic cases P1-P7 and N1-N22 apply to every workflow; the sections
+below add each flow's specific cases. No legal gate is
 changed by any outcome here: a case that touches E30–E34, E36/E37, E46,
 HRX-L* or PAY-L1 is local/UAT evidence only, never production clearance.
 
@@ -100,6 +102,38 @@ Matrix: `docs/security/APPROVAL-AUTHORITY-MATRIX.md`.
   where scoped, requested-at. Never a full Student, Guardian or Employee
   profile, contact value or HR-sensitive field.
 
+## Fee concessions (ORG.8A / 8A-R1, ADR 0076 §58-§59 — built 2026-10-21)
+
+Personas: Requester A = `accountant`; Approver B = `school_admin`; a
+Guardian approver G = `school_admin` whose account is linked (then
+revoked) to a current Guardian of the fixture Student.
+
+| # | Actor | Action | Expected |
+|---|---|---|---|
+| FC1 | A | request a concession for a Student's open Charge | pending; nothing posted |
+| FC2 | B | approve with a fresh code | approved; the adjustment is posted in the same step; audit names A as requester and B as decider |
+| FC3 | B | approve without a code | refused; still pending |
+| FC4 | A (also holding `.approve`) | approve own request | refused (maker/checker, service and database) |
+| FC5 | G | approve or reject a concession for G's linked child (link active or revoked) | refused generically (Rule A, service and database) |
+| FC6 | B | reject (no code needed) | rejected; final; a later approve refused |
+| FC7 | B | revoke a standing concession, then cancel an adjustment (fresh code each) | revoked / cancelled; the adjustment's journal entry is reversed by Fees (accepted v1 residual G-3: no SoD, optional note) |
+| FC8 | staff with `guardians.manage` linked to Guardian X | link, unlink or change X's Student relationships | refused (Rule B, Guardian self-administration) |
+
+## Payroll runs (ORG.8B, ADR 0076 §60 — built 2026-10-22)
+
+Personas: Preparer P = `payroll_officer`; Approver B = `school_admin`;
+Calculator C = a second `school_admin` who recalculates.
+
+| # | Actor | Action | Expected |
+|---|---|---|---|
+| PR1 | P | create and calculate a run | prepared; the calculation is recorded |
+| PR2 | B | approve with a fresh code | approved; results and HRX inputs frozen |
+| PR3 | C | recalculate P's run, then approve it | refused (C is a recorded calculator) |
+| PR4 | a `school_admin` who added a manual override or correction delta | approve the run | refused (adjustment author) |
+| PR5 | P | add an adjustment after the last calculation; B approves | 409 `PAYROLL_RUN_RECALCULATION_REQUIRED`; approval after a fresh calculation succeeds |
+| PR6 | anyone | add an adjustment to an approved run | refused (adjustments only while preparing) |
+| PR7 | B | post, then reverse with a fresh code | posted / reversed (OD-8.4: the approver may post; production policy prerequisite) |
+
 ## Payment corrections (ORG.8C, ADR 0076 §61 — built 2026-10-22)
 
 Personas from the seeded catalogue: Requester A = `accountant`; Approver
@@ -150,6 +184,7 @@ and HR approver H = two `hr.leave.manage` holders; a Campus principal P =
 | LV8 | P | approve R's leave | refused (Campus grants decide no Leave; OD-8.8 closed as Option A) |
 | LV9 | M after their grant is revoked | approve | refused at once (fresh authority) |
 | LV10 | anyone | approve one's own leave on any path | refused |
+| LV11 | M | reject without a reason / with a listed reason | refused / rejected with the closed code |
 
 ## Direct high-impact actions (ORG.8E, ADR 0076 §63 — built 2026-10-22)
 
@@ -167,3 +202,6 @@ No request/approve workflow; each action is direct with assurance.
 | DA8 | Teacher | Correct a register outside their ownership | not found (unchanged) |
 | DA9 | School Admin | Void a fine: reason code + note + fresh code | voided once; the charge is cancelled; a second void refused |
 | DA10 | Librarian, Finance staff | Void a fine | refused (no `library.fines.void`) |
+| DA11 | School Admin | Reactivate an inactive Student (returned to school / deactivated in error, confirm, code) | active; the reason is in the Student's history |
+| DA12 | School Admin | Void a fine without a fresh code | refused; the fine stays |
+| DA13 | API client (School Admin token) | Change status / withdraw / cancel without `reason_code` or `mfa_code` | 422 / refused; nothing recorded |

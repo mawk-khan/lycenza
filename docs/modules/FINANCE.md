@@ -5633,6 +5633,8 @@ Nothing changed. Recorded for later owner-authorized phases:
   a reason (G-3).
 - **Payment reversal and refund** maker/checker, a ledger reverser != poster
   rule and Charge cancel reasons/step-up are owner decisions OD-8.1–OD-8.3.
+  (Superseded: OD-8.1 closed by ORG.8C; OD-8.2 deferred and OD-8.3 needs a
+  technical follow-up, ORG.8F, ADR 0076 §64.)
 
 ## Ledger / subledger reversal guard (ORG.8-P1, 2026-10-21, ADR 0076 §57)
 
@@ -5704,3 +5706,20 @@ detected. That limit is recorded for an owner policy decision (ADR 0076
 - **Unchanged.** Posted Payments, allocations and receipts never change;
   corrections stay whole-School; production stays blocked by E30/E31 and
   the general gates.
+
+## ORG.8 closure audit (ORG.8F, 2026-10-22, ADR 0076 §64)
+
+- **Charge cancel, fee-assessment void and late-fee void (G-8, MEDIUM).**
+  `finance.charges.manage` (school_admin, accountant) with no fresh code, an
+  optional note and no Guardian-beneficiary refusal: an account-linked staff
+  Guardian could cancel their own child's unpaid Charge. Recommended v1
+  (owner decision OD-8.3): a direct action with a listed reason, a fresh
+  code, current authority and the existing Guardian check; no approval
+  workflow. Accounting is already correct (Fees reverses its own entry).
+- **Manual journals (OD-8.2, deferred).** The poster is recorded only in the
+  audit event; a reverser != poster rule needs a `posted_by_user_id` column
+  first. Both sides already need a fresh code.
+- **Concession revoke / adjustment cancel (G-3, LOW, accepted for v1).**
+- **M-1** (a staff parent who never links their account) is a production
+  policy prerequisite for concession, correction and (if adopted) Charge
+  cancel decisions.

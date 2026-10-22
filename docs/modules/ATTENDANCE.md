@@ -812,3 +812,10 @@ no staff service is bypassed or reused.
   the database refuses a status change without it.
 - First-time entry needs no reason. Who may correct is unchanged. No
   approval and no time limit.
+
+## ORG.8 closure audit (ORG.8F, 2026-10-22, ADR 0076 §64)
+
+Student Attendance correction assurance is complete for v1: listed,
+absence-neutral reasons and a database-required correction row; no approval,
+window or step-up (owner decision 8E-D2). Teacher production use stays under
+E33/TCH-L1.
