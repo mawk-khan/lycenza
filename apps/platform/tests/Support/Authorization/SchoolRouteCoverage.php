@@ -73,6 +73,7 @@ use App\Domain\Students\Application\StudentAccess;
 use App\Domain\Students\Application\StudentNameEditService;
 use App\Domain\Timetable\Application\TimetableScheduleAccess;
 use App\Domain\Transport\Application\TransportRiderAccess;
+use App\Domain\Transport\Application\TransportRiderImport;
 use App\Domain\Visitor\Application\VisitorVisitAccess;
 use Tests\Feature\Api\V1\SchoolContextTest;
 use Tests\Feature\App\StatutoryPayrollUiTest;
@@ -728,6 +729,10 @@ final class SchoolRouteCoverage
             Coverage::campusLookup('app.transport.assignments.create', 'transport.assignments.manage', 'Data-free form page; Students, routes and stops come from the scoped searches.'),
             Coverage::campus('app.transport.assignments.search-students', 'transport.assignments.manage', TransportRiderAccess::class, 'riderCandidates'),
             Coverage::campus('app.transport.assignments.search-routes', 'transport.assignments.manage', TransportRiderAccess::class, 'routes'),
+            Coverage::campusLookup('app.transport.assignments.import.create', 'transport.assignments.manage', 'Data-free upload page (limits and column names only).'),
+            Coverage::campusLookup('app.transport.assignments.import.template', 'transport.assignments.manage', 'A blank template: the header and one placeholder line, no School data.'),
+            Coverage::campus('app.transport.assignments.import.preview', 'transport.assignments.manage', TransportRiderImport::class, 'preview'), // scoped via TransportRiderAccess::routes()/assignments()
+            Coverage::campus('app.transport.assignments.import.commit', 'transport.assignments.manage', TransportRiderImport::class, 'commit'), // + TransportRiderAccess::writeGuard() and fresh authority
             Coverage::campus('app.transport.assignments.route-stops', 'transport.assignments.manage', TransportRiderAccess::class, 'scopedRoute'),
             Coverage::campus('app.transport.assignments.store', 'transport.assignments.manage', TransportRiderAccess::class, 'writeGuard'),
             Coverage::campus('app.transport.assignments.end', 'transport.assignments.manage', TransportRiderAccess::class, 'writeGuard'),

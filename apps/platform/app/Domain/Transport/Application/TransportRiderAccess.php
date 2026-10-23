@@ -3,6 +3,7 @@
 namespace App\Domain\Transport\Application;
 
 use App\Domain\Students\Application\StudentLookupCandidate;
+use App\Domain\Students\Application\StudentOperationalCampusResolver;
 use App\Domain\Students\Application\StudentPurposeLookup;
 use App\Domain\Students\Application\StudentSearch;
 use App\Domain\Students\Infrastructure\Student;
@@ -34,7 +35,10 @@ use Illuminate\Support\Str;
  */
 final class TransportRiderAccess
 {
-    public function __construct(private readonly StudentPurposeLookup $students) {}
+    public function __construct(
+        private readonly StudentPurposeLookup $students,
+        private readonly StudentOperationalCampusResolver $campuses,
+    ) {}
 
     /** @return Builder<TransportRoute> */
     public function routes(CampusScope $scope): Builder
@@ -116,5 +120,19 @@ final class TransportRiderAccess
     public function writeGuard(School $school, CampusScope $scope): ?TransportRiderCampusGuard
     {
         return $scope->isWholeSchool() ? null : new TransportRiderCampusGuard($school, $scope);
+    }
+
+    /**
+     * ORG.9C-4 (ADR 0076 §72): each given Student's CURRENT operational Campus
+     * id (null: none), in one read -- the rider import's ADVISORY preview check
+     * for a Campus-scoped actor. Never write-time proof: a commit proves it
+     * under lock through the Campus guard (lockOperationalOn()).
+     *
+     * @param  list<string>  $studentIds
+     * @return array<string, ?string>
+     */
+    public function operationalCampuses(School $school, array $studentIds): array
+    {
+        return array_map(fn ($c) => $c->operationalCampusId(), $this->campuses->forMany($school, $studentIds));
     }
 }

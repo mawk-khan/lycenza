@@ -44,13 +44,20 @@ function endAssignment(assignmentId: string): void {
                 <h1 class="text-xl font-semibold">Student Transport assignments</h1>
                 <p class="mt-1 text-sm text-slate-500">Students currently assigned to a Route.</p>
             </div>
-            <a
-                v-if="canManage"
-                href="/app/transport/assignments/create"
-                class="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-            >
-                Assign a Student
-            </a>
+            <div v-if="canManage" class="flex shrink-0 gap-2">
+                <a
+                    href="/app/transport/assignments/import"
+                    class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
+                >
+                    Import riders
+                </a>
+                <a
+                    href="/app/transport/assignments/create"
+                    class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                >
+                    Assign a Student
+                </a>
+            </div>
         </div>
 
         <EmptyState

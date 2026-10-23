@@ -152,6 +152,7 @@ use App\Http\Controllers\App\TeachingAssignments\TeachingAssignmentController;
 use App\Http\Controllers\App\Timetable\TimetableEntryController;
 use App\Http\Controllers\App\Timetable\TimetablePeriodController;
 use App\Http\Controllers\App\TransportOperationsController;
+use App\Http\Controllers\App\TransportRiderImportController;
 use App\Http\Controllers\App\TransportRouteController;
 use App\Http\Controllers\App\TransportStudentAssignmentController;
 use App\Http\Controllers\App\TransportVehicleController;
@@ -1181,6 +1182,11 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
     Route::prefix('app/transport/assignments')->name('app.transport.assignments.')->group(function (): void {
         Route::get('/', [TransportStudentAssignmentController::class, 'index'])->name('index');
         Route::get('/create', [TransportStudentAssignmentController::class, 'create'])->name('create');
+        // ORG.9C-4 (ADR 0076 §72): add-only bulk rider assignment (upload -> preview -> atomic commit).
+        Route::get('/import', [TransportRiderImportController::class, 'create'])->name('import.create');
+        Route::get('/import/template', [TransportRiderImportController::class, 'template'])->name('import.template');
+        Route::post('/import/preview', [TransportRiderImportController::class, 'preview'])->middleware('throttle:transport-rider-import')->name('import.preview');
+        Route::post('/import/commit', [TransportRiderImportController::class, 'commit'])->middleware('throttle:transport-rider-import')->name('import.commit');
         Route::get('/search/students', [TransportStudentAssignmentController::class, 'searchStudents'])->name('search-students');
         Route::get('/search/routes', [TransportStudentAssignmentController::class, 'searchRoutes'])->name('search-routes');
         Route::get('/routes/{transportRoute}/stops', [TransportStudentAssignmentController::class, 'routeStops'])->name('route-stops');

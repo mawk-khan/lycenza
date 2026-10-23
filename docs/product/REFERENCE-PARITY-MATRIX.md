@@ -693,3 +693,24 @@ Statuses are now P0 70, P1 100, P2 64.
 - procurement (post-v1);
 - exports (D-11);
 - configurable approval chains stay DO_NOT_BUILD.
+
+## 20. ORG.9C-4 — Transport bulk rider import (2026-10-23)
+
+ORG.9C-4 (ADR 0076 §72) built PV1-09's bulk rider assignment: TRN-036, E2 evidence, with no reference screenshot family.
+
+**TRN-036: P3 → P1** (intended difference). The import is:
+- add-only and all-or-nothing;
+- matched by student number, route code and stop number;
+- UTF-8 CSV of at most 500 rows;
+- web only.
+
+TRN-015 (route riders vs capacity) is unchanged: it is a read item not authorized in this slice.
+
+Statuses are now P1 101 and P3 21.
+
+| Coverage | After ORG.9C-3 | After ORG.9C-4 |
+|---|---|---|
+| Functional, weighted / strict | 38.4 % / 33.3 % | **38.5 % / 33.5 %** (244.0 / 633) |
+| V1-required, weighted / strict | 81.8 % / 71.0 % | **82.2 % / 71.4 %** (244.0 / 297) |
+
+**Remaining Transport gaps:** TRN-015 capacity summary; GPS, maps and tracking (privacy-gated); trips and zones; maintenance and costs; fee receivable reports.

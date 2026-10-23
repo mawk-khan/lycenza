@@ -170,6 +170,14 @@ All are read-only on the existing scope; matrix §19 has the coverage.
 - procurement;
 - exports (D-11).
 
+### ORG.9C-4 built (2026-10-23, ADR 0076 §72)
+
+**PV1-09:** TRN-036 bulk rider import, now P1.
+- Add-only and all-or-nothing: UTF-8 CSV, then a signed preview, then an atomic commit through `TransportStudentAssignmentService::assign()`.
+- Existing `transport.assignments.manage` and Campus contract; no schema and no new capability.
+
+**Not built:** TRN-015 (route riders vs capacity, a read item), reassignment by import, partial import and error export (D-11). Matrix §20 has the coverage.
+
 ## Wave ORG.9D — Communications for operations
 
 | ID | Title | Functions | Value | Current gap | Security | Campus | Approval | Gate | Dependency | Size |

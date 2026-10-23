@@ -1606,3 +1606,9 @@ once several modules copy it.
      - **Query shape.** The Location set is resolved once and tested by id, never joined per movement.
      - **Never** show a person, actor, form key or MFA data on a stock report (OD-9.4, OD-9.5).
      - **Edge transfers.** A month view may count a transfer that crosses the selected set's edge as an aggregate quantity at the in-scope end. It never lists that movement as a row and never names the other Location. The row-level register keeps the ORG.7A rule: both ends in scope.
+
+107. **A bulk import is an adapter over the one write path, add-only and all-or-nothing (ADR 0076 §72, ORG.9C-4).**
+     - **Shape.** `TransportRiderImport` parses (bounded, never stored), previews read-only and signed, and commits in ONE transaction.
+     - **Commit.** Lock the named rows in id order, re-evaluate every row, re-read authority fresh, then call the canonical service per row. Any refusal rolls the whole batch back.
+     - **Never** match by name, replace or end an existing record, write a partial batch, add a force option, or build a generic import engine.
+     - **Campus.** A Campus-scoped actor gets one generic refusal for anything outside their Campuses.

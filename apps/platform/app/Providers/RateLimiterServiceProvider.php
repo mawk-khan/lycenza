@@ -101,6 +101,12 @@ class RateLimiterServiceProvider extends ServiceProvider
         RateLimiter::for('guardian-portal-reply', fn (Request $request) => Limit::perMinute(10)
             ->by('guardian-portal-reply:'.($request->user()?->getAuthIdentifier() ?? $request->ip())));
 
+        // ORG.9C-4 (ADR 0076 §72): the Transport rider import's preview and commit
+        // each read up to 500 rows (and a commit locks the named Students). Keyed
+        // by the signed-in User (rule 61); ample for an operator, a bound on loops.
+        RateLimiter::for('transport-rider-import', fn (Request $request) => Limit::perMinute(10)
+            ->by('transport-rider-import:'.($request->user()?->getAuthIdentifier() ?? $request->ip())));
+
         // Webhook administration specifically (section 31): tighter
         // than general School mutations -- creating an endpoint,
         // rotating a secret, or forcing a redelivery are inherently

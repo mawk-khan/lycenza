@@ -667,3 +667,61 @@ Route and stop management (`transport.routes.manage`) and the fleet
   the route fee head stay whole-School.
 - **Fix.** The API fee head and fee-selection endpoints now resolve their
   records inside the School context.
+
+## Bulk rider import (ORG.9C-4, 2026-10-23, ADR 0076 §72)
+
+`/app/transport/assignments/import` adds many rider assignments at once.
+
+**What it is.**
+- **ADD-ONLY and ALL-OR-NOTHING.**
+- **An adapter over the one write path:** `TransportRiderImport` orchestrates `TransportStudentAssignmentService::assign()`, never a second engine.
+- **Existing authority:** `transport.assignments.manage`, Campus-adopted by the route's Campus.
+- **Web only;** no API.
+
+**The file.**
+- **Format:** UTF-8 CSV only, with no new dependency. At most 500 rows and 128 KB.
+- **Header:** must contain `student_number` and `route_code`; `pickup_stop` and `dropoff_stop` are optional. A duplicate or unknown column refuses the file.
+- **Retention:** the file is read in the request and never stored.
+- **Template:** a blank template (header plus a placeholder line) is offered; it contains no School data.
+
+**Matching.** No name or fuzzy matching anywhere.
+- **Student:** `student_number` (unique per School), exactly, after trimming.
+- **Route:** `code` (unique per School, case-insensitive).
+- **Stop:** its active number on that route (`(route, sequence)` is unique), so a stop of another route can never match.
+
+**Preview.** Set-based (six queries) and read-only. Each row is one of:
+- **ready**;
+- **already assigned:** exactly the same route and stops; a no-op;
+- **repeated row:** an identical earlier row; counts once;
+- **conflict:** different terms for one Student in the file, or an existing different assignment;
+- **invalid;**
+- **not accessible.**
+
+Disclosure rules:
+- A Campus-scoped operator gets one generic "not found or not accessible" for anything outside their Campuses: another Campus's Student or route, an unknown number, or a Student riding another Campus's route.
+- A refused row never names its Student.
+- The preview is signed (HMAC over School, actor, time and the normalised rows; 30 minutes).
+
+**Commit, in one transaction.**
+1. Verify the signature.
+2. Lock the named Students FOR NO KEY UPDATE, ascending by id (the single path's own lock).
+3. Re-evaluate every row; refuse the whole batch unless every row is ready, already assigned or repeated.
+4. Re-read authority fresh: the School operating, plus `holdsInCampusNow()` for each route Campus.
+5. Call `assign()` for each ready row, in Student order, with the Campus guard. Any refusal rolls everything back.
+
+**What a commit never does:**
+- end, replace or move an assignment;
+- create a Student, route or stop;
+- touch fees beyond what `assign()` already does (Transport fee intent for the active year through Fees' seam: never a Charge, and exactly once per new rider).
+
+**Replays and audit.**
+- A retried commit finds its rows already assigned and writes nothing.
+- One `transport.rider_import.committed` audit (counts and a batch hash; never a row) is written only when something was created.
+- Every assignment keeps its own canonical audit.
+
+**Not supported:**
+- partial success or forced import;
+- reassignment or unassignment;
+- an error-row export (D-11);
+- capacity (not enforced by the single path; TRN-015 stays open);
+- an academic-year column (assignments carry none; fee intent follows the active year).

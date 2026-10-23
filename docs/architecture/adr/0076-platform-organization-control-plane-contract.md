@@ -10409,3 +10409,86 @@ Owner authorization: ORG.9C-3 (read-only INV-016, INV-023, INV-020). Baseline `o
 - Statuses: INV-016 → P0; INV-023 → P0; INV-020 → P1 (intended difference: no category or average price, no person-type split, no cross-Item totals).
 - Coverage: 38.4 % / 33.3 % functional, 81.8 % / 71.0 % v1. PV1-08 is complete for v1.
 - Production stays NO-GO (§66.7).
+
+## 72. ORG.9C-4 — Transport bulk rider import (as built, 2026-10-23)
+
+Owner authorization: ORG.9C-4 (PV1-09 bulk rider assignment, add-only, all-or-nothing). Baseline `origin/main` = `8c0f9e9e`.
+
+**What did not change:**
+- capability, role or template;
+- `CampusScopeCatalogue`;
+- schema or migration;
+- API surface;
+- any fee or Charge path;
+- legal or production gate.
+
+**72.1 Evidence.**
+- **PV1-09 = TRN-036** "bulk assign riders from file": P3, E2, workbook paths only, with no reference screenshot family.
+- TRN-015 (route riders vs capacity) is a read item that was not authorized here.
+- The evidence proves the use (start-of-year rider setup) and nothing else; this ADR's contract governs everything else.
+
+**72.2 Canonical path.** `TransportStudentAssignmentService::assign()`, called as is.
+- **Locks:** the Student FOR NO KEY UPDATE; the route FOR SHARE (it must be active); for a Campus-scoped actor, the Campus guard (route Campus in scope, Student operational on it, `lockOperationalOn()`).
+- **One active assignment per Student:** checked, with the partial unique index as backstop.
+- **Records:** its own audit event, plus Transport fee INTENT for the active year through Fees' seam (OPF.1; never a Charge).
+- **Capacity:** not enforced by the single path, so not by the import either.
+- **Year:** an assignment carries no academic year.
+
+**72.3 Import contract** (`TransportRiderImport`, an adapter, not an engine).
+- **File:** UTF-8 CSV with no new dependency, at most 500 rows and 128 KB.
+- **Columns:** `student_number` and `route_code` required; `pickup_stop` and `dropoff_stop` optional. A duplicate or unknown header is refused.
+- **Matching, never by name:**
+  - Student: student number exactly, after trimming (Laravel's own TrimStrings rule);
+  - Route: code, case-insensitive;
+  - Stop: its active number on that route.
+- **Retention:** the file is read in the request and never stored.
+- **Template:** a blank template is offered; it is not a D-11 export.
+
+**72.4 Preview.**
+- **Set-based and read-only:** six queries at any size.
+- **Outcomes:** ready, already assigned (identical; a no-op), repeated row, conflict (different terms in the file, or an existing different assignment), invalid, not accessible.
+- **Campus-scoped actor:** one generic "not found or not accessible", with no name, for anything outside their Campuses. A Student is named only once known to be within reach.
+- **Signing:** only a committable preview is signed (HMAC over School, actor, time and the normalised rows, from a key derived from `app.key`; 30 minutes).
+
+**72.5 Commit (ALL OR NOTHING, one transaction).**
+1. Verify the signature.
+2. Authority NOW: the School operating, and the premise the scope was resolved on — a whole-School grant for a whole-School scope (security review L1), a Campus grant otherwise.
+3. Lock every named Student FOR NO KEY UPDATE, ascending by id.
+4. Re-evaluate every row; refuse unless all are ready, already assigned or repeated.
+5. Require a fresh grant on each READY route's Campus (Campus actor).
+6. Call `assign()` per READY row in Student order, with the guard. Any refusal rolls everything back, including fee intent.
+
+What happens next:
+- **Replay:** a retried commit finds its rows already assigned and writes nothing.
+- **Audit:** one `transport.rider_import.committed` (counts and a batch hash, never a row), only when something was created.
+- **Throttle:** preview and commit share 10 per minute per user (`transport-rider-import`).
+- **Accepted (review L5):** a signature is not single-use within its 30 minutes. Re-submitting after another operator ended an assignment re-creates it, through the canonical path and authority.
+
+**72.6 Races** (real two-process tests).
+
+| Race | Result |
+|---|---|
+| The same import in opposite orders | assigns once, no deadlock |
+| Two conflicting imports | exactly one batch whole, nothing of the other |
+| Import vs single assignment | converge |
+
+There is no uniqueness 500. Capacity: not applicable.
+
+**72.7 Performance** (at 20 / 200 / 500 rows).
+- Preview: 6 queries, 8–21 ms.
+- Commit: about 7 queries per row inside `assign()`; 0.1 s / 0.9 s / 2.5 s, holding only the named Students' row locks (plus shared route locks).
+- Peak memory: 59 MB.
+
+**72.8 Security review.** No HIGH or MEDIUM findings.
+- **Fixed:**
+  - L1: re-read the whole-School premise at commit;
+  - L2: authority before any row is read;
+  - L3: a repeated row is checked after scope;
+  - L4: only committable previews are signed, plus a throttle;
+  - INFO: TrimStrings-equal normalisation.
+- **Accepted and documented:** L5 (above).
+
+**72.9 Parity.**
+- TRN-036 P3 → P1, an intended difference: add-only and all-or-nothing, matched by number and code, CSV only, web only.
+- Coverage: 38.5 % / 33.5 % functional, 82.2 % / 71.4 % v1.
+- Production stays NO-GO (§66.7).
