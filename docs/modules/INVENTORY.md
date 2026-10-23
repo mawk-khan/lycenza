@@ -780,3 +780,55 @@ Both run on the ONE ledger and the ONE writer (`InventoryStockService`), with th
 **Evidence.**
 - **Append-only, unchanged:** the runtime role still has no UPDATE or DELETE on `stock_movements` (H1R).
 - **The migration's `down()`** refuses while any write-off, recipient or claimed key exists.
+
+## Stock register and month view (ORG.9C-3, 2026-10-23, ADR 0076 §71)
+
+Two read-only pages on `inventory.stock.view`, read from the ONE ledger by `InventoryStockHistory`. Nothing is stored: no second balance table, no saved opening or closing.
+
+**Scope first, filters second.**
+- Every query starts from the reader's Locations (`InventoryStockAccess`: the stored Location Campus; a School-wide Location is whole-School scope only).
+- A Campus, Location or Item filter only narrows that set. A filter outside the scope selects nothing.
+- The Campus and Location options list the reader's own scope only.
+
+**One sign rule:** `StockMovementEffect`, for a set of Locations.
+
+| Movement | Effect on the set |
+|---|---|
+| receipt | +q at its destination |
+| issue (Canteen consumption is an issue) | −q at its source |
+| write-off | −q at its source |
+| transfer | −q out, +q in; 0 when both ends are in the set |
+
+So no transfer changes a School-wide total.
+
+**Stock register** (`/app/inventory-stock/register`; INV-016 by Campus, INV-023 by Location).
+- One row per movement, newest first (occurred_at, then id), 50 per page.
+- Filters: Campus, Location, Item code or name, type, and School-local from/to dates.
+- Visibility is the existing rule: a movement shows only when every Location it touches is in scope.
+- Each row shows the issue's Department and the write-off's reason code. It never shows a person, an actor, a form key or any MFA data.
+
+**Stock by month** (`/app/inventory-stock/monthly`; INV-020). For one School-local month (the current month runs to today; a future month is refused), per Item over the selected Locations:
+- **opening:** everything before the month's first School-local instant;
+- **in:** received and transferred in;
+- **out:** issued, written off and transferred out;
+- **closing:** opening plus the signed month.
+
+How it reconciles:
+- **Months chain:** each month closes where the next opens.
+- **Today's closing equals the canonical balance:** this month's closing for one Location equals `inventory_stock_balances` (tested).
+- **Transfers across the edge:** a transfer between two selected Locations nets to zero. One crossing the selection counts at the selected end, without naming the other Location.
+- **No cross-Item totals:** each row is in its Item's own unit.
+
+**Query shape.**
+- The selected Location ids are resolved once and tested with `= ANY(...)`, never joined per movement.
+- At 100,000 synthetic movements (unanalyzed tables), the month view took 81 ms (whole School) and 22 ms (one Location); the register took 16 ms.
+- **Follow-up (ADR §71.4):** the month view sums all history before the month, so its cost grows linearly with a School's ledger.
+- **Edge transfers:** a transfer crossing the selection's edge is counted as an aggregate at the in-scope end, never as a row and never naming the other Location (rule 106).
+
+**Not built:**
+- categories and average price (no model);
+- issues split by person recipient type (OD-9.4);
+- count or stocktake variance;
+- returnable or outstanding issues;
+- fixed assets;
+- exports (D-11).

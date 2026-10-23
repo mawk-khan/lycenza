@@ -1599,3 +1599,10 @@ once several modules copy it.
      - **Issue** is terminal consumption from one Location, never to another Location (that is a transfer) and never a sale. Its only recipient is an optional HR Department, through HR's `DepartmentReference`. Never record a person on a movement: movements are tenant-lifetime data without personal data (E21.2G O5).
      - **Write-off** is a `write_off` movement with a closed `WriteOffReason` (DB-required), never free text. It is DIRECT_WITH_ASSURANCE (`ApprovalWorkflowRegistry::DIRECT_ASSURED`): `inventory.stock.manage` re-read fresh through `requireCurrent()` with the Location's Campus (`holdsInCampusNow()`), a `FreshMfaProof`, and a web confirmation. Never a request/approve chain.
      - **Duplicates.** A web issue or write-off is claimed on a server-issued form key (unique per School), and a replay never writes or audits twice.
+
+106. **Inventory history is read from the one ledger through one sign rule (ADR 0076 §71, ORG.9C-3).**
+     - **One sign rule.** Every stock report computes quantities through `StockMovementEffect`: receipt +q in; issue and write-off −q out; transfer −q out and +q in, 0 inside the selected set. Never scatter sign logic, store an opening or closing, or add a second balance table.
+     - **Scope first, then filters.** Reports start from `InventoryStockAccess` scope. A Campus, Location or Item filter only narrows it.
+     - **Query shape.** The Location set is resolved once and tested by id, never joined per movement.
+     - **Never** show a person, actor, form key or MFA data on a stock report (OD-9.4, OD-9.5).
+     - **Edge transfers.** A month view may count a transfer that crosses the selected set's edge as an aggregate quantity at the in-scope end. It never lists that movement as a row and never names the other Location. The row-level register keeps the ORG.7A rule: both ends in scope.

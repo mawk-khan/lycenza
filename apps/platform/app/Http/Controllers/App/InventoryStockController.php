@@ -11,6 +11,7 @@ use App\Domain\Inventory\Application\Exceptions\LocationNotAvailableException;
 use App\Domain\Inventory\Application\Exceptions\SameLocationTransferException;
 use App\Domain\Inventory\Application\Exceptions\StockRequestAlreadySubmittedException;
 use App\Domain\Inventory\Application\InventoryStockAccess;
+use App\Domain\Inventory\Application\InventoryStockHistory;
 use App\Domain\Inventory\Application\InventoryStockService;
 use App\Domain\Inventory\Application\WriteOffReason;
 use App\Domain\Inventory\Infrastructure\InventoryItem;
@@ -18,9 +19,13 @@ use App\Domain\Inventory\Infrastructure\InventoryLocation;
 use App\Domain\Inventory\Infrastructure\InventoryStockBalance;
 use App\Domain\Inventory\Infrastructure\StockMovement;
 use App\Http\Controllers\Controller;
+use App\Models\Campus;
+use App\Models\School;
 use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Authorization\Campus\CampusScope;
 use App\Support\Authorization\Campus\CampusScopeResolver;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -30,6 +35,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use InvalidArgumentException;
 
 /**
  * Phase 10E -- session-authenticated Inertia pages for Inventory
@@ -79,6 +85,77 @@ class InventoryStockController extends Controller
             'writeOffReasons' => WriteOffReason::LABELS,
             'canManage' => ! $scopes->campusScope($context->actor(), 'inventory.stock.manage', $school)->isNone(),
         ]);
+    }
+
+    /** ORG.9C-3 (ADR 0076 §71): the stock register -- INV-016 (by Campus) and INV-023 (by Location). */
+    public function register(Request $request, TenantContext $context, InventoryStockAccess $access, InventoryStockHistory $history): Response
+    {
+        $school = $context->requireSchool();
+        $scope = $this->authorizeCampusScope('inventory.stock.view', $school);
+
+        $filters = $request->validate([
+            'campus_id' => ['nullable', 'uuid'],
+            'location_id' => ['nullable', 'uuid'],
+            'item' => ['nullable', 'string', 'max:100'],
+            'movement_type' => ['nullable', Rule::in(StockMovement::TYPES)],
+            // ORG.9C-3 review LOW-1: bounded, so a School-local date always converts to a storable UTC timestamp.
+            'from' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:2000-01-01', 'before_or_equal:2999-12-31'],
+            'to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:from', 'after_or_equal:2000-01-01', 'before_or_equal:2999-12-31'],
+            'page' => ['nullable', 'integer', 'min:1', 'max:100000'],
+        ]);
+
+        return Inertia::render('App/Inventory/Stock/Register', [
+            'rows' => $history->register($school, $scope, $filters, (int) ($filters['page'] ?? 1))->withQueryString(),
+            'filters' => array_merge(['campus_id' => null, 'location_id' => null, 'item' => null, 'movement_type' => null, 'from' => null, 'to' => null], array_diff_key($filters, ['page' => 1])),
+            'options' => $this->scopeOptions($school, $scope, $access),
+            'writeOffReasons' => WriteOffReason::LABELS,
+        ]);
+    }
+
+    /** ORG.9C-3 (ADR 0076 §71): INV-020 -- opening, in, out and closing per Item for one School-local month. */
+    public function monthly(Request $request, TenantContext $context, InventoryStockAccess $access, InventoryStockHistory $history): Response
+    {
+        $school = $context->requireSchool();
+        $scope = $this->authorizeCampusScope('inventory.stock.view', $school);
+
+        $filters = $request->validate([
+            'month' => ['nullable', 'date_format:Y-m', 'after_or_equal:2000-01'],
+            'campus_id' => ['nullable', 'uuid'],
+            'location_id' => ['nullable', 'uuid'],
+            'item' => ['nullable', 'string', 'max:100'],
+            'page' => ['nullable', 'integer', 'min:1', 'max:100000'],
+        ]);
+        $month = $filters['month'] ?? substr(SchoolTimezone::today($school), 0, 7);
+
+        try {
+            $summary = $history->month($school, $scope, $month, $filters, (int) ($filters['page'] ?? 1));
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['month' => [$e->getMessage()]]);
+        }
+        $summary['rows'] = $summary['rows']->withPath('/app/inventory-stock/monthly')->appends(array_diff_key($filters, ['page' => 1]));
+
+        return Inertia::render('App/Inventory/Stock/Monthly', [
+            'summary' => $summary,
+            'filters' => array_merge(['campus_id' => null, 'location_id' => null, 'item' => null], array_diff_key($filters, ['page' => 1, 'month' => 1]), ['month' => $month]),
+            'options' => $this->scopeOptions($school, $scope, $access),
+        ]);
+    }
+
+    /**
+     * The Campus and Location filter options -- only the reader's own scope
+     * (never a School-wide store for a Campus reader). A filter is never authority.
+     *
+     * @return array{campuses: list<array{id: string, name: string}>, locations: list<array{id: string, code: string, name: string}>}
+     */
+    private function scopeOptions(School $school, CampusScope $scope, InventoryStockAccess $access): array
+    {
+        $locations = $access->locations($scope)->orderBy('code')->get(['id', 'code', 'name', 'campus_id']);
+
+        return [
+            'campuses' => Campus::query()->where('school_id', $school->id)->whereIn('id', $locations->pluck('campus_id')->filter()->unique()->values())
+                ->orderBy('name')->get(['id', 'name'])->map(fn (Campus $c) => ['id' => $c->id, 'name' => $c->name])->values()->all(),
+            'locations' => $locations->map(fn (InventoryLocation $l) => ['id' => $l->id, 'code' => $l->code, 'name' => $l->name])->values()->all(),
+        ];
     }
 
     public function createReceive(TenantContext $context): Response

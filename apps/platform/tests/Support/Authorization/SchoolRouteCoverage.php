@@ -33,6 +33,7 @@ use App\Domain\Identity\Application\Staff\StaffAccessService;
 use App\Domain\Identity\Application\Staff\StaffInvitationService;
 use App\Domain\Identity\Application\Staff\StaffRoleCatalog;
 use App\Domain\Inventory\Application\InventoryStockAccess;
+use App\Domain\Inventory\Application\InventoryStockHistory;
 use App\Domain\Leave\Application\LeaveLedgerService;
 use App\Domain\Leave\Application\LeavePolicyAssignmentService;
 use App\Domain\Leave\Application\LeavePolicyService;
@@ -985,6 +986,8 @@ final class SchoolRouteCoverage
             Coverage::campus('app.inventory-stock.search-locations', 'inventory.stock.manage', InventoryStockAccess::class, 'searchLocations'),
             Coverage::campusLookup('app.inventory-stock.write-off.create', 'inventory.stock.manage', 'Data-free form page (reasons are code-owned); Locations come from the scoped search (search-locations).'),
             Coverage::campus('app.inventory-stock.write-off.store', 'inventory.stock.manage', InventoryStockAccess::class, 'location'),
+            Coverage::campus('app.inventory-stock.register', 'inventory.stock.view', InventoryStockHistory::class, 'register'), // scoped via InventoryStockAccess::movements()
+            Coverage::campus('app.inventory-stock.monthly', 'inventory.stock.view', InventoryStockHistory::class, 'month'), // scoped via InventoryStockAccess::locations()
             Coverage::campusLookup('app.inventory-stock.search-departments', 'inventory.stock.manage', 'Lookup of active HR Departments (id, code, name): School-wide ones and those on in-scope Campuses (CampusScopeCatalogue::DOMAINS inventory sharedLookups).'),
 
             // Http\Controllers\App\Canteen\CanteenOutletController

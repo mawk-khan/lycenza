@@ -1557,6 +1557,9 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::get('/search/items', [InventoryStockController::class, 'searchItems'])->name('search-items');
         Route::get('/search/locations', [InventoryStockController::class, 'searchLocations'])->name('search-locations');
         Route::get('/search/departments', [InventoryStockController::class, 'searchDepartments'])->name('search-departments');
+        // ORG.9C-3 (ADR 0076 §71): read-only stock register (INV-016/023) and month view (INV-020).
+        Route::get('/register', [InventoryStockController::class, 'register'])->name('register');
+        Route::get('/monthly', [InventoryStockController::class, 'monthly'])->name('monthly');
     });
 
     // Phase 10F: Canteen (Outlet/Item/recipe directory, billing

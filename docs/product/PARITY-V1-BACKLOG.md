@@ -150,6 +150,26 @@ None of these shows a late, no-punch, threshold or loss-of-pay state, or a leave
 
 Matrix §18 has the coverage.
 
+### ORG.9C-3 built (2026-10-23, ADR 0076 §71)
+
+**Owner decisions:**
+- **OD-9.4 CLOSED for v1:** no Student or Employee recipient on an Inventory issue (HR Department only); custody, person issue and returnable issue wait for an explicit custody model.
+- **OD-9.5 CLOSED for v1:** no free-text write-off remark (damaged, expired, lost).
+
+**PV1-08 read rows built:**
+- INV-016 and INV-023: the stock register, by Campus or Location, with School-local dates, Item and type.
+- INV-020: stock by month (opening, in, out, closing per Item).
+
+All are read-only on the existing scope; matrix §19 has the coverage.
+
+**PV1-08 is now complete for v1.** The remaining Inventory gaps are post-v1 or owner decisions:
+- returnable issue (OD-9.4);
+- stocktake;
+- categories and average price;
+- fixed assets;
+- procurement;
+- exports (D-11).
+
 ## Wave ORG.9D — Communications for operations
 
 | ID | Title | Functions | Value | Current gap | Security | Campus | Approval | Gate | Dependency | Size |

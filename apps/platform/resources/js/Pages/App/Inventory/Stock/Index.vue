@@ -83,6 +83,10 @@ function filterType(event: Event): void {
             <div>
                 <h1 class="text-xl font-semibold">Inventory stock</h1>
                 <p class="mt-1 text-sm text-slate-500">Current balances and movement history.</p>
+                <p class="mt-1 flex gap-3 text-sm">
+                    <a class="underline" href="/app/inventory-stock/register">Stock register</a>
+                    <a class="underline" href="/app/inventory-stock/monthly">Stock by month</a>
+                </p>
             </div>
             <div v-if="canManage" class="flex flex-wrap gap-2">
                 <a

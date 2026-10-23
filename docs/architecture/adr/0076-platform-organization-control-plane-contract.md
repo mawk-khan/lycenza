@@ -10350,3 +10350,62 @@ The existing issue vs issue proof is unchanged.
 - INV-034 stays DO_NOT_BUILD; INV-003 stays P4.
 - Coverage: 38.2 % / 32.9 % functional, 81.3 % / 70.0 % v1.
 - Production stays NO-GO (§66.7).
+
+## 71. ORG.9C-3 — Inventory read and reporting completion (as built, 2026-10-23)
+
+Owner authorization: ORG.9C-3 (read-only INV-016, INV-023, INV-020). Baseline `origin/main` = `026b4a69`.
+
+**Owner decisions recorded with the brief:**
+- **OD-9.4 CLOSED for v1:** no Student or Employee recipient on an Inventory issue; the HR Department is the only v1 recipient. Custody, person issue and returnable issue wait for an explicit custody or asset-assignment model.
+- **OD-9.5 CLOSED for v1:** no free-text write-off remark (damaged, expired, lost).
+
+**What did not change:**
+- capability, role or template;
+- `CampusScopeCatalogue`;
+- schema, migration or index;
+- write route;
+- export;
+- shared authorization;
+- legal or production gate.
+
+**71.1 Evidence (SF-INV-05, screens only, nothing copied).**
+- **INV-016** "stock ledger by Campus" and **INV-023** "stock ledger by store" are the reference's register screens: one row per movement with date, Item, type and quantity, filtered by Campus or store, Item, and as-on date or date range.
+- **INV-020** "monthly stock by Campus" is the reference's month view: per Item, an opening quantity, received buckets and out buckets (transfer out, issued by recipient type, damaged).
+- All three are read-only.
+
+**71.2 Read model.** `InventoryStockHistory`, from the one append-only ledger.
+
+| Part | How it works |
+|---|---|
+| Scope first | `InventoryStockAccess` (stored Location Campus; a School-wide store is whole-School only); Campus, Location and Item filters only narrow it, and a filter outside the scope selects nothing |
+| Sign rule | one place, `StockMovementEffect`: receipt +q in; issue (Canteen consumption included) and write-off −q out; transfer −q out and +q in, 0 inside the set, so a transfer never changes a School-wide total |
+| Dates | School-local days through `SchoolTimezone`; a future month is refused, the current month runs to today, and dates are bounded to 2000–2999 (review LOW-1) |
+| Register order | occurred_at, then id, newest first, 50 per page |
+| Month view | opening (before the first School-local instant), received, transferred in, issued, written off, transferred out, closing (opening + the signed month), per Item, never stored; paged after aggregation, so the opening never depends on a page |
+| Proven | months chain (June closing = July opening); the current month's closing equals `inventory_stock_balances` for every Location; transfers are neutral School-wide and inside a Campus |
+
+**71.3 Deliberate exception (review LOW-3).**
+- The month view counts a transfer that crosses the selected set's edge as an aggregate quantity at the in-scope end ("in from / out to other locations"). It never names the other Location and never lists the movement.
+- The row-level register keeps the ORG.7A rule: a movement shows only when both ends are in scope.
+- This is what makes a Campus reader's closing equal the balance they already see (CLAUDE.md rule 106).
+
+**71.4 Query review.**
+- **First draft:** joined the selected Location set per movement. On thin statistics that ran as nested loops: about 655 ms (whole School) and 571 ms (one Location) at 100,000 synthetic movements, and 1.25 s under EXPLAIN.
+- **As built:** the set's ids are resolved once and tested with `= ANY(?::uuid[])` (or `IS NOT NULL` for an unfiltered whole-School reader).
+- **Result:** 81 ms (whole School) and 22 ms (one Location); the register takes 16 ms. Query counts are flat, and no index was added.
+- **Follow-up (review LOW-2, not built):** the month view sums all history before the month, so its cost grows linearly with the School's movements. A backward derivation from `inventory_stock_balances` (closing = balance minus the signed movements after the month) would bound it by recency; take it if a School's ledger grows past a few million rows.
+
+**71.5 Privacy.**
+- A register row carries id, time, type, Item, quantity, the two Location codes, the stored Department name and the write-off reason code.
+- It never carries a person, an actor, a form key or MFA data; no Canteen order data is read.
+- No read audit is added; the existing Inventory read policy is unchanged.
+
+**71.6 Validation.**
+- **Tests:** `InventoryStockHistoryTest` has 9 tests: the month cases, a Campus reader, filters, School-local boundaries, pagination, validation, the PHP/SQL sign-rule match, and a read-only guard.
+- **Reviews:** security review found no HIGH or MEDIUM; LOW-1 and LOW-3 are fixed and LOW-2 is recorded above.
+- **DDEV smoke:** 13/13.
+
+**71.7 Parity.**
+- Statuses: INV-016 → P0; INV-023 → P0; INV-020 → P1 (intended difference: no category or average price, no person-type split, no cross-Item totals).
+- Coverage: 38.4 % / 33.3 % functional, 81.8 % / 71.0 % v1. PV1-08 is complete for v1.
+- Production stays NO-GO (§66.7).

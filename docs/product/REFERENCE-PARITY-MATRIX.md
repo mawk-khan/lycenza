@@ -664,3 +664,32 @@ Statuses are now P0 68, P1 99, P2 67; the rest are unchanged.
 - returnable issue.
 
 **OD-9.3 CLOSED for v1 (owner, ORG.9C-2 brief):** Attendance register states stay submitted, pending and not submitted. There is no "missing" state until a canonical Student academic calendar or closure model exists.
+
+## 19. ORG.9C-3 — Inventory read and reporting completion (2026-10-23)
+
+ORG.9C-3 (ADR 0076 §71) built the three remaining read rows of PV1-08. They are read-only, on `inventory.stock.view` with the existing Location scope; there is no schema change, export or new authority.
+
+| Function | Evidence | Before | After ORG.9C-3 | Note |
+|---|---|---|---|---|
+| INV-016 stock ledger by Campus | SF-INV-05 (Campus register: Campus, Item, as-on date or date range) | P2 | **P0** | register filtered by Campus |
+| INV-023 stock ledger by store | SF-INV-05 (store register: store, Item, date range) | P2 | **P0** | register filtered by Location |
+| INV-020 monthly stock by Campus | SF-INV-05 (month view: opening, received buckets, out buckets) | P2 | **P1** | intended difference: no category or average price (no model), issues not split by person type (OD-9.4), no cross-Item totals (units differ) |
+
+Statuses are now P0 70, P1 100, P2 64.
+
+| Coverage | After ORG.9C-2 | After ORG.9C-3 |
+|---|---|---|
+| Functional, weighted / strict | 38.2 % / 32.9 % | **38.4 % / 33.3 %** (243.0 / 633) |
+| V1-required, weighted / strict | 81.3 % / 70.0 % | **81.8 % / 71.0 %** (243.0 / 297) |
+
+**Owner decisions recorded (ORG.9C-3 brief):**
+- **OD-9.4 CLOSED for v1:** an Inventory issue keeps no Student or Employee recipient; the HR Department is the only v1 recipient. Individual custody, Employee or Student issue and returnable issue wait for an explicit custody or asset-assignment model (retention, erasure, return, reassignment, loss, handover).
+- **OD-9.5 CLOSED for v1:** no free-text write-off remark; the closed reasons stay damaged, expired and lost.
+
+**Remaining Inventory gaps:**
+- returnable issue / custody (OD-9.4);
+- count or stocktake correction;
+- categories, average price and fixed assets;
+- procurement (post-v1);
+- exports (D-11);
+- configurable approval chains stay DO_NOT_BUILD.
