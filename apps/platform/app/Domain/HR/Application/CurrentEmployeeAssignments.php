@@ -312,10 +312,21 @@ final class CurrentEmployeeAssignments
         $date ??= $this->today($school);
         $campusIds = $campusIds === null ? null : self::uuids($campusIds);
 
-        $bindings = [];
-        $count = $this->distinctCampusCount($school, $campusIds, $date, $bindings);
+        // One uncorrelated, grouped set evaluated once -- never a per-Employee
+        // correlated count (ORG.9C-1 query review: nested correlated EXISTS
+        // degrade to nested loops on freshly loaded tables).
+        $several = DB::table('employee_assignments as ea')
+            ->join('employment_records as er', fn ($j) => $j->on('er.id', '=', 'ea.employment_record_id')->on('er.school_id', '=', 'ea.school_id'))
+            ->join('campuses as c', fn ($j) => $j->on('c.id', '=', 'ea.campus_id')->on('c.school_id', '=', 'ea.school_id'))
+            ->where('ea.school_id', $school->id)
+            ->where('c.status', 'active')
+            ->when($campusIds !== null, fn ($w) => $w->whereIn('ea.campus_id', $campusIds ?? []))
+            ->select('er.employee_id')
+            ->groupBy('er.employee_id')
+            ->havingRaw('count(DISTINCT ea.campus_id) >= 2');
+        $this->constrainToCurrent($several, $date);
 
-        return $employees->whereRaw('2 <= ('.$count.')', $bindings);
+        return $employees->whereIn('employees.id', $several);
     }
 
     /**
@@ -333,55 +344,33 @@ final class CurrentEmployeeAssignments
      */
     public function whereReportingTo(Builder $employees, School $school, string $managerEmployeeId, ?array $campusIds = null, ?string $date = null): Builder
     {
-        $managerCampusIds = $campusIds === null ? null : self::uuids($campusIds);
-        if (! Str::isUuid($managerEmployeeId) || $managerCampusIds === []) {
+        $campusIds = $campusIds === null ? null : self::uuids($campusIds);
+        if (! Str::isUuid($managerEmployeeId) || $campusIds === []) {
             return $employees->whereRaw('1 = 0');
         }
         $date ??= $this->today($school);
 
-        return $employees->whereExists(function (QueryBuilder $q) use ($school, $managerEmployeeId, $managerCampusIds, $date): void {
-            $q->selectRaw('1')
-                ->from('employee_assignments as ea')
-                ->join('employment_records as er', fn ($j) => $j->on('er.id', '=', 'ea.employment_record_id')->on('er.school_id', '=', 'ea.school_id'))
-                ->whereColumn('er.employee_id', 'employees.id')
-                ->where('ea.school_id', $school->id)
-                ->when($managerCampusIds !== null, fn ($w) => $w->whereIn('ea.campus_id', $managerCampusIds ?? []))
-                ->whereExists(function (QueryBuilder $m) use ($school, $managerEmployeeId, $managerCampusIds, $date): void {
-                    $m->selectRaw('1')
-                        ->from('employee_assignments as ma')
-                        ->join('employment_records as mer', fn ($j) => $j->on('mer.id', '=', 'ma.employment_record_id')->on('mer.school_id', '=', 'ma.school_id'))
-                        ->whereColumn('ma.id', 'ea.manager_assignment_id')
-                        ->where('ma.school_id', $school->id)
-                        ->where('mer.employee_id', $managerEmployeeId)
-                        ->when($managerCampusIds !== null, fn ($w) => $w->whereIn('ma.campus_id', $managerCampusIds ?? []));
-                    $this->constrainToCurrent($m, $date, 'ma');
-                });
-            $this->constrainToCurrent($q, $date);
-        });
-    }
+        // The manager's current assignments are a handful of ids: resolve them
+        // first, so the report set is filtered by literal ids -- never a nested
+        // semi-join the planner may run as nested loops (ORG.9C-1 query review).
+        $managerAssignments = DB::table('employee_assignments as ma')
+            ->join('employment_records as mer', fn ($j) => $j->on('mer.id', '=', 'ma.employment_record_id')->on('mer.school_id', '=', 'ma.school_id'))
+            ->where('ma.school_id', $school->id)
+            ->where('mer.employee_id', $managerEmployeeId)
+            ->when($campusIds !== null, fn ($w) => $w->whereIn('ma.campus_id', $campusIds ?? []));
+        $managerAssignmentIds = $this->constrainToCurrent($managerAssignments, $date, 'ma')->pluck('ma.id')->all();
+        if ($managerAssignmentIds === []) {
+            return $employees->whereRaw('1 = 0');
+        }
 
-    /**
-     * SQL counting an Employee's distinct current active Campuses (correlated
-     * on `employees.id`), appending its bindings to $bindings.
-     *
-     * @param  list<string>|null  $campusIds
-     * @param  array<int, mixed>  $bindings
-     *
-     * @param-out array<int, mixed> $bindings
-     */
-    private function distinctCampusCount(School $school, ?array $campusIds, string $date, array &$bindings): string
-    {
-        $q = DB::table('employee_assignments as ea')
+        $reports = DB::table('employee_assignments as ea')
             ->join('employment_records as er', fn ($j) => $j->on('er.id', '=', 'ea.employment_record_id')->on('er.school_id', '=', 'ea.school_id'))
-            ->join('campuses as c', fn ($j) => $j->on('c.id', '=', 'ea.campus_id')->on('c.school_id', '=', 'ea.school_id'))
-            ->whereColumn('er.employee_id', 'employees.id')
             ->where('ea.school_id', $school->id)
-            ->where('c.status', 'active')
             ->when($campusIds !== null, fn ($w) => $w->whereIn('ea.campus_id', $campusIds ?? []))
-            ->selectRaw('count(DISTINCT ea.campus_id)');
-        $this->constrainToCurrent($q, $date);
-        $bindings = $q->getBindings();
+            ->whereIn('ea.manager_assignment_id', $managerAssignmentIds)
+            ->select('er.employee_id');
+        $this->constrainToCurrent($reports, $date);
 
-        return $q->toSql();
+        return $employees->whereIn('employees.id', $reports);
     }
 }

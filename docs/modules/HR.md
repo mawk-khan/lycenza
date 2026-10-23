@@ -4194,6 +4194,7 @@ All of these are read-only and on existing authority. None adds a capability, a 
   - **On more than one Campus** counts current assignments on active Campuses. For a Campus reader it counts only in-scope Campuses (`CurrentEmployeeAssignments::whereOnSeveralCampuses`).
   - **Joined in a period** is EVENT HISTORY over employment start dates, so a re-hire counts. For a Campus reader, only the employment in force today counts.
   - **Reports to a manager** (`CurrentEmployeeAssignments::whereReportingTo`) means a current assignment whose manager is a current assignment of that Employee. For a Campus reader, BOTH ends must be in scope.
+  - **Query shape.** Both several-Campuses and reports-to are uncorrelated sets, never per-Employee correlated subqueries. The ORG.9C-1 query review measured the correlated form at about 130 s for 72 employees on freshly loaded tables (ADR 0076 §69.4).
   - **Reports-to column.** The directory now shows the manager column it already returned, and the name opens that filter.
 - **Staff attendance by month** (`/app/staff-attendance/monthly`, whole-School `hr.staff_attendance.view`).
   - **Counts:** per employment, in half-days, by EXACTLY the daily register's effective state (leave, then recorded, then holiday, then off day, then unrecorded). Only days inside the employment and up to the School's today count.

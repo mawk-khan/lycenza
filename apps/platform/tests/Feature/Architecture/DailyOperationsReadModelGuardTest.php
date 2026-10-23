@@ -60,4 +60,19 @@ class DailyOperationsReadModelGuardTest extends TestCase
         $this->assertTrue(CampusScopeCatalogue::isAdopted('library.circulation.view'));
         $this->assertFalse(CampusScopeCatalogue::isAdopted('library.fines.view'), 'Fines stay whole-School.');
     }
+
+    #[Test]
+    public function the_hr_report_filters_are_never_per_employee_correlated_subqueries(): void
+    {
+        // ORG.9C-1 query review: nested correlated EXISTS per Employee ran as
+        // nested loops (~130 s at 72 employees on freshly loaded tables).
+        $source = (string) file_get_contents(app_path('Domain/HR/Application/CurrentEmployeeAssignments.php'));
+        foreach (['whereOnSeveralCampuses', 'whereReportingTo'] as $method) {
+            $start = (int) strpos($source, "public function {$method}");
+            $end = strpos($source, 'public function', $start + 1);
+            $body = substr($source, $start, $end === false ? null : $end - $start);
+            $this->assertStringNotContainsString("'employees.id')", $body, "{$method} must not correlate on employees.id");
+            $this->assertStringContainsString("whereIn('employees.id'", $body, "{$method} filters by one uncorrelated set");
+        }
+    }
 }

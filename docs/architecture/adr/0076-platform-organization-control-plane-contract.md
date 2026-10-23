@@ -10229,7 +10229,20 @@ Owner authorization: ORG.9C-1 (PV1-05 Attendance, PV1-06 HR reports within the H
 - New tests: 34 feature tests, with allow/deny, Campus in and out of scope, cross-School and read-only assertions.
 - Regression: the touched-domain regression (2,825 tests) is green.
 - DDEV smoke: all checks pass, including refusals for actors without the capability.
-- No index was added. Every query is bounded by one School, one date or month, or one Student.
+- **Query review** (§37 of the brief). It used scratch probes that were never committed, counting queries at two data sizes and taking `EXPLAIN (ANALYZE, BUFFERS)` plans.
+  - **No N+1 anywhere.** Query counts stay flat as rows grow:
+    - registers, 4 to 44 classes: 27 / 19 queries;
+    - Student history, 1 to 13 records: 21 / 21;
+    - directory filters, 12 to 72 employees: 15–18;
+    - staff and leave month reports, +40 employments: 28 / 27 and 17 / 16;
+    - circulation, 3 to 63 loans: 12.
+  - **Defect found after the first publication (`8a5cbb72`), fixed in the follow-up candidate.** The several-Campuses and reports-to filters used per-Employee correlated subqueries nested three or four `EXISTS` deep. On freshly loaded tables, whose planner estimates are 1 row, they ran as nested loops: about 1 s and about 130 s at 72 employees (22 million buffer hits).
+  - **The fix keeps the semantics:**
+    - several Campuses is one grouped, uncorrelated set (`HAVING count(DISTINCT campus) >= 2`);
+    - reports-to first resolves the manager's current in-scope assignment ids, then one set of Employees currently assigned under them.
+  - **Result:** 20–30 ms at the same volume.
+  - **Guard:** `DailyOperationsReadModelGuardTest` forbids correlating either filter on `employees.id`.
+  - **No index was added.** Every other query stays bounded by one School, one date or month, or one Student, at 6–16 ms in the probes.
 
 **69.5 Parity.**
 - Statuses:
