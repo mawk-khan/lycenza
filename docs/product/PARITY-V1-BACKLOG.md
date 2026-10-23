@@ -90,6 +90,35 @@ FIN-013 became P0; FIN-034 and FIN-062 became P1. Matrix §16 has the coverage.
 
 ## Wave ORG.9C — Daily operations views and completion
 
+### ORG.9C-1 built (2026-10-23, ADR 0076 §69)
+
+**Owner decisions recorded with the ORG.9C-1 brief:**
+- **OD-9.1** CLOSED for v1: no universal Charge fee-head dimension.
+- **OD-9.2** DEFERRED: the cash/bank classification of ledger accounts waits for a bank or reconciliation design.
+- **Posting time** is the canonical as-at basis; there is no received-date view.
+- D-11, dues ageing and the trial balance stay open.
+
+**PV1-05, built:**
+- **ATT-003:** one Student's records over a range, corrections shown, read-audited, never a rate.
+- **ATT-002:** a neutral register-status view (submitted / pending / not submitted).
+
+**PV1-05, stopped:** a "missing register" classification. No Student holiday, closure or cancelled-period model exists, so whether a register was expected cannot be determined structurally. This is owner question **OD-9.3** (Student school calendar; overlaps PV1-12). There is also no teacher filter (`TeacherAttendanceArchitectureGuardTest`).
+
+**PV1-06, built:**
+- the directory employment-state, several-Campuses, joined-in-period and reports-to filters (HR-040, -045, -056, -044 as a filter);
+- the staff attendance month summary, by the register's own states (HR-003);
+- the leave month report (HR-042);
+- the leave request filters (HR-043).
+
+None of these shows a late, no-punch, threshold or loss-of-pay state, or a leave reason.
+
+**PV1-07, built:** circulation filters (LIB-031, -035, -037).
+
+**PV1-07, stopped as transactional or configuration** (separate owner-authorized phase): LIB-010 renewal, LIB-012 web title edit, LIB-019 borrower limit, LIB-021 default loan period, and the LIB-022/-024/-025 masters.
+
+**Not started:** PV1-08, PV1-09 and ORG.9D. Matrix §17 has the coverage.
+
+
 | ID | Title | Functions | Value | Current gap | Security | Campus | Approval | Gate | Dependency | Size |
 |---|---|---|---|---|---|---|---|---|---|---|
 | PV1-05 | Attendance operations: classes with no register for a date; one Student's attendance over a range | ATT-002, ATT-003 | daily follow-up of missing registers and a Student's record | single-day exceptions only | existing `attendance.*` keys, Campus-adopted reads, teacher ownership unchanged | stored register Campus | none | E33 for teacher production | **is LC-6 (SB-01, ATT-07)** — reuse | S |

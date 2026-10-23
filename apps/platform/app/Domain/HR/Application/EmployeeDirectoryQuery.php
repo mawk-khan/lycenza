@@ -44,6 +44,17 @@ final class EmployeeDirectoryQuery
 
     public readonly int $perPage;
 
+    /**
+     * ORG.9C-1 (ADR 0076 §69), HR-040: the Employee's LATEST employment
+     * record's status, grouped (CURRENT STATE, never history).
+     */
+    public const array EMPLOYMENT_FILTERS = [
+        'current' => ['active', 'notice_period'],
+        'notice_period' => ['notice_period'],
+        'pre_joining' => ['pre_joining'],
+        'ended' => ['separated', 'terminated', 'retired', 'deceased'],
+    ];
+
     public function __construct(
         public readonly ?string $search = null,
         public readonly ?string $campusId = null,
@@ -54,6 +65,13 @@ final class EmployeeDirectoryQuery
         ?string $direction = null,
         int $page = 1,
         int $perPage = self::DEFAULT_PER_PAGE,
+        // ORG.9C-1 (ADR 0076 §69): HR-040 employment state, HR-045 several
+        // Campuses, HR-056 joined in a period, HR-044 reports to a manager.
+        public readonly ?string $employment = null,
+        public readonly bool $severalCampuses = false,
+        public readonly ?string $joinedFrom = null,
+        public readonly ?string $joinedTo = null,
+        public readonly ?string $managerEmployeeId = null,
     ) {
         $this->sort = in_array($sort, self::ALLOWED_SORTS, true) ? $sort : self::DEFAULT_SORT;
         $this->direction = in_array($direction, ['asc', 'desc'], true) ? $direction : self::DEFAULT_DIRECTION;

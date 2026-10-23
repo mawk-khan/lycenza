@@ -147,6 +147,37 @@ class EmployeeDirectoryService
                         ->when($query->positionId !== null, fn ($w) => $w->where('ea.position_id', $query->positionId));
                 }),
             )
+            // ORG.9C-1 (ADR 0076 §69). Each only narrows the scoped base query.
+            // HR-040: the LATEST employment record's status (current state). A
+            // Campus reader is judged on the employment in force TODAY only --
+            // never a past or planned (re-hire) record (rule 101: no history).
+            ->when($query->employment !== null && isset(EmployeeDirectoryQuery::EMPLOYMENT_FILTERS[$query->employment]), fn ($q) => $q->whereExists(function ($sub) use ($school, $query, $scoped, $today) {
+                $sub->selectRaw('1')
+                    ->from('employment_records as ler')
+                    ->whereColumn('ler.employee_id', 'employees.id')
+                    ->where('ler.school_id', $school->id)
+                    ->whereIn('ler.status', EmployeeDirectoryQuery::EMPLOYMENT_FILTERS[(string) $query->employment])
+                    ->when($scoped, fn ($w) => $w->where('ler.starts_on', '<=', $today)->where(fn ($e) => $e->whereNull('ler.ends_on')->orWhere('ler.ends_on', '>=', $today)))
+                    ->when(! $scoped, fn ($latest) => $latest->whereNotExists(fn ($later) => $later->selectRaw('1')
+                        ->from('employment_records as ner')
+                        ->whereColumn('ner.employee_id', 'ler.employee_id')
+                        ->where('ner.school_id', $school->id)
+                        ->where(fn ($w) => $w->whereColumn('ner.starts_on', '>', 'ler.starts_on')
+                            ->orWhere(fn ($t) => $t->whereColumn('ner.starts_on', 'ler.starts_on')->whereColumn('ner.id', '>', 'ler.id')))));
+            }))
+            // HR-056: an employment that STARTED in the period (event history; a
+            // rehire counts) -- for a Campus reader, only the employment in force today.
+            ->when($query->joinedFrom !== null || $query->joinedTo !== null, fn ($q) => $q->whereExists(fn ($sub) => $sub->selectRaw('1')
+                ->from('employment_records as jer')
+                ->whereColumn('jer.employee_id', 'employees.id')
+                ->where('jer.school_id', $school->id)
+                ->when($scoped, fn ($w) => $w->where('jer.starts_on', '<=', $today)->where(fn ($e) => $e->whereNull('jer.ends_on')->orWhere('jer.ends_on', '>=', $today)))
+                ->when($query->joinedFrom !== null, fn ($w) => $w->whereDate('jer.starts_on', '>=', (string) $query->joinedFrom))
+                ->when($query->joinedTo !== null, fn ($w) => $w->whereDate('jer.starts_on', '<=', (string) $query->joinedTo))))
+            // HR-045: currently on two or more Campuses -- counted within a Campus reader's scope only.
+            ->when($query->severalCampuses, fn ($q) => $this->current->whereOnSeveralCampuses($q, $school, $scoped ? $scope->campusIds() : null, $today))
+            // HR-044: currently reports to this manager (a Campus reader: only through an in-scope manager assignment).
+            ->when($query->managerEmployeeId !== null, fn ($q) => $this->current->whereReportingTo($q, $school, (string) $query->managerEmployeeId, $scoped ? $scope->campusIds() : null, $today))
             ->orderBy($query->sort, $query->direction)
             ->when($query->sort !== 'employee_number', fn ($q) => $q->orderBy('employee_number'))
             ->orderBy('id');

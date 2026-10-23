@@ -6,6 +6,7 @@ use App\Domain\Admissions\Application\AdmissionApplicationAccess;
 use App\Domain\Analytics\Application\AnalyticsReadGate;
 use App\Domain\Attendance\Application\AttendanceAdministrationAccess;
 use App\Domain\Attendance\Application\AttendanceExceptionReadService;
+use App\Domain\Attendance\Application\AttendanceOperationsReadService;
 use App\Domain\Attendance\Application\TeacherAttendanceAccess;
 use App\Domain\Automation\Application\AutomationReadService;
 use App\Domain\Automation\Application\AutomationRuleService;
@@ -1080,6 +1081,7 @@ final class SchoolRouteCoverage
             Coverage::service('app.leave.adjustments.store', LeaveLedgerService::class, 'adjust')->validatesFirst(),
             Coverage::service('app.leave.allocation-runs.store', LeaveLedgerService::class, 'executeRun')->validatesFirst(),
             Coverage::gate('app.leave.requests', 'hr.leave.view'),
+            Coverage::gate('app.leave.monthly', 'hr.leave.view'),
             Coverage::service('app.leave.requests.store', LeaveRequestService::class, 'submitOnBehalf')->validatesFirst(),
             Coverage::gate('app.leave.requests.show', 'hr.leave.view'),
             Coverage::service('app.leave.requests.approve', LeaveRequestService::class, 'approve'),
@@ -1108,6 +1110,7 @@ final class SchoolRouteCoverage
             Coverage::gate('app.staff-attendance.register', 'hr.staff_attendance.view'),
             Coverage::service('app.staff-attendance.register.store', StaffAttendanceService::class, 'recordRegister')->validatesFirst(),
             Coverage::gate('app.staff-attendance.history', 'hr.staff_attendance.view'),
+            Coverage::gate('app.staff-attendance.monthly', 'hr.staff_attendance.view'),
             Coverage::service('app.staff-attendance.records.store', StaffAttendanceService::class, 'record')->validatesFirst(),
             Coverage::service('app.staff-attendance.records.corrections.store', StaffAttendanceService::class, 'correct')->validatesFirst(),
 
@@ -1201,6 +1204,9 @@ final class SchoolRouteCoverage
 
             // Http\Controllers\App\Attendance\AttendanceExceptionController
             Coverage::campus('app.attendance.exceptions', 'attendance.view', AttendanceExceptionReadService::class, 'list'),
+            // ORG.9C-1 (ADR 0076 §69): Http\Controllers\App\Attendance\AttendanceOperationsController
+            Coverage::campus('app.attendance.registers', 'attendance.view', AttendanceOperationsReadService::class, 'registerStatus'),
+            Coverage::campus('app.attendance.students.show', 'attendance.view', AttendanceOperationsReadService::class, 'studentHistory'),
 
             // Http\Controllers\App\Attendance\AttendanceController
             Coverage::campus('app.attendance.store', 'attendance.manage', AttendanceAdministrationAccess::class, 'writeGuard'),

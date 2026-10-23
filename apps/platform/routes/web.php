@@ -22,6 +22,7 @@ use App\Http\Controllers\App\Analytics\CurriculumCoverageController;
 use App\Http\Controllers\App\ApplicantController;
 use App\Http\Controllers\App\Attendance\AttendanceController;
 use App\Http\Controllers\App\Attendance\AttendanceExceptionController;
+use App\Http\Controllers\App\Attendance\AttendanceOperationsController;
 use App\Http\Controllers\App\Attendance\MyAttendanceController;
 use App\Http\Controllers\App\Automation\AutomationController;
 use App\Http\Controllers\App\Canteen\CanteenBillingConfigurationController;
@@ -1706,6 +1707,8 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::post('/allocation-runs', [LeaveAdminController::class, 'executeRun'])->name('allocation-runs.store');
 
         Route::get('/requests', [LeaveAdminController::class, 'requests'])->name('requests');
+        // ORG.9C-1 (ADR 0076 §69), HR-042: month-wise leave taken, read-only (hr.leave.view).
+        Route::get('/monthly', [LeaveAdminController::class, 'monthly'])->name('monthly');
         Route::post('/requests', [LeaveAdminController::class, 'submitRequest'])->name('requests.store');
         Route::get('/requests/{leaveRequest}', [LeaveAdminController::class, 'showRequest'])->name('requests.show');
         foreach (['approve', 'reject', 'withdraw', 'cancel'] as $action) {
@@ -1745,6 +1748,8 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::get('/', [StaffAttendanceAdminController::class, 'register'])->name('register');
         Route::post('/register', [StaffAttendanceAdminController::class, 'storeRegister'])->name('register.store');
         Route::get('/history', [StaffAttendanceAdminController::class, 'history'])->name('history');
+        // ORG.9C-1 (ADR 0076 §69), HR-003: a month's half-day counts, read-only (hr.staff_attendance.view).
+        Route::get('/monthly', [StaffAttendanceAdminController::class, 'monthly'])->name('monthly');
         Route::post('/records', [StaffAttendanceAdminController::class, 'store'])->name('records.store');
         Route::post('/records/{staffAttendanceRecord}/corrections', [StaffAttendanceAdminController::class, 'correct'])->name('records.corrections.store');
     });
@@ -1932,6 +1937,10 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::get('/roster', [AttendanceController::class, 'roster'])->name('roster');
         // V11.2 (ADR 0075): before /{attendanceSession}, which would capture it.
         Route::get('/exceptions', [AttendanceExceptionController::class, 'index'])->name('exceptions');
+        // ORG.9C-1 (ADR 0076 §69): register status for a date and one Student's
+        // records over a range -- read-only, attendance.view under CampusScope.
+        Route::get('/registers', [AttendanceOperationsController::class, 'registers'])->name('registers');
+        Route::get('/students/{student}', [AttendanceOperationsController::class, 'student'])->name('students.show');
         Route::post('/', [AttendanceController::class, 'store'])->name('store');
         Route::get('/{attendanceSession}', [AttendanceController::class, 'show'])->name('show');
         Route::post('/records/{attendanceRecord}/correct', [AttendanceController::class, 'correct'])->name('correct');

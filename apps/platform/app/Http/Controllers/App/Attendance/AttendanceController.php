@@ -79,6 +79,8 @@ class AttendanceController extends Controller
             'canManage' => ! $scopes->campusScope($context->actor(), 'attendance.manage', $school)->isNone(),
             // V11.2 (ADR 0075): same attendance.view gate as this page.
             'exceptionsUrl' => '/app/attendance/exceptions',
+            // ORG.9C-1 (ADR 0076 §69): the register-status view, same attendance.view.
+            'registersUrl' => '/app/attendance/registers',
         ]);
     }
 

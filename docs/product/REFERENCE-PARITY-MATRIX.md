@@ -605,3 +605,35 @@ The delta comes from three P2 functions becoming present (+1.5 weighted, +3 stri
 - OD-9.1 (fee-head dimension, FIN-033);
 - dues ageing (FIN-054) and the trial balance (FIN-012), both INSUFFICIENT_EVIDENCE;
 - D-11 (exports).
+
+## 17. ORG.9C-1 — Daily operations read models built (2026-10-23)
+
+ORG.9C-1 (ADR 0076 §69) built the authorized PV1-05, PV1-06 and PV1-07 reads. They are read-only, on existing capabilities and Campus contracts, with no schema change, export or new authority.
+
+| Function | Before | After ORG.9C-1 | Note |
+|---|---|---|---|
+| ATT-002 classes with no register for a date | P3 | **P1** | intended difference: neutral submitted / pending / not submitted, never "missing" (no Student holiday or closure calendar exists) |
+| ATT-003 one Student's attendance over a range | P2 | **P0** | records only, never a rate (ADR 0040) |
+| HR-003 monthly staff attendance summary | P3 | **P1** | intended difference: no late, no-punch or loss-of-pay figure (HRX-L2/L4) |
+| HR-040 inactive / separated staff | P2 | **P0** | employment-state filter |
+| HR-042 month-wise staff leave | P3 | **P0** | approved units, never a reason (HRX-L1) |
+| HR-043 staff leave details | P2 | **P0** | employee, type, date filters |
+| HR-044 reporting manager listing | P2 | **P1** | intended difference: a reports-to filter, not a tree |
+| HR-045 multi-Campus staff | P2 | **P0** | |
+| HR-056 staff joining report | P2 | **P0** | |
+| LIB-031 / LIB-035 / LIB-037 loans by period, Campus, Student | P2 | **P0** | E2 evidence only (no Library screenshot pack) |
+| LIB-010, -012, -019, -021, -022, -024, -025 | unchanged | **stopped** | renewal, title edit, borrower limit, default loan period, masters: transactional or configuration, not a read slice |
+
+Statuses are now P0 67, P1 98, P2 69, P3 22; the rest are unchanged.
+
+| Coverage | After ORG.9B | After ORG.9C-1 |
+|---|---|---|
+| Functional, weighted / strict | 36.8 % / 30.6 % | **38.0 % / 32.5 %** (240.5 / 633) |
+| V1-required, weighted / strict | 78.5 % / 65.3 % | **81.0 % / 69.4 %** (240.5 / 297) |
+
+**Unchanged by ORG.9C-1:**
+- PV1-08 Inventory, PV1-09 Transport bulk upload and ORG.9D Communications: not started.
+- D-11 exports, dues ageing and the trial balance: still open or INSUFFICIENT_EVIDENCE.
+- PV1-19 daily (non-period) attendance: the LC-6 ATT-08 owner decision.
+
+**New owner question (OD-9.3):** a Student school calendar (holidays, closures, cancelled periods). It would make a "missing register" status structurally decidable. It also overlaps PV1-12.

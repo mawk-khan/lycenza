@@ -1586,3 +1586,10 @@ once several modules copy it.
      - **Ledger statement.** Opening is the `LedgerBalanceReader` definition, and the running balance is computed over the whole range.
      - **Audit-log filters** only narrow, use the School's own values and never read metadata.
      - **Never** add a write, an export, a fee-head column, a capability or a Campus adoption to these surfaces, and never infer an account's cash or bank nature from its name.
+
+104. **Daily-operations read models are reads, on existing authority (ADR 0076 §69, ORG.9C-1).**
+     - **Attendance register status** is submitted / pending / not submitted only. Never call a register "missing" until a Student calendar can say a register was expected, and never filter Attendance by a teacher column.
+     - **A Student's attendance history** lists records only, never a rate or tally, and every read is audited.
+     - **Staff attendance and leave month reports** count exactly the register's states and approved leave units. They never show a late, no-punch, threshold or loss-of-pay state, or a leave reason (HRX-L1/L2/L4).
+     - **A directory or circulation filter** only narrows the reader's existing Campus scope. A Campus reader is judged on current, in-scope placements only, and a filter is never a permission.
+     - **Never** add a write, an export, a capability or a Campus adoption to these surfaces.

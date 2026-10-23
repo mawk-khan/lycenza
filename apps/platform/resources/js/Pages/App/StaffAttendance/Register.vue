@@ -145,6 +145,9 @@ const attendanceError = useAttendanceError();
             The daily register. Each half is present, absent or not recorded. Leave, holidays and
             weekly offs come from Leave and the staff calendar.
         </p>
+        <p class="mt-1 text-sm">
+            <a class="underline" href="/app/staff-attendance/monthly">Month summary</a>
+        </p>
         <p
             v-if="attendanceError"
             role="alert"

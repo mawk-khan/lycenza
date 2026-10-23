@@ -15,6 +15,7 @@ use App\Domain\Library\Infrastructure\LibraryFine;
 use App\Domain\Library\Infrastructure\LibraryLoan;
 use App\Domain\Students\Application\StudentLookupCandidate;
 use App\Http\Controllers\Controller;
+use App\Models\Campus;
 use App\Models\School;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Authorization\Campus\CampusScopeResolver;
@@ -58,13 +59,39 @@ class LibraryCirculationController extends Controller
         // capability -- so a returned loan (and, with `library.fines.view`, its
         // fine) stays findable after its check-in. Loans only: never a fine
         // list (owner decision X2).
-        $validated = $request->validate(['status' => ['sometimes', Rule::in(['active', 'returned'])]]);
+        // ORG.9C-1 (ADR 0076 §69), PV1-07 read completion (LIB-031/035/037):
+        // `all`, a School-local date range (issued -- or returned, on the
+        // returned tab), a Student name/number and a Campus. Each only narrows
+        // the scope-restricted query in SQL; still never a fine list.
+        $validated = $request->validate([
+            'status' => ['sometimes', Rule::in(['active', 'returned', 'all'])],
+            'from' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
+            'to' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'student' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'campus_id' => ['sometimes', 'nullable', 'uuid'],
+        ]);
         $status = $validated['status'] ?? 'active';
+        $from = $validated['from'] ?? null;
+        $to = $validated['to'] ?? null;
+        $student = trim((string) ($validated['student'] ?? ''));
+        $campusId = $validated['campus_id'] ?? null;
+        $dated = $status === 'returned' ? 'library_loans.checked_in_at' : 'library_loans.checked_out_at';
 
         $loans = $access->loans($scope)
             ->with(['copy.title', 'student'])
-            ->where('status', $status)
-            ->when($status === 'active', fn ($q) => $q->orderBy('due_at'), fn ($q) => $q->orderByDesc('checked_in_at'))
+            ->when($status !== 'all', fn ($q) => $q->where('status', $status))
+            ->when($from !== null, fn ($q) => $q->where($dated, '>=', SchoolTimezone::startOfDayUtc($school, (string) $from)))
+            ->when($to !== null, fn ($q) => $q->where($dated, '<', SchoolTimezone::startOfNextDayUtc($school, (string) $to)))
+            ->when($campusId !== null, fn ($q) => $q->where('library_loans.campus_id', $campusId))
+            ->when($student !== '', function ($q) use ($student) {
+                $needle = addcslashes($student, '%_\\');
+                $q->whereHas('student', fn ($s) => $s->where(fn ($w) => $w->where('student_number', 'ilike', $needle.'%')
+                    ->orWhere('first_name', 'ilike', '%'.$needle.'%')
+                    ->orWhere('last_name', 'ilike', '%'.$needle.'%')));
+            })
+            ->when($status === 'active', fn ($q) => $q->orderBy('due_at'))
+            ->when($status === 'returned', fn ($q) => $q->orderByDesc('checked_in_at'))
+            ->when($status === 'all', fn ($q) => $q->orderByDesc('checked_out_at'))
             ->orderBy('id')
             ->paginate(20)
             ->withQueryString();
@@ -72,6 +99,10 @@ class LibraryCirculationController extends Controller
         return Inertia::render('App/Library/Circulation/Index', [
             'loans' => $loans->through(fn (LibraryLoan $l) => $this->presentLoan($l, SchoolTimezone::resolve($school))),
             'status' => $status,
+            'filters' => ['from' => $from ?? '', 'to' => $to ?? '', 'student' => $student, 'campus_id' => $campusId ?? ''],
+            // A filter, never authority: only the Campuses the reader's scope covers are offered.
+            'campuses' => Campus::query()->where('status', 'active')->tap(fn ($q) => $scope->restrict($q, 'campuses.id'))->orderBy('name')->get(['id', 'name'])
+                ->map(fn (Campus $c) => ['id' => $c->id, 'name' => $c->name])->values()->all(),
             'canManage' => ! $scopes->campusScope($context->actor(), 'library.circulation.manage', $school)->isNone(),
         ]);
     }

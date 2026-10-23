@@ -234,6 +234,12 @@ function periodLabel(row: ExceptionRow): string {
                                     :href="`/app/attendance/${row.sessionId}`"
                                     >Register</a
                                 >
+                                <a
+                                    v-if="row.studentId"
+                                    class="ml-3 text-sm underline"
+                                    :href="`/app/attendance/students/${row.studentId}`"
+                                    >History</a
+                                >
                             </td>
                         </tr>
                     </tbody>

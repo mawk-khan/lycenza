@@ -16,6 +16,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -128,6 +129,64 @@ class StaffAttendanceReadService
                 'day' => self::day($date, $records[$label['employmentRecordId']] ?? null, $calendar, $coverage[$label['employmentRecordId']][$date] ?? [], $detail),
             ])->values()->all(),
         ];
+    }
+
+    /**
+     * ORG.9C-1 (ADR 0076 §69), HR-003: a month's composed days counted per
+     * employment, in HALF-DAYS, by the SAME effective state the register
+     * shows (leave > recorded > holiday > off day > unrecorded):
+     * present, absent, leave, holiday, off_day, unrecorded.
+     *
+     * - Only days inside the employment and not after the School's today
+     *   are counted.
+     * - Never a late, early-leave, no-punch, threshold or loss-of-pay figure:
+     *   Staff Attendance stores no clock times (HRX-L2), and leave is not split
+     *   into paid and unpaid here (HRX-L4 belongs to Payroll's evidence).
+     * - Whole-School (`hr.staff_attendance.view`).
+     *
+     * @param  string  $month  Y-m, not after the School's current month
+     * @return array{month: string, from: string, to: string, calendarConfigured: bool, rows: list<array<string, mixed>>, totals: array<string, int>}
+     */
+    public function monthSummary(School $school, string $month, User $actor): array
+    {
+        $this->authorizeCapabilityFor($actor, StaffAttendanceCapabilities::VIEW, $school);
+        $start = CarbonImmutable::createFromFormat('!Y-m', $month);
+        $today = SchoolTimezone::today($school);
+        if ($start === null || $start->format('Y-m') !== $month || $start->toDateString() > $today) {
+            throw StaffAttendanceException::invalid('STAFF_ATTENDANCE_MONTH_INVALID', 'Choose a month that has started.');
+        }
+        $from = $start->toDateString();
+        $to = min($start->endOfMonth()->toDateString(), $today);
+
+        $labels = collect($this->roster->overlapping($school, $from, $to))->keyBy('employmentRecordId');
+        $ids = $labels->keys()->all();
+        $spans = $this->roster->spans($school, $ids);
+        $records = $ids === [] ? collect() : $this->context->withSchool($school, fn () => StaffAttendanceRecord::query()->where('school_id', $school->id)
+            ->whereIn('employment_record_id', $ids)->whereBetween('attendance_date', [$from, $to])->get()
+            ->groupBy('employment_record_id')
+            ->map(fn ($rows) => $rows->keyBy(fn (StaffAttendanceRecord $r) => $r->attendance_date->toDateString())));
+        $calendar = $this->calendarHalves($school, $from, $to);
+        $coverage = $this->leave->approvedCoverage($school, $ids, $from, $to);
+
+        $states = ['present', 'absent', 'leave', 'holiday', 'off_day', 'unrecorded'];
+        $totals = array_fill_keys($states, 0);
+        $rows = [];
+        foreach ($labels as $id => $label) {
+            $counts = array_fill_keys($states, 0);
+            $first = max($from, $spans[$id]['startsOn'] ?? $from);
+            $last = min($to, $spans[$id]['endsOn'] ?? $to);
+            for ($d = CarbonImmutable::createFromFormat('!Y-m-d', $first); $d->toDateString() <= $last; $d = $d->addDay()) {
+                $date = $d->toDateString();
+                $day = self::day($date, $records[$id][$date] ?? null, $calendar[$date] ?? null, $coverage[$id][$date] ?? [], false);
+                foreach (['firstHalf', 'secondHalf'] as $half) {
+                    $counts[$day[$half]['state']]++;
+                    $totals[$day[$half]['state']]++;
+                }
+            }
+            $rows[] = ['employment' => self::label($label), 'halfDays' => $counts];
+        }
+
+        return ['month' => $month, 'from' => $from, 'to' => $to, 'calendarConfigured' => $calendar !== [], 'rows' => $rows, 'totals' => $totals];
     }
 
     /**

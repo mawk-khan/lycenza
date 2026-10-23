@@ -83,6 +83,12 @@ class HrEmployeeController extends Controller
             'direction' => ['sometimes', 'nullable', Rule::in(['asc', 'desc'])],
             'include_archived' => ['sometimes', 'boolean'],
             'page' => ['sometimes', 'integer', 'min:1'],
+            // ORG.9C-1 (ADR 0076 §69): HR-040/044/045/056 -- narrowing filters only.
+            'employment' => ['sometimes', 'nullable', Rule::in(array_keys(EmployeeDirectoryQuery::EMPLOYMENT_FILTERS))],
+            'several_campuses' => ['sometimes', 'boolean'],
+            'joined_from' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
+            'joined_to' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'after_or_equal:joined_from'],
+            'manager_id' => ['sometimes', 'nullable', 'uuid'],
         ]);
 
         $query = new EmployeeDirectoryQuery(
@@ -94,6 +100,11 @@ class HrEmployeeController extends Controller
             sort: $validated['sort'] ?? null,
             direction: $validated['direction'] ?? null,
             page: (int) ($validated['page'] ?? 1),
+            employment: $validated['employment'] ?? null,
+            severalCampuses: $request->boolean('several_campuses'),
+            joinedFrom: $validated['joined_from'] ?? null,
+            joinedTo: $validated['joined_to'] ?? null,
+            managerEmployeeId: $validated['manager_id'] ?? null,
         );
 
         $paginator = $service->search($school, $query, $context->actor());
@@ -111,6 +122,11 @@ class HrEmployeeController extends Controller
                 'sort' => $query->sort,
                 'direction' => $query->direction,
                 'include_archived' => $request->boolean('include_archived'),
+                'employment' => $validated['employment'] ?? '',
+                'several_campuses' => $request->boolean('several_campuses'),
+                'joined_from' => $validated['joined_from'] ?? '',
+                'joined_to' => $validated['joined_to'] ?? '',
+                'manager_id' => $validated['manager_id'] ?? '',
             ],
             // Filter options. Campuses are School setup reference data
             // every directory reader already sees in the rows. Department

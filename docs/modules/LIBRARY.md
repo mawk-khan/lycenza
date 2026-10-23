@@ -564,3 +564,20 @@ Production execution stays gated by E34.
 A fine void ends its Charge through the assured Charge core, so it is now
 also refused for a staff member who is a linked Guardian (active or revoked
 link) of the Student, in the service and in the database.
+
+## Circulation filters (ORG.9C-1, 2026-10-23, ADR 0076 §69)
+
+The circulation list (`library.circulation.view`, scoped by each loan's stored Campus, ORG.7D-5) now offers:
+- an **All loans** view;
+- a School-local **date range**: issued, or returned on the returned tab;
+- a **Student** name or number (wildcards are literal);
+- a **Campus**, which only narrows the reader's scope. The options are the reader's in-scope Campuses only.
+
+It stays read-only and is still never a fine list (owner decision X2). Retention-expired loans are gone, not resurrected.
+
+**Stopped as transactional or configuration (PV1-07, separate decision needed):**
+- per-borrower loan limits;
+- a default loan period;
+- renewal;
+- web title editing;
+- category, language and publisher masters.

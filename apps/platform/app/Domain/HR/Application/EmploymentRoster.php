@@ -37,6 +37,37 @@ class EmploymentRoster
     }
 
     /**
+     * ORG.9C-1 (ADR 0076 §69): employments (any status but `draft`) whose
+     * dates overlap [from, to] -- a monthly register's population.
+     *
+     * @param  string  $from  School-local Y-m-d
+     * @param  string  $to  School-local Y-m-d
+     * @return list<array{employmentRecordId: string, employeeId: string, employeeNumber: ?string, fullName: ?string, status: string, current: bool}>
+     */
+    public function overlapping(School $school, string $from, string $to): array
+    {
+        return $this->rows($school, fn ($q) => $q->where('status', '<>', 'draft')->where('starts_on', '<=', $to)
+            ->where(fn ($q) => $q->whereNull('ends_on')->orWhere('ends_on', '>=', $from)));
+    }
+
+    /**
+     * ORG.9C-1: several EmploymentRecords' dates in one query (inclusive; `endsOn` null = open-ended).
+     *
+     * @param  list<string>  $employmentRecordIds
+     * @return array<string, array{startsOn: string, endsOn: ?string}>
+     */
+    public function spans(School $school, array $employmentRecordIds): array
+    {
+        if ($employmentRecordIds === []) {
+            return [];
+        }
+
+        return $this->context->withSchool($school, fn (): array => EmploymentRecord::query()->where('school_id', $school->id)->whereIn('id', $employmentRecordIds)
+            ->get(['id', 'starts_on', 'ends_on'])
+            ->mapWithKeys(fn (EmploymentRecord $r) => [$r->id => ['startsOn' => $r->starts_on->toDateString(), 'endsOn' => $r->ends_on?->toDateString()]])->all());
+    }
+
+    /**
      * The same labels for these EmploymentRecord ids of the School (another School's ids yield nothing).
      *
      * @param  list<string>  $employmentRecordIds

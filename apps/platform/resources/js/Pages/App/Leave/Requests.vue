@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { router, useForm } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { router, useForm, usePage } from '@inertiajs/vue3';
+import { computed, ref, watch } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
 import {
     employeeName,
@@ -39,6 +39,8 @@ interface RequestRow {
 interface Props {
     requests: RequestRow[];
     status: string;
+    // ORG.9C-1 (ADR 0076 §69): narrowing filters (employee, type, overlapping dates).
+    filters: { employment_record_id: string; leave_type_id: string; from: string; to: string };
     statuses: string[];
     employees: Record<string, EmployeeLabel>;
     employments: EmployeeLabel[];
@@ -53,13 +55,26 @@ interface Props {
 const props = defineProps<Props>();
 
 const status = ref(props.status);
-watch(status, () => {
+const filterEmployee = ref(props.filters.employment_record_id);
+const filterType = ref(props.filters.leave_type_id);
+const filterFrom = ref(props.filters.from);
+const filterTo = ref(props.filters.to);
+const filterErrors = computed(() => usePage().props.errors as Record<string, string | undefined>);
+
+function applyFilters(): void {
     router.get(
         '/app/leave/requests',
-        { status: status.value || undefined },
+        {
+            status: status.value || undefined,
+            employment_record_id: filterEmployee.value || undefined,
+            leave_type_id: filterType.value || undefined,
+            from: filterFrom.value || undefined,
+            to: filterTo.value || undefined,
+        },
         { preserveState: false, replace: true },
     );
-});
+}
+watch(status, applyFilters);
 
 const submitForm = useForm({
     employment_record_id: '',
@@ -137,6 +152,7 @@ const leaveError = useLeaveError();
             <a class="underline" href="/app/leave/configuration">Configuration</a>
             <a class="underline" href="/app/leave/entitlements">Entitlements</a>
             <a class="underline" href="/app/leave/year-close">Year close</a>
+            <a class="underline" href="/app/leave/monthly">Leave by month</a>
         </nav>
 
         <div class="mt-6">
@@ -152,6 +168,66 @@ const leaveError = useLeaveError();
                 </option>
             </select>
         </div>
+        <form class="mt-3 flex flex-wrap items-end gap-3" @submit.prevent="applyFilters">
+            <div>
+                <label class="block text-sm text-slate-600" for="filter-employee">Employee</label>
+                <select
+                    id="filter-employee"
+                    v-model="filterEmployee"
+                    class="mt-1 w-56 rounded border border-slate-300 px-3 py-2 text-sm"
+                >
+                    <option value="">All employees</option>
+                    <option
+                        v-for="e in employments"
+                        :key="e.employmentRecordId"
+                        :value="e.employmentRecordId"
+                    >
+                        {{ e.fullName ?? '—' }} ({{ e.employeeNumber ?? '—' }})
+                    </option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm text-slate-600" for="filter-type">Leave type</label>
+                <select
+                    id="filter-type"
+                    v-model="filterType"
+                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                >
+                    <option value="">All types</option>
+                    <option v-for="t in types" :key="t.id" :value="t.id">
+                        {{ t.name }} ({{ t.code }})
+                    </option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm text-slate-600" for="filter-from">On or after</label>
+                <input
+                    id="filter-from"
+                    v-model="filterFrom"
+                    type="date"
+                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                />
+            </div>
+            <div>
+                <label class="block text-sm text-slate-600" for="filter-to">On or before</label>
+                <input
+                    id="filter-to"
+                    v-model="filterTo"
+                    type="date"
+                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                />
+            </div>
+            <button type="submit" class="rounded border border-slate-300 px-3 py-2 text-sm">
+                Filter
+            </button>
+        </form>
+        <p
+            v-if="filterErrors.to || filterErrors.from"
+            class="mt-2 text-sm text-red-700"
+            role="alert"
+        >
+            {{ filterErrors.to ?? filterErrors.from }}
+        </p>
 
         <EmptyState
             v-if="requests.length === 0"

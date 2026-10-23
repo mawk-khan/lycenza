@@ -41,12 +41,15 @@ interface Props {
     // V11.2: the administrative exceptions list; only the Tier 1
     // AttendanceController passes it (never My Attendance).
     exceptionsUrl?: string | null;
+    // ORG.9C-1: register status for a date (Tier 1 only).
+    registersUrl?: string | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
     baseUrl: '/app/attendance',
     heading: 'Attendance registers',
     exceptionsUrl: null,
+    registersUrl: null,
 });
 
 const attendanceDate = ref(props.filters.attendanceDate);
@@ -78,6 +81,11 @@ watch(attendanceDate, () => {
                 <p v-if="exceptionsUrl" class="mt-1 text-sm">
                     <a class="underline" :href="exceptionsUrl"
                         >Absent, late and excused Students by day</a
+                    >
+                </p>
+                <p v-if="registersUrl" class="mt-1 text-sm">
+                    <a class="underline" :href="registersUrl"
+                        >Registers taken and not taken by day</a
                     >
                 </p>
             </div>

@@ -54,6 +54,29 @@ class StaffAttendanceAdminController extends Controller
         ]);
     }
 
+    /**
+     * ORG.9C-1 (ADR 0076 §69), HR-003: a month's composed days counted per
+     * employment in half-days (present, absent, leave, holiday, off day,
+     * unrecorded) -- never late, no-punch or loss of pay. Read-only.
+     */
+    public function monthly(Request $request, TenantContext $context, StaffAttendanceReadService $reads): Response
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability(StaffAttendanceCapabilities::VIEW, $school);
+        $month = $request->validate(['month' => ['sometimes', 'date_format:Y-m']])['month'] ?? substr(SchoolTimezone::today($school), 0, 7);
+
+        try {
+            $summary = $reads->monthSummary($school, $month, $context->actor());
+        } catch (StaffAttendanceException $e) {
+            throw ValidationException::withMessages(['month' => $e->getMessage()]);
+        }
+
+        return Inertia::render('App/StaffAttendance/Monthly', [
+            'summary' => $summary,
+            'currentMonth' => substr(SchoolTimezone::today($school), 0, 7),
+        ]);
+    }
+
     public function history(Request $request, TenantContext $context, CapabilityResolver $capabilities, StaffAttendanceReadService $reads): Response
     {
         $school = $context->requireSchool();

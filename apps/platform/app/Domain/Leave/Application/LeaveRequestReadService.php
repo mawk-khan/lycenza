@@ -17,7 +17,9 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use InvalidArgumentException;
 
 /**
  * HRX.2 (ADR 0065 §23): reads of leave requests and year closes.
@@ -107,7 +109,10 @@ class LeaveRequestReadService
     }
 
     /**
-     * @param  array{status?: string, employment_record_id?: string}  $filters
+     * ORG.9C-1 (ADR 0076 §69), HR-043: also narrows by leave type and by a
+     * date range the request OVERLAPS (School-local dates).
+     *
+     * @param  array{status?: string, employment_record_id?: string, leave_type_id?: string, from?: string, to?: string}  $filters
      * @return list<array<string, mixed>>
      */
     public function list(School $school, array $filters, User $actor): array
@@ -117,8 +122,51 @@ class LeaveRequestReadService
         return $this->context->withSchool($school, fn () => LeaveRequest::query()->where('school_id', $school->id)
             ->when(isset($filters['status']), fn ($q) => $q->where('status', $filters['status']))
             ->when(isset($filters['employment_record_id']), fn ($q) => $q->where('employment_record_id', $filters['employment_record_id']))
+            ->when(isset($filters['leave_type_id']), fn ($q) => $q->where('leave_type_id', $filters['leave_type_id']))
+            ->when(isset($filters['from']), fn ($q) => $q->whereDate('ends_on', '>=', $filters['from']))
+            ->when(isset($filters['to']), fn ($q) => $q->whereDate('starts_on', '<=', $filters['to']))
             ->orderByDesc('starts_on')->orderByDesc('id')->limit(self::LIST_LIMIT)->get()
             ->map(fn (LeaveRequest $r) => self::request($r))->values()->all());
+    }
+
+    /**
+     * ORG.9C-1 (ADR 0076 §69), HR-042: APPROVED leave taken in one month, per
+     * employment and leave type, in half-day units (from each request's own
+     * per-date rows, so a request spanning months counts only its days in
+     * this one). Never a reason (HRX-L1), never paid/unpaid. Whole-School.
+     *
+     * @param  string  $month  Y-m
+     * @return array{month: string, rows: list<array{employmentRecordId: string, units: array<string, int>, total: int}>, totals: array<string, int>}
+     */
+    public function monthSummary(School $school, string $month, User $actor): array
+    {
+        $this->authorizeCapabilityFor($actor, LeaveCapabilities::VIEW, $school);
+        $start = CarbonImmutable::createFromFormat('!Y-m', $month);
+        if ($start === null || $start->format('Y-m') !== $month) {
+            throw new InvalidArgumentException('Invalid month.');
+        }
+
+        return $this->context->withSchool($school, function () use ($school, $start, $month): array {
+            $rows = [];
+            $totals = [];
+            foreach (LeaveRequestDay::query()->where('leave_request_days.school_id', $school->id)
+                ->join('leave_requests', fn ($j) => $j->on('leave_requests.id', '=', 'leave_request_days.leave_request_id')->on('leave_requests.school_id', '=', 'leave_request_days.school_id'))
+                ->where('leave_requests.status', 'approved')
+                ->whereBetween('leave_request_days.leave_date', [$start->toDateString(), $start->endOfMonth()->toDateString()])
+                ->groupBy('leave_requests.employment_record_id', 'leave_requests.leave_type_id')
+                ->orderBy('leave_requests.employment_record_id')
+                ->toBase()->selectRaw('leave_requests.employment_record_id AS employment_record_id, leave_requests.leave_type_id AS leave_type_id, sum(leave_request_days.units)::int AS units')
+                ->get() as $row) {
+                $id = (string) $row->employment_record_id;
+                $type = (string) $row->leave_type_id;
+                $rows[$id]['employmentRecordId'] = $id;
+                $rows[$id]['units'][$type] = (int) $row->units;
+                $rows[$id]['total'] = ($rows[$id]['total'] ?? 0) + (int) $row->units;
+                $totals[$type] = ($totals[$type] ?? 0) + (int) $row->units;
+            }
+
+            return ['month' => $month, 'rows' => array_values($rows), 'totals' => $totals];
+        });
     }
 
     /** @return array<string, mixed> */

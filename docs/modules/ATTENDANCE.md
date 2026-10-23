@@ -819,3 +819,25 @@ Student Attendance correction assurance is complete for v1: listed,
 absence-neutral reasons and a database-required correction row; no approval,
 window or step-up (owner decision 8E-D2). Teacher production use stays under
 E33/TCH-L1.
+
+## Operational views: register status and one Student's records (ORG.9C-1, 2026-10-23, ADR 0076 §69)
+
+Both are read-only, under `attendance.view` and the actor's CampusScope through `AttendanceAdministrationAccess`. Teacher (Tier 2) visibility is unchanged: a teacher's own classes and their submitted state stay on My attendance.
+
+- **Register status for one School-local date** (`/app/attendance/registers`). Each class on the CURRENT timetable is listed if it meets that day. That means an active entry of the active academic year, on that weekday, created by the end of that day. Its status is one of:
+  - **submitted**: a register exists;
+  - **pending**: today, and its period has not ended on the School's clock;
+  - **not submitted**.
+
+  The rules around it:
+  - **There is no "missing" status.** Lycenza records no school holidays, closures or cancelled periods for Students, so whether a register was *expected* cannot be decided structurally. On a closed day every class shows "not submitted", and the page says so.
+  - **No teacher filter.** Nothing in Attendance filters or authorizes by a teacher column (`TeacherAttendanceArchitectureGuardTest`).
+  - **Filters** are Grade, Section and status.
+  - **Date limits.** A future date is refused. A date outside the active academic year has no register work.
+  - **Counts** are of registers, never of people (LC-6 S-02).
+- **One Student's records over a date range** (`/app/attendance/students/{student}`, at most one year, default the last 30 School-local days).
+  - **Content:** the individual records each register shows, newest first, with whether each was corrected, the original status, and the closed, absence-neutral correction reason code. There is no free text and no health detail.
+  - **No aggregation:** no rate, percentage or tally (ADR 0040; LC-6 S-06).
+  - **Access:** a Student with no in-scope record at all is not found, so a Campus reader learns nothing about another Campus's Students.
+  - **Audit:** one `attendance.student_history_viewed` audit per read (range and count; the Student as subject).
+  - **Links:** the exceptions list links each row to it.

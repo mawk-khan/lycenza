@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { formatCalendarDate } from '../../../../datetime';
-import { router } from '@inertiajs/vue3';
+import { router, usePage } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 import Pagination from '../../../../Components/Pagination.vue';
 import EmptyState from '../../../../Components/EmptyState.vue';
 
@@ -27,11 +28,14 @@ interface Props {
         links: PageLink[];
         total: number;
     };
-    status: 'active' | 'returned';
+    status: 'active' | 'returned' | 'all';
+    // ORG.9C-1 (ADR 0076 §69): narrowing filters only (dates, Student, Campus).
+    filters: { from: string; to: string; student: string; campus_id: string };
+    campuses: { id: string; name: string }[];
     canManage: boolean;
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
 
 const views = [
     { status: 'active', label: 'Active loans', href: '/app/library/circulation' },
@@ -40,7 +44,29 @@ const views = [
         label: 'Returned loans',
         href: '/app/library/circulation?status=returned',
     },
+    { status: 'all', label: 'All loans', href: '/app/library/circulation?status=all' },
 ] as const;
+
+const from = ref(props.filters.from);
+const to = ref(props.filters.to);
+const student = ref(props.filters.student);
+const campusId = ref(props.filters.campus_id);
+const pageErrors = computed(() => usePage().props.errors as Record<string, string | undefined>);
+const dateLabel = computed(() => (props.status === 'returned' ? 'Returned' : 'Issued'));
+
+function applyFilters(): void {
+    router.get(
+        '/app/library/circulation',
+        {
+            status: props.status === 'active' ? undefined : props.status,
+            from: from.value || undefined,
+            to: to.value || undefined,
+            student: student.value.trim() || undefined,
+            campus_id: campusId.value || undefined,
+        },
+        { preserveScroll: true, replace: true },
+    );
+}
 
 function checkIn(loanId: string): void {
     router.post(`/app/library/circulation/${loanId}/check-in`);
@@ -58,7 +84,9 @@ function checkIn(loanId: string): void {
                     {{
                         status === 'active'
                             ? 'Currently active loans.'
-                            : 'Returned loans, most recently returned first. Open a loan to see its fine, if any.'
+                            : status === 'returned'
+                              ? 'Returned loans, most recently returned first. Open a loan to see its fine, if any.'
+                              : 'Every loan, most recently issued first.'
                     }}
                 </p>
             </div>
@@ -89,10 +117,68 @@ function checkIn(loanId: string): void {
             </ul>
         </nav>
 
+        <form class="mt-4 flex flex-wrap items-end gap-3" @submit.prevent="applyFilters">
+            <div>
+                <label class="block text-xs text-slate-600" for="loans-from"
+                    >{{ dateLabel }} from</label
+                >
+                <input
+                    id="loans-from"
+                    v-model="from"
+                    type="date"
+                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                />
+            </div>
+            <div>
+                <label class="block text-xs text-slate-600" for="loans-to"
+                    >{{ dateLabel }} to</label
+                >
+                <input
+                    id="loans-to"
+                    v-model="to"
+                    type="date"
+                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                />
+            </div>
+            <div>
+                <label class="block text-xs text-slate-600" for="loans-student">Student</label>
+                <input
+                    id="loans-student"
+                    v-model="student"
+                    type="search"
+                    placeholder="Name or student number"
+                    class="mt-1 w-52 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                />
+            </div>
+            <div v-if="campuses.length > 1">
+                <label class="block text-xs text-slate-600" for="loans-campus">Campus</label>
+                <select
+                    id="loans-campus"
+                    v-model="campusId"
+                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                >
+                    <option value="">All campuses</option>
+                    <option v-for="c in campuses" :key="c.id" :value="c.id">{{ c.name }}</option>
+                </select>
+            </div>
+            <button type="submit" class="rounded border border-slate-300 px-3 py-1.5 text-sm">
+                Filter
+            </button>
+        </form>
+        <p v-if="pageErrors.to || pageErrors.from" class="mt-2 text-sm text-red-700" role="alert">
+            {{ pageErrors.to ?? pageErrors.from }}
+        </p>
+
         <EmptyState
             v-if="loans.data.length === 0"
             class="mt-6"
-            :title="status === 'active' ? 'No active loans' : 'No returned loans'"
+            :title="
+                status === 'active'
+                    ? 'No active loans'
+                    : status === 'returned'
+                      ? 'No returned loans'
+                      : 'No loans'
+            "
             :description="
                 status === 'active'
                     ? 'Check out a Library item to a Student to see it here.'
@@ -114,7 +200,11 @@ function checkIn(loanId: string): void {
                 <table class="w-full text-left text-sm">
                     <caption class="sr-only">
                         {{
-                            status === 'active' ? 'Active loans' : 'Returned loans'
+                            status === 'active'
+                                ? 'Active loans'
+                                : status === 'returned'
+                                  ? 'Returned loans'
+                                  : 'All loans'
                         }}
                     </caption>
                     <thead>
@@ -122,9 +212,10 @@ function checkIn(loanId: string): void {
                             <th scope="col" class="pr-3 py-2 font-medium">Title</th>
                             <th scope="col" class="pr-3 py-2 font-medium">Copy</th>
                             <th scope="col" class="pr-3 py-2 font-medium">Student</th>
+                            <th scope="col" class="pr-3 py-2 font-medium">Issued</th>
                             <th scope="col" class="pr-3 py-2 font-medium">Due</th>
                             <th
-                                v-if="status === 'returned'"
+                                v-if="status !== 'active'"
                                 scope="col"
                                 class="pr-3 py-2 font-medium"
                             >
@@ -146,6 +237,9 @@ function checkIn(loanId: string): void {
                             </td>
                             <td class="pr-3 py-3 text-slate-600">{{ loan.copyCode }}</td>
                             <td class="pr-3 py-3 text-slate-600">{{ loan.studentName }}</td>
+                            <td class="pr-3 py-3 text-slate-600">
+                                {{ formatCalendarDate(loan.checkedOutAt) }}
+                            </td>
                             <td
                                 class="pr-3 py-3"
                                 :class="
@@ -155,8 +249,8 @@ function checkIn(loanId: string): void {
                                 {{ formatCalendarDate(loan.dueAt)
                                 }}<span v-if="loan.isOverdue"> (overdue)</span>
                             </td>
-                            <td v-if="status === 'returned'" class="pr-3 py-3 text-slate-600">
-                                {{ formatCalendarDate(loan.returnedAt) }}
+                            <td v-if="status !== 'active'" class="pr-3 py-3 text-slate-600">
+                                {{ loan.returnedAt ? formatCalendarDate(loan.returnedAt) : '—' }}
                             </td>
                             <td class="pr-3 py-3 text-right">
                                 <button

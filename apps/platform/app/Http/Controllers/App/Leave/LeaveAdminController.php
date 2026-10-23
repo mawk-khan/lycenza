@@ -23,6 +23,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -244,12 +245,32 @@ class LeaveAdminController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability(LeaveCapabilities::VIEW, $school);
         $actor = $context->actor();
-        $validated = $request->validate(['status' => ['sometimes', Rule::in(LeaveRequest::STATUSES)]]);
-        $rows = $requests->list($school, array_filter(['status' => $validated['status'] ?? null]), $actor);
+        $validated = $request->validate([
+            'status' => ['sometimes', Rule::in(LeaveRequest::STATUSES)],
+            // ORG.9C-1 (ADR 0076 §69), HR-043: narrowing filters only.
+            'employment_record_id' => ['sometimes', 'nullable', 'uuid'],
+            'leave_type_id' => ['sometimes', 'nullable', 'uuid'],
+            'from' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
+            'to' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
+        ]);
+        $filters = array_filter([
+            'status' => $validated['status'] ?? null,
+            'employment_record_id' => $validated['employment_record_id'] ?? null,
+            'leave_type_id' => $validated['leave_type_id'] ?? null,
+            'from' => $validated['from'] ?? null,
+            'to' => $validated['to'] ?? null,
+        ]);
+        $rows = $requests->list($school, $filters, $actor);
 
         return Inertia::render('App/Leave/Requests', [
             'requests' => $rows,
             'status' => $validated['status'] ?? '',
+            'filters' => [
+                'employment_record_id' => $filters['employment_record_id'] ?? '',
+                'leave_type_id' => $filters['leave_type_id'] ?? '',
+                'from' => $filters['from'] ?? '',
+                'to' => $filters['to'] ?? '',
+            ],
             'statuses' => LeaveRequest::STATUSES,
             'employees' => collect($this->employments($context, $school, array_values(array_unique(array_column($rows, 'employmentRecordId')))))->keyBy('employmentRecordId')->all(),
             'employments' => $this->employments($context, $school),
@@ -259,6 +280,25 @@ class LeaveAdminController extends Controller
             'rejectionReasons' => LeaveDecision::REJECTION_REASONS,
             'closingReasons' => LeaveDecision::CLOSING_REASONS,
             'canManage' => $capabilities->canInSchool($actor, LeaveCapabilities::MANAGE, $school),
+        ]);
+    }
+
+    /**
+     * ORG.9C-1 (ADR 0076 §69), HR-042: approved leave taken in one month per
+     * employment and leave type (half-day units), whole-School, read-only.
+     * Never a reason, never paid/unpaid.
+     */
+    public function monthly(Request $request, TenantContext $context, LeaveReadService $reads, LeaveRequestReadService $requests): Response
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability(LeaveCapabilities::VIEW, $school);
+        $month = $request->validate(['month' => ['sometimes', 'date_format:Y-m']])['month'] ?? substr(SchoolTimezone::today($school), 0, 7);
+        $summary = $requests->monthSummary($school, $month, $context->actor());
+
+        return Inertia::render('App/Leave/Monthly', [
+            'summary' => $summary,
+            'employees' => collect($this->employments($context, $school, array_column($summary['rows'], 'employmentRecordId')))->keyBy('employmentRecordId')->all(),
+            'types' => $reads->types($school, $context->actor()),
         ]);
     }
 

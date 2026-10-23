@@ -4184,3 +4184,21 @@ are Campus-adopted through `App\Domain\HR\Application\HrEmployeeAccess`.
   decision reads the same pair can deadlock; PostgreSQL aborts one side,
   everything rolls back and the user sees an error (retry is safe). HR
   post-v1 hardening.
+
+## Directory filters and month reports (ORG.9C-1, 2026-10-23, ADR 0076 §69)
+
+All of these are read-only and on existing authority. None adds a capability, a Campus adoption, a sensitive field or an export.
+
+- **Directory filters** (`/app/hr/employees`; `hr.employees.view`, Campus-adopted through `HrEmployeeAccess`). Each only narrows the reader's scope.
+  - **Employment state** (current / serving notice / not yet joined / ended) is the CURRENT STATE of the latest employment record. A Campus reader is judged on the employment in force today only, never a past or planned (re-hire) record.
+  - **On more than one Campus** counts current assignments on active Campuses. For a Campus reader it counts only in-scope Campuses (`CurrentEmployeeAssignments::whereOnSeveralCampuses`).
+  - **Joined in a period** is EVENT HISTORY over employment start dates, so a re-hire counts. For a Campus reader, only the employment in force today counts.
+  - **Reports to a manager** (`CurrentEmployeeAssignments::whereReportingTo`) means a current assignment whose manager is a current assignment of that Employee. For a Campus reader, BOTH ends must be in scope.
+  - **Reports-to column.** The directory now shows the manager column it already returned, and the name opens that filter.
+- **Staff attendance by month** (`/app/staff-attendance/monthly`, whole-School `hr.staff_attendance.view`).
+  - **Counts:** per employment, in half-days, by EXACTLY the daily register's effective state (leave, then recorded, then holiday, then off day, then unrecorded). Only days inside the employment and up to the School's today count.
+  - **What it never shows:** a late, early-leave, no-punch, threshold or loss-of-pay figure (HRX-L2/L4), and leave is not split into paid and unpaid.
+- **Leave by month** (`/app/leave/monthly`, whole-School `hr.leave.view`).
+  - **Counts:** APPROVED leave per employment and leave type in half-day units, from each request's own per-date rows, so a cross-month request is split correctly.
+  - **What it never shows:** a reason, or a paid/unpaid split.
+- **Leave request filters** (`/app/leave/requests`): employee, leave type, and a date range the request overlaps.

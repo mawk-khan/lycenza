@@ -10160,3 +10160,85 @@ Owner authorization: ORG.9B (read-only parity implementation). Baseline `origin/
 - Coverage: 36.8 % / 30.6 % functional, 78.5 % / 65.3 % v1.
 - Still open: OD-9.1, ageing, trial balance, D-11.
 - Production stays NO-GO (§66.7).
+
+## 69. ORG.9C-1 — Daily operations read models (as built, 2026-10-23)
+
+Owner authorization: ORG.9C-1 (PV1-05 Attendance, PV1-06 HR reports within the HRX exclusions, PV1-07 Library read completion). Baseline `origin/main` = `9142b100`.
+
+**Owner decisions recorded with the brief:**
+- OD-9.1 CLOSED for v1 (no universal Charge fee-head dimension).
+- OD-9.2 DEFERRED (cash/bank classification waits for a bank or reconciliation design).
+- Posting time is the canonical as-at basis.
+- D-11, ageing and the trial balance stay open.
+
+**What did not change:**
+- capability, role or template;
+- Campus adoption (`CampusScopeCatalogue` untouched);
+- schema, migration or index;
+- export;
+- write route;
+- legal or production gate.
+
+**69.1 Attendance (PV1-05).** `AttendanceOperationsReadService`, under `attendance.view` and the actor's CampusScope through `AttendanceAdministrationAccess`.
+
+- **Register status** (`app.attendance.registers`). For one School-local date, the classes on the current timetable are listed: active entries of the active year on that weekday, created by the end of that day.
+  - **Statuses:** submitted (a register exists); pending (today, and the period's end time has not passed on the School clock); not submitted.
+  - **No missing status. STOPPED** under stop condition 2. Lycenza has no Student holiday, closure or cancelled-period model (only Leave's `staff_holidays`; academic terms have no consumers). Whether a register was expected is therefore not structurally decidable, and absence of a row alone is not evidence. This is owner question **OD-9.3**.
+  - **No grace policy** of any kind.
+  - **Filters:** Grade, Section, status.
+  - **Teacher filter removed** (`TeacherAttendanceArchitectureGuardTest`).
+  - **Counts** are of registers.
+  - **Future dates** are refused; a date outside the active year is not applicable.
+- **One Student's records** (`app.attendance.students.show`), over a range of at most 366 days.
+  - **Content:** records newest first, with whether each was corrected, the original status and the closed, absence-neutral correction reason code. No free text, health detail, rate or tally (ADR 0040).
+  - **Not found:** a Student with no in-scope record is a 404.
+  - **Audit:** each read is audited as `attendance.student_history_viewed` (range and count).
+- **Teacher (Tier 2) visibility** is unchanged.
+
+**69.2 HR (PV1-06).**
+
+- **Directory filters** (`hr.employees.view` through `HrEmployeeAccess`):
+  - **Employment state** is the latest record's state; a Campus reader is judged on the employment in force today only.
+  - **Several Campuses** is `CurrentEmployeeAssignments::whereOnSeveralCampuses`; a Campus reader counts in-scope Campuses only.
+  - **Joined in period** covers employment start dates (re-hires count); a Campus reader sees the current employment only.
+  - **Reports to** is `CurrentEmployeeAssignments::whereReportingTo`; for a Campus reader BOTH the subordinate's and the manager's current assignments must be in scope.
+- **Security review.** It found one MEDIUM and two LOWs, all fixed in this slice with regression tests:
+  - **MEDIUM:** reports-to revealed an out-of-scope subordinate assignment.
+  - **LOW:** the joined filter reached history.
+  - **LOW:** the employment filter revealed a planned re-hire.
+- **Staff attendance month summary** (`StaffAttendanceReadService::monthSummary`, whole-School `hr.staff_attendance.view`).
+  - **Counts:** half-days per employment by the register's effective state (leave > recorded > holiday > off day > unrecorded), up to the School's today, inside each employment.
+  - **Proof:** a test proves the summary equals the sum of the daily registers.
+- **Leave month report** (`LeaveRequestReadService::monthSummary`, whole-School `hr.leave.view`): approved per-date units per employment and type.
+- **Leave request filters:** employee, type, overlapping range.
+- **Never produced (HRX-L1/L2/L4):** late, early, no-punch, threshold, loss-of-pay or paid/unpaid states, or a reason.
+
+**69.3 Library (PV1-07).**
+
+- **Circulation filters** (`library.circulation.view`, stored loan Campus, ORG.7D-5): an `all` view, School-local issued or returned dates, Student name or number (literal wildcards) and Campus. The Campus filter only narrows the scope, and its options are the reader's in-scope Campuses.
+- **Still never a fine list** (X2).
+- **STOPPED** as transactional or configuration (stop condition 4): LIB-010 renewal, LIB-012 web title edit, LIB-019 borrower limit, LIB-021 default loan period, and the LIB-022/-024/-025 masters.
+
+**69.4 Guards and evidence.**
+- `DailyOperationsReadModelGuardTest` checks:
+  - GET-only, no export URIs;
+  - no write path in the Attendance read service;
+  - no `missing` status and no rate;
+  - no derived clock or pay state in the month summary;
+  - no Campus adoption of `hr.staff_attendance.view` or `hr.leave.view`.
+- New tests: 34 feature tests, with allow/deny, Campus in and out of scope, cross-School and read-only assertions.
+- Regression: the touched-domain regression (2,825 tests) is green.
+- DDEV smoke: all checks pass, including refusals for actors without the capability.
+- No index was added. Every query is bounded by one School, one date or month, or one Student.
+
+**69.5 Parity.**
+- Statuses:
+  - P0: ATT-003, HR-040, HR-042, HR-043, HR-045, HR-056, LIB-031, LIB-035, LIB-037;
+  - P1 (intended differences): ATT-002, HR-003, HR-044.
+- Coverage: 38.0 % / 32.5 % functional, 81.0 % / 69.4 % v1 (matrix §17).
+- Still open:
+  - OD-9.3 (Student calendar);
+  - the Library write and configuration items;
+  - PV1-08, PV1-09, ORG.9D;
+  - D-11.
+- Production stays NO-GO (§66.7).

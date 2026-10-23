@@ -292,4 +292,96 @@ final class CurrentEmployeeAssignments
             }
         });
     }
+
+    /**
+     * ORG.9C-1 (ADR 0076 §69), HR-045: Employees CURRENTLY operational on at
+     * least two distinct active Campuses -- counted within $campusIds when
+     * given (a Campus reader's scope), so another Campus is never revealed.
+     *
+     * MUST be called inside the target School's TenantContext.
+     *
+     * @param  Builder<Employee>  $employees
+     * @param  list<string>|null  $campusIds  null: every Campus
+     * @return Builder<Employee>
+     */
+    public function whereOnSeveralCampuses(Builder $employees, School $school, ?array $campusIds = null, ?string $date = null): Builder
+    {
+        if ($campusIds !== null && count(self::uuids($campusIds)) < 2) {
+            return $employees->whereRaw('1 = 0');
+        }
+        $date ??= $this->today($school);
+        $campusIds = $campusIds === null ? null : self::uuids($campusIds);
+
+        $bindings = [];
+        $count = $this->distinctCampusCount($school, $campusIds, $date, $bindings);
+
+        return $employees->whereRaw('2 <= ('.$count.')', $bindings);
+    }
+
+    /**
+     * ORG.9C-1, HR-044: Employees with a CURRENT assignment whose manager is a
+     * CURRENT assignment of $managerEmployeeId. When $campusIds is given (a
+     * Campus reader's scope) BOTH ends must be on those Campuses -- the
+     * subordinate's assignment and the manager's -- so a Campus reader never
+     * learns of an out-of-scope (or NULL-Campus) assignment or reporting line.
+     *
+     * MUST be called inside the target School's TenantContext.
+     *
+     * @param  Builder<Employee>  $employees
+     * @param  list<string>|null  $campusIds
+     * @return Builder<Employee>
+     */
+    public function whereReportingTo(Builder $employees, School $school, string $managerEmployeeId, ?array $campusIds = null, ?string $date = null): Builder
+    {
+        $managerCampusIds = $campusIds === null ? null : self::uuids($campusIds);
+        if (! Str::isUuid($managerEmployeeId) || $managerCampusIds === []) {
+            return $employees->whereRaw('1 = 0');
+        }
+        $date ??= $this->today($school);
+
+        return $employees->whereExists(function (QueryBuilder $q) use ($school, $managerEmployeeId, $managerCampusIds, $date): void {
+            $q->selectRaw('1')
+                ->from('employee_assignments as ea')
+                ->join('employment_records as er', fn ($j) => $j->on('er.id', '=', 'ea.employment_record_id')->on('er.school_id', '=', 'ea.school_id'))
+                ->whereColumn('er.employee_id', 'employees.id')
+                ->where('ea.school_id', $school->id)
+                ->when($managerCampusIds !== null, fn ($w) => $w->whereIn('ea.campus_id', $managerCampusIds ?? []))
+                ->whereExists(function (QueryBuilder $m) use ($school, $managerEmployeeId, $managerCampusIds, $date): void {
+                    $m->selectRaw('1')
+                        ->from('employee_assignments as ma')
+                        ->join('employment_records as mer', fn ($j) => $j->on('mer.id', '=', 'ma.employment_record_id')->on('mer.school_id', '=', 'ma.school_id'))
+                        ->whereColumn('ma.id', 'ea.manager_assignment_id')
+                        ->where('ma.school_id', $school->id)
+                        ->where('mer.employee_id', $managerEmployeeId)
+                        ->when($managerCampusIds !== null, fn ($w) => $w->whereIn('ma.campus_id', $managerCampusIds ?? []));
+                    $this->constrainToCurrent($m, $date, 'ma');
+                });
+            $this->constrainToCurrent($q, $date);
+        });
+    }
+
+    /**
+     * SQL counting an Employee's distinct current active Campuses (correlated
+     * on `employees.id`), appending its bindings to $bindings.
+     *
+     * @param  list<string>|null  $campusIds
+     * @param  array<int, mixed>  $bindings
+     *
+     * @param-out array<int, mixed> $bindings
+     */
+    private function distinctCampusCount(School $school, ?array $campusIds, string $date, array &$bindings): string
+    {
+        $q = DB::table('employee_assignments as ea')
+            ->join('employment_records as er', fn ($j) => $j->on('er.id', '=', 'ea.employment_record_id')->on('er.school_id', '=', 'ea.school_id'))
+            ->join('campuses as c', fn ($j) => $j->on('c.id', '=', 'ea.campus_id')->on('c.school_id', '=', 'ea.school_id'))
+            ->whereColumn('er.employee_id', 'employees.id')
+            ->where('ea.school_id', $school->id)
+            ->where('c.status', 'active')
+            ->when($campusIds !== null, fn ($w) => $w->whereIn('ea.campus_id', $campusIds ?? []))
+            ->selectRaw('count(DISTINCT ea.campus_id)');
+        $this->constrainToCurrent($q, $date);
+        $bindings = $q->getBindings();
+
+        return $q->toSql();
+    }
 }
