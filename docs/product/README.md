@@ -55,3 +55,10 @@ It records and classifies; it builds nothing.)*
 authorization UAT plan — personas, fixture, positive and mandatory negative
 cases across every Campus-scoped area (ADR 0076 §53). It is a plan, not
 evidence.)*
+
+*(2026-10-23, ORG.9A: `REFERENCE-PARITY-MATRIX.md` is the reference-ERP
+parity baseline (ADR 0076 §66): the owner's menu workbook mapped to Lycenza
+business functions, with `reference-parity/functions.csv`,
+`PARITY-V1-BACKLOG.md`, `PARITY-POST-V1-BACKLOG.md`, `PARITY-DO-NOT-BUILD.md`
+and `REFERENCE-SCREENSHOT-REGISTER.md`. It contains no reference wording,
+layout or screenshot. It records and classifies; it builds nothing.)*

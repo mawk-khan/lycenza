@@ -9955,3 +9955,65 @@ DIRECT_WITH_ASSURANCE, and no HIGH or MEDIUM ORG.8 finding remains: **ORG.8
 is technically closed.** Production stays blocked by M-1, OD-8.4, OD-8.9/G-5
 and the legal and release gates (§64.23). ORG.9 waits for the owner's
 approval.
+
+## 66. ORG.9A — Reference ERP parity baseline (read-only, 2026-10-23)
+
+Owner authorization: ORG.9A, documentation only. Baseline `origin/main` =
+`40c584f4` (ORG.8 technically closed, §65). No code, schema, capability,
+role, template, catalogue, module entitlement or gate changed.
+
+**66.1 Evidence.** `Menu_Permissions_Master.xlsx` (owner-held; SHA-256
+verified identical to §31.8): 2,963 menu rows after removing three
+per-sheet total footers, 1,596 unique paths, 52 reference modules, 22
+reference personas, 88 owner-flagged sensitive paths. The reference
+screenshot packs were **not available** to the execution environment, so
+every mapping is evidence E2 (menu + exposure); none is E3–E5
+(`docs/product/REFERENCE-SCREENSHOT-REGISTER.md`). Reference exposure is
+not least privilege (several personas see 860–1,021 menus), confirming
+that a reference "Yes" is never a Lycenza grant.
+
+**66.2 Outputs** (`docs/product/`): `REFERENCE-PARITY-MATRIX.md`
+(methodology, workbook audit, persona analysis, heatmap, domain findings,
+approval parity, filters/bulk/import/export, intentionally different,
+architecture review, LC overlap); `reference-parity/functions.csv` (772
+function rows, Lycenza wording, workbook `sheet!row` references; no
+reference wording, layout or screenshot is committed — ADR 0075 §1);
+`PARITY-V1-BACKLOG.md`, `PARITY-POST-V1-BACKLOG.md`,
+`PARITY-DO-NOT-BUILD.md`.
+
+**66.3 Results.** 723 distinct functions (772 rows incl. 49 duplicate
+functions; 532 duplicate paths). Functions: P0 57, P1 89, P2 80, P3 26,
+P4 234, P5 103, P6 92, P7 42, P8 49. Functional coverage of the
+reference's surface 36.8 % weighted / 30.3 % strict; v1-required coverage
+77.6 % / 63.9 % (formulas in the matrix §5). Largest material gaps
+(weighted coverage, excluding not-adopted): examinations (9 %, almost all
+legally gated E36–E44), documents (8 %), admissions (24 %), transport
+(27 %), inventory (28 %).
+
+**66.4 Invariants held.** No reference menu became a capability, no
+reference module a Lycenza module, no reference persona a role, no branch
+a tenant layer; Campus stays the branch concept and the School the only
+tenant. Reference designs that would cross the architecture (cross-School
+writes, menu-as-security, configurable approval chains, platform-to-tenant
+authority, finance source bypass, bulk money or lifecycle approvals) are
+DO_NOT_BUILD or redesign-required (matrix §13).
+
+**66.5 Backlog.** v1 candidates are mostly read models, filters and
+completion of existing modules, and need no new capability, role or
+Campus adoption: ORG.9B Finance office read models (PV1-01..04), ORG.9C
+daily operations views and completion (PV1-05..09, PV1-05 = LC-6),
+ORG.9D communications for operations (PV1-10..12; PV1-11 needs an ADR 0055
+purpose amendment). Owner decisions before build: PV1-13..22 (opening
+balances, certificates/TC, Student documents, D-11 exports, sibling and
+contact lists, LC-5 applicant correction, daily attendance, staff
+borrowing, dishonoured-cheque reason, expenses).
+
+**66.6 Product observation.** The School-wide announcement audience is
+every active membership, Guardian and Student accounts included (the
+preview shows the breakdown). It is designed behaviour, not a defect, but a
+staff-only audience (PV1-10) should land before E46 production.
+
+**66.7 Not cleared by ORG.9A.** Production stays NO-GO: M-1, OD-8.4,
+OD-8.9, the legal gates (E30–E34, E21, E33, E36–E47, HRX-L1..L4) and the
+release gates (E02/E15, E16, O1). LC-5 … LC-10 stay paused; ORG.9B is not
+started.
