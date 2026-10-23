@@ -56,7 +56,11 @@ const channelLabels: Record<string, string> = { in_app: 'In-app', email: 'Email'
                 </p>
                 <div class="mt-1 flex flex-wrap gap-1.5 text-xs">
                     <span class="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">{{
-                        r.audienceType === 'school_wide' ? 'School-wide' : 'Selected members'
+                        r.audienceType === 'school_wide'
+                            ? 'School-wide'
+                            : r.audienceType === 'staff'
+                              ? 'Staff only'
+                              : 'Selected members'
                     }}</span>
                     <span
                         v-if="r.requirement === 'required'"

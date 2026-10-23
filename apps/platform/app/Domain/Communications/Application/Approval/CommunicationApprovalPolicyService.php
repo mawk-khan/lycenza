@@ -45,7 +45,9 @@ class CommunicationApprovalPolicyService
 
             $reasons = [];
 
-            if ($policy->require_school_wide_approval && $announcement->audienceTypeEnum() === CommunicationAudienceType::SchoolWide) {
+            // ORG.9D-1: the Staff audience is School-wide (all current staff), so it never
+            // escapes a School-wide approval requirement by switching audience.
+            if ($policy->require_school_wide_approval && in_array($announcement->audienceTypeEnum(), [CommunicationAudienceType::SchoolWide, CommunicationAudienceType::Staff], true)) {
                 $reasons[] = 'school_wide';
             }
 

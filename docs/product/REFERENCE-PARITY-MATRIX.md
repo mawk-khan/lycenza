@@ -714,3 +714,21 @@ Statuses are now P1 101 and P3 21.
 | V1-required, weighted / strict | 81.8 % / 71.0 % | **82.2 % / 71.4 %** (244.0 / 297) |
 
 **Remaining Transport gaps:** TRN-015 capacity summary; GPS, maps and tracking (privacy-gated); trips and zones; maintenance and costs; fee receivable reports.
+
+## 21. ORG.9D-1 — Staff-only Communications audience (2026-10-23)
+
+ORG.9D-1 (ADR 0076 §73) built PV1-10.
+
+| Function | Before | After | Note |
+|---|---|---|---|
+| COM-016 announce to staff only | P2 | **P0** | `staff` audience: current linked Employees, resolved at publish, School-wide approval rule applies |
+| COM-034 email staff members | P2 | **P1** | intended difference: through staff User accounts on the existing email channel; never HR contact fields; production email gated (E17–E20) |
+
+Statuses are now P0 71, P1 102, P2 62.
+
+| Coverage | After ORG.9C-4 | After ORG.9D-1 |
+|---|---|---|
+| Functional, weighted / strict | 38.5 % / 33.5 % | **38.7 % / 33.8 %** (245.0 / 633) |
+| V1-required, weighted / strict | 82.2 % / 71.4 % | **82.5 % / 72.1 %** (245.0 / 297) |
+
+Not built: PV1-11 (fee-due reminder email) and PV1-12 (events calendar).

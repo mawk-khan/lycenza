@@ -97,7 +97,9 @@ function reject() {
                     {{
                         request.audienceType === 'school_wide'
                             ? 'School-wide'
-                            : `${request.individualMemberCount} selected members`
+                            : request.audienceType === 'staff'
+                              ? 'Staff only (current employees)'
+                              : `${request.individualMemberCount} selected members`
                     }}
                 </p>
             </div>

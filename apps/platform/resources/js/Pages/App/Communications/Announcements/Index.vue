@@ -33,6 +33,7 @@ defineProps<Props>();
 
 const AUDIENCE_LABELS: Record<string, string> = {
     school_wide: 'Entire School',
+    staff: 'Staff only (current employees)',
     individual: 'Selected Members',
     student: 'Students',
     guardian: 'Guardians',

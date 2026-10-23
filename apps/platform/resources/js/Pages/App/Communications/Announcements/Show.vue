@@ -215,7 +215,7 @@ const submittingApproval = ref(false);
 const withdrawingApproval = ref(false);
 
 const approvalReasonLabels: Record<string, string> = {
-    school_wide: 'School-wide audience',
+    school_wide: 'School-wide or Staff audience',
     required_communication: 'Marked Required',
     non_privileged_sender: 'Sender requires review',
 };
@@ -497,6 +497,7 @@ function formatFileSize(bytes: number): string {
                 {{
                     {
                         school_wide: 'Entire School',
+                        staff: 'Staff only (current employees)',
                         individual: 'Selected Members',
                         student: 'Students',
                         guardian: 'Guardians',

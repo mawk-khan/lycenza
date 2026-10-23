@@ -10492,3 +10492,87 @@ There is no uniqueness 500. Capacity: not applicable.
 - TRN-036 P3 → P1, an intended difference: add-only and all-or-nothing, matched by number and code, CSV only, web only.
 - Coverage: 38.5 % / 33.5 % functional, 82.2 % / 71.4 % v1.
 - Production stays NO-GO (§66.7).
+
+## 73. ORG.9D-1 — Staff-only Communications audience (as built, 2026-10-23)
+
+Owner authorization: ORG.9D-1 (PV1-10). Baseline `origin/main` = `f692e03d`.
+
+**Owner decision (brief §4):** "Staff" is a business identity — the canonical User → Employee → Employment relationship — never a role.
+
+This deliberately differs from CLAUDE.md rule 25's authorization sense of "staff" (holding a `school`-scope grant). That sense stays the authorization rule. This one is the recipient population.
+
+**What did not change:**
+- capability, role or template;
+- `CampusScopeCatalogue`;
+- approval workflow or topology;
+- channel;
+- contact model;
+- PV1-11 and PV1-12;
+- legal gates.
+
+**73.1 Existing pipeline (audited).**
+- **Announcements:** `CommunicationAnnouncement`, with `audience_type` CHECK-enumerated.
+- **Audience:** one `CommunicationAudienceResolver` per type returns de-duplicated User ids.
+- **Resolution timing:** resolved read-only for preview (`previewAudience`) and again inside `publish()`'s transaction after the atomic claim. Publish writes the recipient snapshot and plans one delivery per User per requested channel.
+- **Delivery:** `ProcessCommunicationDeliveryJob` sends the snapshot later and does not re-check the recipient.
+- **Approval:** domain-owned (fingerprint over title, body, audience type and members; maker/checker in the service; policy reasons `school_wide`, `required_communication`, `non_privileged_sender`).
+- **Channels:** in-app and email, to the User account's address.
+- **Campus:** no targeting (`campus_id` is informational).
+- **Capabilities:** `communications.announce` / `.approve` / `.manage`.
+- **Idempotency:** publish is idempotent (a conditional claim).
+
+**73.2 Staff identity** (`App\Domain\HR\Application\CurrentStaffMembers`). One School-constrained query, the set form of `ActingEmployeeResolver`'s chain:
+1. an active membership in the same School;
+2. an enabled User;
+3. the Employee linked by `employees(school_id, user_id)` (unique), `record_status = 'active'`;
+4. exactly one employment current on the School-local date, status `active` or `notice_period` (`HAVING count(*) = 1`, so ambiguity fails closed).
+
+It returns User ids only. The School-operational link is enforced by publish itself (`CommunicationDeliveryFactory`).
+
+**73.3 Audience.**
+- `CommunicationAudienceType::Staff` and `StaffAudienceResolver`: whole-School, creator excluded, de-duplicated by User.
+- Excluded: Guardian-only, Student-only and platform-only Users, leavers, future hires, archived Employees, disabled Users and suspended members.
+- Migration `2027_01_07_090000` widens the CHECK. Its `down()` refuses while any row uses `staff` (the ADD CONSTRAINT re-validation also fails closed).
+
+**73.4 Approval.**
+- The School-wide approval rule also covers Staff (`CommunicationApprovalPolicyService`), so switching audience never avoids it.
+- The fingerprint includes the audience type, so an approval for one audience does not cover another (tested).
+- The labels now say "School-wide or Staff" (review LOW-3).
+
+**73.5 Timing.**
+- **At preview:** advisory; reserves nothing.
+- **At publish:** a leaver is dropped and a new hire is added (tested).
+- **After publish:** the snapshot and its deliveries are fixed, as for every audience.
+- **Accepted residual (review LOW-1, existing contract for all audiences):** an email queued or deferred by quiet hours after publish still reaches someone who left in between. In-app needs an active membership, so it is not affected.
+- **Follow-up for an owner decision:** a send-time recipient re-check across Communications.
+
+**73.6 Privacy.**
+- Communications receives User ids only; no HR field.
+- Audit metadata carries the audience type and counts only, never a recipient list (tested).
+- The Guardian portal never shows a staff announcement.
+- Staff without a linked User account are not reached (no HR contact extraction). The composer says so (review LOW-2).
+
+**73.6a Performance.**
+- **First draft:** one join of the membership set against the grouped employment set ran as a nested-loop cross product on thin statistics: about 2.2 s at 1,050 staff (1.3 million rows).
+- **As built:** four bounded reads — eligible employment ids, then active Employees, then enabled Users, then active memberships — intersected in PHP.
+- **Result:** 6 ms at 50 staff and 16 ms at 1,050 (each query under 1 ms). No index added.
+
+**73.7 Validation.**
+- `StaffAudienceTest` has 8 tests covering:
+  - the identity cases;
+  - School isolation;
+  - ambiguity;
+  - preview and de-duplication;
+  - publish delivers once;
+  - publish-time re-resolution;
+  - approval and its no-bypass;
+  - rejection;
+  - empty audience;
+  - composer and authorization.
+- **Security review:** no HIGH or MEDIUM findings. LOW-2 and LOW-3 are fixed; LOW-1 is accepted as above.
+
+**73.8 Parity.**
+- COM-016 → P0. COM-034 → P1 (intended difference: through User accounts on the existing email channel).
+- Coverage: 38.7 % / 33.8 % functional, 82.5 % / 72.1 % v1.
+- PV1-11 and PV1-12 are not built.
+- Production stays NO-GO (§66.7).

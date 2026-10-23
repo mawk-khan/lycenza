@@ -12,6 +12,7 @@ use App\Domain\Communications\Application\Audience\GuardiansOfStudentsAudienceRe
 use App\Domain\Communications\Application\Audience\IndividualMembersAudienceResolver;
 use App\Domain\Communications\Application\Audience\SchoolWideAudienceResolver;
 use App\Domain\Communications\Application\Audience\SectionAudienceResolver;
+use App\Domain\Communications\Application\Audience\StaffAudienceResolver;
 use App\Domain\Communications\Application\Audience\StudentAudienceResolver;
 use App\Domain\Communications\Application\Audience\SubjectOfferingAudienceResolver;
 use App\Domain\Communications\Application\Channels\CommunicationChannelRegistry;
@@ -93,6 +94,7 @@ class PlatformServiceProvider extends ServiceProvider
             $registry = new CommunicationAudienceResolverRegistry;
             $registry->register($app->make(IndividualMembersAudienceResolver::class));
             $registry->register($app->make(SchoolWideAudienceResolver::class));
+            $registry->register($app->make(StaffAudienceResolver::class));
             $registry->register($app->make(StudentAudienceResolver::class));
             $registry->register($app->make(GuardianAudienceResolver::class));
             $registry->register($app->make(GuardiansOfStudentsAudienceResolver::class));

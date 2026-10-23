@@ -312,7 +312,7 @@ function saveTiming() {
                         type="checkbox"
                         class="rounded border-slate-300"
                     />
-                    Require approval for school-wide announcements
+                    Require approval for school-wide and staff-only announcements
                 </label>
                 <label class="flex items-center gap-2">
                     <input

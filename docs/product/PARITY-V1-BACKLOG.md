@@ -186,6 +186,17 @@ All are read-only on the existing scope; matrix §19 has the coverage.
 | PV1-11 | Fee-due reminder email | COM-045, COM-042 | fewer overdue dues | no purpose, no Fees → Communications link | a new closed `EmailPurpose` reviewed under ADR 0055; Fees publishes an event, Communications sends | none | none | E17–E20 for production delivery | ADR 0055 purpose amendment | M |
 | PV1-12 | School events and holiday calendar (staff; family view later) | COM-024, LMS-115, COM-026, COM-027 | one calendar for terms, holidays, exams | years/terms/staff holidays exist separately | existing academic-structure view keys; family view behind E46 | Campus filter, not authority | none | E46 (family view) | none | M |
 
+### ORG.9D-1 built (2026-10-23, ADR 0076 §73)
+
+**PV1-10:** Staff-only audience (COM-016 P0, COM-034 P1).
+- Current staff from HR's `CurrentStaffMembers`: linked active Employee with one current employment, never a role.
+- The existing announcement pipeline, approval workflow and channels.
+- No new capability, Campus targeting or contact model.
+
+**Not started:**
+- PV1-11 (fee-due reminder, ORG.9D-2): needs its own contract — recipients, financial facts, purpose and legal basis, schedule, duplicates.
+- PV1-12 (events calendar, ORG.9D-3): new business state, and never the Attendance expectation calendar (OD-9.3).
+
 ## Owner decisions before build (not scheduled)
 
 | ID | Title | Functions | Decision needed | Gate | Size |

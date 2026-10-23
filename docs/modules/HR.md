@@ -4211,3 +4211,10 @@ All of these are read-only and on existing authority. None adds a capability, a 
 - **Write time:** it share-locks the Department and requires it to be active and School-wide or on the stock Location's Campus.
 - **Direction:** Inventory → HR only.
 - **Retention:** Departments are tenant-lifetime configuration, so the RESTRICT reference blocks no E21 purge.
+
+## Current staff for other domains (ORG.9D-1, 2026-10-23, ADR 0076 §73)
+
+`CurrentStaffMembers::userIds(School)` is HR's set-based answer to "which Users are current staff here", used by the Communications Staff audience.
+- **Rule:** it mirrors `ActingEmployeeResolver`'s chain — active membership, enabled User, linked active Employee, and exactly one current employment (active or notice period, School-local today).
+- **Returns:** User ids only, never an HR field.
+- **Direction:** Communications → HR, read only.

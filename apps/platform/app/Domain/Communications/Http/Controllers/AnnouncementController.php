@@ -566,7 +566,7 @@ class AnnouncementController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'body' => ['required', 'string', 'max:10000'],
             'priority' => ['required', 'in:normal,important,urgent,critical'],
-            'audience_type' => ['required', 'in:individual,school_wide,student,guardian,guardians_of_students,grade,section,subject_offering'],
+            'audience_type' => ['required', 'in:individual,school_wide,staff,student,guardian,guardians_of_students,grade,section,subject_offering'],
             'member_user_ids' => ['required_if:audience_type,individual', 'array'],
             'member_user_ids.*' => ['string'],
             // Phase 5B.1: the Student ids for 'student'/

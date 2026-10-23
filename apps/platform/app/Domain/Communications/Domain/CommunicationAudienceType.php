@@ -37,6 +37,12 @@ namespace App\Domain\Communications\Domain;
  * (Phase 1C), never against `student_enrollments`/
  * `student_subject_enrollments` directly -- see
  * docs/communication-hub/PHASE-5C-1-SUBJECT-OFFERING-AUDIENCES.md.
+ *
+ * ORG.9D-1 (ADR 0076 §73) adds `Staff` -- the School's CURRENT staff, a
+ * business identity resolved by HR (CurrentStaffMembers: linked, active
+ * Employee with a current employment), never a role name or capability.
+ * Treated as School-wide by the approval policy, so choosing it never
+ * avoids a School-wide approval requirement.
  */
 enum CommunicationAudienceType: string
 {
@@ -48,4 +54,5 @@ enum CommunicationAudienceType: string
     case Grade = 'grade';
     case Section = 'section';
     case SubjectOffering = 'subject_offering';
+    case Staff = 'staff';
 }

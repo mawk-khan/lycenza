@@ -39,6 +39,7 @@ interface DomainTarget {
 
 const audienceType = ref<
     | 'school_wide'
+    | 'staff'
     | 'individual'
     | 'student'
     | 'guardian'
@@ -326,6 +327,7 @@ function submit() {
                     class="mt-1 rounded border border-slate-300 px-2 py-1 text-sm"
                 >
                     <option value="school_wide">Entire School</option>
+                    <option value="staff">Staff only (current employees)</option>
                     <option value="individual">Selected Members</option>
                     <option value="student">Students</option>
                     <option value="guardian">Guardians</option>
@@ -345,6 +347,12 @@ function submit() {
                     active academic year set.
                 </p>
             </div>
+
+            <p v-if="audienceType === 'staff'" class="text-xs text-slate-500">
+                Everyone with a current employment record in HR that is linked to their account.
+                Staff without a linked account are not reached; check the audience preview count
+                before publishing.
+            </p>
 
             <div v-if="audienceType === 'individual'">
                 <label class="block text-xs font-medium text-slate-500"

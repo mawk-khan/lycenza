@@ -1612,3 +1612,8 @@ once several modules copy it.
      - **Commit.** Lock the named rows in id order, re-evaluate every row, re-read authority fresh, then call the canonical service per row. Any refusal rolls the whole batch back.
      - **Never** match by name, replace or end an existing record, write a partial batch, add a force option, or build a generic import engine.
      - **Campus.** A Campus-scoped actor gets one generic refusal for anything outside their Campuses.
+
+108. **"Staff" is an HR identity, never a role (ADR 0076 §73, ORG.9D-1).**
+     - **One answer.** Another domain gets current staff only from `App\Domain\HR\Application\CurrentStaffMembers` (User ids only): active membership, enabled User, linked active Employee, exactly one current employment on the School-local date.
+     - **Never** classify staff by a role name, capability, persona, email domain or Employee contact field, and never pass an HR field to Communications.
+     - **The Staff audience is School-wide** for the approval policy, so switching audience never avoids approval.
