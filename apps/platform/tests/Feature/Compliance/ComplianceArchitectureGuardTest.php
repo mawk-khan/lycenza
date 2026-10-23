@@ -25,6 +25,8 @@ class ComplianceArchitectureGuardTest extends TestCase
         'App\\Models\\User',
         'App\\Support\\Audit\\AuditRecorder',
         'App\\Support\\Audit\\SchoolAuditEventEntry',
+        // ORG.9B (ADR 0076 §68): the read contract's filter value object.
+        'App\\Support\\Audit\\SchoolAuditEventFilter',
         'App\\Support\\Audit\\SchoolAuditEventReader',
         'App\\Support\\Authorization\\AuthorizesCapability',
     ];

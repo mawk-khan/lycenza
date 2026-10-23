@@ -673,11 +673,14 @@ class ChargeService
      *
      * @return list<ChargeCollectionFact>
      */
-    public function collectionFacts(School $school, CampusScope $scope, ?string $academicYearId = null, ?ChargeCampusFilter $campus = null): array
+    public function collectionFacts(School $school, CampusScope $scope, ?string $academicYearId = null, ?ChargeCampusFilter $campus = null, bool $includeCancelled = false): array
     {
-        return $this->context->withSchool($school, function () use ($school, $scope, $academicYearId, $campus) {
+        return $this->context->withSchool($school, function () use ($school, $scope, $academicYearId, $campus, $includeCancelled) {
             $facts = [];
-            foreach ($scope->restrict(Charge::query()->where('school_id', $school->id))->whereNull('cancelled_at')
+            // ORG.9B (ADR 0076 §68): an as-at read also needs Charges cancelled
+            // LATER than its date; Payments' charge-state read decides what
+            // counted on that date. The current list keeps uncancelled only.
+            foreach ($scope->restrict(Charge::query()->where('school_id', $school->id))->when(! $includeCancelled, fn ($q) => $q->whereNull('cancelled_at'))
                 ->when($academicYearId !== null, fn ($q) => $q->where('academic_year_id', $academicYearId))
                 ->when($campus !== null, fn ($q) => $campus->apply($q))
                 ->orderBy('id')->toBase()->select(['id', 'student_id', 'academic_year_id', 'amount', 'currency', 'due_date'])

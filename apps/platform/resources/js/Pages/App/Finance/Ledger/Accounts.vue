@@ -53,7 +53,7 @@ function setStatus(account: LedgerAccountRow, status: 'active' | 'inactive'): vo
         <h1 class="mt-2 text-xl font-semibold">Ledger accounts</h1>
         <p class="mt-1 text-sm text-slate-500">
             The Chart of Accounts. Accounts are deactivated, never deleted, and an account's type
-            cannot change once anything has been posted to it.
+            cannot change once anything has been posted to it. Open an account to see its ledger.
         </p>
 
         <form
@@ -138,7 +138,11 @@ function setStatus(account: LedgerAccountRow, status: 'active' | 'inactive'): vo
                     <tr v-for="account in accounts" :key="account.id">
                         <td class="py-3 font-mono text-xs">{{ account.code }}</td>
                         <td class="py-3">
-                            {{ account.name }}
+                            <a
+                                class="underline"
+                                :href="`/app/finance/ledger-accounts/${account.id}/ledger`"
+                                >{{ account.name }}</a
+                            >
                             <span
                                 v-if="account.isSystem"
                                 class="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500"
@@ -188,7 +192,13 @@ function setStatus(account: LedgerAccountRow, status: 'active' | 'inactive'): vo
                     class="rounded border border-slate-200 p-4"
                 >
                     <p class="font-mono text-xs text-slate-500">{{ account.code }}</p>
-                    <p class="font-medium">{{ account.name }}</p>
+                    <p class="font-medium">
+                        <a
+                            class="underline"
+                            :href="`/app/finance/ledger-accounts/${account.id}/ledger`"
+                            >{{ account.name }}</a
+                        >
+                    </p>
                     <p class="mt-1 text-sm text-slate-500">
                         {{ account.type }} · {{ account.currency }} ·
                         {{ account.status === 'active' ? 'Active' : 'Inactive' }}

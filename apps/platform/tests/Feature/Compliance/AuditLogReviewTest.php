@@ -225,7 +225,9 @@ class AuditLogReviewTest extends TestCase
         foreach ($events as $event) {
             $this->assertSame($admin->id, $event->getAttribute('actor_user_id'));
             $this->assertNull($event->subject_type);
-            $this->assertSame(['paged', 'resultCount'], array_keys($event->metadata));
+            // ORG.9B: plus the NAMES of the filters used (none here), never their values.
+            $this->assertEqualsCanonicalizing(['paged', 'resultCount', 'filters'], array_keys($event->metadata));
+            $this->assertSame([], $event->metadata['filters']);
             $this->assertFalse($event->metadata['paged']);
             $this->assertStringNotContainsString('LEAK-CANARY-METADATA', json_encode($event->metadata));
         }

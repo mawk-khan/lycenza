@@ -1579,3 +1579,10 @@ once several modules copy it.
        linked Guardian of the Student; DB: `charges_cancellation_evidence`).
        Never add a Charge cancel/void caller outside its declared entry
        points, and never a waiver reason (waivers are concessions).
+
+103. **Finance office read models are reads, on existing authority (ADR 0076 §68, ORG.9B).**
+     - **Outstanding fees.** Billed, concession, paid and balance come from the ONE charge state. `billed - concession - paid = balance` holds per Charge; paid is effective allocation; Campus uses the stored Charge Campus.
+     - **As at.** An as-at read goes through `ChargeStateReader::forChargesAsAt()`: the posting-date clock, a School-local day bound, the closed-period baseline. Retention-expired history is refused. Never compute all history in production.
+     - **Ledger statement.** Opening is the `LedgerBalanceReader` definition, and the running balance is computed over the whole range.
+     - **Audit-log filters** only narrow, use the School's own values and never read metadata.
+     - **Never** add a write, an export, a fee-head column, a capability or a Campus adoption to these surfaces, and never infer an account's cash or bank nature from its name.

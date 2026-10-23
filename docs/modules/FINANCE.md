@@ -5745,3 +5745,76 @@ approval workflow).
   repeat is refused with one reversal.
 - **M-1:** a staff parent who never linked their account is not detected
   (production policy).
+
+## Finance office read models (ORG.9B, 2026-10-23, ADR 0076 §68)
+
+ORG.9B is read-only. It adds no capability, role, Campus adoption, export, schema column, migration or write path.
+
+### Outstanding fees: billed, concession, paid, balance (9B-1)
+
+`/app/finance/outstanding` now shows, per Student and as **filtered totals** (every matching row, never one page), four amounts over the Student's uncancelled Charges in the read's population:
+
+| Amount | Definition |
+|---|---|
+| **billed** | the Charges' amounts |
+| **concession** | their live fee adjustments. Every fee adjustment is the posted effect of an approved concession, scholarship or waiver, so there is no other adjustment class to separate out. A cancelled adjustment is out. |
+| **paid** | their effective payment allocation: allocations plus payment-correction lines. A reversal, a recorded refund or a reallocation has already moved the effect, so a corrected Payment is never counted at its original amount. |
+| **balance** | `billed - concession - paid`, exactly per Charge and so per Student (`ChargeState::outstanding()`). It is the canonical outstanding the page always showed. |
+
+- **Cancelled Charges** are no part of the population. The cancellation guards keep their amount, concessions and payments at zero.
+- **Late fees and source-owned Charges** (fee runs, Library, Canteen, Transport, Hostel, Admissions) are ordinary Charges here.
+- **Status `all`** also lists settled Students (balance 0). `outstanding` and `overdue` are unchanged.
+- **Filters and authority** are unchanged:
+  - year, Student text, grade and section (current placement, whole-School `enrollments.view` only), standing, stored-Charge-Campus filter;
+  - `finance.charges.view,campus` ∩ `finance.payments.view`.
+- **Campus.** Scope and filter act on each Charge's STORED Campus in SQL before anything is added up. Paid is only what reached a Charge the reader may see, never a Payment's whole amount, so a mixed-Campus Payment adds to a Campus reader's figures only its part on that Campus's Charges (ORG.7G-1, G1-D7).
+
+### Outstanding as at a date (9B-2)
+
+`as_at` is a School-local date, never after the School's today, and means **the position at the end of that day as recorded by then**.
+
+- **Bound.** Every fact counts when its journal entry was POSTED before the start of the next School-local day: `SchoolTimezone::startOfNextDayUtc()`, compared with `<`, never `23:59:59`; a DST day is bounded by the zone's own midnights.
+- **What counts:**
+  - a Charge's recognition and its cancellation;
+  - a concession adjustment and its cancellation;
+  - a Payment's allocation (its settlement entry);
+  - a correction (its own entry).
+- **Why posting.** Posting is the one clock of charge state: the period close (ADR 0064) dates every fact by its journal entry. Consequences:
+  - a balance as at any date is never negative;
+  - the population agrees with the ledger;
+  - a Payment received earlier but recorded later counts from the day it was recorded (the page says so).
+
+  A received-date view would be a separate owner decision.
+- **Read path.** `ChargeStateReader::forChargesAsAt()`: the carried baseline of the latest CLOSED period ending on or before the date, plus later facts posted by then. A date before the end of the latest retention-expired period is refused (`ChargeHistoryExpiredException`) rather than guessed.
+- **Overdue** is judged against the as-at date.
+- **Campus attribution** is the stored Charge Campus.
+- **The standing filter** keeps its meaning (current lifecycle). Without it, a later leaver's history stays in the view.
+
+### Ledger account statement (9B-3)
+
+`/app/finance/ledger-accounts/{account}/ledger` (`finance.ledger.view`, whole-School) shows one account's posted lines for a School-local posting-date range: from the start of `from` to before the start of the day after `to`, defaulting to this month to today.
+
+- **Opening balance** = the cumulative baseline of the latest closed period ending before `from` + every later (or unmapped) line posted before `from`. It is read through `LedgerBalanceReader::accountBalanceBefore()`, still the only place that sums ledger lines, so a period close never changes it. The range lines and totals come from `accountLinesBetween()`. Nothing is written: it is not an opening-balance entry.
+- **Running balance.** Lines are ordered by (posted_at, journal entry id, line id), a total and stable order since the ids are UUIDv7. The running balance is a SQL window over the WHOLE range before a page is cut, so every page carries the balance brought forward.
+- **Range totals and closing** cover the whole range.
+- **Presentation.** Amounts are net debit, shown on Dr/Cr. The account type's normal side (asset/expense debit, others credit) comes from the stored type, never the name.
+- **Every entry is posted;** a reversal is its own entry and is labelled.
+- **Retention.** A range starting on or before the end of a retention-expired period is refused.
+- **Audit.** One `ledger_account.statement_viewed` audit per read: account id, range, count.
+
+**Cash book / bank book: stopped (ORG.9B stop condition 5).** Ledger accounts carry no structural cash or bank classification. A Payment's settlement account is any active asset account, and the names are free text. A School can open its own cash or bank account's ledger; a dedicated variant needs an owner decision on a structural classification. No trial balance was built (INSUFFICIENT_EVIDENCE).
+
+### Audit-log filters (9B-4)
+
+`/app/compliance/audit-log` (`school.audit.view`, whole-School, no Campus) accepts:
+
+| Filter | Behaviour |
+|---|---|
+| `event` | an exact event type or a family (the first dot-segment; matched with `starts_with`, never `LIKE`) |
+| `subject` | a label: the class basename the page already shows, mapped server-side to the stored classes. No class name reaches the page. |
+| `from` / `to` | School-local days |
+
+- **Validation.** Values are validated for shape and against the School's OWN event types and subject labels, after the capability check.
+- **Options** are read by a loose index scan over the existing indexes (no new index).
+- **Narrow only.** The filters never widen anything, never read `metadata`, and never show an IP address or user agent.
+- **Access event.** The `compliance.audit_log.viewed` event records which filters were used, never their values.

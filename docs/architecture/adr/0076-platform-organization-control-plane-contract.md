@@ -10100,3 +10100,63 @@ LOW findings, recorded and not fixed:
 - LC-5 … LC-10 stay paused, and the LC-6 overlap with PV1-05 is preserved.
 - ORG.9B, 9C and 9D are not started.
 - The remaining Finance captures must be indexed, and the Finance reconciliation re-run, before the ORG.9B scope is confirmed.
+
+## 68. ORG.9B — Finance office read models (as built, 2026-10-23)
+
+Owner authorization: ORG.9B (read-only parity implementation). Baseline `origin/main` = `180e0170`.
+
+**What did not change:**
+- capability, role or template;
+- Campus adoption (`CampusScopeCatalogue` untouched);
+- schema, migration or index;
+- export;
+- write route;
+- legal or production gate.
+
+**68.1 9B-1: billed / concession / paid / balance.** Outstanding fees shows the four amounts per Student, as filtered totals over every matching row, with an `all` status that also lists settled Students.
+
+- **Definitions** are over uncancelled Charges and come from the SAME `ChargeState`:
+  - billed = amount;
+  - concession = live fee adjustments (every adjustment is a concession, scholarship or waiver);
+  - paid = effective allocation (allocations plus correction lines);
+  - balance = `billed - concession - paid` = the canonical outstanding, exactly per Charge.
+- **No double counting.** A reversal, refund or reallocation has already moved the allocation, and a cancelled adjustment is out.
+- **Campus contract unchanged:** stored Charge Campus in SQL; paid only on visible Charges.
+
+**68.2 9B-2: as at.** A School-local date, never after the School's today, through `ChargeStateReader::forChargesAsAt()`.
+- **Model.** The carried baseline of the latest closed period ending on or before the date, plus facts whose journal entry was POSTED before the start of the next School-local day (`SchoolTimezone::startOfNextDayUtc`, compared with `<`). This is the same clock as the ADR 0064 period close, so balances are never negative and agree with the ledger.
+- **Late recordings.** A Payment recorded after the date counts from its recording; a received-date basis would be a separate owner decision.
+- **Retention.** A date before the latest retention-expired period's end is refused (`ChargeHistoryExpiredException`).
+- **Overdue** is judged against the date.
+- **Production stays verification-only for all history.** `AllHistoryChargeReader` remains the verifier's alone.
+
+**68.3 9B-3: ledger account statement.** `app.finance.ledger-accounts.ledger` uses `finance.ledger.view` (controller and service), whole-School.
+- **Opening** = the closed-period cumulative baseline + later or unmapped lines posted before the range. Both it and the range lines are read through `LedgerBalanceReader::accountBalanceBefore()` / `accountLinesBetween()`, still the only place that sums ledger lines (`FinanceReadCutoverGuardTest`).
+- **Running balance.** A SQL window ordered by (posted_at, entry id, line id) over the whole range, so pages carry it forward. Range totals and closing cover the whole range.
+- **Retention.** A range inside retention-expired detail is refused.
+- **No opening-balance entry** is created; that stays PV1-13 / OD-PPR-20.
+- **Cash/bank book: STOPPED** (stop condition 5). `ledger_accounts` has no structural cash or bank classification, and a settlement account is any active asset account, so a variant could only infer it from names. That classification is an owner decision.
+- **Trial balance** not built (INSUFFICIENT_EVIDENCE).
+
+**68.4 9B-4: audit-log filters.**
+- **Filters:** event type or family (`starts_with`), subject label mapped to the stored classes, School-local dates.
+- **Validation** against the School's own values, after `school.audit.view`.
+- **Options** come from a loose index scan over the existing indexes. Query plans at 300,000 events: about 0.3 ms and 1 ms, against 56 ms and 32 ms for DISTINCT.
+- **Narrow only:** metadata, IP and user agent are never read; there is no Campus dimension.
+- **Access event** records the names of the filters used, never their values.
+
+**68.5 Guards and evidence.**
+- `FinanceOfficeReadModelGuardTest` checks:
+  - GET-only routes on existing authority;
+  - read services free of write paths;
+  - no export route;
+  - no `charges.fee_head_id`;
+  - the Finance Campus adoptions unchanged.
+- Query plans were taken on rolled-back synthetic volume: audit filters under 1 ms; ledger reads 57–82 ms at 100,000 entries. No index was added.
+- DDEV smoke: 27/27.
+
+**68.6 Parity.**
+- Statuses: FIN-013 → P0; FIN-034, FIN-062 → P1; FIN-014 stays P2 (stopped).
+- Coverage: 36.8 % / 30.6 % functional, 78.5 % / 65.3 % v1.
+- Still open: OD-9.1, ageing, trial balance, D-11.
+- Production stays NO-GO (§66.7).

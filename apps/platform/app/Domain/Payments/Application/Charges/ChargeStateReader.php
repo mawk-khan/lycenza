@@ -3,12 +3,15 @@
 namespace App\Domain\Payments\Application\Charges;
 
 use App\Domain\Fees\Application\ChargeService;
+use App\Domain\Fees\Application\FeeAdjustmentLedgerFact;
 use App\Domain\Finance\Application\Periods\FinancialPeriodService;
+use App\Domain\Finance\Application\Periods\FinancialPeriodSummary;
 use App\Domain\Payments\Infrastructure\FinancialPeriodChargeState;
 use App\Domain\Payments\Infrastructure\PaymentAllocation;
 use App\Domain\Payments\Infrastructure\PaymentCorrectionLine;
 use App\Models\School;
 use App\Support\Money\Money;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 
 /**
@@ -57,6 +60,169 @@ class ChargeStateReader
     }
 
     /**
+     * ORG.9B (ADR 0076 §68): each charge's state AS AT the end of a
+     * School-local date, by the same carry-forward model as forCharges():
+     * the baseline of the latest CLOSED period ending on or before the date,
+     * plus every later fact whose journal entry was POSTED before the start
+     * of the next School-local day.
+     *
+     * - Posting is the one clock of charge state (the period close dates
+     *   every fact by its journal entry): a Payment received earlier but
+     *   recorded later counts from when it was recorded, so a charge's
+     *   as-at balance is never negative and agrees with the ledger.
+     * - Charges assessed after the date are absent; one cancelled after it
+     *   is live on it.
+     * - Refuses a date before the end of the latest period whose detail
+     *   retention expired (ADR 0064 §15): that history is not retained.
+     *
+     * @param  list<string>  $chargeIds
+     * @return array<string, ChargeState> keyed by charge id; charges not yet assessed on the date are absent
+     *
+     * @throws ChargeHistoryExpiredException
+     */
+    public function forChargesAsAt(School $school, array $chargeIds, string $asAtLocalDate): array
+    {
+        $anchor = $this->periods->expiryAnchor($school);
+        if ($anchor !== null && $asAtLocalDate < $anchor->endsOn) {
+            throw new ChargeHistoryExpiredException($anchor->endsOn);
+        }
+        $base = $this->periods->latestClosedEndingOnOrBefore($school, $asAtLocalDate);
+        $before = SchoolTimezone::startOfNextDayUtc($school, $asAtLocalDate);
+
+        $states = [];
+        foreach (array_chunk(array_values(array_unique($chargeIds)), 1000) as $chunk) {
+            $states += $this->context->withSchool($school, fn () => $this->chunkAsAt($school, $chunk, $base, $before));
+        }
+
+        return $states;
+    }
+
+    /**
+     * @param  list<string>  $ids
+     * @return array<string, ChargeState>
+     */
+    private function chunkAsAt(School $school, array $ids, ?FinancialPeriodSummary $base, string $before): array
+    {
+        $facts = $this->charges->ledgerFacts($school, $ids);
+        if ($facts === []) {
+            return [];
+        }
+        [$allocations, $adjustments] = $this->laterFacts($school, $ids);
+
+        $entries = [];
+        foreach ($facts as $fact) {
+            $entries[] = $fact->journalEntryId;
+            $entries[] = $fact->cancellationJournalEntryId;
+        }
+        foreach ($allocations as $rows) {
+            foreach ($rows as [, $entryId]) {
+                $entries[] = $entryId;
+            }
+        }
+        foreach ($adjustments as $rows) {
+            foreach ($rows as $adjustment) {
+                $entries[] = $adjustment->journalEntryId;
+                $entries[] = $adjustment->cancellationJournalEntryId;
+            }
+        }
+        $entries = array_values(array_filter($entries));
+        $posted = $this->periods->entriesPostedBefore($school, $entries, $before);
+        $through = $this->periods->entriesThrough($school, $entries, $base);
+        $baseline = [];
+        if ($base !== null) {
+            foreach (FinancialPeriodChargeState::query()->where('school_id', $school->id)->where('financial_period_id', $base->id)->whereIn('charge_id', $ids)->get() as $state) {
+                $baseline[$state->charge_id] = $state;
+            }
+        }
+        // An entry through the baseline period was posted before its end, so
+        // before the as-at bound as well; "counts" is simply "posted before".
+        $counts = fn (?string $entryId): bool => $entryId !== null && isset($posted[$entryId]);
+        $closed = fn (?string $entryId): bool => $entryId !== null && isset($through[$entryId]);
+
+        $states = [];
+        foreach ($facts as $fact) {
+            $state = $baseline[$fact->id] ?? null;
+            if ($state === null) {
+                if (! $counts($fact->journalEntryId)) {
+                    continue; // not yet assessed on the date
+                }
+                $cancelled = $fact->cancelled && $counts($fact->cancellationJournalEntryId);
+                $allocated = '0.00';
+                foreach ($allocations[$fact->id] ?? [] as [$amount, $entryId]) {
+                    if ($counts($entryId)) {
+                        $allocated = bcadd($allocated, $amount, self::SCALE);
+                    }
+                }
+                $adjusted = '0.00';
+                foreach ($adjustments[$fact->id] ?? [] as $adjustment) {
+                    if ($counts($adjustment->journalEntryId) && ! ($adjustment->cancelled && $counts($adjustment->cancellationJournalEntryId))) {
+                        $adjusted = bcadd($adjusted, $adjustment->amount, self::SCALE);
+                    }
+                }
+            } else {
+                $cancelled = $state->cancelled || ($fact->cancelled && $counts($fact->cancellationJournalEntryId));
+                $allocated = (string) $state->allocated_total;
+                foreach ($allocations[$fact->id] ?? [] as [$amount, $entryId]) {
+                    if (! $closed($entryId) && $counts($entryId)) {
+                        $allocated = bcadd($allocated, $amount, self::SCALE);
+                    }
+                }
+                $adjusted = (string) $state->live_adjusted_total;
+                foreach ($adjustments[$fact->id] ?? [] as $adjustment) {
+                    if ($closed($adjustment->journalEntryId)) {
+                        if ($adjustment->cancelled && ! $closed($adjustment->cancellationJournalEntryId) && $counts($adjustment->cancellationJournalEntryId)) {
+                            $adjusted = bcsub($adjusted, $adjustment->amount, self::SCALE);
+                        }
+                    } elseif ($counts($adjustment->journalEntryId) && ! ($adjustment->cancelled && $counts($adjustment->cancellationJournalEntryId))) {
+                        $adjusted = bcadd($adjusted, $adjustment->amount, self::SCALE);
+                    }
+                }
+            }
+
+            $states[$fact->id] = new ChargeState(
+                chargeId: $fact->id,
+                studentId: $fact->studentId,
+                amount: Money::of($fact->amount, $fact->currency),
+                cancelled: $cancelled,
+                allocated: Money::of($allocated, $fact->currency),
+                adjusted: Money::of($adjusted, $fact->currency),
+            );
+        }
+
+        return $states;
+    }
+
+    /**
+     * Allocations (by their Payment's settlement entry) and correction lines
+     * (by the correction's entry) per charge, and adjustment facts per charge
+     * -- the same inputs chunk() reads.
+     *
+     * @param  list<string>  $ids
+     * @return array{0: array<string, list<array{0: string, 1: string}>>, 1: array<string, list<FeeAdjustmentLedgerFact>>}
+     */
+    private function laterFacts(School $school, array $ids): array
+    {
+        $allocations = [];
+        foreach (PaymentAllocation::query()->where('payment_allocations.school_id', $school->id)
+            ->whereIn('payment_allocations.charge_id', $ids)
+            ->join('payments', fn ($join) => $join->on('payments.id', '=', 'payment_allocations.payment_id')->on('payments.school_id', '=', 'payment_allocations.school_id'))
+            ->toBase()->select(['payment_allocations.charge_id', 'payment_allocations.amount', 'payments.journal_entry_id'])->get() as $row) {
+            $allocations[(string) $row->charge_id][] = [(string) $row->amount, (string) $row->journal_entry_id];
+        }
+        foreach (self::correctionFacts($school, $ids) as $chargeId => $rows) {
+            foreach ($rows as $row) {
+                $allocations[$chargeId][] = $row;
+            }
+        }
+        $adjustments = [];
+        foreach ($this->charges->adjustmentLedgerFacts($school, $ids) as $adjustment) {
+            $adjustments[$adjustment->chargeId][] = $adjustment;
+        }
+
+        return [$allocations, $adjustments];
+    }
+
+    /**
      * UAT-C3: every payment-correction line on these charges as a signed
      * amount (apply +, release -) with its correction's journal entry -- the
      * same [amount, entry] shape as an allocation, so every reader that sums
@@ -91,24 +257,9 @@ class ChargeStateReader
             return [];
         }
 
-        $allocations = [];
-        foreach (PaymentAllocation::query()->where('payment_allocations.school_id', $school->id)
-            ->whereIn('payment_allocations.charge_id', $ids)
-            ->join('payments', fn ($join) => $join->on('payments.id', '=', 'payment_allocations.payment_id')->on('payments.school_id', '=', 'payment_allocations.school_id'))
-            ->toBase()->select(['payment_allocations.charge_id', 'payment_allocations.amount', 'payments.journal_entry_id'])->get() as $row) {
-            $allocations[(string) $row->charge_id][] = [(string) $row->amount, (string) $row->journal_entry_id];
-        }
         // UAT-C3: correction lines move a Payment's effect between charges
         // (apply +, release -), dated by the correction's own journal entry.
-        foreach (self::correctionFacts($school, $ids) as $chargeId => $rows) {
-            foreach ($rows as $row) {
-                $allocations[$chargeId][] = $row;
-            }
-        }
-        $adjustments = [];
-        foreach ($this->charges->adjustmentLedgerFacts($school, $ids) as $adjustment) {
-            $adjustments[$adjustment->chargeId][] = $adjustment;
-        }
+        [$allocations, $adjustments] = $this->laterFacts($school, $ids);
 
         $latest = $this->periods->latestClosed($school);
         $baseline = [];

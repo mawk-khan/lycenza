@@ -138,9 +138,9 @@ class FinanceCampusAccess
     }
 
     /** @param  list<string>|null  $studentIds */
-    public function outstandingFees(School $school, User $actor, string $status, ?string $academicYearId, ?array $studentIds, ?ChargeCampusFilter $campus): OutstandingFeesList
+    public function outstandingFees(School $school, User $actor, string $status, ?string $academicYearId, ?array $studentIds, ?ChargeCampusFilter $campus, ?string $asAt = null): OutstandingFeesList
     {
-        return $this->outstanding->list($school, $actor, $status, $academicYearId, $studentIds, $campus);
+        return $this->outstanding->list($school, $actor, $status, $academicYearId, $studentIds, $campus, $asAt);
     }
 
     /**

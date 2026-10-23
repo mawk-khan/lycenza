@@ -151,6 +151,51 @@ class FinanceCampusReadTest extends TestCase
     }
 
     #[Test]
+    public function billed_paid_and_totals_add_up_only_the_charges_the_reader_may_see(): void
+    {
+        $w = $this->w;
+        $this->travelTo(CarbonImmutable::parse('2026-10-01T06:00:00Z'));
+        $read = function (User $user, string $query = '') {
+            $props = $this->as($user)->get('/app/finance/outstanding?status=all'.($query === '' ? '' : '&'.$query))->assertOk()->viewData('page')['props'];
+
+            return [collect($props['rows']['data'])->mapWithKeys(fn ($r) => [$r['studentId'] => [$r['billed'], $r['concession'], $r['paid'], $r['outstanding']]])->all(), $props['totals']];
+        };
+
+        // ORG.9B (ADR 0076 §68): paid is what reached a VISIBLE Charge -- PN's
+        // 5.00 on cA counts, its 5.00 on the NULL-Campus Charge never does;
+        // PAB counts 10.00 on cMoveA for A and 10.00 on cMoveB for B.
+        [$rowsA, $totalsA] = $read($this->staff('cashier', [$this->a->id]));
+        $this->assertEquals([
+            $w['sA']->id => ['100.00', '0.00', '45.00', '55.00'],
+            $w['sMove']->id => ['300.00', '0.00', '10.00', '290.00'],
+            $w['sLeaver']->id => ['50.00', '0.00', '0.00', '50.00'],
+        ], $rowsA);
+        $this->assertSame(['450.00', '0.00', '55.00', '395.00'], [$totalsA['billed'], $totalsA['concession'], $totalsA['paid'], $totalsA['outstanding']]);
+
+        [, $totalsB] = $read($this->staff('cashier', [$this->b->id]));
+        $this->assertSame(['600.00', '60.00', '540.00'], [$totalsB['billed'], $totalsB['paid'], $totalsB['outstanding']]);
+
+        $wholeSchool = $this->staff('cashier', [null]);
+        [, $all] = $read($wholeSchool);
+        $this->assertSame(['2050.00', '120.00', '1930.00'], [$all['billed'], $all['paid'], $all['outstanding']], 'Whole School: A + B + the NULL-Campus 1000.00 Charge (PN\'s other 5.00 on it).');
+        [, $filtered] = $read($wholeSchool, 'campus_id='.$this->a->id);
+        $this->assertSame($totalsA, $filtered, 'A whole-School reader filtering to A sees exactly the A reader\'s figures.');
+        [$rowsAB] = $read($this->staff('cashier', [$this->a->id]), 'campus_id='.$this->b->id);
+        $this->assertSame([], $rowsAB, 'A request Campus filter never widens a Campus scope.');
+
+        // As at 2026-08-31: every Charge but cMoveB was assessed (07-01), no Payment yet (09-01).
+        [$asAtA, $asAtTotalsA] = $read($this->staff('cashier', [$this->a->id]), 'as_at=2026-08-31');
+        $this->assertEquals([
+            $w['sA']->id => ['100.00', '0.00', '0.00', '100.00'],
+            $w['sMove']->id => ['300.00', '0.00', '0.00', '300.00'],
+            $w['sLeaver']->id => ['50.00', '0.00', '0.00', '50.00'],
+        ], $asAtA, 'The stored Charge Campus decides, never the mover\'s or the leaver\'s current state.');
+        $this->assertSame('450.00', $asAtTotalsA['billed']);
+        [$asAtB] = $read($this->staff('cashier', [$this->b->id]), 'as_at=2026-08-31');
+        $this->assertSame([$w['sB']->id], array_keys($asAtB), 'cMoveB (09-01) is not yet billed on 08-31.');
+    }
+
+    #[Test]
     public function charges_are_read_by_stored_campus_and_hidden_payments_show_as_an_amount_only(): void
     {
         $w = $this->w;

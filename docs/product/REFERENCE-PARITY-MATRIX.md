@@ -579,3 +579,29 @@ functions stay at 103.
 9B-4, read-only, existing capabilities) are in `PARITY-V1-BACKLOG.md`.
 - PV1-01 is NEEDS_REDESIGN with owner decision OD-9.1, because Charges carry no fee head.
 - Ageing and the trial balance are INSUFFICIENT_EVIDENCE.
+
+## 16. ORG.9B — Finance office read models built (2026-10-23)
+
+ORG.9B (ADR 0076 §68) built the four authorized read models: read-only, on existing capabilities, with no schema change.
+
+| Item | Function | ORG.9A-R1 | After ORG.9B |
+|---|---|---|---|
+| 9B-1 billed / concession / paid / balance per Student, filtered totals | FIN-039 | P7 | P7 (improved) |
+| 9B-2 outstanding as at a School-local date (posting-date basis) | FIN-034 | P2 | **P1** (intended difference: posting date, not received date or month) |
+| 9B-3 account ledger with opening, running and closing balance | FIN-013 | P2 | **P0** |
+| 9B-3 cash / bank book variant | FIN-014 | P2 | P2 — **stopped**: no structural cash or bank classification of ledger accounts |
+| 9B-4 audit-log filters | FIN-062 | P2 | **P1** (intended difference: correction records, never in-place before/after) |
+
+Statuses are now P0 58, P1 95, P2 78; the rest are unchanged.
+
+| Coverage | After R1 | After ORG.9B |
+|---|---|---|
+| Functional, weighted / strict | 36.6 % / 30.2 % | **36.8 % / 30.6 %** |
+| V1-required, weighted / strict | 77.9 % / 64.3 % | **78.5 % / 65.3 %** |
+
+The delta comes from three P2 functions becoming present (+1.5 weighted, +3 strict).
+
+**Unchanged by ORG.9B:**
+- OD-9.1 (fee-head dimension, FIN-033);
+- dues ageing (FIN-054) and the trial balance (FIN-012), both INSUFFICIENT_EVIDENCE;
+- D-11 (exports).

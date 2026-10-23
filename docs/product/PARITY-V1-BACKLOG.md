@@ -59,7 +59,13 @@ Charge Campus (ORG.7G-1A), plus a backfill.
 whether a manual Charge must name one. This is a schema change, so it never
 belongs in a read-only wave.
 
-### ORG.9B proposed scope (final for owner decision; not authorized)
+### ORG.9B built (2026-10-23, ADR 0076 §68)
+
+ORG.9B built 9B-1, 9B-2 and 9B-4 as specified below, and 9B-3's account ledger. The **cash/bank book variant stopped**: ledger accounts carry no structural cash or bank classification, so a variant would have had to infer it from account names. That classification is now an owner decision.
+
+FIN-013 became P0; FIN-034 and FIN-062 became P1. Matrix §16 has the coverage.
+
+### ORG.9B proposed scope (as authorized; kept for traceability)
 
 | ID | Business function | Screen evidence | Level | Current route / service | Exact gap | Capability | Scope / Campus effect | Data source | Schema? | Security / legal | UI work | Backend work | Tests |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|

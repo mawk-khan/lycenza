@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { router, usePage } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 import { formatDateTime } from '../../../datetime';
 import EmptyState from '../../../Components/EmptyState.vue';
 
@@ -8,9 +10,13 @@ import EmptyState from '../../../Components/EmptyState.vue';
  * Shows one School's audit events, newest first, using only the approved
  * envelope fields. Event metadata is never sent to this page (the v1
  * allowlist is empty). Authorization (`school.audit.view`), the read and
- * the audit of this review all happen on the server. No filters, search
- * or export. This page records what happened; it does not state that
+ * the audit of this review all happen on the server. No search or
+ * export. This page records what happened; it does not state that
  * anything is legally compliant.
+ *
+ * ORG.9B (ADR 0076 §68): optional filters by event type or family,
+ * subject, and a date range in the School's own time zone. The choices
+ * are the School's own event types and subjects; filters only narrow.
  */
 interface AuditEntry {
     id: string;
@@ -27,18 +33,76 @@ interface AuditLog {
     entries: AuditEntry[];
     nextCursor: string | null;
     pageSize: number;
+    filterOptions: { events: string[]; eventFamilies: string[]; subjects: string[] };
 }
 
-const props = defineProps<{ log: AuditLog }>();
+interface Filters {
+    event: string;
+    subject: string;
+    from: string;
+    to: string;
+}
+
+const props = defineProps<{ log: AuditLog; filters: Filters; timezone: string }>();
 
 const isFirstPage = !new URLSearchParams(window.location.search).has('cursor');
+const event = ref(props.filters.event);
+const subject = ref(props.filters.subject);
+const from = ref(props.filters.from);
+const to = ref(props.filters.to);
+const filtered = computed(() => Object.values(props.filters).some((value) => value !== ''));
+const pageErrors = computed(() => usePage().props.errors as Record<string, string | undefined>);
+
+function query(): Record<string, string | undefined> {
+    return {
+        event: props.filters.event || undefined,
+        subject: props.filters.subject || undefined,
+        from: props.filters.from || undefined,
+        to: props.filters.to || undefined,
+    };
+}
+
+function apply(): void {
+    router.get(
+        '/app/compliance/audit-log',
+        {
+            event: event.value || undefined,
+            subject: subject.value || undefined,
+            from: from.value || undefined,
+            to: to.value || undefined,
+        },
+        { preserveScroll: true },
+    );
+}
+
+function clearFilters(): void {
+    router.get('/app/compliance/audit-log');
+}
 
 function formatTime(value: string): string {
     return formatDateTime(value);
 }
 
 function nextHref(): string {
-    return `/app/compliance/audit-log?cursor=${encodeURIComponent(props.log.nextCursor ?? '')}`;
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query())) {
+        if (value !== undefined) {
+            params.set(key, value);
+        }
+    }
+    params.set('cursor', props.log.nextCursor ?? '');
+    return `/app/compliance/audit-log?${params.toString()}`;
+}
+
+function firstHref(): string {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query())) {
+        if (value !== undefined) {
+            params.set(key, value);
+        }
+    }
+    const search = params.toString();
+    return search === '' ? '/app/compliance/audit-log' : `/app/compliance/audit-log?${search}`;
 }
 </script>
 
@@ -60,14 +124,92 @@ function nextHref(): string {
             recorded in the audit log.
         </p>
 
+        <form class="mt-6 flex flex-wrap items-end gap-3" @submit.prevent="apply">
+            <div>
+                <label class="block text-xs text-slate-600" for="audit-event">Event</label>
+                <select
+                    id="audit-event"
+                    v-model="event"
+                    class="mt-1 max-w-xs rounded border border-slate-300 px-2 py-1.5 text-sm"
+                >
+                    <option value="">All events</option>
+                    <optgroup label="Event groups">
+                        <option
+                            v-for="family in log.filterOptions.eventFamilies"
+                            :key="`family-${family}`"
+                            :value="family"
+                        >
+                            {{ family }} (all)
+                        </option>
+                    </optgroup>
+                    <optgroup label="Single events">
+                        <option v-for="type in log.filterOptions.events" :key="type" :value="type">
+                            {{ type }}
+                        </option>
+                    </optgroup>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-slate-600" for="audit-subject">Subject</label>
+                <select
+                    id="audit-subject"
+                    v-model="subject"
+                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                >
+                    <option value="">Any subject</option>
+                    <option v-for="label in log.filterOptions.subjects" :key="label" :value="label">
+                        {{ label }}
+                    </option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs text-slate-600" for="audit-from">From</label>
+                <input
+                    id="audit-from"
+                    v-model="from"
+                    type="date"
+                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                />
+            </div>
+            <div>
+                <label class="block text-xs text-slate-600" for="audit-to">To</label>
+                <input
+                    id="audit-to"
+                    v-model="to"
+                    type="date"
+                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                />
+            </div>
+            <button type="submit" class="rounded border border-slate-300 px-3 py-1.5 text-sm">
+                Filter
+            </button>
+            <button v-if="filtered" type="button" class="text-sm underline" @click="clearFilters">
+                Clear filters
+            </button>
+        </form>
+        <p class="mt-2 text-xs text-slate-500">
+            Dates are whole days in the school's time zone ({{ timezone }}).
+        </p>
+        <p
+            v-for="field in ['event', 'subject', 'from', 'to']"
+            v-show="pageErrors[field]"
+            :key="field"
+            class="mt-2 text-sm text-red-700"
+            role="alert"
+        >
+            {{ pageErrors[field] }}
+        </p>
+
         <EmptyState
             v-if="log.entries.length === 0"
             class="mt-6"
-            title="No audit events"
+            :title="filtered ? 'No events match these filters' : 'No audit events'"
             :description="
-                isFirstPage
-                    ? 'Nothing has been recorded for this School yet.'
-                    : 'There are no older events.'
+                !isFirstPage
+                    ? 'There are no older events.'
+                    : filtered
+                      ? 'Try a wider date range or another event.'
+                      : 'Nothing has been recorded for this School yet.'
             "
         />
 
@@ -108,9 +250,7 @@ function nextHref(): string {
         </div>
 
         <nav class="mt-4 flex gap-4 text-sm" aria-label="Audit log pages">
-            <a v-if="!isFirstPage" class="underline" href="/app/compliance/audit-log"
-                >Newest events</a
-            >
+            <a v-if="!isFirstPage" class="underline" :href="firstHref()">Newest events</a>
             <a v-if="log.nextCursor" class="underline" :href="nextHref()">Older events →</a>
         </nav>
     </main>

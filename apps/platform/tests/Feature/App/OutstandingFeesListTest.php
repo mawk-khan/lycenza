@@ -65,7 +65,9 @@ class OutstandingFeesListTest extends TestCase
         $this->assertSame('0.00', $rows[$w['student']->id]['overdue'], 'No due date: outstanding, never overdue.');
         $this->assertSame('250.00', $rows[$b->id]['overdue']);
         $this->assertArrayNotHasKey($paidUp->id, $rows, 'A Student who owes nothing is not listed.');
-        $this->assertSame(['outstanding' => '750.00', 'overdue' => '250.00', 'currency' => 'INR'], $rows['_totals']);
+        // ORG.9B: totals also carry billed / concession / paid over the listed rows
+        // (the paid-up Student is not listed): 1250 - 200 - 300 = 750.
+        $this->assertSame(['billed' => '1250.00', 'concession' => '200.00', 'paid' => '300.00', 'outstanding' => '750.00', 'overdue' => '250.00', 'currency' => 'INR'], $rows['_totals']);
         $this->assertSame($b->id, array_key_first($rows), 'Most overdue first.');
     }
 
@@ -155,7 +157,8 @@ class OutstandingFeesListTest extends TestCase
         $event = $this->inSchool($w['school'], fn () => SchoolAuditEvent::query()->where('event_type', 'fee_outstanding_list.viewed')->sole());
         // jsonb does not keep key order.
         // LC-4: whether a Campus filter narrowed the charge lines -- never which Campus.
-        $this->assertEqualsCanonicalizing(['status' => 'overdue', 'academicYearId' => null, 'narrowed' => false, 'chargeFiltered' => false], $event->metadata);
+        // ORG.9B: plus the as-at date (a date, never an amount); null = now.
+        $this->assertEqualsCanonicalizing(['status' => 'overdue', 'academicYearId' => null, 'narrowed' => false, 'chargeFiltered' => false, 'asAt' => null], $event->metadata);
     }
 
     #[Test]

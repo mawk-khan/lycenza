@@ -7,6 +7,7 @@ use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\Fees\Application\ChargeCampusFilter;
 use App\Domain\Payments\Application\Access\FinanceCampusAccess;
+use App\Domain\Payments\Application\Charges\ChargeHistoryExpiredException;
 use App\Domain\Payments\Application\Collections\OutstandingFeeRow;
 use App\Domain\Payments\Application\Collections\OutstandingFeesReadService;
 use App\Domain\Students\Application\StudentAccess;
@@ -15,10 +16,12 @@ use App\Domain\Students\Application\StudentIdentityLookup;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -38,6 +41,12 @@ use Inertia\Response;
  * whole-School enrollments.view holder, and means "in this class NOW" (the
  * current placement) -- it never re-attributes a Charge's Campus.
  * Staff only; no export, no headcount analytics.
+ *
+ * ORG.9B (ADR 0076 §68): billed / concession / paid / balance per Student
+ * with FILTERED totals (every listed row, never one page); status `all`
+ * also lists settled Students; `as_at` (a School-local date, never after
+ * the School's today, never before the retained history) shows the
+ * position at the end of that day. Same authority and Campus rule as above.
  */
 class OutstandingFeesController extends Controller
 {
@@ -56,7 +65,8 @@ class OutstandingFeesController extends Controller
         $canSeeClass = $students->holdsWholeSchool($context->actor(), 'enrollments.view', $school);
 
         $validated = $request->validate([
-            'status' => ['sometimes', Rule::in([OutstandingFeesReadService::OUTSTANDING, OutstandingFeesReadService::OVERDUE])],
+            'status' => ['sometimes', Rule::in([OutstandingFeesReadService::OUTSTANDING, OutstandingFeesReadService::OVERDUE, OutstandingFeesReadService::ALL])],
+            'as_at' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'before_or_equal:'.SchoolTimezone::today($school)],
             'academic_year_id' => ['sometimes', 'nullable', 'uuid', Rule::exists('academic_years', 'id')->where('school_id', $school->id)],
             'q' => ['sometimes', 'nullable', 'string', 'max:100'],
             'grade_level_id' => ['sometimes', 'nullable', 'uuid'],
@@ -100,7 +110,12 @@ class OutstandingFeesController extends Controller
             default => ChargeCampusFilter::campus($campusId),
         };
 
-        $list = $access->outstandingFees($school, $context->actor(), $status, $validated['academic_year_id'] ?? null, $studentIds, $chargeCampus);
+        $asAt = $validated['as_at'] ?? null;
+        try {
+            $list = $access->outstandingFees($school, $context->actor(), $status, $validated['academic_year_id'] ?? null, $studentIds, $chargeCampus, $asAt);
+        } catch (ChargeHistoryExpiredException $e) {
+            throw ValidationException::withMessages(['as_at' => "Figures before {$e->retainedFrom} are no longer retained; choose that date or a later one."]);
+        }
 
         $page = (int) ($validated['page'] ?? 1);
         $slice = array_slice($list->rows, ($page - 1) * self::PER_PAGE, self::PER_PAGE);
@@ -116,6 +131,9 @@ class OutstandingFeesController extends Controller
                 'studentNumber' => $names[$r->studentId]->studentNumber ?? null,
                 'leaver' => isset($leavers[$r->studentId]),
                 'class' => ($e = $classes->get($r->studentId)) === null ? null : "{$e->gradeLevel?->name} · {$e->section?->name}",
+                'billed' => $r->billed->amount(),
+                'concession' => $r->concession->amount(),
+                'paid' => $r->paid->amount(),
                 'outstanding' => $r->outstanding->amount(),
                 'overdue' => $r->overdue->amount(),
                 'openCharges' => $r->openCharges,
@@ -130,8 +148,16 @@ class OutstandingFeesController extends Controller
 
         return Inertia::render('App/Finance/Outstanding/Index', [
             'rows' => $paginator,
-            'totals' => ['outstanding' => $list->totalOutstanding->amount(), 'overdue' => $list->totalOverdue->amount(), 'currency' => 'INR'],
+            'totals' => [
+                'billed' => $list->totalBilled->amount(),
+                'concession' => $list->totalConcession->amount(),
+                'paid' => $list->totalPaid->amount(),
+                'outstanding' => $list->totalOutstanding->amount(),
+                'overdue' => $list->totalOverdue->amount(),
+                'currency' => 'INR',
+            ],
             'today' => $list->schoolToday,
+            'asAt' => $list->asAt,
             'filters' => [
                 'status' => $status,
                 'academic_year_id' => $validated['academic_year_id'] ?? '',
@@ -140,6 +166,7 @@ class OutstandingFeesController extends Controller
                 'section_id' => $sectionId ?? '',
                 'standing' => $standing ?? '',
                 'campus_id' => $campusId ?? '',
+                'as_at' => $asAt ?? '',
             ],
             // Only the Campuses the reader's scope covers are offered (a filter, never authority).
             'campuses' => Campus::query()->tap(fn ($q) => $access->restrictCharges($q, $scope, 'id'))->orderBy('name')->get(['id', 'school_id', 'name'])->map(fn (Campus $c) => ['id' => $c->id, 'name' => $c->name])->values()->all(),

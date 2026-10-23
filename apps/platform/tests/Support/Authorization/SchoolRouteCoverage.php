@@ -748,6 +748,7 @@ final class SchoolRouteCoverage
 
             // Http\Controllers\App\Finance\LedgerAccountController
             Coverage::gate('app.finance.ledger-accounts.index', 'finance.ledger.view'),
+            Coverage::gate('app.finance.ledger-accounts.ledger', 'finance.ledger.view'),
             Coverage::gate('app.finance.ledger-accounts.store', 'finance.accounts.manage'),
             Coverage::gate('app.finance.ledger-accounts.status', 'finance.accounts.manage'),
 

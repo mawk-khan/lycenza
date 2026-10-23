@@ -65,6 +65,52 @@ class FinancialPeriodService
         return $period === null ? null : FinancialPeriodSummary::fromModel($period);
     }
 
+    /**
+     * ORG.9B (ADR 0076 §68): the latest CLOSED period ending on or before a
+     * School-local date -- the carry-forward baseline of an as-at read.
+     */
+    public function latestClosedEndingOnOrBefore(School $school, string $localDate): ?FinancialPeriodSummary
+    {
+        $period = $this->context->withSchool($school, fn () => FinancialPeriod::query()
+            ->where('school_id', $school->id)
+            ->where('status', FinancialPeriod::CLOSED)
+            ->where('ends_on', '<=', $localDate)
+            ->orderByDesc('starts_on')
+            ->first());
+
+        return $period === null ? null : FinancialPeriodSummary::fromModel($period);
+    }
+
+    /**
+     * ORG.9B (ADR 0076 §68): of the given journal entries, those posted
+     * strictly before `$beforeUtc` (a UTC wall-clock instant, the start of a
+     * School-local day). Bounded like entriesThrough().
+     *
+     * @param  list<string>  $entryIds
+     * @return array<string, true>
+     */
+    public function entriesPostedBefore(School $school, array $entryIds, string $beforeUtc): array
+    {
+        if ($entryIds === []) {
+            return [];
+        }
+
+        return $this->context->withSchool($school, function () use ($school, $entryIds, $beforeUtc) {
+            $posted = [];
+            foreach (array_chunk(array_values(array_unique($entryIds)), 1000) as $chunk) {
+                foreach (DB::table('journal_entries')
+                    ->where('school_id', $school->id)
+                    ->whereIn('id', $chunk)
+                    ->where('posted_at', '<', $beforeUtc)
+                    ->pluck('id') as $id) {
+                    $posted[(string) $id] = true;
+                }
+            }
+
+            return $posted;
+        });
+    }
+
     /** Every journal entry of the School with its period start, plus the latest closed period. */
     public function journalPeriodIndex(School $school): JournalPeriodIndex
     {

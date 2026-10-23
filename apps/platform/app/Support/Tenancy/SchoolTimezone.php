@@ -64,6 +64,31 @@ final class SchoolTimezone
         return CarbonImmutable::now(self::resolve($school))->toDateString();
     }
 
+    /**
+     * ORG.9B (ADR 0076 §68): the exclusive upper bound "through the end of
+     * this School-local date" -- the START of the next School-local day, as
+     * the UTC wall-clock string timestamps are stored in. Compare with `<`,
+     * never a 23:59:59 approximation. Local midnight is taken from the zone's
+     * own calendar, so a DST day of 23 or 25 hours is bounded exactly.
+     */
+    public static function startOfNextDayUtc(School $school, string $localDate): string
+    {
+        return CarbonImmutable::createFromFormat('!Y-m-d', $localDate, self::resolve($school))
+            ->addDay()
+            ->startOfDay()
+            ->utc()
+            ->format('Y-m-d H:i:s');
+    }
+
+    /** ORG.9B: the inclusive lower bound -- the START of this School-local date, as a UTC wall-clock string. */
+    public static function startOfDayUtc(School $school, string $localDate): string
+    {
+        return CarbonImmutable::createFromFormat('!Y-m-d', $localDate, self::resolve($school))
+            ->startOfDay()
+            ->utc()
+            ->format('Y-m-d H:i:s');
+    }
+
     public static function resolve(School $school): DateTimeZone
     {
         try {

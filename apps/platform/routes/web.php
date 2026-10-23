@@ -1226,6 +1226,9 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         // (finance.accounts.manage). No delete, no type change.
         Route::post('/ledger-accounts', [FinanceLedgerAccountController::class, 'store'])->name('ledger-accounts.store');
         Route::post('/ledger-accounts/{ledgerAccount}/status', [FinanceLedgerAccountController::class, 'updateStatus'])->name('ledger-accounts.status');
+        // ORG.9B (ADR 0076 §68), 9B-3: one account's statement (opening,
+        // running and closing balance) -- read-only, finance.ledger.view.
+        Route::get('/ledger-accounts/{ledgerAccount}/ledger', [FinanceLedgerAccountController::class, 'ledger'])->name('ledger-accounts.ledger');
 
         // FEE.1 (ADR 0062 §5-§8): Fee setup -- fee heads, fee structures,
         // instalment schedules, optional-fee selections. View needs
@@ -1755,7 +1758,8 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
     // Phase 0L.4 -- Compliance (ADR 0042): the School audit-log review.
     // Read-only; `school.audit.view`, the ledger read contract and the
     // access audit all live in App\Domain\Compliance\Application\AuditLogReviewService.
-    // No filters, export or API in this checkpoint.
+    // ORG.9B (ADR 0076 §68): narrowing filters (event type/family, subject,
+    // School-local dates); still no export and no API.
     Route::get('/app/compliance/audit-log', [AuditLogController::class, 'index'])->name('app.compliance.audit-log');
 
     // Phase 0L.6 -- Automation (ADR 0043): one catalog rule type, School

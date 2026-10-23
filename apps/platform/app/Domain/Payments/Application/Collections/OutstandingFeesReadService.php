@@ -4,6 +4,7 @@ namespace App\Domain\Payments\Application\Collections;
 
 use App\Domain\Fees\Application\ChargeCampusFilter;
 use App\Domain\Fees\Application\ChargeService;
+use App\Domain\Payments\Application\Charges\ChargeHistoryExpiredException;
 use App\Domain\Payments\Application\Charges\ChargeStateReader;
 use App\Models\School;
 use App\Models\User;
@@ -33,6 +34,21 @@ use Carbon\CarbonImmutable;
  *   null means every Student.
  * - One `fee_outstanding_list.viewed` audit per view: filters only, never a
  *   Student id or amount.
+ *
+ * ORG.9B (ADR 0076 §68):
+ * - Each row also carries billed, concession and paid over the Student's
+ *   uncancelled Charges in the population, from the SAME charge states, so
+ *   `billed - concession - paid = outstanding` exactly (OutstandingFeeRow).
+ * - `ALL` lists every Student with an uncancelled Charge in the population,
+ *   settled ones included (balance 0); OUTSTANDING and OVERDUE are unchanged.
+ * - `$asAt` (a School-local date, never after today) reads every Charge
+ *   through `ChargeStateReader::forChargesAsAt()`: Charges assessed by the
+ *   end of that day and not cancelled by then, with the concessions and
+ *   payment effects POSTED by then. Overdue is judged against that date.
+ * - Campus scope and the Campus filter are unchanged: both act on the
+ *   STORED Charge Campus in SQL before anything is added up, and paid is
+ *   only what reached a Charge the reader may see -- never a Payment's
+ *   whole amount.
  */
 class OutstandingFeesReadService
 {
@@ -41,6 +57,9 @@ class OutstandingFeesReadService
     public const string OUTSTANDING = 'outstanding';
 
     public const string OVERDUE = 'overdue';
+
+    /** ORG.9B: every Student with an uncancelled Charge in the population, balance 0 included. */
+    public const string ALL = 'all';
 
     public function __construct(
         private readonly ChargeService $charges,
@@ -62,37 +81,53 @@ class OutstandingFeesReadService
      * each Charge's full post-correction balance (G1-D7).
      *
      * @param  list<string>|null  $studentIds
+     *
+     * @throws ChargeHistoryExpiredException when `$asAt` is before the retained history
      */
-    public function list(School $school, User $actor, string $status = self::OUTSTANDING, ?string $academicYearId = null, ?array $studentIds = null, ?ChargeCampusFilter $campus = null): OutstandingFeesList
+    public function list(School $school, User $actor, string $status = self::OUTSTANDING, ?string $academicYearId = null, ?array $studentIds = null, ?ChargeCampusFilter $campus = null, ?string $asAt = null): OutstandingFeesList
     {
         $scope = $this->authorizeCampusScopeFor($actor, 'finance.charges.view', $school)
             ->intersect($this->authorizeCampusScopeFor($actor, 'finance.payments.view', $school));
 
         $today = CarbonImmutable::now(SchoolTimezone::resolve($school))->toDateString();
+        if ($asAt !== null && $asAt > $today) {
+            throw new \InvalidArgumentException('An as-at date cannot be after the School\'s today.');
+        }
+        $judgedOn = $asAt ?? $today;
         $only = $studentIds === null ? null : array_flip($studentIds);
 
         $facts = array_values(array_filter(
-            $this->charges->collectionFacts($school, $scope, $academicYearId, $campus),
+            $this->charges->collectionFacts($school, $scope, $academicYearId, $campus, includeCancelled: $asAt !== null),
             fn ($f) => $only === null || isset($only[$f->studentId]),
         ));
-        $states = $this->states->forCharges($school, array_map(fn ($f) => $f->id, $facts));
+        $ids = array_map(fn ($f) => $f->id, $facts);
+        $states = $asAt === null ? $this->states->forCharges($school, $ids) : $this->states->forChargesAsAt($school, $ids, $asAt);
 
-        /** @var array<string, array{outstanding: Money, overdue: Money, open: int, earliestOverdue: ?string, nextDue: ?string}> $byStudent */
+        /** @var array<string, array{outstanding: Money, overdue: Money, open: int, earliestOverdue: ?string, nextDue: ?string, billed: Money, concession: Money, paid: Money}> $byStudent */
         $byStudent = [];
         foreach ($facts as $fact) {
-            $owed = ($states[$fact->id] ?? null)?->outstanding();
-            if ($owed === null || ! $owed->isPositive()) {
+            $state = $states[$fact->id] ?? null;
+            // Absent: not assessed on the as-at date. Cancelled: no part of
+            // the population (its amount, concessions and payments are all
+            // zero by the cancellation guards; its outstanding is nothing).
+            if ($state === null || $state->cancelled) {
                 continue;
             }
-            $isOverdue = $fact->dueDate !== null && $fact->dueDate < $today;
-            $row = $byStudent[$fact->studentId] ?? ['outstanding' => Money::of('0.00', $fact->currency), 'overdue' => Money::of('0.00', $fact->currency), 'open' => 0, 'earliestOverdue' => null, 'nextDue' => null];
-            $row['outstanding'] = $row['outstanding']->add($owed);
-            $row['open']++;
-            if ($isOverdue) {
-                $row['overdue'] = $row['overdue']->add($owed);
-                $row['earliestOverdue'] = $row['earliestOverdue'] === null || $fact->dueDate < $row['earliestOverdue'] ? $fact->dueDate : $row['earliestOverdue'];
-            } elseif ($fact->dueDate !== null) {
-                $row['nextDue'] = $row['nextDue'] === null || $fact->dueDate < $row['nextDue'] ? $fact->dueDate : $row['nextDue'];
+            $zero = Money::of('0.00', $fact->currency);
+            $row = $byStudent[$fact->studentId] ?? ['outstanding' => $zero, 'overdue' => $zero, 'open' => 0, 'earliestOverdue' => null, 'nextDue' => null, 'billed' => $zero, 'concession' => $zero, 'paid' => $zero];
+            $row['billed'] = $row['billed']->add($state->amount);
+            $row['concession'] = $row['concession']->add($state->adjusted);
+            $row['paid'] = $row['paid']->add($state->allocated);
+            $owed = $state->outstanding();
+            if ($owed->isPositive()) {
+                $row['outstanding'] = $row['outstanding']->add($owed);
+                $row['open']++;
+                if ($fact->dueDate !== null && $fact->dueDate < $judgedOn) {
+                    $row['overdue'] = $row['overdue']->add($owed);
+                    $row['earliestOverdue'] = $row['earliestOverdue'] === null || $fact->dueDate < $row['earliestOverdue'] ? $fact->dueDate : $row['earliestOverdue'];
+                } elseif ($fact->dueDate !== null) {
+                    $row['nextDue'] = $row['nextDue'] === null || $fact->dueDate < $row['nextDue'] ? $fact->dueDate : $row['nextDue'];
+                }
             }
             $byStudent[$fact->studentId] = $row;
         }
@@ -102,26 +137,25 @@ class OutstandingFeesReadService
             if ($status === self::OVERDUE && ! $r['overdue']->isPositive()) {
                 continue;
             }
-            $rows[] = new OutstandingFeeRow((string) $studentId, $r['outstanding'], $r['overdue'], $r['open'], $r['earliestOverdue'], $r['nextDue']);
+            if ($status === self::OUTSTANDING && ! $r['outstanding']->isPositive()) {
+                continue;
+            }
+            $rows[] = new OutstandingFeeRow((string) $studentId, $r['outstanding'], $r['overdue'], $r['open'], $r['earliestOverdue'], $r['nextDue'], $r['billed'], $r['concession'], $r['paid']);
         }
         usort($rows, fn (OutstandingFeeRow $a, OutstandingFeeRow $b) => bccomp($b->overdue->amount(), $a->overdue->amount(), 2)
             ?: bccomp($b->outstanding->amount(), $a->outstanding->amount(), 2)
             ?: strcmp($a->studentId, $b->studentId));
 
-        $totalOutstanding = Money::of('0.00', 'INR');
-        $totalOverdue = Money::of('0.00', 'INR');
-        foreach ($rows as $row) {
-            $totalOutstanding = $totalOutstanding->add($row->outstanding);
-            $totalOverdue = $totalOverdue->add($row->overdue);
-        }
+        $total = fn (string $field): Money => array_reduce($rows, fn (Money $sum, OutstandingFeeRow $row) => $sum->add($row->{$field}), Money::of('0.00', 'INR'));
 
         $this->audit->school($school, 'fee_outstanding_list.viewed', actor: $actor, metadata: [
             'status' => $status,
             'academicYearId' => $academicYearId,
             'narrowed' => $studentIds !== null,
             'chargeFiltered' => $campus !== null,
+            'asAt' => $asAt,
         ]);
 
-        return new OutstandingFeesList($rows, $totalOutstanding, $totalOverdue, $today);
+        return new OutstandingFeesList($rows, $total('outstanding'), $total('overdue'), $today, $total('billed'), $total('concession'), $total('paid'), $asAt);
     }
 }

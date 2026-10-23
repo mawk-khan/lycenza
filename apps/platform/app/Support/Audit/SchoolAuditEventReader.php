@@ -5,6 +5,7 @@ namespace App\Support\Audit;
 use App\Models\School;
 use App\Models\SchoolAuditEvent;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
@@ -23,6 +24,10 @@ use InvalidArgumentException;
  * - Keyset pagination with a fixed page size. Offset pagination would
  *   repeat or skip rows here: every review of the ledger appends an
  *   access event of its own, shifting every offset by one.
+ * - ORG.9B (ADR 0076 §68): an optional SchoolAuditEventFilter narrows the
+ *   page in SQL (event type or family, subject class, occurred range); the
+ *   keyset cursor works unchanged under it. `filterOptions()` lists the
+ *   School's own event types and subject labels -- envelope columns only.
  */
 class SchoolAuditEventReader
 {
@@ -39,14 +44,21 @@ class SchoolAuditEventReader
      *
      * @throws InvalidArgumentException for a cursor this reader did not issue
      */
-    public function page(School $school, ?string $cursor = null): SchoolAuditEventPage
+    public function page(School $school, ?string $cursor = null, ?SchoolAuditEventFilter $filter = null): SchoolAuditEventPage
     {
         $position = $cursor === null ? null : self::decodeCursor($cursor);
 
-        return $this->context->withSchool($school, function () use ($school, $position): SchoolAuditEventPage {
+        return $this->context->withSchool($school, function () use ($school, $position, $filter): SchoolAuditEventPage {
             $query = SchoolAuditEvent::query()
                 ->select(self::COLUMNS)
                 ->where('school_id', $school->id)
+                ->when($filter?->eventType !== null, fn ($q) => $q->where('event_type', $filter?->eventType))
+                // A family is the exact type or anything under "<family>." --
+                // starts_with(), never LIKE, so `_` and `%` are plain characters.
+                ->when($filter?->eventFamily !== null, fn ($q) => $q->where(fn ($w) => $w->where('event_type', $filter?->eventFamily)->orWhereRaw('starts_with(event_type, ?)', [$filter?->eventFamily.'.'])))
+                ->when($filter !== null && $filter->subjectTypes !== [], fn ($q) => $q->whereIn('subject_type', $filter === null ? [] : $filter->subjectTypes))
+                ->when($filter?->fromUtc !== null, fn ($q) => $q->where('occurred_at', '>=', $filter?->fromUtc))
+                ->when($filter?->beforeUtc !== null, fn ($q) => $q->where('occurred_at', '<', $filter?->beforeUtc))
                 ->orderByDesc('occurred_at')
                 ->orderByDesc('id')
                 ->limit(self::PAGE_SIZE + 1);
@@ -78,6 +90,43 @@ class SchoolAuditEventReader
                     : null,
             );
         });
+    }
+
+    /**
+     * ORG.9B: the School's own event types (sorted) and subject labels -- a
+     * label is the class basename the page already shows, mapped to every
+     * stored class carrying it. Envelope columns only; never metadata.
+     *
+     * @return array{eventTypes: list<string>, eventFamilies: list<string>, subjectTypes: array<string, list<string>>}
+     */
+    public function filterOptions(School $school): array
+    {
+        return $this->context->withSchool($school, function () use ($school): array {
+            // A loose index scan over the existing (school_id, event_type) and
+            // (school_id, subject_type, subject_id) indexes: one index probe per
+            // DISTINCT value, never a scan of the whole log (ORG.9B query plans:
+            // ~0.3 ms and ~1 ms at 300,000 events versus ~56 ms and ~32 ms).
+            $types = array_map(fn ($row) => (string) $row->value, DB::select(self::distinctSql('event_type', ''), [$school->id, $school->id]));
+            $families = array_values(array_unique(array_map(fn (string $t) => explode('.', $t, 2)[0], $types)));
+            sort($families);
+            $subjects = [];
+            foreach (DB::select(self::distinctSql('subject_type', ' AND subject_type IS NOT NULL'), [$school->id, $school->id]) as $row) {
+                $subjects[class_basename((string) $row->value)][] = (string) $row->value;
+            }
+            ksort($subjects);
+
+            return ['eventTypes' => $types, 'eventFamilies' => $families, 'subjectTypes' => $subjects];
+        });
+    }
+
+    /** The distinct values of one indexed envelope column for one School, ascending (bindings: school, school). */
+    private static function distinctSql(string $column, string $extra): string
+    {
+        return "WITH RECURSIVE t AS (
+                (SELECT {$column} AS value FROM school_audit_events WHERE school_id = ?{$extra} ORDER BY {$column} LIMIT 1)
+                UNION ALL
+                SELECT (SELECT s.{$column} FROM school_audit_events s WHERE s.school_id = ? AND s.{$column} > t.value ORDER BY s.{$column} LIMIT 1) FROM t WHERE t.value IS NOT NULL
+            ) SELECT value FROM t WHERE value IS NOT NULL";
     }
 
     public static function isValidCursor(string $cursor): bool
