@@ -62,7 +62,7 @@ Status: **post-v1 candidates, not authorized and not part of the production-read
 | ATT-007 | attendance | Student leave requests and leave types | none | M | D-16/SB-06 deferred; excused status carries no reason by design (Health tier). |
 | COM-083 | attendance | WhatsApp absence alert | E28 deferred integrations (SMS/WhatsApp/push/voice); E46 portal | M | In-app/email absence alert is the v1 candidate; WhatsApp after a provider decision |
 | HR-004 | attendance | Work-from-home assignment and marking | none | M | No WFH status; would reopen ADR 0065 attendance evidence model. |
-| HR-005 | attendance | Staff shifts and sessions | none | L | Shifts/overtime excluded by ADR 0065 v1; needs reopening contract. Clock times would touch HRX-L2. |
+| HR-005 | attendance | Staff shifts and sessions | HRX-L2 | L | *R1: now P6 LEGAL_DECISION_REQUIRED — every shift on screen is built on clock-time grace, late and early thresholds (HRX-L2); kept here for traceability.* Shifts/overtime excluded by ADR 0065 v1; needs reopening contract. |
 | HR-011 | attendance | Staff attendance regularization requests and approval | none | M | Employee-initiated request + approval absent; would be a rule 102 domain workflow. Owner decides need (§64.25). |
 | HR-058 | attendance | Team attendance for managers | none | M | No reporting-line read path; new authority path needs owner decision. |
 | CAN-001 | canteen | Meal menu planning | none | S | Canteen items/outlets exist; no dated menu. |
@@ -174,7 +174,7 @@ Status: **post-v1 candidates, not authorized and not part of the production-read
 | HR-032 | hr | Short-duration permission requests | none | M | Hourly permissions not modelled; leave is half-day granular. |
 | HR-036 | hr | Leave application windows | none | S | Label only; no blackout or special window concept in Leave. |
 | HR-050 | hr | Staff children enrolled report | none | M | No Employee-to-Student relation; linking via Guardian accounts crosses SIS/HR privacy lines. |
-| HR-052 | hr | Staff praise, feedback and complaints | none | L | Performance feedback not built; needs HR data classification first. HR notes are not equivalent. |
+| HR-052 | hr | Staff praise, feedback and complaints | none | L | *R1: decision OWNER_DECISION_REQUIRED — complaint records with severity up to a formal memo are conduct/discipline data, a new Highly Sensitive HR category.* Performance feedback not built; needs HR data classification first. |
 | HR-053 | hr | Staff profile cards | none | S | Printable cards/ID cards not built. |
 | HR-070 | hr | Staff task management | none | L | No staff task feature (ORG.9 candidate list). |
 | HR-071 | hr | Staff task reports | none | S | Depends on staff tasks. |
@@ -277,3 +277,20 @@ Status: **post-v1 candidates, not authorized and not part of the production-read
 | TRN-052 | transport | Vehicle maintenance report | none | S | Depends on maintenance log. |
 | TRN-053 | transport | Bulk fuel log upload | none | S | Fuel logs non-scope. |
 | SIS-029 | visitor | Early exit / gate pass for students | none | M | Authorised-pickup flag exists; no early-dismissal log or exit points. |
+
+## ORG.9A-R1 additions (screenshot evidence, 2026-10-23)
+
+All of these are P4 and not authorized. The evidence is recorded in
+`REFERENCE-SCREENSHOT-REGISTER.md` §6.
+
+| Function | Domain | Title | Gate | Size | Note |
+|---|---|---|---|---|---|
+| ORG-035 | organization | Ratings report over configured family feedback | none | M | R1: was P7; Lycenza has no feedback capture (follows ORG-013) |
+| HR-084 | hr | Planned retirement date tracking | legal check on statutory ages | S | owner decision |
+| HR-086 | hr | Staff dependants and statutory nominees | PAY-L1, E21 | M | owner decision |
+| TRN-056 | transport | Staff as transport riders | none | M | owner decision; its own Employee rider arm, never polymorphic |
+| SIS-036 | sis | Bulk import of existing Student records | none | L | owner decision OD-SWC-4 / OD-PPR-20 |
+| ACA-003 | academics | Standing home room per Section | none | S | same-Campus composite key |
+| INV-043 | inventory | Item low-stock thresholds | none | S | configuration, never a movement |
+| FIN-090 | fees_finance | Several collecting legal entities within one School | E30 + ADR | XL | owner decision; never a second tenant layer |
+| FIN-091 | fees_finance | Multi-year fee commitment from a starting year | E31 | L | owner decision; one screen only |

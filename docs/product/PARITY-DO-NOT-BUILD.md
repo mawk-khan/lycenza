@@ -59,7 +59,7 @@ Status: **decided by this audit unless the owner reopens one** (each needs a new
 | SIS-033 | communications | Principal daily diary | DO_NOT_BUILD | Diary/calendar products not adopted (ADR 0076 s31.8). |
 | LMS-103 | curriculum | Group-level content planner | OWNER_DECISION_REQUIRED | Architecture conflict: Group authority cannot author School data; would need a template-copy design. |
 | LMS-116 | curriculum | Configurable teaching plan fields | DO_NOT_BUILD | Custom form fields not adopted. |
-| DOC-001 | documents | Unowned School-wide document repository | DO_NOT_BUILD | Conflicts with owner-scoped Documents (access decided by owning record); policies go via announcements |
+| DOC-016 | documents | Unowned School-wide document repository | DO_NOT_BUILD | Conflicts with owner-scoped Documents (access decided by owning record); policies go via announcements |
 | FIN-089 | documents | Finance supporting documents | DO_NOT_BUILD | Documents UI deferred (OD-SWC-2); label gives no workflow. |
 | LIB-016 | examinations | Assess student reading ability | OWNER_DECISION_REQUIRED | Student performance record; would sit with assessment domains and marks isolation, never Library. |
 | LMS-081 | examinations | Delete online exam results | DO_NOT_BUILD | Result deletion contradicts correction-not-deletion; do not build. |
@@ -96,7 +96,7 @@ Status: **decided by this audit unless the owner reopens one** (each needs a new
 | EXM-060 | none (not adopted) | Higher-ed course and programme model | OWNER_DECISION_REQUIRED | Higher-ed is outside the documented School OS scope; Subjects/Offerings cover school courses. |
 | FIN-078 | none (not adopted) | Admissions campaign budget | DO_NOT_BUILD | Label suggests an admissions marketing budget; no Lycenza owner function; would be part of FIN-077 if ever. |
 | FIN-086 | none (not adopted) | Reference-only or unclear finance settings | DO_NOT_BUILD | Label only; no matching Lycenza concept identified. |
-| FIN-088 | none (not adopted) | Enrichment programme attendance | DO_NOT_BUILD | No enrichment programme concept; activities/groups deferred (D-17). |
+| FIN-088 | none (not adopted) | Enrichment programme attendance | *R1: removed — now P8 of FIN-057* | *R1: the screens show an event-fee definition, not programme attendance; it is a duplicate of FIN-057 (optional/ad-hoc fee), not a do-not-build item.* |
 | HST-030 | none (not adopted) | Hostel committee setup | DO_NOT_BUILD | Committee administration not adopted in any Lycenza domain. |
 | HST-031 | none (not adopted) | Hostel committee members | DO_NOT_BUILD | Committee administration not adopted. |
 | HST-036 | none (not adopted) | Committee head listing | DO_NOT_BUILD | Committees not adopted. |
@@ -141,3 +141,23 @@ Status: **decided by this audit unless the owner reopens one** (each needs a new
 | SIS-006 | sis | Cross-module pending request inbox | DO_NOT_BUILD | No generic approval engine (rule 102); SIS has no request/approve workflows; domain queues stay domain-owned. |
 | SIS-012 | sis | Mandatory profile fields before promotion | DO_NOT_BUILD | No custom/required field model; dry run already blocks unsafe items; Data Health covers record gaps. |
 | SIS-026 | sis | Store parent bank account details | DO_NOT_BUILD | Bank credentials are never accepted (rule 91); refunds are recorded corrections, not payouts. |
+
+## ORG.9A-R1 (screenshot evidence, 2026-10-23)
+
+- **Count unchanged.** There are still 103 not-adopted (P5) functions: FIN-088 left (it is now a P8 duplicate of FIN-057), and HR-089 joined it.
+  - **HR-089** — choosing the employing legal entity per staff member — is DO_NOT_BUILD. The School is the only tenant and the employer of record (rule 84).
+- **DOC-016** is the renumbered "Unowned School-wide document repository" row. ORG.9A had published it with a duplicate id.
+- **Reference behaviours recorded as design differences (never adopted).** The screenshots show them; the full list is in `reference-parity/screen-contradictions.csv`:
+  - concession auto-approval within a per-accountant limit;
+  - approvers editing amounts;
+  - in-place edits of assessed amounts, payments and receipt dates;
+  - deleting, moving and force-succeeding payments;
+  - replace-mode concession uploads;
+  - approval chains choosing approvers by role name;
+  - health reasons in Student leave;
+  - network addresses shown to School users;
+  - a role chosen on the HR record;
+  - per-Campus email senders;
+  - edition upsell;
+  - default vendor credentials derived from a code and a phone number;
+  - bulk export of identity, tax, bank, caste and religion columns.

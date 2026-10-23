@@ -62,3 +62,9 @@ business functions, with `reference-parity/functions.csv`,
 `PARITY-V1-BACKLOG.md`, `PARITY-POST-V1-BACKLOG.md`, `PARITY-DO-NOT-BUILD.md`
 and `REFERENCE-SCREENSHOT-REGISTER.md`. It contains no reference wording,
 layout or screenshot. It records and classifies; it builds nothing.)*
+
+*(2026-10-23, ORG.9A-R1: `REFERENCE-SCREENSHOT-REGISTER.md` now records
+the owner's screenshot evidence (ADR 0076 §67). It contains 87 screen
+families, with `reference-parity/screen-families.csv`, `screen-filters.csv`,
+`screen-columns.csv` and `screen-contradictions.csv`, in Lycenza wording
+only. No screenshot, reference layout or personal data is committed.)*

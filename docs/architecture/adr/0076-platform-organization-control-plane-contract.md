@@ -10017,3 +10017,86 @@ staff-only audience (PV1-10) should land before E46 production.
 OD-8.9, the legal gates (E30–E34, E21, E33, E36–E47, HRX-L1..L4) and the
 release gates (E02/E15, E16, O1). LC-5 … LC-10 stay paused; ORG.9B is not
 started.
+
+## 67. ORG.9A-R1 — Screenshot evidence ingestion and parity refinement (read-only, 2026-10-23)
+
+Owner authorization: ORG.9A-R1, documentation and evidence only. Baseline
+`origin/main` = `5be8f815` (§66). No code, schema, route, capability,
+role, template, catalogue, module entitlement, Campus adoption or gate
+changed.
+
+**67.1 Evidence.**
+- **The pack.** 1,005 owner-held screenshots: the owner's own organisation's tenant on the reference ERP, under one system-administrator persona. Fingerprint: SHA-256 of the sorted per-file SHA-256 list `552559c1…dfca`, no byte-identical duplicates.
+- **What was indexed.** 35 captures of unrelated products were excluded, leaving 970 reference screens. Each was inspected visually (no bulk OCR) and grouped into 87 screen families: Finance 29, HR 20, SIS 11, Inventory 10, Transport 8, MIS 3, Organisation 6.
+- **What is committed.** Only normalized Lycenza wording and structure: filters, columns, totals, actions and states. No screenshot, reference layout, distinctive reference title, personal data, amount or school value (ADR 0075 §1). The screen-to-file index stays with the pack.
+- **Packs.** Every required pack is available. The owner announced further Finance captures, which are an open evidence prerequisite. The MIS pack is thin (three families).
+
+**67.2 Outputs** (`docs/product/`):
+- `REFERENCE-SCREENSHOT-REGISTER.md` (rewritten);
+- `reference-parity/screen-families.csv`, `screen-filters.csv` (117), `screen-columns.csv` (107) and `screen-contradictions.csv` (29 classified contradictions, 57 design differences);
+- `functions.csv` enriched: evidence E3/E4/E5 and a `screen_families` column;
+- matrix §15, the ORG.9B section of `PARITY-V1-BACKLOG.md`, and R1 notes in the post-v1 and do-not-build registers.
+
+**67.3 Reconciliation.**
+- **Function rows.** 772 → 787: 15 screenshot-proven functions, each with `reference_paths = 0`.
+- **ORG.9A defect corrected.** Five ids had been published twice. The second rows were renumbered: HST-050, DOC-016, DOC-017, DOC-018, TRN-055.
+- **Six status changes:**
+  - HR-005 → P6 (HRX-L2: shifts are clock-time thresholds);
+  - HR-052 → owner decision (conduct/discipline data);
+  - ORG-035 P7 → P4 (no feedback capture exists);
+  - FIN-088 P5 → P8 of FIN-057 (an event-fee screen);
+  - FIN-061 P0 → P1 (one capped late fee per rule, by design);
+  - FIN-036 P3 → P8 of FIN-033.
+- **One proposal rejected.** HR-047 stays P6: the timing half needs clock times.
+- **Coverage.** Functional coverage moved from 36.8 % to 36.6 % weighted (denominator 620 → 633). V1-required coverage moved from 77.6 % to 77.9 % (294 → 297). Every delta is traced in matrix §15.
+- **Evidence.**
+  - 303 of 787 functions are E3+; 150 are E5 (screen plus a cited repository comparison).
+  - Workflow was observed for 35 functions.
+  - By domain: Finance 68/107 E3+, HR 41/55.
+- **The 103 not-adopted functions stand.** FIN-088 left and HR-089 joined.
+- **Design differences.** The 57 reference behaviours that Lycenza's rules forbid are recorded, never adopted: auto-approval within an accountant's limit, in-place money edits, payment deletion, moves and force-success, role-name approval chains, health reasons in attendance, IP display, and bulk export of identity or bank columns.
+
+**67.4 Finance deep review and the ORG.9B gate** (`PARITY-V1-BACKLOG.md`):
+
+| Item | Gate | Why |
+|---|---|---|
+| PV1-01 fee-head dimension | **NEEDS_REDESIGN + OWNER_DECISION_REQUIRED (OD-9.1)** | Charges carry no fee head. Only fee-run Charges reach one, immutably, through `fee_assessments`; late-fee, Library-fine, Canteen and manual Charges have none or only a mutable configuration link. A correct dimension needs an immutable stored attribution, like the stored Charge Campus — persisted data, never a read-only wave. |
+| PV1-02a billed / concession / paid / balance per Student | **READY_FOR_IMPLEMENTATION** | Query only |
+| PV1-02b outstanding as at a date | **READY_FOR_IMPLEMENTATION** | Query only; records as recorded on or before a School-local date |
+| PV1-02c ageing | **INSUFFICIENT_EVIDENCE** | Menu entry only |
+| PV1-03a account ledger with opening and running balance | **READY_FOR_IMPLEMENTATION** | Query only, beside `LedgerBalanceReader` |
+| PV1-03b cash / bank book | **REPORT_VARIANT_ONLY** | Ships with PV1-03a |
+| PV1-03c trial balance | **INSUFFICIENT_EVIDENCE** | No screen |
+| PV1-04 audit-log filters | **FILTER_ONLY** | Query only |
+
+The proposed ORG.9B scope is 9B-1 … 9B-4:
+- read-only;
+- existing capabilities only (`finance.charges.view,campus` ∩ `finance.payments.view`, `finance.ledger.view`, `school.audit.view`);
+- no schema change;
+- the Campus filter stays a filter over the stored Charge Campus — no Finance key is newly Campus-adopted;
+- exports stay EXPORT_GAP under owner decision D-11;
+- nothing transactional.
+
+ORG.9B is **not authorized** by R1.
+
+**67.5 Architecture review (re-run).** No HIGH or MEDIUM finding.
+
+The proposed 9B items keep:
+- every dependency direction (Payments → Fees → Finance; the audit reader is Support);
+- rule 98 (each page stays on an existing `capability:` route, or a new ledger route carries `capability:finance.ledger.view`);
+- rule 101 (`FinanceCampusAccess`, NULL Campus is whole-School only, the ledger is never Campus-scoped);
+- rule 91 (read-only, effective allocation);
+- the read-audit pattern.
+
+LOW findings, recorded and not fixed:
+- the ORG.9A duplicate ids (corrected in documentation by R1);
+- the audit log has no filters (9B-4);
+- `LedgerBalanceReader` has no page (9B-3);
+- the fee head is not stored on Charges (OD-9.1);
+- several collection, concession and stock lists have no filters (ORG.9C candidates in `screen-filters.csv`).
+
+**67.6 Not cleared by R1.**
+- Production stays NO-GO for the reasons in §66.7.
+- LC-5 … LC-10 stay paused, and the LC-6 overlap with PV1-05 is preserved.
+- ORG.9B, 9C and 9D are not started.
+- The remaining Finance captures must be indexed, and the Finance reconciliation re-run, before the ORG.9B scope is confirmed.

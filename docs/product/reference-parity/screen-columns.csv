@@ -1,0 +1,108 @@
+domain,screen_family,column_or_total,current_lycenza_equivalent,missing,data_class_note
+Finance,SF-FIN-01/02,Receipt count and gross collected,"receipts, gross and retained per currency",no,"Financial, Sensitive"
+Finance,SF-FIN-01,Totals per payment method,none (method filter only),yes,Financial
+Finance,SF-FIN-01,Collector x payment method matrix (day sheet),recordedBy per row only,yes,Financial; staff names are internal
+Finance,SF-FIN-01,Counter vs online split,provider source exists but no gateway,n/a,post-v1 (E28)
+Finance,SF-FIN-01/02/03,Received date vs recorded timestamp,both shown,no,none
+Finance,SF-FIN-02/03/23,Receipt status (active / cancelled),received / partly refunded / refunded / reversed,no,none
+Finance,SF-FIN-02/23,"Cancelled by, cancellation date, request and cancel remarks",correction request requester/decider/dates on the request pages; no list,partial,reason text never logged or audited (rule 91)
+Finance,SF-FIN-01..06,Per-fee-head amount columns,none,yes,PV1-01 (owner decision OD-9.1)
+Finance,SF-FIN-02/04/05/06/12/13/17,Billed / concession / net / paid / due per Student,statement per Student; outstanding/overdue only on lists,partial,PV1-02 (ORG.9B; billed vs paid)
+Finance,SF-FIN-04/06,Per-instalment columns with due/start/end dates,instalment schedule on fee structure page,partial,none
+Finance,SF-FIN-02/05,Month-wise totals,none,yes,FIN-031 month grouping (ORG.9C)
+Finance,SF-FIN-04/05,As-at / generated-at stamp,none on pages,partial,print/export headers are D-11 (owner)
+Finance,SF-FIN-08,"Opening, running and closing balance",none (LedgerBalanceReader no page),yes,PV1-03 (ORG.9B)
+Finance,SF-FIN-09/10,"Instrument number, bank, drawee branch, clearance date",manual reference only (pattern-limited),partial,bank routing data is Sensitive; never credentials (rule 91)
+Finance,SF-FIN-09,"Bounce charges, repaid after bounce",none,yes,owner PV1-21
+Finance,SF-FIN-03/14/16,"Tax amount, rate, service code",none (receipt is an acknowledgement),yes,E30 legal
+Finance,SF-FIN-02/05/06/27,"Guardian names, phones, email, address, photo, date of birth",none by design,never,Highly Sensitive / minimisation; rule 101
+Finance,SF-FIN-12,Projected amount per plan (plan x Students),fee-run preview per item,partial,post-v1 (FIN-074)
+Finance,SF-FIN-18/19,"Concession requested by, approved by, dates","requested_by_user_id, decided_by_user_id, decided_at stored",partial,none
+Finance,SF-FIN-18,Approval-state counts per Campus,status filter only; no counts,yes,whole-School report (concessions not Campus-adopted)
+Finance,SF-FIN-15,Calculated vs paid fine per instalment,"late-fee run preview: calculated, capped, final",partial,none
+Finance,SF-FIN-24,"Old / new amount, network address",none,never,Charges immutable; IP never shown to School users
+Finance,SF-FIN-25,Mismatch counts per Campus,none,yes,post-v1
+Finance,SF-FIN-02/06,Advance collections / adjustments,none,yes,owner FIN-040
+HR,SF-HR-01/05,"Employee number, name, Department, Position, Campus",Directory entry,no,Directory tier
+HR,SF-HR-01/05/06,"Multiple staff identifiers (Campus code, payroll code, device code, reference code)",one employee number,partial,device code HRX-L2; one identifier by design
+HR,SF-HR-01/05,Date of birth / age,EmployeePersonalDetail.date_of_birth (profile only),partial,Restricted; never in lists or exports
+HR,SF-HR-05,"Joining date, employment status",EmploymentRecord starts_on/status (profile),partial,Directory/Restricted; list column missing
+HR,SF-HR-01/05,Access level (role),none on HR,yes,never (rule 92/94)
+HR,SF-HR-01/05/14,Gross salary / contract compensation,compensation values,partial,Highly Sensitive; payroll.compensation.sensitive.view only
+HR,SF-HR-05/14,"National ID, passport, licence, resident ID",none,yes,"Highly Sensitive, unmodelled by design"
+HR,SF-HR-05/14,Tax and social-security identifiers,Payroll Statutory identifiers with reveal,no,Highly Sensitive; PAY-L1/E47
+HR,SF-HR-05,Bank account details,none,yes,"Highly Sensitive, unmodelled"
+HR,SF-HR-05,Caste / religion,none,yes,never
+HR,SF-HR-01/05,"Blood group, height, weight, disabilities",none,yes,"health tier, HRX-L1"
+HR,SF-HR-01,Family members / dependants,emergency contacts only,partial,third-party personal data (HR-086)
+HR,SF-HR-05,"Headcount per department per year (existing, new, inactive, net)",none,yes,"staff counts, not Student person-counting; HR-041"
+HR,SF-HR-11,Per-type assigned / taken / balance per staff,LeaveReadService::balances (one employment),partial,Restricted HR; cross-staff report missing (HR-043)
+HR,SF-HR-11,Monthly opening / taken / closing leave per type,ledger per employment,partial,HR-042
+HR,SF-HR-11/14,"Loss-of-pay days, late/early deductions",none,yes,HRX-L2/HRX-L4 legal gates
+HR,SF-HR-10/11,"Decision provenance (decided by, time, remarks, cancellation reason)",leave_decisions,no,no health reasons (HRX-L1)
+HR,SF-HR-13,"Before/after value, modifier, reason",attendance correction rows,partial,School-wide report missing (HR-012)
+HR,SF-HR-12,Present / absent counts per day or month,half-day register,partial,HR-003 month summary missing
+HR,SF-HR-12,"Late arrivals, early leaving, breaks, punches, no-punch",none,yes,HRX-L2
+HR,SF-HR-14,Paid days / confirmed monthly attendance,HRX absence evidence in half-days,partial,no paid-days conclusion until HRX-L4
+HR,SF-HR-05,Teaching periods per week,timetable schedule per teacher,no,teaching
+HR,SF-HR-05,"Committed workload, % and balance",none,yes,never labelled workload compliance (V11 K3/K4)
+HR,SF-HR-05,Staff children billed / paid / due,none,yes,M-1/E47 owner decisions
+HR,SF-HR-05,Retirement age / date,none,yes,HR-084
+HR,SF-HR-01/05,Documents received vs staff per department,HR document records per employee,partial,DOC-004
+HR,SF-HR-05,Report generated timestamp / created by,none on reports,partial,provenance only
+HR,all,"Grand totals and exports (spreadsheet, PDF, print)",none anywhere,yes,D-11 export gap; HS columns never exportable
+HR,SF-HR-15/17,Praise / feedback / complaint counts (leaderboards),none,yes,complaints HS (HR-052 owner)
+HR,SF-HR-16,"Task status, manager feedback",none,yes,post-v1
+HR,SF-HR-18,"Vendor tax registration, contract price/discount/tax",none,yes,not adopted (INV-038)
+SIS,SF-SIS-01,"Status counts (active, inactive, suspended, new this year)",list total per filter only,partial,aggregate counts; V11.1 for grouped person counts
+SIS,SF-SIS-01,Student number and name,yes,no,Personal
+SIS,SF-SIS-01,Current class-section and roll number,yes (enrollments),no,Personal
+SIS,SF-SIS-01,Date of birth / age,stored; not shown on Campus surfaces,partial,Sensitive (ORG.7F-1: no DOB on Campus surfaces)
+SIS,SF-SIS-01,Last attendance date,none,yes,attendance data; read model
+SIS,SF-SIS-01,"Caste, religion, national and government IDs",not stored,yes,Highly Sensitive; D-15/ADMISSIONS section 4
+SIS,SF-SIS-02,Exit reason,closed lifecycle reason code,partial,closed codes only
+SIS,SF-SIS-02,"Request and approval provenance (requester, approver, remarks)",lifecycle event + audit (no request objects),partial,actor via audited audit-log review only
+SIS,SF-SIS-02,Effective date of exit,enrollment ends_on (withdraw/cancel),partial,none
+SIS,SF-SIS-02,"Guardian names, emails, phones","per-Guardian, guardians.view",partial,Sensitive; ADR 0041 minimisation
+SIS,SF-SIS-03,Changed field with before/after values,changed field names only,partial,values withheld by design
+SIS,SF-SIS-03,Changed by and IP address,audit log actor; IP never shown,partial,never IP/device
+SIS,SF-SIS-04,Section capacity vs current strength,Section capacity advisory; no report,yes,counts per section; small-cohort rule if grouped
+SIS,SF-SIS-04,"Admissions offered/taken, waitlist, payment-link status",admissions statuses; no payment links,partial,none
+SIS,SF-SIS-07,Required documents per Student (received / missing),none,yes,Health-tier for immunisation certificates
+SIS,SF-SIS-08,Room capacity (class and exam seating),Room.capacity (single),partial,none
+SIS,SF-SIS-08,Section home room and in-charge,none,yes,"responsibility label, never authority"
+SIS,SF-SIS-09,Moved from / to class-section and date,"enrollment transfer rows (from/to section, ends_on)",partial,none
+SIS,SF-SIS-11,Attended vs conducted and present/absent %,none,yes,percentages gated V11.1/E44
+SIS,SF-SIS-11,Leave type and remarks,none,yes,rule 102 no health reason or free text
+Inventory,SF-INV-01,"Category tree, SKU, tax %, tax code",none,yes,none
+Inventory,SF-INV-01,"Reorder level, minimum and maximum stock",none,yes,none (new function proposed)
+Inventory,SF-INV-01,"Fixed asset, warranty, depreciation method",none,yes,depreciation is a Finance seam
+Inventory,SF-INV-03,"Supplier, invoice, purchase order, unit price, tax",none (quantity only),yes,costing deferred
+Inventory,SF-INV-04,"Transferred vs received quantity, delivery note",single atomic transfer movement,partial,append-only movements
+Inventory,SF-INV-05,"Opening balance and movement buckets (purchased, in/out, issued by recipient type, damaged)",balances + movements receipt/issue/transfer,partial,new movement kinds needed for damage/recipient
+Inventory,SF-INV-05,Column totals row,none,yes,none
+Inventory,SF-INV-06,Damaged/lost quantity with reason,none,yes,"closed reason, never correction"
+Inventory,SF-INV-07,Issued to staff with returned date,none,yes,HR data minimisation
+Inventory,SF-INV-08,"Supplier bank and tax details, credit limit",none,yes,Sensitive; export D-11
+Inventory,SF-INV-09,Requested vs approved amount,none,yes,rule 102 immutable terms
+MIS,SF-MIS-01,Campus x board matrix of revenue/admissions measures with totals,none,yes,V11.1 person counts; D-14 money; stored Charge Campus
+MIS,SF-MIS-02,"Revenue bridge stages (charged, discounts, net billed, inactivation loss, collected, to collect)",journal and charge data exist; no read model,yes,D-14; FIN-076 post-v1
+MIS,SF-MIS-02,Per fee head fee/concession/net/paid per Student,none (fee-head dimension missing),yes,finance view keys (PV1-01)
+MIS,SF-MIS-03,Per-class counts by gender/segment with grand total,none,yes,V11.1 small-cohort suppression
+Organisation,SF-ORG-01,Modules active of total,platform entitlement list,partial,never billing
+Organisation,SF-ORG-02,Role-by-menu matrix,role-to-capability visibility (ORG-037),partial,menus are not the access model
+Organisation,SF-ORG-04,Feedback average rating and sentiment per period,none,yes,privacy review
+Organisation,SF-ORG-05,Accounts per persona and never-signed-in count,pending invitations,partial,identity-level; counts only
+Organisation,SF-ORG-06,Message credit balance,none,yes,billing; out of scope
+Transport,SF-TRN-01,Driver and attendant with licence number,driver Employee only,partial,licence data Sensitive; documents via Documents
+Transport,SF-TRN-01,Stop pickup/drop time and distance,"stop name, sequence, address",partial,none
+Transport,SF-TRN-03,Riders per route vs vehicle seating capacity,vehicle capacity; route stop count,partial,operational counts (PV1-09)
+Transport,SF-TRN-03,Rider joining date and leaving month,assignment starts_on / ends_on,no,none
+Transport,SF-TRN-03,Guardian names and mobiles on rider lists,none,yes,guardians.view; ADR 0041
+Transport,SF-TRN-04,"Vehicle permit/insurance dates, chassis/engine, CCTV/tracking flags",none,yes,none
+Transport,SF-TRN-04,"Fuel and expense amounts, mileage",none,yes,costs are Finance
+Transport,SF-TRN-05,Boarding scan time vs class attendance,none,yes,privacy-gated
+Transport,SF-TRN-07,"Riders by transport mode (school, private, parent pickup)",none,yes,operational counts
+Transport,SF-TRN-08,"Per-term billed, concession, net, paid, due per rider",Fees charges/outstanding (no fee-head grouping),partial,finance view keys; PV1-01 (owner decision OD-9.1)
+Transport,SF-TRN-08,"Route-, slab- and class-wise receivable totals",none,yes,read model over Charges (PV1-01)
+Transport,SF-TRN-08,"Distance slab, latitude/longitude, distance from school",none,yes,privacy-blocked geo

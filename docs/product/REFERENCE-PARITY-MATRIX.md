@@ -10,7 +10,13 @@ Companion documents:
   rows, one per business function, with workbook row references);
 - `PARITY-V1-BACKLOG.md`, `PARITY-POST-V1-BACKLOG.md`,
   `PARITY-DO-NOT-BUILD.md`;
-- `REFERENCE-SCREENSHOT-REGISTER.md` (screenshot evidence status).
+- `REFERENCE-SCREENSHOT-REGISTER.md` (screenshot evidence, ORG.9A-R1), with
+  `reference-parity/screen-families.csv`, `screen-filters.csv`,
+  `screen-columns.csv` and `screen-contradictions.csv`.
+
+*ORG.9A-R1 (2026-10-23, ADR 0076 §67) refined this baseline with 970
+indexed reference screens. Results are in §15, and §6 keeps the ORG.9A
+figures.*
 
 ## 1. Rules frozen for this audit
 
@@ -36,11 +42,11 @@ Companion documents:
 |---|---|---|
 | `Menu_Permissions_Master.xlsx` (owner-held; SHA-256 `96cf8596…b32b47a`, verified 2026-10-23, identical to ADR 0076 §31.8) | available | primary evidence: menu exposure only (E2) |
 | 19 raw "Manage Menus" exports (owner-held) | available | not re-read: the workbook consolidates them (one duplicate export dropped by the owner) |
-| Reference screenshot packs (HR, Finance, Inventory, Transport, SIS, MIS) | **not available in the execution environment** | none — see `REFERENCE-SCREENSHOT-REGISTER.md`; no E3–E5 claim is made |
+| Reference screenshot packs (HR, Finance, Inventory, Transport, SIS, MIS) | ORG.9A: not available. **ORG.9A-R1: available** — 1,005 owner-held files, 970 reference screens, 87 families | E3–E5 per function (§15, `REFERENCE-SCREENSHOT-REGISTER.md`) |
 | Lycenza repository (ModuleCatalogue, CapabilityAndRoleSeeder, CampusScopeCatalogue, routes, services, schema, module docs, ADRs, UAT, LC audit) | available | every P0/P1/P2 claim was checked against code; every cited capability key exists in the seeder |
 | Legal/production gate register (ADR 0058 §6, E01–E47) | available | gate per function |
 
-**Evidence strength.** Every mapped function is **E2** (menu + exposure
+**Evidence strength (ORG.9A; R1 raises 303 functions to E3+, see §15).** Every mapped function is **E2** (menu + exposure
 evidence): every workbook path is switched on for at least one reference
 persona. No workflow-level claim (E4/E5) is made from a menu label; where
 the repository answers the question, the Lycenza side is code-verified.
@@ -514,3 +520,62 @@ path into tenant business data.
 
 ORG.8 closure is not a prerequisite for any LC item; LC-5 … LC-10 stay
 paused until the owner resumes them.
+
+## 15. ORG.9A-R1 — screenshot evidence refinement (2026-10-23)
+
+R1 indexed the owner's screenshot pack visually, grouped the screens into
+87 families, and reconciled every family against this matrix and the
+repository. The registers are in `REFERENCE-SCREENSHOT-REGISTER.md`.
+
+**Function rows.** There were 772 rows, and there are now 787: 15 new
+screenshot-proven functions, each with `reference_paths = 0`. The path total
+is still 1,596.
+
+Five duplicate ids published by ORG.9A were renumbered: HST-050, DOC-016,
+DOC-017, DOC-018 and TRN-055.
+
+| Status | ORG.9A | R1 | Δ | Traced to |
+|---|---|---|---|---|
+| P0 | 57 | 57 | 0 | +ACA-002, −FIN-061 |
+| P1 | 89 | 93 | +4 | +FIN-061, +HR-083, +HR-087, +HR-088 |
+| P2 | 80 | 81 | +1 | +HR-090 |
+| P3 | 26 | 25 | −1 | FIN-036 → P8 |
+| P4 | 234 | 242 | +8 | +ORG-035, −HR-005; new HR-084, HR-086, TRN-056, SIS-036, ACA-003, INV-043, FIN-090, FIN-091 |
+| P5 | 103 | 103 | 0 | −FIN-088, +HR-089 |
+| P6 | 92 | 94 | +2 | +HR-005, +HR-085 |
+| P7 | 42 | 41 | −1 | ORG-035 → P4 |
+| P8 | 49 | 51 | +2 | +FIN-088 (of FIN-057), +FIN-036 (of FIN-033) |
+
+| Coverage | ORG.9A | R1 | Δ |
+|---|---|---|---|
+| Functional, weighted | 36.8 % (228 / 620) | 36.6 % (231.5 / 633) | −0.2 |
+| Functional, strict | 30.3 % | 30.2 % | −0.1 |
+| V1-required, weighted | 77.6 % (228 / 294) | 77.9 % (231.5 / 297) | +0.3 |
+| V1-required, strict | 63.9 % | 64.3 % | +0.4 |
+
+The deltas are small and explained by the table above. Screenshots
+mostly confirmed the ORG.9A classifications rather than overturning them.
+
+**Duplicates recheck.** P8 functions rose from 49 to 51: FIN-088 and
+FIN-036. Duplicate paths are 532 plus the 4 paths of those two rows. Path
+remaps the screens revealed are recorded only, in
+`screen-contradictions.csv`; the ORG.9A path counts are unchanged:
+- FIN-007 → FIN-028
+- FIN-031 → FIN-038
+- HR-008 → TTB-007
+- TRN-037 → TRN-033
+
+**P2/P3 revalidation.** Every P2 and P3 function with screen evidence was
+re-read without build bias: 69 rows across the three reconciliations. One
+moved (FIN-036 to P8). The proposed move of HR-047 (P6 to P2) was rejected (§6 of the register). The PV1-01 … PV1-04 functions keep their status and are gated in `PARITY-V1-BACKLOG.md`. The 103 not-adopted
+functions stay at 103.
+
+**Evidence.**
+- E3+ covers 303 of 787 functions (38.5 %); E5 (screen plus repository comparison) covers 150.
+- Workflow was observed on a mapped screen for 35 functions.
+- By domain: Finance 68/107 E3+, HR 41/55, Transport 36/53, Inventory 35/52, SIS 23/51.
+
+**ORG.9B.** The Finance deep review and the final proposed scope (9B-1 …
+9B-4, read-only, existing capabilities) are in `PARITY-V1-BACKLOG.md`.
+- PV1-01 is NEEDS_REDESIGN with owner decision OD-9.1, because Charges carry no fee head.
+- Ageing and the trial balance are INSUFFICIENT_EVIDENCE.

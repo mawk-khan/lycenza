@@ -1,0 +1,118 @@
+domain,screen_family,reference_filter,current_lycenza_equivalent,missing,security_effect,wave
+Finance,SF-FIN-01/02/03,Date range,from/to on Payments received (max one year),no,none,exists
+Finance,SF-FIN-01/02/23,Date basis (received date / recorded date / cancellation date),fixed on recorded date; received date shown per row,partial,"none (recorded-date basis keeps back-dated entries visible on the day they were entered, FIN-079)",ORG.9C
+Finance,SF-FIN-01/02/03/09,Campus,Campus scope via FinanceCampusAccess/PaymentCampusVisibility; explicit Campus filter only on Outstanding,partial,"rule 101: a Campus filter narrows, never authorizes; a Payment is Campus-visible only when every touched Charge has one in-scope stored Campus",ORG.9C
+Finance,SF-FIN-01/02/03,Collector (recording user),"recordedBy column, no filter",partial,none (whole-School finance view; never widens who sees the actor),ORG.9C
+Finance,SF-FIN-01/02/03/21,Payment method,method filter incl. provider,no,none,exists
+Finance,SF-FIN-01..06/12/13/19,Fee head / fee category (incl. transport include/exclude/only),none (fee head only via fee_assessments; ad-hoc Charges have none),yes,none,owner (OD-9.1)
+Finance,SF-FIN-04/05/06/12,Instalment / billing period,none (fee_assessments.billing_period_key exists),yes,none,owner (OD-9.1)
+Finance,SF-FIN-01/02/03/06/09,Receiving (settlement) account / fee account,Payment settlement asset account stored; no filter,yes,none,ORG.9C
+Finance,SF-FIN-01/02/06,Academic year / financial year,year on Outstanding and Charges; date range only on Payments,partial,none,ORG.9C
+Finance,SF-FIN-02/04/05/06/13/17,Class / section,grade/section on Outstanding (when the actor may see class); none on Payments,partial,none (class filter gated by canSeeClass),ORG.9C
+Finance,SF-FIN-02/04/05/06,Student status (active / leaver / transferred),standing current/leavers on Outstanding,partial,none (Charges keep stored Campus; transfers never move them),ORG.9C
+Finance,SF-FIN-02/03/23,Cancelled / reversed receipt treatment,status column only (received/partly refunded/refunded/reversed); include_cancelled toggle on Charges,partial,none,ORG.9C
+Finance,SF-FIN-02/23,Cancellation reason,Charge cancellation closed reason codes exist; payment correction reason is free text,partial,rule 91: free-text reasons never logged/audited; filter only by closed codes or correction kind,ORG.9C
+Finance,SF-FIN-02/05,Month / as-at month,none,yes,none,ORG.9B
+Finance,SF-FIN-04/05,Dues only (balance > 0),Outstanding lists only Students owing; outstanding/overdue status,no,none,exists
+Finance,SF-FIN-05,Late fee include/exclude,none (late-fee Charges are linked to source Charges),yes,none,ORG.9C
+Finance,SF-FIN-04/06/17/19,Student segment / category / boarding type / gender,none,yes,DATA-CLASSIFICATION: gender and quota segments on finance reports need minimisation review; SIS-021 owner,owner
+Finance,SF-FIN-05/18/19/20/21/22,Region (group of Campuses),none,yes,rule 84: Group/region reporting only through registered Group-safe reports,never
+Finance,SF-FIN-06,Promoted / financially promoted,"n/a (fee runs follow the new placement, FEE-004)",no,none,exists
+Finance,SF-FIN-08,Cash/bank account and financial year for ledgers,ledger_account_id and posted_from/to on journal entries,partial,none,ORG.9B
+Finance,SF-FIN-09/10,"Cheque/instrument status, deposit date, same-bank vs other-bank",none,yes,none,owner (PV1-21) / post-v1
+Finance,SF-FIN-12,Plan assignment state (assigned / not assigned) and new vs existing Student,fee-run preview_result filter,partial,none,post-v1
+Finance,SF-FIN-15,Fine type / posting head / instalment due date,late-fee rule status filter; run preview_result filter,partial,none,post-v1
+Finance,SF-FIN-17/18/19,Concession status,"status filter (pending/approved/rejected/withdrawn/revoked, all)",no,none,exists
+Finance,SF-FIN-17/19,Concession category / type / month,scope filter only; categories exist (concession/scholarship/waiver),yes,none,owner (OD-9.1)
+Finance,SF-FIN-18/19,Concession requester / decider,"stored (requested_by, decided_by) not filterable",partial,none,ORG.9C
+Finance,SF-FIN-18/19,Campus grouping of concessions,none (concessions carry no Campus; targeted ones reach a Charge's stored Campus),yes,rule 101: finance.fee_concessions.* is not Campus-adopted; grouping is a whole-School report dimension,owner
+Finance,SF-FIN-17/19,Staff member (staff-child),none,yes,M-1 / E47,owner
+Finance,SF-FIN-21/23,Correction kind (reallocation / reversal / refund) and status,status filter only on correction requests,partial,none,ORG.9C
+Finance,SF-FIN-24,"Change-log filters (fee type, class, actor, period)","audit log pages by cursor only; ORG.9B adds event type/family, occurred date range and subject type (fee type and class are not audit dimensions; metadata is never read)",yes,never show IP; never widen who sees the actor,ORG.9B
+Finance,SF-FIN-25,Mismatch type,Data Health has no Fees checks,yes,none,post-v1
+Finance,SF-FIN-28,Search by guardian mobile / transaction id,none,yes,data minimisation; Guardian contact needs guardians.view,never
+HR,SF-HR-01/05,Campus,Directory campusId (Campus-adopted via HrEmployeeAccess),no,Rule 101: a Campus filter is never authority; scope comes from HrEmployeeAccess,exists
+HR,SF-HR-09/11/12/13,"Campus (leave, staff attendance)",none; Leave and Staff Attendance are whole-School,yes,Rule 101 / ADR 0076 §43.14: Campus-scoped Leave and Staff Attendance deferred,owner
+HR,SF-HR-01/05/12,Staff status (active / inactive / employment status),includeArchived only,partial,none,ORG.9C
+HR,SF-HR-01/05/12,Staff type (teaching / non-teaching / transport / outsourced),"Employee Category and employment type exist, not filterable",partial,none,ORG.9C
+HR,SF-HR-01/05/11/12/13,Department,Directory departmentId; absent on leave and attendance lists,partial,none,ORG.9C
+HR,SF-HR-01/03/04,Designation (position),Directory positionId,no,none,exists
+HR,SF-HR-04,Designation level,none (no levels),yes,Rule 102: no level-derived routing,never
+HR,SF-HR-04/19,Department type,none,yes,none,post-v1
+HR,SF-HR-05/11/12/13,Date / date range / period preset,attendance register by date; history range per employee; leave list none,partial,none,ORG.9C
+HR,SF-HR-09/11/14,Leave year / payroll year / payroll month,"leave year, payroll period",partial,none,ORG.9C
+HR,SF-HR-11,Leave type and category,none on request list,yes,none,ORG.9C
+HR,SF-HR-11,Leave status,status filter,no,none,exists
+HR,SF-HR-11,Paid / unpaid leave,"LeaveType.is_paid exists, not filterable",partial,none,ORG.9C
+HR,SF-HR-05,Joining date window,none,yes,none,ORG.9C
+HR,SF-HR-13,Modification type / correction reason,"closed correction reasons, not filterable",partial,HRX-L1: reasons never health,ORG.9C
+HR,SF-HR-12/13,"Shift, session basis, timing vs work-hours basis",none,yes,HRX-L2 (clock times),never
+HR,SF-HR-12,Device/face/GPS-enabled Campus,none,yes,HRX-L2,never
+HR,SF-HR-01/19,Access level (role),none,yes,Rule 24: role names are not HR attributes,never
+HR,SF-HR-11/14,Payroll entity,none,yes,Rule 84 (School is the employer),never
+HR,SF-HR-04/05/11/13,Region / zone above Campus,none,yes,School is the only tenant; Groups governance only,never
+HR,SF-HR-01/14,"Identifier search type (phone, device, payroll, reference codes)",search by name / employee number,partial,Contact data Restricted; device codes HRX-L2,never
+HR,SF-HR-06,Exit request date range,none (no exit requests),yes,Rule 102 if a workflow is ever added,owner
+HR,SF-HR-09,Holiday type (optional holiday),none,yes,none,post-v1
+HR,SF-HR-15/17,"Feedback/entry type, complaint severity",none,yes,Conduct/discipline HS (HR-052 owner decision),owner
+HR,SF-HR-16,Task frequency / task status,none,yes,none,post-v1
+HR,SF-HR-18,Service type / payment frequency (vendor contracts),none,yes,none,owner
+SIS,SF-SIS-01,Academic year,EnrollmentDirectoryController academic_year_id,no,none,exists
+SIS,SF-SIS-01,Campus,EnrollmentDirectoryController campus_id; StudentAccess Campus scope,no,"rule 101: Campus readers only via StudentAccess; filter intersects scope, never widens it",exists
+SIS,SF-SIS-01,Class and section,"EnrollmentDirectoryController grade_level_id, section_id",no,none,exists
+SIS,SF-SIS-01,Student status,StudentDirectoryController status active/inactive (no suspended),partial,ORG.8G status CHECK; no new status,owner
+SIS,SF-SIS-01,Gender,"none (not stored, D-15)",yes,data minimisation D-15,owner
+SIS,SF-SIS-01,Search by name or Student number,"StudentDirectoryController name, student_number",no,none,exists
+SIS,SF-SIS-01,Search by guardian mobile,none,yes,"ADR 0041: Guardian contacts encrypted, no contact lookup",never
+SIS,SF-SIS-01,Joining type (how the Student joined),none,yes,none,post-v1
+SIS,SF-SIS-02,Exit date range,none on leaver list,yes,none,ORG.9C
+SIS,SF-SIS-02,Deactivation reason,StudentLifecycleReason closed codes (no list filter),partial,closed codes only (ORG.8E),ORG.9C
+SIS,SF-SIS-02,Leaving certificate issued or not,none (CRT-002),yes,none,owner
+SIS,SF-SIS-02,Region/zone above Campus,none,yes,no zone layer; Campus is the only sub-School scope (rule 101),never
+SIS,SF-SIS-03,Change date range and Campus on change log,audit log has no filters; Student history per Student,yes,never widen actor visibility; no IP/device (SIS-035),ORG.9C
+SIS,SF-SIS-04,Curriculum board,education_boards reference catalogue; no strength report,yes,person counts gated V11.1,owner
+SIS,SF-SIS-04,"Strength dimension (gender, age, month)",none,yes,V11.1 D-01..D-04 small-cohort gate,owner
+SIS,SF-SIS-05,Group type and group status,none,yes,none,owner
+SIS,SF-SIS-07,Class and section for documents,none (Documents Student owner deferred),yes,OD-SWC-2; E21,owner
+SIS,SF-SIS-08,"Timetable, Campus and status",timetable-schedule teacher/section filters; Campus scope,partial,none,post-v1
+SIS,SF-SIS-09,"Movement type (section change, transfer in, transfer out)",EnrollmentDirectoryController status=transferred,partial,Campus reader sees current in-scope placements only (rule 101),ORG.9C
+SIS,SF-SIS-09,Month or date range of movement,none,yes,none,ORG.9C
+SIS,SF-SIS-11,Attendance date,AttendanceController attendance_date,no,none,exists
+SIS,SF-SIS-11,"Class, section, subject and period",none on register list,yes,teacher ownership and Campus scope unchanged,ORG.9C
+SIS,SF-SIS-11,One Student over a date range,AttendanceExceptionReadService (one day),yes,no percentages (V11.1),ORG.9C
+SIS,SF-SIS-11,Device attendance session/timing,none,yes,HRX-L2 legal gate,never
+SIS,SF-SIS-11,Leave type,none,yes,rule 102: never a health reason,owner
+Inventory,SF-INV-01,Item category / sub-category / type,none (no category),yes,none,post-v1
+Inventory,SF-INV-01,Item usage class,none,yes,none,post-v1
+Inventory,SF-INV-05,Store (Location),API inventory_location_id; web none,partial,Location Campus scope (ORG.7A/7H-1),ORG.9C
+Inventory,SF-INV-05,Campus,InventoryStockAccess scope via Location Campus,partial,filter intersects scope,ORG.9C
+Inventory,SF-INV-05,As-at date / date range,none,yes,none,ORG.9C
+Inventory,SF-INV-05,Month (roll-forward),none,yes,none,ORG.9C
+Inventory,SF-INV-05,Movement type,API movement_type receipt/issue/transfer; web none,partial,none,ORG.9C
+Inventory,SF-INV-05,Report type (consolidated / detailed),none,yes,none,ORG.9C
+Inventory,SF-INV-06,Damage report type (cumulative / detailed) and date,none (no write-off kind),yes,append-only movements (ORG.7H-1R),ORG.9C
+Inventory,SF-INV-07,"Recipient type, staff status, department, returned status",none (custody deferred),yes,HR data minimisation,post-v1
+Inventory,SF-INV-08,"Supplier, verified flag, service type",none,yes,none,post-v1
+Inventory,SF-INV-09,"Financial year, request type, request status",none,yes,none,post-v1
+Inventory,SF-INV-10,Approver user type and access level,none,yes,"rules 24, 102",never
+MIS,SF-MIS-01,"Measure toggle (revenue, admissions, per-Student fee, discount %, collected %, revenue lost)",none,yes,V11.1 person counts; D-14 grouped money,owner
+MIS,SF-MIS-02,Admission entered date range,none (ADM-004 FILTER_GAP),yes,none,owner
+MIS,SF-MIS-02,Unit toggle (currency / share / per Student),none,yes,D-14,owner
+MIS,SF-MIS-03,"Dimension tab (gender, segment, caste, religion)",none,yes,V11.1 small-cohort gate; D-15 fields not stored,never
+Organisation,SF-ORG-02,"User type, access level, module family",none,yes,"rules 24, 93, 98",never
+Organisation,SF-ORG-01,Edition / module family,ModuleCatalogue families (platform view),partial,rule 100: no edition or plan,never
+Organisation,SF-ORG-04,"Feedback type, date, location",none,yes,privacy review for public link,post-v1
+Organisation,SF-ORG-05,Signed-in vs never-signed-in,pending invitations per staff/Guardian,partial,identity-level data; counts only (IDN-012),owner
+Organisation,SF-ORG-05,Data check type,Data Health check list,partial,none,owner
+Organisation,SF-ORG-06,Sender level (organisation / Campus) and channel,none,yes,rule 89; credit purchase is billing,never
+Transport,SF-TRN-01,Academic year for routes,none (routes not year-scoped),no,none,exists
+Transport,SF-TRN-03,Route,none on assignments list,yes,TransportRiderAccess Campus scope,ORG.9C
+Transport,SF-TRN-03,Class and section of rider,none,yes,Campus readers via StudentAccess rules,ORG.9C
+Transport,SF-TRN-03,Rider status (active / ended),API status active/ended; web active only,partial,none,ORG.9C
+Transport,SF-TRN-08,Pickup stop / drop stop,none,yes,none,ORG.9C
+Transport,SF-TRN-08,Fee plan / fee head,Fees lists filter by Student/year only,yes,finance view keys; stored Charge Campus (ORG.7G-1),ORG.9C
+Transport,SF-TRN-08,Fee period / term / month,none,yes,none,ORG.9C
+Transport,SF-TRN-02,Zone,none,yes,address-derived zones privacy-blocked,post-v1
+Transport,SF-TRN-02,Trip type and direction,none (no trip engine),yes,none,post-v1
+Transport,SF-TRN-04,Vehicle and expense type,vehicle list only,yes,costs belong to Finance,post-v1
+Transport,SF-TRN-06,Notification type / tracking,none,yes,privacy review,never

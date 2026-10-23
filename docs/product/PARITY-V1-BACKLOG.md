@@ -12,12 +12,75 @@ uses; **Campus** = Campus impact; **Approval** = approval impact.
 
 ## Wave ORG.9B — Finance office read models (recommended first)
 
+*ORG.9A-R1 (2026-10-23, ADR 0076 §67): screenshot evidence reconciled.*
+The ORG.9A rows PV1-01 … PV1-04 below are kept for traceability. The
+**gate decision** follows them. ORG.9B is **not authorized** by R1.
+
 | ID | Title | Functions | Value | Current gap | Security | Campus | Approval | Gate | Dependency | Size |
 |---|---|---|---|---|---|---|---|---|---|---|
 | PV1-01 | Fee-head dimension: filter and totals on charges, dues and collections (incl. transport/hostel fee views, concession category) | FIN-033, FIN-037, TRN-012, TRN-044, HST-018, HST-041 | finance office answers "how much for transport/exam/admission fees" without a spreadsheet | lists filter by Student/year/date/method only | existing `finance.charges.view`, `finance.payments.view`; read-only | follows ORG.7G-1 stored Charge Campus | none | none (E30/E31 production only) | none | S |
 | PV1-02 | Dues ageing, billed/paid/outstanding per Student, dues as at a date or month | FIN-054, FIN-039, FIN-034, FIN-031 | collections follow-up and month-end | Outstanding shows outstanding/overdue only | existing view keys; read-only | FinanceCampusAccess | none | none | PV1-01 shares the read model | S–M |
 | PV1-03 | Ledger read pages: trial balance, account ledger with running balance, daily cash book | FIN-012, FIN-013, FIN-014 | accountant can close a day/month in-product | `LedgerBalanceReader` exists, no page | existing `finance.ledger.view`; read-only | whole-School (ledger is CAMPUS_INCOMPATIBLE) | none | none | none | S–M |
 | PV1-04 | Finance audit-log filters (entity, event, date) | FIN-062 | review of fee/fine/correction history | audit log has no filters | existing `school.audit.view`; never widen who sees the actor; no Campus dimension without an owner decision (SIS-035) | none | none | none | none | S |
+
+### Finance deep review (R1, screens + repository at 5be8f815)
+
+**Code facts.**
+- **Fee head.** `charges` (Fees) has no fee-head column. A fee head reaches a Charge only through:
+  - `fee_assessments.fee_head_id` (fee-run Charges; frozen);
+  - the late-fee rule's configuration;
+  - the Library fine policy, which may change;
+  - nothing at all for Canteen and manual Charges.
+
+  The Student statement shows a fee-head name only for fee-run Charges (`ChargeService.php:464-489`).
+- **Outstanding page.** `/app/finance/outstanding` (`OutstandingFeesReadService`) shows outstanding, overdue, open count, earliest overdue and next due. It already filters by status, year, Student text, grade, section (whole-School `enrollments.view` only), standing and stored-Charge Campus. It has no billed, concession or paid column and no as-at date.
+- **Ledger.** The ledger pages list accounts and journal entries; the entries filter by account and posted date. `LedgerBalanceReader` (the one authoritative balance read) has no page. Ledger reads are audited per call.
+- **Audit log.** The School audit log pages by cursor only. It shows event type, actor id, subject and request id — never an IP address.
+
+| Item | A visible? | B distinct? | C kind | D Lycenza equivalent | E lacks | F closest | G change class | Gate |
+|---|---|---|---|---|---|---|---|---|
+| PV1-01 fee-head dimension (FIN-033) | yes, strongly (E3): SF-FIN-01…06, -14, -15, -19 | no, a dimension | grouping / filter | fee heads exist; no list groups by head | **data**: a stored fee head on every Charge | `ChargeService::collectionFacts()`, `OutstandingFeesReadService`, `DailyCollectionsQuery` | **new persisted data + owner decision** | **NEEDS_REDESIGN + OWNER_DECISION_REQUIRED (OD-9.1)** |
+| PV1-02a billed / concession / paid / balance per Student (FIN-039) | yes (E3): SF-FIN-05/-06/-12/-17/-27, SF-TRN-08, SF-MIS-02 | no, columns on the outstanding list | report variant | outstanding page | an aggregation per Student | `OutstandingFeesReadService`, `liveAdjustmentTotalsFor()`, effective allocation | query only | **READY_FOR_IMPLEMENTATION** |
+| PV1-02b outstanding as at a date / month (FIN-034) | yes (E3): SF-FIN-05, SF-FIN-07 | no, a filter | filter | today only | a date bound on Charges, concessions, settlements and corrections | same | query only | **READY_FOR_IMPLEMENTATION** |
+| PV1-02c ageing buckets (FIN-054) | **no** — menu entry only | — | — | none | — | — | — | **INSUFFICIENT_EVIDENCE** |
+| PV1-03a account ledger with opening and running balance (FIN-013) | yes (E3): SF-FIN-08 (month-wise and voucher-level cash and bank ledgers) | yes | read page | journal list per account, no balances | opening + running balance for a range | `LedgerReadService`, `JournalEntryQuery`, `LedgerBalanceReader` | query only | **READY_FOR_IMPLEMENTATION** |
+| PV1-03b cash / bank book (FIN-014) | yes (E3), as SF-FIN-08 | variant of PV1-03a on settlement accounts | report variant | none | same as PV1-03a | same | query only | **REPORT_VARIANT_ONLY** (ships with PV1-03a) |
+| PV1-03c trial balance (FIN-012) | **no** | — | — | `LedgerBalanceReader` without a page | a page | `LedgerBalanceReader` | query only | **INSUFFICIENT_EVIDENCE** |
+| PV1-04 finance audit-log filters (FIN-062) | yes (E4): SF-FIN-24 change logs, SF-FIN-23 cancellation actors | no; Lycenza has no in-place money edits, so history = correction records + audit log | filter | `/app/compliance/audit-log`, paging only | event type/family, occurred date range, subject type | `AuditLogReviewService`, `SchoolAuditEventReader` | query only | **FILTER_ONLY** |
+
+Why PV1-01 is not a filter. A query over `fee_assessments` alone would
+give fee-head totals that silently leave out late fees, Library fines,
+Canteen and manual Charges. A correct dimension needs an immutable fee-head
+attribution stored on every Charge. It would be written once by
+`ChargeService::assess()` from each creator, in the same way as the stored
+Charge Campus (ORG.7G-1A), plus a backfill.
+
+**OD-9.1** asks the owner which head the non-fee-run Charges carry, and
+whether a manual Charge must name one. This is a schema change, so it never
+belongs in a read-only wave.
+
+### ORG.9B proposed scope (final for owner decision; not authorized)
+
+| ID | Business function | Screen evidence | Level | Current route / service | Exact gap | Capability | Scope / Campus effect | Data source | Schema? | Security / legal | UI work | Backend work | Tests |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 9B-1 (PV1-02a) | Billed, concession, paid and balance per Student, with totals | SF-FIN-05, -06, -12, -17, -27 | E5 | `app.finance.outstanding.index` → `OutstandingFeesReadService` | no billed/concession/paid columns or totals | existing `finance.charges.view,campus` ∩ `finance.payments.view` | unchanged: stored Charge Campus through `FinanceCampusAccess`; the Campus filter is a filter, never authority; class/section only for whole-School `enrollments.view` | Charges via `ChargeService::collectionFacts()`, live concession totals via `liveAdjustmentTotalsFor()`, effective allocation | none | read-only; the read stays audited; no export (D-11); no legal effect in development (E30/E31 production) | columns and totals on the existing page | widen the Fees fact read through Fees' Application layer (Payments → Fees, no new direction) | allow/deny per capability, Campus in/out of scope, NULL-Campus whole-School only, cross-School (Eloquent + RLS), effective allocation after correction, cancelled Charges excluded |
+| 9B-2 (PV1-02b) | Outstanding as at a School-local date | SF-FIN-05, -07 | E5 | same | no as-at bound | same | same | same records bounded to "recorded on or before the date": Charge recognized, concession live, Payment settled, correction recorded | none | same | an as-at date control | date-bounded facts | the as-at boundary on each record kind, a correction after the date not counted, the School timezone date, the same allow/deny/Campus/RLS matrix |
+| 9B-3 (PV1-03a + 03b) | Account ledger with opening and running balance; a cash/bank book view of settlement accounts | SF-FIN-08 | E5 | `app.finance.journal-entries.*` → `LedgerReadService`, `JournalEntryQuery`, `LedgerBalanceReader` | no opening or running balance | existing `finance.ledger.view` | whole-School (ledger keys are Campus-incompatible); no Campus filter | journal lines + the closed-period baseline; a range inside an expired closed period shows the baseline only | none | read-only, audited per call like today; no export | a ledger page per account and date range | a Finance-owned read beside `LedgerBalanceReader` (one balance definition) | opening equals the balance reader, running sums, reversals, a period close, a retention-expired range, allow/deny, cross-School |
+| 9B-4 (PV1-04) | Audit-log filters | SF-FIN-24, -23 (also SF-HR-08, SF-SIS-03) | E5 (E4 screens) | `app.compliance.audit-log` → `AuditLogReviewService` → `SchoolAuditEventReader` | cursor only | existing `school.audit.view` | whole-School; no Campus dimension | `school_audit_events` (event type, occurred at, subject type) | none (an index only if the query plan proves it necessary) | never metadata, IP or user agent; the review stays audited (`compliance.audit_log.viewed`) | filter controls | validated filters in the reader; a cursor stable under filters | invalid filter refused, the filter combined with the cursor, allow/deny, cross-School, metadata never returned |
+
+**Excluded from ORG.9B:**
+- PV1-01 fee-head dimension: OD-9.1, schema.
+- PV1-02c ageing and PV1-03c trial balance: INSUFFICIENT_EVIDENCE, pending the remaining Finance captures.
+- Every export: EXPORT_GAP — owner decision D-11.
+- Collector, settlement account, date-basis and cancellation-reason filters on collections, the payment-method totals matrix, month grouping (FIN-031) and concession requester/decider filters: FILTER_ONLY or report variants with ORG.9C as their wave (`screen-filters.csv`), for owner choice.
+- Cheque lifecycle (PV1-21), online settlement (E28) and multiple collecting entities (FIN-090): owner decisions or gated.
+- Anything transactional: concession limits, fee removal, payment edits, deletes and moves, refunds. These are design differences (rules 9, 91, 102), never parity items.
+
+**Later-wave impact (not authorized):**
+- ORG.9C keeps PV1-05 (= LC-6, the LC overlap is preserved) … PV1-09.
+- The R1 HR evidence confirms that HR-003, HR-041 and HR-042 read models must exclude late, no-punch and loss-of-pay states (HRX-L2/L4).
+- Transport fee views (SF-TRN-08) wait on OD-9.1.
+- Inventory approval chains stay DO_NOT_BUILD.
 
 ## Wave ORG.9C — Daily operations views and completion
 
@@ -43,7 +106,7 @@ uses; **Campus** = Campus impact; **Approval** = approval impact.
 |---|---|---|---|---|---|
 | PV1-13 | Opening balances (ledger and legacy Student dues) | FIN-009 | OD-SWC-5 / OD-PPR-20: migration method and authority for a first real School | none | M |
 | PV1-14 | Certificates from templates with a numbered issue register; transfer/leaving certificate | CRT-001, CRT-002 | template ownership, statutory TC format, who issues; Student document owner type (OD-SWC-2) | E21 retention | L |
-| PV1-15 | Student documents (repository, received checklist, additional uploads) | DOC-009, DOC-010, DOC-011, DOC-002 | OD-SWC-2 Student owner type; categories; who may manage | E21 | M |
+| PV1-15 | Student documents (repository, received checklist, additional uploads) | DOC-009, DOC-010, DOC-011, DOC-017 | OD-SWC-2 Student owner type; categories; who may manage | E21 | M |
 | PV1-16 | Exports (nominal roll, staff details, finance lists) | SIS-016, HR-048, finance | **D-11** export policy (minimisation, audit, watermark) | per data class | M |
 | PV1-17 | Sibling list and class family-contact list | SIS-019, SIS-020 | contact minimisation (ADR 0041 review) | none | S–M |
 | PV1-18 | Correct applicant and application details | FIN-026 | none new — **this is LC-5 (M5)**; resume LC-5 | none | S |
