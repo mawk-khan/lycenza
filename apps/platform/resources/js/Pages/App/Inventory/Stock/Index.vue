@@ -13,14 +13,18 @@ interface BalanceRow {
     locationName: string;
 }
 
+type MovementType = 'receipt' | 'issue' | 'transfer' | 'write_off';
+
 interface MovementRow {
     id: string;
-    movementType: 'receipt' | 'issue' | 'transfer';
+    movementType: MovementType;
     quantity: string;
     occurredAt: string;
     itemCode: string;
     fromLocationCode: string | null;
     toLocationCode: string | null;
+    writeOffReason: string | null;
+    recipientDepartment: string | null;
 }
 
 interface PageLink {
@@ -40,10 +44,35 @@ interface Props {
         links: PageLink[];
         total: number;
     };
+    movementType: MovementType | null;
+    writeOffReasons: Record<string, string>;
     canManage: boolean;
 }
 
 defineProps<Props>();
+
+const typeLabels: Record<MovementType, string> = {
+    receipt: 'Receipt',
+    issue: 'Issue',
+    transfer: 'Transfer',
+    write_off: 'Write-off',
+};
+
+function detail(movement: MovementRow, reasons: Record<string, string>): string {
+    if (movement.movementType === 'write_off' && movement.writeOffReason !== null) {
+        return reasons[movement.writeOffReason] ?? movement.writeOffReason;
+    }
+    if (movement.movementType === 'issue' && movement.recipientDepartment !== null) {
+        return `To ${movement.recipientDepartment}`;
+    }
+    return '—';
+}
+
+function filterType(event: Event): void {
+    const value = (event.target as HTMLSelectElement).value;
+    window.location.href =
+        value === '' ? '/app/inventory-stock' : `/app/inventory-stock?movement_type=${value}`;
+}
 </script>
 
 <template>
@@ -73,6 +102,12 @@ defineProps<Props>();
                     class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
                 >
                     Transfer
+                </a>
+                <a
+                    href="/app/inventory-stock/write-off"
+                    class="rounded border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+                >
+                    Write off
                 </a>
             </div>
         </div>
@@ -118,13 +153,28 @@ defineProps<Props>();
         </section>
 
         <section class="mt-10">
-            <h2 class="text-sm font-semibold text-slate-700">Movement history</h2>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <h2 class="text-sm font-semibold text-slate-700">Movement history</h2>
+                <label class="text-sm text-slate-600">
+                    Type
+                    <select
+                        class="ml-2 rounded border border-slate-300 px-2 py-1 text-sm"
+                        :value="movementType ?? ''"
+                        @change="filterType"
+                    >
+                        <option value="">All</option>
+                        <option v-for="(label, value) in typeLabels" :key="value" :value="value">
+                            {{ label }}
+                        </option>
+                    </select>
+                </label>
+            </div>
 
             <EmptyState
                 v-if="movements.data.length === 0"
                 class="mt-3"
                 title="No stock movements yet"
-                description="Receipts, issues, and transfers will appear here."
+                description="Receipts, issues, transfers and write-offs will appear here."
             />
 
             <template v-else>
@@ -138,6 +188,7 @@ defineProps<Props>();
                                 <th scope="col" class="py-2 font-medium">From</th>
                                 <th scope="col" class="py-2 font-medium">To</th>
                                 <th scope="col" class="py-2 font-medium">Quantity</th>
+                                <th scope="col" class="py-2 font-medium">Recipient / reason</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
@@ -145,11 +196,14 @@ defineProps<Props>();
                                 <td class="py-3 text-slate-600">
                                     {{ formatDateTime(movement.occurredAt) }}
                                 </td>
-                                <td class="py-3 capitalize">{{ movement.movementType }}</td>
+                                <td class="py-3">{{ typeLabels[movement.movementType] }}</td>
                                 <td class="py-3 font-medium">{{ movement.itemCode }}</td>
                                 <td class="py-3">{{ movement.fromLocationCode ?? '—' }}</td>
                                 <td class="py-3">{{ movement.toLocationCode ?? '—' }}</td>
                                 <td class="py-3">{{ movement.quantity }}</td>
+                                <td class="py-3 text-slate-600">
+                                    {{ detail(movement, writeOffReasons) }}
+                                </td>
                             </tr>
                         </tbody>
                     </table>

@@ -743,3 +743,40 @@ their orders under Finance (D8).
   evidence guard refuses any UPDATE that re-points an evidence row's
   Location (`inventory_location_evidence_immutable`). A used Location never
   becomes unused again.
+
+## Issue recipient and write-off (ORG.9C-2, 2026-10-23, ADR 0076 §70)
+
+Both run on the ONE ledger and the ONE writer (`InventoryStockService`), with the same lock order: Location(s) FOR SHARE, then the balance FOR UPDATE, then sufficiency re-checked under the lock. Nothing else changes.
+
+**Issue (unchanged movement type `issue`).**
+- An issue is terminal consumption out of ONE Location. Stock going to another Location is a transfer; a Canteen sale stays the Canteen order lifecycle (the issue carries no money, price or Student).
+- It may name an optional organisational recipient: an HR Department (`recipient_department_id`). The Department must be active and School-wide or on the Location's Campus, checked under a share lock through HR's `DepartmentReference`.
+- The issue form's Department lookup offers School-wide Departments and those on in-scope Campuses only.
+- **Not built (STOPPED for an owner decision):**
+  - **Person recipients (Employee, Student).** Movements are tenant-lifetime data without personal data (E21.2G O5), and a person reference would block that Employee's E21-D9 purge indefinitely. It needs an E21/owner decision, not a slice.
+  - **Returnable issue / custody.** Still §14: only alongside asset tracking.
+
+**Write-off (new movement type `write_off`).**
+- Units physically no longer usable or present. The closed `WriteOffReason` is damaged, expired or lost, DB-required on exactly the write-offs (`stock_movements_write_off_reason_check`).
+- No free text is stored (E21.2G O5).
+- No "count correction": there is no stocktake model, and a counting or entry mistake is not damage.
+- **DIRECT_WITH_ASSURANCE** (`ApprovalWorkflowRegistry::DIRECT_ASSURED`), never an approval chain:
+  - the existing `inventory.stock.manage` in the Location's scope;
+  - re-read fresh under the locks (`ApprovalDecisionAuthority::requireCurrent()` with the Location's Campus, `CapabilityResolver::holdsInCampusNow()`);
+  - a fresh MFA code (`FreshMfaRequirement`, outside the transaction);
+  - an explicit web confirmation (UX assurance only).
+- Audited as `inventory.stock.written_off` (reason code, `freshMfa`).
+- **Correction:** a write-off is never edited or deleted. Stock that turns up again is a new receipt.
+- **No accounting:** Inventory carries no cost or journal (§12).
+- **No fixed-asset disposal:** there is no asset model (§3, §14).
+
+**Duplicate submissions.**
+- **Web:** web issue and write-off forms carry a server-issued key (`stock_movements.idempotency_key`, unique per School). The same key with the same terms returns the recorded movement (nothing new is written or audited); other terms are refused.
+- **API:** the API routes keep the `idempotent` middleware.
+- **Not covered:** receive and transfer on the web keep their earlier protection (the disabled button), unchanged.
+
+**History.** The web movement history filters by type and shows each issue's Department and each write-off's reason; names come from one read per page.
+
+**Evidence.**
+- **Append-only, unchanged:** the runtime role still has no UPDATE or DELETE on `stock_movements` (H1R).
+- **The migration's `down()`** refuses while any write-off, recipient or claimed key exists.

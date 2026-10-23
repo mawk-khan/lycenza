@@ -4203,3 +4203,11 @@ All of these are read-only and on existing authority. None adds a capability, a 
   - **Counts:** APPROVED leave per employment and leave type in half-day units, from each request's own per-date rows, so a cross-month request is split correctly.
   - **What it never shows:** a reason, or a paid/unpaid split.
 - **Leave request filters** (`/app/leave/requests`): employee, leave type, and a date range the request overlaps.
+
+## Department reference for other domains (ORG.9C-2, 2026-10-23, ADR 0076 §70)
+
+`DepartmentReference` is HR's one narrow answer to which Department another domain may name as an organisational recipient (today: an Inventory issue).
+- **Returns:** id, code and name of active Departments, School-wide plus the asker's in-scope Campuses. It never returns a person, a position or a reporting line.
+- **Write time:** it share-locks the Department and requires it to be active and School-wide or on the stock Location's Campus.
+- **Direction:** Inventory → HR only.
+- **Retention:** Departments are tenant-lifetime configuration, so the RESTRICT reference blocks no E21 purge.

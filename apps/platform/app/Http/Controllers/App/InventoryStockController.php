@@ -2,24 +2,31 @@
 
 namespace App\Http\Controllers\App;
 
+use App\Domain\HR\Application\DepartmentReference;
 use App\Domain\Inventory\Application\Exceptions\InsufficientStockException;
 use App\Domain\Inventory\Application\Exceptions\InvalidQuantityException;
+use App\Domain\Inventory\Application\Exceptions\IssueRecipientNotAvailableException;
 use App\Domain\Inventory\Application\Exceptions\ItemNotAvailableException;
 use App\Domain\Inventory\Application\Exceptions\LocationNotAvailableException;
 use App\Domain\Inventory\Application\Exceptions\SameLocationTransferException;
+use App\Domain\Inventory\Application\Exceptions\StockRequestAlreadySubmittedException;
 use App\Domain\Inventory\Application\InventoryStockAccess;
 use App\Domain\Inventory\Application\InventoryStockService;
+use App\Domain\Inventory\Application\WriteOffReason;
 use App\Domain\Inventory\Infrastructure\InventoryItem;
 use App\Domain\Inventory\Infrastructure\InventoryLocation;
 use App\Domain\Inventory\Infrastructure\InventoryStockBalance;
 use App\Domain\Inventory\Infrastructure\StockMovement;
 use App\Http\Controllers\Controller;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Authorization\Campus\CampusScopeResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -37,7 +44,10 @@ class InventoryStockController extends Controller
 {
     use AuthorizesCampusScope;
 
-    public function index(Request $request, TenantContext $context, CampusScopeResolver $scopes, InventoryStockAccess $access): Response
+    /** ORG.9C-2: the form keys a session remembers per form (open tabs, retries). */
+    private const FORM_KEYS_KEPT = 10;
+
+    public function index(Request $request, TenantContext $context, CampusScopeResolver $scopes, InventoryStockAccess $access, DepartmentReference $departmentNames): Response
     {
         $school = $context->requireSchool();
         $scope = $this->authorizeCampusScope('inventory.stock.view', $school);
@@ -48,15 +58,25 @@ class InventoryStockController extends Controller
             ->paginate(20, ['*'], 'balancesPage')
             ->withQueryString();
 
+        $validated = $request->validate([
+            'movement_type' => ['sometimes', 'nullable', Rule::in(StockMovement::TYPES)],
+        ]);
+        $type = $validated['movement_type'] ?? null;
+
         $movements = $access->movements($scope)
             ->with(['item', 'fromLocation', 'toLocation'])
+            ->when($type !== null, fn ($q) => $q->where('movement_type', $type))
             ->orderByDesc('occurred_at')
             ->paginate(20, ['*'], 'movementsPage')
             ->withQueryString();
+        // ORG.9C-2: an issue's Department recipient, by name, in one read (never per row).
+        $departments = $departmentNames->names($school, $movements->getCollection()->pluck('recipient_department_id')->filter()->unique()->values()->all());
 
         return Inertia::render('App/Inventory/Stock/Index', [
             'balances' => $balances->through(fn (InventoryStockBalance $b) => $this->presentBalance($b)),
-            'movements' => $movements->through(fn (StockMovement $m) => $this->presentMovement($m)),
+            'movements' => $movements->through(fn (StockMovement $m) => $this->presentMovement($m, $departments)),
+            'movementType' => $type,
+            'writeOffReasons' => WriteOffReason::LABELS,
             'canManage' => ! $scopes->campusScope($context->actor(), 'inventory.stock.manage', $school)->isNone(),
         ]);
     }
@@ -69,12 +89,26 @@ class InventoryStockController extends Controller
         return Inertia::render('App/Inventory/Stock/Receive');
     }
 
-    public function createIssue(TenantContext $context): Response
+    public function createIssue(Request $request, TenantContext $context): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCampusScope('inventory.stock.manage', $school);
 
-        return Inertia::render('App/Inventory/Stock/Issue');
+        // ORG.9C-2: a server-issued key the submission is claimed on (a retry replays, never re-issues).
+        return Inertia::render('App/Inventory/Stock/Issue', ['idempotencyKey' => $this->issueFormKey($request, 'issue')]);
+    }
+
+    /** ORG.9C-2 (ADR 0076 §70): the write-off form -- reasons, the MFA step-up and its own key. */
+    public function createWriteOff(Request $request, TenantContext $context, FreshMfaRequirement $mfa): Response
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCampusScope('inventory.stock.manage', $school);
+
+        return Inertia::render('App/Inventory/Stock/WriteOff', [
+            'reasons' => WriteOffReason::LABELS,
+            'hasMfaFactor' => $mfa->hasActiveFactor($context->actor()),
+            'idempotencyKey' => $this->issueFormKey($request, 'write_off'),
+        ]);
     }
 
     public function createTransfer(TenantContext $context): Response
@@ -122,6 +156,15 @@ class InventoryStockController extends Controller
         ])->all()]);
     }
 
+    /** ORG.9C-2: active HR Departments an issue may name -- School-wide ones and those on the actor's in-scope Campuses. */
+    public function searchDepartments(Request $request, TenantContext $context, DepartmentReference $departments): JsonResponse
+    {
+        $school = $context->requireSchool();
+        $scope = $this->authorizeCampusScope('inventory.stock.manage', $school);
+
+        return response()->json(['data' => $departments->pickable($school, $scope->isWholeSchool() ? null : $scope->campusIds(), (string) $request->query('q', ''))]);
+    }
+
     public function storeReceive(Request $request, TenantContext $context, InventoryStockService $service, InventoryStockAccess $access): RedirectResponse
     {
         $school = $context->requireSchool();
@@ -148,20 +191,62 @@ class InventoryStockController extends Controller
         $school = $context->requireSchool();
         $scope = $this->authorizeCampusScope('inventory.stock.manage', $school);
 
-        $validated = $this->validateMutation($request);
+        $validated = $request->validate([
+            ...$this->mutationRules(),
+            'recipient_department_id' => ['nullable', 'uuid'],
+            'idempotency_key' => ['required', 'uuid'],
+        ]);
 
         $item = InventoryItem::query()->findOrFail($validated['inventory_item_id']);
         $location = $access->location($scope, $validated['inventory_location_id']);
+        $this->requireIssuedFormKey($request, 'issue', $validated['idempotency_key']);
 
         try {
-            $service->issue($item, $location, $validated['quantity'], $context->actor());
-        } catch (ItemNotAvailableException|InvalidQuantityException|InsufficientStockException $e) {
+            $service->issue($item, $location, $validated['quantity'], $context->actor(), $validated['recipient_department_id'] ?? null, $validated['idempotency_key']);
+        } catch (ItemNotAvailableException|InvalidQuantityException|InsufficientStockException|StockRequestAlreadySubmittedException $e) {
+            throw ValidationException::withMessages(['inventory_item_id' => [$e->getMessage()]]);
+        } catch (LocationNotAvailableException $e) {
+            throw ValidationException::withMessages(['inventory_location_id' => [$e->getMessage()]]);
+        } catch (IssueRecipientNotAvailableException $e) {
+            throw ValidationException::withMessages(['recipient_department_id' => [$e->getMessage()]]);
+        }
+
+        return redirect('/app/inventory-stock')->with('flash', 'Stock issued.');
+    }
+
+    /**
+     * ORG.9C-2 (ADR 0076 §70): DIRECT_WITH_ASSURANCE. Order: the Campus
+     * scope (route floor + this check), the Location within it, input, the
+     * explicit confirmation (UX assurance only), then the fresh MFA step-up
+     * OUTSIDE the business transaction (rule 95). The service re-reads the
+     * actor's authority under its locks.
+     */
+    public function storeWriteOff(Request $request, TenantContext $context, InventoryStockService $service, InventoryStockAccess $access, FreshMfaRequirement $mfa): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $scope = $this->authorizeCampusScope('inventory.stock.manage', $school);
+
+        $validated = $request->validate([
+            ...$this->mutationRules(),
+            'reason_code' => ['required', 'string', Rule::in(WriteOffReason::CODES)],
+            'confirm' => ['accepted'],
+            'idempotency_key' => ['required', 'uuid'],
+        ]);
+
+        $item = InventoryItem::query()->findOrFail($validated['inventory_item_id']);
+        $location = $access->location($scope, $validated['inventory_location_id']);
+        $this->requireIssuedFormKey($request, 'write_off', $validated['idempotency_key']);
+        $proof = $mfa->requireForAction($request, $context->actor());
+
+        try {
+            $service->writeOff($school, $item, $location, $validated['quantity'], $validated['reason_code'], $context->actor(), $proof, $validated['idempotency_key']);
+        } catch (ItemNotAvailableException|InvalidQuantityException|InsufficientStockException|StockRequestAlreadySubmittedException $e) {
             throw ValidationException::withMessages(['inventory_item_id' => [$e->getMessage()]]);
         } catch (LocationNotAvailableException $e) {
             throw ValidationException::withMessages(['inventory_location_id' => [$e->getMessage()]]);
         }
 
-        return redirect('/app/inventory-stock')->with('flash', 'Stock issued.');
+        return redirect('/app/inventory-stock')->with('flash', 'Stock written off.');
     }
 
     public function storeTransfer(Request $request, TenantContext $context, InventoryStockService $service, InventoryStockAccess $access): RedirectResponse
@@ -194,15 +279,44 @@ class InventoryStockController extends Controller
     }
 
     /**
+     * ORG.9C-2 security review L1: a form key is minted server-side and
+     * remembered in THIS session (the last few per form), so a submission
+     * can only claim a key its own session was given -- another User cannot
+     * replay someone else's recorded movement as their own success. A key
+     * stays valid for retries of the same form.
+     */
+    private function issueFormKey(Request $request, string $form): string
+    {
+        $key = (string) Str::uuid();
+        $keys = (array) $request->session()->get("inventory.form_keys.{$form}", []);
+        $request->session()->put("inventory.form_keys.{$form}", array_slice([...$keys, $key], -self::FORM_KEYS_KEPT));
+
+        return $key;
+    }
+
+    private function requireIssuedFormKey(Request $request, string $form, string $key): void
+    {
+        if (! in_array($key, (array) $request->session()->get("inventory.form_keys.{$form}", []), true)) {
+            throw ValidationException::withMessages(['idempotency_key' => ['This form has expired. Reload the page and try again.']]);
+        }
+    }
+
+    /**
      * @return array{inventory_item_id: string, inventory_location_id: string, quantity: string}
      */
     private function validateMutation(Request $request): array
     {
-        return $request->validate([
+        return $request->validate($this->mutationRules());
+    }
+
+    /** @return array<string, list<string>> */
+    private function mutationRules(): array
+    {
+        return [
             'inventory_item_id' => ['required', 'string'],
             'inventory_location_id' => ['required', 'string'],
             'quantity' => ['required', 'regex:/^\d+(\.\d{1,3})?$/'],
-        ]);
+        ];
     }
 
     /**
@@ -224,7 +338,11 @@ class InventoryStockController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function presentMovement(StockMovement $movement): array
+    /**
+     * @param  array<string, string>  $departments  id => name
+     * @return array<string, mixed>
+     */
+    private function presentMovement(StockMovement $movement, array $departments): array
     {
         return [
             'id' => $movement->id,
@@ -234,6 +352,8 @@ class InventoryStockController extends Controller
             'itemCode' => $movement->item->code,
             'fromLocationCode' => $movement->fromLocation?->code,
             'toLocationCode' => $movement->toLocation?->code,
+            'writeOffReason' => $movement->write_off_reason,
+            'recipientDepartment' => $movement->recipient_department_id === null ? null : ($departments[$movement->recipient_department_id] ?? null),
         ];
     }
 }

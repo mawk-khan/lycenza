@@ -370,6 +370,26 @@ class CapabilityResolver
      */
     public function holdsInSchoolNow(User $actor, string $capability, School $school): bool
     {
+        return $this->holdsNow($actor, $capability, $school, null);
+    }
+
+    /**
+     * ORG.9C-2 (ADR 0076 §70): holdsInSchoolNow() for an action on ONE
+     * Campus's record -- a whole-School grant, or, for a Campus-ADOPTED
+     * capability only (CampusScopeCatalogue), an active grant scoped to
+     * exactly $campusId while that Campus is active (share-locked with the
+     * grants). Read fresh, never the cache. $campusId null (a School-wide
+     * record) is exactly holdsInSchoolNow(): a Campus grant never reaches
+     * it. For direct-assured actions on a Campus record
+     * (the approval authority's requireCurrent() with a Campus).
+     */
+    public function holdsInCampusNow(User $actor, string $capability, School $school, ?string $campusId): bool
+    {
+        return $this->holdsNow($actor, $capability, $school, $campusId);
+    }
+
+    private function holdsNow(User $actor, string $capability, School $school, ?string $campusId): bool
+    {
         if (DB::transactionLevel() === 0) {
             throw new LogicException('CapabilityResolver::holdsInSchoolNow() must run inside the decision transaction.');
         }
@@ -383,7 +403,9 @@ class CapabilityResolver
             return false;
         }
 
-        return $this->context->withSchool($school, function () use ($actor, $capability, $school, $required): bool {
+        $campusGrantCounts = $campusId !== null && CampusScopeCatalogue::isAdopted($capability);
+
+        return $this->context->withSchool($school, function () use ($actor, $capability, $school, $required, $campusId, $campusGrantCounts): bool {
             $membership = SchoolMembership::query()
                 ->where('school_id', $school->id)
                 ->where('user_id', $actor->id)
@@ -397,12 +419,17 @@ class CapabilityResolver
             $held = MembershipRoleAssignment::query()
                 ->where('school_membership_id', $membership->id)
                 ->active()
-                ->whereNull('campus_id')
+                ->where(fn ($q) => $q->whereNull('campus_id')->when($campusGrantCounts, fn ($w) => $w->orWhere('campus_id', $campusId)))
                 ->sharedLock()
                 ->with('role.capabilities')
                 ->get()
-                ->contains(fn (MembershipRoleAssignment $grant): bool => $grant->role->capabilities->contains('key', $capability));
-            if (! $held) {
+                ->filter(fn (MembershipRoleAssignment $grant): bool => $grant->role->capabilities->contains('key', $capability));
+            if ($held->isEmpty()) {
+                return false;
+            }
+            // A Campus-scoped grant confers nothing on an inactive Campus.
+            if ($held->every(fn (MembershipRoleAssignment $grant): bool => $grant->campus_id !== null)
+                && ! Campus::query()->where('school_id', $school->id)->whereKey($campusId)->where('status', 'active')->sharedLock()->exists()) {
                 return false;
             }
 

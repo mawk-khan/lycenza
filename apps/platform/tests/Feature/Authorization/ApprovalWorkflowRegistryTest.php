@@ -216,6 +216,34 @@ class ApprovalWorkflowRegistryTest extends TestCase
     }
 
     #[Test]
+    public function only_a_declared_campus_scoped_direct_action_passes_a_campus_to_the_authority_read(): void
+    {
+        // ORG.9C-2 (ADR 0076 §70, security review L2): requireCurrent() accepts a Campus for a
+        // direct-assured action on one Campus's record. Every approval workflow decides on
+        // whole-School authority (rule 102; OD-8.8 Option A), so no other caller may pass one.
+        $declared = array_keys(array_filter(ApprovalWorkflowRegistry::DIRECT_ASSURED, fn (array $meta) => isset($meta['campusScoped'])));
+        $withCampus = [];
+        foreach (Finder::create()->files()->name('*.php')->in(app_path())->notPath('Support/Approval') as $file) {
+            preg_match_all('/->requireCurrent(\((?:[^()]|(?1))*\))/', $file->getContents(), $calls);
+            foreach ($calls[1] as $arguments) {
+                $depth = 0;
+                $commas = 0;
+                foreach (str_split(substr($arguments, 1, -1)) as $char) {
+                    $depth += match ($char) {
+                        '(', '[' => 1, ')', ']' => -1, default => 0
+                    };
+                    $commas += ($char === ',' && $depth === 0) ? 1 : 0;
+                }
+                if ($commas >= 3) {
+                    $withCampus[] = 'App\\'.str_replace(['/', '.php'], ['\\', ''], $file->getRelativePathname());
+                }
+            }
+        }
+        $this->assertSame($declared, array_values(array_unique($withCampus)));
+        $this->assertSame(['App\\Domain\\Inventory\\Application\\InventoryStockService'], $declared);
+    }
+
+    #[Test]
     public function every_charge_cancellation_enters_through_a_declared_assured_entry_point(): void
     {
         // ORG.8G (ADR 0076 §65): ChargeService::cancel() is the one assured core; only its declared

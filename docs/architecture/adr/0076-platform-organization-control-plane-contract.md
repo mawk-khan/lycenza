@@ -10255,3 +10255,98 @@ Owner authorization: ORG.9C-1 (PV1-05 Attendance, PV1-06 HR reports within the H
   - PV1-08, PV1-09, ORG.9D;
   - D-11.
 - Production stays NO-GO (§66.7).
+
+## 70. ORG.9C-2 — Inventory issue and write-off (as built, 2026-10-23)
+
+Owner authorization: ORG.9C-2 (PV1-08 issue and write-off only). Baseline `origin/main` = `3b573db8`.
+
+**Owner decisions recorded with the brief:**
+- **OD-9.3 CLOSED for v1:** register states stay SUBMITTED, PENDING and NOT_SUBMITTED, with no MISSING state until a canonical Student calendar exists.
+- **Write-off requires fresh MFA;** it is DIRECT_WITH_ASSURANCE.
+
+**What did not change:**
+- capability, role or template;
+- Campus adoption (`CampusScopeCatalogue`: only the Inventory shared-lookup text gained the Department lookup);
+- approval workflow or engine;
+- accounting;
+- export;
+- legal or production gate.
+
+**70.1 Repository truth.**
+- **One writer:** `InventoryStockService` is the only stock writer, for receipt, issue, transfer and `issueMany()` (Canteen).
+- **Lock order:** every write locks the Location(s) FOR SHARE, resolves and locks the balance FOR UPDATE in ascending id order, re-checks sufficiency under the lock, then inserts exactly one append-only movement and an audit event.
+- **Database:** CHECKs on type and shape; the runtime role has no UPDATE or DELETE (ORG.7H-1R).
+- **Idempotency:** the API carries `idempotent`; the web had none.
+- **Neither existed:** no adjustment, count correction, reversal, returnable issue, fixed-asset flag or costing.
+
+**70.2 Issue.**
+- **Definition:** the existing `issue` type is terminal consumption out of ONE Location. A transfer moves stock between Locations; a Canteen sale stays the Canteen order lifecycle (an issue carries no money, price or Student).
+- **New: an optional HR Department recipient** (`recipient_department_id`, composite same-School FK, RESTRICT).
+  - **Read only through HR:** `DepartmentReference`, a new one-way Inventory → HR read (DOMAIN-MAP).
+  - **Validity:** the Department must be active and School-wide or on the Location's Campus, share-locked under the Location lock.
+  - **Lookup:** the issue form offers School-wide and in-scope-Campus Departments only.
+- **STOPPED for an owner/E21 decision:**
+  - **Person recipients (Employee, Student).** E21.2G O5 classifies movements as tenant-lifetime data without personal data. A person FK would also block that Employee's E21-D9 purge indefinitely (`ReferencingRows`).
+  - **Returnable issue.** Custody waits for asset tracking (INVENTORY.md §14).
+- **Assurance:** ordinary, as before (`inventory.stock.manage` in scope), with no step-up.
+
+**70.3 Write-off.**
+- **Movement:** a new `write_off` type, shaped like an issue.
+- **Reason:** closed `WriteOffReason` (damaged, expired, lost), DB-required exactly on write-offs (`stock_movements_write_off_reason_check`). There is no free text (O5).
+- **Count correction is a separate gap:** there is no stocktake model, and a counting mistake is not damage.
+- **DIRECT_WITH_ASSURANCE** (`ApprovalWorkflowRegistry::DIRECT_ASSURED`):
+  - **Authority:** the existing `inventory.stock.manage` within the Location's scope.
+  - **Fresh read:** under the locks, `ApprovalDecisionAuthority::requireCurrent()` with the Location's Campus calls the new `CapabilityResolver::holdsInCampusNow()`. A whole-School grant counts, or, for an adopted key only, an active grant on exactly that active Campus. A School-wide Location needs whole-School authority. It is uncached, share-locked and entitlement-aware.
+  - **Fresh MFA:** `FreshMfaRequirement`, outside the transaction, on web and API.
+  - **Confirmation:** an explicit web confirmation (UX only).
+  - **Audit:** `inventory.stock.written_off` (reason code, `freshMfa`).
+- **No new authority:** every existing holder (school_admin, principal, stores_officer) could already remove the same stock as an untyped issue. Write-off adds assurance, not power.
+- **Correction:** a new receipt; never an edit or delete.
+- **Out of scope:**
+  - accounting: Inventory has no cost or journal (§12);
+  - fixed-asset disposal: there is no asset model;
+  - an approval chain: INV-034 stays DO_NOT_BUILD.
+
+**70.4 Duplicates.**
+- **Web forms:** a server-issued key claimed by the partial unique index `stock_movements_idempotency_unique (school_id, idempotency_key)`.
+  - **Same key, same terms:** replays the recorded movement, with no second write or audit.
+  - **Different terms:** refused.
+  - **Order:** the key is checked after authority (rule 32).
+- **Security review L1 (fixed):** keys are remembered in the issuing session, and a key the session was not given is refused.
+- **API:** keeps `idempotent`.
+- **Unchanged:** web receive and transfer (residual).
+
+**70.5 Concurrency (real two-process tests).** From 5 on hand, two writes of 4 each, for write-off vs issue, write-off vs write-off, issue vs transfer, and write-off vs transfer:
+- exactly one succeeds;
+- the other is refused with insufficient stock;
+- the balance ends at 1, with one movement;
+- no deadlock.
+
+The existing issue vs issue proof is unchanged.
+
+**70.6 Database and rollback.**
+- **Migration** `2027_01_06_090000`: type and shape CHECKs, the reason CHECK, `recipient_issue_only_check`, the Department FK and the key index.
+- **Proof:** `StockWriteOffShapeDbTest` (raw runtime role) and the unchanged H1R suite.
+- **`down()`** refuses while any write-off, recipient or claimed key exists (append-only evidence is never deleted to roll back).
+- **Rollback proof:** IDENTICAL schema; `verify-database` failed=0.
+
+**70.7 Security review.**
+- **No HIGH or MEDIUM.**
+- **L1 fixed:** session-bound form keys.
+- **L2 fixed:** `ApprovalWorkflowRegistryTest` now proves only declared Campus-scoped direct actions pass a Campus to `requireCurrent()`. Every workflow stays whole-School (rule 102; OD-8.8 Option A).
+
+**70.8 Performance.**
+- **Query counts are flat:**
+  - history: 24 / 16 queries at 6 / 66 movements;
+  - Department search: 6 / 6;
+  - write-off: 17 queries, including the fresh authority reads;
+  - issue: 8.
+- No index was added beyond the key's unique index.
+
+**70.9 Parity.**
+- INV-011 → P0; INV-014 → P1 (intended difference).
+- INV-007 stays P2.
+- INV-008/022/024 stay P4: person recipients are stopped.
+- INV-034 stays DO_NOT_BUILD; INV-003 stays P4.
+- Coverage: 38.2 % / 32.9 % functional, 81.3 % / 70.0 % v1.
+- Production stays NO-GO (§66.7).

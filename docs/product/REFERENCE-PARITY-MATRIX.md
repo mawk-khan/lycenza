@@ -637,3 +637,30 @@ Statuses are now P0 67, P1 98, P2 69, P3 22; the rest are unchanged.
 - PV1-19 daily (non-period) attendance: the LC-6 ATT-08 owner decision.
 
 **New owner question (OD-9.3):** a Student school calendar (holidays, closures, cancelled periods). It would make a "missing register" status structurally decidable. It also overlaps PV1-12.
+
+## 18. ORG.9C-2 — Inventory issue and write-off (2026-10-23)
+
+ORG.9C-2 (ADR 0076 §70) built PV1-08's two transactional items on the existing ledger, with one narrow schema change (`stock_movements`: a `write_off` type with a closed reason, an optional issue Department recipient, a form key).
+
+| Function | Before | After ORG.9C-2 | Note |
+|---|---|---|---|
+| INV-011 write off damaged stock | P2 | **P0** | `write_off` movement; damaged, expired or lost; fresh MFA and fresh authority; ordinary stock only |
+| INV-014 issue stock out of a store | P2 | **P1** | intended difference: terminal issue with an optional HR Department recipient; no person, no returnable issue |
+| INV-007 issued items listing | P2 | P2 | the web history now filters by type and shows the Department; no person or date filter |
+| INV-008 / INV-022 / INV-024 staff and Student issue | P4 | P4 | person recipients **stopped**: tenant-lifetime movements carry no personal data (E21.2G O5); E21/owner decision |
+| INV-034 configurable approval chains | P5 DO_NOT_BUILD | unchanged | write-off is DIRECT_WITH_ASSURANCE |
+| INV-003 fixed-asset register / disposal | P4 | unchanged | no asset model; no disposal built |
+
+Statuses are now P0 68, P1 99, P2 67; the rest are unchanged.
+
+| Coverage | After ORG.9C-1 | After ORG.9C-2 |
+|---|---|---|
+| Functional, weighted / strict | 38.0 % / 32.5 % | **38.2 % / 32.9 %** (241.5 / 633) |
+| V1-required, weighted / strict | 81.0 % / 69.4 % | **81.3 % / 70.0 %** (241.5 / 297) |
+
+**Remaining PV1-08 items (not authorized in ORG.9C-2):**
+- stock filters and the monthly stock view (INV-016, INV-023, INV-020);
+- a count or stocktake correction;
+- returnable issue.
+
+**OD-9.3 CLOSED for v1 (owner, ORG.9C-2 brief):** Attendance register states stay submitted, pending and not submitted. There is no "missing" state until a canonical Student academic calendar or closure model exists.

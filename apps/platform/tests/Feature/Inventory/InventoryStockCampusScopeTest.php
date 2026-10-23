@@ -10,6 +10,7 @@ use App\Models\Campus;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -125,7 +126,7 @@ class InventoryStockCampusScopeTest extends TestCase
         $post('receive', ['inventory_item_id' => $this->item->id, 'inventory_location_id' => $this->loc['b']->id, 'quantity' => '2'], 'campus-scope-k2')->assertNotFound();
         $post('issue', ['inventory_item_id' => $this->item->id, 'inventory_location_id' => $this->loc['school']->id, 'quantity' => '1'], 'campus-scope-k3')->assertNotFound();
         $post('transfer', ['inventory_item_id' => $this->item->id, 'from_location_id' => $this->loc['a']->id, 'to_location_id' => $this->loc['b']->id, 'quantity' => '1'], 'campus-scope-k4')->assertNotFound();
-        $this->post('/app/inventory-stock/issue', ['inventory_item_id' => $this->item->id, 'inventory_location_id' => $this->loc['b']->id, 'quantity' => '1'])->assertNotFound();
+        $this->post('/app/inventory-stock/issue', ['inventory_item_id' => $this->item->id, 'inventory_location_id' => $this->loc['b']->id, 'quantity' => '1', 'idempotency_key' => (string) Str::uuid()])->assertNotFound();
 
         $this->assertSame('11.000', $this->quantity('a'));
         $this->assertSame('11.000', $this->quantity('b'));

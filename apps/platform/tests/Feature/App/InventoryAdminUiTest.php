@@ -162,7 +162,7 @@ class InventoryAdminUiTest extends TestCase
         ])->assertRedirect('/app/inventory-stock');
 
         $this->post('/app/inventory-stock/issue', [
-            'inventory_item_id' => $item->id, 'inventory_location_id' => $from->id, 'quantity' => '2',
+            'inventory_item_id' => $item->id, 'inventory_location_id' => $from->id, 'quantity' => '2', 'idempotency_key' => $this->get('/app/inventory-stock/issue')->viewData('page')['props']['idempotencyKey'],
         ])->assertRedirect('/app/inventory-stock');
 
         $this->post('/app/inventory-stock/transfer', [
@@ -186,7 +186,7 @@ class InventoryAdminUiTest extends TestCase
         ])->assertRedirect();
 
         $response = $this->post('/app/inventory-stock/issue', [
-            'inventory_item_id' => $item->id, 'inventory_location_id' => $location->id, 'quantity' => '5',
+            'inventory_item_id' => $item->id, 'inventory_location_id' => $location->id, 'quantity' => '5', 'idempotency_key' => $this->get('/app/inventory-stock/issue')->viewData('page')['props']['idempotencyKey'],
         ]);
         $response->assertSessionHasErrors('inventory_item_id');
     }

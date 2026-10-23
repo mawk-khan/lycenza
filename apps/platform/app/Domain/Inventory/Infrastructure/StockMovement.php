@@ -22,9 +22,12 @@ use Illuminate\Support\Carbon;
  * @property string $id
  * @property string $school_id
  * @property string $inventory_item_id
- * @property string $movement_type receipt|issue|transfer
+ * @property string $movement_type receipt|issue|transfer|write_off
  * @property string|null $from_location_id
  * @property string|null $to_location_id
+ * @property string|null $write_off_reason damaged|expired|lost (write-offs only)
+ * @property string|null $recipient_department_id an issue's HR Department recipient (ORG.9C-2)
+ * @property string|null $idempotency_key the server-issued form key it was claimed on
  * @property string $quantity
  * @property Carbon $occurred_at
  * @property Carbon $created_at
@@ -37,9 +40,12 @@ class StockMovement extends Model
 
     protected $table = 'stock_movements';
 
+    public const TYPES = ['receipt', 'issue', 'transfer', 'write_off'];
+
     protected $fillable = [
         'school_id', 'inventory_item_id', 'movement_type',
         'from_location_id', 'to_location_id', 'quantity', 'occurred_at',
+        'write_off_reason', 'recipient_department_id', 'idempotency_key',
     ];
 
     protected function casts(): array

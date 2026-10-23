@@ -36,7 +36,7 @@ final class CampusScopeCatalogue
             'label' => 'Inventory stock',
             'nullCampus' => 'A Location without a Campus is a School-wide store: whole-School scope only (never listed, read or moved by a Campus-scoped holder).',
             'inactiveCampus' => 'A grant on an inactive Campus confers nothing (no read, no movement); whole-School holders keep everything.',
-            'sharedLookups' => 'The stock pages\' active Item lookup (the School-wide catalogue: id, code, name, unit) answers a Campus-scoped stock.manage holder; the Item/Location directory (inventory.directory.*) stays School-only. A movement is visible only when every Location it touches is in scope; a transfer needs scope over both Locations.',
+            'sharedLookups' => 'The stock pages\' active Item lookup (the School-wide catalogue: id, code, name, unit) answers a Campus-scoped stock.manage holder; the Item/Location directory (inventory.directory.*) stays School-only. A movement is visible only when every Location it touches is in scope; a transfer needs scope over both Locations. ORG.9C-2: the issue form\'s Department lookup (active HR Departments: id, code, name) offers School-wide Departments and those on in-scope Campuses only; a write-off follows its Location\'s scope, re-read fresh.',
         ],
         'timetable' => [
             'label' => 'Timetable schedule',

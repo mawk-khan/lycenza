@@ -4,11 +4,13 @@ namespace App\Domain\Inventory\Http\Controllers;
 
 use App\Domain\Inventory\Application\InventoryStockAccess;
 use App\Domain\Inventory\Application\InventoryStockService;
+use App\Domain\Inventory\Application\WriteOffReason;
 use App\Domain\Inventory\Infrastructure\InventoryItem;
 use App\Domain\Inventory\Infrastructure\InventoryStockBalance;
 use App\Domain\Inventory\Infrastructure\StockMovement;
 use App\Http\Controllers\Controller;
 use App\Models\School;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -70,7 +72,7 @@ class InventoryStockController extends Controller
         $validated = $request->validate([
             'inventory_item_id' => ['sometimes', 'string'],
             'inventory_location_id' => ['sometimes', 'string'],
-            'movement_type' => ['sometimes', Rule::in(['receipt', 'issue', 'transfer'])],
+            'movement_type' => ['sometimes', Rule::in(StockMovement::TYPES)],
         ]);
 
         $query = $access->movements($scope)->with(['item', 'fromLocation', 'toLocation'])->orderByDesc('occurred_at');
@@ -119,12 +121,43 @@ class InventoryStockController extends Controller
     {
         $scope = $this->authorizeCampusScope('inventory.stock.manage', $school);
 
-        $validated = $this->validateMutation($request);
+        $validated = $request->validate([
+            'inventory_item_id' => ['required', 'string'],
+            'inventory_location_id' => ['required', 'string'],
+            'quantity' => ['required', 'regex:/^\d+(\.\d{1,3})?$/'],
+            'recipient_department_id' => ['sometimes', 'nullable', 'uuid'],
+        ]);
 
         $item = InventoryItem::query()->findOrFail($validated['inventory_item_id']);
         $location = $access->location($scope, $validated['inventory_location_id']);
 
-        $movement = $service->issue($item, $location, $validated['quantity'], $request->user());
+        $movement = $service->issue($item, $location, $validated['quantity'], $request->user(), $validated['recipient_department_id'] ?? null);
+
+        return response()->json(['data' => $this->presentMovement($movement->load(['item', 'fromLocation']))], 201);
+    }
+
+    /**
+     * ORG.9C-2 (ADR 0076 §70): write-off over the API -- the same
+     * DIRECT_WITH_ASSURANCE service as the web form. The request's
+     * `mfa_code` is re-verified after the scope check and outside the
+     * business transaction (rule 95); `idempotent` replays a retry.
+     */
+    public function writeOff(Request $request, School $school, InventoryStockService $service, InventoryStockAccess $access, FreshMfaRequirement $mfa): JsonResponse
+    {
+        $scope = $this->authorizeCampusScope('inventory.stock.manage', $school);
+
+        $validated = $request->validate([
+            'inventory_item_id' => ['required', 'string'],
+            'inventory_location_id' => ['required', 'string'],
+            'quantity' => ['required', 'regex:/^\d+(\.\d{1,3})?$/'],
+            'reason_code' => ['required', 'string', Rule::in(WriteOffReason::CODES)],
+        ]);
+
+        $item = InventoryItem::query()->findOrFail($validated['inventory_item_id']);
+        $location = $access->location($scope, $validated['inventory_location_id']);
+        $proof = $mfa->requireForAction($request, $request->user());
+
+        $movement = $service->writeOff($school, $item, $location, $validated['quantity'], $validated['reason_code'], $request->user(), $proof);
 
         return response()->json(['data' => $this->presentMovement($movement->load(['item', 'fromLocation']))], 201);
     }
@@ -187,6 +220,8 @@ class InventoryStockController extends Controller
             'item' => ['id' => $movement->item->id, 'code' => $movement->item->code, 'name' => $movement->item->name],
             'fromLocation' => $movement->fromLocation ? ['id' => $movement->fromLocation->id, 'code' => $movement->fromLocation->code] : null,
             'toLocation' => $movement->toLocation ? ['id' => $movement->toLocation->id, 'code' => $movement->toLocation->code] : null,
+            'writeOffReason' => $movement->write_off_reason,
+            'recipientDepartmentId' => $movement->recipient_department_id,
         ];
     }
 }

@@ -1634,6 +1634,10 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('/inventory-stock/transfer', [InventoryStockController::class, 'transfer'])
                 ->middleware(['capability:inventory.stock.manage,campus', 'throttle:school-api-mutations', 'idempotent'])
                 ->name('schools.inventory-stock.transfer');
+            // ORG.9C-2 (ADR 0076 §70): write-off -- fresh MFA (mfa_code) and fresh authority in the service.
+            Route::post('/inventory-stock/write-off', [InventoryStockController::class, 'writeOff'])
+                ->middleware(['capability:inventory.stock.manage,campus', 'throttle:school-api-mutations', 'idempotent'])
+                ->name('schools.inventory-stock.write-off');
 
             // Phase 10F: Canteen (Outlet/Item/recipe directory, billing
             // configuration, Order lifecycle). `place`/`fulfill` carry

@@ -2,23 +2,32 @@
 
 namespace App\Domain\Inventory\Application;
 
+use App\Domain\HR\Application\DepartmentReference;
 use App\Domain\Inventory\Application\Exceptions\ConcurrentStockConflictException;
 use App\Domain\Inventory\Application\Exceptions\DuplicateInventoryItemRequirementException;
 use App\Domain\Inventory\Application\Exceptions\EmptyIssueRequirementsException;
 use App\Domain\Inventory\Application\Exceptions\InsufficientStockException;
 use App\Domain\Inventory\Application\Exceptions\InvalidQuantityException;
+use App\Domain\Inventory\Application\Exceptions\InvalidWriteOffReasonException;
 use App\Domain\Inventory\Application\Exceptions\InventoryItemNotFoundException;
+use App\Domain\Inventory\Application\Exceptions\IssueRecipientNotAvailableException;
 use App\Domain\Inventory\Application\Exceptions\ItemNotAvailableException;
 use App\Domain\Inventory\Application\Exceptions\LocationNotAvailableException;
 use App\Domain\Inventory\Application\Exceptions\SameLocationTransferException;
+use App\Domain\Inventory\Application\Exceptions\StockRequestAlreadySubmittedException;
 use App\Domain\Inventory\Infrastructure\InventoryItem;
 use App\Domain\Inventory\Infrastructure\InventoryLocation;
 use App\Domain\Inventory\Infrastructure\InventoryStockBalance;
 use App\Domain\Inventory\Infrastructure\StockMovement;
+use App\Models\School;
 use App\Models\User;
+use App\Support\Approval\ApprovalDecisionAuthority;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use Illuminate\Database\QueryException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 use Symfony\Component\Uid\UuidV7;
 use Throwable;
 
@@ -50,6 +59,8 @@ class InventoryStockService
 
     public function __construct(
         private readonly AuditRecorder $audit,
+        private readonly DepartmentReference $departments,
+        private readonly ApprovalDecisionAuthority $authority,
     ) {}
 
     /**
@@ -93,16 +104,33 @@ class InventoryStockService
      * than the requested quantity -- `quantity_on_hand` can never go
      * negative, proven under real two-process concurrency
      * (tests/Feature/Inventory/InventoryStockConcurrencyTest.php).
+     *
+     * ORG.9C-2 (ADR 0076 §70): an issue is terminal consumption out of a
+     * Location, never to another Location (that is transfer()) and never a
+     * sale (Canteen keeps its own order lifecycle). It may name an HR
+     * Department as its organisational recipient (DepartmentReference:
+     * active, School-wide or on the Location's Campus, share-locked here);
+     * a person is never recorded (E21.2G O5). A web submission carries a
+     * server-issued `$idempotencyKey`: the same key with the same terms
+     * returns the recorded movement, different terms are refused.
      */
-    public function issue(InventoryItem $item, InventoryLocation $location, string $quantity, ?User $actor = null): StockMovement
+    public function issue(InventoryItem $item, InventoryLocation $location, string $quantity, ?User $actor = null, ?string $recipientDepartmentId = null, ?string $idempotencyKey = null): StockMovement
     {
         $this->assertAvailable($item, $location);
         $this->assertValidQuantity($item, $quantity);
 
-        return $this->guarded(function () use ($item, $location, $quantity, $actor) {
-            return DB::transaction(function () use ($item, $location, $quantity, $actor) {
+        return $this->guarded(function () use ($item, $location, $quantity, $actor, $recipientDepartmentId, $idempotencyKey) {
+            return DB::transaction(function () use ($item, $location, $quantity, $actor, $recipientDepartmentId, $idempotencyKey) {
                 $this->lockLocations($location);
+                if ($recipientDepartmentId !== null && ! $this->departments->lockIssuable($item->school, $recipientDepartmentId, $location->campus_id)) {
+                    throw new IssueRecipientNotAvailableException;
+                }
                 $balance = $this->lockBalance($this->ensureBalanceRow($item, $location));
+
+                $replay = $this->replay($item, $idempotencyKey, 'issue', $location, $quantity, ['recipient_department_id' => $recipientDepartmentId]);
+                if ($replay !== null) {
+                    return $replay;
+                }
 
                 if (bccomp($balance->quantity_on_hand, $quantity, 3) < 0) {
                     throw new InsufficientStockException;
@@ -111,15 +139,89 @@ class InventoryStockService
                 $balance->quantity_on_hand = bcsub($balance->quantity_on_hand, $quantity, 3);
                 $balance->save();
 
-                $movement = $this->recordMovement($item, 'issue', $location, null, $quantity);
+                $movement = $this->recordMovement($item, 'issue', $location, null, $quantity, [
+                    'recipient_department_id' => $recipientDepartmentId,
+                    'idempotency_key' => $idempotencyKey,
+                ]);
 
-                $this->audit->school($item->school, 'inventory.stock.issued', actor: $actor, subject: $movement, metadata: [
+                $this->audit->school($item->school, 'inventory.stock.issued', actor: $actor, subject: $movement, metadata: array_filter([
                     'movementId' => $movement->id,
                     'itemId' => $item->id,
                     'itemCode' => $item->code,
                     'fromLocationId' => $location->id,
                     'fromLocationCode' => $location->code,
                     'quantity' => $quantity,
+                    'recipientDepartmentId' => $recipientDepartmentId,
+                ], fn ($v) => $v !== null));
+
+                return $movement;
+            });
+        });
+    }
+
+    /**
+     * ORG.9C-2 (ADR 0076 §70): write stock off -- units physically no longer
+     * usable or present (WriteOffReason: damaged, expired, lost), removed
+     * from the Location as a `write_off` movement. DIRECT_WITH_ASSURANCE
+     * (ApprovalWorkflowRegistry::DIRECT_ASSURED), never an approval
+     * workflow:
+     * - the existing `inventory.stock.manage` within the Location's scope
+     *   (the caller resolved it), re-read FRESH under the locks through
+     *   ApprovalDecisionAuthority with the Location's Campus;
+     * - a FreshMfaProof for this actor (FreshMfaRequirement, outside this
+     *   transaction);
+     * - a closed reason, stored on the movement and DB-required
+     *   (`stock_movements_write_off_reason_check`); no free text;
+     * - the same Location-then-balance lock order and post-lock sufficiency
+     *   check as issue(), so it serializes with every other stock write.
+     * No accounting: Inventory carries no cost or journal (INVENTORY.md §12).
+     */
+    public function writeOff(School $school, InventoryItem $item, InventoryLocation $location, string $quantity, string $reasonCode, User $actor, FreshMfaProof $mfa, ?string $idempotencyKey = null): StockMovement
+    {
+        if (! in_array($reasonCode, WriteOffReason::CODES, true)) {
+            throw new InvalidWriteOffReasonException;
+        }
+        if (! $mfa->isFor($actor->id)) {
+            throw new LogicException('The fresh MFA proof belongs to another User.');
+        }
+        if ($item->school_id !== $school->id || $location->school_id !== $school->id) {
+            throw new LocationNotAvailableException;
+        }
+        $this->assertAvailable($item, $location);
+        $this->assertValidQuantity($item, $quantity);
+
+        return $this->guarded(function () use ($school, $item, $location, $quantity, $reasonCode, $actor, $idempotencyKey) {
+            return DB::transaction(function () use ($school, $item, $location, $quantity, $reasonCode, $actor, $idempotencyKey) {
+                $this->lockLocations($location);
+                $balance = $this->lockBalance($this->ensureBalanceRow($item, $location));
+                $this->authority->requireCurrent($actor, 'inventory.stock.manage', $school, $location->campus_id);
+
+                $replay = $this->replay($item, $idempotencyKey, 'write_off', $location, $quantity, ['write_off_reason' => $reasonCode]);
+                if ($replay !== null) {
+                    return $replay;
+                }
+
+                if (bccomp($balance->quantity_on_hand, $quantity, 3) < 0) {
+                    throw new InsufficientStockException;
+                }
+
+                $balance->quantity_on_hand = bcsub($balance->quantity_on_hand, $quantity, 3);
+                $balance->save();
+
+                $movement = $this->recordMovement($item, 'write_off', $location, null, $quantity, [
+                    'write_off_reason' => $reasonCode,
+                    'idempotency_key' => $idempotencyKey,
+                ]);
+
+                $this->audit->school($school, 'inventory.stock.written_off', actor: $actor, subject: $movement, metadata: [
+                    'movementId' => $movement->id,
+                    'itemId' => $item->id,
+                    'itemCode' => $item->code,
+                    'fromLocationId' => $location->id,
+                    'fromLocationCode' => $location->code,
+                    'quantity' => $quantity,
+                    'reasonCode' => $reasonCode,
+                    'freshMfa' => true,
                 ]);
 
                 return $movement;
@@ -436,7 +538,8 @@ class InventoryStockService
         return $locked;
     }
 
-    private function recordMovement(InventoryItem $item, string $type, ?InventoryLocation $from, ?InventoryLocation $to, string $quantity): StockMovement
+    /** @param  array<string, string|null>  $extra  ORG.9C-2: write-off reason, issue recipient, form key */
+    private function recordMovement(InventoryItem $item, string $type, ?InventoryLocation $from, ?InventoryLocation $to, string $quantity, array $extra = []): StockMovement
     {
         return StockMovement::query()->create([
             'school_id' => $item->school_id,
@@ -446,7 +549,37 @@ class InventoryStockService
             'to_location_id' => $to?->id,
             'quantity' => $quantity,
             'occurred_at' => now(),
+            ...$extra,
         ]);
+    }
+
+    /**
+     * ORG.9C-2: the movement already claimed on this form key, when its terms
+     * are exactly these (a retried submission: returned, nothing new is
+     * written or audited); a key claimed with other terms is refused. Read
+     * after the balance lock, so a concurrent duplicate of the same terms
+     * waits for the first and then finds it.
+     *
+     * @param  array<string, string|null>  $terms
+     */
+    private function replay(InventoryItem $item, ?string $key, string $type, InventoryLocation $location, string $quantity, array $terms): ?StockMovement
+    {
+        if ($key === null) {
+            return null;
+        }
+        $existing = StockMovement::query()->where('school_id', $item->school_id)->where('idempotency_key', $key)->first();
+        if ($existing === null) {
+            return null;
+        }
+        $same = $existing->movement_type === $type
+            && $existing->inventory_item_id === $item->id
+            && $existing->from_location_id === $location->id
+            && bccomp((string) $existing->quantity, $quantity, 3) === 0;
+        foreach ($terms as $column => $value) {
+            $same = $same && $existing->{$column} === $value;
+        }
+
+        return $same ? $existing : throw new StockRequestAlreadySubmittedException;
     }
 
     private function assertAvailable(InventoryItem $item, InventoryLocation $location): void
@@ -514,6 +647,14 @@ class InventoryStockService
     {
         try {
             return $callback();
+        } catch (UniqueConstraintViolationException $e) {
+            // ORG.9C-2: the same form key raced in with DIFFERENT terms (the
+            // same terms serialize on the balance lock and replay instead).
+            if (str_contains($e->getMessage(), 'stock_movements_idempotency_unique')) {
+                throw new StockRequestAlreadySubmittedException;
+            }
+
+            throw $e;
         } catch (QueryException $e) {
             if ($this->isCheckViolation($e)) {
                 throw new ConcurrentStockConflictException;

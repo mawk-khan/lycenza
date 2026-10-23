@@ -1551,8 +1551,12 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::post('/issue', [InventoryStockController::class, 'storeIssue'])->name('issue.store');
         Route::get('/transfer', [InventoryStockController::class, 'createTransfer'])->name('transfer.create');
         Route::post('/transfer', [InventoryStockController::class, 'storeTransfer'])->name('transfer.store');
+        // ORG.9C-2 (ADR 0076 §70): write-off, DIRECT_WITH_ASSURANCE (fresh MFA + fresh authority + closed reason).
+        Route::get('/write-off', [InventoryStockController::class, 'createWriteOff'])->name('write-off.create');
+        Route::post('/write-off', [InventoryStockController::class, 'storeWriteOff'])->name('write-off.store');
         Route::get('/search/items', [InventoryStockController::class, 'searchItems'])->name('search-items');
         Route::get('/search/locations', [InventoryStockController::class, 'searchLocations'])->name('search-locations');
+        Route::get('/search/departments', [InventoryStockController::class, 'searchDepartments'])->name('search-departments');
     });
 
     // Phase 10F: Canteen (Outlet/Item/recipe directory, billing

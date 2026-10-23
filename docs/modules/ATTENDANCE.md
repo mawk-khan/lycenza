@@ -841,3 +841,5 @@ Both are read-only, under `attendance.view` and the actor's CampusScope through 
   - **Access:** a Student with no in-scope record at all is not found, so a Campus reader learns nothing about another Campus's Students.
   - **Audit:** one `attendance.student_history_viewed` audit per read (range and count; the Student as subject).
   - **Links:** the exceptions list links each row to it.
+
+**OD-9.3 (owner, 2026-10-23): CLOSED for v1.** The register-status model above is the factual model: submitted, pending, not submitted. There is no "missing" or compliance state until a canonical Student academic-calendar or closure model exists.

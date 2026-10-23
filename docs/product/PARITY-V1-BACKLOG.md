@@ -127,6 +127,29 @@ None of these shows a late, no-punch, threshold or loss-of-pay state, or a leave
 | PV1-08 | Inventory issue and write-off: recipient and reason on issue, damaged write-off as a new movement kind, stock filters, monthly stock view | INV-011, INV-014, INV-007, INV-016, INV-023, INV-020 | stores can account for issued and damaged stock | issue has no recipient/reason | existing `inventory.*` keys; movements stay append-only (ORG.7H-1R), Location Campus frozen | Location Campus re-checked | none (a write-off approval would be an owner decision) | none | migration (movement kind) | M |
 | PV1-09 | Transport: bulk rider upload through `TransportStudentAssignmentService` per row; route riders vs vehicle capacity | TRN-036, TRN-015 | start-of-year rider setup | one-by-one assignment; route index counts stops only | existing transport keys; per-row service, per-row outcome, no direct writes | rider Campus rules (ORG.7D-5) | none | none | none | M |
 
+### ORG.9C-2 built (2026-10-23, ADR 0076 §70)
+
+**OD-9.3 CLOSED for v1 (owner):** register states stay SUBMITTED, PENDING and NOT_SUBMITTED. There is no MISSING state until a canonical Student academic-calendar or closure model exists.
+
+**PV1-08, built:**
+- **Write-off (INV-011 → P0).** A `write_off` movement with a closed reason (damaged, expired, lost), DIRECT_WITH_ASSURANCE: the existing `inventory.stock.manage` in the Location's scope, re-read fresh, plus fresh MFA, a web confirmation and a replay-safe form key.
+- **Issue (INV-014 → P1).** Terminal issue with an optional HR Department recipient.
+
+**PV1-08, stopped (owner decision):**
+- **Person recipients (staff, Students).** Movements are tenant-lifetime without personal data (E21.2G O5), and a person FK would block E21-D9 Employee purge.
+- **Write-off remarks.** The same reason: no free text is stored.
+- **Returnable issue.** Custody is deferred with asset tracking (INVENTORY.md §14).
+- **Count or stocktake correction.** There is no stocktake model.
+- **Fixed-asset disposal.** There is no asset model.
+
+**PV1-08, not authorized here:** stock filters and the monthly stock view (INV-016, INV-023, INV-020).
+
+**Unchanged:**
+- Configurable approval chains stay DO_NOT_BUILD (INV-034).
+- PV1-09, ORG.9D and the Library write and configuration items are untouched.
+
+Matrix §18 has the coverage.
+
 ## Wave ORG.9D — Communications for operations
 
 | ID | Title | Functions | Value | Current gap | Security | Campus | Approval | Gate | Dependency | Size |

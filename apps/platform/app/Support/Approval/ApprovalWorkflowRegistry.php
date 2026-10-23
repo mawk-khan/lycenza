@@ -207,6 +207,13 @@ final class ApprovalWorkflowRegistry
                 'App\Domain\Fees\Application\Sources\FeeSourceChargeService',
             ],
         ],
+        // ORG.9C-2 (ADR 0076 §70): never a request/approve chain (INV-034 stays DO_NOT_BUILD).
+        'App\Domain\Inventory\Application\InventoryStockService' => [
+            'capability' => 'inventory.stock.manage', 'action' => 'Inventory stock write-off (writeOff(); issue, receive and transfer stay ordinary)',
+            'freshAuthority' => true, 'freshMfa' => true, 'reason' => 'WriteOffReason (closed: damaged, expired, lost; no free text)',
+            'evidence' => 'stock_movements write_off movement + write_off_reason (DB-required: stock_movements_write_off_reason_check)', 'relationshipConflict' => null,
+            'campusScoped' => 'The Location\'s Campus: requireCurrent() with it (a whole-School grant or an active grant on that Campus); a School-wide Location needs whole-School authority.',
+        ],
     ];
 
     /**

@@ -52,7 +52,15 @@ class StockMovementArchitectureGuardTest extends TestCase
     {
         $source = file_get_contents(base_path('app/Domain/Inventory/Application/InventoryStockService.php'));
 
-        $this->assertStringNotContainsString('StockMovement::query()->where', $source, 'InventoryStockService must only ever create() a StockMovement, never query-then-update/delete one.');
+        // ORG.9C-2 (ADR 0076 §70): the ONE read is the form-key replay lookup; nothing chained
+        // on a StockMovement query may write (the runtime role has no UPDATE/DELETE either).
+        preg_match_all('/StockMovement::query\(\)[^;]*;/s', $source, $queries);
+        $reads = array_values(array_filter($queries[0], fn (string $q) => ! str_starts_with($q, 'StockMovement::query()->create(')));
+        $this->assertCount(1, $reads, 'InventoryStockService reads a StockMovement only to replay a claimed form key.');
+        $this->assertStringContainsString("->where('idempotency_key', \$key)->first();", $reads[0]);
+        foreach ($queries[0] as $query) {
+            $this->assertDoesNotMatchRegularExpression('/->(update|delete|forceDelete|increment|decrement|upsert)\(/', $query, 'InventoryStockService must only ever create() a StockMovement, never query-then-update/delete one.');
+        }
 
         foreach (['$movement->update(', '$movement->delete(', '$movement->save('] as $needle) {
             $this->assertStringNotContainsString($needle, $source, "InventoryStockService must never mutate a created StockMovement ({$needle}).");

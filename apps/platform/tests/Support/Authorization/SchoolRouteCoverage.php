@@ -312,6 +312,7 @@ final class SchoolRouteCoverage
             Coverage::campus('api.v1.schools.inventory-stock.receive', 'inventory.stock.manage', InventoryStockAccess::class, 'location'),
             Coverage::campus('api.v1.schools.inventory-stock.issue', 'inventory.stock.manage', InventoryStockAccess::class, 'location'),
             Coverage::campus('api.v1.schools.inventory-stock.transfer', 'inventory.stock.manage', InventoryStockAccess::class, 'location'),
+            Coverage::campus('api.v1.schools.inventory-stock.write-off', 'inventory.stock.manage', InventoryStockAccess::class, 'location'),
 
             // Domain\Canteen\Http\Controllers\CanteenOutletController
             Coverage::gate('api.v1.schools.canteen-outlets.index', 'canteen.directory.view'),
@@ -982,6 +983,9 @@ final class SchoolRouteCoverage
             Coverage::campus('app.inventory-stock.transfer.store', 'inventory.stock.manage', InventoryStockAccess::class, 'location'),
             Coverage::campusLookup('app.inventory-stock.search-items', 'inventory.stock.manage', 'Lookup of the School-wide Item catalogue (CampusScopeCatalogue::DOMAINS inventory sharedLookups).'),
             Coverage::campus('app.inventory-stock.search-locations', 'inventory.stock.manage', InventoryStockAccess::class, 'searchLocations'),
+            Coverage::campusLookup('app.inventory-stock.write-off.create', 'inventory.stock.manage', 'Data-free form page (reasons are code-owned); Locations come from the scoped search (search-locations).'),
+            Coverage::campus('app.inventory-stock.write-off.store', 'inventory.stock.manage', InventoryStockAccess::class, 'location'),
+            Coverage::campusLookup('app.inventory-stock.search-departments', 'inventory.stock.manage', 'Lookup of active HR Departments (id, code, name): School-wide ones and those on in-scope Campuses (CampusScopeCatalogue::DOMAINS inventory sharedLookups).'),
 
             // Http\Controllers\App\Canteen\CanteenOutletController
             Coverage::gate('app.canteen-outlets.index', 'canteen.directory.view'),

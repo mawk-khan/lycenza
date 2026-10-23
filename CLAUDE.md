@@ -1593,3 +1593,9 @@ once several modules copy it.
      - **Staff attendance and leave month reports** count exactly the register's states and approved leave units. They never show a late, no-punch, threshold or loss-of-pay state, or a leave reason (HRX-L1/L2/L4).
      - **A directory or circulation filter** only narrows the reader's existing Campus scope. A Campus reader is judged on current, in-scope placements only, and a filter is never a permission.
      - **Never** add a write, an export, a capability or a Campus adoption to these surfaces.
+
+105. **Inventory issue and write-off stay on the one ledger; a write-off is direct with assurance (ADR 0076 §70, ORG.9C-2).**
+     - **One writer.** Every stock change goes through `InventoryStockService`, with the Location FOR SHARE, then the balance FOR UPDATE, then sufficiency re-checked under the lock. Never a second stock engine, a balance change without a movement, or an edit or delete of a movement.
+     - **Issue** is terminal consumption from one Location, never to another Location (that is a transfer) and never a sale. Its only recipient is an optional HR Department, through HR's `DepartmentReference`. Never record a person on a movement: movements are tenant-lifetime data without personal data (E21.2G O5).
+     - **Write-off** is a `write_off` movement with a closed `WriteOffReason` (DB-required), never free text. It is DIRECT_WITH_ASSURANCE (`ApprovalWorkflowRegistry::DIRECT_ASSURED`): `inventory.stock.manage` re-read fresh through `requireCurrent()` with the Location's Campus (`holdsInCampusNow()`), a `FreshMfaProof`, and a web confirmation. Never a request/approve chain.
+     - **Duplicates.** A web issue or write-off is claimed on a server-issued form key (unique per School), and a replay never writes or audits twice.
