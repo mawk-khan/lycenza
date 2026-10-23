@@ -76,7 +76,7 @@ class FinanceCampusReadTest extends TestCase
         $w['cLeaver'] = $charge($w['sLeaver'], '50.00');
 
         $this->travelTo(CarbonImmutable::parse('2026-08-01T06:00:00Z'));
-        $this->inSchool($w['school'], fn () => app(StudentEnrollmentService::class)->transferPlacement(StudentEnrollment::query()->findOrFail($moveA->id), $sectionB, '91', '2026-08-01'));
+        $this->inSchool($w['school'], fn () => app(StudentEnrollmentService::class)->transferPlacement(StudentEnrollment::query()->findOrFail($moveA->id), $sectionB, 'T-91', '2026-08-01')); // never numeric: the factory's process-wide numeric roll sequence can reach any number
         $this->travelTo(CarbonImmutable::parse('2026-09-01T06:00:00Z'));
         $w['cMoveB'] = $charge($w['sMove'], '400.00');
         $this->forceStudentStatusOf($w['school'], $w['sLeaver']->id, 'inactive');

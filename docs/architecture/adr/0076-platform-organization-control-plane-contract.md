@@ -10571,6 +10571,11 @@ It returns User ids only. The School-operational link is enforced by publish its
   - composer and authorization.
 - **Security review:** no HIGH or MEDIUM findings. LOW-2 and LOW-3 are fixed; LOW-1 is accepted as above.
 
+**73.7a Pre-existing test fixture defect.** The first exact-SHA CI run failed on one shard.
+- **Test:** `FinanceCampusReadTest` (Finance; untouched by this slice).
+- **Cause:** a hard-coded transfer roll number "91" collided with `StudentEnrollmentFactory`'s process-wide numeric roll sequence. This happens whenever exactly 90 enrollments precede it in a shard, which this slice's added tests changed. The same latent defect sat in `FinanceCampusPaymentEntryTest`.
+- **Fix:** both now use "T-91", which never collides. Shard 4 was re-run locally green before the second CI run.
+
 **73.8 Parity.**
 - COM-016 → P0. COM-034 → P1 (intended difference: through User accounts on the existing email channel).
 - Coverage: 38.7 % / 33.8 % functional, 82.5 % / 72.1 % v1.
