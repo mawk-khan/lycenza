@@ -86,6 +86,8 @@ final class RetentionAnchors
         'communication_threads' => ['last_activity_at', 'campus_id'],
         'communication_approval_requests' => ['status', 'decided_at', 'requested_at', 'announcement_id'],
         'communication_delivery_policy_decisions' => ['created_at', 'message_id', 'recipient_guardian_id', 'recipient_student_id'],
+        // ORG.9D-3 (ADR 0076 §75.12): School calendar Events.
+        'communication_events' => ['status', 'published_at', 'cancelled_at', 'ends_on', 'ends_at', 'grade_level_id', 'section_id'],
         // E21.2A housekeeping
         'email_messages' => ['status', 'finished_at', 'source_id'],
         'email_provider_references' => ['email_message_id'],

@@ -114,7 +114,16 @@ final class CommunicationRetentionService
     public function pruneContent(School $school, string $cutoffDate, int $batch, bool $dryRun): array
     {
         // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
-        return app(RetentionExpiry::class)->retained('communication_content', $dryRun, $school->id, ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'skipped' => 0, 'errors' => 0], fn (): array => $this->pruneContentUnit($school, $cutoffDate, $batch, $dryRun), recordedBefore: $cutoffDate);
+        $result = app(RetentionExpiry::class)->retained('communication_content', $dryRun, $school->id, ['eligible' => 0, 'deleted' => 0, 'unresolved' => 0, 'skipped' => 0, 'errors' => 0], fn (): array => $this->pruneContentUnit($school, $cutoffDate, $batch, $dryRun), recordedBefore: $cutoffDate);
+
+        // ORG.9D-3 (ADR 0076 §75.12): published School calendar Events are content
+        // too -- the same D3 clock (the Academic Year of their School-local last
+        // day), expired by their database function as the retention identity.
+        $events = $this->expiry->forSchool(RetentionExpiry::COMMUNICATION_EVENT, $school, CarbonImmutable::parse($cutoffDate), $batch, $dryRun);
+        $result['eligible'] += $events['eligible'];
+        $result['deleted'] += $events['deleted'];
+
+        return $result;
     }
 
     /** @return array{eligible: int, deleted: int, unresolved: int, skipped: int, errors: int} */

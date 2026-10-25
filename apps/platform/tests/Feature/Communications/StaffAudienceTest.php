@@ -282,4 +282,15 @@ class StaffAudienceTest extends TestCase
         $this->actingAs($member)->post("/app/schools/{$this->school->id}/activate");
         $this->post('/app/communications/announcements', ['title' => 'x', 'body' => 'y', 'priority' => 'normal', 'audience_type' => 'staff'])->assertForbidden();
     }
+
+    #[Test]
+    public function the_single_user_answer_agrees_with_the_staff_set(): void
+    {
+        // ORG.9D-3: CurrentStaffMembers::includes() is the same identity chain for ONE User.
+        $staff = app(CurrentStaffMembers::class);
+        $set = $staff->userIds($this->school);
+        foreach ($this->u as $key => $user) {
+            $this->assertSame(in_array((string) $user->id, $set, true), $staff->includes($this->school, $user), $key);
+        }
+    }
 }

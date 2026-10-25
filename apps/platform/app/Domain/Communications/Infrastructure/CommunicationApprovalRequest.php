@@ -38,7 +38,7 @@ class CommunicationApprovalRequest extends Model
     use BelongsToSchool, GeneratesUuidV7, HasFactory;
 
     protected $fillable = [
-        'school_id', 'announcement_id', 'requested_by_user_id', 'requested_at',
+        'school_id', 'announcement_id', 'event_id', 'requested_by_user_id', 'requested_at',
         'fingerprint', 'snapshot', 'status', 'decided_by_user_id', 'decided_at', 'decision_note',
     ];
 
@@ -60,6 +60,22 @@ class CommunicationApprovalRequest extends Model
     public function announcement(): BelongsTo
     {
         return $this->belongsTo(CommunicationAnnouncement::class, 'announcement_id');
+    }
+
+    /**
+     * ORG.9D-3: the other possible subject -- exactly one of announcement or
+     * event (communication_approval_requests_one_subject_check).
+     *
+     * @return BelongsTo<CommunicationEvent, $this>
+     */
+    public function event(): BelongsTo
+    {
+        return $this->belongsTo(CommunicationEvent::class, 'event_id');
+    }
+
+    public function isForEvent(): bool
+    {
+        return $this->event_id !== null;
     }
 
     /** @return BelongsTo<User, $this> */

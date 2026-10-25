@@ -4,7 +4,10 @@ import { Link } from '@inertiajs/vue3';
 
 interface ApprovalQueueRow {
     id: string;
-    announcementId: string;
+    announcementId: string | null;
+    // ORG.9D-3: a calendar Event's request shares this queue.
+    kind: 'announcement' | 'event';
+    eventId: string | null;
     title: string;
     requestedByName: string | null;
     requestedAt: string;
@@ -62,7 +65,9 @@ const channelLabels: Record<string, string> = { in_app: 'In-app', email: 'Email'
                               ? 'Staff only'
                               : r.audienceType === 'fee_reminder'
                                 ? 'Fee reminder'
-                                : 'Selected members'
+                                : r.kind === 'event'
+                                  ? 'Calendar event'
+                                  : 'Selected members'
                     }}</span>
                     <span
                         v-if="r.requirement === 'required'"

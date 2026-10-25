@@ -2,6 +2,8 @@
 
 namespace App\Domain\Communications\Http\Controllers;
 
+use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
+use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\Communications\Application\Approval\CommunicationApprovalService;
 use App\Domain\Communications\Application\Audience\FeeReminder\FeeReminderSelection;
 use App\Domain\Communications\Application\Exceptions\CommunicationException;
@@ -9,7 +11,9 @@ use App\Domain\Communications\Http\Controllers\Concerns\HandlesFeeReminders;
 use App\Domain\Communications\Infrastructure\CommunicationApprovalRequest;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -68,7 +72,7 @@ class CommunicationApprovalController extends Controller
         $actor = $context->actor();
 
         $model = CommunicationApprovalRequest::query()
-            ->with(['announcement:id,title,status', 'requestedBy:id,name', 'decidedBy:id,name'])
+            ->with(['announcement:id,title,status', 'event:id,status,created_by_user_id', 'requestedBy:id,name', 'decidedBy:id,name'])
             ->findOrFail($approvalRequest);
 
         return Inertia::render('App/Communications/Approvals/Show', [
@@ -78,7 +82,9 @@ class CommunicationApprovalController extends Controller
             // requester -- server-side enforcement in
             // CommunicationApprovalService::decide() is the real
             // guarantee; this flag is presentation only.
-            'canDecide' => $model->isPending() && $model->requested_by_user_id !== $actor->id,
+            // ORG.9D-3: an Event's creator is never offered the decision either (the service refuses every author).
+            'canDecide' => $model->isPending() && $model->requested_by_user_id !== $actor->id
+                && ! ($model->isForEvent() && (string) $model->event?->created_by_user_id === (string) $actor->id),
         ]);
     }
 
@@ -131,6 +137,9 @@ class CommunicationApprovalController extends Controller
         return [
             'id' => $r->id,
             'announcementId' => $r->announcement_id,
+            // ORG.9D-3: a calendar Event's request shares this queue.
+            'kind' => $r->isForEvent() ? 'event' : 'announcement',
+            'eventId' => $r->event_id,
             'title' => $snapshot['title'] ?? $r->announcement?->title,
             'requestedByName' => $r->requestedBy?->name,
             'requestedAt' => $r->requested_at->toIso8601String(),
@@ -160,6 +169,27 @@ class CommunicationApprovalController extends Controller
             'id' => $r->id,
             'announcementId' => $r->announcement_id,
             'announcementStatus' => $r->announcement?->status,
+            // ORG.9D-3 (ADR 0076 §75): an Event request shows the approved
+            // TERMS from its immutable snapshot (dates, location, audience).
+            'kind' => $r->isForEvent() ? 'event' : 'announcement',
+            'eventId' => $r->event_id,
+            'eventStatus' => $r->event?->status,
+            'eventTerms' => $r->isForEvent() ? [
+                'location' => $snapshot['location'] ?? null,
+                'dateMode' => $snapshot['dateMode'] ?? null,
+                'startsOn' => $snapshot['startsOn'] ?? null,
+                'endsOn' => $snapshot['endsOn'] ?? null,
+                'startsAt' => isset($snapshot['startsAt']) ? CarbonImmutable::parse($snapshot['startsAt'])->setTimezone(SchoolTimezone::resolve($r->school))->format('Y-m-d H:i') : null,
+                'endsAt' => isset($snapshot['endsAt']) ? CarbonImmutable::parse($snapshot['endsAt'])->setTimezone(SchoolTimezone::resolve($r->school))->format('Y-m-d H:i') : null,
+                // The bound audience, by name (this School's own Grade/Section).
+                'audienceLabel' => match ($snapshot['audienceType'] ?? null) {
+                    'school_wide' => 'Whole School',
+                    'staff' => 'Staff (current employees)',
+                    'grade' => 'Guardians of '.(GradeLevel::query()->whereKey($snapshot['gradeLevelId'] ?? null)->value('name') ?? 'a Grade'),
+                    'section' => 'Guardians of '.(($s = Section::query()->with('gradeLevel:id,name')->find($snapshot['sectionId'] ?? null)) ? trim("{$s->gradeLevel?->name} · {$s->name}") : 'a Section'),
+                    default => 'Unknown',
+                },
+            ] : null,
             'status' => $r->status,
             'title' => $snapshot['title'] ?? null,
             'body' => $snapshot['body'] ?? null,

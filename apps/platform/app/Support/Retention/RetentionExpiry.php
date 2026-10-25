@@ -61,6 +61,12 @@ final class RetentionExpiry
     /** E21.2C (E21-D3): append-only delivery policy decisions, 1 year after created_at. */
     public const COMMUNICATION_POLICY_DECISION = 'communication_policy_decision';
 
+    /** ORG.9D-3 (E21-D3, ADR 0076 §75.12): a published School calendar Event, 3 years after the end of its Academic Year. */
+    public const COMMUNICATION_EVENT = 'communication_event';
+
+    /** ORG.9D-3 (E21-D3 residual): a never-published cancelled calendar Event, 1 year after its cancellation. */
+    public const COMMUNICATION_EVENT_CANCELLED = 'communication_event_cancelled';
+
     /** E21.3E (E21.2G I3, E21-D6): an ended API client credential, 7 years after its authority ended. */
     public const SCHOOL_API_CREDENTIAL = 'school_api_credential';
 
@@ -90,6 +96,8 @@ final class RetentionExpiry
         self::ELECTIVE_TEACHING_ASSIGNMENT => 'retention_expire_elective_teaching_assignments',
         self::SCHOOL_ELEVATION => 'retention_expire_school_elevations',
         self::COMMUNICATION_POLICY_DECISION => 'retention_expire_communication_delivery_policy_decisions',
+        self::COMMUNICATION_EVENT => 'retention_expire_communication_events',
+        self::COMMUNICATION_EVENT_CANCELLED => 'retention_expire_cancelled_communication_events',
         self::SCHOOL_API_CREDENTIAL => 'retention_expire_api_client_credentials',
     ];
 
@@ -103,7 +111,7 @@ final class RetentionExpiry
     ];
 
     /** Categories whose trigger is a School-local date (the cutoff is a date). */
-    private const DATE_CUTOFFS = [self::TEACHING_ASSIGNMENT, self::ELECTIVE_TEACHING_ASSIGNMENT];
+    private const DATE_CUTOFFS = [self::TEACHING_ASSIGNMENT, self::ELECTIVE_TEACHING_ASSIGNMENT, self::COMMUNICATION_EVENT];
 
     /** @return list<string> every category (the metric's closed `operation` values) */
     public static function categories(): array

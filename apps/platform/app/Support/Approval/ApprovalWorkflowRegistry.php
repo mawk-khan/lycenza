@@ -75,8 +75,10 @@ final class ApprovalWorkflowRegistry
             'tables' => ['communication_approval_requests'],
             'request' => ['communications.announce'],
             'decide' => ['communications.approve'],
-            'participants' => ['communication_approval_requests.requested_by_user_id'],
+            'participants' => ['communication_approval_requests.requested_by_user_id', 'communication_events.created_by_user_id'],
             'decider' => 'communication_approval_requests.decided_by_user_id',
+            // ORG.9D-3: publishing an approved calendar Event (execution, never a decision of its own).
+            'otherDecisionColumns' => ['communication_events.published_by_user_id'],
             'dbBackstop' => null,
             'makerChecker' => 'domain',
             'service' => 'App\Domain\Communications\Application\Approval\CommunicationApprovalService',
@@ -85,7 +87,7 @@ final class ApprovalWorkflowRegistry
             'drift' => 'fingerprint',
             'freshMfa' => [],
             'compatibility' => 'adapter',
-            'note' => 'Self-approval refused in the service only (no DB check); the announcement creator is a second candidate participant (ORG.9D-2: refused as decider for a fee_reminder, whose preparer is the only sender); the capability is checked in the controller.',
+            'note' => 'Self-approval refused in the service only (no DB check); the announcement creator is a second candidate participant (ORG.9D-2: refused as decider for a fee_reminder, whose preparer is the only sender); ORG.9D-3: calendar Events share this table (exclusive event_id subject) -- their creator and every audited editor are refused deciders; the capability is checked in the controller.',
         ],
         'student_mark_corrections' => [
             'domain' => 'Examinations',

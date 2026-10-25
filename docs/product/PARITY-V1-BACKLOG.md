@@ -202,8 +202,15 @@ All are read-only on the existing scope; matrix §19 has the coverage.
 - Existing `school_communication` email purpose under the owner brief (§38.3). A dedicated purpose is a pre-production owner decision (§74.11).
 - No new capability, role, Campus adoption, campaign or template engine.
 
-**Not started:**
-- PV1-12 (events calendar, ORG.9D-3): new business state, and never the Attendance expectation calendar (OD-9.3).
+### ORG.9D-3 built (2026-10-25, ADR 0076 §75)
+
+**PV1-12:** School Events Calendar (COM-024 P1, COM-027 P1; LMS-115 and COM-026 stay P2).
+- Communications-owned: all-day or timed Events in the School's timezone, an optional display-only location, and an existing audience (School-wide, Staff, Guardians of a Grade or Section).
+- Always approved by someone other than the preparer, then published to the staff calendar and the Guardian portal (dev-only until E46). Visibility is resolved per viewer at read time; a cancelled published Event stays visible, marked.
+- Never Attendance, closure, timetable, leave or exam truth (OD-9.3, separation guard). No recurrence, notifications, RSVP, Campus targeting, categories or attachments.
+- Retention: D3 adopted and implemented (published Events with their Academic Year; never-published cancelled after 1 year).
+
+**The ORG.9D Communications parity wave (PV1-10, PV1-11, PV1-12) is built.**
 
 ## Owner decisions before build (not scheduled)
 

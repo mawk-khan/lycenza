@@ -10716,3 +10716,134 @@ If nobody still owes, the existing `EmptyAudienceException` refuses and the anno
 - COM-045 → P1 and COM-042 → P1 (intended differences: manual, approved, Guardian accounts, fixed template plus a School note).
 - Statuses: P0 71, P1 104, P2 62, P3 19.
 - Coverage: 39.0 % / 34.1 % functional, 83.2 % / 72.7 % v1.
+
+## 75. ORG.9D-3 — School Events Calendar (as built, 2026-10-25)
+
+Owner authorization: ORG.9D-3 (PV1-12). Baseline `origin/main` = `12738b23`.
+
+**Owner decisions frozen in the brief:**
+- **Ownership:** Communications.
+- **Lifecycle:** draft → submit → approve or reject → publish → cancel, on the existing approval workflow. No recurrence, reminders, notifications, RSVP, capacity, attachments, links, categories, Campus targeting or academic-year binding.
+- **Content:** all-day or timed, in the School's timezone; a display-only location.
+- **OD-9.3 is unchanged:** an Event is never Attendance, closure, timetable, leave, payroll or exam truth.
+
+**75.1 Evidence.**
+- **Rows:** COM-024 "School events and holiday calendar" (with LMS-115, COM-026, COM-027), E2 workbook evidence only. No reference screenshot family was captured.
+- **Existing calendar-like data (audited; none is an Event model):**
+  - academic years and terms (Academic Structure);
+  - timetable periods and entries;
+  - staff holidays (Leave);
+  - examination paper dates (`scheduled_on`);
+  - admissions dates;
+  - announcements (messages, not dated entries).
+
+**75.2 Model** (`communication_events`, RLS forced).
+- **Fields:** title (≤ 200), description (≤ 10,000), optional location (≤ 200, text only), and a date mode.
+  - all-day: `starts_on`/`ends_on`, School-local dates;
+  - timed: `starts_at`/`ends_at`, instants entered as School-local wall-clock times.
+- **Audience:**
+  - school_wide;
+  - staff;
+  - grade (`grade_level_id`);
+  - section (`section_id`, an active Section of the current year).
+- **Lifecycle and publication evidence:** status, `published_at`/`_by`, `cancelled_at`/`_by`.
+- **Database CHECKs** for every domain and shape:
+  - end ≥ start (all-day) or end > start (timed);
+  - 2000–2100;
+  - audience shape;
+  - publication evidence.
+- **`communication_events_published_guard`** (insert and update):
+  - a row is born `draft`;
+  - the status moves only along the lifecycle graph;
+  - `approved` and `published` need an approved request row for the Event;
+  - once published, the terms and the publication record are immutable, `published` only becomes `cancelled`, and `cancelled` is final.
+- **No runtime DELETE:** the runtime role cannot delete an Event.
+- **Not here:** participants, recurrence, Campus or category columns.
+
+**75.3 Lifecycle** (`CommunicationEventService`, the only writer). Every step locks the Event row first.
+- **Edit:** allowed in draft, rejected or approved; an approved edit invalidates the approval and returns the Event to draft.
+- **Submit:** creates a request on the SAME `communication_approval_requests` table, now with an exclusive `event_id` subject and one pending request per Event.
+- **Decide:** `CommunicationApprovalService::decide()`, never by the requester or anyone who authored the terms (the creator, or any editor recorded in the audit ledger); it locks the Event, then the request, the same order as withdraw and cancel.
+- **Publish:**
+  - only when approved AND the stored fingerprint matches the current terms, re-checked under the lock;
+  - never for an Event that has already ended;
+  - Grade or Section still valid;
+  - idempotent.
+- **Cancel:** from any non-final state (a pending request is cancelled too); idempotent; a cancelled published Event keeps its publication record.
+- **Change after publication:** a published Event is never edited. Cancel it and publish a corrected copy (prefilled from it; a new draft with its own approval).
+- **Approval:** always required, with no School-policy exception and no auto-approval.
+
+**75.4 Fingerprint.**
+- **Binds:** title, body, location, date mode, start, end, audience type, Grade and Section.
+- **Edit after approval:** invalidated (audited).
+- **A raw change** behind an approval still never publishes, because publish re-checks the fingerprint.
+
+**75.5 Visibility** (`CommunicationEventCalendar`, read-only). Resolved for the viewer at read time, never snapshotted per person.
+
+| Surface | Gate | Shows |
+|---|---|---|
+| Staff calendar | `communications.view` | School-wide Events; Staff Events only while the viewer is current HR staff (`CurrentStaffMembers`) |
+| Guardian portal | `portal-development-only` + `portal.communications.view` + `ActingGuardian` | School-wide Events; Grade/Section Events whose Grade or Section currently holds one of the Guardian's eligible Students (`GuardianStudentScope` → current placement) |
+| Management | `communications.announce` | Every Event in any state |
+
+- **Excluded from viewer surfaces:** drafts and never-published Events. A cancelled published Event stays listed, marked cancelled.
+- **Persona separation:** never a Staff Event in the portal. A staff member who is also a Guardian sees each persona on its own surface.
+- **No Student surface:** there is no Student portal, so Student audiences are not offered.
+- **Upcoming:** all-day, last day ≥ the School's today; timed, end ≥ now. Past means ended.
+- **Month view:** an Event appears in every School-local month it overlaps.
+
+**75.6 Campus.** None: Events are whole-School within their audience. There is no Campus filter or target, and no `CampusScopeCatalogue` change. Location text creates no authority or booking.
+
+**75.7 Dates.**
+- **Timezone:** the School's is authoritative, never the browser's.
+- **All-day Events:** stored as dates, so never shifted through UTC.
+- **DST:** a nonexistent local time (spring-forward gap) is refused; an ambiguous one (fall-back) is its first occurrence.
+- **Bounds:** malformed or out-of-range input is a clean 422.
+- **Already ended:** an Event that has ended cannot be created, submitted or published (no backdated publication).
+- **Timezone change:** timed Events keep their absolute instant (the stored UTC), shown in the new zone; all-day Events keep their dates.
+
+**75.8 Separation.**
+- `CommunicationEventSeparationArchitectureTest`: Attendance, Staff Attendance, Timetable, Leave, Payroll, Examinations, Academic Structure and Curriculum Delivery never reference Events.
+- A published all-day "Holiday" Event on a teaching day changes no register status (pending stays pending, then not submitted) and no timetable entry (`AttendanceOperationsReadTest`).
+
+**75.9 Notifications.** Publishing changes visibility only: no announcement, email, SMS, push or reminder, and no scheduler.
+
+**75.10 Audit.**
+- **Events:** `communication_event.created`, `.updated`, `.approval_requested`, `.approval_withdrawn`, `.approval_invalidated`, `.approved`, `.rejected`, `.published`, `.cancelled`.
+- **Metadata:** audience type, date mode and range, request ids, fingerprints, `wasPublished`. Never the description, and never any audience list.
+
+**75.11 Capabilities.** Existing `communications.view`, `.announce`, `.manage`, `.approve` and `portal.communications.view`; the Communications module entitlement. No new capability, role, template, module or Campus adoption.
+
+**75.12 Retention** (E21-D3, implemented).
+- **Category:** `communication_events` is in the adopted `communications` category.
+- **Published Events** (cancelled later or not) are content. `retention_expire_communication_events` expires one 3 years after the end of the ONE Academic Year containing its School-local last day. An Event whose last day is in no Academic Year, or in two, is unresolved and kept (`UNRESOLVED_ROWS`).
+- **Never-published cancelled Events:** `retention_expire_cancelled_communication_events`, 1 year after cancellation.
+- **Working state:** drafts, pending, approved and rejected Events are never expired.
+- **Shape:** both are SECURITY DEFINER functions in the RH.4/RH.7 shape (as `retention_expire_elective_teaching_assignments`):
+  - executable only by the retention identity;
+  - no deletion while a hold is active;
+  - the period comes from the caller's cutoff, computed by `platform:communications-prune` exactly as for announcements (no separate database floor);
+  - only rows recorded before the cutoff (`retention_recorded_at`, `zzz_retention_anchor`), under the `trg_retention_guard_communication_events` statement guard.
+- **Runners:** `CommunicationRetentionService::pruneContent()` and `CommunicationResidualRetentionService::pruneNeverSent()`.
+- **The runtime role cannot DELETE an Event.** Its approval requests go with it (cascade).
+- **Wiring updated:** `RetentionExpiry`, `RetentionMetrics`, `RetentionAnchors`, `DatabaseRoleVerifier` and `TenantRetentionCatalog`.
+- **Why it ships in this slice:** the project invariant "every adopted period has its mechanism" (TenantClosureReadinessTest) forbids leaving it pending.
+
+**75.13 Concurrency.** Two real OS processes per race (`CommunicationEventConcurrencyTest`); the contender is observed blocked on the Event row lock each time:
+
+| Race | Outcome |
+|---|---|
+| Edit vs publish | Edited terms never publish |
+| Publish vs edit | A published Event is not edited |
+| Two publishes | One transition |
+| Publish vs cancel | Cancelled, publication kept |
+| Two cancels | One transition |
+| Approve vs withdraw | The decision stands |
+
+**75.14 Schema.** Migration `2027_01_09_090000`: the table, its CHECKs, the guard, RLS, and the approval-request `event_id` subject (exclusive CHECK, unique pending index). `down()` refuses while any Event exists.
+
+**75.15 Parity.**
+- COM-024 → P1 and COM-027 → P1 (intended differences: information only, never holidays or closures; no recurrence, notifications, RSVP, Campus targeting or categories; staff holidays stay in Leave).
+- LMS-115 and COM-026 stay P2: an Event is not academic-calendar or exam-schedule truth.
+- Statuses: P0 71, P1 106, P2 60, P3 19.
+- Coverage: 39.2 % / 34.4 % functional, 83.5 % / 73.4 % v1.

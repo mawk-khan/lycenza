@@ -121,6 +121,10 @@ final class TenantRetentionCatalog
             // announcement; its per-recipient lines are content and go with
             // their recipient (both cascade).
             'communication_announcement_fee_reminders', 'communication_fee_reminder_lines',
+            // ORG.9D-3 (ADR 0076 §75.12): School calendar Events -- published ones are content
+            // (3 y after the Academic Year of their last day, by their database expiry function);
+            // never-published cancelled ones 1 y after cancellation; the rest is working state.
+            'communication_events',
         ]],
         'communication_consent' => [self::ADOPTED, 'E21.2G C4/C5: consent evidence and domain preferences follow their subject: a Student subject\'s go with the Student core record (25 y, E21.3B, implemented); a Guardian subject\'s with Guardian personal data (1 y, E21.3C, implemented)', [
             'communication_domain_consent_events', 'communication_domain_preferences',
@@ -229,6 +233,8 @@ final class TenantRetentionCatalog
         // E21.3E: a never-sent cancelled announcement without its cancellation time, a rejected one without its rejected request, an empty thread without activity time.
         'communication_announcements' => "published_at IS NULL AND message_id IS NULL AND ((status = 'cancelled' AND cancelled_at IS NULL) OR (status = 'rejected' AND NOT EXISTS (SELECT 1 FROM communication_approval_requests r WHERE r.announcement_id = communication_announcements.id AND r.status = 'rejected' AND r.decided_at IS NOT NULL)))",
         'communication_threads' => 'last_activity_at IS NULL AND NOT EXISTS (SELECT 1 FROM communication_messages m WHERE m.thread_id = communication_threads.id)',
+        // ORG.9D-3: a published Event whose School-local last day is in no Academic Year, or in two.
+        'communication_events' => "published_at IS NOT NULL AND (SELECT count(*) FROM academic_years y WHERE y.school_id = communication_events.school_id AND (CASE WHEN communication_events.date_mode = 'all_day' THEN communication_events.ends_on ELSE (communication_events.ends_at AT TIME ZONE COALESCE((SELECT s.timezone FROM schools s WHERE s.id = communication_events.school_id), 'UTC'))::date END) BETWEEN y.starts_on AND y.ends_on) <> 1",
     ];
 
     /** @return array<string, string> table => category */

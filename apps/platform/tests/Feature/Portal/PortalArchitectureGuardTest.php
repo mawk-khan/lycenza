@@ -35,6 +35,7 @@ class PortalArchitectureGuardTest extends TestCase
         $routes = collect(RouteFacade::getRoutes()->getRoutes())->filter(fn (Route $r) => str_starts_with($r->uri(), 'app/portal'));
         $this->assertSame([
             'app.portal.attendance.index', 'app.portal.attendance.show',
+            'app.portal.calendar.index', // ORG.9D-3 (ADR 0076 §75): the read-only School calendar
             'app.portal.communications.attachments.download', 'app.portal.communications.index', 'app.portal.communications.show',
             'app.portal.conversations.attachments.download', 'app.portal.conversations.index', 'app.portal.conversations.reply', 'app.portal.conversations.show',
             'app.portal.fees.index', 'app.portal.fees.payment', 'app.portal.fees.show',

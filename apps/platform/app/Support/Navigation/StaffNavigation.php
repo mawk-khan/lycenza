@@ -77,6 +77,8 @@ final class StaffNavigation
             // ActingGuardian, exactly as the portal routes do.
             new E('portal-communications', 'guardian-portal', 'Messages from the School', 'app.portal.communications.index', all: ['portal.communications.view'], availability: NavigationBuilder::AVAILABILITY_GUARDIAN_PORTAL),
             new E('portal-conversations', 'guardian-portal', 'Conversations', 'app.portal.conversations.index', all: ['portal.communications.view'], availability: NavigationBuilder::AVAILABILITY_GUARDIAN_PORTAL),
+            // ORG.9D-3 (ADR 0076 §75): the Guardian's School calendar.
+            new E('portal-calendar', 'guardian-portal', 'School calendar', 'app.portal.calendar.index', all: ['portal.communications.view'], availability: NavigationBuilder::AVAILABILITY_GUARDIAN_PORTAL),
             new E('portal-attendance', 'guardian-portal', 'Attendance', 'app.portal.attendance.index', all: ['portal.attendance.view'], availability: NavigationBuilder::AVAILABILITY_GUARDIAN_PORTAL),
             new E('portal-fees', 'guardian-portal', 'Fees', 'app.portal.fees.index', all: ['portal.fees.view'], availability: NavigationBuilder::AVAILABILITY_GUARDIAN_PORTAL),
 
@@ -170,6 +172,9 @@ final class StaffNavigation
             new E('visitor-visits', 'operations', 'Visits', 'app.visitor.visits.index', all: ['visitor.visits.view'], section: 'Visitors'),
 
             new E('communications', 'communications', 'Communication Hub', 'app.communications.index', all: ['communications.view']),
+            // ORG.9D-3 (ADR 0076 §75): the School calendar (viewers) and its Events (preparers).
+            new E('communications-calendar', 'communications', 'School calendar', 'app.communications.calendar', all: ['communications.view']),
+            new E('communications-events', 'communications', 'Events', 'app.communications.events.index', all: ['communications.announce']),
 
             new E('analytics', 'reports', 'Curriculum coverage', 'app.analytics.curriculum-coverage', all: ['analytics.view']),
             new E('audit-log', 'reports', 'Audit log', 'app.compliance.audit-log', all: ['school.audit.view']),

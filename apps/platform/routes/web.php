@@ -7,9 +7,11 @@ use App\Domain\Communications\Http\Controllers\CommunicationApprovalPolicyContro
 use App\Domain\Communications\Http\Controllers\CommunicationAttachmentController;
 use App\Domain\Communications\Http\Controllers\CommunicationAudienceSearchController;
 use App\Domain\Communications\Http\Controllers\CommunicationAuditController;
+use App\Domain\Communications\Http\Controllers\CommunicationCalendarController;
 use App\Domain\Communications\Http\Controllers\CommunicationChannelPolicyController;
 use App\Domain\Communications\Http\Controllers\CommunicationConversationPolicyController;
 use App\Domain\Communications\Http\Controllers\CommunicationDeliveryTimingPolicyController;
+use App\Domain\Communications\Http\Controllers\CommunicationEventController;
 use App\Domain\Communications\Http\Controllers\CommunicationHubController;
 use App\Domain\Communications\Http\Controllers\CommunicationInboxController;
 use App\Domain\Communications\Http\Controllers\CommunicationPreferenceController;
@@ -126,6 +128,7 @@ use App\Http\Controllers\App\Platform\PlatformSchoolModuleController;
 use App\Http\Controllers\App\Platform\SchoolElevationController;
 use App\Http\Controllers\App\Platform\SchoolGroupAdminController;
 use App\Http\Controllers\App\Portal\GuardianAttendanceController;
+use App\Http\Controllers\App\Portal\GuardianCalendarController;
 use App\Http\Controllers\App\Portal\GuardianCommunicationController;
 use App\Http\Controllers\App\Portal\GuardianConversationController;
 use App\Http\Controllers\App\Portal\GuardianFeeController;
@@ -766,6 +769,13 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
                 ->whereUuid(['announcement', 'attachment'])->name('attachments.download');
         });
 
+    // ORG.9D-3 (ADR 0076 §75): the Guardian's School calendar -- web/session
+    // only, development only until E46. `portal-development-only` FIRST, then
+    // the Guardian capability; the controller resolves ActingGuardian fresh.
+    Route::get('app/portal/calendar', [GuardianCalendarController::class, 'index'])
+        ->middleware(['portal-development-only', 'capability:portal.communications.view'])
+        ->name('app.portal.calendar.index');
+
     // POR.2 (ADR 0070 §25): a linked Student's minimized Attendance -- web/session
     // only, development only (POR-L1). `portal-development-only` FIRST, then the
     // Guardian capability, then current MFA assurance (enrolled factor + window);
@@ -866,6 +876,26 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
             // Announcement directly.
             Route::post('/{announcement}/submit-approval', [AnnouncementController::class, 'submitForApproval'])->name('submit-approval');
             Route::post('/{announcement}/withdraw-approval', [AnnouncementController::class, 'withdrawApproval'])->name('withdraw-approval');
+        });
+
+        // ORG.9D-3 (ADR 0076 §75): the School Events Calendar -- registered
+        // BEFORE the '/{thread}' wildcard below. Management needs
+        // communications.announce (changes: creator or communications.manage,
+        // in the controller); decisions stay in the approvals queue; the staff
+        // calendar needs communications.view and shows only what the viewer's
+        // current audience membership reaches.
+        Route::get('/calendar', [CommunicationCalendarController::class, 'index'])->middleware('capability:communications.view')->name('calendar');
+        Route::prefix('events')->name('events.')->middleware('capability:communications.announce')->group(function (): void {
+            Route::get('/', [CommunicationEventController::class, 'index'])->name('index');
+            Route::get('/create', [CommunicationEventController::class, 'create'])->name('create');
+            Route::post('/', [CommunicationEventController::class, 'store'])->name('store');
+            Route::get('/{event}', [CommunicationEventController::class, 'show'])->whereUuid('event')->name('show');
+            Route::get('/{event}/edit', [CommunicationEventController::class, 'edit'])->whereUuid('event')->name('edit');
+            Route::put('/{event}', [CommunicationEventController::class, 'update'])->whereUuid('event')->name('update');
+            Route::post('/{event}/submit-approval', [CommunicationEventController::class, 'submit'])->whereUuid('event')->name('submit-approval');
+            Route::post('/{event}/withdraw-approval', [CommunicationEventController::class, 'withdraw'])->whereUuid('event')->name('withdraw-approval');
+            Route::post('/{event}/publish', [CommunicationEventController::class, 'publish'])->whereUuid('event')->name('publish');
+            Route::post('/{event}/cancel', [CommunicationEventController::class, 'cancel'])->whereUuid('event')->name('cancel');
         });
 
         // Phase 5A.12 §42/§45: registered BEFORE the '/{thread}'

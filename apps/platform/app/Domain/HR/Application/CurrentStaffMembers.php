@@ -4,6 +4,7 @@ namespace App\Domain\HR\Application;
 
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Models\School;
+use App\Models\User;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +34,36 @@ use Illuminate\Support\Facades\DB;
 final class CurrentStaffMembers
 {
     public function __construct(private readonly TenantContext $context) {}
+
+    /**
+     * ORG.9D-3 (ADR 0076 §75): the same answer for ONE User -- bounded reads
+     * keyed by that User, never the whole staff set.
+     */
+    public function includes(School $school, User $user): bool
+    {
+        if ($user->isDisabled()) {
+            return false;
+        }
+        $today = SchoolTimezone::today($school);
+
+        return $this->context->withSchool($school, function () use ($school, $user, $today): bool {
+            if (! DB::table('school_memberships')->where('school_id', $school->id)->where('user_id', $user->id)->where('status', 'active')->exists()) {
+                return false;
+            }
+            $employeeId = DB::table('employees')->where('school_id', $school->id)->where('user_id', $user->id)->where('record_status', 'active')->value('id');
+            if ($employeeId === null) {
+                return false;
+            }
+
+            return DB::table('employment_records')
+                ->where('school_id', $school->id)
+                ->where('employee_id', $employeeId)
+                ->whereIn('status', EmploymentRecord::AUTHORIZATION_ELIGIBLE_STATUSES)
+                ->where('starts_on', '<=', $today)
+                ->where(fn ($q) => $q->whereNull('ends_on')->orWhere('ends_on', '>=', $today))
+                ->count() === 1;
+        });
+    }
 
     /** @return list<string> */
     public function userIds(School $school): array

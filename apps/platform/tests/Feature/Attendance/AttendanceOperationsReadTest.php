@@ -5,6 +5,9 @@ namespace Tests\Feature\Attendance;
 use App\Domain\Attendance\Application\AttendanceSubmissionService;
 use App\Domain\Attendance\Infrastructure\AttendanceRecord;
 use App\Domain\Attendance\Infrastructure\AttendanceSession;
+use App\Domain\Communications\Application\Approval\CommunicationApprovalService;
+use App\Domain\Communications\Application\Events\CommunicationEventService;
+use App\Domain\Communications\Application\Events\CommunicationEventTerms;
 use App\Models\Campus;
 use App\Models\School;
 use App\Models\SchoolAuditEvent;
@@ -128,6 +131,29 @@ class AttendanceOperationsReadTest extends TestCase
         $this->assertSame('pending', $this->statuses($this->registers($this->admin))[$this->entry('a', 'later')]);
         $this->travelTo(CarbonImmutable::parse('2026-08-31T05:30:00Z')); // 11:00:00
         $this->assertSame('not_submitted', $this->statuses($this->registers($this->admin))[$this->entry('a', 'later')]);
+    }
+
+    #[Test]
+    public function a_published_holiday_event_changes_no_register_status_and_no_timetable_entry(): void
+    {
+        // ORG.9D-3 (ADR 0076 §75; OD-9.3): a calendar Event -- even one called
+        // "Holiday" covering a teaching day -- is information only.
+        $this->travelTo(CarbonImmutable::parse('2026-08-31T04:15:00Z')); // 09:45 school time, Monday
+        $before = $this->statuses($this->registers($this->admin));
+        $preparer = $this->createUserWithCapabilities($this->school, ['communications.announce']);
+        $approver = $this->createUserWithCapabilities($this->school, ['communications.approve']);
+        $events = app(CommunicationEventService::class);
+        $holiday = $events->create($this->school, $preparer, CommunicationEventTerms::fromInput($this->school, [
+            'title' => 'Holiday', 'body' => 'School closed today.', 'date_mode' => 'all_day',
+            'starts_on' => self::MONDAY, 'ends_on' => self::MONDAY, 'audience_type' => 'school_wide',
+        ]));
+        app(CommunicationApprovalService::class)->approve($events->submit($holiday, $preparer), $approver);
+        $events->publish($this->inSchool($this->school, fn () => $holiday->fresh()), $preparer);
+
+        $this->assertSame($before, $this->statuses($this->registers($this->admin)), 'Pending and submitted registers stay exactly as they were.');
+        $this->travelTo(CarbonImmutable::parse('2026-08-31T05:30:00Z')); // 11:00
+        $this->assertSame('not_submitted', $this->statuses($this->registers($this->admin))[$this->entry('a', 'later')], 'Never "not required" because of an Event.');
+        $this->assertSame(4, $this->inSchool($this->school, fn () => DB::table('timetable_entries')->where('status', 'active')->count()), 'No timetable entry is cancelled.');
     }
 
     #[Test]

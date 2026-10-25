@@ -12,6 +12,7 @@ use App\Domain\Communications\Application\Exceptions\RejectionReasonRequiredExce
 use App\Domain\Communications\Application\Exceptions\SelfApprovalNotAllowedException;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Domain\Communications\Infrastructure\CommunicationApprovalRequest;
+use App\Domain\Communications\Infrastructure\CommunicationEvent;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Tenancy\TenantContext;
@@ -139,6 +140,10 @@ class CommunicationApprovalService
                 throw new SelfApprovalNotAllowedException;
             }
 
+            if ($request->isForEvent()) {
+                return $this->decideEvent($request, $approver, $outcome, $note);
+            }
+
             // ORG.9D-2 (ADR 0076 §74): a fee reminder's preparer is its only
             // sender, so they never decide it either -- even when another
             // manager submitted it for them.
@@ -184,6 +189,55 @@ class CommunicationApprovalService
 
                 return $fresh;
             });
+        });
+    }
+
+    /**
+     * ORG.9D-3 (ADR 0076 §75): the SAME decision for a calendar Event's
+     * request -- never by the requester (above) nor by anyone who authored
+     * its terms (the creator, or an editor recorded in the audit ledger),
+     * single-winner on the pending request. The Event row is locked FIRST,
+     * the order CommunicationEventService's withdraw/cancel take (Event, then
+     * request), so a decision racing a withdrawal never deadlocks.
+     */
+    private function decideEvent(CommunicationApprovalRequest $request, User $approver, string $outcome, ?string $note): CommunicationApprovalRequest
+    {
+        return DB::transaction(function () use ($request, $approver, $outcome, $note) {
+            $event = CommunicationEvent::query()->whereKey($request->event_id)->lockForUpdate()->firstOrFail();
+            // Every author of the terms is a participant: the creator and anyone
+            // who edited them (the append-only audit ledger records each edit).
+            $authored = (string) $event->created_by_user_id === (string) $approver->id
+                || DB::table('school_audit_events')->where('school_id', $event->school_id)->where('subject_id', $event->id)
+                    ->whereIn('event_type', ['communication_event.created', 'communication_event.updated'])
+                    ->where('actor_user_id', $approver->id)->exists();
+            if ($authored) {
+                throw new SelfApprovalNotAllowedException;
+            }
+
+            $claimed = CommunicationApprovalRequest::query()
+                ->where('id', $request->id)
+                ->where('status', 'pending')
+                ->update([
+                    'status' => $outcome,
+                    'decided_by_user_id' => $approver->id,
+                    'decided_at' => now(),
+                    'decision_note' => $note,
+                ]);
+
+            if ($claimed === 0) {
+                throw new ApprovalAlreadyDecidedException;
+            }
+
+            $status = $outcome === 'approved' ? 'approved' : 'rejected';
+            CommunicationEvent::query()->whereKey($event->id)->where('status', 'pending_approval')->update(['status' => $status]);
+
+            $this->audit->school($event->school, "communication_event.{$status}", actor: $approver, subject: $event, metadata: array_filter([
+                'requestId' => $request->id,
+                'fingerprint' => $request->fingerprint,
+                'decisionNote' => $note,
+            ], fn ($value) => $value !== null));
+
+            return $request->fresh();
         });
     }
 

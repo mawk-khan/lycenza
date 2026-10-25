@@ -1624,3 +1624,9 @@ once several modules copy it.
      - **Approval:** always, never by the preparer. Only the preparer sends it. Never Required, Emergency or scheduled (service and database). The fingerprint binds the selection and the preparer's Finance scope.
      - **Content:** a fixed subject without amounts, and immutable per-recipient lines (`communication_fee_reminder_lines`). A recipient without lines fails closed.
      - **Visibility:** figures, counts and delivery analytics are the preparer's only.
+
+110. **A School calendar Event is information, never policy truth (ADR 0076 §75, ORG.9D-3).**
+     - **One writer:** `CommunicationEventService`, on the existing approval workflow (the same request table and `decide()`). Approval is always required, never decided by the requester or anyone who authored the terms (creator or audited editor), and fingerprint-bound to every material term. Publish re-checks the fingerprint under the Event row lock.
+     - **The database** (`communication_events_published_guard`) enforces: born draft; lifecycle graph only; approved and published need an approved request; published terms immutable (cancel, never edit); no runtime DELETE. Cancellation keeps the publication record. Retention runs only through the two `retention_expire_*communication_events` functions.
+     - **Visibility** is resolved per viewer at read time (`CommunicationEventCalendar`): School-wide; Staff only for CURRENT HR staff; Grade/Section only for Guardians whose eligible Students are placed there now. Never a per-person snapshot, never a Staff Event in the portal, never Campus targeting.
+     - **Never** let Attendance, Timetable, Leave, Payroll, Examinations or Academic Structure read Events (`CommunicationEventSeparationArchitectureTest`, OD-9.3). Never make publishing send anything, and never add recurrence, RSVP or a category engine without a new contract.

@@ -750,3 +750,23 @@ Statuses are now P0 71, P1 104, P2 62, P3 19.
 | V1-required, weighted / strict | 82.5 % / 72.1 % | **83.2 % / 72.7 %** (247.0 / 297) |
 
 Not built: PV1-12 (events calendar). Production email stays gated (E17–E20).
+
+## 23. ORG.9D-3 — School Events Calendar (2026-10-25)
+
+ORG.9D-3 (ADR 0076 §75) built PV1-12.
+
+| Function | Before | After | Note |
+|---|---|---|---|
+| COM-024 School events and holiday calendar | P2 | **P1** | informational Events (all-day or timed, School timezone), approved by someone else, visibility per viewer; intended differences: never a holiday/closure/Attendance fact (OD-9.3), no recurrence, notifications, RSVP, Campus targeting or categories |
+| COM-027 calendar of staff events and holidays | P2 | **P1** | staff Events on the School calendar (current HR staff); staff holidays stay in the Leave calendar |
+| LMS-115 academic calendar | P2 | P2 | not delivered: an Event is never academic-calendar truth |
+| COM-026 calendar of examination papers | P2 | P2 | not delivered: exam schedules stay with Examinations |
+
+Statuses are now P0 71, P1 106, P2 60, P3 19.
+
+| Coverage | After ORG.9D-2 | After ORG.9D-3 |
+|---|---|---|
+| Functional, weighted / strict | 39.0 % / 34.1 % | **39.2 % / 34.4 %** (248.0 / 633) |
+| V1-required, weighted / strict | 83.2 % / 72.7 % | **83.5 % / 73.4 %** (248.0 / 297) |
+
+The ORG.9D Communications wave (PV1-10, PV1-11, PV1-12) is built. Production stays gated (E46 for family views, E17–E20 for email, general gates).

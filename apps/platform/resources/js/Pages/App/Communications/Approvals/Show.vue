@@ -17,6 +17,19 @@ interface ApprovalDetail {
     individualMemberCount: number;
     channels: string[];
     attachmentCount: number;
+    // ORG.9D-3: a calendar Event's approved terms (from the immutable snapshot).
+    kind: 'announcement' | 'event';
+    eventId: string | null;
+    eventStatus: string | null;
+    eventTerms: {
+        location: string | null;
+        dateMode: string | null;
+        startsOn: string | null;
+        endsOn: string | null;
+        startsAt: string | null;
+        endsAt: string | null;
+        audienceLabel: string;
+    } | null;
     // ORG.9D-2: the approved population DEFINITION of a fee reminder (never balances).
     feeReminder: { status: string; academicYear: string; campus: string; class: string } | null;
     requestedByName: string | null;
@@ -103,7 +116,14 @@ function reject() {
                               ? 'Staff only (current employees)'
                               : request.audienceType === 'fee_reminder'
                                 ? 'Fee reminder'
-                                : `${request.individualMemberCount} selected members`
+                                : request.kind === 'event'
+                                  ? ({
+                                        school_wide: 'Calendar event — whole School',
+                                        staff: 'Calendar event — staff',
+                                        grade: 'Calendar event — guardians of a Grade',
+                                        section: 'Calendar event — guardians of a Section',
+                                    }[request.audienceType ?? ''] ?? 'Calendar event')
+                                  : `${request.individualMemberCount} selected members`
                     }}
                 </p>
             </div>
@@ -126,6 +146,29 @@ function reject() {
                 <p class="font-medium">{{ request.attachmentCount }}</p>
             </div>
         </div>
+
+        <section
+            v-if="request.kind === 'event' && request.eventTerms"
+            class="mt-4 rounded border border-slate-200 p-3 text-xs"
+            aria-labelledby="approval-event"
+        >
+            <h2 id="approval-event" class="font-medium text-slate-600">Calendar event</h2>
+            <dl class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
+                <dt class="text-slate-500">When</dt>
+                <dd v-if="request.eventTerms.dateMode === 'all_day'">
+                    {{ request.eventTerms.startsOn }} – {{ request.eventTerms.endsOn }} (all day)
+                </dd>
+                <dd v-else>{{ request.eventTerms.startsAt }} – {{ request.eventTerms.endsAt }}</dd>
+                <dt class="text-slate-500">Where</dt>
+                <dd>{{ request.eventTerms.location ?? '—' }}</dd>
+                <dt class="text-slate-500">Who can see it</dt>
+                <dd>{{ request.eventTerms.audienceLabel }}</dd>
+            </dl>
+            <p class="mt-2 text-slate-500">
+                Approving lets the preparer publish exactly these terms to the calendar. Publishing
+                sends no message; any later change needs a new approval.
+            </p>
+        </section>
 
         <section
             v-if="request.feeReminder"
@@ -213,6 +256,13 @@ function reject() {
         </p>
 
         <Link
+            v-if="request.kind === 'event'"
+            class="mt-6 block text-xs text-slate-400 underline"
+            :href="`/app/communications/events/${request.eventId}`"
+            >View event</Link
+        >
+        <Link
+            v-else
             class="mt-6 block text-xs text-slate-400 underline"
             :href="`/app/communications/announcements/${request.announcementId}`"
             >View announcement</Link

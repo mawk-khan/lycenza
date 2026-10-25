@@ -41,7 +41,7 @@ final class WebRouteParameters
         'attendanceRecord', 'attendanceSession', 'authorization', 'campus', 'canteenItem', 'canteenOrder',
         'canteenOutlet', 'category', 'certification', 'charge', 'client', 'compensationAssignment',
         'concession', 'contact', 'correctionRequest', 'curriculumDelivery', 'department', 'document', 'domain', 'electiveGroup',
-        'electiveTeachingAssignment', 'employee', 'employment', 'employmentRecord', 'enrollment', 'examination',
+        'electiveTeachingAssignment', 'employee', 'event', 'employment', 'employmentRecord', 'enrollment', 'examination',
         'examinationPaper', 'experience', 'feeHead', 'feeStructure', 'gradeBand', 'gradeLevel', 'gradeScale',
         'grant', 'guardian', 'hostel', 'hostelBed', 'hostelResidencyAssignment', 'hostelRoom', 'inventoryItem',
         'inventoryLocation', 'invitation', 'item', 'journalEntry', 'learningContent', 'leavePolicy',

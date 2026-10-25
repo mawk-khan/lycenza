@@ -71,7 +71,17 @@ final class CommunicationResidualRetentionService
     public function pruneNeverSent(School $school, CarbonInterface $cutoff, int $batch, bool $dryRun, bool $held): array
     {
         // E21-RH.6 (ADR 0066 §14): the whole unit as the retention identity, on its own connection.
-        return app(RetentionExpiry::class)->retained('communication_never_sent', $dryRun || $held, $school->id, ['eligible' => 0, 'deleted' => 0, 'held' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneNeverSentUnit($school, $cutoff, $batch, $dryRun, $held), recordedBefore: $cutoff);
+        $result = app(RetentionExpiry::class)->retained('communication_never_sent', $dryRun || $held, $school->id, ['eligible' => 0, 'deleted' => 0, 'held' => 0, 'unresolved' => 0, 'dependency_blocked' => 0, 'errors' => 0], fn (): array => $this->pruneNeverSentUnit($school, $cutoff, $batch, $dryRun, $held), recordedBefore: $cutoff);
+
+        // ORG.9D-3 (ADR 0076 §75.12): a never-published cancelled School calendar
+        // Event, 1 year after its cancellation, by its database function (a held
+        // School deletes nothing; its eligible rows count as held).
+        $events = app(RetentionExpiry::class)->forSchool(RetentionExpiry::COMMUNICATION_EVENT_CANCELLED, $school, $cutoff, $batch, $dryRun || $held);
+        $result['eligible'] += $events['eligible'];
+        $result['deleted'] += $events['deleted'];
+        $result['held'] += $events['held'];
+
+        return $result;
     }
 
     /** @return array{eligible: int, deleted: int, held: int, unresolved: int, dependency_blocked: int, errors: int} */

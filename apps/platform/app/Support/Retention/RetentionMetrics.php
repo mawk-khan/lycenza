@@ -106,6 +106,8 @@ final class RetentionMetrics
         RetentionExpiry::GROUP_ROLE_GRANT => 'authority',
         RetentionExpiry::PLATFORM_ROLE_GRANT => 'authority',
         RetentionExpiry::COMMUNICATION_POLICY_DECISION => 'communications',
+        RetentionExpiry::COMMUNICATION_EVENT => 'communications',
+        RetentionExpiry::COMMUNICATION_EVENT_CANCELLED => 'communications',
         self::COMMUNICATION_CONTENT => 'communications',
         self::COMMUNICATION_DELIVERY => 'communications',
         RetentionExpiry::ERASURE_CASE => 'erasure',

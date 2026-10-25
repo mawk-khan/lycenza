@@ -44,6 +44,9 @@ class StandaloneRetentionHardeningTest extends TestCase
         'retention_expire_api_client_credentials' => 'ts',
         // TCH-E (ADR 0063 section 45): created already in the RH.4 shape.
         'retention_expire_elective_teaching_assignments' => 'date',
+        // ORG.9D-3 (ADR 0076 §75.12): created in the same shape.
+        'retention_expire_communication_events' => 'date',
+        'retention_expire_cancelled_communication_events' => 'ts',
     ];
 
     private const PLATFORM = [
