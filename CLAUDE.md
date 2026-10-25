@@ -1630,3 +1630,8 @@ once several modules copy it.
      - **The database** (`communication_events_published_guard`) enforces: born draft; lifecycle graph only; approved and published need an approved request; published terms immutable (cancel, never edit); no runtime DELETE. Cancellation keeps the publication record. Retention runs only through the two `retention_expire_*communication_events` functions.
      - **Visibility** is resolved per viewer at read time (`CommunicationEventCalendar`): School-wide; Staff only for CURRENT HR staff; Grade/Section only for Guardians whose eligible Students are placed there now. Never a per-person snapshot, never a Staff Event in the portal, never Campus targeting.
      - **Never** let Attendance, Timetable, Leave, Payroll, Examinations or Academic Structure read Events (`CommunicationEventSeparationArchitectureTest`, OD-9.3). Never make publishing send anything, and never add recurrence, RSVP or a category engine without a new contract.
+     - **Reading is not managing (ORG.9D-3R1, ADR 0076 §76).** The staff calendar needs only `communications.events.view`, held by every staff persona role except the `hr_sensitive_records` add-on and re-checked in `CommunicationEventCalendar::forStaff()`.
+       - It never satisfies a Hub, announcement, Event management or approval check.
+       - It never makes anyone staff.
+       - `communications.view` alone never opens the calendar.
+       - Never grant `communications.view` (Hub and announcement-list visibility) to give someone the calendar.

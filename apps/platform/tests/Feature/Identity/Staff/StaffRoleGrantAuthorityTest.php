@@ -270,7 +270,7 @@ class StaffRoleGrantAuthorityTest extends TestCase
         sort($code);
 
         $this->assertSame($database, $code, 'Every school capability is classified, and no unknown key is.');
-        $this->assertCount(180, $code, '174 classified in SR.0 + the three SR.2 grant rights + the three ORG.8C payment correction keys.');
+        $this->assertCount(181, $code, '174 classified in SR.0 + the three SR.2 grant rights + the three ORG.8C payment correction keys + ORG.9D-3R1 communications.events.view.');
 
         foreach (CapabilityClasses::CLASSES as $capability => $classes) {
             $this->assertNotEmpty($classes, $capability);
@@ -502,7 +502,7 @@ class StaffRoleGrantAuthorityTest extends TestCase
     public function reactivation_decides_every_chosen_role_inside_its_transaction(): void
     {
         $school = $this->createSchool();
-        [$limited] = $this->issuer($school, $this->createFixtureRole([...self::ADMIN_WITHOUT_GRANT_RIGHTS, 'hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self']));
+        [$limited] = $this->issuer($school, $this->createFixtureRole([...self::ADMIN_WITHOUT_GRANT_RIGHTS, 'hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self', 'communications.events.view']));
         [, $target] = $this->staffMember($school, 'staff_self_service');
         $this->access()->suspend($school, $limited, $target->id);
         $hr = $this->systemRole(['hr.positions.view']);

@@ -1555,7 +1555,43 @@ verified. Additional actor-level SoD decisions remain deferred.
 - **Status:** **Staff Role Catalogue & Least-Privilege Operations Access —
   PUBLISHED / CLOSED.** EmploymentRecord finding: **CLOSED**.
 
-## Appendix A — capability-class map (v1, all 174 `school` capabilities)
+## 28. ORG.9D-3R1 amendment — School calendar consumption (2026-10-25, ADR 0076 §76)
+
+A reviewed catalogue release (§25), owner-authorized by the ORG.9D-3R1 brief.
+
+**28.1 Why.** A current teacher is an audience of Staff Events (ADR 0076 §75),
+but the staff calendar needed `communications.view`, which the teacher role
+does not hold. That capability is not a recipient capability: it opens the
+Communication Hub and the School's whole announcement list (drafts,
+scheduled and cancelled announcements, their creators, audiences, channels
+and recipient counts). Granting it to teachers would over-grant, so it was
+not granted.
+
+**28.2 The new capability.** One code-owned key:
+- **Key:** `communications.events.view`, `school` namespace, class `operational`, Communications module.
+- **Label:** "View published School Events in the School calendar".
+- **Opens only** the staff calendar. It never satisfies a Hub, announcement, Event management or approval check.
+- **Never makes anyone staff.** A Staff Event still needs current HR staff identity (`CurrentStaffMembers`).
+
+**28.3 Grants (before → after).** Added to the 16 staff persona roles:
+- **Leadership:** `school_admin`, `principal`.
+- **Teaching:** `teacher`, `staff_self_service`.
+- **The 12 operational job roles:** `hr_officer`, `payroll_officer`, `accountant`, `cashier`, `librarian`, `transport_coordinator`, `hostel_warden`, `front_office`, `stores_officer`, `canteen_operator`, `admissions_officer`, `communications_coordinator`.
+
+Not added to:
+- **`hr_sensitive_records`:** an add-on that is never held on its own (§4.2).
+- **`guardian`, Group and platform roles:** excluded by scope and namespace.
+
+No other capability moved.
+
+**28.4 Contracts kept.**
+- **Operational roles:** the key is not an authority, legal-gated or owned-scope capability, so §4's rule holds.
+- **Teacher role:** still carries no School-wide administration.
+- **`staff_self_service`:** still a bundle with no enforcement role.
+- **Grantability:** `school_admin` holds the key, so it can still grant every operational role.
+- **Pins:** `StaffRoleCatalogueSnapshotTest` and the teacher and self-service pins were updated in the same release.
+
+## Appendix A — capability-class map (v1, all 174 `school` capabilities; 175 since ORG.9D-3R1, §28)
 Grant-right coverage appears only where `school_admin` does not hold the key
 and the owner approved coverage (§6.1). The three `school.roles.grant.*`
 keys (SR.2) are class `authority` and are themselves never covered.
@@ -1589,6 +1625,7 @@ keys (SR.2) are class `authority` and are themselves never covered.
 | `communications.conversations.guardians` | sensitive | — |
 | `communications.conversations.students` | legal-gated, sensitive | — |
 | `communications.emergency` | authority, sensitive | — |
+| `communications.events.view` (ORG.9D-3R1, §28) | operational | — |
 | `communications.manage` | sensitive | — |
 | `communications.reply` | sensitive | — |
 | `communications.send` | sensitive | — |

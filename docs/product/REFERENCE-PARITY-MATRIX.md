@@ -770,3 +770,7 @@ Statuses are now P0 71, P1 106, P2 60, P3 19.
 | V1-required, weighted / strict | 83.2 % / 72.7 % | **83.5 % / 73.4 %** (248.0 / 297) |
 
 The ORG.9D Communications wave (PV1-10, PV1-11, PV1-12) is built. Production stays gated (E46 for family views, E17–E20 for email, general gates).
+
+## 24. ORG.9D-3R1 — Event consumer access (2026-10-25)
+
+ORG.9D-3R1 (ADR 0076 §76) closes PV1-12's consumer gap: every staff persona role can read the School calendar (`communications.events.view`) without Communications administration. No function status changes (COM-024 and COM-027 stay P1; statuses P0 71, P1 106, P2 60, P3 19; coverage unchanged).

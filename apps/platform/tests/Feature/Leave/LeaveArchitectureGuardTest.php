@@ -142,11 +142,11 @@ class LeaveArchitectureGuardTest extends TestCase
     {
         $teacher = DB::table('roles as r')->join('role_capabilities as rc', 'rc.role_id', '=', 'r.id')
             ->where('r.key', 'teacher')->pluck('rc.capability_key')->sort()->values()->all();
-        $this->assertSame(['attendance.teacher', 'curriculum.delivery.teacher', 'examinations.marks.teacher', 'lms.assignments.teacher', 'lms.content.teacher'], $teacher, 'E33: the teacher role is unchanged by Leave (RES.4 adds only the owned marks key)');
+        $this->assertSame(['attendance.teacher', 'communications.events.view', 'curriculum.delivery.teacher', 'examinations.marks.teacher', 'lms.assignments.teacher', 'lms.content.teacher'], $teacher, 'E33: the teacher role is unchanged by Leave (RES.4 adds only the owned marks key; ORG.9D-3R1 the School calendar)');
 
         $leave = DB::table('capabilities')->where('key', 'like', 'hr.leave.%')->orderBy('key')->pluck('key')->all();
         $this->assertSame(['hr.leave.approve', 'hr.leave.configure', 'hr.leave.manage', 'hr.leave.self', 'hr.leave.view'], $leave, 'HRX.2 adds approve; HRX.4 adds self');
         $bundle = DB::table('roles as r')->join('role_capabilities as rc', 'rc.role_id', '=', 'r.id')->where('r.key', 'staff_self_service')->pluck('rc.capability_key')->sort()->values()->all();
-        $this->assertSame(['hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self'], $bundle, 'HRX.4: the self-service bundle, and nothing administrative');
+        $this->assertSame(['communications.events.view', 'hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self'], $bundle, 'HRX.4: the self-service bundle, and nothing administrative (ORG.9D-3R1: plus reading the School calendar)');
     }
 }

@@ -28,36 +28,36 @@ class StaffRoleCatalogueSnapshotTest extends TestCase
     /** role key => exact sorted capability keys, for EVERY active School system role. */
     private const SNAPSHOT = [
         'accountant' => [
-            'finance.accounts.manage', 'finance.charges.manage', 'finance.charges.view',
+            'communications.events.view', 'finance.accounts.manage', 'finance.charges.manage', 'finance.charges.view',
             'finance.fee_assessments.run', 'finance.fee_concessions.request', 'finance.fee_concessions.view',
             'finance.fee_structures.manage', 'finance.fee_structures.view', 'finance.ledger.post',
             'finance.ledger.view', 'finance.payment_corrections.request', 'finance.payment_corrections.view',
             'finance.payments.record', 'finance.payments.view',
         ],
         'admissions_officer' => [
-            'admissions.manage', 'admissions.view',
+            'admissions.manage', 'admissions.view', 'communications.events.view',
         ],
         'canteen_operator' => [
             'canteen.directory.manage', 'canteen.directory.view', 'canteen.orders.manage',
-            'canteen.orders.view',
+            'canteen.orders.view', 'communications.events.view',
         ],
         'cashier' => [
-            'finance.charges.view', 'finance.payments.record', 'finance.payments.view',
+            'communications.events.view', 'finance.charges.view', 'finance.payments.record', 'finance.payments.view',
         ],
         'communications_coordinator' => [
-            'communications.announce', 'communications.conversations.guardians', 'communications.reply',
+            'communications.announce', 'communications.conversations.guardians', 'communications.events.view', 'communications.reply',
             'communications.send', 'communications.templates.manage', 'communications.view',
         ],
         'front_office' => [
-            'visitor.directory.manage', 'visitor.directory.view', 'visitor.visits.manage',
+            'communications.events.view', 'visitor.directory.manage', 'visitor.directory.view', 'visitor.visits.manage',
             'visitor.visits.view',
         ],
         'hostel_warden' => [
-            'hostel.directory.manage', 'hostel.directory.view', 'hostel.residency.manage',
+            'communications.events.view', 'hostel.directory.manage', 'hostel.directory.view', 'hostel.residency.manage',
             'hostel.residency.view',
         ],
         'hr_officer' => [
-            'hr.categories.manage', 'hr.categories.view', 'hr.departments.manage', 'hr.departments.view',
+            'communications.events.view', 'hr.categories.manage', 'hr.categories.view', 'hr.departments.manage', 'hr.departments.view',
             'hr.employees.assignments.manage', 'hr.employees.assignments.view',
             'hr.employees.documents.manage', 'hr.employees.documents.view', 'hr.employees.manage',
             'hr.employees.notes.manage', 'hr.employees.notes.view', 'hr.employees.personal.manage',
@@ -70,11 +70,11 @@ class StaffRoleCatalogueSnapshotTest extends TestCase
             'hr.employees.sensitive.manage', 'hr.employees.sensitive.view',
         ],
         'librarian' => [
-            'library.catalogue.manage', 'library.catalogue.view', 'library.circulation.manage',
+            'communications.events.view', 'library.catalogue.manage', 'library.catalogue.view', 'library.circulation.manage',
             'library.circulation.view', 'library.fines.view',
         ],
         'payroll_officer' => [
-            'payroll.compensation.sensitive.manage',
+            'communications.events.view', 'payroll.compensation.sensitive.manage',
             'payroll.compensation.sensitive.view', 'payroll.compensation.view', 'payroll.periods.manage',
             'payroll.runs.prepare', 'payroll.runs.view', 'payroll.structures.manage',
             'payroll.structures.view',
@@ -85,7 +85,7 @@ class StaffRoleCatalogueSnapshotTest extends TestCase
             'admissions.view', 'analytics.view', 'attendance.manage', 'attendance.view', 'automation.view',
             'canteen.directory.manage', 'canteen.directory.view', 'canteen.orders.manage',
             'canteen.orders.view', 'communications.announce', 'communications.approve',
-            'communications.conversations.guardians', 'communications.reply', 'communications.send',
+            'communications.conversations.guardians', 'communications.events.view', 'communications.reply', 'communications.send',
             'communications.templates.manage', 'communications.view', 'curriculum.delivery.manage',
             'curriculum.delivery.view', 'enrollments.manage', 'enrollments.rollovers.view',
             'enrollments.view', 'examinations.definitions.manage', 'examinations.definitions.view',
@@ -119,7 +119,7 @@ class StaffRoleCatalogueSnapshotTest extends TestCase
             'canteen.directory.view', 'canteen.orders.manage', 'canteen.orders.view',
             'canteen.settings.manage', 'canteen.settings.view', 'communications.announce',
             'communications.approve', 'communications.audit.view', 'communications.conversations.guardians',
-            'communications.emergency', 'communications.manage', 'communications.reply',
+            'communications.emergency', 'communications.events.view', 'communications.manage', 'communications.reply',
             'communications.send', 'communications.templates.manage', 'communications.view',
             'curriculum.delivery.manage', 'curriculum.delivery.teacher', 'curriculum.delivery.view',
             'enrollments.manage', 'enrollments.rollovers.manage', 'enrollments.rollovers.view',
@@ -163,18 +163,18 @@ class StaffRoleCatalogueSnapshotTest extends TestCase
             'visitor.directory.view', 'visitor.visits.manage', 'visitor.visits.view',
         ],
         'staff_self_service' => [
-            'hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self',
+            'communications.events.view', 'hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self',
         ],
         'stores_officer' => [
-            'inventory.directory.manage', 'inventory.directory.view', 'inventory.stock.manage',
+            'communications.events.view', 'inventory.directory.manage', 'inventory.directory.view', 'inventory.stock.manage',
             'inventory.stock.view',
         ],
         'teacher' => [
-            'attendance.teacher', 'curriculum.delivery.teacher', 'examinations.marks.teacher',
+            'attendance.teacher', 'communications.events.view', 'curriculum.delivery.teacher', 'examinations.marks.teacher',
             'lms.assignments.teacher', 'lms.content.teacher',
         ],
         'transport_coordinator' => [
-            'transport.assignments.manage', 'transport.assignments.view', 'transport.routes.manage',
+            'communications.events.view', 'transport.assignments.manage', 'transport.assignments.view', 'transport.routes.manage',
             'transport.routes.view', 'transport.vehicles.manage', 'transport.vehicles.view',
         ],
     ];
@@ -282,11 +282,13 @@ class StaffRoleCatalogueSnapshotTest extends TestCase
         // hr_sensitive_records is an add-on (exactly two keys); hr_officer has neither.
         $this->assertSame(['hr.employees.sensitive.manage', 'hr.employees.sensitive.view'], $live['hr_sensitive_records']);
         $this->assertSame([], array_values(array_filter($live['hr_officer'], fn ($k) => str_starts_with($k, 'hr.employees.sensitive.'))));
-        // Cashier: payments + charge view only, no Student capability.
-        $this->assertSame(['finance.charges.view', 'finance.payments.record', 'finance.payments.view'], $live['cashier']);
+        // Cashier: payments + charge view only, no Student capability (ORG.9D-3R1: plus
+        // reading the School calendar, like every staff persona role).
+        $this->assertSame(['communications.events.view', 'finance.charges.view', 'finance.payments.record', 'finance.payments.view'], $live['cashier']);
         // Canteen and stores are separate roles (no inventory on canteen, no canteen on stores).
-        $this->assertSame([], array_values(array_filter($live['canteen_operator'], fn ($k) => ! str_starts_with($k, 'canteen.'))));
-        $this->assertSame([], array_values(array_filter($live['stores_officer'], fn ($k) => ! str_starts_with($k, 'inventory.'))));
+        $calendar = fn (string $k) => $k === 'communications.events.view';
+        $this->assertSame([], array_values(array_filter($live['canteen_operator'], fn ($k) => ! str_starts_with($k, 'canteen.') && ! $calendar($k))));
+        $this->assertSame([], array_values(array_filter($live['stores_officer'], fn ($k) => ! str_starts_with($k, 'inventory.') && ! $calendar($k))));
     }
 
     #[Test]

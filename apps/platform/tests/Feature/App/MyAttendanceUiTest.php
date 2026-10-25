@@ -100,7 +100,7 @@ class MyAttendanceUiTest extends TestCase
         $this->actor($w, $user)->get('/app')->assertInertia(fn (AssertableInertia $page) => $page
             ->where('navigation', self::nav(shown: ['my-attendance']))
             ->where('navigation', self::nav(shown: ['my-curriculum-delivery']))
-            ->where('navigation', self::navExactly(['my-assignments', 'my-attendance', 'my-curriculum-delivery', 'my-learning-content'])));
+            ->where('navigation', self::navExactly(['communications-calendar', 'my-assignments', 'my-attendance', 'my-curriculum-delivery', 'my-learning-content'])));
 
         $this->actor($w, $noRole)->get('/app/my-attendance')->assertForbidden();
         foreach (['/app/attendance', '/app/attendance/take', '/app/students', '/app/teaching-assignments', '/app/timetable-schedule'] as $page) {

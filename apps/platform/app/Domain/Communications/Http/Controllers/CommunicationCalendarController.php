@@ -12,9 +12,11 @@ use Inertia\Response;
 
 /**
  * ORG.9D-3 (ADR 0076 §75): the staff School calendar
- * (`capability:communications.view`): published School-wide Events, and
+ * (`capability:communications.events.view`, ORG.9D-3R1 §76 -- consumption,
+ * never Communications administration): published School-wide Events, and
  * Staff Events while the viewer is current staff -- resolved for the viewer
- * on every read (CommunicationEventCalendar::forStaff()).
+ * on every read (CommunicationEventCalendar::forStaff()). It shows no
+ * management action.
  */
 class CommunicationCalendarController extends Controller
 {

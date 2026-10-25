@@ -41,10 +41,17 @@ never stored per person:
 
 | Surface | Sees |
 |---|---|
-| **Staff:** Communications → School calendar (`communications.view`) | Whole-School Events; Staff Events only while the viewer is current staff |
+| **Staff:** Communications → School calendar (`communications.events.view`, ORG.9D-3R1) | Whole-School Events; Staff Events only while the viewer is current staff |
 | **Guardians:** the portal calendar (development only until E46) | Whole-School Events, and Grade/Section Events for the classes their children are in now; never Staff Events |
 
 Both have upcoming and past lists and a month filter.
+
+**Reading is not managing (ORG.9D-3R1, ADR 0076 §76).** The staff calendar
+needs only `communications.events.view`, held by every staff role (teacher,
+cashier, librarian, …; not the HR sensitive-records add-on). It opens no
+Communication Hub, announcement list, Event management or approval page.
+Holding it never makes anyone staff: Staff Events still need current
+employment.
 
 ## Separation
 

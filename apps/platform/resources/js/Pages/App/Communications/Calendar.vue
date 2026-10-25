@@ -2,7 +2,9 @@
 // ORG.9D-3 (ADR 0076 §75): the staff School calendar -- published Events the
 // viewer's CURRENT audience membership reaches (School-wide; Staff while
 // they are current staff). Informational only: an Event never changes
-// Attendance, the timetable, exams or leave.
+// Attendance, the timetable, exams or leave. ORG.9D-3R1 (§76): a consumer
+// page (communications.events.view) -- no management action and no link into
+// the Communication Hub, which its reader may not hold.
 import { Head, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
@@ -29,7 +31,7 @@ function go(when: 'upcoming' | 'past'): void {
 <template>
     <Head title="School calendar" />
     <main class="mx-auto max-w-3xl p-8 font-sans text-slate-900">
-        <a class="text-sm underline" href="/app/communications">← Communication Hub</a>
+        <a class="text-sm underline" href="/app">← Dashboard</a>
         <h1 class="mt-2 text-xl font-semibold">School calendar</h1>
         <p class="mt-1 text-sm text-slate-500">
             School events for you. Times are in the School's timezone ({{ schoolTimezone }}). Events

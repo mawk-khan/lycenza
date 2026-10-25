@@ -881,10 +881,12 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         // ORG.9D-3 (ADR 0076 §75): the School Events Calendar -- registered
         // BEFORE the '/{thread}' wildcard below. Management needs
         // communications.announce (changes: creator or communications.manage,
-        // in the controller); decisions stay in the approvals queue; the staff
-        // calendar needs communications.view and shows only what the viewer's
-        // current audience membership reaches.
-        Route::get('/calendar', [CommunicationCalendarController::class, 'index'])->middleware('capability:communications.view')->name('calendar');
+        // in the controller); decisions stay in the approvals queue. The staff
+        // calendar is CONSUMPTION (ORG.9D-3R1, ADR 0076 §76): it needs only
+        // communications.events.view -- never communications.view, which opens
+        // the Hub and the School's announcement list -- and shows only what the
+        // viewer's current audience membership reaches.
+        Route::get('/calendar', [CommunicationCalendarController::class, 'index'])->middleware('capability:communications.events.view')->name('calendar');
         Route::prefix('events')->name('events.')->middleware('capability:communications.announce')->group(function (): void {
             Route::get('/', [CommunicationEventController::class, 'index'])->name('index');
             Route::get('/create', [CommunicationEventController::class, 'create'])->name('create');

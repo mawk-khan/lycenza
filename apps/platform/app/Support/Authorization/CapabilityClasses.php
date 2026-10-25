@@ -94,6 +94,8 @@ final class CapabilityClasses
         'communications.conversations.guardians' => ['sensitive'],
         'communications.conversations.students' => ['legal-gated', 'sensitive'],
         'communications.emergency' => ['authority', 'sensitive'],
+        // ORG.9D-3R1 (ADR 0076 §76): published School Events only -- no personal data.
+        'communications.events.view' => ['operational'],
         'communications.manage' => ['sensitive'],
         'communications.reply' => ['sensitive'],
         'communications.send' => ['sensitive'],

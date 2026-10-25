@@ -173,7 +173,8 @@ final class StaffNavigation
 
             new E('communications', 'communications', 'Communication Hub', 'app.communications.index', all: ['communications.view']),
             // ORG.9D-3 (ADR 0076 §75): the School calendar (viewers) and its Events (preparers).
-            new E('communications-calendar', 'communications', 'School calendar', 'app.communications.calendar', all: ['communications.view']),
+            // ORG.9D-3R1 (§76): the calendar is consumption, on its own capability.
+            new E('communications-calendar', 'communications', 'School calendar', 'app.communications.calendar', all: ['communications.events.view']),
             new E('communications-events', 'communications', 'Events', 'app.communications.events.index', all: ['communications.announce']),
 
             new E('analytics', 'reports', 'Curriculum coverage', 'app.analytics.curriculum-coverage', all: ['analytics.view']),

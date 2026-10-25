@@ -10782,7 +10782,7 @@ Owner authorization: ORG.9D-3 (PV1-12). Baseline `origin/main` = `12738b23`.
 
 | Surface | Gate | Shows |
 |---|---|---|
-| Staff calendar | `communications.view` | School-wide Events; Staff Events only while the viewer is current HR staff (`CurrentStaffMembers`) |
+| Staff calendar | `communications.view` (amended by §76: `communications.events.view`) | School-wide Events; Staff Events only while the viewer is current HR staff (`CurrentStaffMembers`) |
 | Guardian portal | `portal-development-only` + `portal.communications.view` + `ActingGuardian` | School-wide Events; Grade/Section Events whose Grade or Section currently holds one of the Guardian's eligible Students (`GuardianStudentScope` → current placement) |
 | Management | `communications.announce` | Every Event in any state |
 
@@ -10812,7 +10812,7 @@ Owner authorization: ORG.9D-3 (PV1-12). Baseline `origin/main` = `12738b23`.
 - **Events:** `communication_event.created`, `.updated`, `.approval_requested`, `.approval_withdrawn`, `.approval_invalidated`, `.approved`, `.rejected`, `.published`, `.cancelled`.
 - **Metadata:** audience type, date mode and range, request ids, fingerprints, `wasPublished`. Never the description, and never any audience list.
 
-**75.11 Capabilities.** Existing `communications.view`, `.announce`, `.manage`, `.approve` and `portal.communications.view`; the Communications module entitlement. No new capability, role, template, module or Campus adoption.
+**75.11 Capabilities.** Existing `communications.view`, `.announce`, `.manage`, `.approve` and `portal.communications.view`; the Communications module entitlement. No new capability, role, template, module or Campus adoption. (Amended by §76: the staff calendar moved to the new consumption capability `communications.events.view`.)
 
 **75.12 Retention** (E21-D3, implemented).
 - **Category:** `communication_events` is in the adopted `communications` category.
@@ -10847,3 +10847,87 @@ Owner authorization: ORG.9D-3 (PV1-12). Baseline `origin/main` = `12738b23`.
 - LMS-115 and COM-026 stay P2: an Event is not academic-calendar or exam-schedule truth.
 - Statuses: P0 71, P1 106, P2 60, P3 19.
 - Coverage: 39.2 % / 34.4 % functional, 83.5 % / 73.4 % v1.
+
+## 76. ORG.9D-3R1 — Events Calendar consumer access correction (as built, 2026-10-25)
+
+Owner authorization: ORG.9D-3R1. Baseline `origin/main` = `a1d3aafb`. Amends §75.5 and §75.11 (the staff calendar's gate) and ADR 0071 (§28, a reviewed catalogue release).
+
+**76.1 Root cause.** A current teacher is in the Staff audience (`CurrentStaffMembers`), but `GET /app/communications/calendar` carried `capability:communications.view`, and the `teacher` role (ADR 0063, the owned-scope bundle) does not hold it. So the teacher got 403 on the calendar holding the Event meant for them. The same was true of every operational role except `communications_coordinator`.
+
+**76.2 What `communications.view` authorizes (audited).**
+
+| Surface | Reach |
+|---|---|
+| Hub Inbox, Unread, Sent, Search | Every item re-checked for participation or recipiency |
+| Conversations list and thread detail | Participation |
+| Attachment download | The attachment's own read rule |
+| **Announcement list** (`/announcements`) | **Every announcement of the School**: drafts, scheduled, published and cancelled; their titles, creators, audience types, priority, requirement, dispatch mode, channels and recipient counts (not a fee reminder's, §74) |
+| Announcement detail | Creator, recipient or `communications.manage` only |
+
+Things it does NOT reach:
+- **Each gated by its own capability:** approvals (`.approve`), delivery analytics and failures (`.manage`), the audit trail (`.audit.view`), templates (`.templates.manage`), settings (`.manage`), Event management (`.announce`).
+- **No API:** no endpoint checks `communications.view`.
+
+Because the announcement list is School-wide administrative visibility, an ordinary recipient must not hold it. **`communications.view` was therefore not granted to the teacher role.**
+
+**76.3 Design: consuming is not producing.**
+- **One new capability:** `communications.events.view` (`school` namespace; class `operational`; Communications module through the `communications.` prefix; label "View published School Events in the School calendar").
+- **The calendar route** (`app.communications.calendar`) needs exactly `capability:communications.events.view`.
+- **The service re-checks it:** `CommunicationEventCalendar::forStaff()` checks it again through the Gate, so module entitlement applies there too and the route is never the only check.
+- **Other Communications routes:** no other route accepts it, and no management, approval or Hub check names it (`CommunicationEventSeparationArchitectureTest`). Event management stays `communications.announce` (changes: creator or `.manage`); decisions stay `communications.approve`. The consumer page shows no management action and no Hub link.
+- **Navigation:** "School calendar" is offered on the new capability; the Hub and Events entries still follow their own capabilities. No role-name check.
+- **Not created:** no `teacher.events.view`, no `staff.events.view`, and no audience-specific or generic recipient framework.
+
+**76.4 Staff identity stays the deciding fact.**
+- **Staff Events** need the capability AND current HR staff identity: `CurrentStaffMembers::includes()`, the ORG.9D-1 contract, unchanged and not forked.
+  - A former Employee loses them.
+  - Future-dated employment grants nothing until it starts.
+  - A role-only member never sees them.
+  - Each School decides its own staff identity.
+- **Whole-School Events** are for any active member holding the capability.
+- **Eligibility** is evaluated when the calendar is opened, and nothing is stored per person.
+- **The Guardian portal** is unchanged: `portal.communications.view` + `ActingGuardian`, never a Staff Event, E46-gated. A staff member who is also a Guardian sees each persona on its own surface.
+
+**76.5 Grants** (ADR 0071 §28). Added to the 16 staff persona roles:
+- **Roles:** `school_admin`, `principal`, `teacher`, `staff_self_service`, `hr_officer`, `payroll_officer`, `accountant`, `cashier`, `librarian`, `transport_coordinator`, `hostel_warden`, `front_office`, `stores_officer`, `canteen_operator`, `admissions_officer` and `communications_coordinator`.
+- **Not granted:** the `hr_sensitive_records` add-on (never held alone), the `guardian` role, Group roles and platform roles (refused by scope and namespace).
+- **Unchanged:** no other capability moved.
+- **Delivery:** seeded by `CapabilityAndRoleSeeder` through the admin connection, as every catalogue release; no migration, no backfill, no Event row touched.
+
+**76.6 Unchanged.**
+- **Events:** schema, lifecycle, dates, audiences and retention (§75).
+- **Elsewhere:** Attendance (OD-9.3), Campus (no adoption, no `CampusScopeCatalogue` change), the portal, E46, E21, E33 and the Communications production gates.
+- **PV1-10 and PV1-11** are not reopened.
+
+**76.7 Tests.**
+- **`CommunicationEventConsumerAccessTest`:**
+  - a current teacher reads both Events, has only the calendar in navigation, and is refused every Hub, announcement, Event management, approval, publish and cancel route, changing nothing;
+  - ended and future employment, and no Employee at all, show School-wide Events only;
+  - every consumer role with and without an Employee;
+  - the exact holder list;
+  - `communications.view` alone, a Guardian-only account and a User with no membership are refused;
+  - the Staff and Guardian personas stay separate;
+  - a disabled Communications module refuses the calendar on the route and in the service;
+  - per-School authority and identity.
+- **`CommunicationEventSeparationArchitectureTest`:**
+  - the capability is named only by the calendar read, its controller, navigation and classification;
+  - route middleware is pinned for the calendar, every `events.*` route and the portal;
+  - the Staff audience goes only through `CurrentStaffMembers`.
+- **Catalogue pins updated:** `StaffRoleCatalogueSnapshotTest`, `TeacherRoleRegistryTest`, `LeaveArchitectureGuardTest`, `TeacherAttendanceArchitectureGuardTest` and `StaffSelfServiceAuthorizationTest`.
+- **Shared-run pins also updated:** `StaffAttendanceArchitectureGuardTest`, `StaffRoleGrantAuthorityTest` (181 classified keys, and a limited issuer now needs the new key to grant `staff_self_service`), `ProductionStaffRolesTest` ("Operational" label), `DemoDataBuilderTest` and `MyAttendanceUiTest` (teacher navigation).
+
+**76.8 Performance** (teacher, current staff, half of the Events Staff):
+
+| Events | Request | Queries per request | SQL time |
+|---|---|---|---|
+| 100 | 20 ms | 14 | 6.5 ms |
+| 1,000 | 32 ms | 14 | 8.7 ms |
+| 5,000 | 32 ms | 14 | 11.0 ms |
+
+- **Constant query count:** no per-Event query and no per-Event HR read. The staff check is one bounded single-user `CurrentStaffMembers::includes()`.
+- **List query:** 3.9 ms at 5,000 Events (School index, top-N sort, LIMIT 200). No index added.
+
+**76.9 Finding for the owner: PV1-10 has the same gap (not changed here).**
+- **The problem:** an in-app Staff announcement reaches current staff (§73), but a teacher cannot open the Hub inbox or the announcement page. Both check `communications.view` before recognizing the reader as a recipient.
+- **What still works:** the email channel reaches them.
+- **Fixing it** means separating announcement reading from Hub administration, like §76.3. It reopens PV1-10, so it needs owner authorization (recorded as OD-9.6).

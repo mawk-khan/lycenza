@@ -181,6 +181,8 @@ class DemoDataBuilderTest extends TestCase
         $this->assertEqualsCanonicalizing([
             'curriculum.delivery.teacher', 'attendance.teacher', 'lms.content.teacher', 'lms.assignments.teacher', 'examinations.marks.teacher',
             'hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self',
+            // ORG.9D-3R1: reading the School calendar (both roles carry it).
+            'communications.events.view',
         ], array_values($resolver->schoolCapabilities($this->user('teacher@example.test'), $school)));
 
         // Operations desks (SR.3): PRODUCTION system roles only, in the Demo

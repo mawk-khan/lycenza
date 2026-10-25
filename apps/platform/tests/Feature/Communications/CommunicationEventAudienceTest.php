@@ -71,7 +71,7 @@ class CommunicationEventAudienceTest extends TestCase
         $school ??= $this->school;
         $user = $this->createUser();
         $membership = $this->createMembership($user, $school);
-        LocalCatalogueFixtures::grantRole($membership, $this->createFixtureRole(['communications.view']));
+        LocalCatalogueFixtures::grantRole($membership, $this->createFixtureRole(['communications.events.view']));
         if ($employee) {
             $record = $this->createEmployee($school, ['user_id' => $user->id, 'record_status' => 'active']);
             $this->createEmploymentRecord($record, ['status' => $endsOn === null ? 'active' : 'separated', 'starts_on' => '2025-01-01', 'ends_on' => $endsOn]);

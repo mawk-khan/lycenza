@@ -14,16 +14,18 @@ use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * ORG.9D-3 (ADR 0076 §75): who sees which School calendar Events -- read,
  * never written, and resolved for the VIEWER when they read, never
  * snapshotted per person (a former member of an audience stops seeing it):
  *
- * - Staff surface (`communications.view`): School-wide Events (an active
- *   member of this School, which reaching the page already proves) and
- *   Staff Events only while the viewer is CURRENT staff (HR's
- *   CurrentStaffMembers -- never a role).
+ * - Staff surface (`communications.events.view`, ORG.9D-3R1 §76 --
+ *   consumption only, never `communications.view`): School-wide Events (an
+ *   active member of this School holding it, re-checked here) and Staff
+ *   Events only while the viewer is CURRENT staff (HR's CurrentStaffMembers
+ *   -- never a role; the capability alone never makes anyone staff).
  * - Guardian portal (`portal.communications.view`, development only until
  *   E46): School-wide Events and Grade/Section Events whose Grade or Section
  *   currently holds one of the ActingGuardian's eligible Students
@@ -57,6 +59,9 @@ final class CommunicationEventCalendar
     /** @return list<array<string, mixed>> */
     public function forStaff(School $school, User $viewer, string $when, ?string $month = null): array
     {
+        // ORG.9D-3R1: the service authorizes its own reader (module entitlement
+        // included), never trusting the route alone.
+        Gate::forUser($viewer)->authorize('capability', ['communications.events.view', $school]);
         $isStaff = $this->staff->includes($school, $viewer);
 
         return $this->context->withSchool($school, fn (): array => $this->list($school, $when, $month, function (Builder $q) use ($isStaff): void {

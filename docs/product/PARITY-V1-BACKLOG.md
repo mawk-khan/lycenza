@@ -210,7 +210,16 @@ All are read-only on the existing scope; matrix §19 has the coverage.
 - Never Attendance, closure, timetable, leave or exam truth (OD-9.3, separation guard). No recurrence, notifications, RSVP, Campus targeting, categories or attachments.
 - Retention: D3 adopted and implemented (published Events with their Academic Year; never-published cancelled after 1 year).
 
-**The ORG.9D Communications parity wave (PV1-10, PV1-11, PV1-12) is built.**
+### ORG.9D-3R1 built (2026-10-25, ADR 0076 §76)
+
+**PV1-12 consumer access closed.** Teachers and other staff were the audience of Staff Events but could not open the staff calendar.
+- **The fix:** the calendar now needs only the new consumption capability `communications.events.view`, on every staff persona role except the `hr_sensitive_records` add-on.
+- **Not granted:** `communications.view` (Hub and School announcement list).
+- **Staff Events** still need current HR staff identity.
+- **Unchanged:** management and approval.
+- **New owner question OD-9.6:** in-app Staff announcements (PV1-10) have the same gap. Staff who are not Hub users cannot open them, though email still reaches them. Fixing it reopens PV1-10 (ADR 0076 §76.9).
+
+**The ORG.9D Communications parity wave (PV1-10, PV1-11, PV1-12) is built. PV1-12 is complete for development/UAT.**
 
 ## Owner decisions before build (not scheduled)
 

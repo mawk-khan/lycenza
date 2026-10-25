@@ -17,7 +17,7 @@ use Tests\TestCase;
 /**
  * ORG.9D-3 (ADR 0076 §75): the Events HTTP surface. Management needs
  * communications.announce (changes: creator or communications.manage); the
- * staff calendar communications.view; decisions communications.approve in
+ * staff calendar communications.events.view (ORG.9D-3R1 §76); decisions communications.approve in
  * the existing approvals queue. Another School's Event is the unknown 404.
  * Every value reaches the page as escaped text.
  */
@@ -36,7 +36,7 @@ class CommunicationEventHttpTest extends TestCase
         parent::setUp();
         $this->travelTo(CarbonImmutable::parse('2026-10-01T06:00:00Z'));
         $this->school = $this->createSchool(['timezone' => 'Asia/Kolkata']);
-        $this->preparer = $this->createUserWithCapabilities($this->school, ['communications.view', 'communications.announce']);
+        $this->preparer = $this->createUserWithCapabilities($this->school, ['communications.view', 'communications.announce', 'communications.events.view']);
         $this->approver = $this->createUserWithCapabilities($this->school, ['communications.view', 'communications.approve']);
     }
 
@@ -57,7 +57,7 @@ class CommunicationEventHttpTest extends TestCase
     #[Test]
     public function the_full_flow_over_http_with_each_authority_checked(): void
     {
-        $viewer = $this->createUserWithCapabilities($this->school, ['communications.view']);
+        $viewer = $this->createUserWithCapabilities($this->school, ['communications.events.view']);
         $this->as($viewer)->get('/app/communications/events')->assertForbidden();
         $this->as($viewer)->post('/app/communications/events', $this->form())->assertForbidden();
         $this->as($this->createUserWithCapabilities($this->school, []))->get('/app/communications/calendar')->assertForbidden();
