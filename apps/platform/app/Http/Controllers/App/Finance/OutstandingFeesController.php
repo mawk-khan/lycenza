@@ -20,6 +20,7 @@ use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -173,6 +174,10 @@ class OutstandingFeesController extends Controller
             'scope' => $scope->isWholeSchool() ? 'school' : 'campus',
             'academicYears' => AcademicYear::query()->orderByDesc('starts_on')->get()->map(fn (AcademicYear $y) => ['id' => $y->id, 'name' => $y->name])->values()->all(),
             'canSeeClass' => $canSeeClass,
+            // ORG.9D-2 (ADR 0076 §74): the fee-reminder action is offered only to
+            // someone who can also prepare a communication; Communications
+            // re-checks both authorities itself (this flag is presentation only).
+            'canSendFeeReminder' => Gate::allows('capability', ['communications.announce', $school]),
             'gradeLevels' => $canSeeClass ? GradeLevel::query()->orderBy('sequence')->get()->map(fn (GradeLevel $g) => ['id' => $g->id, 'name' => $g->name])->values()->all() : [],
             'sections' => $canSeeClass && $activeYear !== null
                 ? Section::query()->where('academic_year_id', $activeYear->id)->with('gradeLevel')->get()

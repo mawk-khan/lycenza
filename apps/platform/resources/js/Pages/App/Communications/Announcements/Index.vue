@@ -41,6 +41,7 @@ const AUDIENCE_LABELS: Record<string, string> = {
     grade: 'Grade (Academic Cohort)',
     section: 'Section (Academic Cohort)',
     subject_offering: 'Subject Offering (Academic Cohort)',
+    fee_reminder: 'Fee reminder',
 };
 
 function audienceLabel(type: string): string {

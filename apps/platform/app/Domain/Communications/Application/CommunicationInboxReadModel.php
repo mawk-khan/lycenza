@@ -421,6 +421,16 @@ class CommunicationInboxReadModel
      */
     private function applyRecipientVisibility($query, User $actor): void
     {
+        // ORG.9D-2 (ADR 0076 §74): a fee reminder is EMAIL only, addressed to
+        // its recipient as a Guardian -- never surfaced in a staff in-app inbox
+        // (a staff member who is also a Guardian gets it by email).
+        $query->where('audience_type', '!=', 'fee_reminder')
+            ->where(fn ($visible) => $this->recipientOf($visible, $actor));
+    }
+
+    /** @param  Builder<CommunicationAnnouncement>  $query */
+    private function recipientOf($query, User $actor): void
+    {
         $query->whereIn('id', fn ($q) => $q->select('announcement_id')
             ->from('communication_announcement_recipients')
             ->where('user_id', $actor->id))

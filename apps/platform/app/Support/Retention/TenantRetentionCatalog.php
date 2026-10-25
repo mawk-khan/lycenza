@@ -117,6 +117,10 @@ final class TenantRetentionCatalog
             'communication_approval_requests', 'communication_attachments', 'communication_messages', 'communication_recipients',
             'communication_threads', 'communication_thread_participants', 'communication_deliveries', 'communication_delivery_attempts',
             'communication_delivery_policy_decisions',
+            // ORG.9D-2 (ADR 0076 §74): a fee reminder's selection goes with its
+            // announcement; its per-recipient lines are content and go with
+            // their recipient (both cascade).
+            'communication_announcement_fee_reminders', 'communication_fee_reminder_lines',
         ]],
         'communication_consent' => [self::ADOPTED, 'E21.2G C4/C5: consent evidence and domain preferences follow their subject: a Student subject\'s go with the Student core record (25 y, E21.3B, implemented); a Guardian subject\'s with Guardian personal data (1 y, E21.3C, implemented)', [
             'communication_domain_consent_events', 'communication_domain_preferences',

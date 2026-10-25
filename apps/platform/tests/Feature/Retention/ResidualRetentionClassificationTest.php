@@ -27,6 +27,7 @@ class ResidualRetentionClassificationTest extends TestCase
             'communication_approval_requests' => 'owned: the approval history goes with it (cascade)',
             'communication_announcement_domain_audience_members' => 'owned: goes with it (cascade)',
             'communication_announcement_academic_cohorts' => 'owned: goes with it (cascade)',
+            'communication_announcement_fee_reminders' => 'owned: a fee reminder\'s Finance selection goes with it (cascade)',
         ],
         'communication_threads' => [
             'communication_thread_participants' => 'owned: participants go with an empty thread (cascade)',

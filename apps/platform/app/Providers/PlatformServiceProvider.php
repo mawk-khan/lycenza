@@ -6,6 +6,8 @@ use App\Domain\AcademicStructure\Application\DataHealth\ActiveYearWithoutSection
 use App\Domain\AcademicStructure\Application\DataHealth\NoActiveAcademicYearCheck;
 use App\Domain\Automation\Application\AutomationTriggerConsumer;
 use App\Domain\Communications\Application\Audience\CommunicationAudienceResolverRegistry;
+use App\Domain\Communications\Application\Audience\FeeReminder\FeeReminderAudienceResolver;
+use App\Domain\Communications\Application\Audience\FeeReminder\FeeReminderBalanceSource;
 use App\Domain\Communications\Application\Audience\GradeAudienceResolver;
 use App\Domain\Communications\Application\Audience\GuardianAudienceResolver;
 use App\Domain\Communications\Application\Audience\GuardiansOfStudentsAudienceResolver;
@@ -18,6 +20,7 @@ use App\Domain\Communications\Application\Audience\SubjectOfferingAudienceResolv
 use App\Domain\Communications\Application\Channels\CommunicationChannelRegistry;
 use App\Domain\Communications\Application\Channels\EmailChannelDriver;
 use App\Domain\Communications\Application\Channels\InAppChannelDriver;
+use App\Domain\Payments\Application\Collections\FeeReminderBalances;
 use App\Domain\Students\Application\DataHealth\ActiveEnrollmentInClosedYearCheck;
 use App\Domain\Students\Application\DataHealth\ActiveEnrollmentInInactiveSectionCheck;
 use App\Domain\Students\Application\DataHealth\ActiveStudentWithoutCurrentPlacementCheck;
@@ -90,11 +93,16 @@ class PlatformServiceProvider extends ServiceProvider
             return $registry;
         });
 
+        // ORG.9D-2 (ADR 0076 §74): Finance (Payments) answers the Communications
+        // fee-reminder port -- Payments -> Communications, never the reverse.
+        $this->app->bind(FeeReminderBalanceSource::class, FeeReminderBalances::class);
+
         $this->app->singleton(CommunicationAudienceResolverRegistry::class, function ($app) {
             $registry = new CommunicationAudienceResolverRegistry;
             $registry->register($app->make(IndividualMembersAudienceResolver::class));
             $registry->register($app->make(SchoolWideAudienceResolver::class));
             $registry->register($app->make(StaffAudienceResolver::class));
+            $registry->register($app->make(FeeReminderAudienceResolver::class));
             $registry->register($app->make(StudentAudienceResolver::class));
             $registry->register($app->make(GuardianAudienceResolver::class));
             $registry->register($app->make(GuardiansOfStudentsAudienceResolver::class));

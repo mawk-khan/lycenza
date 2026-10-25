@@ -29,6 +29,7 @@ use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Authorization\Campus\CampusScope;
 use App\Support\Authorization\Campus\CampusScopeResolver;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -135,6 +136,25 @@ class FinanceCampusAccess
         }
 
         return ['payments' => $shown, 'otherAmount' => $other];
+    }
+
+    /**
+     * ORG.9D-2 (ADR 0076 §74): the Outstanding fees reader's scope -- the
+     * intersection of finance.charges.view and finance.payments.view -- for a
+     * caller that must refuse BEFORE reading (a fee reminder's initiator).
+     * Refuses (403) without either key, or when the two scopes share nothing.
+     *
+     * @throws AuthorizationException
+     */
+    public function outstandingScope(School $school, User $actor): CampusScope
+    {
+        $scope = $this->authorizeCampusScopeFor($actor, 'finance.charges.view', $school)
+            ->intersect($this->authorizeCampusScopeFor($actor, 'finance.payments.view', $school));
+        if ($scope->isNone()) {
+            throw new AuthorizationException('No Finance scope covers outstanding balances.');
+        }
+
+        return $scope;
     }
 
     /** @param  list<string>|null  $studentIds */

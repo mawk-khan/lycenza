@@ -3,7 +3,9 @@
 namespace App\Domain\Communications\Http\Controllers;
 
 use App\Domain\Communications\Application\Approval\CommunicationApprovalService;
+use App\Domain\Communications\Application\Audience\FeeReminder\FeeReminderSelection;
 use App\Domain\Communications\Application\Exceptions\CommunicationException;
+use App\Domain\Communications\Http\Controllers\Concerns\HandlesFeeReminders;
 use App\Domain\Communications\Infrastructure\CommunicationApprovalRequest;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\AuthorizesCapability;
@@ -30,6 +32,7 @@ use Inertia\Response;
 class CommunicationApprovalController extends Controller
 {
     use AuthorizesCapability;
+    use HandlesFeeReminders;
 
     public function index(TenantContext $context, Request $request): Response
     {
@@ -167,6 +170,12 @@ class CommunicationApprovalController extends Controller
             'individualMemberCount' => count($snapshot['individualMemberIds'] ?? []),
             'channels' => $snapshot['channels'] ?? [],
             'attachmentCount' => count($snapshot['attachmentChecksums'] ?? []),
+            // ORG.9D-2 (ADR 0076 §74): what the approver approves for a fee
+            // reminder is its message and this population DEFINITION -- the
+            // current balances are re-read at publish and never shown here.
+            'feeReminder' => isset($snapshot['feeReminder']) && is_array($snapshot['feeReminder'])
+                ? $this->presentFeeReminderSelection(new FeeReminderSelection(...$snapshot['feeReminder']))['labels']
+                : null,
             'requestedByName' => $r->requestedBy?->name,
             'requestedAt' => $r->requested_at->toIso8601String(),
             'decidedByName' => $r->decidedBy?->name,

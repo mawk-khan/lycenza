@@ -2,7 +2,9 @@
 
 namespace App\Domain\Communications\Application\Approval;
 
+use App\Domain\Communications\Application\Audience\FeeReminder\FeeReminderBalanceSource;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
+use App\Models\User;
 
 /**
  * Phase 5A.12 §4/§17-§26 -- computes the deterministic, server-side
@@ -63,6 +65,8 @@ use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
  */
 class CommunicationApprovalFingerprint
 {
+    public function __construct(private readonly FeeReminderBalanceSource $feeReminderBalances) {}
+
     /**
      * @return array<string, mixed>
      */
@@ -76,12 +80,12 @@ class CommunicationApprovalFingerprint
         // always be reflected here. Fingerprint correctness is a
         // security boundary (brief §17/§32), not just a convenience
         // read.
-        $announcement = $announcement->fresh(['requestedChannels', 'audienceMembers', 'domainAudienceMembers', 'attachments', 'academicCohort']);
+        $announcement = $announcement->fresh(['requestedChannels', 'audienceMembers', 'domainAudienceMembers', 'attachments', 'academicCohort', 'feeReminder']);
 
         $isDomainAudience = in_array($announcement->audience_type, ['student', 'guardian', 'guardians_of_students'], true);
         $isAcademicCohortAudience = in_array($announcement->audience_type, ['grade', 'section', 'subject_offering'], true);
 
-        return [
+        $snapshot = [
             'title' => trim($announcement->title),
             'body' => trim($announcement->body),
             'priority' => $announcement->priority,
@@ -119,6 +123,21 @@ class CommunicationApprovalFingerprint
             // Brief §25/§66: identity only, never bytes/storage paths.
             'attachmentChecksums' => $this->sortedUnique($announcement->attachments->pluck('checksum_sha256')->all()),
         ];
+
+        // ORG.9D-2 (ADR 0076 §74): a fee reminder also binds its Finance
+        // selection -- the population DEFINITION approved, never its Students
+        // or amounts (those are re-read at publish, by design: the approval
+        // is "send the current outstanding to this population"). Added only
+        // for a fee reminder, so no other announcement's fingerprint moves.
+        // The preparer's Finance scope is bound too (L1): if it widens or
+        // narrows after approval, the approval no longer matches.
+        if ($announcement->isFeeReminder()) {
+            $snapshot['feeReminder'] = $announcement->feeReminder?->selection()->toArray();
+            $creator = User::query()->find($announcement->created_by_user_id);
+            $snapshot['feeReminderScope'] = $creator === null ? 'none' : $this->feeReminderBalances->scopeKey($announcement->school, $creator);
+        }
+
+        return $snapshot;
     }
 
     public function hash(array $snapshot): string

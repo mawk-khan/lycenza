@@ -43,6 +43,12 @@ namespace App\Domain\Communications\Domain;
  * Employee with a current employment), never a role name or capability.
  * Treated as School-wide by the approval policy, so choosing it never
  * avoids a School-wide approval requirement.
+ *
+ * ORG.9D-2 (ADR 0076 §74) adds `FeeReminder` -- a fee-due reminder to the
+ * current Guardian accounts of Students with a positive outstanding in a
+ * Finance selection (FeeReminderAudienceResolver). Email only, always
+ * approved, never scheduled or Emergency; each recipient gets their own
+ * immutable lines at publish (`communication_fee_reminder_lines`).
  */
 enum CommunicationAudienceType: string
 {
@@ -55,4 +61,5 @@ enum CommunicationAudienceType: string
     case Section = 'section';
     case SubjectOffering = 'subject_offering';
     case Staff = 'staff';
+    case FeeReminder = 'fee_reminder';
 }

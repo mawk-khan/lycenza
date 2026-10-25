@@ -9,6 +9,8 @@ use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Communications\Application\Approval\CommunicationApprovalService;
 use App\Domain\Communications\Application\Audience\AcademicCohortSelection;
 use App\Domain\Communications\Application\Audience\CommunicationAudienceResolverRegistry;
+use App\Domain\Communications\Application\Audience\FeeReminder\FeeReminderBalanceSource;
+use App\Domain\Communications\Application\Audience\FeeReminder\FeeReminderSelection;
 use App\Domain\Communications\Application\Audience\ResolvedAudience;
 use App\Domain\Communications\Application\Channels\EmailAddressResolver;
 use App\Domain\Communications\Application\Channels\GuardianEmailAddressResolver;
@@ -17,6 +19,8 @@ use App\Domain\Communications\Application\Exceptions\EmergencyCannotBeScheduledE
 use App\Domain\Communications\Application\Exceptions\EmergencyJustificationRequiredException;
 use App\Domain\Communications\Application\Exceptions\EmergencyMustBeRequiredException;
 use App\Domain\Communications\Application\Exceptions\EmptyAudienceException;
+use App\Domain\Communications\Application\Exceptions\FeeReminderAuthorityException;
+use App\Domain\Communications\Application\Exceptions\FeeReminderNotAllowedException;
 use App\Domain\Communications\Application\Exceptions\InvalidAcademicCohortException;
 use App\Domain\Communications\Application\Exceptions\InvalidAnnouncementTransitionException;
 use App\Domain\Communications\Application\Exceptions\InvalidAudienceMemberException;
@@ -45,6 +49,7 @@ use App\Domain\Communications\Infrastructure\CommunicationAnnouncementAcademicCo
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementAudienceMember;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementChannel;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementDomainAudienceMember;
+use App\Domain\Communications\Infrastructure\CommunicationAnnouncementFeeReminder;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementRecipient;
 use App\Domain\Communications\Infrastructure\CommunicationAttachment;
 use App\Domain\Communications\Infrastructure\CommunicationDeliveryPolicyDecision;
@@ -62,6 +67,7 @@ use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Observability\QueueName;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -124,6 +130,7 @@ class AnnouncementService
         private readonly AccountLinkService $accountLinks,
         private readonly CommunicationDomainPreferenceService $domainPreferences,
         private readonly CommunicationConsentService $domainConsents,
+        private readonly FeeReminderBalanceSource $feeReminderBalances,
     ) {}
 
     /**
@@ -147,7 +154,28 @@ class AnnouncementService
         ?string $emergencyJustification = null,
         array $domainAudienceMemberIds = [],
         ?AcademicCohortSelection $academicCohort = null,
+        ?FeeReminderSelection $feeReminder = null,
     ): CommunicationAnnouncement {
+        // ORG.9D-2 (ADR 0076 §74): a fee reminder needs its Finance selection,
+        // is never Emergency, and its creator must be able to see the balances
+        // it names NOW -- the port refuses otherwise (never a silent narrowing).
+        if ($audienceType === CommunicationAudienceType::FeeReminder) {
+            if ($feeReminder === null) {
+                throw FeeReminderNotAllowedException::selection();
+            }
+            if ($dispatchMode === CommunicationDispatchMode::Emergency) {
+                throw FeeReminderNotAllowedException::emergency();
+            }
+            if ($requirement === CommunicationRequirement::Required) {
+                throw FeeReminderNotAllowedException::required();
+            }
+            try {
+                $this->feeReminderBalances->assertCanSelect($school, $creator, $feeReminder);
+            } catch (AuthorizationException) {
+                throw new FeeReminderAuthorityException;
+            }
+        }
+
         // Phase 5A.10 §6/§23: validated BEFORE any write, independent
         // of whatever the controller already validated -- an
         // Application-layer caller (including a direct service test)
@@ -158,7 +186,7 @@ class AnnouncementService
         // re-checked in this service.
         $this->assertValidDispatchMode($dispatchMode, $requirement, $emergencyJustification);
 
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $creator, $title, $body, $priority, $audienceType, $individualMemberUserIds, $campus, $channels, $sourceTemplateId, $requirement, $dispatchMode, $emergencyJustification, $domainAudienceMemberIds, $academicCohort) {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $creator, $title, $body, $priority, $audienceType, $individualMemberUserIds, $campus, $channels, $sourceTemplateId, $requirement, $dispatchMode, $emergencyJustification, $domainAudienceMemberIds, $academicCohort, $feeReminder) {
             $isEmergency = $dispatchMode === CommunicationDispatchMode::Emergency;
 
             $announcement = CommunicationAnnouncement::query()->create([
@@ -188,6 +216,19 @@ class AnnouncementService
 
             if ($this->isAcademicCohortAudienceType($audienceType)) {
                 $this->syncAcademicCohort($announcement, $audienceType, $academicCohort);
+            }
+
+            if ($audienceType === CommunicationAudienceType::FeeReminder && $feeReminder !== null) {
+                CommunicationAnnouncementFeeReminder::query()->create([
+                    'school_id' => $school->id,
+                    'announcement_id' => $announcement->id,
+                    'balance_status' => $feeReminder->balanceStatus,
+                    'academic_year_id' => $feeReminder->academicYearId,
+                    'campus_id' => $feeReminder->campusId,
+                    'campus_unattributed' => $feeReminder->campusUnattributed,
+                    'grade_level_id' => $feeReminder->gradeLevelId,
+                    'section_id' => $feeReminder->sectionId,
+                ]);
             }
 
             $this->syncChannels($announcement, $channels);
@@ -249,6 +290,14 @@ class AnnouncementService
 
             if ($effectiveDispatchMode === CommunicationDispatchMode::Emergency && ! $announcement->isDraft()) {
                 throw new EmergencyCannotBeScheduledException;
+            }
+
+            if ($effectiveDispatchMode === CommunicationDispatchMode::Emergency && $announcement->isFeeReminder()) {
+                throw FeeReminderNotAllowedException::emergency();
+            }
+
+            if ($effectiveRequirement === CommunicationRequirement::Required && $announcement->isFeeReminder()) {
+                throw FeeReminderNotAllowedException::required();
             }
 
             $this->assertValidDispatchMode($effectiveDispatchMode, $effectiveRequirement, $effectiveJustification);
@@ -402,6 +451,22 @@ class AnnouncementService
      */
     public function publish(CommunicationAnnouncement $announcement, User $actor): CommunicationAnnouncement
     {
+        // ORG.9D-2 (ADR 0076 §74): a fee reminder's population is read under its
+        // initiator's Finance authority, so only that initiator sends it (and it
+        // is never scheduled, so the scheduler never reaches here for one).
+        if ($announcement->isFeeReminder() && (string) $announcement->created_by_user_id !== (string) $actor->id) {
+            throw FeeReminderNotAllowedException::publisher();
+        }
+        // ...and only while that initiator can still see the balances it names
+        // (the clear refusal; the publish-time read re-checks it again).
+        if ($announcement->isFeeReminder()) {
+            try {
+                $this->context->withSchool($announcement->school, fn () => $this->feeReminderBalances->assertCanSelect($announcement->school, $actor, $announcement->feeReminderSelection()));
+            } catch (AuthorizationException) {
+                throw new FeeReminderAuthorityException;
+            }
+        }
+
         return $this->context->withSchool($announcement->school, function () use ($announcement, $actor) {
             $deliveryIds = [];
 
@@ -530,7 +595,30 @@ class AnnouncementService
                     }
                 }
 
+                $feeReminder = $resolved->feeReminder;
+
+                // ORG.9D-2 (ADR 0076 §74): a fee reminder reaches each account AS a
+                // Guardian, so that Guardian's own email preference and consent
+                // apply exactly as on the existing Guardian email path (batched
+                // reads; a fee reminder is never Required, so nothing bypasses them).
+                $feeReminderSuppressed = [];
+                if ($feeReminder !== null && $feeReminder->guardianByUser !== []) {
+                    $guardianIds = array_values(array_unique($feeReminder->guardianByUser));
+                    $preferences = $this->domainPreferences->currentPreferencesForGuardians($fresh->school, $guardianIds, CommunicationChannel::Email);
+                    $consents = $this->domainConsents->currentStatusesForGuardians($fresh->school, $guardianIds, CommunicationChannel::Email);
+                    foreach ($feeReminder->guardianByUser as $userId => $guardianId) {
+                        $preference = $preferences->get($guardianId);
+                        if ($preference !== null && ! $preference->isEnabled()) {
+                            $feeReminderSuppressed[$userId] = CommunicationPolicyReason::RecipientPreferenceDisabled;
+                        } elseif ($consents->get($guardianId) === CommunicationConsentStatus::Withdrawn) {
+                            $feeReminderSuppressed[$userId] = CommunicationPolicyReason::ConsentWithdrawn;
+                        }
+                    }
+                }
+
                 foreach (array_chunk($resolved->userIds, self::CHUNK_SIZE) as $chunk) {
+                    $lineRows = [];
+
                     // Reused for BOTH the historical snapshot AND the
                     // policy engine's eligibility/preference lookups
                     // (brief §55) -- never a second membership query.
@@ -555,6 +643,18 @@ class AnnouncementService
                     foreach ($chunk as $userId) {
                         $membershipId = $memberships->get($userId)?->id;
                         $recipient = null;
+
+                        if (isset($feeReminderSuppressed[$userId])) {
+                            CommunicationDeliveryPolicyDecision::query()->create([
+                                'school_id' => $fresh->school_id,
+                                'message_id' => $message->id,
+                                'recipient_user_id' => $userId,
+                                'channel' => CommunicationChannel::Email->value,
+                                'reason' => $feeReminderSuppressed[$userId]->value,
+                            ]);
+
+                            continue;
+                        }
 
                         foreach ($requestedChannels as $channel) {
                             $decision = $this->channelPolicy->evaluate($fresh->school, $membershipId, $channel, $requirement);
@@ -602,6 +702,28 @@ class AnnouncementService
                                 $deliveryIds[] = $delivery->id;
                             }
                         }
+
+                        // ORG.9D-2 (ADR 0076 §74): this recipient's own reminder lines,
+                        // snapshotted with the recipient -- the email is rendered from
+                        // these and nothing else, even if delivered later (quiet hours).
+                        if ($feeReminder !== null && $recipient !== null) {
+                            foreach ($feeReminder->linesByUser[$userId] ?? [] as $position => $line) {
+                                $lineRows[] = [
+                                    'id' => (string) new UuidV7,
+                                    'school_id' => $fresh->school_id,
+                                    'recipient_id' => $recipient->id,
+                                    'position' => $position + 1,
+                                    'student_name' => $line['studentName'],
+                                    'outstanding_amount' => $line['amount'],
+                                    'currency' => $line['currency'],
+                                    'as_of' => $feeReminder->asOf->format('Y-m-d H:i:sP'),
+                                ];
+                            }
+                        }
+                    }
+
+                    if ($lineRows !== []) {
+                        DB::table('communication_fee_reminder_lines')->insert($lineRows);
                     }
                 }
 
@@ -633,10 +755,15 @@ class AnnouncementService
                     'recipient_count' => $resolved->count(),
                 ]);
 
+                // ORG.9D-2: counts only for a fee reminder -- never a Student, an
+                // amount, a Guardian or an address.
                 $this->audit->school($fresh->school, 'announcement.published', actor: $actor, subject: $fresh, metadata: [
                     'audienceType' => $fresh->audience_type,
                     'resolvedCount' => $resolved->count(),
-                ]);
+                ] + ($feeReminder === null ? [] : [
+                    'feeReminderStudents' => $feeReminder->studentCount,
+                    'feeReminderStudentsWithoutRecipient' => $feeReminder->studentsWithoutRecipient,
+                ]));
 
                 if ($emergencyBypassRequested) {
                     $this->audit->school($fresh->school, 'announcement.emergency_published', actor: $actor, subject: $fresh, metadata: [
@@ -687,6 +814,11 @@ class AnnouncementService
             // state. A future scheduled advisory must remain STANDARD.
             if ($announcement->isEmergency()) {
                 throw new EmergencyCannotBeScheduledException;
+            }
+
+            // ORG.9D-2 (OD-9.6): fee reminders are manual -- never scheduled.
+            if ($announcement->isFeeReminder()) {
+                throw FeeReminderNotAllowedException::scheduling();
             }
 
             return DB::transaction(function () use ($announcement, $actor, $scheduledAtUtc) {
@@ -1553,6 +1685,12 @@ class AnnouncementService
             fn (CommunicationChannel $c) => $c->value,
             [...$channels, CommunicationChannel::InApp],
         ));
+
+        // ORG.9D-2 (ADR 0076 §74): a fee reminder is EMAIL only -- its figures
+        // live in each recipient's email, never in an in-app inbox.
+        if ($announcement->isFeeReminder()) {
+            $values = [CommunicationChannel::Email->value];
+        }
 
         CommunicationAnnouncementChannel::query()->where('announcement_id', $announcement->id)->delete();
 

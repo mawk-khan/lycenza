@@ -63,6 +63,8 @@ interface Props {
     canSeeClass: boolean;
     gradeLevels: { id: string; name: string }[];
     sections: { id: string; label: string; gradeLevelId: string }[];
+    // ORG.9D-2: may also prepare a communication (presentation only).
+    canSendFeeReminder: boolean;
 }
 
 const props = defineProps<Props>();
@@ -90,6 +92,25 @@ const emptyTitle = computed(() =>
 const sectionsForGrade = computed(() =>
     gradeId.value ? props.sections.filter((s) => s.gradeLevelId === gradeId.value) : props.sections,
 );
+
+// ORG.9D-2 (ADR 0076 §74): a fee reminder starts from this page's own
+// filters -- the balance status, year, charge campus and class. Search, the
+// Students (current/leavers) filter and "as at" are not part of a reminder:
+// it always reminds every Student in the selection who owes money NOW.
+const reminderHref = computed(() => {
+    const params = new URLSearchParams({ audience: 'fee_reminder' });
+    params.set('status', props.filters.status === 'overdue' ? 'overdue' : 'outstanding');
+    for (const key of ['academic_year_id', 'campus_id', 'section_id'] as const) {
+        if (props.filters[key]) {
+            params.set(key, props.filters[key]);
+        }
+    }
+    // A Section already names its Grade; a reminder carries one class filter.
+    if (props.filters.grade_level_id && !props.filters.section_id) {
+        params.set('grade_level_id', props.filters.grade_level_id);
+    }
+    return `/app/communications/announcements/create?${params.toString()}`;
+});
 
 function apply(): void {
     if (sectionId.value && !sectionsForGrade.value.some((s) => s.id === sectionId.value)) {
@@ -276,6 +297,20 @@ function apply(): void {
                 </dd>
             </div>
         </dl>
+
+        <section
+            v-if="canSendFeeReminder && !asAt"
+            class="mt-4 flex flex-wrap items-center gap-3 rounded border border-slate-200 p-3 text-sm"
+        >
+            <a class="rounded bg-slate-900 px-3 py-1.5 text-white" :href="reminderHref"
+                >Send fee reminder</a
+            >
+            <span class="text-xs text-slate-600"
+                >Emails the current guardians of every Student in this selection who owes money,
+                after approval. Uses the status, year, campus and class filters above (not the
+                search or Students filters); amounts are read again when it is sent.</span
+            >
+        </section>
 
         <p v-if="filters.campus_id" class="mt-3 text-xs text-slate-500">
             Each charge keeps the campus it was recorded against when it was charged (a fee run's

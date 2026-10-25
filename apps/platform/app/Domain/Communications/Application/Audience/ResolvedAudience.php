@@ -2,6 +2,8 @@
 
 namespace App\Domain\Communications\Application\Audience;
 
+use App\Domain\Communications\Application\Audience\FeeReminder\FeeReminderAudience;
+
 /**
  * Phase 5A.2 §8/§14: the output of resolving an Announcement's
  * audience definition into concrete, deduplicated identities -- never
@@ -20,6 +22,11 @@ namespace App\Domain\Communications\Application\Audience;
  * publish() handles each separately (the membership loop is unchanged
  * from Phase 5A, see docs/communication-hub/
  * PHASE-5B-1-STUDENT-GUARDIAN-AUDIENCE-REACHABILITY.md §6).
+ *
+ * ORG.9D-2 (ADR 0076 §74): `feeReminder` is set only by
+ * FeeReminderAudienceResolver -- the per-User reminder lines publish()
+ * snapshots for each recipient it creates. Every other audience leaves it
+ * null.
  */
 final class ResolvedAudience
 {
@@ -34,6 +41,7 @@ final class ResolvedAudience
         public readonly array $categoryBreakdown,
         public readonly array $guardianIds = [],
         public readonly array $studentIds = [],
+        public readonly ?FeeReminderAudience $feeReminder = null,
     ) {}
 
     public function count(): int

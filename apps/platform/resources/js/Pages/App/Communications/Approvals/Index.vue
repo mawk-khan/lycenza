@@ -60,7 +60,9 @@ const channelLabels: Record<string, string> = { in_app: 'In-app', email: 'Email'
                             ? 'School-wide'
                             : r.audienceType === 'staff'
                               ? 'Staff only'
-                              : 'Selected members'
+                              : r.audienceType === 'fee_reminder'
+                                ? 'Fee reminder'
+                                : 'Selected members'
                     }}</span>
                     <span
                         v-if="r.requirement === 'required'"

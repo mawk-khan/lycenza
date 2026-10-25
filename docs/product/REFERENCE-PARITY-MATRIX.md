@@ -732,3 +732,21 @@ Statuses are now P0 71, P1 102, P2 62.
 | V1-required, weighted / strict | 82.2 % / 71.4 % | **82.5 % / 72.1 %** (245.0 / 297) |
 
 Not built: PV1-11 (fee-due reminder email) and PV1-12 (events calendar).
+
+## 22. ORG.9D-2 — Fee-due reminder email (2026-10-25)
+
+ORG.9D-2 (ADR 0076 §74) built PV1-11.
+
+| Function | Before | After | Note |
+|---|---|---|---|
+| COM-045 send fee-due reminders | P3 | **P1** | manual (no schedules, OD-9.6); amounts = the Outstanding fees page, re-read at publish; current Guardian accounts only, one email each; always approved, preparer never decides; email only |
+| COM-042 templates for fee reminder emails | P3 | **P1** | intended difference: one fixed Lycenza template plus a per-reminder School note; no editable template variables (owner brief §14) |
+
+Statuses are now P0 71, P1 104, P2 62, P3 19.
+
+| Coverage | After ORG.9D-1 | After ORG.9D-2 |
+|---|---|---|
+| Functional, weighted / strict | 38.7 % / 33.8 % | **39.0 % / 34.1 %** (247.0 / 633) |
+| V1-required, weighted / strict | 82.5 % / 72.1 % | **83.2 % / 72.7 %** (247.0 / 297) |
+
+Not built: PV1-12 (events calendar). Production email stays gated (E17–E20).

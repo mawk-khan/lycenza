@@ -5818,3 +5818,11 @@ ORG.9B is read-only. It adds no capability, role, Campus adoption, export, schem
 - **Options** are read by a loose index scan over the existing indexes (no new index).
 - **Narrow only.** The filters never widen anything, never read `metadata`, and never show an IP address or user agent.
 - **Access event.** The `compliance.audit_log.viewed` event records which filters were used, never their values.
+
+## Fee-due reminder email (ORG.9D-2, 2026-10-25, ADR 0076 §74)
+
+- **Entry:** Outstanding fees → **Send fee reminder** (shown to a holder of `communications.announce`). It carries the page's status, year, charge Campus and class filters.
+- **Finance's part is read-only:** Payments' `FeeReminderBalances` implements Communications' `FeeReminderBalanceSource` port with the page's own read (`FinanceCampusAccess::outstandingFees()`), under the preparer's CURRENT `finance.charges.view` ∩ `finance.payments.view` scope. Only strictly positive balances; no as-at read; one `fee_outstanding_list.viewed` audit per read.
+- **Refusals:** a Campus outside the preparer's scope, whole-School Charges for a Campus-scoped preparer, and a class filter without whole-School `enrollments.view` or without an active academic year.
+- **Never:** Communications writes no Charge, Payment, concession, correction or ledger row, and computes no balance. Sending a reminder changes no financial state.
+- **Details:** `docs/communication-hub/ORG-9D-2-FEE-REMINDER.md`.

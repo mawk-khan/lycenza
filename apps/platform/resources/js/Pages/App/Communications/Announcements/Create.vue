@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import ErrorSummary from '../../../../Components/Form/ErrorSummary.vue';
 import SearchCombobox from '../../../../Components/Form/SearchCombobox.vue';
-import { router } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { router, usePage } from '@inertiajs/vue3';
+import { computed, ref, watch } from 'vue';
 
 interface TemplatePrefill {
     id: string;
@@ -15,6 +16,14 @@ interface CurrentAcademicYear {
     label: string;
 }
 
+// ORG.9D-2 (ADR 0076 §74): opened from Finance -> Outstanding fees. The
+// selection is fixed here (start a new reminder to change it); the Students
+// and amounts are read on the draft's preview and again when it is sent.
+interface FeeReminderSelection {
+    fields: Record<string, string>;
+    labels: { status: string; academicYear: string; campus: string; class: string };
+}
+
 interface Props {
     emailChannelEnabled: boolean;
     schoolTimezone: string;
@@ -22,11 +31,13 @@ interface Props {
     canDispatchEmergency: boolean;
     template: TemplatePrefill | null;
     currentAcademicYear: CurrentAcademicYear | null;
+    feeReminder: FeeReminderSelection | null;
 }
 
 const props = defineProps<Props>();
+const pageErrors = computed(() => usePage().props.errors as Record<string, string | undefined>);
 
-const title = ref(props.template?.title ?? '');
+const title = ref(props.feeReminder ? 'Fee reminder' : (props.template?.title ?? ''));
 const body = ref(props.template?.body ?? '');
 const priority = ref<'normal' | 'important' | 'urgent' | 'critical'>(
     (props.template?.priority as 'normal' | 'important' | 'urgent' | 'critical' | undefined) ??
@@ -47,7 +58,8 @@ const audienceType = ref<
     | 'grade'
     | 'section'
     | 'subject_offering'
->('school_wide');
+    | 'fee_reminder'
+>(props.feeReminder ? 'fee_reminder' : 'school_wide');
 const memberIds = ref('');
 
 // Phase 5B.1 §11/§12/§13/§25/§26: search-assisted picker for the three
@@ -254,10 +266,17 @@ function submit() {
                           recipient_kind: cohortRecipientKind.value,
                       }
                     : undefined,
-            channels:
-                props.emailChannelEnabled && emailSelected.value ? ['in_app', 'email'] : ['in_app'],
+            fee_reminder: props.feeReminder ? props.feeReminder.fields : undefined,
+            channels: props.feeReminder
+                ? ['email']
+                : props.emailChannelEnabled && emailSelected.value
+                  ? ['in_app', 'email']
+                  : ['in_app'],
             source_template_id: props.template?.id ?? null,
-            requirement: props.canMarkRequired ? requirement.value : 'optional',
+            // ORG.9D-2: a fee reminder is never Required (it respects each
+            // guardian's email choices); the server refuses it too.
+            requirement:
+                props.canMarkRequired && !props.feeReminder ? requirement.value : 'optional',
             dispatch_mode: isEmergency ? 'emergency' : 'standard',
             emergency_justification: isEmergency ? emergencyJustification.value : null,
             emergency_acknowledged: isEmergency ? emergencyAcknowledged.value : undefined,
@@ -284,6 +303,20 @@ function submit() {
         <p v-if="template" class="mt-1 text-xs text-slate-400">
             Pre-filled from template. Editing here does not change the template.
         </p>
+
+        <ErrorSummary
+            :errors="pageErrors"
+            :fields="[
+                'audience',
+                'channels',
+                'fee_reminder',
+                'fee_reminder.status',
+                'fee_reminder.academic_year_id',
+                'fee_reminder.campus_id',
+                'fee_reminder.grade_level_id',
+                'fee_reminder.section_id',
+            ]"
+        />
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div>
@@ -320,7 +353,36 @@ function submit() {
                 </select>
             </div>
 
-            <div>
+            <section
+                v-if="feeReminder"
+                class="rounded border border-slate-200 bg-slate-50 p-3 text-sm"
+                aria-labelledby="fee-reminder-heading"
+            >
+                <h2 id="fee-reminder-heading" class="font-medium">Fee reminder</h2>
+                <dl class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                    <dt class="text-slate-500">Who</dt>
+                    <dd>{{ feeReminder.labels.status }}</dd>
+                    <dt class="text-slate-500">Academic year</dt>
+                    <dd>{{ feeReminder.labels.academicYear }}</dd>
+                    <dt class="text-slate-500">Charge campus</dt>
+                    <dd>{{ feeReminder.labels.campus }}</dd>
+                    <dt class="text-slate-500">Class</dt>
+                    <dd>{{ feeReminder.labels.class }}</dd>
+                </dl>
+                <p class="mt-2 text-xs text-slate-600">
+                    Each current guardian with an account gets one email listing their own Students
+                    in this selection and the amount each still owes, as of the moment it is sent.
+                    Students without a guardian account are not emailed. The email subject never
+                    shows an amount. It is sent by email only, always needs approval by someone
+                    else, and only you can send it after approval. Your message below is added as
+                    the school's note (for example, how to pay).
+                </p>
+                <p v-if="!emailChannelEnabled" class="mt-2 text-xs text-red-700" role="alert">
+                    Email is not enabled for this school, so a fee reminder cannot be prepared.
+                </p>
+            </section>
+
+            <div v-if="!feeReminder">
                 <label class="block text-xs font-medium text-slate-500">Audience</label>
                 <select
                     v-model="audienceType"
@@ -530,7 +592,7 @@ function submit() {
                 </div>
             </div>
 
-            <div>
+            <div v-if="!feeReminder">
                 <label class="block text-xs font-medium text-slate-500">Delivery</label>
                 <div class="mt-1 space-y-1">
                     <label class="flex items-center gap-2 text-sm text-slate-600">
@@ -555,7 +617,7 @@ function submit() {
                 </div>
             </div>
 
-            <div v-if="canMarkRequired">
+            <div v-if="canMarkRequired && !feeReminder">
                 <label class="block text-xs font-medium text-slate-500">Delivery policy</label>
                 <div class="mt-1 space-y-1 text-sm text-slate-600">
                     <label class="flex items-start gap-2">
@@ -596,7 +658,10 @@ function submit() {
                 </div>
             </div>
 
-            <div v-if="canDispatchEmergency" class="rounded border border-red-200 bg-red-50 p-3">
+            <div
+                v-if="canDispatchEmergency && !feeReminder"
+                class="rounded border border-red-200 bg-red-50 p-3"
+            >
                 <label class="flex items-start gap-2 text-sm font-medium text-red-800">
                     <input
                         :checked="dispatchMode === 'emergency'"

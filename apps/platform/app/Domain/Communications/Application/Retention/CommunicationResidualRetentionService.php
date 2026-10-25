@@ -53,6 +53,7 @@ final class CommunicationResidualRetentionService
     private const ANNOUNCEMENT_OWNED = [
         'communication_announcement_audience_members', 'communication_announcement_channels', 'communication_attachments',
         'communication_approval_requests', 'communication_announcement_domain_audience_members', 'communication_announcement_academic_cohorts',
+        'communication_announcement_fee_reminders',
     ];
 
     /** Children a thread's own delete removes (ON DELETE CASCADE). */

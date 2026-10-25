@@ -17,6 +17,8 @@ interface ApprovalDetail {
     individualMemberCount: number;
     channels: string[];
     attachmentCount: number;
+    // ORG.9D-2: the approved population DEFINITION of a fee reminder (never balances).
+    feeReminder: { status: string; academicYear: string; campus: string; class: string } | null;
     requestedByName: string | null;
     requestedAt: string;
     decidedByName: string | null;
@@ -99,7 +101,9 @@ function reject() {
                             ? 'School-wide'
                             : request.audienceType === 'staff'
                               ? 'Staff only (current employees)'
-                              : `${request.individualMemberCount} selected members`
+                              : request.audienceType === 'fee_reminder'
+                                ? 'Fee reminder'
+                                : `${request.individualMemberCount} selected members`
                     }}
                 </p>
             </div>
@@ -122,6 +126,31 @@ function reject() {
                 <p class="font-medium">{{ request.attachmentCount }}</p>
             </div>
         </div>
+
+        <section
+            v-if="request.feeReminder"
+            class="mt-4 rounded border border-slate-200 p-3 text-xs"
+            aria-labelledby="approval-fee-reminder"
+        >
+            <h2 id="approval-fee-reminder" class="font-medium text-slate-600">
+                Fee reminder selection
+            </h2>
+            <dl class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1">
+                <dt class="text-slate-500">Who</dt>
+                <dd>{{ request.feeReminder.status }}</dd>
+                <dt class="text-slate-500">Academic year</dt>
+                <dd>{{ request.feeReminder.academicYear }}</dd>
+                <dt class="text-slate-500">Charge campus</dt>
+                <dd>{{ request.feeReminder.campus }}</dd>
+                <dt class="text-slate-500">Class</dt>
+                <dd>{{ request.feeReminder.class }}</dd>
+            </dl>
+            <p class="mt-2 text-slate-500">
+                You are approving this message and this selection. Each guardian is emailed the
+                amount their Students owe when it is sent (read again then), never an amount shown
+                here; anyone who has paid by then is left out.
+            </p>
+        </section>
 
         <div
             v-if="request.status !== 'pending'"

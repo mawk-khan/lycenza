@@ -85,7 +85,7 @@ final class ApprovalWorkflowRegistry
             'drift' => 'fingerprint',
             'freshMfa' => [],
             'compatibility' => 'adapter',
-            'note' => 'Self-approval refused in the service only (no DB check); the announcement creator is a second candidate participant; the capability is checked in the controller.',
+            'note' => 'Self-approval refused in the service only (no DB check); the announcement creator is a second candidate participant (ORG.9D-2: refused as decider for a fee_reminder, whose preparer is the only sender); the capability is checked in the controller.',
         ],
         'student_mark_corrections' => [
             'domain' => 'Examinations',

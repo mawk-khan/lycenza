@@ -1617,3 +1617,10 @@ once several modules copy it.
      - **One answer.** Another domain gets current staff only from `App\Domain\HR\Application\CurrentStaffMembers` (User ids only): active membership, enabled User, linked active Employee, exactly one current employment on the School-local date.
      - **Never** classify staff by a role name, capability, persona, email domain or Employee contact field, and never pass an HR field to Communications.
      - **The Staff audience is School-wide** for the approval policy, so switching audience never avoids approval.
+
+109. **A fee reminder is Finance truth → Guardian accounts → approval → email, and nothing more (ADR 0076 §74, ORG.9D-2).**
+     - **Amounts** come only through Communications' `FeeReminderBalanceSource` port, which Payments implements with the Outstanding fees read under the preparer's CURRENT Finance scope. Never compute a balance in Communications, and never write financial state from it.
+     - **Recipients** are only `CurrentGuardianAccounts` (legal guardian of an active Student, active Guardian, its one active link, active membership, enabled User). Never a Student account, a raw or emergency contact, or PII matching. One email per Guardian, listing only their selected Students.
+     - **Approval:** always, never by the preparer. Only the preparer sends it. Never Required, Emergency or scheduled (service and database). The fingerprint binds the selection and the preparer's Finance scope.
+     - **Content:** a fixed subject without amounts, and immutable per-recipient lines (`communication_fee_reminder_lines`). A recipient without lines fails closed.
+     - **Visibility:** figures, counts and delivery analytics are the preparer's only.

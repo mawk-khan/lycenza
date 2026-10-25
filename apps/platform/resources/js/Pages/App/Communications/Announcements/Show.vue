@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { formatMoney } from '../../../../money';
+import ErrorSummary from '../../../../Components/Form/ErrorSummary.vue';
 import { formatDateTime } from '../../../../datetime';
 import { router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
@@ -46,12 +48,28 @@ interface AcademicCohortPreview {
     isDynamic: boolean;
 }
 
+// ORG.9D-2 (ADR 0076 §74): read under the preparer's own Finance authority,
+// so the server sends these figures to the preparer only.
+interface FeeReminderPreview {
+    students: number;
+    studentsWithoutRecipient: number;
+    totalOutstanding: string;
+    currency: string;
+    asOf: string;
+}
+
+interface FeeReminderDetail {
+    labels: { status: string; academicYear: string; campus: string; class: string };
+    error: string | null;
+}
+
 interface AudiencePreview {
     count: number;
     categoryBreakdown: Record<string, number>;
     email: EmailEligibility | null;
     domain: DomainAudiencePreview | null;
     academicCohort: AcademicCohortPreview | null;
+    feeReminder: FeeReminderPreview | null;
 }
 
 interface ChannelDeliveryRow {
@@ -111,6 +129,7 @@ interface Props {
     canWithdrawApproval: boolean;
     canApprove: boolean;
     hasMfaFactor: boolean;
+    feeReminder: FeeReminderDetail | null;
 }
 
 const props = defineProps<Props>();
@@ -191,6 +210,7 @@ const publishAcknowledged = ref(false);
 // SR.4 (ADR 0071 §26.7): an Emergency publish also needs a fresh code.
 const emergencyMfaCode = ref('');
 const page = usePage();
+const pageErrors = computed(() => page.props.errors as Record<string, string | undefined>);
 const emergencyMfaError = computed(
     () => (page.props.errors as Record<string, string>).mfa_code ?? null,
 );
@@ -216,6 +236,7 @@ const withdrawingApproval = ref(false);
 
 const approvalReasonLabels: Record<string, string> = {
     school_wide: 'School-wide or Staff audience',
+    fee_reminder: 'Fee reminder (always reviewed)',
     required_communication: 'Marked Required',
     non_privileged_sender: 'Sender requires review',
 };
@@ -491,6 +512,62 @@ function formatFileSize(bytes: number): string {
             </p>
         </div>
 
+        <ErrorSummary :errors="pageErrors" :fields="['audience']" />
+
+        <section
+            v-if="feeReminder"
+            class="mt-4 rounded border border-slate-200 p-4"
+            aria-labelledby="fee-reminder-selection"
+        >
+            <h2 id="fee-reminder-selection" class="text-sm font-semibold">Fee reminder</h2>
+            <dl class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                <dt class="text-slate-500">Who</dt>
+                <dd>{{ feeReminder.labels.status }}</dd>
+                <dt class="text-slate-500">Academic year</dt>
+                <dd>{{ feeReminder.labels.academicYear }}</dd>
+                <dt class="text-slate-500">Charge campus</dt>
+                <dd>{{ feeReminder.labels.campus }}</dd>
+                <dt class="text-slate-500">Class</dt>
+                <dd>{{ feeReminder.labels.class }}</dd>
+            </dl>
+            <p v-if="feeReminder.error" class="mt-2 text-xs text-red-700" role="alert">
+                {{ feeReminder.error }}
+            </p>
+            <dl
+                v-if="preview?.feeReminder"
+                class="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-slate-100 pt-2 text-xs"
+            >
+                <dt class="text-slate-500">Students who owe fees</dt>
+                <dd>{{ preview.feeReminder.students }}</dd>
+                <dt class="text-slate-500">Guardian accounts to email</dt>
+                <dd>{{ preview.count }}</dd>
+                <dt class="text-slate-500">Students with no guardian account (not emailed)</dt>
+                <dd>{{ preview.feeReminder.studentsWithoutRecipient }}</dd>
+                <dt class="text-slate-500">Total outstanding</dt>
+                <dd>
+                    {{
+                        formatMoney(
+                            preview.feeReminder.totalOutstanding,
+                            preview.feeReminder.currency,
+                        )
+                    }}
+                </dd>
+                <dt class="text-slate-500">As of</dt>
+                <dd>{{ preview.feeReminder.asOf }} ({{ schoolTimezone }})</dd>
+                <dt class="text-slate-500">Channel</dt>
+                <dd>Email only · approval required</dd>
+            </dl>
+            <p class="mt-2 text-xs text-slate-500">
+                <template v-if="preview?.feeReminder"
+                    >This preview is an estimate. Students, guardians and amounts are read again
+                    when the reminder is sent; anyone who has paid by then is left out.</template
+                >
+                <template v-else-if="announcement.status !== 'published'"
+                    >Figures are shown only to the person who prepared this reminder.</template
+                >
+            </p>
+        </section>
+
         <div v-if="preview" class="mt-4 rounded border border-slate-200 p-4">
             <h2 class="text-sm font-semibold">Audience</h2>
             <p class="mt-1 text-xs text-slate-500">
@@ -505,6 +582,7 @@ function formatFileSize(bytes: number): string {
                         grade: 'Grade (Academic Cohort)',
                         section: 'Section (Academic Cohort)',
                         subject_offering: 'Subject Offering (Academic Cohort)',
+                        fee_reminder: 'Fee reminder (guardians of Students who owe fees)',
                     }[announcement.audienceType] ?? announcement.audienceType
                 }}
             </p>

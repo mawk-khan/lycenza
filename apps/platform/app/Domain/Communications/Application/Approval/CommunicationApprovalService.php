@@ -6,6 +6,7 @@ use App\Domain\Communications\Application\Exceptions\ApprovalAlreadyDecidedExcep
 use App\Domain\Communications\Application\Exceptions\ApprovalAlreadyPendingException;
 use App\Domain\Communications\Application\Exceptions\ApprovalNotRequiredException;
 use App\Domain\Communications\Application\Exceptions\EmergencyCannotUseApprovalWorkflowException;
+use App\Domain\Communications\Application\Exceptions\FeeReminderNotAllowedException;
 use App\Domain\Communications\Application\Exceptions\InvalidAnnouncementTransitionException;
 use App\Domain\Communications\Application\Exceptions\RejectionReasonRequiredException;
 use App\Domain\Communications\Application\Exceptions\SelfApprovalNotAllowedException;
@@ -136,6 +137,14 @@ class CommunicationApprovalService
             // path exists in 5A.12.
             if ($request->requested_by_user_id === $approver->id) {
                 throw new SelfApprovalNotAllowedException;
+            }
+
+            // ORG.9D-2 (ADR 0076 §74): a fee reminder's preparer is its only
+            // sender, so they never decide it either -- even when another
+            // manager submitted it for them.
+            $announcement = CommunicationAnnouncement::query()->find($request->announcement_id);
+            if ($announcement?->isFeeReminder() && (string) $announcement->created_by_user_id === (string) $approver->id) {
+                throw FeeReminderNotAllowedException::selfApproval();
             }
 
             return DB::transaction(function () use ($request, $approver, $outcome, $note) {

@@ -193,8 +193,16 @@ All are read-only on the existing scope; matrix §19 has the coverage.
 - The existing announcement pipeline, approval workflow and channels.
 - No new capability, Campus targeting or contact model.
 
+### ORG.9D-2 built (2026-10-25, ADR 0076 §74)
+
+**PV1-11:** fee-due reminder email (COM-045 P1, COM-042 P1).
+- Manual (OD-9.6), started from Finance → Outstanding fees; amounts are that page's balances, re-read at publish.
+- Recipients are current Guardian User accounts only; one email per Guardian listing only their selected Students.
+- Always approved by someone other than the preparer; email only; never Required, Emergency or scheduled.
+- Existing `school_communication` email purpose under the owner brief (§38.3). A dedicated purpose is a pre-production owner decision (§74.11).
+- No new capability, role, Campus adoption, campaign or template engine.
+
 **Not started:**
-- PV1-11 (fee-due reminder, ORG.9D-2): needs its own contract — recipients, financial facts, purpose and legal basis, schedule, duplicates.
 - PV1-12 (events calendar, ORG.9D-3): new business state, and never the Attendance expectation calendar (OD-9.3).
 
 ## Owner decisions before build (not scheduled)
@@ -219,7 +227,7 @@ All are read-only on the existing scope; matrix §19 has the coverage.
 - PV1-05 = LC-6; PV1-19 is LC-6's ATT-08 decision.
 - PV1-07 overlaps LC-8 (LIB-05) and LC-9 (web edits) — one slice.
 - PV1-10 before E46 production; PV1-12's family view after E46.
-- PV1-11 needs an ADR 0055 purpose amendment.
+- PV1-11 built on the existing email purpose (ADR 0076 §74.11); a dedicated ADR 0055 purpose is a pre-production owner decision.
 - PV1-13 belongs with pre-production data migration (PPR), not ORG.9.
 - PV1-14 and PV1-15 share the Student document owner type (OD-SWC-2).
 

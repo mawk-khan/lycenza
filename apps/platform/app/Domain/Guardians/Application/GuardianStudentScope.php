@@ -46,15 +46,79 @@ final class GuardianStudentScope
      */
     public function eligibleStudentIdsQuery(School $school, string $guardianId): Builder
     {
+        return $this->eligibleRelationships($school)
+            ->where('sgr.guardian_id', $guardianId)
+            ->select('sgr.student_id');
+    }
+
+    /**
+     * ORG.9D-2 (ADR 0076 §74): the same predicate the other way round --
+     * for each given Student, the Guardians who may reach them right now
+     * (a legal-guardian relationship, an active Student, an active
+     * Guardian, all in this School). A Student with no eligible Guardian is
+     * absent.
+     *
+     * Three bounded, single-table reads intersected here -- never the
+     * three-way join, which runs as a nested-loop cross product on thin
+     * statistics (ORG.9D-2 query review: ~60 s for 1,000 Students).
+     * GuardianStudentScopeTest keeps it equal to eligibleStudentIdsQuery().
+     *
+     * @param  list<string>  $studentIds
+     * @return array<string, list<string>> studentId => guardianIds
+     */
+    public function eligibleGuardiansByStudent(School $school, array $studentIds): array
+    {
+        $studentIds = array_values(array_unique($studentIds));
+        if ($studentIds === []) {
+            return [];
+        }
+
+        return $this->context->withSchool($school, function () use ($school, $studentIds): array {
+            $active = [];
+            foreach (array_chunk($studentIds, 5000) as $chunk) {
+                $active += array_flip(DB::table('students')->where('school_id', $school->id)->where('status', 'active')
+                    ->whereIn('id', $chunk)->pluck('id')->map(fn ($id) => (string) $id)->all());
+            }
+            if ($active === []) {
+                return [];
+            }
+
+            $pairs = collect();
+            foreach (array_chunk(array_map('strval', array_keys($active)), 5000) as $chunk) {
+                $pairs = $pairs->concat(DB::table('student_guardian_relationships')->where('school_id', $school->id)->where('is_legal_guardian', true)
+                    ->whereIn('student_id', $chunk)->get(['student_id', 'guardian_id']));
+            }
+            $guardians = [];
+            foreach (array_chunk($pairs->pluck('guardian_id')->map(fn ($id) => (string) $id)->unique()->values()->all(), 5000) as $chunk) {
+                $guardians += array_flip(DB::table('guardians')->where('school_id', $school->id)->where('status', 'active')
+                    ->whereIn('id', $chunk)->pluck('id')->map(fn ($id) => (string) $id)->all());
+            }
+
+            $byStudent = [];
+            foreach ($pairs as $pair) {
+                if (isset($guardians[(string) $pair->guardian_id])) {
+                    $byStudent[(string) $pair->student_id][] = (string) $pair->guardian_id;
+                }
+            }
+            foreach ($byStudent as &$ids) {
+                $ids = array_values(array_unique($ids));
+                sort($ids);
+            }
+
+            return $byStudent;
+        });
+    }
+
+    /** The one eligibility predicate (see the class docblock), un-narrowed. */
+    private function eligibleRelationships(School $school): Builder
+    {
         return DB::table('student_guardian_relationships as sgr')
             ->join('students as s', fn ($j) => $j->on('s.id', '=', 'sgr.student_id')->on('s.school_id', '=', 'sgr.school_id'))
             ->join('guardians as g', fn ($j) => $j->on('g.id', '=', 'sgr.guardian_id')->on('g.school_id', '=', 'sgr.school_id'))
             ->where('sgr.school_id', $school->id)
-            ->where('sgr.guardian_id', $guardianId)
             ->where('sgr.is_legal_guardian', true)
             ->where('s.status', 'active')
-            ->where('g.status', 'active')
-            ->select('sgr.student_id');
+            ->where('g.status', 'active');
     }
 
     public function hasEligibleStudent(School $school, string $guardianId): bool

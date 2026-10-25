@@ -74,6 +74,10 @@ class CommunicationAnalyticsController extends Controller
         $this->authorizeCapability('communications.manage', $school);
 
         $model = CommunicationAnnouncement::query()->with('createdBy:id,name')->findOrFail($announcement);
+        // ORG.9D-2 (ADR 0076 §74): who a fee reminder reached (and how many)
+        // tells which families owe money -- only its preparer, whose Finance
+        // authority produced that population, sees its delivery analytics.
+        abort_if($model->isFeeReminder() && (string) $model->created_by_user_id !== (string) $context->actor()->id, 403);
 
         $summary = $readModel->announcementSummary($school, $model);
 

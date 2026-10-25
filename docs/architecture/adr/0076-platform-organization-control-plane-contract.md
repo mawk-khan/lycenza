@@ -10581,3 +10581,138 @@ It returns User ids only. The School-operational link is enforced by publish its
 - Coverage: 38.7 % / 33.8 % functional, 82.5 % / 72.1 % v1.
 - PV1-11 and PV1-12 are not built.
 - Production stays NO-GO (§66.7).
+
+## 74. ORG.9D-2 — Fee-due reminder email (as built, 2026-10-25)
+
+Owner authorization: ORG.9D-2 (PV1-11). Baseline `origin/main` = `e947d5dc`.
+
+**Owner decisions frozen in the brief:**
+- **OD-9.6:** reminders are MANUAL. No schedule, recurrence, automation or escalation.
+- **Recipients:** current Guardian USER ACCOUNTS only.
+- **Content:** the minimum; the subject carries no amount.
+- **Delivery:** one email per Guardian per operation; email only.
+- **Approval:** the existing Communications workflow.
+- **Snapshot:** authoritative at publish (this also closes ORG.9D-1 LOW-1 for v1, §73.5).
+- **No new capability or role,** and no `CampusScopeCatalogue` change.
+
+**74.1 Flow:** Finance truth → recipient resolution → Communications approval → email.
+- Communications defines the port `FeeReminderBalanceSource`. Payments implements it as `FeeReminderBalances` (Payments → Communications, the documented direction); Communications never imports Payments.
+- The port reads the ONE canonical outstanding read, `FinanceCampusAccess::outstandingFees()` → `OutstandingFeesReadService` → `ChargeStateReader`, with the Outstanding fees page's own filters composed the same way.
+- So a reminder's amount equals the page's balance for that Student and population at that moment, by construction:
+  - cancelled Charges are skipped;
+  - concessions are the live adjustments;
+  - paid is the effective allocation (reversals, refunds and reallocations already out);
+  - only strictly positive outstanding counts (settled and credit Students never);
+  - no as-at or retained-history read.
+
+**74.2 Selection** (`communication_announcement_fee_reminders`).
+- **What it holds:** the population DEFINITION, never Students or amounts:
+  - balance status (outstanding / overdue);
+  - academic year;
+  - the Charge's stored Campus, or whole-School Charges;
+  - the current Grade or Section.
+- **Shape:** one row per announcement, written once and append-only. Composite same-School keys.
+- **Entry point:** Finance → Outstanding fees, "Send fee reminder", carrying that page's filters. Search, Students (current/leavers) and as-at are not part of a reminder.
+
+**74.3 Authority.** Both are required: the initiator's CURRENT `finance.charges.view` ∩ `finance.payments.view` scope (the page's intersection), AND `communications.announce`.
+- Neither alone suffices.
+- A Campus-scoped initiator is refused outright for a Campus outside the scope, and for whole-School (NULL-Campus) Charges. Within scope, counts, totals and every Guardian's lines contain in-scope Charges only.
+- A class filter needs whole-School `enrollments.view`. With no active academic year it FAILS CLOSED, both at preparation and at publish; the read model's null means "every Student" (review H1).
+
+**74.4 Recipients** (`App\Domain\Identity\Application\Portal\CurrentGuardianAccounts`). The set form of `ActingGuardianResolver`:
+1. an eligible relationship under `GuardianStudentScope`'s POR predicate: legal guardian, active Student, active Guardian. `eligibleGuardiansByStudent()` is kept equal to the per-Guardian predicate by `GuardianStudentScopeTest`;
+2. the Guardian's one active account link;
+3. an active membership;
+4. an enabled User.
+
+Never:
+- a Student account, a raw Guardian contact or an emergency contact;
+- a revoked link, an inactive Guardian or a leaver's Guardian;
+- PII matching.
+
+A Staff member who is a Guardian receives it once, as a Guardian, by email, and never in a staff inbox.
+
+One recipient per User. A Guardian of several selected Students gets ONE email listing them all, and only those. The creator is not excluded.
+
+**74.5 Content.**
+- **Subject:** fixed, `EmailChannelDriver::FEE_REMINDER_SUBJECT`; never an amount, name or number.
+- **Body:** a Lycenza-owned template (`emails/communications/fee-reminder*`):
+  - each selected Student's display name and current outstanding with its currency;
+  - "as of" in the School's local time and zone;
+  - the School-authored note (the announcement body, approved);
+  - "If you have already paid, please disregard this reminder."
+- **Excluded:** ids, admission numbers, Charges, payments, concessions, corrections and bank data.
+- **Escaping:** every value is escaped in the HTML part.
+- **Fail closed:** a recipient without lines fails `fee_reminder_content_missing` rather than sending a generic reminder.
+
+**74.6 Persistence** (`communication_fee_reminder_lines`).
+- **Why a table:** a message has ONE body, and a delivery's `destination_snapshot` is a destination that expires with telemetry before its content.
+- **Contents:** each recipient's lines (name, amount > 0, currency, as-of), written at publish with the recipient, under `communication_recipients`.
+- **Lifecycle:** append-only, and content-retained and purged with the announcement (E21-D3, cascade).
+- **Not:** a Finance mirror, a campaign table or a template-variable engine.
+
+**74.7 Approval.**
+- **Always required:** reason `fee_reminder`, even with no School policy.
+- **Who decides:** never the requester, and never the preparer, even when someone else submitted it (review M2). Only the preparer sends it.
+- **Never:** scheduled, Emergency or Required (service and database `communication_announcements_fee_reminder_shape_check`).
+- **Fingerprint binds:** the message, the selection and the preparer's Finance scope key (review L1), so a scope that widens or narrows after approval makes the approval stale.
+- **Explicitly approved:** "send the CURRENT outstanding to this population". Ordinary balance changes between approval and publish do not need re-approval; the approver sees the selection, never balances.
+
+**74.8 Publish revalidation.** In this order:
+1. creator-only;
+2. the initiator's current Finance authority;
+3. the atomic claim and fingerprint;
+4. re-reading the population and canonical outstanding;
+5. dropping zero and credit balances;
+6. re-resolving Guardians;
+7. channel policy;
+8. the Guardian's own email preference and consent withdrawal (review M1; a fee reminder is never Required, so nothing bypasses them);
+9. lines, deliveries and the audit.
+
+If nobody still owes, the existing `EmptyAudienceException` refuses and the announcement stays approved.
+
+**74.9 After publish.** The snapshot is immutable. A later payment, Guardian change or deferred (quiet-hours) send uses the published lines with no send-time Finance re-read, hence the already-paid sentence. A send-time recipient re-check across all Communications stays a post-v1 hardening item (§73.5; review L4).
+
+**74.10 Privacy and visibility.**
+- **Audit:** `announcement.published` adds counts only (`feeReminderStudents`, `feeReminderStudentsWithoutRecipient`). The Finance read keeps its one `fee_outstanding_list.viewed` per read.
+- **Who sees figures:** preview figures, recipient counts, delivery summaries and per-announcement analytics are the preparer's only (review M3). Anyone else sees the selection.
+
+**74.11 Email purpose (rule 15, review M4).** It is sent as `EmailPurpose::SchoolCommunication` (Standard kind: suppression applies, never critical) through the existing Communications email channel, per the owner brief (§38.3: reuse the existing channel).
+- The backlog's earlier proposal of a dedicated closed purpose under an ADR 0055 amendment is NOT adopted for development.
+- Whether production needs one is a pre-production owner decision, alongside E17–E20.
+
+**74.12 Performance.**
+- **First draft:** the Guardian set read was the three-table join (the shape of the existing `GuardianProjectionResolver`). It ran as a nested loop on thin statistics: about 60 s for 1,000 Students, 27.7 s preview.
+- **As built:** bounded single-table reads in 5,000-id chunks.
+
+| Students (90 % with a Guardian account) | Preview | Publish (deliveries planned, queue faked) |
+|---|---|---|
+| 10 | 27 ms / 35 queries | 78 ms / 99 queries |
+| 100 | 30 ms / 35 queries | 283 ms / 342 queries |
+| 1,000 | 0.26 s / 48 queries | 12.6–20 s / 2,792 queries |
+
+- The 1,000-Student publish cost is the existing per-recipient planning loop. An existing School-wide email publish to the same ~900 members took 36–58 s / 4,579 queries.
+- No index added.
+- The existing `GuardianProjectionResolver` join has the same planner exposure; it is recorded as a follow-up, not changed here.
+
+**74.13 Schema.** One migration, `2027_01_08_090000`:
+- the audience CHECK gains `fee_reminder`;
+- the shape CHECK;
+- two RLS tables, both append-only for the runtime role.
+
+`down()` refuses while any fee reminder exists. The rollback proof was IDENTICAL and `verify-database` reported failed=0.
+
+**74.14 Validation.**
+- **Tests:**
+  - `FeeReminderTest` (15): Finance truth across concessions, payments, reversal, refund, cancellation and late fee; the Guardian matrix; preview; approval; revalidation; snapshot; email privacy; fail-closed; preferences and consent; preparer never decides; class without a year.
+  - `FeeReminderHttpTest` (4): entry, both authorities, preparer-only figures, approver view, analytics, the Campus matrix, scope drift.
+  - `FeeReminderConcurrencyTest` (1): two real processes publish the same reminder → sent once.
+  - `CommunicationFeeReminderRlsIsolationTest` (3) and `GuardianStudentScopeTest` (1).
+- **Security review:** H1, M1–M4, L1–L3 and L5 fixed; L4 accepted (§74.9).
+
+**74.15 Not built:** PV1-12 (events calendar), schedules, SMS, WhatsApp, push, in-app reminders, opt-out management, payment links, exports, Student recipients. Production stays NO-GO (§66.7); E17–E20 and the other gates are unchanged.
+
+**74.16 Parity.**
+- COM-045 → P1 and COM-042 → P1 (intended differences: manual, approved, Guardian accounts, fixed template plus a School note).
+- Statuses: P0 71, P1 104, P2 62, P3 19.
+- Coverage: 39.0 % / 34.1 % functional, 83.2 % / 72.7 % v1.

@@ -3,11 +3,16 @@
 namespace App\Domain\Communications\Application\Channels;
 
 use App\Domain\Communications\Domain\CommunicationChannel;
+use App\Domain\Communications\Infrastructure\CommunicationAttachment;
 use App\Domain\Communications\Infrastructure\CommunicationDelivery;
 use App\Domain\Communications\Infrastructure\CommunicationMessage;
 use App\Support\Email\EmailPurpose;
 use App\Support\Email\OutboundEmailGateway;
 use App\Support\Email\Providers\EmailProviderResolver;
+use App\Support\Tenancy\SchoolTimezone;
+use Carbon\CarbonImmutable;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Phase 5A.3 §6: the EMAIL implementation of
@@ -39,6 +44,9 @@ use App\Support\Email\Providers\EmailProviderResolver;
  */
 final class EmailChannelDriver implements CommunicationChannelDriver
 {
+    /** ORG.9D-2: a fee reminder's fixed, generic subject -- never an amount or a name. */
+    public const FEE_REMINDER_SUBJECT = 'School fees reminder';
+
     public function __construct(
         private readonly OutboundEmailGateway $email,
         private readonly EmailProviderResolver $providers,
@@ -100,6 +108,10 @@ final class EmailChannelDriver implements CommunicationChannelDriver
             );
         }
 
+        if ($message->isAnnouncement() && $message->announcement->isFeeReminder()) {
+            return $this->sendFeeReminder($delivery, $email, $attachments);
+        }
+
         $subject = $this->subjectFor($message);
 
         $queued = $this->email->queue(
@@ -110,6 +122,65 @@ final class EmailChannelDriver implements CommunicationChannelDriver
             subject: $subject,
             text: view('emails.communications.message', ['bodyText' => $message->body])->render(),
             html: view('emails.communications.message-html', ['bodyText' => $message->body, 'subject' => $subject])->render(),
+            attachments: $attachments->map(fn ($a) => [
+                'disk' => $a->storage_disk,
+                'path' => $a->storage_path,
+                'name' => $a->safe_display_name,
+                'mime' => $a->mime_type,
+            ])->values()->all(),
+        );
+
+        return CommunicationDeliveryResult::accepted($queued->id);
+    }
+
+    /**
+     * ORG.9D-2 (ADR 0076 §74, PV1-11): a fee-due reminder is rendered from
+     * THIS recipient's immutable lines (written at publish) -- one email per
+     * Guardian account listing each of their selected Students -- and
+     * nothing else: no live Finance re-read at send time (the published
+     * snapshot is authoritative, hence the "already paid" sentence). The
+     * subject is fixed and never carries an amount, a Student or a number.
+     * A recipient with no lines fails closed rather than sending a generic
+     * reminder.
+     *
+     * @param  Collection<int, CommunicationAttachment>  $attachments
+     */
+    private function sendFeeReminder(CommunicationDelivery $delivery, string $email, Collection $attachments): CommunicationDeliveryResult
+    {
+        $school = $delivery->school;
+        $lines = DB::table('communication_fee_reminder_lines')
+            ->where('school_id', $school->id)
+            ->where('recipient_id', $delivery->recipient_id)
+            ->orderBy('position')
+            ->get(['student_name', 'outstanding_amount', 'currency', 'as_of']);
+
+        if ($lines->isEmpty()) {
+            return CommunicationDeliveryResult::failed(
+                'fee_reminder_content_missing',
+                'This fee reminder has no content for this recipient, so it was not sent.',
+            );
+        }
+
+        $view = [
+            'subject' => self::FEE_REMINDER_SUBJECT,
+            'schoolName' => $school->name,
+            'lines' => $lines->map(fn ($line): array => [
+                'studentName' => (string) $line->student_name,
+                'amount' => (string) $line->outstanding_amount,
+                'currency' => (string) $line->currency,
+            ])->all(),
+            'asOf' => CarbonImmutable::parse((string) $lines->first()->as_of)->setTimezone(SchoolTimezone::resolve($school))->format('j M Y, g:i A').' ('.SchoolTimezone::resolve($school)->getName().')',
+            'note' => (string) $delivery->recipient->message->body,
+        ];
+
+        $queued = $this->email->queue(
+            school: $school,
+            purpose: EmailPurpose::SchoolCommunication,
+            sourceId: $delivery->id,
+            recipient: $email,
+            subject: self::FEE_REMINDER_SUBJECT,
+            text: view('emails.communications.fee-reminder', $view)->render(),
+            html: view('emails.communications.fee-reminder-html', $view)->render(),
             attachments: $attachments->map(fn ($a) => [
                 'disk' => $a->storage_disk,
                 'path' => $a->storage_path,

@@ -6,6 +6,7 @@ use App\Domain\AcademicStructure\Application\CurrentAcademicYearResolver;
 use App\Domain\Communications\Application\AnnouncementService;
 use App\Domain\Communications\Application\Approval\CommunicationApprovalService;
 use App\Domain\Communications\Application\Audience\AcademicCohortSelection;
+use App\Domain\Communications\Application\Audience\FeeReminder\FeeReminderBalanceSource;
 use App\Domain\Communications\Application\Audience\ResolvedAudience;
 use App\Domain\Communications\Application\Channels\EmailAddressResolver;
 use App\Domain\Communications\Application\Channels\GuardianEmailAddressResolver;
@@ -18,6 +19,7 @@ use App\Domain\Communications\Domain\CommunicationChannel;
 use App\Domain\Communications\Domain\CommunicationDispatchMode;
 use App\Domain\Communications\Domain\CommunicationPriority;
 use App\Domain\Communications\Domain\CommunicationRequirement;
+use App\Domain\Communications\Http\Controllers\Concerns\HandlesFeeReminders;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncementRecipient;
 use App\Domain\Communications\Infrastructure\CommunicationAttachment;
@@ -33,6 +35,7 @@ use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -61,6 +64,7 @@ use Inertia\Response;
 class AnnouncementController extends Controller
 {
     use AuthorizesCapability;
+    use HandlesFeeReminders;
 
     public function index(TenantContext $context, Request $request): Response
     {
@@ -80,16 +84,33 @@ class AnnouncementController extends Controller
         $announcements = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
 
         return Inertia::render('App/Communications/Announcements/Index', [
-            'announcements' => $announcements->through(fn (CommunicationAnnouncement $a) => $this->presentSummary($a)),
+            'announcements' => $announcements->through(fn (CommunicationAnnouncement $a) => $this->presentSummary($a, $context->actor())),
             'filters' => ['status' => $status ?: null],
             'canAnnounce' => app(CapabilityResolver::class)->canInSchool($context->actor(), 'communications.announce', $school),
         ]);
     }
 
-    public function create(TenantContext $context, Request $request, CurrentAcademicYearResolver $academicYearResolver): Response
+    public function create(TenantContext $context, Request $request, CurrentAcademicYearResolver $academicYearResolver, FeeReminderBalanceSource $feeReminderBalances): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('communications.announce', $school);
+
+        // ORG.9D-2 (ADR 0076 §74): opened from Finance -> Outstanding fees with
+        // that page's filters; the composer is offered only to someone who
+        // holds BOTH communications.announce (above) and the Finance
+        // visibility the selection needs (the port, 403 otherwise).
+        $feeReminder = null;
+        if ($request->query('audience') === 'fee_reminder') {
+            $selection = $this->feeReminderSelectionFrom($request->validate($this->feeReminderRules($school)));
+            try {
+                $feeReminderBalances->assertCanSelect($school, $context->actor(), $selection);
+            } catch (AuthorizationException) {
+                abort(403);
+            } catch (CommunicationException $e) {
+                throw ValidationException::withMessages(['audience' => [$e->getMessage()]]);
+            }
+            $feeReminder = $this->presentFeeReminderSelection($selection);
+        }
 
         // Phase 5B.3 §6/§7: Grade/Section cohort audiences always
         // target the School's CURRENT AcademicYear -- there is no
@@ -131,6 +152,7 @@ class AnnouncementController extends Controller
                 'id' => $currentAcademicYear->id,
                 'label' => $currentAcademicYear->name,
             ],
+            'feeReminder' => $feeReminder,
         ]);
     }
 
@@ -142,6 +164,17 @@ class AnnouncementController extends Controller
         $canDispatchEmergency = app(CapabilityResolver::class)->canInSchool($context->actor(), 'communications.emergency', $school);
 
         $validated = $this->validateComposer($request, $canMarkRequired, $canDispatchEmergency);
+
+        // ORG.9D-2 (ADR 0076 §74): a fee reminder carries its Finance selection
+        // and goes by email only -- refused while email is not enabled.
+        $feeReminder = null;
+        if ($validated['audience_type'] === CommunicationAudienceType::FeeReminder->value) {
+            $feeInput = $request->validate(['fee_reminder' => ['required', 'array'], ...$this->feeReminderRules($school, 'fee_reminder.')])['fee_reminder'];
+            if (! config('communications.channels.email.enabled')) {
+                throw ValidationException::withMessages(['audience' => ['Fee reminders are sent by email, which is not enabled for this School.']]);
+            }
+            $feeReminder = $this->feeReminderSelectionFrom($feeInput);
+        }
 
         try {
             $announcement = $service->createDraft(
@@ -159,6 +192,7 @@ class AnnouncementController extends Controller
                 emergencyJustification: $validated['emergency_justification'] ?? null,
                 domainAudienceMemberIds: $validated['domain_audience_member_ids'] ?? [],
                 academicCohort: $this->academicCohortSelectionFromInput($validated, $validated['audience_type']),
+                feeReminder: $feeReminder,
             );
         } catch (CommunicationException $e) {
             throw ValidationException::withMessages([$this->audienceErrorField($validated['audience_type']) => [$e->getMessage()]]);
@@ -197,11 +231,13 @@ class AnnouncementController extends Controller
         // (App\Domain\Communications\Application\AnnouncementService::deliverInAppForLinkedDomainParty()),
         // which is the correct "did this person genuinely receive
         // this" answer regardless of which audience type produced it.
-        $isRecipient = CommunicationAnnouncementRecipient::query()
+        // ORG.9D-2 (ADR 0076 §74): a fee reminder reaches its recipients by
+        // email only, as Guardians; being one never opens it here.
+        $isRecipient = ! $model->isFeeReminder() && CommunicationAnnouncementRecipient::query()
             ->where('announcement_id', $model->id)
             ->where('user_id', $actor->id)
             ->exists()
-            || ($model->message_id !== null && CommunicationRecipient::query()
+            || (! $model->isFeeReminder() && $model->message_id !== null && CommunicationRecipient::query()
                 ->where('message_id', $model->message_id)
                 ->where('recipient_user_id', $actor->id)
                 ->exists());
@@ -220,7 +256,20 @@ class AnnouncementController extends Controller
         // for a SCHEDULED announcement too, computed the same live way
         // as a draft's -- the real snapshot only exists once
         // publish() actually runs at due time.
-        $preview = $model->isEditable() ? $service->previewAudience($model) : null;
+        // ORG.9D-2 (ADR 0076 §74): a fee reminder's preview carries Finance
+        // figures read under its creator's authority, so only the creator
+        // sees it; anyone else sees the selection, never balances or counts.
+        $feeReminderError = null;
+        if ($model->isFeeReminder()) {
+            try {
+                $preview = $model->isEditable() && $isCreator ? $service->previewAudience($model) : null;
+            } catch (CommunicationException $e) {
+                $preview = null;
+                $feeReminderError = $e->getMessage();
+            }
+        } else {
+            $preview = $model->isEditable() ? $service->previewAudience($model) : null;
+        }
 
         $canEditOrSchedule = ($isCreator || $canManage) && $model->isEditable();
         $canDispatchEmergency = app(CapabilityResolver::class)->canInSchool($actor, 'communications.emergency', $school);
@@ -240,7 +289,7 @@ class AnnouncementController extends Controller
             // Phase 5A.10 §41: `emergencyJustification` is restricted
             // server-side -- never sent to the payload at all for an
             // unauthorized viewer, rather than sent and hidden in Vue.
-            'announcement' => $this->presentDetail($model, includeEmergencyJustification: $canManage || $canDispatchEmergency),
+            'announcement' => $this->presentDetail($model, $actor, includeEmergencyJustification: $canManage || $canDispatchEmergency),
             'requestedChannels' => $requestedChannels,
             'emailChannelEnabled' => (bool) config('communications.channels.email.enabled'),
             'schoolTimezone' => $school->timezone,
@@ -271,10 +320,16 @@ class AnnouncementController extends Controller
                 'academicCohort' => $this->isAcademicCohortAudienceType($model->audience_type)
                     ? $this->academicCohortPreview($model)
                     : null,
+                'feeReminder' => $preview->feeReminder === null ? null : $this->presentFeeReminderPreview($preview->feeReminder, $school),
             ],
-            'channelDeliverySummary' => $model->isPublished() ? $this->channelDeliverySummary($model) : null,
+            'feeReminder' => $model->isFeeReminder() ? [
+                ...$this->presentFeeReminderSelection($model->feeReminderSelection()),
+                'error' => $feeReminderError,
+            ] : null,
+            'channelDeliverySummary' => $model->isPublished() && $this->mayCount($model, $actor) ? $this->channelDeliverySummary($model) : null,
             'canEdit' => $canEditOrSchedule,
-            'canSchedule' => $canEditOrSchedule,
+            // ORG.9D-2: a fee reminder is sent manually, never scheduled.
+            'canSchedule' => $canEditOrSchedule && ! $model->isFeeReminder(),
             // Phase 5A.12: deliberately NOT the widened isEditable() --
             // App\Domain\Communications\Application\AnnouncementService::cancel()
             // was intentionally left untouched by this checkpoint (its
@@ -293,7 +348,7 @@ class AnnouncementController extends Controller
             // `canManage` alone for audit (communications.audit.view is
             // its own capability).
             'canViewAudit' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.audit.view', $school),
-            'canViewAnalytics' => $canManage,
+            'canViewAnalytics' => $canManage && $this->mayCount($model, $actor),
             // Phase 5A.12 §44/§70-§73: approval-workflow status for the
             // requester's own view. `canSubmitForApproval` is
             // deliberately false while Emergency (brief §75 -- the
@@ -566,7 +621,7 @@ class AnnouncementController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'body' => ['required', 'string', 'max:10000'],
             'priority' => ['required', 'in:normal,important,urgent,critical'],
-            'audience_type' => ['required', 'in:individual,school_wide,staff,student,guardian,guardians_of_students,grade,section,subject_offering'],
+            'audience_type' => ['required', 'in:individual,school_wide,staff,student,guardian,guardians_of_students,grade,section,subject_offering,fee_reminder'],
             'member_user_ids' => ['required_if:audience_type,individual', 'array'],
             'member_user_ids.*' => ['string'],
             // Phase 5B.1: the Student ids for 'student'/
@@ -642,6 +697,10 @@ class AnnouncementController extends Controller
 
     private function audienceErrorField(string $audienceType): string
     {
+        if ($audienceType === CommunicationAudienceType::FeeReminder->value) {
+            return 'audience';
+        }
+
         if ($this->isAcademicCohortAudienceType($audienceType)) {
             return 'academic_cohort';
         }
@@ -887,14 +946,14 @@ class AnnouncementController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function presentSummary(CommunicationAnnouncement $a): array
+    private function presentSummary(CommunicationAnnouncement $a, User $viewer): array
     {
         return [
             'id' => $a->id,
             'title' => $a->title,
             'createdByName' => $a->createdBy?->name,
             'audienceType' => $a->audience_type,
-            'recipientCount' => $a->recipient_count,
+            'recipientCount' => $this->mayCount($a, $viewer) ? $a->recipient_count : null,
             'status' => $a->status,
             'priority' => $a->priority,
             'requirement' => $a->requirement,
@@ -916,9 +975,20 @@ class AnnouncementController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function presentDetail(CommunicationAnnouncement $a, bool $includeEmergencyJustification = false): array
+    /**
+     * ORG.9D-2 (ADR 0076 §74): how many families a fee reminder reached (and
+     * who) follows from its preparer's Finance scope, so only the preparer
+     * sees its counts and delivery analytics; every other announcement is
+     * unchanged.
+     */
+    private function mayCount(CommunicationAnnouncement $a, User $viewer): bool
     {
-        return array_merge($this->presentSummary($a), [
+        return ! $a->isFeeReminder() || (string) $a->created_by_user_id === (string) $viewer->id;
+    }
+
+    private function presentDetail(CommunicationAnnouncement $a, User $viewer, bool $includeEmergencyJustification = false): array
+    {
+        return array_merge($this->presentSummary($a, $viewer), [
             'body' => $a->body,
             // Phase 5A.10 §41: never included at all for an
             // unauthorized viewer -- restricted server-side, not

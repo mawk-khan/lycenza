@@ -2,6 +2,8 @@
 
 namespace App\Domain\Communications\Infrastructure;
 
+use App\Domain\Communications\Application\Audience\FeeReminder\FeeReminderSelection;
+use App\Domain\Communications\Application\Exceptions\FeeReminderNotAllowedException;
 use App\Domain\Communications\Domain\CommunicationAudienceType;
 use App\Domain\Communications\Domain\CommunicationDispatchMode;
 use App\Domain\Communications\Domain\CommunicationPriority;
@@ -141,6 +143,29 @@ class CommunicationAnnouncement extends Model
     public function academicCohort(): HasOne
     {
         return $this->hasOne(CommunicationAnnouncementAcademicCohort::class, 'announcement_id');
+    }
+
+    /**
+     * ORG.9D-2: the Finance selection of a `fee_reminder` announcement.
+     *
+     * @return HasOne<CommunicationAnnouncementFeeReminder, $this>
+     */
+    public function feeReminder(): HasOne
+    {
+        return $this->hasOne(CommunicationAnnouncementFeeReminder::class, 'announcement_id');
+    }
+
+    public function isFeeReminder(): bool
+    {
+        return $this->audience_type === CommunicationAudienceType::FeeReminder->value;
+    }
+
+    /** ORG.9D-2: the saved selection; a fee reminder without one fails closed. */
+    public function feeReminderSelection(): FeeReminderSelection
+    {
+        $row = $this->feeReminder()->first();
+
+        return $row?->selection() ?? throw FeeReminderNotAllowedException::selection();
     }
 
     /** @return HasMany<CommunicationAnnouncementRecipient, $this> */

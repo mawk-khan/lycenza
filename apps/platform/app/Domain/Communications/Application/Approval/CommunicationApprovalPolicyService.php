@@ -37,13 +37,16 @@ class CommunicationApprovalPolicyService
         return $this->context->withSchool($school, function () use ($school, $announcement) {
             $policy = CommunicationApprovalPolicy::query()->where('school_id', $school->id)->first();
 
+            // ORG.9D-2 (ADR 0076 §74): a fee reminder carries Students' balances
+            // to their Guardians, so it ALWAYS goes through maker/checker --
+            // whatever the School's policy, including none.
+            $reasons = $announcement->isFeeReminder() ? ['fee_reminder'] : [];
+
             // Brief §8: no row means "approval not required for
             // anything" -- the mandatory safe default.
             if ($policy === null) {
-                return new CommunicationApprovalRequirement(false, []);
+                return new CommunicationApprovalRequirement($reasons !== [], $reasons);
             }
-
-            $reasons = [];
 
             // ORG.9D-1: the Staff audience is School-wide (all current staff), so it never
             // escapes a School-wide approval requirement by switching audience.
