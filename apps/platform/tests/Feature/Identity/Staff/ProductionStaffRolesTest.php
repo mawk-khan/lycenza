@@ -279,7 +279,7 @@ class ProductionStaffRolesTest extends TestCase
         $this->assertTrue($byKey->every(fn ($role) => $role['grantable'] === true), 'School Admin can grant every role.');
         $this->assertTrue($byKey['hr_sensitive_records']['addOn']);
         $this->assertSame(['Highly sensitive HR data'], $byKey['hr_sensitive_records']['sensitivity']);
-        $this->assertSame(['Payroll amounts', 'Financial', 'Operational'], $byKey['payroll_officer']['sensitivity'], 'ORG.9D-3R1: the School calendar is operational.');
+        $this->assertSame(['Payroll amounts', 'Financial', 'Operational'], $byKey['payroll_officer']['sensitivity'], 'ORG.9D-3R1: the School calendar is operational (ORG.9D-1R1: so is the own inbox).');
         $this->assertSame('HR and payroll', $byKey['hr_officer']['groupLabel']);
         $this->assertNotEmpty($byKey['cashier']['purpose']);
         $this->assertStringNotContainsString('school.roles.grant', json_encode($catalog), 'No grant-right mechanics.');

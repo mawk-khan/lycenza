@@ -139,9 +139,14 @@ class CommunicationInboxReadModel
      * separately-derived, potentially-looser search authorization
      * check).
      *
+     * ORG.9D-1R1 (ADR 0076 §77): `$includeAuthored` is false on the
+     * recipient-consumption path (the recipient capability without
+     * `communications.view`) -- announcements are then matched only among
+     * those the actor actually received, never their own authored ones.
+     *
      * @return Collection<int, CommunicationInboxItem>
      */
-    public function search(School $school, User $actor, string $query, bool $canManage, bool $canManageTemplates, int $limitPerType = 10): Collection
+    public function search(School $school, User $actor, string $query, bool $canManage, bool $canManageTemplates, int $limitPerType = 10, bool $includeAuthored = true): Collection
     {
         $query = trim($query);
 
@@ -150,7 +155,7 @@ class CommunicationInboxReadModel
         }
 
         $conversations = $this->conversationItems($school, $actor, $limitPerType, $query, unreadOnly: false, sentOnly: false, filters: []);
-        $announcements = $this->searchAnnouncements($school, $actor, $query, $canManage, $limitPerType);
+        $announcements = $this->searchAnnouncements($school, $actor, $query, $canManage, $limitPerType, $includeAuthored);
         $templates = $canManageTemplates ? $this->searchTemplates($school, $query, $limitPerType) : collect();
 
         return $conversations->concat($announcements)->concat($templates)
@@ -324,19 +329,28 @@ class CommunicationInboxReadModel
      *
      * @return Collection<int, CommunicationInboxItem>
      */
-    private function searchAnnouncements(School $school, User $actor, string $search, bool $canManage, int $limit): Collection
+    private function searchAnnouncements(School $school, User $actor, string $search, bool $canManage, int $limit, bool $includeAuthored = true): Collection
     {
-        return $this->context->withSchool($school, function () use ($actor, $search, $canManage, $limit) {
-            $query = CommunicationAnnouncement::query()
-                ->where('title', 'ilike', "%{$search}%")
-                ->where(function ($q) use ($actor, $canManage) {
-                    $q->where('created_by_user_id', $actor->id)
-                        ->orWhere(fn ($visible) => $this->applyRecipientVisibility($visible, $actor));
+        return $this->context->withSchool($school, function () use ($actor, $search, $canManage, $limit, $includeAuthored) {
+            if (! $includeAuthored) {
+                // Recipient path: published and received only, the inbox
+                // predicate -- participation is applied before the title match.
+                $query = CommunicationAnnouncement::query()
+                    ->where('status', 'published')
+                    ->where(fn ($visible) => $this->applyRecipientVisibility($visible, $actor))
+                    ->where('title', 'ilike', "%{$search}%");
+            } else {
+                $query = CommunicationAnnouncement::query()
+                    ->where('title', 'ilike', "%{$search}%")
+                    ->where(function ($q) use ($actor, $canManage) {
+                        $q->where('created_by_user_id', $actor->id)
+                            ->orWhere(fn ($visible) => $this->applyRecipientVisibility($visible, $actor));
 
-                    if ($canManage) {
-                        $q->orWhere('status', 'published');
-                    }
-                });
+                        if ($canManage) {
+                            $q->orWhere('status', 'published');
+                        }
+                    });
+            }
 
             $announcements = $query->with('createdBy:id,name')
                 ->orderByDesc('created_at')

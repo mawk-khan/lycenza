@@ -17,6 +17,7 @@ interface Props {
     totalUnreadCount: number;
     canSend: boolean;
     canAnnounce: boolean;
+    canViewHub: boolean;
     canManage: boolean;
     canManageChannelPolicy: boolean;
     canManageTemplates: boolean;
@@ -98,6 +99,7 @@ function showMore() {
             <HubNav
                 active="inbox"
                 :total-unread-count="totalUnreadCount"
+                :can-view-hub="canViewHub"
                 :can-announce="canAnnounce"
                 :can-manage="canManage"
                 :can-manage-templates="canManageTemplates"

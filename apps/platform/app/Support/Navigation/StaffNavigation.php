@@ -171,7 +171,9 @@ final class StaffNavigation
             new E('visitor-directory', 'operations', 'Visitors', 'app.visitor.directory.index', all: ['visitor.directory.view'], section: 'Visitors'),
             new E('visitor-visits', 'operations', 'Visits', 'app.visitor.visits.index', all: ['visitor.visits.view'], section: 'Visitors'),
 
-            new E('communications', 'communications', 'Communication Hub', 'app.communications.index', all: ['communications.view']),
+            // ORG.9D-1R1 (ADR 0076 §77): the Hub opens for its administrators and
+            // for recipients reading what they received (the inbox is per-viewer).
+            new E('communications', 'communications', 'Communication Hub', 'app.communications.index', any: ['communications.view', 'communications.inbox.view']),
             // ORG.9D-3 (ADR 0076 §75): the School calendar (viewers) and its Events (preparers).
             // ORG.9D-3R1 (§76): the calendar is consumption, on its own capability.
             new E('communications-calendar', 'communications', 'School calendar', 'app.communications.calendar', all: ['communications.events.view']),

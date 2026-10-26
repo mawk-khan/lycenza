@@ -110,6 +110,9 @@ const UNAVAILABLE_FAILURE_CODES = [
 
 interface Props {
     announcement: AnnouncementDetail;
+    // ORG.9D-1R1: false for a recipient-only reader -- the School
+    // announcement list is a Hub (communications.view) page.
+    canViewHub: boolean;
     requestedChannels: string[];
     emailChannelEnabled: boolean;
     schoolTimezone: string;
@@ -123,7 +126,8 @@ interface Props {
     canManageAttachments: boolean;
     canViewAudit: boolean;
     canViewAnalytics: boolean;
-    approvalRequirement: ApprovalRequirement;
+    // ORG.9D-1R1: null on the recipient view (no approval history shown).
+    approvalRequirement: ApprovalRequirement | null;
     latestApprovalRequest: LatestApprovalRequest | null;
     canSubmitForApproval: boolean;
     canWithdrawApproval: boolean;
@@ -334,9 +338,13 @@ function formatFileSize(bytes: number): string {
 
 <template>
     <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
-        <a class="text-xs text-slate-400 underline" href="/app/communications/announcements"
+        <a
+            v-if="canViewHub"
+            class="text-xs text-slate-400 underline"
+            href="/app/communications/announcements"
             >← Announcements</a
         >
+        <a v-else class="text-xs text-slate-400 underline" href="/app/communications">← Inbox</a>
 
         <div class="mt-2 flex items-center gap-2">
             <h1 class="text-xl font-semibold">{{ announcement.title }}</h1>
@@ -377,7 +385,7 @@ function formatFileSize(bytes: number): string {
         </div>
 
         <div
-            v-if="approvalRequirement.required || latestApprovalRequest"
+            v-if="approvalRequirement?.required || latestApprovalRequest"
             class="mt-3 rounded border border-slate-200 bg-slate-50 p-3 text-xs"
         >
             <p v-if="announcement.status === 'pending_approval'" class="font-medium text-blue-700">
@@ -408,7 +416,10 @@ function formatFileSize(bytes: number): string {
                 Reason: {{ latestApprovalRequest.decisionNote }}
             </p>
 
-            <p v-if="approvalRequirement.reasons.length > 0" class="mt-1 text-slate-500">
+            <p
+                v-if="approvalRequirement && approvalRequirement.reasons.length > 0"
+                class="mt-1 text-slate-500"
+            >
                 Required because:
                 {{
                     approvalRequirement.reasons.map((r) => approvalReasonLabels[r] ?? r).join(', ')

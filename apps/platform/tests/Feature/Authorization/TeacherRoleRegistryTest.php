@@ -42,7 +42,7 @@ class TeacherRoleRegistryTest extends TestCase
         $this->assertSame('school', $role->scope);
         // TCH.3 + TCH.4 + TCH.5C + TCH.5D + RES.4 (ADR 0068 §25, development only): exactly the five owned-scope capabilities.
         // ORG.9D-3R1 (ADR 0076 §76): plus School-calendar consumption -- no Hub, no Event management.
-        $this->assertSame(['attendance.teacher', 'communications.events.view', 'curriculum.delivery.teacher', 'examinations.marks.teacher', 'lms.assignments.teacher', 'lms.content.teacher'], $this->capabilities('teacher'));
+        $this->assertSame(['attendance.teacher', 'communications.events.view', 'communications.inbox.view', 'curriculum.delivery.teacher', 'examinations.marks.teacher', 'lms.assignments.teacher', 'lms.content.teacher'], $this->capabilities('teacher'));
         $this->assertSame(1, Role::query()->where('key', 'like', '%teacher%')->count(), 'One Teacher role, no second teacher-like role.');
     }
 

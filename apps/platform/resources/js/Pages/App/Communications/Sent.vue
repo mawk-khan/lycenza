@@ -9,6 +9,7 @@ interface Props {
     limit: number;
     totalUnreadCount: number;
     canAnnounce: boolean;
+    canViewHub: boolean;
     canManage: boolean;
     canManageTemplates: boolean;
     canApprove: boolean;
@@ -41,6 +42,7 @@ function showMore() {
             <HubNav
                 active="sent"
                 :total-unread-count="totalUnreadCount"
+                :can-view-hub="canViewHub"
                 :can-announce="canAnnounce"
                 :can-manage="canManage"
                 :can-manage-templates="canManageTemplates"

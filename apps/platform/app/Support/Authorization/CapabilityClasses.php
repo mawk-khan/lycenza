@@ -96,6 +96,9 @@ final class CapabilityClasses
         'communications.emergency' => ['authority', 'sensitive'],
         // ORG.9D-3R1 (ADR 0076 §76): published School Events only -- no personal data.
         'communications.events.view' => ['operational'],
+        // ORG.9D-1R1 (ADR 0076 §77): only what the holder was sent or takes part
+        // in -- never anyone else's Communications or the School's list.
+        'communications.inbox.view' => ['operational'],
         'communications.manage' => ['sensitive'],
         'communications.reply' => ['sensitive'],
         'communications.send' => ['sensitive'],

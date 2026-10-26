@@ -11,7 +11,6 @@ use App\Domain\Communications\Application\Exceptions\NotThreadParticipantExcepti
 use App\Domain\Communications\Application\Exceptions\ThreadNotOpenException;
 use App\Domain\Communications\Application\Exceptions\TooManyAttachmentsException;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
-use App\Domain\Communications\Infrastructure\CommunicationAnnouncementRecipient;
 use App\Domain\Communications\Infrastructure\CommunicationAttachment;
 use App\Domain\Communications\Infrastructure\CommunicationThread;
 use App\Models\School;
@@ -66,6 +65,7 @@ class CommunicationAttachmentService
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly CommunicationApprovalService $approvalService,
+        private readonly AnnouncementRecipientAccess $recipients,
     ) {}
 
     public function upload(CommunicationAnnouncement $announcement, User $actor, UploadedFile $file): CommunicationAttachment
@@ -198,14 +198,20 @@ class CommunicationAttachmentService
      * authorization). For a Thread-owned attachment: an active
      * participant, or communications.manage. Never satisfied merely by
      * knowing the attachment's id (brief §5/§12).
+     *
+     * ORG.9D-1R1 (ADR 0076 §77): `$recipientOnly` is the recipient-
+     * consumption path (the caller holds the staff recipient capability but
+     * not the Hub's `communications.view`): only an actual recipient of the
+     * published parent announcement, or an active participant of the parent
+     * thread -- never the creator or communications.manage paths.
      */
-    public function authorizeRead(CommunicationAttachment $attachment, User $actor, School $school): bool
+    public function authorizeRead(CommunicationAttachment $attachment, User $actor, School $school, bool $recipientOnly = false): bool
     {
         if ($attachment->school_id !== $school->id) {
             return false;
         }
 
-        return $this->context->withSchool($school, function () use ($attachment, $actor) {
+        return $this->context->withSchool($school, function () use ($attachment, $actor, $recipientOnly) {
             if ($attachment->communication_announcement_id !== null) {
                 $announcement = $attachment->announcement;
 
@@ -213,18 +219,16 @@ class CommunicationAttachmentService
                     return false;
                 }
 
-                if ($announcement->created_by_user_id === $actor->id) {
+                if (! $recipientOnly && $announcement->created_by_user_id === $actor->id) {
                     return true;
                 }
 
-                if (app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $announcement->school)) {
+                if (! $recipientOnly && app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $announcement->school)) {
                     return true;
                 }
 
-                return CommunicationAnnouncementRecipient::query()
-                    ->where('announcement_id', $announcement->id)
-                    ->where('user_id', $actor->id)
-                    ->exists();
+                // The same recipient answer AnnouncementController::show() uses.
+                return $this->recipients->isRecipient($announcement, $actor);
             }
 
             $thread = $attachment->thread;
@@ -233,8 +237,15 @@ class CommunicationAttachmentService
                 return false;
             }
 
-            if (app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $thread->school)) {
+            if (! $recipientOnly && app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $thread->school)) {
                 return true;
+            }
+
+            // ORG.9D-1R1 security review: a pending upload (not yet sent in a
+            // message) is its uploader's own draft -- never another
+            // participant's to download by id.
+            if ($attachment->communication_message_id === null && $attachment->created_by_user_id !== $actor->id) {
+                return false;
             }
 
             return $this->isActiveParticipant($thread, $actor);

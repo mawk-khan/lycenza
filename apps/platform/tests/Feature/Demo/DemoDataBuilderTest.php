@@ -183,6 +183,8 @@ class DemoDataBuilderTest extends TestCase
             'hr.leave.self', 'hr.staff_attendance.self', 'payroll.payslips.self',
             // ORG.9D-3R1: reading the School calendar (both roles carry it).
             'communications.events.view',
+            // ORG.9D-1R1: reading own received Communications (both roles carry it).
+            'communications.inbox.view',
         ], array_values($resolver->schoolCapabilities($this->user('teacher@example.test'), $school)));
 
         // Operations desks (SR.3): PRODUCTION system roles only, in the Demo
@@ -252,8 +254,13 @@ class DemoDataBuilderTest extends TestCase
         foreach (['teacher@example.test', 'student@example.test', 'guardian01@example.test'] as $email) {
             $this->assertPageStatus($email, $school, '/app', 200);
             $this->assertPageStatus($email, $school, '/app/students', 403);
-            $this->assertPageStatus($email, $school, '/app/communications', 403);
+            $this->assertPageStatus($email, $school, '/app/communications/announcements', 403);
         }
+        // ORG.9D-1R1 (ADR 0076 §77): the teacher's Hub is her own inbox; Student and
+        // Guardian accounts still have no staff Hub.
+        $this->assertPageStatus('teacher@example.test', $school, '/app/communications', 200);
+        $this->assertPageStatus('student@example.test', $school, '/app/communications', 403);
+        $this->assertPageStatus('guardian01@example.test', $school, '/app/communications', 403);
 
         // TCH.3: the teacher reaches My Curriculum Delivery -- and nothing
         // School-wide: not the administrative delivery page, not

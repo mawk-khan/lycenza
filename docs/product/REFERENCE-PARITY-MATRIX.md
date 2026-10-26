@@ -774,3 +774,9 @@ The ORG.9D Communications wave (PV1-10, PV1-11, PV1-12) is built. Production sta
 ## 24. ORG.9D-3R1 — Event consumer access (2026-10-25)
 
 ORG.9D-3R1 (ADR 0076 §76) closes PV1-12's consumer gap: every staff persona role can read the School calendar (`communications.events.view`) without Communications administration. No function status changes (COM-024 and COM-027 stay P1; statuses P0 71, P1 106, P2 60, P3 19; coverage unchanged).
+
+## 25. ORG.9D-1R1 — Staff announcement consumer access (2026-10-26)
+
+ORG.9D-1R1 (ADR 0076 §77) closes OD-9.6 and PV1-10's consumer gap: every staff persona role can open the in-app Communications it actually received (Hub inbox, unread, search, the announcement and its attachments, its own conversations) through `communications.inbox.view`, without Communications administration (`communications.view` stays on School Admin, Principal and the Communications Coordinator). No function status changes (COM-016 stays P0, COM-034 P1; statuses P0 71, P1 106, P2 60, P3 19; coverage unchanged).
+
+PV1-10 is complete for v1 development/UAT. With PV1-11 and PV1-12, the ORG.9D wave is technically closed; production stays gated (E46, E17–E20, E21, E33, the fee-reminder purpose decision and general gates).

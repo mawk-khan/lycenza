@@ -16,6 +16,9 @@ export type HubNavTab =
 interface Props {
     active: HubNavTab;
     totalUnreadCount: number;
+    // ORG.9D-1R1: the School announcement list and Sent are Hub
+    // (communications.view) pages; a recipient-only reader has neither.
+    canViewHub: boolean;
     canAnnounce: boolean;
     canManage: boolean;
     canManageTemplates: boolean;
@@ -70,7 +73,7 @@ defineProps<Props>();
                     >Conversations</a
                 >
             </li>
-            <li>
+            <li v-if="canViewHub">
                 <a
                     href="/app/communications/announcements"
                     class="block rounded px-2 py-1"
@@ -94,7 +97,7 @@ defineProps<Props>();
                     >Scheduled</a
                 >
             </li>
-            <li>
+            <li v-if="canViewHub">
                 <a
                     href="/app/communications/sent"
                     class="block rounded px-2 py-1"

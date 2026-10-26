@@ -163,6 +163,7 @@ class CommunicationAnalyticsController extends Controller
 
         return [
             'totalUnreadCount' => $conversationReadModel->totalUnreadCount($school, $actor->id) + $readModel->unreadAnnouncementCount($school, $actor),
+            'canViewHub' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.view', $school),
             'canSend' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.send', $school),
             'canAnnounce' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.announce', $school),
             'canManage' => $canManage,

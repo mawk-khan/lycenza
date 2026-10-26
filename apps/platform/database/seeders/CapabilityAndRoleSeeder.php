@@ -256,6 +256,17 @@ class CapabilityAndRoleSeeder extends Seeder
             // administration: it opens no Hub, announcement, draft, approval or
             // analytics surface, and no Event management action.
             ['key' => 'communications.events.view', 'label' => 'View published School Events in the School calendar', 'namespace' => 'school'],
+            // ORG.9D-1R1 (ADR 0076 §77): CONSUMING one's own Communications -- the
+            // Hub inbox, unread and search over what the User actually received or
+            // takes part in, a received announcement and its attachments, and the
+            // conversations they are a participant of. Capability never makes
+            // anyone a recipient: every item still needs the actual published
+            // recipient record or thread participation. Never Communications
+            // administration: no School announcement list, draft, scheduled item,
+            // recipient count, analytics, failure, approval, template, setting,
+            // audit or management action. Audience-agnostic (never a per-audience
+            // key) and separate from `communications.events.view`.
+            ['key' => 'communications.inbox.view', 'label' => 'Read own received Communication Hub messages and announcements', 'namespace' => 'school'],
             // POR.1 (ADR 0070 §8): the Guardian portal capabilities live in their
             // own `guardian` namespace (database-separated from every staff
             // capability) and are carried only by the closed `guardian` role.
@@ -1086,6 +1097,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'communications.conversations.guardians',
                     // ORG.9D-3R1: the School calendar (consumer).
                     'communications.events.view',
+                    'communications.inbox.view',
                     'enrollments.view', 'enrollments.manage',
                     // Phase 8A.10, HR.md "Authorization design": ONLY
                     // Directory-tier view/manage + Restricted personal
@@ -1420,6 +1432,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'communications.conversations.guardians',
                     // ORG.9D-3R1: the School calendar (consumer).
                     'communications.events.view',
+                    'communications.inbox.view',
                     // Phase 1B.4: Enrollment/academic placement is the
                     // same kind of hands-on operational concern for a
                     // Principal as Student/Guardian identity already is
@@ -1586,6 +1599,10 @@ class CapabilityAndRoleSeeder extends Seeder
                     // no Event management; Staff Events still need current
                     // HR staff identity.
                     'communications.events.view',
+                    // ORG.9D-1R1 (ADR 0076 §77): reads the Communications the
+                    // teacher actually received or takes part in -- never the
+                    // School announcement list, drafts or any administration.
+                    'communications.inbox.view',
                 ],
             ],
             // HRX.4 (ADR 0065 §22.3, §25.2): Staff Self-Service -- a convenience
@@ -1618,6 +1635,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'hr.staff_attendance.self',
                     'payroll.payslips.self',
                     'communications.events.view',
+                    'communications.inbox.view',
                 ],
             ],
             // SR.3 (ADR 0071 §4): the fixed production staff catalogue -- thirteen
@@ -1628,7 +1646,9 @@ class CapabilityAndRoleSeeder extends Seeder
             // school_admin. No authority, legal-gated or owned-scope capability.
             // ORG.9D-3R1 (ADR 0076 §76): every staff persona role (not the
             // hr_sensitive_records add-on) also carries `communications.events.view`,
-            // so its holder can read the School calendar they are an audience of.
+            // so its holder can read the School calendar they are an audience of,
+            // and (ORG.9D-1R1, §77) `communications.inbox.view`, so they can read
+            // the Communications they actually received.
             'hr_officer' => [ // ADR 0071 §4.1
                 'name' => 'HR Officer',
                 'scope' => 'school',
@@ -1643,6 +1663,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'hr.categories.manage', 'hr.leave.view', 'hr.leave.manage',
                     'hr.leave.configure', 'hr.staff_attendance.view', 'hr.staff_attendance.manage',
                     'communications.events.view',
+                    'communications.inbox.view',
                 ],
             ],
             'hr_sensitive_records' => [ // ADR 0071 §4.2
@@ -1661,6 +1682,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'payroll.compensation.sensitive.manage', 'payroll.periods.manage',
                     'payroll.runs.view', 'payroll.runs.prepare',
                     'communications.events.view',
+                    'communications.inbox.view',
                 ],
             ],
             'accountant' => [ // ADR 0071 §4.4
@@ -1676,6 +1698,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     // ORG.8C: requests payment corrections; never approves them.
                     'finance.payment_corrections.view', 'finance.payment_corrections.request',
                     'communications.events.view',
+                    'communications.inbox.view',
                 ],
             ],
             'cashier' => [ // ADR 0071 §4.5
@@ -1684,6 +1707,7 @@ class CapabilityAndRoleSeeder extends Seeder
                 'capabilities' => [
                     'finance.payments.view', 'finance.payments.record', 'finance.charges.view',
                     'communications.events.view',
+                    'communications.inbox.view',
                 ],
             ],
             'librarian' => [ // ADR 0071 §4.6
@@ -1693,6 +1717,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'library.catalogue.view', 'library.catalogue.manage',
                     'library.circulation.view', 'library.circulation.manage', 'library.fines.view',
                     'communications.events.view',
+                    'communications.inbox.view',
                 ],
             ],
             'transport_coordinator' => [ // ADR 0071 §4.7
@@ -1703,6 +1728,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'transport.vehicles.manage', 'transport.assignments.view',
                     'transport.assignments.manage',
                     'communications.events.view',
+                    'communications.inbox.view',
                 ],
             ],
             'hostel_warden' => [ // ADR 0071 §4.7
@@ -1712,6 +1738,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'hostel.directory.view', 'hostel.directory.manage', 'hostel.residency.view',
                     'hostel.residency.manage',
                     'communications.events.view',
+                    'communications.inbox.view',
                 ],
             ],
             'front_office' => [ // ADR 0071 §4.7
@@ -1721,6 +1748,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'visitor.directory.view', 'visitor.directory.manage', 'visitor.visits.view',
                     'visitor.visits.manage',
                     'communications.events.view',
+                    'communications.inbox.view',
                 ],
             ],
             'stores_officer' => [ // ADR 0071 §4.7
@@ -1730,6 +1758,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'inventory.directory.view', 'inventory.directory.manage',
                     'inventory.stock.view', 'inventory.stock.manage',
                     'communications.events.view',
+                    'communications.inbox.view',
                 ],
             ],
             'canteen_operator' => [ // ADR 0071 §4.7
@@ -1739,6 +1768,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'canteen.directory.view', 'canteen.directory.manage', 'canteen.orders.view',
                     'canteen.orders.manage',
                     'communications.events.view',
+                    'communications.inbox.view',
                 ],
             ],
             'admissions_officer' => [ // ADR 0071 §4.8
@@ -1747,6 +1777,7 @@ class CapabilityAndRoleSeeder extends Seeder
                 'capabilities' => [
                     'admissions.view', 'admissions.manage',
                     'communications.events.view',
+                    'communications.inbox.view',
                 ],
             ],
             'communications_coordinator' => [ // ADR 0071 §4.9
@@ -1757,6 +1788,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'communications.announce', 'communications.templates.manage',
                     'communications.conversations.guardians',
                     'communications.events.view',
+                    'communications.inbox.view',
                 ],
             ],
         ];

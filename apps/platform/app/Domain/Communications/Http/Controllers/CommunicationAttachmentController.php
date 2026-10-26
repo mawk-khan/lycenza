@@ -162,9 +162,13 @@ class CommunicationAttachmentController extends Controller
         // capability like every other Hub page -- a membership alone (an
         // off-boarded staff member who stays a Guardian, a role-less member)
         // never reaches staff attachments by id. Guardians use the portal's
-        // own route.
-        $this->authorizeCapability('communications.view', $school);
+        // own route. ORG.9D-1R1 (ADR 0076 §77): the staff recipient capability
+        // `communications.inbox.view` also qualifies, but then only as an
+        // actual recipient/participant of the parent (never the creator or
+        // communications.manage paths).
+        $this->authorizeAnyCapability(['communications.view', 'communications.inbox.view'], $school);
         $actor = $context->actor();
+        $recipientOnly = ! Gate::forUser($actor)->allows('capability', ['communications.view', $school]);
 
         // School-scoped by construction (BelongsToSchool/RLS already
         // limit this query to the active School) -- a forged id for
@@ -172,7 +176,7 @@ class CommunicationAttachmentController extends Controller
         // forbidden.
         $model = CommunicationAttachment::query()->where('school_id', $school->id)->findOrFail($attachment);
 
-        abort_unless($service->authorizeRead($model, $actor, $school), 403);
+        abort_unless($service->authorizeRead($model, $actor, $school, $recipientOnly), 403);
 
         $context->withSchool($school, function () use ($model, $actor, $school, $audit) {
             $audit->school($school, 'communication_attachment.downloaded', actor: $actor, subject: $model, metadata: [

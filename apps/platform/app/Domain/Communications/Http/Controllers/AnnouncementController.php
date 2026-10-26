@@ -3,6 +3,7 @@
 namespace App\Domain\Communications\Http\Controllers;
 
 use App\Domain\AcademicStructure\Application\CurrentAcademicYearResolver;
+use App\Domain\Communications\Application\AnnouncementRecipientAccess;
 use App\Domain\Communications\Application\AnnouncementService;
 use App\Domain\Communications\Application\Approval\CommunicationApprovalService;
 use App\Domain\Communications\Application\Audience\AcademicCohortSelection;
@@ -21,9 +22,7 @@ use App\Domain\Communications\Domain\CommunicationPriority;
 use App\Domain\Communications\Domain\CommunicationRequirement;
 use App\Domain\Communications\Http\Controllers\Concerns\HandlesFeeReminders;
 use App\Domain\Communications\Infrastructure\CommunicationAnnouncement;
-use App\Domain\Communications\Infrastructure\CommunicationAnnouncementRecipient;
 use App\Domain\Communications\Infrastructure\CommunicationAttachment;
-use App\Domain\Communications\Infrastructure\CommunicationRecipient;
 use App\Domain\Communications\Infrastructure\CommunicationTemplate;
 use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Http\Controllers\Controller;
@@ -208,41 +207,36 @@ class AnnouncementController extends Controller
         GuardianEmailAddressResolver $guardianEmailResolver,
         CommunicationChannelPolicyService $channelPolicy,
         CommunicationApprovalService $approvalService,
+        AnnouncementRecipientAccess $recipients,
         string $announcement,
     ): Response {
         $school = $context->requireSchool();
-        $this->authorizeCapability('communications.view', $school);
+        // ORG.9D-1R1 (ADR 0076 §77): an actual recipient reads it on the
+        // recipient capability `communications.inbox.view` too. The creator and
+        // communications.manage paths stay behind the Hub's `communications.view`.
+        $this->authorizeAnyCapability(['communications.view', 'communications.inbox.view'], $school);
         $actor = $context->actor();
+        $hubReader = Gate::forUser($actor)->allows('capability', ['communications.view', $school]);
 
         $model = CommunicationAnnouncement::query()
             ->with(['createdBy:id,name', 'requestedChannels', 'attachments', 'academicCohort.gradeLevel:id,name,code', 'academicCohort.section:id,name,code', 'academicCohort.academicYear:id,name', 'academicCohort.subjectOffering:id,subject_id,is_required', 'academicCohort.subjectOffering.subject:id,name,code'])
             ->findOrFail($announcement);
 
-        $canManage = Gate::forUser($actor)->allows('capability', ['communications.manage', $school]);
-        $isCreator = $model->created_by_user_id === $actor->id;
+        $canManage = $hubReader && Gate::forUser($actor)->allows('capability', ['communications.manage', $school]);
+        $isCreator = $hubReader && $model->created_by_user_id === $actor->id;
         // Phase 5B.2: a linked Guardian/Student's own login is a real
-        // IN_APP recipient too, but the immutable AUDIENCE snapshot
-        // (communication_announcement_recipients) records the Guardian/
-        // Student identity, not the linked User -- so the plain
-        // snapshot check below never recognizes them. The delivery-
-        // tracking table (communication_recipients) is checked as a
-        // second, additive signal: it exists only once a real IN_APP
-        // delivery was actually planned for this exact User
-        // (App\Domain\Communications\Application\AnnouncementService::deliverInAppForLinkedDomainParty()),
-        // which is the correct "did this person genuinely receive
-        // this" answer regardless of which audience type produced it.
-        // ORG.9D-2 (ADR 0076 §74): a fee reminder reaches its recipients by
-        // email only, as Guardians; being one never opens it here.
-        $isRecipient = ! $model->isFeeReminder() && CommunicationAnnouncementRecipient::query()
-            ->where('announcement_id', $model->id)
-            ->where('user_id', $actor->id)
-            ->exists()
-            || (! $model->isFeeReminder() && $model->message_id !== null && CommunicationRecipient::query()
-                ->where('message_id', $model->message_id)
-                ->where('recipient_user_id', $actor->id)
-                ->exists());
+        // IN_APP recipient too (communication_recipients), besides the
+        // immutable AUDIENCE snapshot. ORG.9D-2 (ADR 0076 §74): a fee
+        // reminder reaches its recipients by email only, as Guardians; being
+        // one never opens it here. Both live in AnnouncementRecipientAccess.
+        $isRecipient = $recipients->isRecipient($model, $actor);
 
         abort_unless($isCreator || $isRecipient || $canManage, 403);
+
+        // ORG.9D-1R1: on the recipient path the reader sees the message, never
+        // the School's administration of it -- no recipient count, delivery
+        // summary, approval history, template or audit/analytics links.
+        $recipientView = ! $hubReader;
 
         // Brief §14: only the genuine recipient's own in-app read
         // state moves -- the creator/manager viewing their own
@@ -279,8 +273,8 @@ class AnnouncementController extends Controller
         // are safe governance metadata, not private content). Emergency
         // announcements always evaluate to `required: false` (brief
         // §10) regardless of School policy.
-        $approvalRequirement = $approvalService->requirement($model);
-        $latestApprovalRequest = $approvalRequirement->required || $model->status !== 'draft'
+        $approvalRequirement = $recipientView ? null : $approvalService->requirement($model);
+        $latestApprovalRequest = $approvalRequirement !== null && ($approvalRequirement->required || $model->status !== 'draft')
             ? $approvalService->latestRequest($model)
             : null;
         $canApprove = app(CapabilityResolver::class)->canInSchool($actor, 'communications.approve', $school);
@@ -289,7 +283,8 @@ class AnnouncementController extends Controller
             // Phase 5A.10 §41: `emergencyJustification` is restricted
             // server-side -- never sent to the payload at all for an
             // unauthorized viewer, rather than sent and hidden in Vue.
-            'announcement' => $this->presentDetail($model, $actor, includeEmergencyJustification: $canManage || $canDispatchEmergency),
+            'announcement' => $this->presentDetail($model, $actor, includeEmergencyJustification: ! $recipientView && ($canManage || $canDispatchEmergency), recipientView: $recipientView),
+            'canViewHub' => $hubReader,
             'requestedChannels' => $requestedChannels,
             'emailChannelEnabled' => (bool) config('communications.channels.email.enabled'),
             'schoolTimezone' => $school->timezone,
@@ -326,7 +321,7 @@ class AnnouncementController extends Controller
                 ...$this->presentFeeReminderSelection($model->feeReminderSelection()),
                 'error' => $feeReminderError,
             ] : null,
-            'channelDeliverySummary' => $model->isPublished() && $this->mayCount($model, $actor) ? $this->channelDeliverySummary($model) : null,
+            'channelDeliverySummary' => ! $recipientView && $model->isPublished() && $this->mayCount($model, $actor) ? $this->channelDeliverySummary($model) : null,
             'canEdit' => $canEditOrSchedule,
             // ORG.9D-2: a fee reminder is sent manually, never scheduled.
             'canSchedule' => $canEditOrSchedule && ! $model->isFeeReminder(),
@@ -347,13 +342,13 @@ class AnnouncementController extends Controller
             // controllers themselves enforce, never inferred from
             // `canManage` alone for audit (communications.audit.view is
             // its own capability).
-            'canViewAudit' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.audit.view', $school),
+            'canViewAudit' => ! $recipientView && app(CapabilityResolver::class)->canInSchool($actor, 'communications.audit.view', $school),
             'canViewAnalytics' => $canManage && $this->mayCount($model, $actor),
             // Phase 5A.12 §44/§70-§73: approval-workflow status for the
             // requester's own view. `canSubmitForApproval` is
             // deliberately false while Emergency (brief §75 -- the
             // Emergency composer/detail flow never shows this action).
-            'approvalRequirement' => [
+            'approvalRequirement' => $approvalRequirement === null ? null : [
                 'required' => $approvalRequirement->required,
                 'reasons' => $approvalRequirement->reasons,
             ],
@@ -369,7 +364,7 @@ class AnnouncementController extends Controller
             'canSubmitForApproval' => ($isCreator || $canManage) && $model->isDraft()
                 && ! $model->isEmergency() && $approvalRequirement->required,
             'canWithdrawApproval' => ($isCreator || $canManage) && $model->isPendingApproval(),
-            'canApprove' => $canApprove && $model->isPendingApproval(),
+            'canApprove' => ! $recipientView && $canApprove && $model->isPendingApproval(),
             'hasMfaFactor' => app(FreshMfaRequirement::class)->hasActiveFactor($context->actor()),
         ]);
     }
@@ -986,9 +981,19 @@ class AnnouncementController extends Controller
         return ! $a->isFeeReminder() || (string) $a->created_by_user_id === (string) $viewer->id;
     }
 
-    private function presentDetail(CommunicationAnnouncement $a, User $viewer, bool $includeEmergencyJustification = false): array
+    private function presentDetail(CommunicationAnnouncement $a, User $viewer, bool $includeEmergencyJustification = false, bool $recipientView = false): array
     {
-        return array_merge($this->presentSummary($a, $viewer), [
+        $summary = $this->presentSummary($a, $viewer);
+
+        // ORG.9D-1R1 (ADR 0076 §77): the recipient view carries the message,
+        // its sender and audience type -- never how many it reached or which
+        // template it came from.
+        if ($recipientView) {
+            $summary['recipientCount'] = null;
+            $summary['sourceTemplateId'] = null;
+        }
+
+        return array_merge($summary, [
             'body' => $a->body,
             // Phase 5A.10 §41: never included at all for an
             // unauthorized viewer -- restricted server-side, not

@@ -37,3 +37,31 @@ Consequences:
 ## Performance
 
 Four bounded reads (16 ms at 1,050 staff), never one join of memberships against employments. The first draft of that join was a nested-loop cross product, about 2.2 s at 1,050 staff.
+
+## Reading what was delivered (ORG.9D-1R1, ADR 0076 §77)
+
+ORG.9D-1 delivered in-app copies to current staff, but the Hub checked
+`communications.view` (the School announcement list) before recognising a
+recipient, so most staff could not open them. OD-9.6 closed it:
+
+- **Capability:** `communications.inbox.view` -- read what you actually
+  received or take part in. On every staff persona role except the
+  `hr_sensitive_records` add-on; never the Guardian, Group or platform roles.
+- **Surfaces:** Hub inbox, unread and search; a received announcement and
+  its attachments; the conversations you are an active participant of (and
+  your own archive flag). Sent, the School announcement list, Failed,
+  analytics, approvals, templates, settings and the audit trail keep their
+  own capabilities.
+- **Per item:** the published recipient record (`AnnouncementRecipientAccess`:
+  the audience snapshot, or a linked login's in-app delivery row; never a
+  draft, scheduled, pending, cancelled or fee-reminder announcement) or
+  active thread participation. The capability never makes anyone a recipient.
+- **Recipient view:** the message, sender, audience type, attachments and
+  own read state -- never the recipient count, delivery figures, approval
+  history, template or audit/analytics links.
+- **History:** the snapshot is the fact. A recipient whose employment later
+  ends keeps what was delivered while they keep School access (an active
+  membership and a role carrying the capability); off-boarding ends it. A
+  Staff announcement published after they left never reaches them. This is
+  deliberately different from Events, which are evaluated per viewer at
+  read time.

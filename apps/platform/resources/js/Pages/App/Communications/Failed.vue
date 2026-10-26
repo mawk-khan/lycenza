@@ -26,6 +26,7 @@ interface Props {
     meta: { currentPage: number; lastPage: number; total: number };
     totalUnreadCount: number;
     canAnnounce: boolean;
+    canViewHub: boolean;
     canManage: boolean;
     canManageTemplates: boolean;
     canApprove: boolean;
@@ -52,6 +53,7 @@ const channelLabels: Record<string, string> = { in_app: 'In-app', email: 'Email'
             <HubNav
                 active="failed"
                 :total-unread-count="totalUnreadCount"
+                :can-view-hub="canViewHub"
                 :can-announce="canAnnounce"
                 :can-manage="canManage"
                 :can-manage-templates="canManageTemplates"

@@ -14,6 +14,7 @@ use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -30,6 +31,13 @@ use Inertia\Response;
  * by the read model re-deriving genuine participation/recipiency
  * (brief §9/§12), never by this broader capability alone. `Failed` is
  * the one surface gated by `communications.manage` (brief §41).
+ *
+ * ORG.9D-1R1 (ADR 0076 §77): Inbox, Unread and Search are recipient
+ * surfaces, so `communications.inbox.view` (reading what one actually
+ * received or takes part in) opens them too. On that path Search finds
+ * only received announcements and conversations one is in -- never one's
+ * own authored drafts, templates or the School's published list -- and
+ * Sent stays on `communications.view`.
  */
 class CommunicationInboxController extends Controller
 {
@@ -38,7 +46,7 @@ class CommunicationInboxController extends Controller
     public function index(TenantContext $context, CommunicationInboxReadModel $readModel, ConversationReadModel $conversationReadModel, Request $request): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('communications.view', $school);
+        $this->authorizeAnyCapability(['communications.view', 'communications.inbox.view'], $school);
         $actor = $context->actor();
 
         $limit = $this->boundedLimit($request);
@@ -75,7 +83,7 @@ class CommunicationInboxController extends Controller
     public function unread(TenantContext $context, CommunicationInboxReadModel $readModel, ConversationReadModel $conversationReadModel, Request $request): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('communications.view', $school);
+        $this->authorizeAnyCapability(['communications.view', 'communications.inbox.view'], $school);
         $actor = $context->actor();
 
         $limit = $this->boundedLimit($request);
@@ -142,7 +150,7 @@ class CommunicationInboxController extends Controller
     public function search(TenantContext $context, CommunicationInboxReadModel $readModel, ConversationReadModel $conversationReadModel, Request $request): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('communications.view', $school);
+        $this->authorizeAnyCapability(['communications.view', 'communications.inbox.view'], $school);
         $actor = $context->actor();
 
         $validated = $request->validate([
@@ -150,10 +158,14 @@ class CommunicationInboxController extends Controller
         ]);
 
         $query = trim((string) ($validated['q'] ?? ''));
-        $canManage = app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
-        $canManageTemplates = app(CapabilityResolver::class)->canInSchool($actor, 'communications.templates.manage', $school);
+        // ORG.9D-1R1: the authored, manage and template branches belong to the
+        // Hub (`communications.view`); the recipient path searches received
+        // items only.
+        $hubReader = Gate::forUser($actor)->allows('capability', ['communications.view', $school]);
+        $canManage = $hubReader && app(CapabilityResolver::class)->canInSchool($actor, 'communications.manage', $school);
+        $canManageTemplates = $hubReader && app(CapabilityResolver::class)->canInSchool($actor, 'communications.templates.manage', $school);
 
-        $items = $query === '' ? collect() : $readModel->search($school, $actor, $query, $canManage, $canManageTemplates);
+        $items = $query === '' ? collect() : $readModel->search($school, $actor, $query, $canManage, $canManageTemplates, includeAuthored: $hubReader);
 
         return Inertia::render('App/Communications/Search', array_merge([
             'query' => $query ?: null,
@@ -188,6 +200,9 @@ class CommunicationInboxController extends Controller
 
         return [
             'totalUnreadCount' => $conversationReadModel->totalUnreadCount($school, $actor->id) + $readModel->unreadAnnouncementCount($school, $actor),
+            // ORG.9D-1R1: the School announcement list and Sent are Hub
+            // (`communications.view`) surfaces, hidden on the recipient path.
+            'canViewHub' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.view', $school),
             'canSend' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.send', $school),
             'canAnnounce' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.announce', $school),
             'canManage' => $canManage,

@@ -1591,7 +1591,44 @@ No other capability moved.
 - **Grantability:** `school_admin` holds the key, so it can still grant every operational role.
 - **Pins:** `StaffRoleCatalogueSnapshotTest` and the teacher and self-service pins were updated in the same release.
 
-## Appendix A — capability-class map (v1, all 174 `school` capabilities; 175 since ORG.9D-3R1, §28)
+## 29. ORG.9D-1R1 amendment — own Communications consumption (2026-10-26, ADR 0076 §77)
+
+A reviewed catalogue release (§25), owner-authorized by the ORG.9D-1R1 brief
+(OD-9.6).
+
+**29.1 Why.** A current teacher is a recipient of in-app Staff announcements
+(ADR 0076 §73), but the Hub inbox and the announcement page checked
+`communications.view` before recognising the reader as a recipient, so the
+teacher could not open what was delivered to them. `communications.view` is
+the Hub's administrative read (the School's whole announcement list with
+drafts, scheduled and cancelled items, creators, audiences, channels and
+recipient counts, and Sent); granting it to ordinary staff would over-grant,
+so it was not granted. No existing key meant "read what I received":
+`portal.communications.view` is the Guardian namespace (never on a staff
+role), `communications.events.view` is the calendar.
+
+**29.2 The new capability.** One code-owned key:
+- **Key:** `communications.inbox.view`, `school` namespace, class `operational`, Communications module (the `communications.` prefix).
+- **Label:** "Read own received Communication Hub messages and announcements".
+- **Opens only** the recipient surfaces: Hub inbox, unread and search; a published announcement the User actually received, and its attachments; the conversations the User is an active participant of (list, thread, own archive state). Every item still needs the recipient record or participation.
+- **Never** the School announcement list, Sent, Failed, drafts, scheduled or cancelled items, recipient counts, delivery analytics, approvals, templates, settings, the audit trail or any write. Never the Events calendar (`communications.events.view` stays separate). Audience-agnostic: no per-audience key.
+- **Class `operational`:** like the calendar, it reaches nothing beyond what the holder was sent, so it adds no sensitivity label to a role.
+
+**29.3 Grants (before → after).** Added to the same 16 staff persona roles as §28.3:
+- **Leadership:** `school_admin`, `principal` (they keep `communications.view`; the narrow key coexists for catalogue consistency).
+- **Teaching:** `teacher`, `staff_self_service`.
+- **The 12 operational job roles:** `hr_officer`, `payroll_officer`, `accountant`, `cashier`, `librarian`, `transport_coordinator`, `hostel_warden`, `front_office`, `stores_officer`, `canteen_operator`, `admissions_officer`, `communications_coordinator` (keeps its management keys).
+
+Not added to `hr_sensitive_records` (add-on), `guardian`, Group or platform roles. `communications.view` still sits on exactly `school_admin`, `principal` and `communications_coordinator`. No other capability moved.
+
+**29.4 Contracts kept.**
+- **Operational roles:** not an authority, legal-gated or owned-scope capability (§4).
+- **Teacher role:** still no School-wide administration; the Hub it now opens is per-viewer.
+- **Grantability:** `school_admin` holds the key, so it can still grant every operational role; a limited issuer needs it (or does not grant these roles).
+- **Campus:** not Campus-adopted. A Campus-only grant does not confer it (whole-School paths read whole-School grants only, ADR 0076 §33), exactly like `communications.events.view`.
+- **Pins:** `StaffRoleCatalogueSnapshotTest`, the teacher/self-service pins, `StaffRoleGrantAuthorityTest` (182 classified keys) and the demo/navigation pins were updated in the same release.
+
+## Appendix A — capability-class map (v1, all 174 `school` capabilities; 175 since ORG.9D-3R1, §28; 176 since ORG.9D-1R1, §29)
 Grant-right coverage appears only where `school_admin` does not hold the key
 and the owner approved coverage (§6.1). The three `school.roles.grant.*`
 keys (SR.2) are class `authority` and are themselves never covered.
@@ -1626,6 +1663,7 @@ keys (SR.2) are class `authority` and are themselves never covered.
 | `communications.conversations.students` | legal-gated, sensitive | — |
 | `communications.emergency` | authority, sensitive | — |
 | `communications.events.view` (ORG.9D-3R1, §28) | operational | — |
+| `communications.inbox.view` (ORG.9D-1R1, §29) | operational | — |
 | `communications.manage` | sensitive | — |
 | `communications.reply` | sensitive | — |
 | `communications.send` | sensitive | — |

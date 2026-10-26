@@ -844,7 +844,8 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
             Route::get('/', [AnnouncementController::class, 'index'])->name('index');
             Route::get('/create', [AnnouncementController::class, 'create'])->name('create');
             Route::post('/', [AnnouncementController::class, 'store'])->name('store');
-            Route::get('/{announcement}', [AnnouncementController::class, 'show'])->name('show');
+            // ORG.9D-1R1: a recipient route -- a malformed id is the same 404.
+            Route::get('/{announcement}', [AnnouncementController::class, 'show'])->whereUuid('announcement')->name('show');
             Route::put('/{announcement}', [AnnouncementController::class, 'update'])->name('update');
             Route::post('/{announcement}/publish', [AnnouncementController::class, 'publish'])->name('publish');
             Route::post('/{announcement}/cancel', [AnnouncementController::class, 'cancel'])->name('cancel');
@@ -913,7 +914,7 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         // below, same reasoning as 'announcements'/'templates' above.
         // An attachment id alone resolves its own School/parent
         // Announcement -- no announcement id appears in this route.
-        Route::get('/attachments/{attachment}/download', [CommunicationAttachmentController::class, 'download'])->name('attachments.download');
+        Route::get('/attachments/{attachment}/download', [CommunicationAttachmentController::class, 'download'])->whereUuid('attachment')->name('attachments.download');
 
         // Phase 5A.4: registered BEFORE the '/{thread}' wildcard below,
         // same reasoning as 'announcements' above.
@@ -990,18 +991,18 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         // group.
         Route::get('/analytics', [CommunicationAnalyticsController::class, 'overview'])->name('analytics');
 
-        Route::get('/{thread}', [CommunicationHubController::class, 'show'])->name('show');
-        Route::post('/{thread}/messages', [CommunicationHubController::class, 'storeMessage'])->name('messages.store');
-        Route::post('/{thread}/archive', [CommunicationHubController::class, 'archive'])->name('archive');
-        Route::post('/{thread}/unarchive', [CommunicationHubController::class, 'unarchive'])->name('unarchive');
+        Route::get('/{thread}', [CommunicationHubController::class, 'show'])->whereUuid('thread')->name('show');
+        Route::post('/{thread}/messages', [CommunicationHubController::class, 'storeMessage'])->whereUuid('thread')->name('messages.store');
+        Route::post('/{thread}/archive', [CommunicationHubController::class, 'archive'])->whereUuid('thread')->name('archive');
+        Route::post('/{thread}/unarchive', [CommunicationHubController::class, 'unarchive'])->whereUuid('thread')->name('unarchive');
 
         // Phase 5A.7 §15: attachment upload/removal scoped to their
         // owning Thread, mirroring the Announcement pair above --
         // download reuses the SAME generic endpoint registered above
         // (brief §32: authorization is re-derived from the parent,
         // whichever type it is).
-        Route::post('/{thread}/attachments', [CommunicationAttachmentController::class, 'storeForThread'])->name('threads.attachments.store');
-        Route::delete('/{thread}/attachments/{attachment}', [CommunicationAttachmentController::class, 'destroyForThread'])->name('threads.attachments.destroy');
+        Route::post('/{thread}/attachments', [CommunicationAttachmentController::class, 'storeForThread'])->whereUuid('thread')->name('threads.attachments.store');
+        Route::delete('/{thread}/attachments/{attachment}', [CommunicationAttachmentController::class, 'destroyForThread'])->whereUuid(['thread', 'attachment'])->name('threads.attachments.destroy');
     });
 
     // Phase 1B.6: Enrollment administrative UI (docs/modules/STUDENT-ENROLLMENT.md,

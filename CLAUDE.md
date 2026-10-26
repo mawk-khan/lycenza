@@ -1617,6 +1617,11 @@ once several modules copy it.
      - **One answer.** Another domain gets current staff only from `App\Domain\HR\Application\CurrentStaffMembers` (User ids only): active membership, enabled User, linked active Employee, exactly one current employment on the School-local date.
      - **Never** classify staff by a role name, capability, persona, email domain or Employee contact field, and never pass an HR field to Communications.
      - **The Staff audience is School-wide** for the approval policy, so switching audience never avoids approval.
+     - **Reading what you received is not managing (ORG.9D-1R1, ADR 0076 §77).** The Hub inbox, unread and search, a received announcement and its attachments, and one's own conversations accept `communications.inbox.view` (every staff persona role except the `hr_sensitive_records` add-on) or `communications.view`.
+       - Each item still needs the published recipient record (`AnnouncementRecipientAccess`) or active thread participation. The capability never makes anyone a recipient.
+       - On that path the creator and `communications.manage` paths, Sent, the School announcement list, counts, delivery analytics, approval history, templates and authored search results stay closed.
+       - Delivered history follows the immutable recipient snapshot, never current Staff identity, while School access lasts.
+       - Never grant `communications.view` so someone can read what they received, and never merge it with `communications.events.view`.
 
 109. **A fee reminder is Finance truth → Guardian accounts → approval → email, and nothing more (ADR 0076 §74, ORG.9D-2).**
      - **Amounts** come only through Communications' `FeeReminderBalanceSource` port, which Payments implements with the Outstanding fees read under the preparer's CURRENT Finance scope. Never compute a balance in Communications, and never write financial state from it.

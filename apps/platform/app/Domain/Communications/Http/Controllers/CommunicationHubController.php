@@ -60,7 +60,9 @@ class CommunicationHubController extends Controller
     public function conversations(TenantContext $context, ConversationReadModel $readModel, CommunicationConversationPolicyService $conversationPolicy, Request $request): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('communications.view', $school);
+        // ORG.9D-1R1 (ADR 0076 §77): the actor's own conversations -- a
+        // recipient surface, so `communications.inbox.view` opens it too.
+        $this->authorizeAnyCapability(['communications.view', 'communications.inbox.view'], $school);
         $actor = $context->actor();
 
         $showArchived = $request->boolean('archived');
@@ -98,6 +100,7 @@ class CommunicationHubController extends Controller
             // docblock for why this bundle is duplicated, not shared,
             // across the two controllers.
             'totalUnreadCount' => $readModel->totalUnreadCount($school, $actor->id) + app(CommunicationInboxReadModel::class)->unreadAnnouncementCount($school, $actor),
+            'canViewHub' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.view', $school),
             'canSend' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.send', $school),
             'canAnnounce' => app(CapabilityResolver::class)->canInSchool($actor, 'communications.announce', $school),
             'canManage' => $canManage,
@@ -315,13 +318,17 @@ class CommunicationHubController extends Controller
     public function show(TenantContext $context, CommunicationThreadService $service, string $thread, Request $request): Response
     {
         $school = $context->requireSchool();
-        $this->authorizeCapability('communications.view', $school);
+        // ORG.9D-1R1 (ADR 0076 §77): an active participant reads the thread on
+        // `communications.inbox.view` too; the communications.manage path
+        // (any thread) stays behind the Hub's `communications.view`.
+        $this->authorizeAnyCapability(['communications.view', 'communications.inbox.view'], $school);
         $actor = $context->actor();
 
         $model = CommunicationThread::query()->with(['participants.user:id,name'])->findOrFail($thread);
 
         $participant = $model->participants->first(fn (CommunicationThreadParticipant $p) => $p->user_id === $actor->id && $p->left_at === null);
-        $canManage = Gate::forUser($actor)->allows('capability', ['communications.manage', $school]);
+        $canManage = Gate::forUser($actor)->allows('capability', ['communications.view', $school])
+            && Gate::forUser($actor)->allows('capability', ['communications.manage', $school]);
 
         abort_unless($participant !== null || $canManage, 403);
 
@@ -416,7 +423,9 @@ class CommunicationHubController extends Controller
      * self-scoped (the real gate is genuinely being an active participant
      * of this thread). Since POR.5 (ADR 0070 §28.4) it also needs the Hub's
      * `communications.view`: Guardian-only members are thread participants
-     * too, and the staff Hub is not their surface.
+     * too, and the staff Hub is not their surface. Since ORG.9D-1R1 (ADR 0076
+     * §77) the staff recipient capability `communications.inbox.view` also
+     * qualifies -- a `school` key, never held by the Guardian role.
      */
     public function archive(TenantContext $context, CommunicationThreadService $service, string $thread): RedirectResponse
     {
@@ -431,10 +440,11 @@ class CommunicationHubController extends Controller
     private function toggleArchive(TenantContext $context, CommunicationThreadService $service, string $thread, bool $archived): RedirectResponse
     {
         // POR.5 (ADR 0070 §28.4): still self-scoped, but a staff Hub write --
-        // so it needs the Hub's own `communications.view`, like every Hub page.
-        // A Guardian-only participant has none and uses the portal instead.
+        // so it needs a staff Hub capability (`communications.view`, or since
+        // ORG.9D-1R1 the recipient `communications.inbox.view`). A Guardian-only
+        // participant has neither and uses the portal instead.
         $school = $context->requireSchool();
-        $this->authorizeCapability('communications.view', $school);
+        $this->authorizeAnyCapability(['communications.view', 'communications.inbox.view'], $school);
         $actor = $context->actor();
 
         $model = CommunicationThread::query()->findOrFail($thread);

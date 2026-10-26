@@ -10931,3 +10931,82 @@ Because the announcement list is School-wide administrative visibility, an ordin
 - **The problem:** an in-app Staff announcement reaches current staff (§73), but a teacher cannot open the Hub inbox or the announcement page. Both check `communications.view` before recognizing the reader as a recipient.
 - **What still works:** the email channel reaches them.
 - **Fixing it** means separating announcement reading from Hub administration, like §76.3. It reopens PV1-10, so it needs owner authorization (recorded as OD-9.6).
+
+## 77. ORG.9D-1R1 — Staff announcement consumer access correction (as built, 2026-10-26)
+
+Owner authorization: ORG.9D-1R1 (OD-9.6). Baseline `origin/main` = `603a79e7`. Closes §76.9 (OD-9.6) and amends §73 (PV1-10 consumer access) and ADR 0071 (§29, a reviewed catalogue release).
+
+**Numbering note.** §74 already used the label "OD-9.6" for a different, decided item (fee reminders are MANUAL); §76.9 reused it for this question. Both stand: read §74's as "OD-9.6 (fee reminders manual)" -- unchanged -- and this one as "OD-9.6 (staff inbox consumer access)", closed here. Future decisions use OD-9.7 onward.
+
+**77.1 Root cause.** A current teacher is a recipient of an in-app Staff announcement (§73: snapshot row and in-app delivery), but every Hub surface began with `authorizeCapability('communications.view')`, and the `teacher` role does not hold it. The recipient check came second and was never reached:
+
+| Route | Preliminary check (before) | Then |
+|---|---|---|
+| `app.communications.index` / `.unread` / `.search` | `communications.view` | items filtered by recipiency/participation |
+| `app.communications.conversations` / `.show` / `.archive` / `.unarchive` | `communications.view` | participation (or `.manage` for `show`) |
+| `app.communications.announcements.show` | `communications.view` | creator, recipient or `.manage` |
+| `app.communications.attachments.download` | `communications.view` | parent read rule |
+
+So the teacher got 403 on the message delivered to them; email still reached them.
+
+**77.2 What `communications.view` still authorizes (audited, unchanged).**
+- **Only on `communications.view`:** the School announcement list (`/announcements`, every status, creators, audiences, channels, recipient counts), Sent, and on the creator/manager paths of the surfaces above.
+- **Its own keys:** Failed, delivery analytics and channel settings (`.manage`), the audit trail (`.audit.view`), approvals (`.approve`), templates (`.templates.manage`), composing and Event management (`.announce`), replying (`.reply`), starting conversations (`.send`).
+- **Holders:** exactly `school_admin`, `principal` and `communications_coordinator`. It was **not** granted to the teacher or any other role.
+
+**77.3 Capability audit.** No existing key meant "read what I received": `communications.view` is administrative; `portal.communications.view` is the `guardian` namespace and can never sit on a staff role (`trg_role_capabilities_scope`); `communications.events.view` is the calendar (§76) and must not be merged. One new key was therefore authorized.
+
+**77.4 Design: reading what you received is not managing.**
+- **One new capability:** `communications.inbox.view` (`school` namespace; class `operational`; Communications module through the `communications.` prefix; label "Read own received Communication Hub messages and announcements"). Audience-agnostic -- no per-audience key.
+- **Recipient surfaces accept either key** (`authorizeAnyCapability(['communications.view', 'communications.inbox.view'])`, the C2 Gate, so module entitlement applies): Inbox, Unread, Search, Conversations, thread `show`, own `archive`/`unarchive`, announcement `show`, attachment `download`. No route middleware names the key.
+- **The Hub capability decides the admin paths.** Each action computes `$hubReader` (the Gate for `communications.view`); the creator and `communications.manage` paths require it. On the recipient path:
+  - announcement `show` opens only for an actual recipient;
+  - thread `show` only for an active participant;
+  - attachments only through `authorizeRead(..., recipientOnly: true)` (recipient of the published parent or active participant of the parent thread);
+  - search matches announcements only among published, received ones (participation applied in SQL before the title match; never authored drafts, templates or the School's published list).
+- **One recipient answer:** `AnnouncementRecipientAccess::isRecipient()` -- the audience snapshot (`communication_announcement_recipients.user_id`) or a linked login's in-app delivery row (`communication_recipients.recipient_user_id`, Phase 5B.2); never an unpublished or fee-reminder announcement. Used by the announcement page and attachment download (previously the download checked the snapshot only).
+- **Recipient view payload:** message, sender, audience type, priority, dispatch mode, attachments and own read state. Null/false: recipient count, channel delivery summary, approval requirement and history, source template, emergency justification, audit/analytics links, every management flag.
+- **Unchanged and still `communications.view`:** the School announcement list and Sent. Failed, analytics, approvals, templates, settings, audit and every write keep their own keys.
+- **Navigation:** "Communication Hub" is offered on `communications.view` OR `communications.inbox.view`; the sidebar hides Announcements and Sent without `communications.view` (`canViewHub`), and the announcement page links back to the Inbox. "School calendar" stays on `communications.events.view`; "Events" on `communications.announce`. No role-name check.
+- **Malformed ids:** the recipient routes' ids are UUID-constrained (announcement, thread, attachment), so a malformed id is the same 404 instead of a database error.
+- **Not created:** no audience-specific key, no generic recipient or permission framework, no schema change.
+
+**77.5 Grants** (ADR 0071 §29): the same 16 staff persona roles as §76.5 (`school_admin`, `principal`, `teacher`, `staff_self_service`, `hr_officer`, `payroll_officer`, `accountant`, `cashier`, `librarian`, `transport_coordinator`, `hostel_warden`, `front_office`, `stores_officer`, `canteen_operator`, `admissions_officer`, `communications_coordinator`). Not the `hr_sensitive_records` add-on, the `guardian` role, Group or platform roles. Seeded by `CapabilityAndRoleSeeder` through the admin connection; no migration, no backfill.
+
+**77.6 Historical recipient semantics (audited).**
+- **Guardian (existing, unchanged):** the portal shows published announcements whose snapshot names the acting Guardian persona; a later end of a Student relationship does not remove them while the Guardian account link (and so the portal role) lasts.
+- **Staff (now explicit):** the snapshot is the authorization fact. A recipient whose employment ends keeps what was delivered while they keep School access (active membership + a role carrying the capability); off-boarding (membership suspended, roles revoked, ADR 0059) ends it. A Staff announcement published after they left never reaches them (§73: resolved at publish).
+- **Deliberately different from Events (§75/§76):** an Event is evaluated per viewer at read time; a delivered announcement is an immutable record.
+
+**77.7 Unchanged.** Staff audience resolution (`CurrentStaffMembers`), publish, snapshot, deliveries, approval/maker-checker/fingerprint, email, read-receipt idempotency (`markRead()` moves only the viewer's own in-app row), fee reminders (email only, never in the Hub), Events and their capability, the Guardian portal, Campus (no adoption, `CampusScopeCatalogue` unchanged), RLS, schema.
+
+**77.8 Tests.**
+- **`CommunicationInboxConsumerAccessTest`** (13): a teacher reads exactly what they received (inbox, unread, the announcement, own read marker) with the minimized payload and is refused the School list, Sent, Failed, analytics, audit, approvals, templates, settings, Events management and every write; unreceived, draft, scheduled, pending-approval and cancelled announcements and guessed/malformed ids are refused; capability without recipiency shows nothing; recipient-scoped search (not another person's, a draft, a template, another School's, a thread one is not in); attachments follow the parent (own yes; unreceived, draft no; cross-School 404); conversations by participation (read, own archive; no reply without `.reply`; another participant's unsent upload refused); history after employment ends and after off-boarding; every consumer role; the exact holder list and `communications.view` holders unchanged; inbox vs Events separation, Guardian-only, platform-only and root refused; staff+Guardian personas; disabled module closes every surface; per-School authority.
+- **`CommunicationInboxConsumerArchitectureTest`** (5): the key is named only by the four controllers, navigation and classification, and within them only by the eight recipient actions; never a route middleware; the School list and Sent stay on `communications.view`; detail needs participation and admin paths need the Hub key; recipient search is participation-first; the calendar keeps `communications.events.view` and the inbox never accepts it.
+- **Pins updated:** `StaffRoleCatalogueSnapshotTest`, `TeacherRoleRegistryTest`, `LeaveArchitectureGuardTest`, `TeacherAttendanceArchitectureGuardTest`, `StaffAttendanceArchitectureGuardTest`, `StaffSelfServiceAuthorizationTest`, `StaffRoleGrantAuthorityTest` (182 classified keys), `ProductionStaffRolesTest`, `DemoDataBuilderTest`, `MyAttendanceUiTest`, `CommunicationEventConsumerAccessTest` (the teacher's Hub is now their inbox), `SchoolRouteCoverage` (nine C2 entries name both keys).
+
+**77.9 Performance** (teacher; N received + N not received; the same N for every surface):
+
+| Received | Inbox | Unread | Search | Queries per request |
+|---|---|---|---|---|
+| 10 | 17 ms (9.5 ms SQL) | 16 ms | 30 ms | 21 |
+| 100 | 27 ms (15.8 ms SQL) | 29 ms | 22 ms | 21 |
+| 1,000 | 154–225 ms (~145–217 ms SQL) | 155–230 ms | 167–207 ms | 21 |
+
+- **Set-based:** a constant 21 queries at every size; no per-item query. Recipient filtering is SQL (`applyRecipientVisibility`), never load-then-hide; lists are bounded (20 / 10 per type in search).
+- **Dominant cost at 1,000:** the pre-existing Hub unread badge (`unreadAnnouncementCount`, ~130 ms), unchanged by this slice and identical for `communications.view` holders. The list and search queries are ~6 ms. No index added (no speculative indexes); recorded as LOW P-1 for a later read-model pass.
+
+
+**77.10 Security review** (independent reviewer over the diff, 13 threats). **No HIGH, no MEDIUM.**
+- **Fixed in this slice (LOW, pre-existing, now reaching more staff):** another thread participant could download a participant's UNSENT thread upload by id. `authorizeRead()` now refuses a pending upload (`communication_message_id` NULL) to anyone but its uploader (`communications.manage` unchanged). Also UUID-constrained `messages.store` and the thread attachment routes.
+- **Accepted LOW residuals:**
+  - **L-1** search `ILIKE` does not escape `%`/`_` (pre-existing; widens matches only within what the viewer may already see).
+  - **L-2** a staff member who is also a linked Guardian sees Guardian-audience announcements delivered in-app to their own login in the staff Hub (Phase 5B.2 behaviour, their own mail; the portal never shows staff mail). Pinned by a test.
+  - **L-3** read markers move on a GET (pre-existing; own row only).
+  - **L-4** a Campus-only role grant does not confer the capability (whole-School paths read whole-School grants only, §33) -- same as `communications.events.view`; Campus-only staff have no Hub inbox. Owner may revisit post-v1; no Campus adoption here.
+  - **P-1** the unread-badge count cost above.
+- **Confirmed:** no write beyond the viewer's own read marker, thread cursor and archive flag; replying still needs `communications.reply`; no Guardian, Group or platform role can hold the key (`trg_role_capabilities_scope`); module entitlement applies through the Gate; no route accepts `communications.events.view` for the inbox or the reverse.
+
+**77.11 DDEV smoke** (`ddev demo-reset`, then real HTTPS sessions): 29/29 -- teacher: Hub entry offered, inbox lists the Staff and School-wide notices only, both open with the minimized view, attachment downloads, search finds only own; School list, draft, approvals, analytics (School and per-announcement), another recipient's announcement and attachment, and Sent are 403; the calendar still opens. Librarian (ordinary operational role): inbox and School-wide notice open, School list 403. Communications Coordinator: School list, draft, Sent and the administrative view (with counts) unchanged. Guardian: portal inbox 200, staff Hub 403.
+
+**77.12 Verdicts.** OD-9.6 (staff inbox consumer access) **closed**. PV1-10 **complete for v1 development/UAT**. With PV1-11 (§74) and PV1-12 (§75, §76), **ORG.9D is technically closed**. Production stays **NO-GO**: E21, E33, E46 (family views), E17–E20 (email), the fee-reminder email purpose (§74.11) and the general release gates (M-1, OD-8.4, OD-8.9). ORG.10 integrated UAT needs separate owner authorization.

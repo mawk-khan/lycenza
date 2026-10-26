@@ -523,21 +523,21 @@ final class SchoolRouteCoverage
             Coverage::owned('app.portal.conversations.attachments.download', ActingGuardianResolver::class, 'require', 'Guardian scope: the acting Guardian\'s linked Students'),
 
             // Domain\Communications\Http\Controllers\CommunicationInboxController
-            Coverage::gate('app.communications.index', 'communications.view'),
-            Coverage::gate('app.communications.unread', 'communications.view'),
+            Coverage::gate('app.communications.index', ['communications.view', 'communications.inbox.view']),
+            Coverage::gate('app.communications.unread', ['communications.view', 'communications.inbox.view']),
             Coverage::gate('app.communications.sent', 'communications.view'),
             Coverage::gate('app.communications.failed', 'communications.manage'),
-            Coverage::gate('app.communications.search', 'communications.view'),
+            Coverage::gate('app.communications.search', ['communications.view', 'communications.inbox.view']),
 
             // Domain\Communications\Http\Controllers\CommunicationHubController
-            Coverage::gate('app.communications.conversations', 'communications.view'),
+            Coverage::gate('app.communications.conversations', ['communications.view', 'communications.inbox.view']),
             Coverage::gate('app.communications.store', 'communications.send'),
 
             // Domain\Communications\Http\Controllers\AnnouncementController
             Coverage::gate('app.communications.announcements.index', 'communications.view'),
             Coverage::gate('app.communications.announcements.create', 'communications.announce'),
             Coverage::gate('app.communications.announcements.store', 'communications.announce'),
-            Coverage::gate('app.communications.announcements.show', 'communications.view'),
+            Coverage::gate('app.communications.announcements.show', ['communications.view', 'communications.inbox.view']),
             Coverage::gate('app.communications.announcements.update', 'communications.announce'),
             Coverage::gate('app.communications.announcements.publish', 'communications.announce'),
             Coverage::gate('app.communications.announcements.cancel', 'communications.announce'),
@@ -564,7 +564,7 @@ final class SchoolRouteCoverage
             Coverage::gate('app.communications.approvals.reject', 'communications.approve'),
 
             // Domain\Communications\Http\Controllers\CommunicationAttachmentController
-            Coverage::gate('app.communications.attachments.download', 'communications.view'),
+            Coverage::gate('app.communications.attachments.download', ['communications.view', 'communications.inbox.view']),
 
             // Domain\Communications\Http\Controllers\CommunicationTemplateController
             Coverage::gate('app.communications.templates.index', 'communications.templates.manage'),
@@ -608,10 +608,10 @@ final class SchoolRouteCoverage
             Coverage::gate('app.communications.analytics', 'communications.manage'),
 
             // Domain\Communications\Http\Controllers\CommunicationHubController
-            Coverage::gate('app.communications.show', 'communications.view'),
+            Coverage::gate('app.communications.show', ['communications.view', 'communications.inbox.view']),
             Coverage::gate('app.communications.messages.store', 'communications.reply'),
-            Coverage::gate('app.communications.archive', 'communications.view'),
-            Coverage::gate('app.communications.unarchive', 'communications.view'),
+            Coverage::gate('app.communications.archive', ['communications.view', 'communications.inbox.view']),
+            Coverage::gate('app.communications.unarchive', ['communications.view', 'communications.inbox.view']),
 
             // Domain\Communications\Http\Controllers\CommunicationAttachmentController
             Coverage::gate('app.communications.threads.attachments.store', 'communications.reply'),

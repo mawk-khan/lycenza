@@ -217,9 +217,18 @@ All are read-only on the existing scope; matrix §19 has the coverage.
 - **Not granted:** `communications.view` (Hub and School announcement list).
 - **Staff Events** still need current HR staff identity.
 - **Unchanged:** management and approval.
-- **New owner question OD-9.6:** in-app Staff announcements (PV1-10) have the same gap. Staff who are not Hub users cannot open them, though email still reaches them. Fixing it reopens PV1-10 (ADR 0076 §76.9).
+- **New owner question OD-9.6:** in-app Staff announcements (PV1-10) have the same gap. Staff who are not Hub users cannot open them, though email still reaches them. Fixing it reopens PV1-10 (ADR 0076 §76.9). **Closed by ORG.9D-1R1 (below).**
 
-**The ORG.9D Communications parity wave (PV1-10, PV1-11, PV1-12) is built. PV1-12 is complete for development/UAT.**
+### ORG.9D-1R1 built (2026-10-26, ADR 0076 §77)
+
+**PV1-10 consumer access closed (OD-9.6).** Staff recipients could not open in-app Staff announcements without the Hub's `communications.view`.
+- **The fix:** the recipient surfaces (Hub inbox, unread, search, a received announcement and its attachments, one's own conversations) also accept the new consumption capability `communications.inbox.view`, on every staff persona role except the `hr_sensitive_records` add-on.
+- **Per item:** still the published recipient record or thread participation; the capability never makes anyone a recipient.
+- **Not granted:** `communications.view` (School announcement list, Sent, drafts, counts). On the recipient path, no counts, delivery figures, approval history, template, authored search results or management action.
+- **History:** follows the immutable recipient snapshot while School access lasts (unlike Events, which are evaluated per viewer at read time).
+- **Unchanged:** the Staff audience (`CurrentStaffMembers`), publish, approval, email, fee reminders (email only), Events, the Guardian portal, Campus.
+
+**The ORG.9D Communications parity wave (PV1-10, PV1-11, PV1-12) is built and complete for development/UAT. ORG.9D is technically closed (production gated).**
 
 ## Owner decisions before build (not scheduled)
 

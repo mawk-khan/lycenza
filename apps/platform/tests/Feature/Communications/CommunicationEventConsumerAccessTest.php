@@ -106,9 +106,11 @@ class CommunicationEventConsumerAccessTest extends TestCase
         $keys = $this->offeredNavigation();
         $this->assertContains('communications-calendar', $keys);
         $this->assertNotContains('communications-events', $keys);
-        $this->assertNotContains('communications', $keys, 'No Communication Hub entry.');
+        // ORG.9D-1R1 (ADR 0076 §77): the Hub entry is the teacher's own inbox
+        // (communications.inbox.view), never the School announcement list.
+        $this->assertContains('communications', $keys, 'The Hub entry is the teacher\'s own inbox.');
 
-        $this->get('/app/communications')->assertForbidden();
+        $this->get('/app/communications')->assertOk();
         $this->get('/app/communications/announcements')->assertForbidden();
         $this->get('/app/communications/events')->assertForbidden();
         $this->get('/app/communications/events/create')->assertForbidden();
