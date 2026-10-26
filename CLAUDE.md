@@ -1293,6 +1293,19 @@ once several modules copy it.
        Gate, `can()`, `schoolCapabilities()`, `capability:` middleware,
        `RoleGrantAuthority` and the grantor trigger read whole-School
        grants only.
+       - **One exception (ORG.10-R1, OD-9.7, ADR 0076 §79):** the
+         scope-independent consumer capabilities in
+         `App\Support\Authorization\ConsumerCapabilities` -- exactly
+         `communications.inbox.view` and `communications.events.view` -- are
+         also activated by an active Campus grant on an active Campus of the
+         same School, because what they show is bound to the viewer (own
+         received Communications, current Event audience).
+       - This is capability activation only, never Campus adoption and never
+         a Campus grant conferring School-wide authority: no other key of a
+         Campus grant reaches a whole-School check
+         (`ConsumerCapabilityActivationArchitectureTest`), and
+         `RoleGrantAuthority`, the grantor trigger and `holdsInSchoolNow()`
+         are unchanged. A third key is an owner decision.
      - **Campus authority has one path:**
        - `CampusScopeResolver` returns a `CampusScope`, and an adopted
          action enters through `authorizeCampusScope()` or

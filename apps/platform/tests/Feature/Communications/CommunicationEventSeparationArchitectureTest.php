@@ -67,6 +67,7 @@ class CommunicationEventSeparationArchitectureTest extends TestCase
             'app/Domain/Communications/Application/Events/CommunicationEventCalendar.php',
             'app/Domain/Communications/Http/Controllers/CommunicationCalendarController.php',
             'app/Support/Authorization/CapabilityClasses.php',
+            'app/Support/Authorization/ConsumerCapabilities.php', // OD-9.7 activation classification
             'app/Support/Navigation/StaffNavigation.php',
         ], $holders, 'Only the staff calendar read, its navigation entry and the classification name the consumer capability.');
         $this->assertSame(1, substr_count((string) file_get_contents("{$base}/app/Domain/Communications/Application/Events/CommunicationEventCalendar.php"), "'communications.events.view'"), 'Checked once, in forStaff().');

@@ -791,6 +791,14 @@ whole-School supersedes. A selected or current Campus
   `capability` Gate, `can()`, `schoolCapabilities()`, `capability:`
   middleware, grant authority and the last-administrator count, in any
   domain.
+  - **One exception (ORG.10-R1, OD-9.7, ADR 0076 §79):** the two
+    scope-independent consumer keys in `ConsumerCapabilities`
+    (`communications.inbox.view`, `communications.events.view`) are also
+    activated by an active Campus grant on an active Campus of the same
+    School. They only open what is bound to the viewer (own received
+    Communications, the Events their current audience reaches), so this
+    is activation, not Campus adoption; grant authority and the
+    last-administrator count are unchanged.
 - **Adopted actions:**
   - entry goes through `authorizeCampusScope()` or
     `capability:x,campus` ("held somewhere");

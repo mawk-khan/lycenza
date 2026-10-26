@@ -87,6 +87,9 @@ re-run of an already-applied step, a paginated last line, an assertion that
 did not match the documented contract); each was corrected and **retested
 PASS** with the same product build. **2 are product findings** (§5).
 Final: **146 PASS, 2 open findings, 1 observation**; 33 scenarios retested.
+**After ORG.10-R1 (OD-9.7):** ORG10-D02 CLOSED (UAT-COM-005 retested PASS,
+plus 3 Campus-only persona retests); ORG10-D01 OPEN UAT-MINOR / ACCEPTED
+FOR STAGING TESTING.
 
 | Checkpoint | Scenarios | Result |
 |---|---|---|
@@ -151,26 +154,17 @@ Highlights (all PASS):
 
 | Defect | Severity | Scenario | Behaviour | Expected contract | Root cause | Security | Disposition |
 |---|---|---|---|---|---|---|---|
-| **ORG10-D01** | UAT-MINOR | UAT-HR-001 | Staff directory "Current" lists a hire whose employment starts 2026-12-01; "Pre-joining" is always empty | ADR 0076 §69 groups by the latest employment **status**; every web path writes a future hire as `active`, so the status grouping cannot express "not yet started" | Directory filter is status-only (as contracted); no web path writes `pre_joining` | none — authority and Staff identity use date-based currency (`CurrentEmployeeAssignments`, `CurrentStaffMembers`) | **Open, recorded.** Fixing it changes a frozen read contract (date-derived employment state) → owner decision; does not block staging testing |
-| **ORG10-D02** | **UAT-MAJOR** | UAT-COM-005 | Current staff whose role grants are **Campus-only** (librarian@A1, cashier@A1, principal@A2) are in the Staff audience and are **emailed** Staff announcements, but get **403** on the Hub, the announcement page and the School calendar | A Staff recipient can consume what is sent to them (§16/§46) | Staff audience = HR identity (`CurrentStaffMembers`, role-independent); `communications.inbox.view`/`.events.view` are read through whole-School paths, which never count a Campus grant (rule 101, ORG.7A); no rule requires a whole-School self-service grant for Campus-only staff | none (fails closed: no over-exposure) | **STOPPED for owner decision** (§16.4: fixing needs a scope policy). Options below |
+| **ORG10-D01** | UAT-MINOR | UAT-HR-001 | Staff directory "Current" lists a hire whose employment starts 2026-12-01; "Pre-joining" is always empty | ADR 0076 §69 groups by the latest employment **status**; every web path writes a future hire as `active`, so the status grouping cannot express "not yet started" | Directory filter is status-only (as contracted); no web path writes `pre_joining` | none — authority and Staff identity use date-based currency (`CurrentEmployeeAssignments`, `CurrentStaffMembers`) | **OPEN UAT-MINOR / ACCEPTED FOR STAGING TESTING** (owner, ORG.10-R1 §42/§57). Unchanged; listed in the staging handoff |
+| **ORG10-D02** | **UAT-MAJOR** | UAT-COM-005 | Current staff whose role grants are **Campus-only** (librarian@A1, cashier@A1, principal@A2) were in the Staff audience and **emailed** Staff announcements, but got **403** on the Hub, the announcement page and the School calendar | A Staff recipient can consume what is sent to them (§16/§46) | Staff audience = HR identity (`CurrentStaffMembers`, role-independent); `communications.inbox.view`/`.events.view` were read through whole-School paths, which never counted a Campus grant (rule 101, `CapabilityResolver::grants()`) | none (failed closed) | **CLOSED** by ORG.10-R1 (owner decision **OD-9.7**, ADR 0076 §79): `ConsumerCapabilities` (exactly the two keys) are activated by an active Campus grant on an active Campus of the same School; tests `CampusOnlyStaffConsumerAccessTest`, `ConsumerCapabilityActivationArchitectureTest`; DDEV retest UAT-COM-005 + UAT-R1-* PASS |
 
-**ORG10-D02 options (owner):**
-1. **Consumption keys honour any active grant** — `communications.inbox.view`
-   and `communications.events.view` (own content only) are satisfied by a
-   Campus-scoped grant too. Smallest product change; amends rule 101's
-   "whole-School paths never count a Campus grant" for exactly these two
-   consumption keys; no Campus adoption, no `CampusScopeCatalogue` change.
-   **Recommended.**
-2. **Mandatory whole-School `staff_self_service`** for every staff member
-   (documented in the administrator guide, optionally a Data Health warning).
-   No code; relies on administrators; also grants own leave/attendance/payslips.
-3. **Exclude Campus-only staff from in-app delivery** — rejected: hides
-   School communication from real staff.
-4. **Campus-adopt Communications consumption** — rejected: consumption is not
-   Campus data, and `CampusScopeCatalogue` changes need an owner decision.
+**ORG10-D02 decision (OD-9.7, ORG.10-R1):** option 1 was chosen — the two
+consumption keys are satisfied by any active grant of the same School
+(whole-School, or Campus-scoped on an active Campus). It is capability
+activation only: no Campus adoption, no `CampusScopeCatalogue` or role-template
+change, no Campus filtering of own content, and no other key of a Campus grant
+reaches a whole-School check (pinned for every Campus-grantable system role).
 
-No code was changed in ORG.10: no fix was authorized without an owner
-decision, and no other defect was found.
+No code was changed in ORG.10 itself; ORG.10-R1 implemented OD-9.7.
 
 ## 6. Observations (not defects)
 
@@ -319,7 +313,7 @@ Generated from `register.jsonl` (first and final attempt per scenario).
 | `UAT-COM-004-former` | F | communications | former teacher | own | Never snapshotted: not in inbox; direct URL refused | PASS | **PASS** |  |
 | `UAT-COM-004-future` | F | communications | future teacher | own | Never snapshotted: not in inbox; direct URL refused | PASS | **PASS** |  |
 | `UAT-COM-004-role-only` | F | communications | role-only (suspended in B) | own | Never snapshotted: not in inbox; direct URL refused | PASS | **PASS** |  |
-| `UAT-COM-005` | F | communications | Campus-only staff (librarian@A1, cashier@A1, principal@A2) | Campus grants only | A Staff recipient can consume what is sent to them | FAIL | **FAIL** | ORG10-D02 |
+| `UAT-COM-005` | R1 | communications | Campus-only staff (librarian@A1, cashier@A1, principal@A2) | Campus grants only | A Staff recipient can consume what is sent to them | FAIL | **PASS** (retested) | ORG10-D02 |
 | `UAT-EVT-001` | F | events | communications_coordinator -> principal | whole-School | Published / published / cancelled | PASS | **PASS** |  |
 | `UAT-EVT-002` | F | events | teacher | own | Staff Event + cancelled School-wide Event (marked); never the family Event | PASS | **PASS** |  |
 | `UAT-EVT-003` | F | events+portal | guardian01 (child in G6-A) | guardian | Family Event and family note visible; never staff mail or Staff Event | PASS | **PASS** |  |
@@ -357,3 +351,6 @@ Generated from `register.jsonl` (first and final attempt per scenario).
 | `UAT-SMOKE-canteen.operator` | H | final-smoke | canteen.operator | grants | Each opens or is refused exactly as authorized | PASS | **PASS** |  |
 | `UAT-SMOKE-transport.operator` | H | final-smoke | transport.operator | grants | Each opens or is refused exactly as authorized | PASS | **PASS** |  |
 | `UAT-SMOKE-communications` | H | final-smoke | communications | grants | Each opens or is refused exactly as authorized | PASS | **PASS** |  |
+| `UAT-R1-uat.librarian.a1` | R1 | communications | uat.librarian.a1 | Campus grant only | Consumes own Staff Communications/Events; management and other Campus data still refused | PASS | **PASS** |  |
+| `UAT-R1-uat.cashier.a1` | R1 | communications | uat.cashier.a1 | Campus grant only | Consumes own Staff Communications/Events; management and other Campus data still refused | PASS | **PASS** |  |
+| `UAT-R1-uat.principal.a2` | R1 | communications | uat.principal.a2 | Campus grant only | Consumes own Staff Communications/Events; management and other Campus data still refused | PASS | **PASS** |  |

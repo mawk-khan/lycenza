@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Support\Authorization\Campus\CampusScopeCatalogue;
 use App\Support\Authorization\Campus\CampusScopeResolver;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Authorization\ConsumerCapabilities;
 use App\Support\Navigation\NavigationBuilder;
 use App\Support\Tenancy\TenantContext;
 use Database\Factories\SchoolFactory;
@@ -61,7 +62,9 @@ class CampusScopeResolutionTest extends TestCase
         $this->assignSchoolRole($membership, 'front_office', $this->a->id);
         $resolver = app(CapabilityResolver::class);
 
-        $this->assertSame([], $resolver->schoolCapabilities($user, $this->school));
+        // ORG.10-R1 (OD-9.7): only the two scope-independent consumer keys
+        // (own Communications, the School calendar) are activated School-wide.
+        $this->assertEqualsCanonicalizing(ConsumerCapabilities::SCOPE_INDEPENDENT, $resolver->schoolCapabilities($user, $this->school));
         $this->assertFalse($resolver->canInSchool($user, 'visitor.visits.view', $this->school));
         $this->assertFalse(Gate::forUser($user)->allows('capability', ['visitor.visits.view', $this->school]));
         $this->assertTrue(Gate::forUser($user)->allows('campus-capability', ['visitor.visits.view', $this->school]));

@@ -66,6 +66,7 @@ class CommunicationInboxConsumerArchitectureTest extends TestCase
             'app/Domain/Communications/Http/Controllers/CommunicationHubController.php',
             'app/Domain/Communications/Http/Controllers/CommunicationInboxController.php',
             'app/Support/Authorization/CapabilityClasses.php',
+            'app/Support/Authorization/ConsumerCapabilities.php', // OD-9.7 activation classification
             'app/Support/Navigation/StaffNavigation.php',
         ], $holders, 'Analytics, approvals, templates, settings, audit and Events code never name it.');
 

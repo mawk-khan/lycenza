@@ -156,6 +156,12 @@ class CapabilityResolver
      * 'school' feeds schoolCapabilities()/can(); 'campus' is read only by
      * campusCapabilities().
      *
+     * ORG.10-R1 (ADR 0076 §79, OD-9.7): the one exception -- an active
+     * Campus-scoped grant on an ACTIVE Campus also activates, School-wide,
+     * exactly the scope-independent consumer capabilities its role carries
+     * (ConsumerCapabilities: own Communications, the School calendar). No
+     * other key of a Campus grant ever reaches 'school'.
+     *
      * @return array{school: list<string>, campus: array<string, list<string>>}
      */
     private function grants(User $actor, School $school): array
@@ -191,6 +197,7 @@ class CapabilityResolver
 
                 $wholeSchool = [];
                 $campus = [];
+                $consumer = [];
                 foreach ($assignments as $assignment) {
                     $keys = $assignment->role->capabilities->pluck('key')->all();
                     if ($assignment->campus_id === null) {
@@ -203,6 +210,25 @@ class CapabilityResolver
                     $adopted = CampusScopeCatalogue::adoptedAmong($keys);
                     if ($adopted !== []) {
                         $campus[$assignment->campus_id] = array_values(array_unique([...($campus[$assignment->campus_id] ?? []), ...$adopted]));
+                    }
+                    // ...except the scope-independent consumer keys (OD-9.7).
+                    $consumerKeys = ConsumerCapabilities::scopeIndependentAmong($keys);
+                    if ($consumerKeys !== []) {
+                        $consumer[$assignment->campus_id] = array_values(array_unique([...($consumer[$assignment->campus_id] ?? []), ...$consumerKeys]));
+                    }
+                }
+
+                // OD-9.7: only grants on an ACTIVE Campus activate a consumer
+                // key (one query, only for an actor holding such a grant).
+                if ($consumer !== []) {
+                    $activeCampuses = $this->context->withSchool($school, fn (): array => Campus::query()
+                        ->where('school_id', $school->id)
+                        ->whereIn('id', array_keys($consumer))
+                        ->where('status', 'active')
+                        ->pluck('id')
+                        ->all());
+                    foreach ($activeCampuses as $campusId) {
+                        array_push($wholeSchool, ...$consumer[$campusId]);
                     }
                 }
 
