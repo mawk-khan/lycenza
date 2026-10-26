@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\Domain\AcademicStructure\Application\Calendar\AcademicYearDateDependency;
+use App\Domain\Examinations\Application\ExaminationYearDateDependency;
+use App\Domain\Fees\Application\FeeYearDateDependency;
 use App\Domain\Finance\Application\Periods\FinancialPeriodCloseParticipant;
 use App\Domain\Finance\Application\Retention\FinanceRetentionParticipant;
 use App\Domain\Guardians\Application\GuardianAccountOwnership;
@@ -9,13 +12,16 @@ use App\Domain\Hostel\Application\HostelTransferBlocker;
 use App\Domain\HR\Application\EmploymentEndParticipant;
 use App\Domain\Identity\Application\GuardianAccountOwnershipReader;
 use App\Domain\Leave\Application\AttendancePresenceConflictReader;
+use App\Domain\LMS\Application\AssignmentYearDateDependency;
 use App\Domain\Payments\Application\ChargePeriodStateParticipant;
 use App\Domain\Payments\Application\Retention\ChargeRetentionParticipant;
 use App\Domain\Payroll\Application\Retention\PayrollLedgerRetentionParticipant;
 use App\Domain\StaffAttendance\Application\StaffAttendancePresenceReader;
 use App\Domain\Students\Application\ElectiveTransferBlocker;
+use App\Domain\Students\Application\PlacementYearDateDependency;
 use App\Domain\Students\Application\StudentTransferBlocker;
 use App\Domain\TeachingAssignments\Application\EmploymentEndedTeachingOwnership;
+use App\Domain\TeachingAssignments\Application\TeachingAssignmentYearDateDependency;
 use App\Domain\Transport\Application\TransportTransferBlocker;
 use App\Models\School;
 use App\Models\User;
@@ -128,6 +134,14 @@ class AppServiceProvider extends ServiceProvider
         // Students, so Students never references Hostel or Transport (which
         // depend on it).
         $this->app->tag([ElectiveTransferBlocker::class, HostelTransferBlocker::class, TransportTransferBlocker::class], StudentTransferBlocker::TAG);
+
+        // SIS 5.1 (MC-3, ADR 0077): the records that must stay inside a draft
+        // Academic Year's dates while they are corrected. Registered here, not
+        // in AcademicStructure, which every one of these modules depends on.
+        $this->app->tag([
+            PlacementYearDateDependency::class, TeachingAssignmentYearDateDependency::class, ExaminationYearDateDependency::class,
+            AssignmentYearDateDependency::class, FeeYearDateDependency::class,
+        ], AcademicYearDateDependency::TAG);
 
         // HRX.3 (ADR 0065 §24.5): Leave's approval port, implemented by Staff
         // Attendance. Bound here, not in Leave, so Leave never references the

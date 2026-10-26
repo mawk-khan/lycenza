@@ -568,6 +568,9 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::put('/academic-years/{academicYear}', [SchoolSetupController::class, 'renameAcademicYear'])->name('academic-years.update');
         Route::post('/academic-years/{academicYear}/activate', [SchoolSetupController::class, 'activateAcademicYear'])->name('academic-years.activate');
         Route::post('/academic-years/{academicYear}/close', [SchoolSetupController::class, 'closeAcademicYear'])->name('academic-years.close');
+        // SIS 5.1 (MC-3, ADR 0077): date correction of a DRAFT year only.
+        Route::get('/academic-years/{academicYear}/dates', [SchoolSetupController::class, 'editAcademicYearDates'])->name('academic-years.dates');
+        Route::put('/academic-years/{academicYear}/dates', [SchoolSetupController::class, 'correctAcademicYearDates'])->name('academic-years.dates.update');
 
         Route::get('/grade-levels', [SchoolSetupController::class, 'gradeLevels'])->name('grade-levels');
         Route::post('/grade-levels', [SchoolSetupController::class, 'storeGradeLevel'])->name('grade-levels.store');
@@ -583,6 +586,9 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::get('/terms', [SchoolSetupStructureController::class, 'terms'])->name('terms');
         Route::post('/academic-years/{academicYear}/terms', [SchoolSetupStructureController::class, 'storeTerm'])->name('terms.store');
         Route::put('/terms/{academicTerm}', [SchoolSetupStructureController::class, 'renameTerm'])->name('terms.update');
+        // SIS 5.1: date correction of a Term of a DRAFT year only.
+        Route::get('/terms/{academicTerm}/dates', [SchoolSetupStructureController::class, 'editTermDates'])->name('terms.dates');
+        Route::put('/terms/{academicTerm}/dates', [SchoolSetupStructureController::class, 'correctTermDates'])->name('terms.dates.update');
 
         Route::get('/sections', [SchoolSetupStructureController::class, 'sections'])->name('sections');
         Route::post('/academic-years/{academicYear}/sections', [SchoolSetupStructureController::class, 'storeSection'])->name('sections.store');

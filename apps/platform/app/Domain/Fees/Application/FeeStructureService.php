@@ -442,7 +442,8 @@ class FeeStructureService
 
         return $this->mutateDraft($school, $feeStructureId, $actor, function (FeeStructure $structure) use ($school, $lineId, $frequency) {
             $line = $this->findLine($structure, $lineId);
-            $year = AcademicYear::query()->where('school_id', $school->id)->findOrFail($structure->academic_year_id);
+            // SIS 5.1: FOR SHARE -- a draft year's dates can be corrected concurrently.
+            $year = AcademicYear::query()->where('school_id', $school->id)->sharedLock()->findOrFail($structure->academic_year_id);
 
             $periods = match ($frequency) {
                 FeeStructureLine::FREQUENCY_ONE_TIME => $this->oneTimePeriods($year),
@@ -616,7 +617,8 @@ class FeeStructureService
             throw new InvalidFeeStructureException('installments', 'A schedule needs at least one instalment.');
         }
 
-        $year = AcademicYear::query()->where('school_id', $school->id)->findOrFail($structure->academic_year_id);
+        // SIS 5.1: FOR SHARE -- a draft year's dates can be corrected concurrently.
+        $year = AcademicYear::query()->where('school_id', $school->id)->sharedLock()->findOrFail($structure->academic_year_id);
         $normalized = [];
         $keys = [];
 

@@ -116,8 +116,8 @@ at a time.
 
 | State | What it means | What you can do |
 |---|---|---|
-| Draft | Being prepared | Rename; add Sections, offerings and a rollover plan. **Safe before its start date.** |
-| Active | The current operational year | Day-to-day work happens here |
+| Draft | Being prepared | Rename; **correct its dates and its Terms' dates**; add Sections, offerings and a rollover plan. **Safe before its start date.** |
+| Active | The current operational year | Day-to-day work happens here. Its dates are fixed |
 | Closed | History | Read only; complete its open placements (§16) |
 
 **Rules that protect you:**
@@ -131,11 +131,33 @@ at a time.
   not activate early "to get ahead". Prepare the next year as a draft
   instead.
 
+**Correcting a mistyped date (draft years only, SIS 5.1):**
+- **Academic years → Correct dates** on a draft year. Change the start or end
+  date and select **Save dates**. Name, code and status do not change.
+- **Terms → Correct dates** on a Term of a draft year. Name, code and order do
+  not change.
+- **What is checked:**
+  - The start must be before the end.
+  - The year must not overlap another year.
+  - A Term must stay inside its year and must not overlap another Term.
+  - Everything already in the year must stay inside the new dates: its
+    Terms, placements, teaching assignments, examinations, assignment due
+    dates and fee instalments or concessions.
+- **If a record would fall outside,** the change is refused with what is in
+  the way (for example "Correct the Term dates first: 1 Term would fall
+  outside…"). Correct that record first. Nothing is moved or ended for you.
+- **Once a year is activated, its dates and its Terms' dates are fixed.**
+  The Correct dates action is no longer offered, and a correction started
+  before activation is refused. Check the dates before activating.
+- **If someone else changed the year or Term** while you were editing, you
+  are asked to reload and try again.
+
 **Safe sequence for a new year:**
 1. Add the next year (**Add an Academic year**: name, code, start and end
    dates). It is created as draft.
 2. Prepare it: Sections, subject offerings, fee structures and the rollover
-   plan (§16).
+   plan (§16). Check its dates now: they can be corrected only while it is a
+   draft.
 3. On or after its start date, **Activate** it.
 4. Complete the closed year's open placements (§16, step 9).
 

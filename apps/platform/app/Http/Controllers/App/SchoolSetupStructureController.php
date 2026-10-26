@@ -4,6 +4,9 @@ namespace App\Http\Controllers\App;
 
 use App\Domain\AcademicStructure\Application\AcademicDepartmentAdministrationService;
 use App\Domain\AcademicStructure\Application\AcademicTermService;
+use App\Domain\AcademicStructure\Application\Exceptions\AcademicCalendarDatesFixedException;
+use App\Domain\AcademicStructure\Application\Exceptions\AcademicTermOutOfRangeException;
+use App\Domain\AcademicStructure\Application\Exceptions\AcademicTermOverlapException;
 use App\Domain\AcademicStructure\Application\RoomAdministrationService;
 use App\Domain\AcademicStructure\Application\SectionAdministrationService;
 use App\Domain\AcademicStructure\Infrastructure\AcademicDepartment;
@@ -21,6 +24,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -80,6 +84,51 @@ class SchoolSetupStructureController extends Controller
         $term = $terms->rename($school, $academicTerm, $request->only(['name', 'code']), $context->actor());
 
         return redirect()->route('app.school-setup.terms', ['academic_year_id' => $term->academic_year_id]);
+    }
+
+    /**
+     * SIS 5.1 (MC-3, ADR 0077): the date-correction page of a Term whose
+     * Academic Year is DRAFT. Once the year is active or closed, its Terms'
+     * dates are fixed and there is no such page.
+     */
+    public function editTermDates(TenantContext $context, string $academicTerm): Response|RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('academics.years.manage', $school);
+
+        $term = AcademicTerm::query()->findOrFail($academicTerm);
+        $year = AcademicYear::query()->findOrFail($term->academic_year_id);
+        if ($year->status !== 'draft') {
+            return redirect()->route('app.school-setup.terms', ['academic_year_id' => $year->id])
+                ->withErrors(['refusal' => (new AcademicCalendarDatesFixedException($year->status))->getMessage()]);
+        }
+
+        return Inertia::render('App/SchoolSetup/TermDates', [
+            'term' => [
+                'id' => $term->id, 'name' => $term->name, 'code' => $term->code, 'sequence' => $term->sequence,
+                'startsOn' => $term->starts_on->toDateString(), 'endsOn' => $term->ends_on->toDateString(),
+                'updatedAt' => $term->updated_at->toIso8601String(),
+            ],
+            'academicYear' => $this->presentYear($year),
+        ]);
+    }
+
+    /**
+     * SIS 5.1: dates only. Order, out-of-year and overlap are field errors; a
+     * fixed year or a stale form is a refusal (LC-1).
+     */
+    public function correctTermDates(Request $request, TenantContext $context, AcademicTermService $terms, string $academicTerm): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('academics.years.manage', $school);
+
+        try {
+            $term = $terms->correctDraftDates($school, $academicTerm, $request->only(['starts_on', 'ends_on', 'expected_updated_at']), $context->actor());
+        } catch (AcademicTermOutOfRangeException|AcademicTermOverlapException $e) {
+            throw ValidationException::withMessages(['starts_on' => [$e->getMessage()]]);
+        }
+
+        return redirect()->route('app.school-setup.terms', ['academic_year_id' => $term->academic_year_id])->with('flash', 'Term dates corrected.');
     }
 
     public function sections(Request $request, TenantContext $context): Response

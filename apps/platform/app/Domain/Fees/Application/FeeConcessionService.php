@@ -2,6 +2,7 @@
 
 namespace App\Domain\Fees\Application;
 
+use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\Fees\Application\Exceptions\AcademicYearNotFoundException;
 use App\Domain\Fees\Application\Exceptions\ChargeAlreadyCancelledException;
 use App\Domain\Fees\Application\Exceptions\ChargeNotFoundException;
@@ -306,6 +307,11 @@ class FeeConcessionService
             if ($data->feeHeadId !== null && ! FeeHead::query()->where('school_id', $school->id)->whereKey($data->feeHeadId)->exists()) {
                 throw new FeeHeadNotFoundException($data->feeHeadId);
             }
+            // SIS 5.1: the year FOR SHARE until commit, so the database's window
+            // check (`fees_validate_fee_concession`) reads dates a concurrent
+            // correction of a draft year cannot change underneath it. A missing
+            // year stays the foreign-key refusal below.
+            AcademicYear::query()->where('school_id', $school->id)->whereKey($data->academicYearId)->sharedLock()->first();
             $columns += [
                 'student_id' => $data->studentId,
                 'academic_year_id' => $data->academicYearId,

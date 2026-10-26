@@ -121,7 +121,9 @@ class TeachingAssignmentService
                 throw new TeachingContextInactiveException;
             }
 
-            $year = AcademicYear::query()->where('school_id', $school->id)->findOrFail($offering->academic_year_id);
+            // SIS 5.1: FOR SHARE -- a draft year's dates can be corrected; a
+            // correction either committed first (seen here) or waits for this.
+            $year = AcademicYear::query()->where('school_id', $school->id)->sharedLock()->findOrFail($offering->academic_year_id);
 
             if (! in_array($year->status, explode('|', self::OPEN_YEAR_STATUSES), true)) {
                 throw new AcademicYearNotOpenException;

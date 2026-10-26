@@ -324,13 +324,15 @@ class AcademicOperationsRetentionTest extends TestCase
     }
 
     #[Test]
-    public function the_academic_year_dates_are_immutable(): void
+    public function a_closed_academic_years_dates_are_immutable(): void
     {
+        // SIS 5.1 (ADR 0077): only a draft year's dates may still be corrected
+        // (DraftCalendarSchemaTest); once it has left draft the clock is fixed.
         $w = $this->year(null, '2026-04-01', '2027-03-31', 'AY26');
 
         $this->inSchool($w['school'], function () use ($w): void {
-            $this->refused(fn () => DB::table('academic_years')->where('id', $w['year']->id)->update(['ends_on' => '2040-03-31']), 'the date range is fixed at creation');
-            $this->refused(fn () => DB::table('academic_years')->where('id', $w['year']->id)->update(['starts_on' => '2020-04-01']), 'the date range is fixed at creation');
+            $this->refused(fn () => DB::table('academic_years')->where('id', $w['year']->id)->update(['ends_on' => '2040-03-31']), 'the date range is fixed once the year leaves draft');
+            $this->refused(fn () => DB::table('academic_years')->where('id', $w['year']->id)->update(['starts_on' => '2020-04-01']), 'the date range is fixed once the year leaves draft');
             $this->assertSame(1, DB::table('academic_years')->where('id', $w['year']->id)->update(['name' => 'Renamed']), 'name and code stay editable');
         });
         $this->assertSame('2027-03-31', $this->inSchool($w['school'], fn () => AcademicYear::query()->findOrFail($w['year']->id))->ends_on->toDateString());

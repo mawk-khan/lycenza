@@ -144,6 +144,9 @@ class TeachingAssignmentArchitectureGuardTest extends TestCase
             'Domain/TeachingAssignments/Application/ElectiveTeachingAssignmentService.php',
             'Domain/TeachingAssignments/Application/OwnedElectivePeriod.php',
             'Domain/TeachingAssignments/Application/TeachingAssignmentReadService.php',
+            // SIS 5.1 (ADR 0077), reviewed: counts rows whose dates fall outside a
+            // proposed draft-year range; never reads who owns what, grants nothing.
+            'Domain/TeachingAssignments/Application/TeachingAssignmentYearDateDependency.php',
             'Domain/TeachingAssignments/Application/TeachingOwnership.php',
             'Domain/TeachingAssignments/Infrastructure/ElectiveTeachingAssignment.php',
             'Http/Controllers/App/TeachingAssignments/ElectiveTeachingAssignmentController.php',

@@ -1251,6 +1251,13 @@ Project-adopted, pending ratification.
 - **The clock cannot move.** Migration `2026_11_13_090000` makes
   `academic_years.starts_on`/`ends_on` immutable for every role (no
   application path edits them; the API edits name/code only).
+  *Amended by SIS 5.1 (ADR 0077, 2026-10-26):* a year that has never left
+  `draft` may have its dates corrected (`academic_years_freeze_dates` now
+  admits draft → draft only, and `academic_years_no_return_to_draft` stops a
+  year going back to draft). Every year that has been active or closed keeps
+  this fixed clock. A draft year has no Attendance or curriculum deliveries,
+  and the E21-RH.7 recorded anchor means no row becomes eligible before its
+  full period from recording.
 - **Rows, in dependency order** (`platform:academic-retention-prune`, daily
   04:45; bounded batches, `FOR UPDATE SKIP LOCKED`, predicate re-applied,
   any FK-referenced row kept as `dependency_blocked`):

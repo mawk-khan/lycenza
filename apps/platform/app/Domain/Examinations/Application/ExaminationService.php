@@ -72,6 +72,10 @@ class ExaminationService
             $this->assertWithinYear($year, $startsOn, $endsOn);
 
             return DB::transaction(function () use ($school, $year, $attributes, $startsOn, $endsOn, $actor) {
+                // SIS 5.1: re-checked on the year read FOR SHARE -- a draft
+                // year's dates can be corrected concurrently.
+                $this->assertWithinYear($this->shareLockYear($school, $year->id), $startsOn, $endsOn);
+
                 $examination = new Examination;
                 // `academic_year_id` is force-filled from the resolved
                 // route parent, never mass-assigned from input.
@@ -139,6 +143,9 @@ class ExaminationService
             ];
 
             return DB::transaction(function () use ($school, $examination, $attributes, $startsOn, $endsOn, $before, $actor) {
+                // SIS 5.1: re-checked on the year read FOR SHARE (see create()).
+                $this->assertWithinYear($this->shareLockYear($school, $examination->academic_year_id), $startsOn, $endsOn);
+
                 $examination->forceFill([
                     'code' => $attributes['code'] ?? $examination->code,
                     'name' => $attributes['name'] ?? $examination->name,
@@ -199,6 +206,15 @@ class ExaminationService
         if ($endsOn < $startsOn) {
             throw new ExaminationDateOrderException($startsOn, $endsOn);
         }
+    }
+
+    /**
+     * SIS 5.1 (MC-3): the year FOR SHARE until the write commits, so a
+     * concurrent correction of a draft year's dates either is seen or waits.
+     */
+    private function shareLockYear(School $school, string $academicYearId): AcademicYear
+    {
+        return AcademicYear::query()->where('school_id', $school->id)->sharedLock()->findOrFail($academicYearId);
     }
 
     /**

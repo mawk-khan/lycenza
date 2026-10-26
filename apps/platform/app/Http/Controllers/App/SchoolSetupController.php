@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\App;
 
 use App\Domain\AcademicStructure\Application\AcademicYearService;
+use App\Domain\AcademicStructure\Application\Exceptions\AcademicCalendarDatesFixedException;
+use App\Domain\AcademicStructure\Application\Exceptions\AcademicYearOverlapException;
 use App\Domain\AcademicStructure\Application\GradeLevelAdministrationService;
 use App\Domain\AcademicStructure\Application\SubjectAdministrationService;
 use App\Domain\AcademicStructure\Infrastructure\AcademicDepartment;
@@ -22,6 +24,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -199,6 +202,49 @@ class SchoolSetupController extends Controller
         $service->rename($school, $academicYear, $request->only(['name', 'code']), $context->actor());
 
         return redirect('/app/school-setup/academic-years');
+    }
+
+    /**
+     * SIS 5.1 (MC-3, ADR 0077): the date-correction page of a DRAFT year. An
+     * active or closed year has no such page: its dates are fixed.
+     */
+    public function editAcademicYearDates(TenantContext $context, string $academicYear): Response|RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('academics.years.manage', $school);
+
+        $year = AcademicYear::query()->findOrFail($academicYear);
+        if ($year->status !== 'draft') {
+            return redirect('/app/school-setup/academic-years')
+                ->withErrors(['refusal' => (new AcademicCalendarDatesFixedException($year->status))->getMessage()]);
+        }
+
+        return Inertia::render('App/SchoolSetup/AcademicYearDates', [
+            'academicYear' => [
+                'id' => $year->id, 'name' => $year->name, 'code' => $year->code, 'status' => $year->status,
+                'startsOn' => $year->starts_on->toDateString(), 'endsOn' => $year->ends_on->toDateString(),
+                'updatedAt' => $year->updated_at->toIso8601String(),
+            ],
+        ]);
+    }
+
+    /**
+     * SIS 5.1: dates only. Date order and an overlap with another year are
+     * field errors; a fixed (non-draft) year, a stale form or dependent records
+     * outside the new dates are refusals (LC-1).
+     */
+    public function correctAcademicYearDates(Request $request, TenantContext $context, AcademicYearService $service, string $academicYear): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('academics.years.manage', $school);
+
+        try {
+            $service->correctDraftDates($school, $academicYear, $request->only(['starts_on', 'ends_on', 'expected_updated_at']), $context->actor());
+        } catch (AcademicYearOverlapException $e) {
+            throw ValidationException::withMessages(['starts_on' => [$e->getMessage()]]);
+        }
+
+        return redirect('/app/school-setup/academic-years')->with('flash', 'Academic year dates corrected.');
     }
 
     public function activateAcademicYear(TenantContext $context, AcademicYearService $service, string $academicYear): RedirectResponse

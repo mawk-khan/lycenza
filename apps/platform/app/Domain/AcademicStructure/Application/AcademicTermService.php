@@ -3,6 +3,8 @@
 namespace App\Domain\AcademicStructure\Application;
 
 use App\Domain\AcademicStructure\Application\Concerns\AdministersReferenceData;
+use App\Domain\AcademicStructure\Application\Exceptions\AcademicCalendarChangedException;
+use App\Domain\AcademicStructure\Application\Exceptions\AcademicCalendarDatesFixedException;
 use App\Domain\AcademicStructure\Application\Exceptions\AcademicTermOutOfRangeException;
 use App\Domain\AcademicStructure\Application\Exceptions\AcademicTermOverlapException;
 use App\Domain\AcademicStructure\Events\AcademicTermCreated;
@@ -40,6 +42,9 @@ class AcademicTermService
     public function create(AcademicYear $year, array $attributes, ?User $actor = null): AcademicTerm
     {
         return $this->context->withSchool($year->school, fn () => DB::transaction(function () use ($year, $attributes, $actor) {
+            // SIS 5.1: the year's dates are read FOR SHARE, so a concurrent
+            // correction of a draft year's dates either is seen or waits.
+            $year = AcademicYear::query()->whereKey($year->id)->sharedLock()->firstOrFail();
             $this->assertWithinYear($year, $attributes['starts_on'], $attributes['ends_on']);
             $this->assertNoOverlap($year, $attributes['starts_on'], $attributes['ends_on']);
 
@@ -122,6 +127,63 @@ class AcademicTermService
         });
     }
 
+    /**
+     * SIS 5.1 (MC-3, ADR 0077): correct a Term's dates while its Academic Year
+     * is DRAFT -- dates only (name and code keep rename(); the sequence never
+     * changes). Under the year's FOR UPDATE lock, so it serializes with the
+     * year's own correction, its activation and other Term corrections: the
+     * year must still be draft, the Term unchanged since the form was opened,
+     * and the new dates inside the year without overlapping another Term.
+     *
+     * @param  array<string, mixed>  $input
+     */
+    public function correctDraftDates(School $school, string $academicTermId, array $input, User $actor): AcademicTerm
+    {
+        $this->authorizeFor($actor, self::CAPABILITY_MANAGE, $school);
+        $validated = $this->validateInput($input, [
+            'starts_on' => ['required', 'date_format:Y-m-d'],
+            'ends_on' => ['required', 'date_format:Y-m-d', 'after:starts_on'],
+            'expected_updated_at' => ['required', 'string', 'max:64'],
+        ]);
+
+        return $this->context->withSchool($school, function () use ($school, $academicTermId, $validated, $actor): AcademicTerm {
+            // Discovery only: which year to lock. The Term is re-read under it.
+            $yearId = AcademicTerm::query()->where('school_id', $school->id)->findOrFail($academicTermId)->academic_year_id;
+
+            return DB::transaction(function () use ($school, $academicTermId, $yearId, $validated, $actor): AcademicTerm {
+                $year = AcademicYear::query()->where('school_id', $school->id)->lockForUpdate()->findOrFail($yearId);
+                $term = AcademicTerm::query()->where('academic_year_id', $year->id)->lockForUpdate()->findOrFail($academicTermId);
+
+                if ($year->status !== 'draft') {
+                    throw new AcademicCalendarDatesFixedException($year->status);
+                }
+                if ($term->updated_at?->toIso8601String() !== $validated['expected_updated_at']) {
+                    throw new AcademicCalendarChangedException;
+                }
+
+                $before = ['starts_on' => $term->starts_on->toDateString(), 'ends_on' => $term->ends_on->toDateString()];
+                $after = ['starts_on' => $validated['starts_on'], 'ends_on' => $validated['ends_on']];
+                if ($before === $after) {
+                    return $term;
+                }
+
+                $this->assertWithinYear($year, $after['starts_on'], $after['ends_on']);
+                $this->assertNoOverlap($year, $after['starts_on'], $after['ends_on'], $term->id);
+
+                $term->update($after);
+
+                $this->audit->school($school, 'academic_term.dates_corrected', actor: $actor, subject: $term, metadata: [
+                    'academicYearId' => $year->id,
+                    'changed' => array_keys(array_diff_assoc($after, $before)),
+                    'before' => $before,
+                    'after' => $after,
+                ]);
+
+                return $term->refresh();
+            });
+        });
+    }
+
     private function assertWithinYear(AcademicYear $year, string $startsOn, string $endsOn): void
     {
         if ($startsOn < $year->starts_on->toDateString() || $endsOn > $year->ends_on->toDateString()) {
@@ -129,10 +191,11 @@ class AcademicTermService
         }
     }
 
-    private function assertNoOverlap(AcademicYear $year, string $startsOn, string $endsOn): void
+    private function assertNoOverlap(AcademicYear $year, string $startsOn, string $endsOn, ?string $exceptTermId = null): void
     {
         $overlaps = AcademicTerm::query()
             ->where('academic_year_id', $year->id)
+            ->when($exceptTermId !== null, fn ($q) => $q->whereKeyNot($exceptTermId))
             ->where('starts_on', '<', $endsOn)
             ->where('ends_on', '>', $startsOn)
             ->exists();

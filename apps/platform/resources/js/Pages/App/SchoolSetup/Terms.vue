@@ -2,8 +2,9 @@
 // SWC.2 (ADR 0073 section 10): the Terms of one Academic Year -- list,
 // create and rename over AcademicTermService. A Term's dates must fall
 // inside its Year and not overlap another Term (the service's refusals,
-// shown on the dates); dates and order cannot change after creation, and
-// Terms have no deactivation -- the domain has none.
+// shown on the dates); the order never changes, and Terms have no
+// deactivation -- the domain has none. SIS 5.1 (ADR 0077): while the Year is
+// draft, a Term's dates can be corrected on its own page.
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, ref } from 'vue';
 import SelectField from '../../../Components/Form/SelectField.vue';
@@ -141,10 +142,18 @@ function submitEdit() {
                             <td class="pr-3 py-2 font-medium">{{ term.name }}</td>
                             <td class="pr-3 py-2">{{ term.code }}</td>
                             <td class="pr-3 py-2">{{ term.startsOn }} – {{ term.endsOn }}</td>
-                            <td v-if="props.canManage" class="pr-3 py-2 text-right">
+                            <td v-if="props.canManage" class="pr-3 space-x-3 py-2 text-right">
                                 <button type="button" class="underline" @click="startEdit(term)">
                                     Rename<span class="sr-only"> {{ term.name }}</span>
                                 </button>
+                                <a
+                                    v-if="year?.status === 'draft'"
+                                    class="underline"
+                                    :href="`/app/school-setup/terms/${term.id}/dates`"
+                                    >Correct dates<span class="sr-only">
+                                        of {{ term.name }}</span
+                                    ></a
+                                >
                             </td>
                         </tr>
                     </tbody>
@@ -158,7 +167,8 @@ function submitEdit() {
             >
                 <h2 id="edit-term-heading" class="font-semibold">Rename {{ editing.name }}</h2>
                 <p class="mt-1 text-sm text-slate-600">
-                    A Term's dates and order cannot change after it is created.
+                    Renaming changes the name and code only. Dates can be corrected while the
+                    Academic Year is a draft.
                 </p>
                 <form class="mt-3 grid gap-3 sm:grid-cols-2" @submit.prevent="submitEdit">
                     <TextField

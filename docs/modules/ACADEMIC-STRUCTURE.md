@@ -276,7 +276,7 @@ controllers:
 |---|---|---|
 | Campus | `Domain\Campuses\Application\CampusAdministrationService` | School setup → Campuses (create, edit, deactivate/reactivate) |
 | Academic Year | `AcademicYearService::createFromInput()`, `rename()`, `activate()`, `close()` | School setup → Academic years |
-| Academic Term | `AcademicTermService::createFromInput()`, `rename()` | School setup → Terms (create, rename; dates fixed) |
+| Academic Term | `AcademicTermService::createFromInput()`, `rename()`, `correctDraftDates()` (SIS 5.1) | School setup → Terms (create, rename; correct dates while the year is draft) |
 | Grade Level | `GradeLevelAdministrationService` | School setup → Grade levels |
 | Section | `SectionAdministrationService` | School setup → Sections (per Year; create, edit, deactivate/reactivate) |
 | Academic Department | `AcademicDepartmentAdministrationService` | School setup → Academic departments |
@@ -334,3 +334,47 @@ Existing Sections and Offerings on a Campus that later becomes inactive
 are kept and stay editable. Room creation is unchanged (not in the
 ORG.7D-0 scope). Since ORG.7D-0 a Room's Campus is also pinned by every
 Timetable entry that uses it.
+
+## Draft calendar correction (SIS 5.1, 2026-10-26, ADR 0077)
+
+Closes MC-3. A **draft** Academic Year's dates, and its Terms' dates, can be
+corrected while the year stays draft. Once a year is active or closed its
+calendar is fixed, and there is no path back to draft.
+
+- **Database:**
+  - `academic_years_freeze_dates` admits a date change only when the row is
+    draft before and after the UPDATE.
+  - `academic_years_no_return_to_draft` refuses setting `status` back to
+    `draft`.
+  - Both apply to every role.
+- **Year:** `AcademicYearService::correctDraftDates()`, under the year's
+  `FOR UPDATE` lock. Dates only (name, code, status and School are never read
+  from the input). It requires:
+  - the year still draft, and an unchanged `expected_updated_at`;
+  - start before end, and no overlap with another year;
+  - every Term, and every record of an `AcademicYearDateDependency` (placements,
+    teaching assignments, examinations, LMS due dates, fee instalments and
+    standing concessions), still inside the new dates.
+
+  Nothing is moved or ended for the operator; the refusal gives the kind and
+  count.
+- **Term:** `AcademicTermService::correctDraftDates()`, under the year's
+  `FOR UPDATE` lock. It requires the year draft, the Term unchanged, inside the
+  year and not overlapping a sibling (a shared boundary day is allowed). Name,
+  code and order are unchanged.
+- **Serialization:**
+  - Activation re-reads the draft row `FOR UPDATE` and re-checks status and
+    start date.
+  - Every dependent writer reads the year `FOR SHARE` in its own transaction.
+  - So whichever commits first decides: a stale correction never re-dates an
+    activated year, and no record is left outside.
+- **Web:**
+  - Academic years → **Correct dates** (draft only), and Terms → **Correct
+    dates** (Terms of a draft year), each on its own page.
+  - Field errors for order, out-of-year and overlap; the LC-1 refusal banner
+    for a fixed year, a stale form or dependent records.
+  - Capability `academics.years.manage`; the API stays rename-only.
+- **Audit:** `academic_year.dates_corrected`, `academic_term.dates_corrected`
+  (changed fields, before/after dates).
+- **The year's name is free text,** never derived from dates; a correction
+  does not rename it.

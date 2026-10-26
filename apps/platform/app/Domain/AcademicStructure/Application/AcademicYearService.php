@@ -2,7 +2,11 @@
 
 namespace App\Domain\AcademicStructure\Application;
 
+use App\Domain\AcademicStructure\Application\Calendar\AcademicYearDateDependency;
 use App\Domain\AcademicStructure\Application\Concerns\AdministersReferenceData;
+use App\Domain\AcademicStructure\Application\Exceptions\AcademicCalendarChangedException;
+use App\Domain\AcademicStructure\Application\Exceptions\AcademicCalendarDatesFixedException;
+use App\Domain\AcademicStructure\Application\Exceptions\AcademicYearDependentsOutsideException;
 use App\Domain\AcademicStructure\Application\Exceptions\AcademicYearNotStartedException;
 use App\Domain\AcademicStructure\Application\Exceptions\AcademicYearOverlapException;
 use App\Domain\AcademicStructure\Application\Exceptions\ConcurrentActivationConflictException;
@@ -10,6 +14,7 @@ use App\Domain\AcademicStructure\Application\Exceptions\InvalidAcademicYearTrans
 use App\Domain\AcademicStructure\Events\AcademicYearActivated;
 use App\Domain\AcademicStructure\Events\AcademicYearClosed;
 use App\Domain\AcademicStructure\Events\AcademicYearCreated;
+use App\Domain\AcademicStructure\Infrastructure\AcademicTerm;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Models\School;
 use App\Models\User;
@@ -17,6 +22,7 @@ use App\Support\Audit\AuditRecorder;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
+use Illuminate\Container\Attributes\Tag;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -34,9 +40,11 @@ class AcademicYearService
 
     public const string CAPABILITY_MANAGE = 'academics.years.manage';
 
+    /** @param  iterable<AcademicYearDateDependency>  $dependencies */
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        #[Tag(AcademicYearDateDependency::TAG)] private readonly iterable $dependencies = [],
     ) {}
 
     /**
@@ -132,6 +140,74 @@ class AcademicYearService
         });
     }
 
+    /**
+     * SIS 5.1 (MC-3, ADR 0077): correct a DRAFT year's start and end dates --
+     * nothing else (name, code and status have their own paths). Under the
+     * year's FOR UPDATE lock, which activation and every dependent writer's
+     * FOR SHARE read wait for:
+     * - the year must still be draft and unchanged since the form was opened
+     *   (`expected_updated_at`; an activation in between is refused, never
+     *   re-dated afterwards -- the database refuses it too);
+     * - creation's rules: start before end, no overlap with another year;
+     * - every Term and every dependent record (placements, teaching
+     *   assignments, examinations, LMS due dates, fee instalments and
+     *   concessions) must stay inside the new dates. Nothing is moved,
+     *   truncated or ended: the operator corrects them first.
+     *
+     * @param  array<string, mixed>  $input
+     */
+    public function correctDraftDates(School $school, string $academicYearId, array $input, User $actor): AcademicYear
+    {
+        $this->authorizeFor($actor, self::CAPABILITY_MANAGE, $school);
+        $validated = $this->validateInput($input, [
+            'starts_on' => ['required', 'date_format:Y-m-d'],
+            'ends_on' => ['required', 'date_format:Y-m-d', 'after:starts_on'],
+            'expected_updated_at' => ['required', 'string', 'max:64'],
+        ]);
+
+        return $this->context->withSchool($school, fn (): AcademicYear => DB::transaction(function () use ($school, $academicYearId, $validated, $actor): AcademicYear {
+            $year = AcademicYear::query()->where('school_id', $school->id)->lockForUpdate()->findOrFail($academicYearId);
+
+            if ($year->status !== 'draft') {
+                throw new AcademicCalendarDatesFixedException($year->status);
+            }
+            if ($year->updated_at?->toIso8601String() !== $validated['expected_updated_at']) {
+                throw new AcademicCalendarChangedException;
+            }
+
+            $before = ['starts_on' => $year->starts_on->toDateString(), 'ends_on' => $year->ends_on->toDateString()];
+            $after = ['starts_on' => $validated['starts_on'], 'ends_on' => $validated['ends_on']];
+            if ($before === $after) {
+                return $year;
+            }
+
+            $this->assertNoOverlap($school, $after['starts_on'], $after['ends_on'], $year->id);
+
+            $termsOutside = AcademicTerm::query()->where('academic_year_id', $year->id)
+                ->where(fn ($q) => $q->where('starts_on', '<', $after['starts_on'])->orWhere('ends_on', '>', $after['ends_on']))
+                ->count();
+            if ($termsOutside > 0) {
+                throw AcademicYearDependentsOutsideException::terms($termsOutside);
+            }
+            foreach ($this->dependencies as $dependency) {
+                $outside = $dependency->recordsOutside($school, $year->id, $after['starts_on'], $after['ends_on']);
+                if ($outside > 0) {
+                    throw AcademicYearDependentsOutsideException::records($dependency->kind(), $outside);
+                }
+            }
+
+            $year->update($after);
+
+            $this->audit->school($school, 'academic_year.dates_corrected', actor: $actor, subject: $year, metadata: [
+                'changed' => array_keys(array_diff_assoc($after, $before)),
+                'before' => $before,
+                'after' => $after,
+            ]);
+
+            return $year->refresh();
+        }));
+    }
+
     public function activate(AcademicYear $year, ?User $actor = null): AcademicYear
     {
         if ($year->status !== 'draft') {
@@ -148,6 +224,18 @@ class AcademicYearService
         return $this->context->withSchool($year->school, function () use ($year, $actor) {
             try {
                 return DB::transaction(function () use ($year, $actor) {
+                    // SIS 5.1: a draft year's dates can now be corrected, so the
+                    // checks above are repeated on the locked row -- a
+                    // correction that committed first (moving the start date
+                    // later) is seen; one still running waits for this.
+                    $locked = AcademicYear::query()->whereKey($year->id)->lockForUpdate()->firstOrFail();
+                    if ($locked->status !== 'draft') {
+                        throw new InvalidAcademicYearTransitionException($locked->status, 'active');
+                    }
+                    if ($locked->starts_on->toDateString() > self::schoolToday($year->school)) {
+                        throw new AcademicYearNotStartedException($locked->starts_on->toDateString());
+                    }
+
                     $previousActive = AcademicYear::query()
                         ->where('school_id', $year->school_id)
                         ->where('status', 'active')
@@ -219,10 +307,11 @@ class AcademicYearService
         return CarbonImmutable::now(SchoolTimezone::resolve($school))->toDateString();
     }
 
-    private function assertNoOverlap(School $school, string $startsOn, string $endsOn): void
+    private function assertNoOverlap(School $school, string $startsOn, string $endsOn, ?string $exceptYearId = null): void
     {
         $overlaps = AcademicYear::query()
             ->where('school_id', $school->id)
+            ->when($exceptYearId !== null, fn ($q) => $q->whereKeyNot($exceptYearId))
             ->where('starts_on', '<', $endsOn)
             ->where('ends_on', '>', $startsOn)
             ->exists();

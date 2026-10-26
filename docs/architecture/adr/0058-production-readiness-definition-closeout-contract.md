@@ -1228,7 +1228,8 @@ for:
   owner/audience minimum) go 7 calendar years after the end of their
   authoritative Academic Year (`platform:academic-retention-prune`).
 - Academic Year dates are immutable; syllabus and examination configuration
-  are tenant lifetime.
+  are tenant lifetime. *(Amended 2026-10-26 by ADR 0077: a draft year's dates
+  may be corrected while it stays draft; active and closed years stay fixed.)*
 - Teaching Employees are released only by those rows' own expiry.
 - **Remaining engineering:** E21.3E and E21.3F (provisional).
 - **Final ratification:** deferred to the pre-production closeout. No

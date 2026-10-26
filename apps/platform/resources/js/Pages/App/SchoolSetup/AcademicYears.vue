@@ -7,7 +7,9 @@
 // concurrent activation -- come back as form errors, never a 500. UAT-C1
 // (UAT-YR-07): a draft Year can be activated only from its start date in the
 // School's calendar (the service refuses earlier), so the action is withheld
-// until then and the confirmation names the Year it will close.
+// until then and the confirmation names the Year it will close. SIS 5.1
+// (ADR 0077): a draft Year's dates can be corrected on its own page; an
+// active or closed Year's dates are fixed.
 import { Head, useForm } from '@inertiajs/vue3';
 import { computed, nextTick, ref } from 'vue';
 import ConfirmDialog from '../../../Components/ConfirmDialog.vue';
@@ -108,6 +110,12 @@ const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Active', 
                             <button type="button" class="underline" @click="startEdit(year)">
                                 Rename<span class="sr-only"> {{ year.name }}</span>
                             </button>
+                            <a
+                                v-if="year.status === 'draft'"
+                                class="underline"
+                                :href="`/app/school-setup/academic-years/${year.id}/dates`"
+                                >Correct dates<span class="sr-only"> of {{ year.name }}</span></a
+                            >
                             <button
                                 v-if="year.status === 'draft' && year.hasStarted"
                                 type="button"
@@ -142,7 +150,8 @@ const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Active', 
         >
             <h2 id="edit-year-heading" class="font-semibold">Rename {{ editing.name }}</h2>
             <p class="mt-1 text-sm text-slate-600">
-                Dates and status have their own controls and do not change here.
+                Status has its own controls. A draft year's dates are corrected with
+                <strong>Correct dates</strong>; an active or closed year's dates are fixed.
             </p>
             <form class="mt-3 grid gap-3 sm:grid-cols-2" @submit.prevent="submitEdit">
                 <TextField

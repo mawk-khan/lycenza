@@ -93,14 +93,11 @@ class AssignmentService
             // rather than an empty/misleading later failure.
             $offering = SubjectOffering::query()->where('school_id', $school->id)->findOrFail($subjectOfferingId);
 
-            $dueOn = null;
-            if (! empty($attributes['due_on'])) {
-                $dueOn = $this->assertDueDateWithinYear($school, $offering, $attributes['due_on']);
-            }
+            return $this->audiences->refusingForeignOwner('assignments', fn () => DB::transaction(function () use ($school, $offering, $attributes, $actor, $audience) {
+                $dueOn = empty($attributes['due_on']) ? null : $this->assertDueDateWithinYear($school, $offering, $attributes['due_on']);
 
-            return $this->audiences->refusingForeignOwner('assignments', fn () => DB::transaction(
-                fn () => $this->insert($school, $offering, $attributes, $dueOn, $actor, $audience),
-            ));
+                return $this->insert($school, $offering, $attributes, $dueOn, $actor, $audience);
+            }));
         });
     }
 
@@ -180,13 +177,15 @@ class AssignmentService
             $offering = SubjectOffering::query()->where('school_id', $school->id)->findOrFail($assignment->subject_offering_id);
 
             $dueOnProvided = array_key_exists('due_on', $attributes);
-            $dueOn = $dueOnProvided && $attributes['due_on'] !== null
-                ? $this->assertDueDateWithinYear($school, $offering, $attributes['due_on'])
-                : null;
 
-            return DB::transaction(function () use ($school, $assignment, $attributes, $dueOnProvided, $dueOn, $actor, $guard) {
+            return DB::transaction(function () use ($school, $assignment, $offering, $attributes, $dueOnProvided, $actor, $guard) {
                 // TCH.5D Tier 2 only: identity and ownership held before the row lock.
                 $guard?->beforeWrite($school, $assignment);
+
+                // SIS 5.1: validated inside the transaction (the year FOR SHARE).
+                $dueOn = $dueOnProvided && $attributes['due_on'] !== null
+                    ? $this->assertDueDateWithinYear($school, $offering, $attributes['due_on'])
+                    : null;
 
                 $locked = Assignment::query()->whereKey($assignment->id)->lockForUpdate()->firstOrFail();
 
@@ -298,7 +297,9 @@ class AssignmentService
         $parsed = CarbonImmutable::parse($dueOn)->startOfDay();
         $value = $parsed->toDateString();
 
-        $year = AcademicYear::query()->where('school_id', $school->id)->findOrFail($offering->academic_year_id);
+        // SIS 5.1: FOR SHARE inside the caller's transaction, so a concurrent
+        // correction of a draft year's dates either is seen or waits.
+        $year = AcademicYear::query()->where('school_id', $school->id)->sharedLock()->findOrFail($offering->academic_year_id);
 
         if ($value < $year->starts_on->toDateString() || $value > $year->ends_on->toDateString()) {
             throw new AssignmentDueDateOutsideAcademicYearException($value);
