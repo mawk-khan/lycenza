@@ -505,6 +505,9 @@ final class SchoolRouteCoverage
             // Http\Controllers\App\GuardianController
             Coverage::gate('app.contacts.primary', 'guardians.manage'),
             Coverage::gate('app.contacts.deactivate', 'guardians.manage'),
+            Coverage::gate('app.contacts.edit', 'guardians.manage'),
+            Coverage::gate('app.contacts.update', 'guardians.manage'),
+            Coverage::gate('app.contacts.reactivate', 'guardians.manage'),
 
             // Http\Controllers\App\Portal\GuardianCommunicationController
             Coverage::owned('app.portal.communications.index', ActingGuardianResolver::class, 'require', 'Guardian scope: the acting Guardian\'s linked Students'),

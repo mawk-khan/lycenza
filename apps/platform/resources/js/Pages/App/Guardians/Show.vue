@@ -2,7 +2,7 @@
 import { formatDate } from '../../../datetime';
 import SearchCombobox from '../../../Components/Form/SearchCombobox.vue';
 import { router, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import RelationshipFlags from '../../../Components/RelationshipFlags.vue';
 import StatusBadge from '../../../Components/StatusBadge.vue';
 
@@ -235,6 +235,19 @@ function setPrimaryContact(contactId: string): void {
     router.post(`/app/contacts/${contactId}/primary`, {}, { preserveScroll: true });
 }
 
+// SIS 2.1 (MC-4): inactive contacts are listed apart -- never offered as a
+// destination -- and can be corrected and explicitly reactivated.
+const activeContacts = computed(() => props.contacts.filter((c) => c.isActive));
+const inactiveContacts = computed(() => props.contacts.filter((c) => !c.isActive));
+
+function reactivateContact(contact: Contact): void {
+    const confirmed = window.confirm(
+        `Reactivate this ${contact.type === 'email' ? 'email' : 'mobile'} contact? It becomes an active contact again (not primary).`,
+    );
+    if (!confirmed) return;
+    router.post(`/app/contacts/${contact.id}/reactivate`, {}, { preserveScroll: true });
+}
+
 function deactivateContact(contact: Contact): void {
     const confirmed = window.confirm(
         `Deactivate this ${contact.type === 'email' ? 'email' : 'mobile'} contact? It will no longer be usable as the primary contact, but the record is kept, not deleted.`,
@@ -331,9 +344,9 @@ function submitContact(): void {
                 No contact information on file yet.
             </p>
 
-            <ul v-if="contacts.length" class="mt-3 space-y-2">
+            <ul v-if="activeContacts.length" class="mt-3 space-y-2">
                 <li
-                    v-for="contact in contacts"
+                    v-for="contact in activeContacts"
                     :key="contact.id"
                     class="flex flex-wrap items-center justify-between gap-3 rounded border border-slate-200 p-3 text-sm"
                 >
@@ -358,6 +371,9 @@ function submitContact(): void {
                         </p>
                     </div>
                     <div v-if="canManage" class="flex items-center gap-3">
+                        <a class="underline" :href="`/app/contacts/${contact.id}/edit`"
+                            >Correct<span class="sr-only"> {{ contact.value }}</span></a
+                        >
                         <button
                             v-if="!contact.isPrimary && contact.isActive"
                             type="button"
@@ -377,6 +393,47 @@ function submitContact(): void {
                     </div>
                 </li>
             </ul>
+
+            <template v-if="inactiveContacts.length">
+                <h3 class="mt-5 text-sm font-medium text-slate-500">
+                    Inactive contacts ({{ inactiveContacts.length }})
+                </h3>
+                <p class="mt-1 text-xs text-slate-500">
+                    Kept on file, never used to reach this Guardian. Reactivate one to use it again.
+                </p>
+                <ul class="mt-2 space-y-2">
+                    <li
+                        v-for="contact in inactiveContacts"
+                        :key="contact.id"
+                        class="flex flex-wrap items-center justify-between gap-3 rounded border border-dashed border-slate-300 p-3 text-sm"
+                    >
+                        <div>
+                            <p>
+                                <span class="font-medium text-slate-600">{{ contact.value }}</span>
+                                <span class="ml-2 text-slate-400">{{
+                                    contact.type === 'email' ? 'Email' : 'Mobile'
+                                }}</span>
+                                <span v-if="contact.label" class="ml-2 text-slate-400"
+                                    >· {{ contact.label }}</span
+                                >
+                            </p>
+                            <p class="mt-0.5 text-slate-500">Inactive</p>
+                        </div>
+                        <div v-if="canManage" class="flex items-center gap-3">
+                            <a class="underline" :href="`/app/contacts/${contact.id}/edit`"
+                                >Correct<span class="sr-only"> {{ contact.value }}</span></a
+                            >
+                            <button
+                                type="button"
+                                class="underline"
+                                @click="reactivateContact(contact)"
+                            >
+                                Reactivate<span class="sr-only"> {{ contact.value }}</span>
+                            </button>
+                        </div>
+                    </li>
+                </ul>
+            </template>
 
             <form
                 v-if="showAddContact"

@@ -753,6 +753,10 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
     Route::prefix('app/contacts')->name('app.contacts.')->group(function (): void {
         Route::post('/{contact}/primary', [GuardianController::class, 'setPrimaryContact'])->name('primary');
         Route::post('/{contact}/deactivate', [GuardianController::class, 'deactivateContact'])->name('deactivate');
+        // SIS 2.1 (MC-4): correct an existing contact; reactivate a deactivated one.
+        Route::get('/{contact}/edit', [GuardianController::class, 'editContact'])->whereUuid('contact')->name('edit');
+        Route::put('/{contact}', [GuardianController::class, 'correctContact'])->whereUuid('contact')->name('update');
+        Route::post('/{contact}/reactivate', [GuardianController::class, 'reactivateContact'])->whereUuid('contact')->name('reactivate');
     });
 
     // Phase 5A.1: the Communication Hub foundation -- session-

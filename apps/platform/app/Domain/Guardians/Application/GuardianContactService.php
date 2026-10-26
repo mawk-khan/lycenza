@@ -2,6 +2,7 @@
 
 namespace App\Domain\Guardians\Application;
 
+use App\Domain\Guardians\Application\Exceptions\GuardianContactConflictException;
 use App\Domain\Guardians\Infrastructure\ContactType;
 use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Domain\Guardians\Infrastructure\GuardianContact;
@@ -13,7 +14,9 @@ use App\Support\Privacy\EmailNormalizer;
 use App\Support\Privacy\PhoneNormalizer;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 
 /**
  * The only sanctioned write path for GuardianContact -- never create/
@@ -117,6 +120,100 @@ class GuardianContactService
     }
 
     /**
+     * SIS 2.1 (MC-4): correct an existing contact's value and label -- active
+     * or inactive; its type, primary and active state never change here
+     * (reactivation is its own explicit operation). The new value is
+     * normalized and hashed exactly like create(), with the CURRENT lookup key
+     * version, and the ciphertext, digest and version are written together in
+     * one transaction under the contact's row lock, so the old value stops
+     * matching the exact-match lookup at the same instant the new one starts.
+     * A changed value clears `verified_at` (it verified the old value).
+     *
+     * Refused, nothing written: a form opened on an older version
+     * (`$expectedVersion`, see version()), or a value this Guardian already holds of this
+     * type in another row (active, or inactive -- reactivate that one). Another
+     * Guardian sharing the value is fine (household). Audit: field names only.
+     */
+    public function correct(GuardianContact $contact, string $rawValue, ?string $label, string $expectedVersion, ?User $actor = null): GuardianContact
+    {
+        $normalized = $this->normalize($contact->type, $rawValue);
+        $label = $label === null || trim($label) === '' ? null : trim($label);
+
+        return $this->context->withSchool($contact->school, fn () => $this->translateDuplicate($contact, fn () => DB::transaction(function () use ($contact, $normalized, $label, $expectedVersion, $actor): GuardianContact {
+            $locked = GuardianContact::query()->whereKey($contact->id)->lockForUpdate()->firstOrFail();
+            if (! hash_equals(self::version($locked), $expectedVersion)) {
+                throw GuardianContactConflictException::changed();
+            }
+
+            $hash = $this->hasher->hash($locked->school_id, $locked->type->value, $normalized);
+            $valueChanged = $normalized !== $locked->encrypted_value;
+            $changed = array_keys(array_filter(['value' => $valueChanged, 'label' => $label !== $locked->label]));
+            if ($changed === []) {
+                return $locked;
+            }
+            $this->assertNoOtherRowWith($locked, $hash);
+
+            $locked->update([
+                'encrypted_value' => $normalized,
+                'lookup_hash' => $hash,
+                'lookup_key_version' => $this->hasher->keyVersion(),
+                'label' => $label,
+            ] + ($valueChanged ? ['verified_at' => null] : []));
+
+            $this->audit->school($locked->school, 'guardian_contact.corrected', actor: $actor, subject: $locked, metadata: [
+                'guardianId' => $locked->guardian_id,
+                'type' => $locked->type->value,
+                'changed' => $changed,
+                'isActive' => $locked->is_active,
+            ]);
+
+            return $locked->refresh();
+        })));
+    }
+
+    /**
+     * SIS 2.1 (MC-4): bring back THIS deactivated contact -- the same row,
+     * never a new one, and never "find any inactive contact with this value".
+     * Every current rule is re-run under the row lock: the stored value must
+     * still normalize under today's rules, it is re-hashed with the current
+     * lookup key version (so the exact-match lookup finds it again), and no
+     * other row of this Guardian may hold that value. It comes back as a
+     * non-primary contact; making it primary stays setPrimary(). Refused,
+     * nothing written, when it is already active (a concurrent reactivation).
+     */
+    public function reactivate(GuardianContact $contact, ?User $actor = null): GuardianContact
+    {
+        return $this->context->withSchool($contact->school, fn () => $this->translateDuplicate($contact, fn () => DB::transaction(function () use ($contact, $actor): GuardianContact {
+            $locked = GuardianContact::query()->whereKey($contact->id)->lockForUpdate()->firstOrFail();
+            if ($locked->is_active) {
+                throw GuardianContactConflictException::alreadyActive();
+            }
+
+            try {
+                $normalized = $this->normalize($locked->type, $locked->encrypted_value);
+            } catch (InvalidArgumentException) {
+                throw GuardianContactConflictException::noLongerValid();
+            }
+            $hash = $this->hasher->hash($locked->school_id, $locked->type->value, $normalized);
+            $this->assertNoOtherRowWith($locked, $hash);
+
+            $locked->update([
+                'is_active' => true,
+                'encrypted_value' => $normalized,
+                'lookup_hash' => $hash,
+                'lookup_key_version' => $this->hasher->keyVersion(),
+            ]);
+
+            $this->audit->school($locked->school, 'guardian_contact.reactivated', actor: $actor, subject: $locked, metadata: [
+                'guardianId' => $locked->guardian_id,
+                'type' => $locked->type->value,
+            ]);
+
+            return $locked->refresh();
+        })));
+    }
+
+    /**
      * Exact-match candidate lookup, same School only -- never queries
      * across Schools, never decrypts every Guardian's contacts to
      * search (searches the indexed lookup_hash column directly). May
@@ -134,6 +231,53 @@ class GuardianContactService
         return $this->context->withSchool($school, fn () => Guardian::query()
             ->whereHas('contacts', fn ($query) => $query->where('type', $type)->where('lookup_hash', $hash))
             ->get());
+    }
+
+    /**
+     * SIS 2.1: the opaque version a correction form carries -- a digest of the
+     * row's state (value digest, label, active, primary, last write), so any
+     * change since the form was opened is detected even within the same second
+     * (`updated_at` alone has one-second precision). Reveals nothing.
+     */
+    public static function version(GuardianContact $contact): string
+    {
+        return hash('sha256', implode('|', [
+            $contact->id, $contact->updated_at?->toIso8601String(), $contact->lookup_hash, $contact->label ?? '',
+            $contact->is_active ? '1' : '0', $contact->is_primary ? '1' : '0',
+        ]));
+    }
+
+    /** The one-row-per-value rule for this Guardian and type (the unique index is the backstop). */
+    private function assertNoOtherRowWith(GuardianContact $contact, string $hash): void
+    {
+        $other = GuardianContact::query()
+            ->where('guardian_id', $contact->guardian_id)
+            ->where('type', $contact->type)
+            ->where('lookup_hash', $hash)
+            ->whereKeyNot($contact->id)
+            ->first(['id', 'is_active']);
+
+        if ($other !== null) {
+            throw GuardianContactConflictException::duplicate($other->is_active, $contact->type->value);
+        }
+    }
+
+    /**
+     * A concurrent write that committed the same value first trips the unique
+     * index; it is the same refusal as the pre-check, never a raw SQL error.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $write
+     * @return T
+     */
+    private function translateDuplicate(GuardianContact $contact, callable $write): mixed
+    {
+        try {
+            return $write();
+        } catch (UniqueConstraintViolationException) {
+            throw GuardianContactConflictException::duplicate(true, $contact->type->value);
+        }
     }
 
     private function normalize(ContactType $type, string $rawValue): string

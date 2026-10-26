@@ -310,6 +310,8 @@ workflow that actually has that context available.
   `is_active` (the simplest rule; re-adding a value a Guardian
   previously deactivated means reactivating that existing row, a
   future mutation-service concern, not inserting a second row).
+  *Since SIS 2.1 that service exists:* `GuardianContactService::reactivate()`
+  — see "Contact correction and reactivation" below.
   Deliberately **not** `unique(school_id, lookup_hash)` — two different
   Guardians legitimately sharing a household email/phone (proven in
   `GuardianContactTest::the_same_email_across_different_guardians_is_allowed`
@@ -1512,3 +1514,72 @@ Nobody can link, unlink or change the Student relationships of a Guardian identi
   takes the Student row lock; marking a Student with the status they already
   have is refused. Each change is recorded in `student_lifecycle_events` (no
   free text, no date of birth or contact details in the audit).
+
+## Contact correction and reactivation (SIS 2.1, 2026-10-26, MC-4)
+
+Closes MC-4. Before SIS 2.1 a contact could be added, made primary or
+deactivated, never corrected. Because the one-row-per-value unique index
+includes inactive rows, re-adding a deactivated value failed: recovery was SQL.
+
+- **`GuardianContactService::correct()`** changes the value and label of an
+  existing contact, active or inactive; type, primary and active state never
+  change.
+  - **Normalization and hashing:** the value is normalized and hashed exactly
+    like `create()`, with the **current** lookup key version. The ciphertext,
+    `lookup_hash` and `lookup_key_version` are written together under the
+    row's `FOR UPDATE` lock, so the old value stops matching the exact-match
+    lookup at the same instant the new one starts.
+  - **Verification:** a changed value clears `verified_at`, which verified the
+    old value. A label-only change keeps it.
+  - **Stale forms:** the form carries an opaque `version()`: a digest of id,
+    `updated_at`, digest, label, active and primary. Any change since the form
+    was opened is refused, even within the same second, and nothing is
+    overwritten.
+- **`GuardianContactService::reactivate()`** reactivates THAT row. It never
+  inserts, and never finds "any inactive contact with this value". Under the
+  row lock it:
+  - refuses an already-active contact (a concurrent reactivation);
+  - re-runs today's rules: the stored value must still normalize, otherwise
+    "correct it first";
+  - re-hashes with the current key version;
+  - refuses a second row of this Guardian holding the value.
+
+  The contact comes back **non-primary**; `setPrimary()` stays the way to
+  promote it.
+- **Duplicate rule (unchanged):**
+  - one row per value per Guardian and type, active or inactive;
+  - another Guardian (a household) may share the value;
+  - another School's identical value never matches (the digest is
+    School-scoped).
+
+  A correction onto a value this Guardian already holds is refused: active
+  ("already has this…"), or inactive ("…reactivate that contact instead").
+  The unique index is the backstop for a racing duplicate, translated to the
+  same refusal.
+- **Use:** an inactive contact is never a destination
+  (`GuardianEmailAddressResolver` and the Student page read active contacts
+  only). It becomes usable again only through `reactivate()`.
+- **Shared Guardians:** the contact belongs to the Guardian, so a correction
+  reaches every linked Student at once. There is no per-Student copy.
+- **Accounts:** a contact is not a login identity. Correcting an email contact
+  never changes `users.email` or an account link. It changes where Guardian
+  email from the School is sent, because the resolver reads the active
+  contact.
+- **Audit:** `guardian_contact.corrected` (guardianId, type, changed field
+  names, isActive) and `guardian_contact.reactivated` (guardianId, type). Never
+  a value, ciphertext or digest.
+- **Web only** (SIS 3.1/5.1 precedent):
+  - On the Guardian page, active contacts show **Correct**. Inactive contacts
+    are listed apart ("Inactive contacts") with **Correct** and
+    **Reactivate**; Reactivate asks for confirmation, like Deactivate.
+  - Correct opens its own page (value and label only).
+  - Capability: `guardians.manage`. Routes are UUID-constrained (a malformed
+    id is a 404), and another School's contact is a 404.
+  - The API keeps create/primary/deactivate.
+- **ADR 0041 unchanged:**
+  - no new lookup or search surface (pinned by
+    `GuardianContactCorrectionTest`);
+  - no plaintext column;
+  - no key change or backfill: only the corrected or reactivated row is
+    written, with the current key version.
+- **No schema change.**

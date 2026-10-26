@@ -245,11 +245,64 @@ class GuardianController extends Controller
             throw ValidationException::withMessages(['value' => [$e->getMessage()]]);
         } catch (UniqueConstraintViolationException) {
             throw ValidationException::withMessages([
-                'value' => ['This contact conflicts with an existing record for this Guardian (a duplicate value, or an existing active primary contact of this type).'],
+                'value' => ['This contact conflicts with an existing record for this Guardian (a duplicate value, or an existing active primary contact of this type). If it is listed under Inactive contacts, reactivate it instead.'],
             ]);
         }
 
         return redirect("/app/guardians/{$model->id}");
+    }
+
+    /**
+     * SIS 2.1 (MC-4): the correction page of one existing contact, reached
+     * only from its Guardian (the same School-scoped, `guardians.manage`
+     * context as every other contact action). It shows the value with the
+     * same visibility the Guardian page already gives an administrator.
+     */
+    public function editContact(TenantContext $context, string $contact): Response
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('guardians.manage', $school);
+
+        $model = GuardianContact::query()->with('guardian')->findOrFail($contact);
+
+        return Inertia::render('App/Guardians/ContactEdit', [
+            'guardian' => $this->presentSummary($model->guardian),
+            'contact' => [...$this->presentContact($model), 'version' => GuardianContactService::version($model)],
+        ]);
+    }
+
+    /** SIS 2.1: value and label only; an invalid value is a field error, a duplicate or stale form a refusal (LC-1). */
+    public function correctContact(Request $request, TenantContext $context, GuardianContactService $service, string $contact): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('guardians.manage', $school);
+
+        $model = GuardianContact::query()->findOrFail($contact);
+        $validated = $request->validate([
+            'value' => ['required', 'string', 'max:255'],
+            'label' => ['nullable', 'string', 'max:255'],
+            'expected_version' => ['required', 'string', 'max:64'],
+        ]);
+
+        try {
+            $service->correct($model, $validated['value'], $validated['label'] ?? null, $validated['expected_version'], $context->actor());
+        } catch (InvalidArgumentException $e) {
+            throw ValidationException::withMessages(['value' => [$e->getMessage()]]);
+        }
+
+        return redirect("/app/guardians/{$model->guardian_id}")->with('flash', 'Contact corrected.');
+    }
+
+    /** SIS 2.1: reactivate THIS deactivated contact (its Guardian page asks for confirmation first). */
+    public function reactivateContact(TenantContext $context, GuardianContactService $service, string $contact): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('guardians.manage', $school);
+
+        $model = GuardianContact::query()->findOrFail($contact);
+        $service->reactivate($model, $context->actor());
+
+        return redirect("/app/guardians/{$model->guardian_id}")->with('flash', 'Contact reactivated.');
     }
 
     public function setPrimaryContact(TenantContext $context, GuardianContactService $service, string $contact): RedirectResponse

@@ -363,6 +363,26 @@ role.
 **Mark inactive is one click, with no confirmation** (§21). Data Health
 then lists an inactive Student who still has a placement.
 
+**Guardian contacts** (Guardians → a Guardian → Contact information, SIS 2.1):
+- **Correct** fixes a mistyped email address or mobile number, or its label.
+  The corrected value is used everywhere this Guardian is reached, for every
+  linked Student. Mobile numbers are written with the country code and no
+  spaces (+919876543210).
+- **Deactivate** stops using a contact without deleting it. It then appears
+  under **Inactive contacts** and is never used to reach the Guardian.
+- **Reactivate** (under Inactive contacts) brings that same contact back,
+  after a confirmation. It returns as a non-primary contact; use **Make
+  primary** if needed. You can also correct an inactive contact first; it
+  stays inactive until you reactivate it.
+- **Adding a value the Guardian already has** (even an inactive one) is
+  refused: reactivate the inactive contact instead.
+- **Two Guardians of one family may share** an email address or mobile
+  number.
+- **Not a login.** Correcting a contact's email does not change the
+  Guardian's sign-in account.
+- **There is no search by phone or email** (privacy decision); open the
+  Guardian from the Student or the Guardians list.
+
 ## 10. Timetable and teaching assignments
 
 - **Timetable** (`Timetable schedule`): schedule an offering for a Section
