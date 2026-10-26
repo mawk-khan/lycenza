@@ -1,6 +1,6 @@
 # Parity v1 backlog (ORG.9A, 2026-10-23)
 
-Status: **proposed, not authorized.** Built from `REFERENCE-PARITY-MATRIX.md`
+Status: **waves ORG.9B, ORG.9C and ORG.9D built and closed** (see each "built" section; closure ADR 0076 §82); PV1-13..PV1-22 remain owner decisions. Originally proposed 2026-10-23. Built from `REFERENCE-PARITY-MATRIX.md`
 and `reference-parity/functions.csv` (function ids below). Every item traces
 to reference evidence (workbook, E2), a business reason and a code-verified
 Lycenza absence or partial implementation. Nothing here creates a

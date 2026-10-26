@@ -11087,3 +11087,45 @@ Owner authorization: ORG.11-R1. Baseline `origin/main` = `779e009c`. Records: `d
 **81.3 Recorded.** OD-PPR-4 = AWS Secrets Manager; OD-PPR-5 = Amazon ECR + durable AWS-backed signing custody; OD-PPR-8 = `staging.<approved-canonical-product-domain>` (FQDN unresolved, no DNS) — none provisioned. AWS account / Organization state **UNKNOWN / NOT AUTHENTICATED**. E16-R2 **RETIRED / HISTORICAL** (abandonment condition met; branch untouched). E16 decision valid through 2026-11-12; **a successor is required before 2026-11-13**. STG-04 (two local Docker engines) **not restored**: the Docker Desktop socket needs root and switching off docker-ce would touch another project — owner action (§9.4 of the readiness record).
 
 **81.4 Gates.** Artifact readiness **met**. Staging promotion still **FAIL** on infrastructure (STG-01: no environment, no authenticated AWS session, registry/signing custody not provisioned). Production **NO-GO** (unchanged). No AWS, Terraform, ECR, DNS, staging or production work begins before this report is reviewed and infrastructure is explicitly authorized.
+
+## 82. ORG.LOCAL-CLOSE — Organization programme final local closure (2026-10-26)
+
+Owner authorization: ORG.LOCAL-CLOSE (documentation/closure audit only). Baseline `origin/main` = `76dfaa03`. Record: `docs/organization/ORG-LOCAL-CLOSURE.md`.
+
+**82.1 Result.**
+- **LOCAL ORGANIZATION DEVELOPMENT = COMPLETE** for the authorized local scope.
+- **STAGING = NOT STARTED / NOT PROVISIONED.**
+- **PRODUCTION = NO-GO.**
+
+The audit found no contradicting repository evidence:
+- no parallel tenancy column or table, and no Branch table;
+- OD-9.7 is exactly two consumer keys, and `CampusScopeCatalogue` was untouched by it;
+- OD-9.4/9.5 hold structurally (`stock_movements`: Department recipient only, closed write-off reason, no remarks);
+- no export beyond the pre-ORG statutory Payroll exports;
+- no application code changed since `ca4769aa`.
+
+**82.2 Closed.**
+- Foundation (§27–§32).
+- Campus (§53).
+- ORG.8 (§65).
+- ORG.9 authorized v1 waves (§68–§77).
+- ORG.10 integrated UAT (§78–§79): 146/149 PASS; ORG10-D02 closed.
+- Release artifact (§81): app `sha256:7d2591e6…0868` and ai-gateway `sha256:ef524d9b…6aed` VERIFIED on `66be83a6` (CI gate 40325590541 → qualification 40327776824).
+
+Security: HIGH 0, MEDIUM 0; accepted LOWs are listed in the record (§5).
+
+**82.3 Recorded non-blocking items.**
+- ORG10-D01: UAT-MINOR, accepted for staging testing.
+- STG-04: local engines; must be reconciled before any future stateful local testing.
+- STG-01: infrastructure prerequisite.
+- AWS state: UNKNOWN / NOT AUTHENTICATED.
+- D-11: separate product decision.
+- PV1-13..22: owner decisions.
+- Post-v1 backlog.
+- E16-R2: RETIRED / HISTORICAL.
+- E16 successor: required before 2026-11-13.
+- Production gates: E17–E20, E21, E30–E34, E36–E47, HRX, fee-reminder email purpose, M-1, OD-8.4, OD-8.9, production infrastructure.
+
+**82.4 Regression.** Documentation-only audit, so no full rerun. The latest exact-SHA regression is `66be83a6` (9,584 passed + ESI-12 skip). Counter 0/5.
+
+**82.5 Next.** Owner choice: another ERP phase, staging via R-00a later, or a recorded item. Nothing is started automatically.
