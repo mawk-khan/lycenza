@@ -194,6 +194,17 @@ class SupplyChainGuardTest extends TestCase
             }
         }
 
+        // ORG.11: every workflow installs Composer from the lock without
+        // scripts or plugins (rule 87) -- a script would boot the app before
+        // .env exists, where an unset APP_ENV is production and the guard refuses.
+        foreach ($this->workflows() as $name => $workflow) {
+            preg_match_all('/composer install[^\n]*/', $workflow, $installs);
+            foreach ($installs[0] as $install) {
+                $this->assertMatchesRegularExpression('/--no-scripts/', $install, "{$name}: composer install runs no scripts");
+                $this->assertMatchesRegularExpression('/--no-plugins/', $install, "{$name}: composer install runs no plugins");
+            }
+        }
+
         $release = $this->workflows()['release-qualification.yml'];
         $this->assertMatchesRegularExpression('/^on:\n  workflow_dispatch: \{\}\n/m', $release, 'release qualification is only dispatched by hand');
         $this->assertStringContainsString("if: github.ref == 'refs/heads/main'", $release);

@@ -59,7 +59,7 @@ jobs:
 
       - name: Install test dependencies from their locks
         run: |
-          (cd apps/platform && composer install --no-interaction --prefer-dist --no-plugins && npm ci && cp .env.example .env)
+          (cd apps/platform && composer install --no-interaction --prefer-dist --no-progress --no-scripts --no-plugins && npm ci && cp .env.example .env)
           python -m venv services/ai/.venv
           services/ai/.venv/bin/pip install --disable-pip-version-check -r services/ai/requirements-dev.txt
 
