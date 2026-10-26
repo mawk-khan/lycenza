@@ -13,7 +13,7 @@
 #
 # Phase 0O.6A (ADR 0052 section 3.2): every base image is pinned BY DIGEST
 # (`image:exact-version@sha256:...`); the tag is a readable alias only and
-# the toolchain (PHP 8.3.35, Composer 2.10.2, Node 22.23.3 / npm 10.9.9) is
+# the toolchain (PHP 8.3.36, Composer 2.10.2, Node 22.23.3 / npm 10.9.9) is
 # whatever these digests contain. Phase 0O.6B: the PHP base (extension build,
 # Composer install and runtime stages) is Debian 13 "trixie"; the Node and
 # Composer images are build-only and unchanged, so npm/Composer output is
@@ -25,8 +25,8 @@
 # Phase 0O.6D (owner decision; docs/operations/CUSTOM-PHP-RUNTIME.md): the
 # runtime PHP is REPOSITORY-BUILT. Debian 13 ships libcurl 8.14.1 and libxml2
 # 2.9.14 with unfixed CRITICAL/HIGH advisories; the fixed upstream releases
-# are curl 8.22.0 (libcurl.so.4) and libxml2 2.15.4 (libxml2.so.16, a new
-# ABI the official PHP binary cannot load). So PHP 8.3.35 is compiled from
+# are curl 8.23.0 (libcurl.so.4) and libxml2 2.15.4 (libxml2.so.16, a new
+# ABI the official PHP binary cannot load). So PHP 8.3.36 is compiled from
 # the official, signature-verified release source with the official
 # docker-library recipe (same configure flags, minus PEAR -- dev tooling
 # whose install downloads an unverified phar) against curl and libxml2 built
@@ -36,7 +36,7 @@
 # this runtime for every PHP 8.3 / curl / libxml2 / base security release.
 # Tests\Feature\Configuration\CustomPhpRuntimeGuardTest guards this file.
 
-ARG PHP_IMAGE=php:8.3.35-fpm-trixie@sha256:e0623b713dba09e154cd513c9d175ba0967b82dae101f0c817a7e812b4b1c5d4
+ARG PHP_IMAGE=php:8.3.36-fpm-trixie@sha256:56e2cf0558ddfbe36e90030f763b72be2f763bcd9075890e9c68420e0dfa827e
 ARG RUNTIME_IMAGE=debian:13.7-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
 ARG NODE_IMAGE=node:22.23.3-bookworm-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c
 ARG COMPOSER_IMAGE=composer:2.10.2@sha256:4d71c3c2109c61d5415544264b59ad4087e4c5b7244481723664138fd36d5040
@@ -55,13 +55,13 @@ FROM ${COMPOSER_IMAGE} AS composer-bin
 FROM ${PHP_IMAGE} AS sources
 # (The LYCENZA_*_URL / *_SHA256 pairs are also read by the release
 # provenance generator as the image's source materials.)
-ENV LYCENZA_PHP_VERSION=8.3.35 \
-    LYCENZA_PHP_URL=https://www.php.net/distributions/php-8.3.35.tar.xz \
-    LYCENZA_PHP_SHA256=ff4630fbbbd94359134b7d3c223db59329905bdc4f5a9ef93d257b48e358619a \
+ENV LYCENZA_PHP_VERSION=8.3.36 \
+    LYCENZA_PHP_URL=https://www.php.net/distributions/php-8.3.36.tar.xz \
+    LYCENZA_PHP_SHA256=dd54693aa334c5c4d72e9aee96b082c2473750a18a6c1d105789c93a3b1692fd \
     LYCENZA_PHP_SIGNER_FINGERPRINTS="1198C0117593497A5EC5C199286AF1F9897469DC C28D937575603EB4ABB725861C0779DC5C0A9DE4 AFD8691FDAEDF03BDF6E460563F15A9B715376CA" \
-    LYCENZA_CURL_VERSION=8.22.0 \
-    LYCENZA_CURL_URL=https://curl.se/download/curl-8.22.0.tar.xz \
-    LYCENZA_CURL_SHA256=f7ef3ae8a22e521f289803fe93543eb64c329b58aa73a9e224dfd915a2a5f4f7 \
+    LYCENZA_CURL_VERSION=8.23.0 \
+    LYCENZA_CURL_URL=https://curl.se/download/curl-8.23.0.tar.xz \
+    LYCENZA_CURL_SHA256=8dadd7d2536a314f982ad05a651b713f426bf7d02cc2c76cffb9796f2218e6c5 \
     LYCENZA_CURL_SIGNER_FINGERPRINT=27EDEAF22F3ABCEB50DB9A125CC908FDB71E12C2 \
     LYCENZA_LIBXML2_VERSION=2.15.4 \
     LYCENZA_LIBXML2_URL=https://download.gnome.org/sources/libxml2/2.15/libxml2-2.15.4.tar.xz \
@@ -153,14 +153,14 @@ RUN set -eux; \
     # Standard ELF package metadata (FDO .note.package, the systemd "ELF
     # package metadata" spec) so SBOM tools identify the source-built
     # libraries -- written after stripping, from the pinned versions.
-    for lib in "curl:8.22.0:/usr/local/lib/libcurl.so.4:https://curl.se/download/curl-8.22.0.tar.xz" \
+    for lib in "curl:8.23.0:/usr/local/lib/libcurl.so.4:https://curl.se/download/curl-8.23.0.tar.xz" \
                "libxml2:2.15.4:/usr/local/lib/libxml2.so.16:https://download.gnome.org/sources/libxml2/2.15/libxml2-2.15.4.tar.xz"; do \
         name="${lib%%:*}"; rest="${lib#*:}"; version="${rest%%:*}"; rest="${rest#*:}"; path="${rest%%:*}"; url="${rest#*:}"; \
         php -r '$d = json_encode(["type" => "generic", "name" => $argv[2], "version" => $argv[3], "architecture" => "x86_64", "sourceRepo" => $argv[4]], JSON_UNESCAPED_SLASHES) . "\0"; $n = "FDO\0"; $p = fn ($s) => $s . str_repeat("\0", (4 - strlen($s) % 4) % 4); file_put_contents($argv[1], pack("VVV", strlen($n), strlen($d), 0xcafe1a7e) . $p($n) . $p($d));' /tmp/note "$name" "$version" "$url"; \
         objcopy --add-section .note.package=/tmp/note --set-section-flags .note.package=noload,readonly "$path"; \
         readelf -n "$path" | grep -q "\"name\":\"$name\",\"version\":\"$version\""; \
     done; rm -f /tmp/note; \
-    php -r 'exit(curl_version()["version"] === "8.22.0" ? 0 : 1);'; \
+    php -r 'exit(curl_version()["version"] === "8.23.0" ? 0 : 1);'; \
     php -r 'exit(LIBXML_DOTTED_VERSION === "2.15.4" ? 0 : 1);'; \
     ldd /usr/local/bin/php | grep -q '/usr/local/lib/libxml2.so.16'; \
     ldd /usr/local/bin/php | grep -q '/usr/local/lib/libcurl.so.4'; \

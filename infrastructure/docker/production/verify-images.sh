@@ -38,8 +38,8 @@
 #                  (Phase 0O.6B) every required PHP extension loads; no build
 #                  toolchain/perl/curl/xz in the application runtime; CA
 #                  bundles, TLS-capable libpq and PHP timezone data present.
-#   custom PHP     -- (Phase 0O.6D) PHP 8.3.35 built from source; the exact
-#                  expected extension set; libcurl 8.22.0 / libxml2 2.15.4
+#   custom PHP     -- (Phase 0O.6D) PHP 8.3.36 built from source; the exact
+#                  expected extension set; libcurl 8.23.0 / libxml2 2.15.4
 #                  resolved from /usr/local/lib by php and php-fpm (never a
 #                  Debian copy -- none is installed); ELF package notes; no
 #                  headers, source, phpize or PEAR; SIGQUIT stop signal; and a
@@ -194,14 +194,14 @@ check "PostgreSQL client library is TLS-capable" in_app 'ldd /usr/lib/x86_64-lin
 check "PHP timezone database resolves School timezones" in_app 'php -r "new DateTimeZone(\"Asia/Kolkata\"); new DateTimeZone(\"America/New_York\");"'
 # Phase 0O.6D: the repository-built PHP runtime and its patched libraries.
 expected_modules="$(tr '\n' ' ' < "$ROOT/infrastructure/docker/production/php-modules.expected")"
-check "PHP is the repository-built 8.3.35" in_app 'php -r "exit(PHP_VERSION === \"8.3.35\" ? 0 : 1);"'
+check "PHP is the repository-built 8.3.36" in_app 'php -r "exit(PHP_VERSION === \"8.3.36\" ? 0 : 1);"'
 check "PHP module set equals php-modules.expected exactly" test "$(in_app 'php -m | grep -v "^\[" | grep -v "^$" | sort -u | tr "\n" " "')" = "$expected_modules"
-check "libcurl 8.22.0 and libxml2 2.15.4 are the loaded runtime versions" in_app 'php -r "exit(curl_version()[\"version\"] === \"8.22.0\" && LIBXML_DOTTED_VERSION === \"2.15.4\" ? 0 : 1);"'
+check "libcurl 8.23.0 and libxml2 2.15.4 are the loaded runtime versions" in_app 'php -r "exit(curl_version()[\"version\"] === \"8.23.0\" && LIBXML_DOTTED_VERSION === \"2.15.4\" ? 0 : 1);"'
 check "php and php-fpm resolve libcurl.so.4 and libxml2.so.16 from /usr/local/lib" in_app 'for b in /usr/local/bin/php /usr/local/sbin/php-fpm; do ldd "$b" | grep -q "libcurl.so.4 => /usr/local/lib/libcurl.so.4" && ldd "$b" | grep -q "libxml2.so.16 => /usr/local/lib/libxml2.so.16" || exit 1; done'
 check "no binary or extension has an unresolved library" test -z "$(in_app 'ldd /usr/local/bin/php /usr/local/sbin/php-fpm /usr/local/lib/php/extensions/*/*.so | grep "not found"')"
 check "the loader registers /usr/local/lib explicitly" in_app 'grep -qx /usr/local/lib /etc/ld.so.conf.d/00-lycenza-native.conf && ldconfig -p | grep -q "libcurl.so.4 .*=> /usr/local/lib/libcurl.so.4"'
 check "no Debian libcurl/libxml2 package and no other copy on disk" in_app '! dpkg -s libcurl4t64 >/dev/null 2>&1 && ! dpkg -s libxml2 >/dev/null 2>&1 && test "$(find / -xdev \( -name "libcurl.so*" -o -name "libxml2.so*" \) 2>/dev/null | sort | tr "\n" " ")" = "/usr/local/lib/libcurl.so.4 /usr/local/lib/libxml2.so.16 "'
-check "patched libraries carry their ELF package notes" in_app 'grep -aq "\"name\":\"curl\",\"version\":\"8.22.0\"" /usr/local/lib/libcurl.so.4 && grep -aq "\"name\":\"libxml2\",\"version\":\"2.15.4\"" /usr/local/lib/libxml2.so.16'
+check "patched libraries carry their ELF package notes" in_app 'grep -aq "\"name\":\"curl\",\"version\":\"8.23.0\"" /usr/local/lib/libcurl.so.4 && grep -aq "\"name\":\"libxml2\",\"version\":\"2.15.4\"" /usr/local/lib/libxml2.so.16'
 check "no headers, PHP/curl/libxml2 source, phpize, php-config or PEAR" in_app 'test -z "$(find /usr/local/include /usr/src -mindepth 1 2>/dev/null)" && ! command -v phpize && ! command -v php-config && ! command -v pear && ! command -v curl-config && ! command -v xmllint'
 check "graceful FPM stop signal is SIGQUIT" test "$(docker image inspect -f '{{.Config.StopSignal}}' "$APP_IMAGE")" = "SIGQUIT"
 check "no private-key file in application or configuration paths" test -z "$(in_app 'find /var/www/app /usr/local/etc /etc/nginx \( -name "*.pem" -o -name "*.key" -o -name "id_rsa*" \) -not -path "*/vendor/*" 2>/dev/null')"

@@ -2,7 +2,7 @@
 
 /**
  * Phase 0O.6D: native-runtime smoke test for the REPOSITORY-BUILT PHP
- * (8.3.35 against curl 8.22.0 / libxml2 2.15.4), run INSIDE the production
+ * (8.3.36 against curl 8.23.0 / libxml2 2.15.4), run INSIDE the production
  * application image by verify-images.sh. It exercises the application's own
  * HTTP client stack (Laravel HTTP client -> Guzzle -> libcurl, with the
  * webhook delivery options: CURLOPT_RESOLVE pinning, no redirects, connect and
@@ -54,10 +54,10 @@ $webhook = fn (string $url, array $extra = []) => $http
     ->connectTimeout(3)->timeout(5)
     ->send('POST', $url, ['body' => '{"event":"smoke"}']);
 
-$check('libcurl 8.22.0, OpenSSL, HTTP/2, HTTP(S) only', function () {
+$check('libcurl 8.23.0, OpenSSL, HTTP/2, HTTP(S) only', function () {
     $v = curl_version();
 
-    return $v['version'] === '8.22.0' && str_starts_with($v['ssl_version'], 'OpenSSL/')
+    return $v['version'] === '8.23.0' && str_starts_with($v['ssl_version'], 'OpenSSL/')
         && ($v['features'] & CURL_VERSION_HTTP2) && $v['protocols'] === ['http', 'https'];
 });
 $check('libxml2 2.15.4', fn () => LIBXML_DOTTED_VERSION === '2.15.4');

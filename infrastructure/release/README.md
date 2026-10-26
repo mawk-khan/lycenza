@@ -201,7 +201,7 @@ base image of the Dockerfile.
 ## Current release status (Phase 0O.6F)
 
 Both production images have 0 CRITICAL and 0 HIGH with a fix (application:
-repository-built PHP 8.3.35 on curl 8.22.0 / libxml2 2.15.4; Gateway: CPython
+repository-built PHP 8.3.36 on curl 8.23.0 / libxml2 2.15.4; Gateway: CPython
 3.14.7 at the time; 3.14.8 since E16-R1). Their remaining HIGH-without-fix findings — 12 Debian 13
 Essential-package advisories, 48 + 49 matches — are covered exactly by owner
 decision `OWNER-0O6E-2026-09-26`

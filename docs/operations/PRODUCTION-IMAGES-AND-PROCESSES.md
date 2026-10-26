@@ -8,7 +8,7 @@ supervise processes will do. No orchestrator manifest is committed.
 
 | Image | Dockerfile | Build context | Base |
 |---|---|---|---|
-| Application | `infrastructure/docker/production/app.Dockerfile` | `apps/platform` | runtime `debian:13.7-slim@sha256:a29215f6…` (digest refreshed in E16-R1) with a **repository-built PHP 8.3.35** (curl 8.22.0, libxml2 2.15.4) since Phase 0O.6D — [CUSTOM-PHP-RUNTIME.md](CUSTOM-PHP-RUNTIME.md); build-only `php:8.3.35-fpm-trixie@sha256:e0623b71…`, `node:22.23.3-bookworm-slim@sha256:43ac6c60…`, `composer:2.10.2@sha256:4d71c3c2…` |
+| Application | `infrastructure/docker/production/app.Dockerfile` | `apps/platform` | runtime `debian:13.7-slim@sha256:a29215f6…` (digest refreshed in E16-R1) with a **repository-built PHP 8.3.36** (curl 8.23.0, libxml2 2.15.4; ORG.11-R1) since Phase 0O.6D — [CUSTOM-PHP-RUNTIME.md](CUSTOM-PHP-RUNTIME.md); build-only `php:8.3.36-fpm-trixie@sha256:56e2cf05…`, `node:22.23.3-bookworm-slim@sha256:43ac6c60…`, `composer:2.10.2@sha256:4d71c3c2…` |
 | AI Gateway | `infrastructure/docker/production/ai.Dockerfile` | `services/ai` | `python:3.14.8-slim-trixie@sha256:a2b82f3c…` — Debian 13 since Phase 0O.6B, CPython 3.14 since Phase 0O.6C, 3.14.8 since E16-R1 |
 
 Since Phase 0O.6A (ADR 0052) every base image is pinned **by digest**

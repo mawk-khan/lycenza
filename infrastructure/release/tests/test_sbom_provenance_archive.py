@@ -65,7 +65,7 @@ class ProvenanceTest(unittest.TestCase):
         self.assertEqual(names, ["PHP_IMAGE", "RUNTIME_IMAGE", "NODE_IMAGE", "COMPOSER_IMAGE",
                                  "PHP_SOURCE", "CURL_SOURCE", "LIBXML2_SOURCE"])
         sources = {d["name"]: d for d in self.statement["predicate"]["buildDefinition"]["resolvedDependencies"] if d.get("name", "").endswith("_SOURCE")}
-        self.assertEqual(sources["CURL_SOURCE"]["uri"], "https://curl.se/download/curl-8.22.0.tar.xz")
+        self.assertEqual(sources["CURL_SOURCE"]["uri"], "https://curl.se/download/curl-8.23.0.tar.xz")
         self.assertRegex(sources["LIBXML2_SOURCE"]["digest"]["sha256"], r"^[0-9a-f]{64}$")
         self.assertEqual(self.verify(self.statement), [])
 

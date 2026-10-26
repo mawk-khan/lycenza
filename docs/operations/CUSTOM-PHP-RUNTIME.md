@@ -7,7 +7,7 @@ Docker image. It ships PHP compiled by this repository
 `php-build` → `runtime`).
 
 The reason: Debian 13 ships libcurl 8.14.1 and libxml2 2.9.14 with unfixed
-CRITICAL/HIGH advisories. The fixed upstream releases are curl 8.22.0 and
+CRITICAL/HIGH advisories. The fixed upstream releases were curl 8.22.0 (now 8.23.0, ORG.11-R1) and
 libxml2 2.15.4. libxml2 2.15.4 has a new ABI (`libxml2.so.16`) that the
 official PHP binary cannot load
 (`docs/security/release-remediation/0O.6C-PATCHED-LIBRARIES-PYTHON314.md`).
@@ -20,12 +20,12 @@ build-time toolchain here.
 
 | Component | Version | Source | SHA-256 | Signature |
 |---|---|---|---|---|
-| PHP | 8.3.35 | `https://www.php.net/distributions/php-8.3.35.tar.xz` | `ff4630fbbbd94359134b7d3c223db59329905bdc4f5a9ef93d257b48e358619a` | detached `.asc`; `VALIDSIG` must be one of the PHP 8.3 release managers `1198C0117593497A5EC5C199286AF1F9897469DC`, `C28D937575603EB4ABB725861C0779DC5C0A9DE4`, `AFD8691FDAEDF03BDF6E460563F15A9B715376CA` (keys from php.net's published keyring) |
-| curl / libcurl | 8.22.0 (`libcurl.so.4`) | `https://curl.se/download/curl-8.22.0.tar.xz` | `f7ef3ae8a22e521f289803fe93543eb64c329b58aa73a9e224dfd915a2a5f4f7` | detached `.asc`; `VALIDSIG` must be `27EDEAF22F3ABCEB50DB9A125CC908FDB71E12C2` (Daniel Stenberg) |
+| PHP | 8.3.36 | `https://www.php.net/distributions/php-8.3.36.tar.xz` | `dd54693aa334c5c4d72e9aee96b082c2473750a18a6c1d105789c93a3b1692fd` | detached `.asc`; `VALIDSIG` must be one of the PHP 8.3 release managers `1198C0117593497A5EC5C199286AF1F9897469DC`, `C28D937575603EB4ABB725861C0779DC5C0A9DE4`, `AFD8691FDAEDF03BDF6E460563F15A9B715376CA` (keys from php.net's published keyring) |
+| curl / libcurl | 8.23.0 (`libcurl.so.4`) | `https://curl.se/download/curl-8.23.0.tar.xz` | `8dadd7d2536a314f982ad05a651b713f426bf7d02cc2c76cffb9796f2218e6c5` | detached `.asc`; `VALIDSIG` must be `27EDEAF22F3ABCEB50DB9A125CC908FDB71E12C2` (Daniel Stenberg) |
 | libxml2 | 2.15.4 (`libxml2.so.16`) | `https://download.gnome.org/sources/libxml2/2.15/libxml2-2.15.4.tar.xz` | `98087fd181d9070724f3fbc65c7377db03038eb92bd882374daff44940138821` | none published by GNOME. The pinned SHA-256, equal to GNOME's `.sha256sum`, is the integrity mechanism. |
 
 Build-only images, all digest-pinned in the Dockerfile:
-- `php:8.3.35-fpm-trixie`: the official image, used for its recipe environment, `PHPIZE_DEPS` and `docker-php-*` scripts;
+- `php:8.3.36-fpm-trixie`: the official image, used for its recipe environment, `PHPIZE_DEPS` and `docker-php-*` scripts;
 - `node:22.23.3-bookworm-slim` and `composer:2.10.2`.
 
 Runtime base: `debian:13.7-slim`, the official PHP image's own base.
@@ -36,6 +36,8 @@ Runtime base: `debian:13.7-slim`, the official PHP image's own base.
 - **libxml2:** the default configuration without Python bindings.
 - **Loader:** the patched libraries live in `/usr/local/lib`, registered through `/etc/ld.so.conf.d/00-lycenza-native.conf` and `ldconfig`.
 - **SBOM identity:** each library carries a standard ELF `.note.package` (FDO packaging metadata) so Syft can identify it.
+
+**ORG.11-R1 (2026-10-26):** PHP 8.3.35 → 8.3.36 (CVE-2026-109618, CVE-2026-109619) and curl 8.22.0 → 8.23.0 (CVE-2026-92392); PHP signature `VALIDSIG AFD8691FDAEDF03BDF6E460563F15A9B715376CA` and SHA-256 equal to php.net's release metadata; curl signature `VALIDSIG 27EDEAF22F3ABCEB50DB9A125CC908FDB71E12C2`; build-only base `php:8.3.36-fpm-trixie@sha256:56e2cf05…`. Record: `docs/security/release-remediation/ORG-11-R1-PHP-CURL-REMEDIATION.md`.
 
 ## When a rebuild is due
 

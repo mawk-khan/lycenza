@@ -8,7 +8,7 @@ use Tests\TestCase;
 
 /**
  * Phase 0O.6D: the production application runtime is a REPOSITORY-BUILT PHP
- * 8.3.35 linked against curl 8.22.0 and libxml2 2.15.4 (Debian 13 ships
+ * 8.3.36 linked against curl 8.23.0 and libxml2 2.15.4 (Debian 13 ships
  * vulnerable libcurl/libxml2 and the official PHP binary cannot load the fixed
  * libxml2 ABI). These guards stop a later Dockerfile edit from silently
  * returning to the prebuilt official runtime, or from drifting away from what
@@ -18,9 +18,9 @@ use Tests\TestCase;
 #[Group('repository-documents')]
 class CustomPhpRuntimeGuardTest extends TestCase
 {
-    private const PHP_VERSION = '8.3.35';
+    private const PHP_VERSION = '8.3.36';
 
-    private const CURL_VERSION = '8.22.0';
+    private const CURL_VERSION = '8.23.0';
 
     private const LIBXML2_VERSION = '2.15.4';
 
