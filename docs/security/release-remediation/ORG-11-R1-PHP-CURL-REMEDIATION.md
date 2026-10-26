@@ -35,10 +35,31 @@ qualification below reports `app = VERIFIED`.
   `test_sbom_provenance_archive.py`, `CUSTOM-PHP-RUNTIME.md`,
   `PRODUCTION-IMAGES-AND-PROCESSES.md`, `infrastructure/release/README.md`.
 
-## Qualification
+## Qualification (run 40327776824, `66be83a6`)
 
-The fresh *Release qualification* run on the published remediation commit, its
-verdicts and the before/after package diff are recorded in the follow-up
-documentation commit (this file and `docs/operations/ORG-11-STAGING-READINESS.md`
-§4). Scanner policy, thresholds and `vulnerability-exceptions.json` were not
-changed; none of the three advisories is excepted.
+Published through the protected flow: candidate `66be83a6` → `CI gate` run
+40325590541 green (4 shards = canonical inventory: 9,585 cases, 9,584 passed
++ ESI-12 skip, 365,639 assertions) → `publication-check --push` (fast-forward
+of `main` from `779e009c`). *Release qualification* was then dispatched on
+protected `main`:
+
+| Evidence | Result |
+|---|---|
+| Same-run complete regression | 9,585 tests, 1 skip (ESI-12), 366,384 assertions, exit 0 |
+| Source secret scan / image secret + history scans | 0 / 0 / 0 findings |
+| Language audits | non-blocking only: `league/flysystem` ≤3.35.2 (Low), `postcss-selector-parser` (Moderate, npm, build-time) |
+| `verify-images.sh` | 143 PASS, 0 FAIL — "PHP is the repository-built 8.3.36", "libcurl 8.23.0 and libxml2 2.15.4 are the loaded runtime versions" |
+| **`app`** `sha256:7d2591e62d45baa8f2905f724194d72e63563caea54e1f250e98492c9f110868` | **VERIFIED** (16/16 checks PASS; 0 blocking, 60 excepted; 0 Critical) |
+| **`ai-gateway`** `sha256:ef524d9be34e3a5b14c3f5fa9f2393a4f5dfbcc4d48e0fbc87a5e1f1ab166aed` | **VERIFIED** (0 blocking, 55 excepted) |
+| CVE-2026-109618 / CVE-2026-109619 / CVE-2026-92392 | **absent** from the fresh scan of both images |
+| Signing | ephemeral NON-PRODUCTION key (qualification only; nothing pushed, published or promoted) |
+
+**App package diff (SBOM, run 40310279869 → 40327776824):** 216 → 216
+packages; only `php-cli`, `php-fpm` and the bundled extensions (`bcmath`,
+`gd`, `opcache`, `pcntl`, `pdo_pgsql`, `pgsql`, `sodium`) 8.3.35 → 8.3.36 and
+`curl` 8.22.0 → 8.23.0 changed. Scanner matches 213 → 208 (the 2 Critical
+and 3 High above removed; nothing added). The `ai-gateway` package set is
+identical (117 → 117); only its digest changed (fresh no-cache build).
+
+Scanner policy, thresholds and `vulnerability-exceptions.json` were not
+changed; none of the three advisories was excepted. **STG-06 is CLOSED.**
