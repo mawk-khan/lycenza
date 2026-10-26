@@ -30,6 +30,10 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 180
+    env:
+      # ORG.11: the same S3-compatible test server as CI (MinIO's public images
+      # were withdrawn in 2026-09; infrastructure/ci/compose.s3-versitygw.yml).
+      SAFE_TEST_COMPOSE_OVERRIDE: ${{ github.workspace }}/infrastructure/ci/compose.s3-versitygw.yml
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -59,7 +63,13 @@ jobs:
 
       - name: Install test dependencies from their locks
         run: |
-          (cd apps/platform && composer install --no-interaction --prefer-dist --no-progress --no-scripts --no-plugins && npm ci && cp .env.example .env)
+          # ORG.11: as CI does -- the inert committed env examples exist before
+          # anything boots Laravel (Compose also requires every env_file), then a
+          # script-free install from the lock (rule 87), explicit package
+          # discovery and an application key.
+          cp apps/platform/.env.example apps/platform/.env
+          cp services/ai/.env.example services/ai/.env
+          (cd apps/platform && composer install --no-interaction --prefer-dist --no-progress --no-scripts --no-plugins && php artisan package:discover --ansi && php artisan key:generate --ansi && npm ci)
           python -m venv services/ai/.venv
           services/ai/.venv/bin/pip install --disable-pip-version-check -r services/ai/requirements-dev.txt
 

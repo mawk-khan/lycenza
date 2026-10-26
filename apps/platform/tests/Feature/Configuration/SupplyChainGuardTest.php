@@ -210,6 +210,9 @@ class SupplyChainGuardTest extends TestCase
         $this->assertStringContainsString("if: github.ref == 'refs/heads/main'", $release);
         $this->assertStringContainsString('git merge-base --is-ancestor "$GITHUB_SHA" origin/main', $release);
         $this->assertStringContainsString('infrastructure/release/qualify all', $release);
+        // ORG.11: the release regression runs on the same test stack as CI.
+        $this->assertStringContainsString('SAFE_TEST_COMPOSE_OVERRIDE: ${{ github.workspace }}/infrastructure/ci/compose.s3-versitygw.yml', $release);
+        $this->assertLessThan(strpos($release, 'composer install'), strpos($release, 'cp apps/platform/.env.example apps/platform/.env'), 'env files exist before Composer');
         $this->assertStringContainsString('-- infrastructure/release/regression-gates', $release);
         $this->assertStringNotContainsString('cache:', $release, 'release builds use no dependency cache');
         preg_match('/path: (.+)/', $release, $upload);
