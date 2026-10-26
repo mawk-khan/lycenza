@@ -672,6 +672,9 @@ final class SchoolRouteCoverage
             Coverage::campus('app.admissions.accept', 'admissions.manage', AdmissionApplicationAccess::class, 'application'),
             Coverage::campus('app.admissions.reject', 'admissions.manage', AdmissionApplicationAccess::class, 'application'),
             Coverage::campus('app.admissions.withdraw', 'admissions.manage', AdmissionApplicationAccess::class, 'application'),
+            Coverage::campus('app.admissions.edit', 'admissions.manage', AdmissionApplicationAccess::class, 'application'),
+            Coverage::campus('app.admissions.update', 'admissions.manage', AdmissionApplicationAccess::class, 'application'),
+            Coverage::campus('app.admissions.discard', 'admissions.manage', AdmissionApplicationAccess::class, 'application'),
 
             // Http\Controllers\App\LibraryCatalogueController
             Coverage::gate('app.library.titles.index', 'library.catalogue.view'),

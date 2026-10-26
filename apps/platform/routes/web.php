@@ -1119,6 +1119,9 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
             Route::get('/create', [ApplicantController::class, 'create'])->middleware('capability:admissions.manage')->name('create');
             Route::post('/', [ApplicantController::class, 'store'])->middleware('capability:admissions.manage')->name('store');
             Route::get('/{applicant}', [ApplicantController::class, 'show'])->middleware('capability:admissions.view')->name('show');
+            // SIS 3.1: identity correction (until an application is converted).
+            Route::get('/{applicant}/edit', [ApplicantController::class, 'edit'])->middleware('capability:admissions.manage')->name('edit');
+            Route::put('/{applicant}', [ApplicantController::class, 'update'])->middleware('capability:admissions.manage')->name('update');
 
             Route::get('/{applicant}/applications/create', [AdmissionApplicationController::class, 'create'])->middleware('capability:admissions.manage')->name('applications.create');
             Route::post('/{applicant}/applications', [AdmissionApplicationController::class, 'store'])->middleware('capability:admissions.manage')->name('applications.store');
@@ -1136,6 +1139,11 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::post('/{admissionApplication}/accept', [AdmissionApplicationController::class, 'accept'])->name('accept');
         Route::post('/{admissionApplication}/reject', [AdmissionApplicationController::class, 'reject'])->name('reject');
         Route::post('/{admissionApplication}/withdraw', [AdmissionApplicationController::class, 'withdraw'])->name('withdraw');
+        // SIS 3.1: state-aware correction and discarding an unused draft
+        // (Campus-adopted like the lifecycle actions, checked in the controller).
+        Route::get('/{admissionApplication}/edit', [AdmissionApplicationController::class, 'edit'])->name('edit');
+        Route::put('/{admissionApplication}', [AdmissionApplicationController::class, 'update'])->name('update');
+        Route::post('/{admissionApplication}/discard', [AdmissionApplicationController::class, 'discard'])->name('discard');
         Route::post('/{admissionApplication}/convert', [AdmissionApplicationController::class, 'convert'])->middleware('capability:admissions.manage')->name('convert');
     });
 

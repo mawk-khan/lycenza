@@ -11,8 +11,10 @@ use App\Domain\Admissions\Application\AdmissionApplicationReadService;
 use App\Domain\Admissions\Application\AdmissionApplicationService;
 use App\Domain\Admissions\Application\AdmissionConversionService;
 use App\Domain\Admissions\Application\Exceptions\AdmissionApplicationAlreadyConvertedException;
+use App\Domain\Admissions\Application\Exceptions\AdmissionCorrectionNotPermittedException;
 use App\Domain\Admissions\Application\Exceptions\AdmissionGuardianNotActiveException;
 use App\Domain\Admissions\Application\Exceptions\AdmissionGuardianSelectionRequiredException;
+use App\Domain\Admissions\Application\Exceptions\AdmissionRecordChangedException;
 use App\Domain\Admissions\Application\Exceptions\CrossSchoolAdmissionReferenceException;
 use App\Domain\Admissions\Application\Exceptions\IncompatibleConversionSectionException;
 use App\Domain\Admissions\Application\Exceptions\InvalidAdmissionApplicationTransitionException;
@@ -197,6 +199,8 @@ class AdmissionApplicationController extends Controller
         return Inertia::render('App/Admissions/Show', [
             'application' => $this->presentDetail($model),
             'canManage' => $canManage,
+            // SIS 3.1: something is correctable in every state but converted.
+            'canCorrect' => $canManage && $model->status !== 'converted',
             'canConvert' => $canConvert,
             'canViewApplicants' => $scope->isWholeSchool(),
             // ORG.7F-1: the converted-Student link opens the full Profile, a
@@ -273,6 +277,97 @@ class AdmissionApplicationController extends Controller
         }
 
         return redirect("/app/admissions/{$model->id}");
+    }
+
+    // --- Correction (SIS 3.1) ------------------------------------------------
+
+    /**
+     * SIS 3.1: the state-aware correction form -- academic context while
+     * `draft`/`submitted`, the decision note once decided
+     * (AdmissionApplicationService::CONTEXT_CORRECTABLE / NOTE_CORRECTABLE).
+     * Campus-adopted like the lifecycle actions (out of scope = 404); a
+     * Campus-scoped operator is offered, and may choose, only their Campuses.
+     */
+    public function edit(TenantContext $context, AdmissionApplicationAccess $access, string $admissionApplication): Response|RedirectResponse
+    {
+        $scope = $this->authorizeCampusScope('admissions.manage', $context->requireSchool());
+        $model = $access->application($scope, $admissionApplication);
+
+        if ($model->status === 'converted') {
+            return redirect("/app/admissions/{$model->id}")
+                ->withErrors(['status' => 'A converted application is a historical record. Correct the Student record instead.']);
+        }
+
+        return Inertia::render('App/Admissions/Edit', [
+            'application' => $this->presentDetail($model),
+            'mode' => in_array($model->status, AdmissionApplicationService::CONTEXT_CORRECTABLE, true) ? 'context' : 'note',
+            'academicYears' => AcademicYearChoices::options(AcademicYear::query()->get()),
+            'campuses' => $access->campusOptions($scope),
+            'gradeLevels' => $this->gradeLevelOptions(),
+        ]);
+    }
+
+    public function update(Request $request, TenantContext $context, AdmissionApplicationAccess $access, AdmissionApplicationService $service, string $admissionApplication): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $scope = $this->authorizeCampusScope('admissions.manage', $school);
+        $model = $access->application($scope, $admissionApplication);
+
+        $version = $request->validate([
+            'expected_status' => ['required', Rule::in(['draft', 'submitted', 'accepted', 'rejected', 'withdrawn', 'converted'])],
+            'expected_updated_at' => ['required', 'string', 'max:64'],
+        ]);
+
+        try {
+            if (in_array($version['expected_status'], AdmissionApplicationService::CONTEXT_CORRECTABLE, true)) {
+                // The same rules as creation (store()) -- never weaker.
+                $validated = $request->validate([
+                    'academic_year_id' => ['required', 'uuid', Rule::exists('academic_years', 'id')->where('school_id', $school->id)],
+                    'campus_id' => ['required', 'uuid', Rule::exists('campuses', 'id')->where('school_id', $school->id)],
+                    'grade_level_id' => ['required', 'uuid', Rule::exists('grade_levels', 'id')->where('school_id', $school->id)],
+                ]);
+                if (! $scope->covers($validated['campus_id'])) {
+                    throw ValidationException::withMessages(['campus_id' => ['Choose a Campus you manage applications for.']]);
+                }
+
+                $service->correctAcademicContext(
+                    $model,
+                    AcademicYear::query()->findOrFail($validated['academic_year_id']),
+                    Campus::query()->findOrFail($validated['campus_id']),
+                    GradeLevel::query()->findOrFail($validated['grade_level_id']),
+                    $version['expected_status'],
+                    $version['expected_updated_at'],
+                    $context->actor(),
+                );
+            } else {
+                $validated = $request->validate(['decision_note' => ['present', 'nullable', 'string', 'max:1000']]);
+                $service->correctDecisionNote($model, $validated['decision_note'], $version['expected_status'], $version['expected_updated_at'], $context->actor());
+            }
+        } catch (CrossSchoolAdmissionReferenceException|OpenAdmissionApplicationExistsException $e) {
+            throw ValidationException::withMessages(['grade_level_id' => [$e->getMessage()]]);
+        } catch (AdmissionCorrectionNotPermittedException|AdmissionRecordChangedException $e) {
+            throw ValidationException::withMessages(['correction' => [$e->getMessage()]]);
+        }
+
+        return redirect("/app/admissions/{$model->id}")->with('flash', 'Application corrected.');
+    }
+
+    /**
+     * SIS 3.1: closes an unused draft (draft -> withdrawn). Anything already
+     * submitted keeps its own Withdraw action.
+     */
+    public function discard(TenantContext $context, AdmissionApplicationAccess $access, AdmissionApplicationService $service, string $admissionApplication): RedirectResponse
+    {
+        $scope = $this->authorizeCampusScope('admissions.manage', $context->requireSchool());
+        $model = $access->application($scope, $admissionApplication);
+
+        try {
+            $service->discard($model, $context->actor());
+        } catch (InvalidAdmissionApplicationTransitionException) {
+            throw ValidationException::withMessages(['status' => ['Only a draft that was never submitted can be discarded. Use Withdraw for a submitted or accepted application.']]);
+        }
+
+        return redirect("/app/admissions/{$model->id}")->with('flash', 'Draft application discarded.');
     }
 
     // --- Conversion -------------------------------------------------------

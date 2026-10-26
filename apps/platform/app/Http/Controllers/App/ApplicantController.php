@@ -4,6 +4,8 @@ namespace App\Http\Controllers\App;
 
 use App\Domain\Admissions\Application\ApplicantReadService;
 use App\Domain\Admissions\Application\ApplicantService;
+use App\Domain\Admissions\Application\Exceptions\AdmissionCorrectionNotPermittedException;
+use App\Domain\Admissions\Application\Exceptions\AdmissionRecordChangedException;
 use App\Domain\Admissions\Infrastructure\AdmissionApplication;
 use App\Domain\Admissions\Infrastructure\Applicant;
 use App\Http\Controllers\Controller;
@@ -12,6 +14,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -93,11 +96,67 @@ class ApplicantController extends Controller
 
         $history = $reads->applications($model);
 
+        $canManage = $scopes->campusScope($context->actor(), 'admissions.manage', $school)->isWholeSchool();
+        $admitted = $history->contains(fn (AdmissionApplication $a) => $a->status === 'converted');
+
         return Inertia::render('App/Admissions/Applicants/Show', [
             'applicant' => $this->presentDetail($model),
             'applications' => $history->map(fn (AdmissionApplication $a) => $this->presentApplicationSummary($a))->values()->all(),
-            'canManage' => $scopes->campusScope($context->actor(), 'admissions.manage', $school)->isWholeSchool(),
+            'canManage' => $canManage,
+            // SIS 3.1: identity is correctable until an application is converted.
+            'canCorrect' => $canManage && ! $admitted,
+            'admitted' => $admitted,
         ]);
+    }
+
+    /**
+     * SIS 3.1: the identity correction form. A declared whole-School-only
+     * operation (Applicants have no Campus), authorized by the route's
+     * `capability:admissions.manage` floor.
+     */
+    public function edit(TenantContext $context, ApplicantReadService $reads, string $applicant): Response|RedirectResponse
+    {
+        $context->requireSchool();
+
+        $model = $reads->detail($applicant);
+        abort_if($model === null, 404);
+
+        if ($reads->applications($model)->contains(fn (AdmissionApplication $a) => $a->status === 'converted')) {
+            return redirect("/app/admissions/applicants/{$model->id}")
+                ->withErrors(['correction' => AdmissionCorrectionNotPermittedException::applicantAdmitted()->getMessage()]);
+        }
+
+        return Inertia::render('App/Admissions/Applicants/Edit', [
+            'applicant' => [
+                ...$this->presentDetail($model),
+                'updatedAt' => $model->updated_at->toIso8601String(),
+            ],
+        ]);
+    }
+
+    public function update(Request $request, TenantContext $context, ApplicantReadService $reads, ApplicantService $service, string $applicant): RedirectResponse
+    {
+        $context->requireSchool();
+
+        $model = $reads->detail($applicant);
+        abort_if($model === null, 404);
+
+        // The same rules as creation (store()) -- never weaker.
+        $validated = $request->validate([
+            'first_name' => ['required', 'string', 'max:255'],
+            'middle_name' => ['nullable', 'string', 'max:255'],
+            'last_name' => ['nullable', 'string', 'max:255'],
+            'date_of_birth' => ['required', 'date'],
+            'expected_updated_at' => ['required', 'string', 'max:64'],
+        ]);
+
+        try {
+            $service->correct($model, $validated, $validated['expected_updated_at'], $context->actor());
+        } catch (AdmissionCorrectionNotPermittedException|AdmissionRecordChangedException $e) {
+            throw ValidationException::withMessages(['correction' => [$e->getMessage()]]);
+        }
+
+        return redirect("/app/admissions/applicants/{$model->id}")->with('flash', 'Applicant details corrected.');
     }
 
     /**

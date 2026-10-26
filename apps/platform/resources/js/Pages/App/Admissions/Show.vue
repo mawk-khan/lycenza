@@ -3,6 +3,7 @@ import { formatDate } from '../../../datetime';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import StatusBadge from '../../../Components/StatusBadge.vue';
+import ConfirmDialog from '../../../Components/ConfirmDialog.vue';
 import AdmissionFeePanel from '../../../Components/Fees/AdmissionFeePanel.vue';
 import { RELATIONSHIP_TYPES } from '../../../relationshipTypes';
 
@@ -48,6 +49,8 @@ interface Props {
         updatedAt: string;
     };
     canManage: boolean;
+    // SIS 3.1: the state-aware correction form is available (not converted).
+    canCorrect: boolean;
     // ORG.7D-3: conversion and the Applicant page are whole-School only.
     canConvert: boolean;
     canViewApplicants: boolean;
@@ -100,6 +103,22 @@ function withdrawApplication(): void {
     transitioning.value = true;
     router.post(
         `/app/admissions/${props.application.id}/withdraw`,
+        {},
+        {
+            preserveScroll: true,
+            onFinish: () => (transitioning.value = false),
+        },
+    );
+}
+
+// --- Discard an unused draft (SIS 3.1) -----------------------------------
+
+const discardDialog = ref<InstanceType<typeof ConfirmDialog> | null>(null);
+
+function discardDraft(): void {
+    transitioning.value = true;
+    router.post(
+        `/app/admissions/${props.application.id}/discard`,
         {},
         {
             preserveScroll: true,
@@ -374,7 +393,31 @@ function switchToLinkExisting(g: GuardianCandidate): void {
             >
                 Withdraw
             </button>
+            <a v-if="canCorrect" class="underline" :href="`/app/admissions/${application.id}/edit`"
+                >Correct details</a
+            >
+            <button
+                v-if="application.status === 'draft'"
+                type="button"
+                :disabled="transitioning"
+                class="text-red-600 underline disabled:opacity-50"
+                @click="discardDialog?.open()"
+            >
+                Discard draft
+            </button>
         </section>
+
+        <ConfirmDialog
+            ref="discardDialog"
+            title="Discard this draft?"
+            confirm-label="Discard draft"
+            @confirm="discardDraft"
+        >
+            <p>
+                The draft for {{ applicantName() }} closes without being submitted and is shown as
+                Withdrawn. It cannot be reopened; the applicant and their other applications stay.
+            </p>
+        </ConfirmDialog>
 
         <!-- Inline accept/reject decision-note form -->
         <form

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 import { formatDate } from '../../../../datetime';
 import StatusBadge from '../../../../Components/StatusBadge.vue';
 
@@ -27,9 +29,15 @@ interface Props {
     };
     applications: ApplicationRow[];
     canManage: boolean;
+    // SIS 3.1: identity is correctable until an application is converted.
+    canCorrect: boolean;
+    admitted: boolean;
 }
 
 const props = defineProps<Props>();
+
+const page = usePage<{ errors: Record<string, string> }>();
+const correctionError = computed(() => page.props.errors?.correction);
 
 function fullName(): string {
     return [props.applicant.firstName, props.applicant.middleName, props.applicant.lastName]
@@ -51,14 +59,35 @@ function applicationContext(a: ApplicationRow): string {
                 <h1 class="text-xl font-semibold">{{ fullName() }}</h1>
                 <p class="mt-1 text-sm text-slate-500">Applicant</p>
             </div>
-            <a
-                v-if="canManage"
-                :href="`/app/admissions/applicants/${applicant.id}/applications/create`"
-                class="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
-            >
-                New application
-            </a>
+            <div class="flex flex-wrap gap-2">
+                <a
+                    v-if="canCorrect"
+                    :href="`/app/admissions/applicants/${applicant.id}/edit`"
+                    class="shrink-0 rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
+                >
+                    Correct details
+                </a>
+                <a
+                    v-if="canManage"
+                    :href="`/app/admissions/applicants/${applicant.id}/applications/create`"
+                    class="shrink-0 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                >
+                    New application
+                </a>
+            </div>
         </div>
+
+        <p
+            v-if="correctionError"
+            role="alert"
+            class="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+        >
+            {{ correctionError }}
+        </p>
+        <p v-if="admitted && canManage" class="mt-4 text-sm text-slate-600">
+            Admitted: these details are the record taken at admission. Correct the Student record
+            instead.
+        </p>
 
         <section class="mt-8">
             <h2 class="text-sm font-medium text-slate-500">Identity</h2>

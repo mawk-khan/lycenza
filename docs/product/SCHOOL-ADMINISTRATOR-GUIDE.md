@@ -290,7 +290,20 @@ role.
 **Good to know:**
 - **A Guardian is optional.** Their email and phone are optional too.
 - **A Student number already in use is refused** with a clear message.
-- **Applicant details cannot be edited after creation** (§21).
+- **Correcting a mistake** (SIS 3.1):
+  - **Applicant name or date of birth:** on the applicant, select **Correct
+    details**. This works until one of their applications is converted;
+    after that, correct the Student record instead.
+  - **Academic Year, Campus or Grade:** on the application, select
+    **Correct details** while it is a draft or submitted. The status does
+    not change. Once accepted or rejected, the year, Campus and Grade are
+    fixed, and **Correct details** edits the decision note only.
+  - A converted application cannot be edited: it is the admission record.
+  - If someone else changed the record while you were editing, you are asked
+    to reload and try again; nothing is overwritten.
+- **Discard draft** closes a draft that was never submitted. Use it for a
+  draft created by mistake. It then shows as Withdrawn, and the applicant
+  stays. After submission, use **Withdraw** instead.
 - **Admission fee:** Admissions → Admission fee records a fee *intent*.
   It is not a charge.
 
@@ -688,7 +701,6 @@ how you are using Lycenza.
 - **Guardian search** is by name only. Search by phone or email awaits a
   privacy decision.
 - **No fee proration** (approved current behaviour).
-- **Applicant details cannot be edited** after creation.
 - **One-click actions** with no reason captured:
   - attendance corrections;
   - Mark inactive.

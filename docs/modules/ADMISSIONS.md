@@ -207,6 +207,41 @@ has started, exactly matching the "prefer lifecycle status over
 deletion for submitted records" principle already used throughout this
 codebase.
 
+### 6.1 Correction by state, and discarding a draft (SIS 3.1, 2026-10-26)
+
+SIS 3.1 implements the mutability rules above, narrowed where the repository
+requires it.
+
+| State | Applicant identity (names, DOB) | Academic context (year, Campus, grade) | Decision note | Discard |
+|---|---|---|---|---|
+| `draft` | correctable | correctable | — (no decision) | **yes** |
+| `submitted` | correctable | correctable | — (no decision) | no (Withdraw) |
+| `accepted` | correctable | **fixed** (the decision was made for it) | correctable | no |
+| `rejected` / `withdrawn` | correctable | fixed | correctable | no |
+| `converted` | **fixed** once any application of the Applicant is converted (the Student is canonical) | fixed | fixed (historical snapshot) | no |
+
+**Where it lives:**
+- `ApplicantService::correct()`;
+- `AdmissionApplicationService::correctAcademicContext()`, `correctDecisionNote()` and `discard()`;
+- web routes `app.admissions.applicants.edit/update` (declared whole-School) and `app.admissions.edit/update/discard` (Campus-adopted like the lifecycle actions).
+
+**Rules:**
+- **Status is never edited.** Only the lifecycle actions change it.
+- **Context corrections reuse the creation rules:** same-School references, an active Campus when the Campus changes, `one_open_per_context`. A Campus-scoped officer may move an application only between their own Campuses.
+- **Stale edits are refused** (`AdmissionRecordChangedException`, 409), never overwritten. The form carries the version it was opened on: the status and `updated_at`.
+- **Applicant correction is serialized with conversion.** It locks the Applicant's application rows first, and conversion locks its row before reading the Applicant. A Student is therefore created either before the correction (which is then refused) or from the corrected identity. A two-process test proves this (`AdmissionCorrectionConcurrencyTest`).
+- **Audit events:**
+  - `admission_applicant.corrected`: field names only, never values;
+  - `admission_application.corrected`: field names plus previous and corrected ids;
+  - `admission_application.decision_note_corrected`: never the text;
+  - `admission_application.discarded`.
+- **Discard is `draft -> withdrawn`, not a deletion.** The "hard-delete a draft" line in §6 is **superseded**: since E21-RH.6 the runtime role holds no DELETE on `admission_applications`. Entering `withdrawn` starts the retention clock (`terminal_at`) and frees the open-application slot. A draft has no decision, conversion, Guardian or fee intent behind it, and the Applicant stays.
+- **API parity:** browser only, deliberately. The `/api/v1` surface keeps create and lifecycle; correction is an administrative act on the web, through the same services.
+- **Deliberately not done here:**
+  - correction of the Student or placement after conversion (Student workflows, SIS 4.x);
+  - Guardian contact correction (SIS 2.1);
+  - a future-date rule for date of birth (SIS 2.3; correction applies creation's rule).
+
 ## 6A. Status constraint: application-level, not a DB CHECK (1D.0A)
 
 **HARDENED, resolved with direct precedent:** `AdmissionApplication.status`'s

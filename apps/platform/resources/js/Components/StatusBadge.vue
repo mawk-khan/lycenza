@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed } from 'vue';
+
 // Phase 1B.6 extended this from a fixed active/inactive binary to any
 // registered status key (Enrollment's active/completed/withdrawn/
 // transferred/cancelled) -- existing active/inactive callers
@@ -130,7 +132,9 @@ const STYLES: Record<Status, { label: string; badge: string; dot: string }> = {
     reversed: { label: 'Reversed', badge: 'bg-amber-50 text-amber-700', dot: 'bg-amber-500' },
 };
 
-const style = STYLES[props.status];
+// SIS 3.1: computed, so a status changed by an in-page Inertia visit (Submit,
+// Accept, Discard ...) relabels the badge instead of keeping the first one.
+const style = computed(() => STYLES[props.status]);
 </script>
 
 <template>

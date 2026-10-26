@@ -4,6 +4,8 @@ namespace App\Domain\Admissions\Application;
 
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
+use App\Domain\Admissions\Application\Exceptions\AdmissionCorrectionNotPermittedException;
+use App\Domain\Admissions\Application\Exceptions\AdmissionRecordChangedException;
 use App\Domain\Admissions\Application\Exceptions\CrossSchoolAdmissionReferenceException;
 use App\Domain\Admissions\Application\Exceptions\InvalidAdmissionApplicationTransitionException;
 use App\Domain\Admissions\Application\Exceptions\OpenAdmissionApplicationExistsException;
@@ -37,6 +39,7 @@ use Throwable;
  *   submitted -> rejected
  *   submitted -> withdrawn
  *   accepted  -> withdrawn
+ *   draft     -> withdrawn   (SIS 3.1: discard(), an unused draft)
  * Every other combination (including any transition FROM `rejected`,
  * `withdrawn`, or `converted`) is rejected by
  * InvalidAdmissionApplicationTransitionException.
@@ -72,6 +75,12 @@ use Throwable;
  */
 class AdmissionApplicationService
 {
+    /** SIS 3.1: states whose academic context may be corrected (ADMISSIONS.md §6). */
+    public const CONTEXT_CORRECTABLE = ['draft', 'submitted'];
+
+    /** SIS 3.1: states whose decision note may be corrected (ADMISSIONS.md §6). */
+    public const NOTE_CORRECTABLE = ['accepted', 'rejected', 'withdrawn'];
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
@@ -172,6 +181,136 @@ class AdmissionApplicationService
     public function withdraw(AdmissionApplication $application, ?User $actor = null): AdmissionApplication
     {
         return $this->transitionTo($application, ['submitted', 'accepted'], 'withdrawn', 'admission_application.withdrawn', $actor);
+    }
+
+    /**
+     * SIS 3.1: `draft` -> `withdrawn`, closing an unused draft. A draft has no
+     * decision, conversion, Guardian or fee intent behind it, so closing it
+     * orphans nothing; the shared Applicant identity stays. It is a status
+     * transition, not a delete: the runtime role holds no DELETE on
+     * `admission_applications` (E21-RH.6), and entering `withdrawn` starts
+     * the row's retention clock (`terminal_at`) and frees the
+     * open-application slot. Audited separately from a family's withdrawal.
+     */
+    public function discard(AdmissionApplication $application, ?User $actor = null): AdmissionApplication
+    {
+        return $this->transitionTo($application, ['draft'], 'withdrawn', 'admission_application.discarded', $actor);
+    }
+
+    /**
+     * SIS 3.1: corrects the academic context (year, Campus, grade) of a
+     * `draft` or `submitted` application -- never of an accepted one (the
+     * decision was made for that context), a terminal one or a converted one.
+     * The same rules as create(): same-School references, an active Campus
+     * when the Campus changes, one open application per context.
+     * `$expectedStatus`/`$expectedUpdatedAt` are the version the form was
+     * opened on; a newer version (another correction, a transition, a
+     * conversion) is refused, never overwritten. Status never changes here.
+     */
+    public function correctAcademicContext(
+        AdmissionApplication $application,
+        AcademicYear $academicYear,
+        Campus $campus,
+        GradeLevel $gradeLevel,
+        string $expectedStatus,
+        string $expectedUpdatedAt,
+        ?User $actor = null,
+    ): AdmissionApplication {
+        if ($academicYear->school_id !== $application->school_id
+            || $campus->school_id !== $application->school_id
+            || $gradeLevel->school_id !== $application->school_id) {
+            throw new CrossSchoolAdmissionReferenceException;
+        }
+
+        return $this->context->withSchool($application->school, function () use ($application, $academicYear, $campus, $gradeLevel, $expectedStatus, $expectedUpdatedAt, $actor) {
+            try {
+                return DB::transaction(function () use ($application, $academicYear, $campus, $gradeLevel, $expectedStatus, $expectedUpdatedAt, $actor) {
+                    $locked = $this->lockCurrentVersion($application, $expectedStatus, $expectedUpdatedAt);
+                    if (! in_array($locked->status, self::CONTEXT_CORRECTABLE, true)) {
+                        throw AdmissionCorrectionNotPermittedException::academicContext();
+                    }
+
+                    $corrected = [
+                        'academic_year_id' => $academicYear->id,
+                        'campus_id' => $campus->id,
+                        'grade_level_id' => $gradeLevel->id,
+                    ];
+                    $changed = array_filter($corrected, fn (string $id, string $field) => $id !== $locked->{$field}, ARRAY_FILTER_USE_BOTH);
+                    if ($changed === []) {
+                        return $locked;
+                    }
+                    if (isset($changed['campus_id'])) {
+                        // ORG.7D-0 R5: no application moves onto an inactive Campus.
+                        $this->activeCampus->require($locked->school_id, $campus->id);
+                    }
+
+                    $previous = array_intersect_key($locked->only(array_keys($corrected)), $changed);
+                    AdmissionApplication::query()->whereKey($locked->id)
+                        ->whereIn('status', self::CONTEXT_CORRECTABLE)
+                        ->update($changed);
+
+                    $this->audit->school($locked->school, 'admission_application.corrected', actor: $actor, subject: $locked, metadata: [
+                        'applicantId' => $locked->applicant_id,
+                        'status' => $locked->status,
+                        'fields' => array_keys($changed),
+                        'previous' => $previous,
+                        'corrected' => $changed,
+                    ]);
+
+                    return $locked->refresh();
+                });
+            } catch (UniqueConstraintViolationException $e) {
+                throw $this->translateUniqueViolation($e);
+            }
+        });
+    }
+
+    /**
+     * SIS 3.1: corrects the decision note of an `accepted`, `rejected` or
+     * `withdrawn` application (ADMISSIONS.md §6: record-keeping, never
+     * re-litigating the decision -- the decision and its audit event stay as
+     * they were). Not before a decision, and never on a converted
+     * application (a historical snapshot). The note text is never audited.
+     */
+    public function correctDecisionNote(AdmissionApplication $application, ?string $decisionNote, string $expectedStatus, string $expectedUpdatedAt, ?User $actor = null): AdmissionApplication
+    {
+        return $this->context->withSchool($application->school, fn () => DB::transaction(function () use ($application, $decisionNote, $expectedStatus, $expectedUpdatedAt, $actor) {
+            $locked = $this->lockCurrentVersion($application, $expectedStatus, $expectedUpdatedAt);
+            if (! in_array($locked->status, self::NOTE_CORRECTABLE, true)) {
+                throw AdmissionCorrectionNotPermittedException::decisionNote();
+            }
+
+            $note = self::normalizeDecisionNote($decisionNote);
+            if ($note === $locked->decision_note) {
+                return $locked;
+            }
+
+            AdmissionApplication::query()->whereKey($locked->id)
+                ->whereIn('status', self::NOTE_CORRECTABLE)
+                ->update(['decision_note' => $note]);
+
+            $this->audit->school($locked->school, 'admission_application.decision_note_corrected', actor: $actor, subject: $locked, metadata: [
+                'applicantId' => $locked->applicant_id,
+                'status' => $locked->status,
+            ]);
+
+            return $locked->refresh();
+        }));
+    }
+
+    /**
+     * Locks the authoritative row and refuses unless it is still exactly the
+     * version (status and `updated_at`) the correction form was opened on.
+     */
+    private function lockCurrentVersion(AdmissionApplication $application, string $expectedStatus, string $expectedUpdatedAt): AdmissionApplication
+    {
+        $locked = AdmissionApplication::query()->whereKey($application->id)->lockForUpdate()->firstOrFail();
+
+        if ($locked->status !== $expectedStatus || $locked->updated_at?->toIso8601String() !== $expectedUpdatedAt) {
+            throw new AdmissionRecordChangedException;
+        }
+
+        return $locked;
     }
 
     /**

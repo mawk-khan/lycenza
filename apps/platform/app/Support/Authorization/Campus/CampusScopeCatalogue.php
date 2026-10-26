@@ -234,6 +234,8 @@ final class CampusScopeCatalogue
         'app.admissions.applicants.create' => ['capability' => 'admissions.manage', 'reason' => 'Applicant identity is School-wide; there is no atomic applicant-plus-application path yet.'],
         'app.admissions.applicants.store' => ['capability' => 'admissions.manage', 'reason' => 'Applicant identity is School-wide; there is no atomic applicant-plus-application path yet.'],
         'app.admissions.applicants.show' => ['capability' => 'admissions.view', 'reason' => 'The Applicant page lists applications on every Campus.'],
+        'app.admissions.applicants.edit' => ['capability' => 'admissions.manage', 'reason' => 'Applicant identity is School-wide (SIS 3.1 correction).'],
+        'app.admissions.applicants.update' => ['capability' => 'admissions.manage', 'reason' => 'Applicant identity is School-wide (SIS 3.1 correction).'],
         'app.admissions.applicants.applications.create' => ['capability' => 'admissions.manage', 'reason' => 'Starting an application is reached from the whole-School Applicant page.'],
         'app.admissions.applicants.applications.store' => ['capability' => 'admissions.manage', 'reason' => 'Starting an application is reached from the whole-School Applicant page.'],
         'app.admissions.guardians.search' => ['capability' => 'admissions.manage', 'reason' => 'School-wide Guardian name search (conversion form).'],

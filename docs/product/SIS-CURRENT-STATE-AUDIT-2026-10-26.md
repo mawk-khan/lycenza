@@ -29,6 +29,7 @@ limitations. **SIS Local Completion Score: 82/100.**
 | DDEV | `lycenza` OK; `https://lycenza.ddev.site` serves 200 (Docker Desktop engine, ORG.10 data) |
 | Known local caveat | **STG-04:** CLI `ddev exec` still reaches the stale WSL docker-ce database. Reconcile it before stateful local SIS work (ORG-LOCAL-CLOSURE §7). |
 | Update (SIS 1.2, 2026-10-26) | **STG-04 resolved.** Local stateful browser proof is now reliable: one engine (Docker Desktop), one DDEV database, `ddev env-check` passes. No other conclusion of this audit changes. |
+| Update (SIS 3.1, 2026-10-26) | **MC-1 closed:** applicant and application correction (state-aware), decision-note correction and discarding an unused draft, browser-proven on DDEV (`docs/modules/ADMISSIONS.md` §6.1). Must-Complete remaining: 3 (MC-2, MC-3, MC-4). The 82/100 score is not re-scored here. |
 
 ## 2. Historical SIS work already completed
 
