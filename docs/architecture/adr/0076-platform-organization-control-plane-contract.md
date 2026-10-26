@@ -11063,3 +11063,15 @@ Owner authorization: ORG.10-R1, owner decision **OD-9.7**. Baseline `origin/main
 - Carried LOWs (§77.10): unescaped `ILIKE` in recipient search, Staff+Guardian Hub shows own Guardian mail, GET read markers, unread-badge cost at volume.
 
 **79.9 Verdicts.** ORG10-D02 **CLOSED**; ORG10-D01 **OPEN UAT-MINOR / ACCEPTED FOR STAGING TESTING**. Integrated local UAT (ORG.10) is closed with no owner-decision prerequisite outstanding. ORG.11 (staging readiness & promotion audit) is technically ready for authorization. Production stays **NO-GO** (§78.6).
+
+## 80. ORG.11 — Staging readiness & controlled promotion (2026-10-26)
+
+Owner authorization: ORG.11. Baseline `origin/main` = `ca4769aa`. Record: `docs/operations/ORG-11-STAGING-READINESS.md`.
+
+**80.1 Result.** No staging environment exists and no authorized cloud session is available (standard AWS chain: no credentials; Terraform absent; no Terraform code beyond the contract README) — **INFRASTRUCTURE PREREQUISITE**; nothing was provisioned, pushed, published, promoted or deployed. The approved contract stays ADR 0074 / PPR.2D (AWS `ap-south-1`, Terraform, ECS on EC2) with one rule-16 approval per R-step; open decisions OD-PPR-4, -5, -6, -7, -8, -22.
+
+**80.2 Release tooling repaired (no product change).** The *Release qualification* workflow had never completed: (STG-02, `5f2e21cd`) `composer install` ran scripts before `.env` existed, so `package:discover` booted as production and the guard refused — now `--no-scripts --no-plugins` (rule 87); (STG-05, `135de265`) its regression pulled the withdrawn `minio/minio` image — now CI's versitygw override and CI-equivalent env/discovery/key preparation. `SupplyChainGuardTest` pins both. Each passed the exact-SHA CI gate (full suite 9,584 + ESI-12 skip).
+
+**80.3 Qualification (run 40310279869, `135de265`).** The whole pipeline ran: same-run regression green, builds, `verify-images` green, SBOM, fresh scan, provenance, signed (NON-PRODUCTION) evidence. **ai-gateway VERIFIED; app FAIL** on PHP 8.3.35 (Critical CVE-2026-109618, High CVE-2026-109619; fix 8.3.36) and curl 8.22.0 (High CVE-2026-92392; fix 8.23.0) — STG-06, a narrow same-major remediation slice for the owner to authorize. The Debian trixie nginx fix (`1.26.3-3+deb13u10`) cleared the three nginx Criticals, meeting the owner's E16-R2 monitoring condition (`integration/e16-r2` untouched).
+
+**80.4 Gates.** Staging promotion gate **FAIL** (no environment, no registry/signing custody, app not VERIFIED). Production **NO-GO**. E16 decision valid through 2026-11-12 (hard stop 2026-11-13). Local observation STG-04: after a host-level restart at 09:00 UTC the WSL DDEV database came back on a 2026-09-29 volume while the web stays served by the Docker Desktop engine — owner to pick the canonical local engine.
