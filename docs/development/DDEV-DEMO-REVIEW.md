@@ -78,7 +78,10 @@ ddev start      # also starts the queue worker and scheduler
 ddev stop       # keeps the database volume
 ddev launch     # opens https://lycenza.ddev.site in the browser
 ddev describe   # URLs and service status
+ddev env-check  # read-only: browser, CLI and workers reach ONE engine and ONE database
 ```
+
+Run `ddev env-check` before any stateful local proof or UAT (section 17a).
 
 ## 5. `ddev demo-reset`
 
@@ -891,6 +894,63 @@ run -- use the docker-compose `minio` service for those.
 | "Too Many Attempts" on sign-in | The product login limiter allows 6 attempts/minute/IP; wait a minute. |
 | Port 80/443 conflicts | Stop the conflicting service or see `ddev config global --router-http-port`. |
 | Queue/scheduler not running (deliveries stay `pending`) | `ddev exec supervisorctl status`; `ddev exec supervisorctl start 'webextradaemons:*'` or `ddev restart`. `ddev start` on an already-running project can skip them; `ddev demo-reset` starts them. |
+
+## 17a. One engine, one database (STG-04, SIS 1.2)
+
+**Canonical local environment.**
+
+| Item | Value |
+|---|---|
+| Docker engine | **Docker Desktop**, reached by the default context (`/var/run/docker.sock`, through Desktop's WSL integration). WSL docker-ce is disabled (`docker.service`/`docker.socket`). |
+| DDEV project / root | `lycenza` / the repository root |
+| Containers | `ddev-lycenza-web` (PHP, queue worker, scheduler), `ddev-lycenza-db` (PostgreSQL), `ddev-lycenza-redis`, `ddev-router` |
+| URL | `https://lycenza.ddev.site` |
+| Demo database | `db` on service `db:5432` (Laravel: `DB_HOST=db`, `DB_DATABASE=db`, from `.ddev/config.yaml`, which overrides `apps/platform/.env`) |
+| Test database | `school_os_test` on the same server, used only by `ddev test` |
+| Commands | `ddev exec ...` (working directory `apps/platform`), `ddev demo-reset`, `ddev test`, `ddev env-check` |
+
+**What went wrong (2026-10-26).** After a host restart, both WSL docker-ce
+and Docker Desktop started, and each brought up its own copy of every DDEV
+project.
+- Docker Desktop's WSL integration took over `/var/run/docker.sock`, so
+  `docker`, `ddev exec` and `artisan` reached Desktop's containers. Those
+  sat on a stale database.
+- The browser reached the docker-ce containers, which held the current data:
+  Windows `127.0.0.1:443` is `wslrelay.exe`, relaying to docker-ce's router
+  inside WSL.
+- The two paths wrote to different PostgreSQL servers, proven by different
+  `system_identifier` values and failed-login markers.
+- The fix: disable WSL docker-ce (`sudo systemctl disable --now docker.socket
+  docker.service`, volumes kept), `ddev restart` (router on Docker Desktop),
+  then `ddev demo-reset`.
+
+**Verify the database identity** at any time:
+
+```bash
+ddev env-check
+ddev exec -s db "psql -U db -d db -tAc 'select system_identifier from pg_control_system()'"
+ddev exec php artisan config:show database.connections.pgsql   # host db, database db
+```
+
+`ddev env-check` fails when:
+- the router serving `127.0.0.1:443` is not on the CLI's engine (its TLS
+  certificate serial differs);
+- the project's containers are missing;
+- WSL docker-ce runs beside Docker Desktop;
+- the Windows `:443` listener is not Docker Desktop's;
+- Laravel resolves another database or has cached configuration.
+
+**Stale-environment signs:**
+- a change made in the browser is invisible to `ddev exec`, or the reverse;
+- `ddev describe` lists no router;
+- `docker ps` shows a project you did not start.
+
+**Do not:**
+- delete the other engine's volumes;
+- run `docker system prune`.
+
+Stop the second engine, `ddev restart`, then `ddev demo-reset`, and re-run
+`ddev env-check`.
 
 ## 18. Complete DDEV reset
 

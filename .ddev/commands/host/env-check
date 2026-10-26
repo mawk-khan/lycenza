@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+
+## Description: Read-only check that the browser, ddev exec, the Laravel CLI and the queue/scheduler all reach ONE Docker engine and ONE DDEV database
+## Usage: env-check
+## Example: "ddev env-check" (run before any stateful local proof or UAT)
+
+# SIS 1.2 (STG-04): after a host restart, Docker Desktop's WSL integration
+# took over /var/run/docker.sock while the WSL docker-ce daemon kept serving
+# https://lycenza.ddev.site through its own router. The browser and the CLI
+# then reached two different databases. This check changes nothing; it fails
+# when that split could exist. See docs/development/DDEV-DEMO-REVIEW.md §17a.
+
+set -uo pipefail
+
+failures=0
+pass() { printf '  PASS  %s\n' "$*"; }
+fail() { printf '  FAIL  %s\n' "$*"; failures=$((failures + 1)); }
+info() { printf '  info  %s\n' "$*"; }
+
+engine_os="$(docker info --format '{{.OperatingSystem}}' 2>/dev/null || true)"
+engine_name="$(docker info --format '{{.Name}}' 2>/dev/null || true)"
+[[ -n "$engine_os" ]] || { echo "env-check: the docker CLI reaches no engine"; exit 1; }
+info "docker CLI engine: ${engine_name} (${engine_os}), context $(docker context show 2>/dev/null)"
+
+# 1. The router that serves the browser runs on the engine the CLI reaches.
+if [[ "$(docker inspect -f '{{.State.Running}}' ddev-router 2>/dev/null)" == "true" ]] \
+    && docker port ddev-router 443/tcp 2>/dev/null | grep -q '127.0.0.1:443$'; then
+    pass "ddev-router runs on the CLI's engine and publishes 127.0.0.1:443"
+else
+    fail "ddev-router is not running on the CLI's engine with 127.0.0.1:443 (another engine may be serving the browser)"
+fi
+for c in ddev-lycenza-web ddev-lycenza-db; do
+    [[ "$(docker inspect -f '{{.State.Running}}' "$c" 2>/dev/null)" == "true" ]] && pass "$c runs on the CLI's engine" || fail "$c is not running on the CLI's engine"
+done
+
+# 2. WSL only: no second engine may hold the browser's port.
+if grep -qi microsoft /proc/version 2>/dev/null; then
+    if [[ "$engine_os" == *"Docker Desktop"* ]]; then
+        if systemctl is-active --quiet docker.service 2>/dev/null; then
+            fail "WSL docker-ce (docker.service) is running beside Docker Desktop -- two engines, two copies of this project"
+        else
+            pass "WSL docker-ce is not running"
+        fi
+    fi
+    # Whatever holds 127.0.0.1:443 here (Docker Desktop's forwarder or another
+    # engine's router) must present THIS router's certificate.
+    served="$(echo | openssl s_client -connect 127.0.0.1:443 -servername "${DDEV_HOSTNAME:-lycenza.ddev.site}" 2>/dev/null | openssl x509 -noout -serial 2>/dev/null)"
+    routed="$(docker exec ddev-router cat "/mnt/ddev-global-cache/traefik/certs/${DDEV_PROJECT:-lycenza}.crt" 2>/dev/null | openssl x509 -noout -serial 2>/dev/null)"
+    if [[ -n "$served" && "$served" == "$routed" ]]; then
+        pass "127.0.0.1:443 serves this engine's router certificate (${served#serial=})"
+    else
+        fail "127.0.0.1:443 serves '${served:-nothing}', this engine's router holds '${routed:-nothing}' -- another engine is serving the browser"
+    fi
+    if [[ -x /mnt/c/Windows/System32/netstat.exe ]]; then
+        win_pid="$(/mnt/c/Windows/System32/netstat.exe -ano 2>/dev/null | tr -d '\r' | awk '$2 == "127.0.0.1:443" && $4 == "LISTENING" {print $5; exit}')"
+        win_proc="$(/mnt/c/Windows/System32/tasklist.exe /FI "PID eq ${win_pid:-0}" /NH 2>/dev/null | tr -d '\r' | awk 'NF {print $1; exit}')"
+        info "Windows 127.0.0.1:443 is held by ${win_proc:-nothing}"
+        if [[ "$engine_os" == *"Docker Desktop"* && "$win_proc" != "com.docker.backend.exe" ]]; then
+            fail "the Windows browser's :443 is not Docker Desktop's (${win_proc:-nothing})"
+        fi
+    fi
+fi
+
+# 3. One database: what ddev exec, the Laravel CLI and the workers resolve.
+sysid="$(ddev exec -s db "psql -U db -d db -tAc 'select system_identifier from pg_control_system()'" 2>/dev/null | tr -d '[:space:]')"
+migrations="$(ddev exec -s db "psql -U db -d db -tAc 'select count(*) from migrations'" 2>/dev/null | tr -d '[:space:]')"
+info "DDEV database: system_identifier=${sysid:-?}, migrations=${migrations:-?}"
+app_db="$(ddev exec 'php artisan config:show database.connections.pgsql 2>/dev/null' 2>/dev/null | awk '$1 == "host" || $1 == "database" {print $1"="$NF}' | tr '\n' ' ')"
+[[ "$app_db" == *"host=db"*"database=db"* ]] && pass "Laravel CLI resolves pgsql to ${app_db}" || fail "Laravel CLI resolves pgsql to '${app_db}', expected host=db database=db"
+ddev exec 'test ! -f bootstrap/cache/config.php' 2>/dev/null && pass "no cached Laravel configuration" || fail "bootstrap/cache/config.php exists (run: ddev exec php artisan config:clear)"
+workers="$(ddev exec 'for p in $(pgrep -f "queue:work|schedule:work"); do tr "\0" "\n" < /proc/$p/environ | grep -c "^DB_HOST=db$"; done' 2>/dev/null | grep -c '^1')"
+[[ "${workers:-0}" -ge 2 ]] && pass "queue worker and scheduler run in the same web container with DB_HOST=db" || info "queue worker/scheduler not running (ddev demo-reset or ddev restart starts them)"
+
+if [[ "$failures" -eq 0 ]]; then
+    echo "env-check: PASS -- browser, CLI and workers share one engine and one database"
+else
+    echo "env-check: FAIL ($failures) -- local stateful evidence is NOT trustworthy until fixed"
+    exit 1
+fi

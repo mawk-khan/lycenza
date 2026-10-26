@@ -171,7 +171,7 @@ after it (`76dfaa03` and this audit), which change documentation only.
 
 ## 7. Environment and gates (not local-closure blockers)
 
-- **STG-04:** OPEN LOCAL-ENVIRONMENT OPERATIONAL ISSUE
+- **STG-04** (*update 2026-10-26: RESOLVED by SIS 1.2, `DDEV-DEMO-REVIEW.md` §17a; `ddev env-check` guards it*): OPEN LOCAL-ENVIRONMENT OPERATIONAL ISSUE
   (`docs/operations/ORG-11-STAGING-READINESS.md` §9.4).
   - The browser is served by Docker Desktop with the ORG.10 data.
   - The CLI points at the stale WSL docker-ce Lycenza project (a 2026-09-29

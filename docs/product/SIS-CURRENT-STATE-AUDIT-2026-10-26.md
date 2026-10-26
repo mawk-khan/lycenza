@@ -28,6 +28,7 @@ limitations. **SIS Local Completion Score: 82/100.**
 | Latest full regression | exact-SHA `66be83a6`: 9,585 cases, 9,584 passed, 1 ESI-12 skip, 0 failures (counter 0/5) |
 | DDEV | `lycenza` OK; `https://lycenza.ddev.site` serves 200 (Docker Desktop engine, ORG.10 data) |
 | Known local caveat | **STG-04:** CLI `ddev exec` still reaches the stale WSL docker-ce database. Reconcile it before stateful local SIS work (ORG-LOCAL-CLOSURE §7). |
+| Update (SIS 1.2, 2026-10-26) | **STG-04 resolved.** Local stateful browser proof is now reliable: one engine (Docker Desktop), one DDEV database, `ddev env-check` passes. No other conclusion of this audit changes. |
 
 ## 2. Historical SIS work already completed
 

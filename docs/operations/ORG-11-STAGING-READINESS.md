@@ -169,7 +169,18 @@ assertions) → `publication-check --push` (fast-forward from `779e009c`).
   registry, published, promoted or deployed (OD-PPR-5 custody not
   provisioned).
 
-**9.4 STG-04 (local Docker engines) — NOT RESTORED, owner action required.**
+**9.4 STG-04 (local Docker engines) — RESOLVED 2026-10-26 by SIS 1.2** (see
+`docs/development/DDEV-DEMO-REVIEW.md` §17a). The diagnosis below was
+inverted:
+- the browser was served by WSL docker-ce (Windows `:443` = `wslrelay.exe`);
+- the CLI reached Docker Desktop, which had taken over `/var/run/docker.sock`
+  at 08:57 UTC.
+
+Docker Desktop is now the only engine (docker-ce disabled, volumes kept),
+proven by database identity and markers in both directions. The original
+text follows for history.
+
+**9.4 (original) STG-04 (local Docker engines) — NOT RESTORED, owner action required.**
 The owner's decision is that Docker Desktop is canonical, if the audit shows it
 serves `lycenza.ddev.site` with the ORG.10 data. Audit findings:
 - The `default` Docker context (WSL docker-ce) runs this project's DDEV
