@@ -68,3 +68,11 @@ the owner's screenshot evidence (ADR 0076 §67). It contains 87 screen
 families, with `reference-parity/screen-families.csv`, `screen-filters.csv`,
 `screen-columns.csv` and `screen-contradictions.csv`, in Lycenza wording
 only. No screenshot, reference layout or personal data is committed.)*
+
+*(2026-10-26, SIS 1.1: `SIS-CURRENT-STATE-AUDIT-2026-10-26.md` is the first
+checkpoint of the Student Information System programme, a current-state
+audit of `main` `6d1b5640`. It reconciles 49 historical SIS checkpoints (41
+complete) and classifies every SIS capability. Score: SIS Local Completion
+82/100. It lists 4 Must-Complete items, 9 Should-Complete groups and 13
+decision- or legal-blocked items, and sets out the numbered roadmap SIS
+1.1–10.1. It records and classifies; it builds nothing.)*
