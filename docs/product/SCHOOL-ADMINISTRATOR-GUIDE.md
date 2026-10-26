@@ -321,6 +321,23 @@ role.
   - **History**: admitted, placed, moved, inactive and active, Guardian
     linked.
 
+**Placement start dates** (SIS 4.1):
+- **The start date must fall inside the Section's academic year**, first
+  and last day included. The Section's year decides, never the active one.
+  Outside it, the start date field says which dates are allowed; correct the
+  date and save again. This applies to Enroll student, Transfer (the
+  effective date) and converting an admission.
+- **A closed academic year takes no new placements.** Its Sections are not
+  offered, and a closed-year Section is refused with "New placements cannot
+  be added to a closed Academic Year."
+- **A draft (next) year can be prepared:** placing a Student in a draft
+  year's Section works, with a start date inside that year.
+- **A start date cannot be edited afterwards.** If a placement was entered by
+  mistake, cancel it (reason: entered in error or duplicate placement) and
+  enroll again; for a wrong Section, use Transfer. A cancellation is dated
+  between the start date and today, so a placement that starts in the
+  future can be cancelled only from its start date on.
+
 **Mark inactive is one click, with no confirmation** (§21). Data Health
 then lists an inactive Student who still has a placement.
 

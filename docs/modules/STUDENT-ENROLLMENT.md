@@ -343,7 +343,9 @@ rule 2).
 
 ## Temporal integrity
 
-- `starts_on` is required.
+- `starts_on` is required, and (SIS 4.1) a new placement's `starts_on` lies
+  inside its Section's academic year, which must not be closed — see
+  "Placement start date and Academic Year validity" below.
 - `ends_on` is nullable (an active Enrollment has no end date yet).
 - A CHECK constraint enforces `ends_on IS NULL OR ends_on >= starts_on`
   at the database level (same-day withdrawal is valid, unlike
@@ -2932,3 +2934,70 @@ Closes G-6.
   no scheduled termination.
 - **Actor boundary:** the database proves the evidence exists, not who acted;
   only the Student services write these states.
+
+## Placement start date and Academic Year validity (SIS 4.1, 2026-10-26, MC-2)
+
+Closes MC-2 (`docs/product/SIS-CURRENT-STATE-AUDIT-2026-10-26.md` §22).
+Before SIS 4.1, `starts_on` was validated only as a date. Because it is
+frozen once written (`retention_eligibility_guard`) and an end must lie in
+`[starts_on, year end]`, a start after the year's end produced a placement
+that could never be ended or corrected without owner SQL.
+
+- **One rule, one place.** `StudentEnrollmentService::assertPlaceable()` (the
+  ORG.7F-2 placement-validity rule) now also checks the year. The only runtime
+  INSERT, `createEnrollmentRow()`, is reached only through `enroll()` and
+  `transferPlacement()`. So every creation path meets it: manual placement
+  (web and API), transfer (whole-School and Campus), Admissions conversion,
+  rollover execution and Campus onboarding. No path duplicates the date
+  logic.
+- **The year is the Section's own.** Never a caller-supplied year, never the
+  School's active year. A transfer's target shares the source's year
+  (checked first).
+- **Start date:** `year.starts_on <= starts_on <= year.ends_on`, both ends
+  inclusive. It is compared as a calendar date (`Y-m-d`), with no timezone
+  conversion. Outside the year: `InvalidEnrollmentDateRangeException`
+  (422 `INVALID_ENROLLMENT_DATE_RANGE`): "The start date must fall within
+  Academic Year <name> (<start> to <end>)." The web forms show it on the date
+  field (`starts_on`; `effective_date` for a transfer).
+- **Closed year:** no new placement, whatever the date.
+  `PlacementTargetUnavailableException::YEAR_CLOSED` (422
+  `PLACEMENT_TARGET_UNAVAILABLE`): "New placements cannot be added to a closed
+  Academic Year." On the web it is the LC-1 refusal banner. The create and
+  transfer pickers already offered only draft/active-year Sections.
+- **Draft year:** placeable. Future-year preparation and rollover create
+  placements before activation, starting inside the draft year.
+- **Active year:** unchanged.
+- **Concurrency.** The year row is share-locked (FOR SHARE) after the Student
+  and before any Section lock, the same Year → Section order as Attendance.
+  `AcademicYearService::close()`/`activate()` UPDATE that row, so a close
+  either waits for the placement to commit or, having committed first, is
+  seen, and the placement is refused. FOR SHARE is compatible with the
+  INSERT's own foreign-key lock and with Attendance's share lock.
+  `PlacementYearConcurrencyTest` proves both orders with two real processes.
+- **Callers:**
+  - Rollover execution maps a target year closed after validation to drift
+    (`placement_target_unavailable_at_execution`), never to a placement.
+    Its start date is the target year's first day, so the date rule never
+    refuses it. Target-year status at plan/dry-run time stays SIS 5.2.
+  - Campus onboarding and Campus transfer keep their one generic refusal.
+  - Admissions conversion rolls back entirely: no Student, Guardian,
+    relationship, placement or fee intent.
+- **Not changed:**
+  - no schema change, no new capability or route;
+  - placement history stays frozen; there is no start-date edit;
+  - historical closed-year placements stay visible;
+  - factories that insert rows directly are not service paths and are
+    unchanged.
+- **Database backstop: not added.** The database does not refuse an
+  out-of-year `starts_on` today, as it does for `ends_on`
+  (`student_enrollments_end_within_year`). Enforcing it there is a migration,
+  so it is an owner decision, out of this checkpoint's no-schema scope.
+- **Correcting a placement entered by mistake:**
+  - cancel it (`did_not_join`, `duplicate_placement`, `entered_in_error`)
+    and enroll again; for a wrong Section, transfer;
+  - a cancellation is dated in `[starts_on, today]`, so a future-dated
+    placement (for example a draft-year one) can be cancelled only from its
+    start date. Recorded for SIS 4.2.
+- **Existing data (canonical DDEV demo, 2026-10-26):** 0 placements start
+  outside their year, 0 sit in a closed year, 0 disagree with their Section's
+  context, 0 have an end before their start.

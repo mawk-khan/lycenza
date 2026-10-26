@@ -6,6 +6,7 @@ use App\Domain\AcademicStructure\Application\CurrentAcademicYearResolver;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\Students\Application\Exceptions\DuplicateEnrollmentRollNumberException;
 use App\Domain\Students\Application\Exceptions\DuplicateStudentNumberException;
+use App\Domain\Students\Application\Exceptions\InvalidEnrollmentDateRangeException;
 use App\Domain\Students\Application\Exceptions\PlacementTargetUnavailableException;
 use App\Domain\Students\Application\Exceptions\StudentOnboardingUnavailableException;
 use App\Domain\Students\Infrastructure\Student;
@@ -82,7 +83,7 @@ final class CampusStudentOnboardingService
                     'date_of_birth' => $input['date_of_birth'],
                 ], $actor);
                 $enrollment = $this->enrollments->enroll($student, $section, $input['roll_number'], SchoolTimezone::today($school), $actor);
-            } catch (PlacementTargetUnavailableException|DuplicateStudentNumberException) {
+            } catch (PlacementTargetUnavailableException|InvalidEnrollmentDateRangeException|DuplicateStudentNumberException) {
                 throw new StudentOnboardingUnavailableException;
             } catch (DuplicateEnrollmentRollNumberException $e) {
                 // The roll number is taken in the actor's own, in-scope Section:

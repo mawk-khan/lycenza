@@ -203,8 +203,10 @@ class StudentMarkServiceTest extends TestCase
         $this->elect($w, $student);
         $this->assertThrows(fn () => $this->recordMarks($w, [$this->entry($student, 'present', '1')], $w['electivePaper']), StudentMarkPaperInactiveException::class);
 
+        // SIS 4.1: placed before the close -- a closed year takes no new placement.
+        $unmarked = $this->markStudent($w);
         app(AcademicYearService::class)->close($w['year'], $w['admin']);
-        $this->assertThrows(fn () => $this->recordMarks($w, [$this->entry($this->markStudent($w), 'present', '20')]), StudentMarkAcademicYearClosedException::class);
+        $this->assertThrows(fn () => $this->recordMarks($w, [$this->entry($unmarked, 'present', '20')]), StudentMarkAcademicYearClosedException::class);
         $this->assertThrows(fn () => $this->recordMarks($w, [$this->entry($student, 'present', '21', 1)]), StudentMarkAcademicYearClosedException::class);
         $this->assertSame('20.00', (string) $this->markOf($w, $student)->value);
     }

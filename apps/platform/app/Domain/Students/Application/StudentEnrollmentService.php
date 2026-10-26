@@ -2,6 +2,7 @@
 
 namespace App\Domain\Students\Application;
 
+use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\Campuses\Application\ActiveCampus;
 use App\Domain\Students\Application\Exceptions\ActiveEnrollmentConflictException;
@@ -129,10 +130,12 @@ class StudentEnrollmentService
                     // ORG.7F-2: the Student FIRST (FOR SHARE), then the
                     // Section lock before any Enrollment mutation (this
                     // class's own docblock), then the placement-validity
-                    // check under those locks.
+                    // check under those locks. SIS 4.1: the Section's
+                    // Academic Year sits between them (FOR SHARE).
                     $lockedStudent = $this->lockStudentForPlacement($student->id);
+                    $year = $this->lockAcademicYearForPlacement($section->academic_year_id);
                     $sections = $this->lockSections([$section->id]);
-                    $this->assertPlaceable($lockedStudent, $sections[$section->id]);
+                    $startsOn = $this->assertPlaceable($lockedStudent, $sections[$section->id], $year, $startsOn);
 
                     return $this->createEnrollmentRow($lockedStudent, $sections[$section->id], $rollNumber, $startsOn, $actor);
                 });
@@ -245,6 +248,9 @@ class StudentEnrollmentService
                     // UPDATE) and then waiting for this Enrollment can never
                     // form a cycle with this transfer (ADR 0076 §44.11).
                     $lockedStudent = $this->lockStudentForPlacement($sourceEnrollment->student_id);
+                    // SIS 4.1: the one Academic Year both placements share
+                    // (checked above), FOR SHARE before the Sections.
+                    $year = $this->lockAcademicYearForPlacement($targetSection->academic_year_id);
                     $discovered = StudentEnrollment::query()->whereKey($sourceEnrollment->id)->firstOrFail();
                     $sections = $this->lockSections([$discovered->section_id, $targetSection->id]);
 
@@ -292,7 +298,7 @@ class StudentEnrollmentService
                     // rolls back together, so
                     // the source Enrollment is never left half-transferred
                     // and no false "transferred" audit record survives.
-                    $this->assertPlaceable($lockedStudent, $sections[$targetSection->id]);
+                    $effectiveDate = $this->assertPlaceable($lockedStudent, $sections[$targetSection->id], $year, $effectiveDate);
 
                     $target = $this->createEnrollmentRow($lockedStudent, $sections[$targetSection->id], $rollNumber, $effectiveDate, $actor);
 
@@ -484,6 +490,21 @@ class StudentEnrollmentService
     }
 
     /**
+     * SIS 4.1 (MC-2): the Academic Year a new placement belongs to -- always
+     * the Section's own, never a caller-supplied year -- share-locked (FOR
+     * SHARE) until the placement commits. AcademicYearService's activate()
+     * and close() UPDATE that row, so a close waits for this placement or,
+     * having committed first, is seen; FOR SHARE stays compatible with the
+     * INSERT's own foreign-key FOR KEY SHARE and with Attendance's FOR SHARE
+     * (AttendanceSubmissionService, step 2). Taken after the Student and
+     * BEFORE any Section lock -- Attendance's Year -> Section order.
+     */
+    private function lockAcademicYearForPlacement(string $academicYearId): AcademicYear
+    {
+        return AcademicYear::query()->whereKey($academicYearId)->sharedLock()->firstOrFail();
+    }
+
+    /**
      * ORG.7F-2 (finding F-2): the ONE placement-validity rule for every new
      * Enrollment -- an active Student, an active Section, and that Section's
      * Campus active in the same School (share-locked by ActiveCampus until
@@ -491,11 +512,19 @@ class StudentEnrollmentService
      * Campus and Grade are bound by the composite foreign key (ORG.7D-0); a
      * future year is fine (rollover), so the year is never required to be
      * the School's active one here. Data validity, never authorization.
+     *
+     * SIS 4.1 (MC-2): the Section's Academic Year (share-locked) is not
+     * `closed` -- a `draft` year stays placeable for preparation and
+     * rollover -- and the start date is a calendar date inside that year,
+     * both ends inclusive. Returns the start date as `Y-m-d`.
      */
-    private function assertPlaceable(Student $lockedStudent, Section $lockedSection): void
+    private function assertPlaceable(Student $lockedStudent, Section $lockedSection, AcademicYear $lockedYear, string $startsOn): string
     {
         if ($lockedStudent->school_id !== $lockedSection->school_id) {
             throw new CrossSchoolEnrollmentException;
+        }
+        if ($lockedSection->academic_year_id !== $lockedYear->id) {
+            throw new LogicException('A placement is checked against its own Section\'s Academic Year.');
         }
         if ($lockedStudent->status !== 'active') {
             throw new PlacementTargetUnavailableException(PlacementTargetUnavailableException::STUDENT_INACTIVE);
@@ -506,6 +535,19 @@ class StudentEnrollmentService
         if ($this->campuses->find($lockedSection->school_id, $lockedSection->campus_id) === null) {
             throw new PlacementTargetUnavailableException(PlacementTargetUnavailableException::CAMPUS_INACTIVE);
         }
+        if ($lockedYear->status === 'closed') {
+            throw new PlacementTargetUnavailableException(PlacementTargetUnavailableException::YEAR_CLOSED);
+        }
+
+        // Calendar dates only: no timezone conversion on either side.
+        $startsOn = Carbon::parse($startsOn)->toDateString();
+        $yearStart = $lockedYear->starts_on->toDateString();
+        $yearEnd = $lockedYear->ends_on->toDateString();
+        if ($startsOn < $yearStart || $startsOn > $yearEnd) {
+            throw new InvalidEnrollmentDateRangeException("The start date must fall within Academic Year {$lockedYear->name} ({$yearStart} to {$yearEnd}).");
+        }
+
+        return $startsOn;
     }
 
     /**

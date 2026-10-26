@@ -68,9 +68,9 @@ class PlacementValidityTest extends TestCase
         return app(TenantContext::class)->withSchool($this->school, $fn);
     }
 
-    private function enroll(Student $student, Section $section, string $roll = '1'): StudentEnrollment
+    private function enroll(Student $student, Section $section, string $roll = '1', string $startsOn = '2026-06-02'): StudentEnrollment
     {
-        return app(StudentEnrollmentService::class)->enroll($student, $section, $roll, '2026-06-02');
+        return app(StudentEnrollmentService::class)->enroll($student, $section, $roll, $startsOn);
     }
 
     private function refusedWith(string $reason, callable $operation): void
@@ -107,7 +107,8 @@ class PlacementValidityTest extends TestCase
         $student = $this->createStudent($this->school);
         $future = $this->createSection($this->next, $this->a, $this->grade, ['code' => 'F', 'status' => 'active']);
 
-        $this->assertSame($this->next->id, $this->enroll($student, $future)->academic_year_id, 'F-2 never requires the active year');
+        // SIS 4.1: the start date lies inside the future year itself.
+        $this->assertSame($this->next->id, $this->enroll($student, $future, '1', '2027-06-01')->academic_year_id, 'F-2 never requires the active year');
     }
 
     #[Test]

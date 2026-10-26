@@ -361,11 +361,12 @@ class StudentEnrollmentApiTest extends TestCase
         $sectionTwo = $this->createSection($year, $campus, $grade, ['name' => 'B', 'code' => 'B']);
         $sectionThree = $this->createSection($year, $campus, $grade, ['name' => 'C', 'code' => 'C']);
 
-        $completed = $this->service()->enroll($student, $sectionOne, '01', '2026-01-01');
+        // SIS 4.1: every start date lies inside the Section's year (2026-06-01 to 2027-05-31).
+        $completed = $this->service()->enroll($student, $sectionOne, '01', '2026-06-01');
         $this->completeEnrollment($completed);
 
-        $reEnrolled = $this->service()->enroll($student, $sectionTwo, '02', '2026-03-02');
-        $this->service()->transferPlacement($reEnrolled, $sectionThree, '03', '2026-04-01');
+        $reEnrolled = $this->service()->enroll($student, $sectionTwo, '02', '2026-06-02');
+        $this->service()->transferPlacement($reEnrolled, $sectionThree, '03', '2026-07-01');
 
         [$user] = $this->createSchoolAdmin('school_admin');
         $membership = $this->createMembership($user, $school);
@@ -386,9 +387,10 @@ class StudentEnrollmentApiTest extends TestCase
     {
         ['school' => $school, 'campus' => $campus, 'year' => $year, 'grade' => $grade, 'section' => $sectionOne, 'student' => $student] = $this->buildPlacementContext();
         $sectionTwo = $this->createSection($year, $campus, $grade, ['name' => 'B', 'code' => 'B']);
-        $completed = $this->service()->enroll($student, $sectionOne, '01', '2026-01-01');
+        // SIS 4.1: every start date lies inside the Section's year (2026-06-01 to 2027-05-31).
+        $completed = $this->service()->enroll($student, $sectionOne, '01', '2026-06-01');
         $this->completeEnrollment($completed);
-        $this->service()->enroll($student, $sectionTwo, '02', '2026-03-02');
+        $this->service()->enroll($student, $sectionTwo, '02', '2026-06-02');
         app(TenantContext::class)->withSchool($school, fn () => $year->update(['status' => 'active']));
 
         [$user] = $this->createSchoolAdmin('school_admin');

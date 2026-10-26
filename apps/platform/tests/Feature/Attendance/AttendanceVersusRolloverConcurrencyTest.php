@@ -6,7 +6,6 @@ use App\Domain\Attendance\Infrastructure\AttendanceRecord;
 use App\Domain\Attendance\Infrastructure\AttendanceSession;
 use App\Domain\Students\Application\EnrollmentRolloverDryRunService;
 use App\Domain\Students\Application\EnrollmentRolloverPlanService;
-use App\Domain\Students\Application\StudentEnrollmentService;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Models\School;
@@ -101,7 +100,9 @@ class AttendanceVersusRolloverConcurrencyTest extends TestCase
 
             // A different Student being promoted INTO that same Section.
             $promoted = $this->createStudent($school, ['student_number' => "S-{$round}"]);
-            app(StudentEnrollmentService::class)->enroll($promoted, $sourceSection, '007', '2025-06-01');
+            // SIS 4.1: the source year is closed, so its placement is
+            // pre-existing history (fixture), not a new service placement.
+            $this->createStudentEnrollment($promoted, $sourceSection, ['roll_number' => '007', 'starts_on' => '2025-06-01']);
 
             $plan = $this->createEnrollmentRolloverPlan($sourceYear, $targetYear);
             app(EnrollmentRolloverPlanService::class)->upsertMapping($plan, $sourceGrade, null, $targetGrade, $targetSection);
