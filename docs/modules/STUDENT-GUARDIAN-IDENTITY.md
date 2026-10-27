@@ -1668,3 +1668,14 @@ includes inactive rows, re-adding a deactivated value failed: recovery was SQL.
     - every search compares case-insensitively.
   - Nothing is normalized. Changing the identifier contract is a later,
     explicit decision.
+
+## Date of birth: one rule with Admissions (SIS 3.2, 2026-10-27)
+
+A Student's and an Applicant's date of birth share
+`App\Support\Validation\DateOfBirth`: never after the School's own date.
+It is used by:
+- every controller's validation (web and API create and edit, Campus
+  onboarding);
+- `StudentService::create()`/`update()`, as the authoritative backstop.
+
+The rule and message are the same as SIS 2.3's.

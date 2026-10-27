@@ -21,6 +21,7 @@ use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Validation\DateOfBirth;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -55,8 +56,6 @@ class StudentController extends Controller
     use AuthorizesCapability, PresentsDuplicateStudentWarning;
 
     /** SIS 2.3: a date of birth is never after the School's own today. */
-    private const DATE_OF_BIRTH_MESSAGES = ['date_of_birth.before_or_equal' => 'The date of birth cannot be in the future.'];
-
     public function create(Request $request, TenantContext $context): Response
     {
         $school = $context->requireSchool();
@@ -85,9 +84,9 @@ class StudentController extends Controller
             'first_name' => ['required', 'string', 'max:255'],
             'middle_name' => ['nullable', 'string', 'max:255'],
             'last_name' => ['nullable', 'string', 'max:255'],
-            'date_of_birth' => ['required', 'date', 'before_or_equal:'.SchoolTimezone::today($school)],
+            'date_of_birth' => DateOfBirth::rules($school),
             'duplicate_acknowledgement' => ['nullable', 'string', 'max:128'],
-        ], self::DATE_OF_BIRTH_MESSAGES);
+        ], DateOfBirth::messages());
 
         try {
             $student = $service->create($school, Arr::except($validated, ['duplicate_acknowledgement']), $context->actor(), $validated['duplicate_acknowledgement'] ?? null);
@@ -242,8 +241,8 @@ class StudentController extends Controller
             'first_name' => ['required', 'string', 'max:255'],
             'middle_name' => ['nullable', 'string', 'max:255'],
             'last_name' => ['nullable', 'string', 'max:255'],
-            'date_of_birth' => ['required', 'date', 'before_or_equal:'.SchoolTimezone::today($school)],
-        ], self::DATE_OF_BIRTH_MESSAGES);
+            'date_of_birth' => DateOfBirth::rules($school),
+        ], DateOfBirth::messages());
 
         try {
             $service->update($model, $validated, $context->actor());

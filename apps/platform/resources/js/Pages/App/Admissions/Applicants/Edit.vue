@@ -14,6 +14,8 @@ interface Props {
         dateOfBirth: string;
         updatedAt: string;
     };
+    // SIS 3.2: the School's date -- a date of birth is never later.
+    today: string;
 }
 
 const props = defineProps<Props>();
@@ -74,6 +76,7 @@ function submit(): void {
                 type="date"
                 label="Date of birth"
                 required
+                :max="today"
                 :error="form.errors.date_of_birth"
             />
 

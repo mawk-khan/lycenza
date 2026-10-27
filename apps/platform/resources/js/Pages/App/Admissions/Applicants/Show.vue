@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
-import { formatDate } from '../../../../datetime';
+import { formatCalendarDate, formatDate } from '../../../../datetime';
 import StatusBadge from '../../../../Components/StatusBadge.vue';
 
 interface Ref {
@@ -100,7 +100,7 @@ function applicationContext(a: ApplicationRow): string {
                 </div>
                 <div>
                     <dt class="text-slate-500">Date of birth</dt>
-                    <dd class="mt-0.5">{{ applicant.dateOfBirth }}</dd>
+                    <dd class="mt-0.5">{{ formatCalendarDate(applicant.dateOfBirth) }}</dd>
                 </div>
             </dl>
         </section>

@@ -9505,7 +9505,7 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
-        /** @description No school_id, no contact fields, no Guardian fields -- Admissions stores no contact data of any kind (docs/modules/ADMISSIONS.md §9). */
+        /** @description No school_id, no contact fields, no Guardian fields -- Admissions stores no contact data of any kind (docs/modules/ADMISSIONS.md §9). date_of_birth may not be after the School's today (SIS 3.2, the same rule as a Student's; a 422 field error). */
         ApplicantInput: {
             first_name: string;
             middle_name?: string | null;
@@ -19072,7 +19072,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Not currently accepted (including already converted -- AdmissionApplicationAlreadyConvertedException), an incompatible Section, a duplicate Student Number, a duplicate roll number, or a Guardian create-vs-link candidate conflict (AdmissionGuardianSelectionRequiredException -- never returns candidate ids/names/contact values), or a supplied student_number (allocated since SIS 2.3). */
+            /** @description Not currently accepted (including already converted -- AdmissionApplicationAlreadyConvertedException), an incompatible Section, a duplicate Student Number, a duplicate roll number, or a Guardian create-vs-link candidate conflict (AdmissionGuardianSelectionRequiredException -- never returns candidate ids/names/contact values), a supplied student_number (allocated since SIS 2.3), or an applicant date of birth after the School's today (APPLICANT_DATE_OF_BIRTH_IN_FUTURE, SIS 3.2 -- legacy data; nothing is written). */
             422: {
                 headers: {
                     [name: string]: unknown;

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import EmptyState from '../../../../Components/EmptyState.vue';
 import Pagination from '../../../../Components/Pagination.vue';
 
@@ -54,7 +54,9 @@ function fullName(applicant: ApplicantRow): string {
         .join(' ');
 }
 
-const hasFilters = name.value.length > 0;
+// SIS 3.2: reactive, from the filter the list was actually loaded with
+// (searching keeps this component mounted -- preserveState).
+const hasFilters = computed(() => !!props.filters.name);
 </script>
 
 <template>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
 import Pagination from '../../../Components/Pagination.vue';
 import StatusBadge from '../../../Components/StatusBadge.vue';
@@ -93,12 +93,9 @@ function applicationContext(a: ApplicationRow): string {
     return `${a.gradeLevel.name} · ${a.campus.name} · ${a.academicYear.name}`;
 }
 
-const hasFilters =
-    status.value ||
-    academicYearId.value ||
-    campusId.value ||
-    gradeLevelId.value ||
-    applicantName.value;
+// SIS 3.2: reactive, from the filters the list was actually loaded with
+// (filtering keeps this component mounted -- preserveState).
+const hasFilters = computed(() => Object.values(props.filters).some((v) => !!v));
 </script>
 
 <template>

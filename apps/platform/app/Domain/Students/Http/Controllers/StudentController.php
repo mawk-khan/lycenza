@@ -9,7 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
-use App\Support\Tenancy\SchoolTimezone;
+use App\Support\Validation\DateOfBirth;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -70,11 +70,11 @@ class StudentController extends Controller
             'first_name' => ['required', 'string', 'max:255'],
             'middle_name' => ['nullable', 'string', 'max:255'],
             'last_name' => ['nullable', 'string', 'max:255'],
-            'date_of_birth' => ['required', 'date', 'before_or_equal:'.SchoolTimezone::today($school)],
+            'date_of_birth' => DateOfBirth::rules($school),
             'duplicate_acknowledgement' => ['nullable', 'string', 'max:128'],
         ], [
             'student_number.prohibited' => 'The Student number is allocated by the School and cannot be supplied.',
-            'date_of_birth.before_or_equal' => 'The date of birth cannot be in the future.',
+            ...DateOfBirth::messages(),
         ]);
 
         $student = $service->create($school, Arr::except($validated, ['duplicate_acknowledgement', 'student_number']), $request->user(), $validated['duplicate_acknowledgement'] ?? null);
@@ -95,8 +95,8 @@ class StudentController extends Controller
             'first_name' => ['sometimes', 'string', 'max:255'],
             'middle_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'last_name' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'date_of_birth' => ['sometimes', 'date', 'before_or_equal:'.SchoolTimezone::today($school)],
-        ], ['date_of_birth.before_or_equal' => 'The date of birth cannot be in the future.']);
+            'date_of_birth' => DateOfBirth::rules($school, required: false),
+        ], DateOfBirth::messages());
 
         $updated = $service->update($model, $validated, $request->user());
 

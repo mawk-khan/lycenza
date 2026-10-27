@@ -52,9 +52,21 @@ final class AdmissionApplicationAccess
     }
 
     /** @return list<array{id: string, name: string}> the Campus filter's choices: the scope's Campuses only */
-    public function campusOptions(CampusScope $scope): array
+    /**
+     * The Campuses within the scope, by name. SIS 3.2: a directory filter
+     * lists every Campus (history stays findable), an inactive one labelled;
+     * a form choosing NEW context (`$activeOnly`) lists only active Campuses,
+     * plus the application's current Campus (`$keep`) so a correction form
+     * still shows what is recorded -- ActiveCampus refuses moving onto an
+     * inactive Campus regardless.
+     *
+     * @return list<array{id: string, name: string}>
+     */
+    public function campusOptions(CampusScope $scope, bool $activeOnly = false, ?string $keep = null): array
     {
-        return $scope->restrict(Campus::query(), 'id')->orderBy('name')->get(['id', 'name'])
-            ->map(fn (Campus $c): array => ['id' => $c->id, 'name' => $c->name])->values()->all();
+        return $scope->restrict(Campus::query(), 'id')
+            ->when($activeOnly, fn ($q) => $q->where(fn ($w) => $w->where('status', 'active')->when($keep !== null, fn ($k) => $k->orWhere('id', $keep))))
+            ->orderBy('name')->get(['id', 'name', 'status'])
+            ->map(fn (Campus $c): array => ['id' => (string) $c->id, 'name' => $c->status === 'active' ? $c->name : "{$c->name} (inactive)"])->values()->all();
     }
 }

@@ -10,7 +10,9 @@ use App\Domain\Admissions\Infrastructure\AdmissionApplication;
 use App\Domain\Admissions\Infrastructure\Applicant;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\Campus\CampusScopeResolver;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Validation\DateOfBirth;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -64,7 +66,8 @@ class ApplicantController extends Controller
         // ORG.7D-3: a declared whole-School-only operation -- authorized by the
         // route's ordinary `capability:admissions.manage` floor (ADR 0076 §39).
 
-        return Inertia::render('App/Admissions/Applicants/Create');
+        // SIS 3.2: the School's date bounds the date-of-birth input.
+        return Inertia::render('App/Admissions/Applicants/Create', ['today' => SchoolTimezone::today($school)]);
     }
 
     public function store(Request $request, TenantContext $context, ApplicantService $service): RedirectResponse
@@ -77,8 +80,8 @@ class ApplicantController extends Controller
             'first_name' => ['required', 'string', 'max:255'],
             'middle_name' => ['nullable', 'string', 'max:255'],
             'last_name' => ['nullable', 'string', 'max:255'],
-            'date_of_birth' => ['required', 'date'],
-        ]);
+            'date_of_birth' => DateOfBirth::rules($school),
+        ], DateOfBirth::messages());
 
         $applicant = $service->create($school, $validated, $context->actor());
 
@@ -116,7 +119,7 @@ class ApplicantController extends Controller
      */
     public function edit(TenantContext $context, ApplicantReadService $reads, string $applicant): Response|RedirectResponse
     {
-        $context->requireSchool();
+        $school = $context->requireSchool();
 
         $model = $reads->detail($applicant);
         abort_if($model === null, 404);
@@ -131,12 +134,13 @@ class ApplicantController extends Controller
                 ...$this->presentDetail($model),
                 'updatedAt' => $model->updated_at->toIso8601String(),
             ],
+            'today' => SchoolTimezone::today($school),
         ]);
     }
 
     public function update(Request $request, TenantContext $context, ApplicantReadService $reads, ApplicantService $service, string $applicant): RedirectResponse
     {
-        $context->requireSchool();
+        $school = $context->requireSchool();
 
         $model = $reads->detail($applicant);
         abort_if($model === null, 404);
@@ -146,9 +150,9 @@ class ApplicantController extends Controller
             'first_name' => ['required', 'string', 'max:255'],
             'middle_name' => ['nullable', 'string', 'max:255'],
             'last_name' => ['nullable', 'string', 'max:255'],
-            'date_of_birth' => ['required', 'date'],
+            'date_of_birth' => DateOfBirth::rules($school),
             'expected_updated_at' => ['required', 'string', 'max:64'],
-        ]);
+        ], DateOfBirth::messages());
 
         try {
             $service->correct($model, $validated, $validated['expected_updated_at'], $context->actor());

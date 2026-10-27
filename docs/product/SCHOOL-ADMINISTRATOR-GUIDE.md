@@ -305,11 +305,14 @@ role.
 **Goal:** turn an applicant into an active, placed Student.
 
 1. **Admissions → Applicants → Add applicant**: name and date of birth.
+   The date of birth cannot be later than today (the School's date).
 2. On the applicant, select **New application**. Choose the **Academic
    Year**, Campus and Grade. The current year is preselected; upcoming
-   draft years are labelled.
-3. **Submit**, then **Accept application**, or **Reject application** /
-   **Withdraw** with a note.
+   draft years are labelled. Only active Campuses are offered.
+3. **Submit application**, then **Accept application…** or **Reject
+   application…** (with an optional note), or **Withdraw application**.
+   **Accepted is a decision, not yet a Student:** the Student record is
+   created only when you convert the application.
 4. On an accepted application, **Convert to Student**:
    - Section, roll number and start date (the Student number is assigned
      automatically, SIS 2.3);
@@ -343,6 +346,15 @@ role.
 - **Discard draft** closes a draft that was never submitted. Use it for a
   draft created by mistake. It then shows as Withdrawn, and the applicant
   stays. After submission, use **Withdraw** instead.
+- **Withdraw, Reject and Discard** all close an application for good;
+  nothing is deleted. Withdraw is for a submitted or accepted application
+  the family no longer pursues; Reject is the School's decision; Discard
+  removes a draft created by mistake.
+- **A Campus deactivated later** stays on the applications already made
+  there ("Campus now inactive"); they remain readable and are never moved.
+- **A date of birth in the future** (recorded before this rule existed)
+  stops conversion with a message. Correct the applicant's details, then
+  convert.
 - **Admission fee:** Admissions → Admission fee records a fee *intent*.
   It is not a charge.
 

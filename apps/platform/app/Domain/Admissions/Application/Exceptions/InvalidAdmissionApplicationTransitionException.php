@@ -16,12 +16,33 @@ namespace App\Domain\Admissions\Application\Exceptions;
  */
 class InvalidAdmissionApplicationTransitionException extends AdmissionsException
 {
-    public function __construct(string $from, string $to)
+    /** SIS 3.2: the operator's words for each status (never a raw status key). */
+    private const array NOW = [
+        'draft' => 'is still a draft',
+        'submitted' => 'has been submitted',
+        'accepted' => 'has been accepted',
+        'rejected' => 'has been rejected',
+        'withdrawn' => 'has been withdrawn',
+        'converted' => 'has already been converted to a Student',
+    ];
+
+    private const array ACTION = [
+        'submitted' => 'submitted',
+        'accepted' => 'accepted',
+        'rejected' => 'rejected',
+        'withdrawn' => 'withdrawn',
+        'converted' => 'converted to a Student',
+    ];
+
+    public function __construct(public readonly string $from, public readonly string $to)
     {
+        $now = self::NOW[$from] ?? 'has changed';
+        $action = self::ACTION[$to] ?? 'changed this way';
+
         parent::__construct(
             422,
             'INVALID_ADMISSION_APPLICATION_TRANSITION',
-            "Cannot transition an Admission Application from '{$from}' to '{$to}'.",
+            "This application {$now}, so it can't be {$action}. Refresh the page to see what can be done next.",
         );
     }
 }

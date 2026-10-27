@@ -15,6 +15,7 @@ use App\Support\Audit\AuditRecorder;
 use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Authorization\Campus\CampusScope;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Validation\DateOfBirth;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -82,6 +83,8 @@ class StudentService
         if (array_key_exists('student_number', $attributes)) { // @phpstan-ignore function.impossibleType
             throw new LogicException('A Student number is allocated by StudentService::create(), never supplied (SIS 2.3).');
         }
+        // SIS 3.2: the shared date-of-birth rule as the authoritative backstop.
+        DateOfBirth::assert($school, $attributes['date_of_birth']);
 
         return $this->context->withSchool($school, function () use ($school, $attributes, $actor, $duplicateAcknowledgement, $duplicateScope) {
             $studentNumber = null;
@@ -139,6 +142,9 @@ class StudentService
         return $this->context->withSchool($student->school, function () use ($student, $attributes, $actor) {
             try {
                 return DB::transaction(function () use ($student, $attributes, $actor) {
+                    if (array_key_exists('date_of_birth', $attributes)) {
+                        DateOfBirth::assert($student->school, $attributes['date_of_birth']);
+                    }
                     $student->update($attributes);
 
                     $this->audit->school($student->school, 'student.updated', actor: $actor, subject: $student, metadata: [

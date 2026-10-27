@@ -45,6 +45,8 @@ interface Props {
         campus: Ref;
         gradeLevel: Ref;
         decisionNote: string | null;
+        // SIS 3.2: false once the recorded Campus has been deactivated (history stays).
+        campusActive: boolean;
         convertedStudentId: string | null;
         convertedStudentEnrollmentId: string | null;
         createdAt: string;
@@ -101,7 +103,7 @@ function submitApplication(): void {
 
 function withdrawApplication(): void {
     const confirmed = window.confirm(
-        `Withdraw this application for ${applicantName()}? This cannot be undone from this page.`,
+        `Withdraw this application for ${applicantName()}? A withdrawn application cannot be reopened; the applicant and their other applications stay.`,
     );
     if (!confirmed) return;
     transitioning.value = true;
@@ -339,7 +341,8 @@ function switchToLinkExisting(g: GuardianCandidate): void {
                     <span v-else>{{ applicantName() }}</span>
                 </h1>
                 <p class="mt-1 text-sm text-slate-500">
-                    {{ application.gradeLevel.name }} · {{ application.campus.name }} ·
+                    {{ application.gradeLevel.name }} · {{ application.campus.name
+                    }}<span v-if="!application.campusActive"> (Campus now inactive)</span> ·
                     {{ application.academicYear.name }}
                 </p>
             </div>
@@ -365,8 +368,10 @@ function switchToLinkExisting(g: GuardianCandidate): void {
             v-if="application.status === 'converted'"
             class="mt-6 rounded border border-slate-200 p-4 text-sm"
         >
-            <h2 class="font-medium text-slate-500">Converted</h2>
-            <p class="mt-1">Converted {{ formatDate(application.convertedAt) }}.</p>
+            <h2 class="font-medium text-slate-500">Admitted</h2>
+            <p class="mt-1">
+                Converted to a Student record on {{ formatDate(application.convertedAt) }}.
+            </p>
             <a
                 v-if="canViewStudents && application.convertedStudentId"
                 class="mt-2 inline-block underline"
@@ -375,6 +380,20 @@ function switchToLinkExisting(g: GuardianCandidate): void {
                 View converted Student
             </a>
         </section>
+
+        <!-- SIS 3.2: acceptance is a decision; the Student is created only by conversion. -->
+        <p
+            v-if="application.status === 'accepted'"
+            class="mt-6 rounded border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900"
+        >
+            Accepted — not yet a Student.
+            <template v-if="canConvert">
+                Convert it below to create the Student record and place them in a class.
+            </template>
+            <template v-else>
+                An Admissions manager for the whole School converts it into a Student record.
+            </template>
+        </p>
 
         <!-- Lifecycle actions -->
         <section v-if="canManage" class="mt-6 flex flex-wrap items-center gap-3 text-sm">
@@ -385,7 +404,7 @@ function switchToLinkExisting(g: GuardianCandidate): void {
                 class="rounded bg-slate-900 px-3 py-1.5 font-medium text-white disabled:opacity-50"
                 @click="submitApplication"
             >
-                Submit
+                Submit application
             </button>
             <button
                 v-if="application.status === 'submitted'"
@@ -393,7 +412,7 @@ function switchToLinkExisting(g: GuardianCandidate): void {
                 class="rounded bg-slate-900 px-3 py-1.5 font-medium text-white"
                 @click="startDecision('accept')"
             >
-                Accept
+                Accept application…
             </button>
             <button
                 v-if="application.status === 'submitted'"
@@ -401,7 +420,7 @@ function switchToLinkExisting(g: GuardianCandidate): void {
                 class="rounded border border-slate-300 px-3 py-1.5 font-medium hover:bg-slate-50"
                 @click="startDecision('reject')"
             >
-                Reject
+                Reject application…
             </button>
             <button
                 v-if="['submitted', 'accepted'].includes(application.status)"
@@ -410,7 +429,7 @@ function switchToLinkExisting(g: GuardianCandidate): void {
                 class="text-red-600 underline disabled:opacity-50"
                 @click="withdrawApplication"
             >
-                Withdraw
+                Withdraw application
             </button>
             <a v-if="canCorrect" class="underline" :href="`/app/admissions/${application.id}/edit`"
                 >Correct details</a
@@ -447,6 +466,13 @@ function switchToLinkExisting(g: GuardianCandidate): void {
             <p class="text-sm font-medium text-slate-700">
                 {{ activeDecision === 'accept' ? 'Accept application' : 'Reject application' }}
             </p>
+            <p class="mt-1 text-sm text-slate-500">
+                {{
+                    activeDecision === 'accept'
+                        ? 'Accepting records the decision. It does not create a Student: that happens when the application is converted.'
+                        : 'Rejecting closes the application. It cannot be reopened.'
+                }}
+            </p>
             <div class="mt-2">
                 <label class="block text-sm text-slate-600" for="decision_note">
                     Decision note (optional)
@@ -455,9 +481,13 @@ function switchToLinkExisting(g: GuardianCandidate): void {
                     id="decision_note"
                     v-model="decisionForm.decision_note"
                     rows="3"
+                    :aria-invalid="decisionForm.errors.decision_note ? 'true' : undefined"
+                    aria-describedby="decision_note-error"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                 />
-                <p class="mt-1 text-sm text-red-600">{{ decisionForm.errors.decision_note }}</p>
+                <p id="decision_note-error" class="mt-1 text-sm text-red-600">
+                    {{ decisionForm.errors.decision_note }}
+                </p>
             </div>
             <div class="mt-3 flex items-center gap-3">
                 <button
@@ -465,7 +495,7 @@ function switchToLinkExisting(g: GuardianCandidate): void {
                     :disabled="decisionForm.processing"
                     class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
                 >
-                    Confirm {{ activeDecision === 'accept' ? 'accept' : 'reject' }}
+                    {{ activeDecision === 'accept' ? 'Confirm acceptance' : 'Confirm rejection' }}
                 </button>
                 <button type="button" class="text-sm underline" @click="activeDecision = null">
                     Cancel
@@ -505,9 +535,11 @@ function switchToLinkExisting(g: GuardianCandidate): void {
                             v-model="convertForm.roll_number"
                             type="text"
                             required
+                            :aria-invalid="convertForm.errors.roll_number ? 'true' : undefined"
+                            aria-describedby="roll_number-error"
                             class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                         />
-                        <p class="mt-1 text-sm text-red-600">
+                        <p id="roll_number-error" class="mt-1 text-sm text-red-600">
                             {{ convertForm.errors.roll_number }}
                         </p>
                     </div>
@@ -522,6 +554,8 @@ function switchToLinkExisting(g: GuardianCandidate): void {
                             id="section_id"
                             v-model="convertForm.section_id"
                             required
+                            :aria-invalid="convertForm.errors.section_id ? 'true' : undefined"
+                            aria-describedby="section_id-error"
                             class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                         >
                             <option value="" disabled>Select a Section…</option>
@@ -529,7 +563,9 @@ function switchToLinkExisting(g: GuardianCandidate): void {
                                 {{ s.label }}
                             </option>
                         </select>
-                        <p class="mt-1 text-sm text-red-600">{{ convertForm.errors.section_id }}</p>
+                        <p id="section_id-error" class="mt-1 text-sm text-red-600">
+                            {{ convertForm.errors.section_id }}
+                        </p>
                         <p
                             v-if="compatibleSections.length === 0"
                             class="mt-1 text-sm text-amber-700"
@@ -547,36 +583,48 @@ function switchToLinkExisting(g: GuardianCandidate): void {
                             v-model="convertForm.starts_on"
                             type="date"
                             required
+                            :aria-invalid="convertForm.errors.starts_on ? 'true' : undefined"
+                            aria-describedby="starts_on-error"
                             class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                         />
-                        <p class="mt-1 text-sm text-red-600">{{ convertForm.errors.starts_on }}</p>
+                        <p id="starts_on-error" class="mt-1 text-sm text-red-600">
+                            {{ convertForm.errors.starts_on }}
+                        </p>
                     </div>
                 </div>
 
                 <div class="border-t border-slate-100 pt-4">
-                    <p class="text-sm font-medium text-slate-700">Guardian (optional)</p>
-                    <div class="mt-2 flex gap-4 text-sm">
-                        <label class="flex items-center gap-2">
-                            <input v-model="convertForm.guardian_mode" type="radio" value="none" />
-                            None
-                        </label>
-                        <label class="flex items-center gap-2">
-                            <input
-                                v-model="convertForm.guardian_mode"
-                                type="radio"
-                                value="create"
-                            />
-                            Create new
-                        </label>
-                        <label class="flex items-center gap-2">
-                            <input
-                                v-model="convertForm.guardian_mode"
-                                type="radio"
-                                value="link_existing"
-                            />
-                            Link existing
-                        </label>
-                    </div>
+                    <fieldset>
+                        <legend class="text-sm font-medium text-slate-700">
+                            Guardian (optional)
+                        </legend>
+                        <div class="mt-2 flex flex-wrap gap-4 text-sm">
+                            <label class="flex items-center gap-2">
+                                <input
+                                    v-model="convertForm.guardian_mode"
+                                    type="radio"
+                                    value="none"
+                                />
+                                None
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input
+                                    v-model="convertForm.guardian_mode"
+                                    type="radio"
+                                    value="create"
+                                />
+                                Create new
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input
+                                    v-model="convertForm.guardian_mode"
+                                    type="radio"
+                                    value="link_existing"
+                                />
+                                Link existing
+                            </label>
+                        </div>
+                    </fieldset>
 
                     <div v-if="convertForm.guardian_mode !== 'none'" class="mt-3">
                         <label class="block text-sm text-slate-600" for="guardian_relationship_type"
@@ -626,26 +674,49 @@ function switchToLinkExisting(g: GuardianCandidate): void {
                     <!-- Create mode -->
                     <div v-if="convertForm.guardian_mode === 'create'" class="mt-4 space-y-3">
                         <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                            <input
-                                v-model="convertForm.guardian_first_name"
-                                type="text"
-                                placeholder="First name"
-                                class="rounded border border-slate-300 px-3 py-2 text-sm"
-                            />
-                            <input
-                                v-model="convertForm.guardian_middle_name"
-                                type="text"
-                                placeholder="Middle name"
-                                class="rounded border border-slate-300 px-3 py-2 text-sm"
-                            />
-                            <input
-                                v-model="convertForm.guardian_last_name"
-                                type="text"
-                                placeholder="Last name"
-                                class="rounded border border-slate-300 px-3 py-2 text-sm"
-                            />
+                            <div>
+                                <label
+                                    class="block text-sm text-slate-600"
+                                    for="guardian_first_name"
+                                    >Guardian first name</label
+                                >
+                                <input
+                                    id="guardian_first_name"
+                                    v-model="convertForm.guardian_first_name"
+                                    type="text"
+                                    :aria-invalid="
+                                        convertError('guardian.first_name') ? 'true' : undefined
+                                    "
+                                    aria-describedby="guardian_first_name-error"
+                                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                />
+                            </div>
+                            <div>
+                                <label
+                                    class="block text-sm text-slate-600"
+                                    for="guardian_middle_name"
+                                    >Middle name</label
+                                >
+                                <input
+                                    id="guardian_middle_name"
+                                    v-model="convertForm.guardian_middle_name"
+                                    type="text"
+                                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                />
+                            </div>
+                            <div>
+                                <label class="block text-sm text-slate-600" for="guardian_last_name"
+                                    >Last name</label
+                                >
+                                <input
+                                    id="guardian_last_name"
+                                    v-model="convertForm.guardian_last_name"
+                                    type="text"
+                                    class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                />
+                            </div>
                         </div>
-                        <p class="text-sm text-red-600">
+                        <p id="guardian_first_name-error" class="text-sm text-red-600">
                             {{ convertError('guardian.first_name') }}
                         </p>
 
@@ -734,7 +805,11 @@ function switchToLinkExisting(g: GuardianCandidate): void {
                             </button>
                         </div>
                         <div v-else class="relative">
+                            <label class="sr-only" for="guardian_name_search"
+                                >Search Guardians by name</label
+                            >
                             <input
+                                id="guardian_name_search"
                                 v-model="nameQuery"
                                 type="text"
                                 placeholder="Search Guardians by name…"

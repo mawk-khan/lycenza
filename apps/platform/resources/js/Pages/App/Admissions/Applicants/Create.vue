@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import { useForm } from '@inertiajs/vue3';
+import TextField from '../../../../Components/Form/TextField.vue';
+
+// SIS 3.2: the same labelled fields (and the same "not in the future" date of
+// birth, by the School's date) as the correction form.
+const props = defineProps<{ today: string }>();
 
 const form = useForm({
     first_name: '',
@@ -14,7 +19,7 @@ function submit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-xl px-4 py-6 font-sans text-slate-900 sm:p-8">
         <a class="text-sm underline" href="/app/admissions/applicants">← Applicants</a>
         <h1 class="mt-2 text-xl font-semibold">Add applicant</h1>
         <p class="mt-1 text-sm text-slate-500">
@@ -24,63 +29,40 @@ function submit(): void {
 
         <form class="mt-6 space-y-4" @submit.prevent="submit">
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700" for="first_name"
-                        >First name</label
-                    >
-                    <input
-                        id="first_name"
-                        v-model="form.first_name"
-                        type="text"
-                        required
-                        :aria-invalid="!!form.errors.first_name"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-                    />
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700" for="middle_name"
-                        >Middle name</label
-                    >
-                    <input
-                        id="middle_name"
-                        v-model="form.middle_name"
-                        type="text"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-                    />
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700" for="last_name"
-                        >Last name</label
-                    >
-                    <input
-                        id="last_name"
-                        v-model="form.last_name"
-                        type="text"
-                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-                    />
-                </div>
-            </div>
-            <p class="text-sm text-red-600">{{ form.errors.first_name }}</p>
-
-            <div>
-                <label class="block text-sm font-medium text-slate-700" for="date_of_birth"
-                    >Date of birth</label
-                >
-                <input
-                    id="date_of_birth"
-                    v-model="form.date_of_birth"
-                    type="date"
+                <TextField
+                    id="first_name"
+                    v-model="form.first_name"
+                    label="First name"
                     required
-                    :aria-invalid="!!form.errors.date_of_birth"
-                    aria-describedby="date_of_birth-error"
-                    class="mt-1 rounded border border-slate-300 px-3 py-2 sm:w-56"
+                    :maxlength="255"
+                    :error="form.errors.first_name"
                 />
-                <p id="date_of_birth-error" class="mt-1 text-sm text-red-600">
-                    {{ form.errors.date_of_birth }}
-                </p>
+                <TextField
+                    id="middle_name"
+                    v-model="form.middle_name"
+                    label="Middle name"
+                    :maxlength="255"
+                    :error="form.errors.middle_name"
+                />
+                <TextField
+                    id="last_name"
+                    v-model="form.last_name"
+                    label="Last name"
+                    :maxlength="255"
+                    :error="form.errors.last_name"
+                />
             </div>
+            <TextField
+                id="date_of_birth"
+                v-model="form.date_of_birth"
+                type="date"
+                label="Date of birth"
+                required
+                :max="props.today"
+                :error="form.errors.date_of_birth"
+            />
 
-            <div class="flex items-center gap-3">
+            <div class="flex flex-wrap items-center gap-3">
                 <button
                     type="submit"
                     :disabled="form.processing"

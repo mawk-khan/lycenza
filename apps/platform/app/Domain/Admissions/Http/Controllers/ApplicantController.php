@@ -11,6 +11,7 @@ use App\Domain\Admissions\Infrastructure\Applicant;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Models\School;
+use App\Support\Validation\DateOfBirth;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -72,8 +73,8 @@ class ApplicantController extends Controller
             'first_name' => ['required', 'string', 'max:255'],
             'middle_name' => ['nullable', 'string', 'max:255'],
             'last_name' => ['nullable', 'string', 'max:255'],
-            'date_of_birth' => ['required', 'date'],
-        ]);
+            'date_of_birth' => DateOfBirth::rules($school),
+        ], DateOfBirth::messages());
 
         $applicant = $service->create($school, $validated, $request->user());
 

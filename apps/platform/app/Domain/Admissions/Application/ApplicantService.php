@@ -10,6 +10,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Validation\DateOfBirth;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -46,6 +47,9 @@ class ApplicantService
      */
     public function create(School $school, array $attributes, ?User $actor = null): Applicant
     {
+        // SIS 3.2: the shared rule, again here so no caller bypasses the form.
+        DateOfBirth::assert($school, $attributes['date_of_birth']);
+
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $attributes, $actor) {
             $applicant = Applicant::query()->create([
                 'school_id' => $school->id,
@@ -91,6 +95,8 @@ class ApplicantService
             if ($locked->updated_at?->toIso8601String() !== $expectedUpdatedAt) {
                 throw new AdmissionRecordChangedException;
             }
+            // SIS 3.2: a correction is never weaker than creation.
+            DateOfBirth::assert($locked->school, $attributes['date_of_birth']);
 
             $current = [
                 'first_name' => $locked->first_name,

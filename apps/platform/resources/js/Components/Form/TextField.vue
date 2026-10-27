@@ -13,6 +13,8 @@ const props = withDefaults(
         hint?: string;
         required?: boolean;
         min?: number;
+        // SIS 3.2: an upper bound, e.g. a date input's latest allowed date (Y-m-d).
+        max?: string | number;
         maxlength?: number;
         autocomplete?: string;
     }>(),
@@ -21,6 +23,7 @@ const props = withDefaults(
         error: undefined,
         hint: undefined,
         min: undefined,
+        max: undefined,
         maxlength: undefined,
         autocomplete: 'off',
     },
@@ -47,6 +50,7 @@ const describedBy = computed(
             :type="type"
             :required="required"
             :min="min"
+            :max="max"
             :maxlength="maxlength"
             :autocomplete="autocomplete"
             :aria-invalid="error ? 'true' : undefined"

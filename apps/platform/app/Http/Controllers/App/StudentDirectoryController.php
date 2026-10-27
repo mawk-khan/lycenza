@@ -19,6 +19,7 @@ use App\Models\User;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Validation\DateOfBirth;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -216,11 +217,11 @@ class StudentDirectoryController extends Controller
             'first_name' => ['required', 'string', 'max:255'],
             'middle_name' => ['nullable', 'string', 'max:255'],
             'last_name' => ['nullable', 'string', 'max:255'],
-            'date_of_birth' => ['required', 'date', 'before_or_equal:'.SchoolTimezone::today($school)],
+            'date_of_birth' => DateOfBirth::rules($school),
             'section_id' => ['required', 'uuid'],
             'roll_number' => ['required', 'string', 'max:255'],
             'duplicate_acknowledgement' => ['nullable', 'string', 'max:128'],
-        ], ['date_of_birth.before_or_equal' => 'The date of birth cannot be in the future.']);
+        ], DateOfBirth::messages());
 
         // SIS 2.3: the duplicate-risk check compares only with the Students
         // this actor may already see (their students.view Campus scope).

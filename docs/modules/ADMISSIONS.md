@@ -811,3 +811,47 @@ conversion, by the application's Campus.
   - the admission fee head and fee provenance.
 - **Search hygiene:** the Applicant and Guardian searches now escape LIKE
   wildcards.
+
+## Validation and wording polish (SIS 3.2, 2026-10-27)
+
+- **Date of birth.** An Applicant's date of birth may not be later than the
+  School's own date (`SchoolTimezone::today()`, never UTC). This is the same
+  rule as a Student's: `App\Support\Validation\DateOfBirth`.
+  - It applies on web and API create, and on correction (field error
+    "The date of birth cannot be in the future.").
+  - `ApplicantService::create()`/`correct()` assert it again.
+  - Conversion revalidates the Applicant's date of birth under the
+    application lock, before anything is written
+    (`APPLICANT_DATE_OF_BIRTH_IN_FUTURE`, 422; on the web, a page banner).
+    No Student, placement, Guardian or fee intent results.
+  - The canonical demo held no future-dated Applicant.
+- **Campus.** A new or changed application context uses an active Campus.
+  - The Create form offers active Campuses only.
+  - The correction form offers active Campuses plus the recorded one.
+  - A forged inactive Campus remains the `ActiveCampus` field error
+    (ORG.7D-0).
+  - An application whose Campus is deactivated later keeps it, stays
+    readable, and its page says "Campus now inactive". The directory
+    filter still lists it, labelled "(inactive)".
+- **Wording.**
+  - A refused transition reads in the operator's words, e.g. "This
+    application is still a draft, so it can't be accepted." — never
+    status keys. The error code is unchanged.
+  - The actions are "Submit application", "Accept application…", "Reject
+    application…", "Withdraw application" and "Discard draft".
+  - An accepted application says it is not yet a Student, and the accept
+    form says acceptance does not create one.
+  - A converted application reads "Admitted — converted to a Student
+    record on …".
+  - The status machine and every transition are unchanged.
+- **Forms.**
+  - Add applicant uses the same labelled fields as correction, with every
+    name error shown, and both date inputs bounded by the School's date.
+  - The Applicant page shows the date of birth as "5 May 2016".
+  - On the conversion form:
+    - Start date, Section, roll number and the decision note have
+      `aria-invalid` + `aria-describedby` errors;
+    - the Guardian choice is a `fieldset` with a legend;
+    - the Guardian name and search inputs have labels.
+  - Both directories' empty states follow the applied filters (reactive).
+- No schema change, no new state, no capability change.

@@ -6,6 +6,7 @@ use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\Admissions\Application\Exceptions\AdmissionApplicationAlreadyConvertedException;
 use App\Domain\Admissions\Application\Exceptions\AdmissionGuardianNotActiveException;
 use App\Domain\Admissions\Application\Exceptions\AdmissionGuardianSelectionRequiredException;
+use App\Domain\Admissions\Application\Exceptions\ApplicantDateOfBirthInFutureException;
 use App\Domain\Admissions\Application\Exceptions\IncompatibleConversionSectionException;
 use App\Domain\Admissions\Application\Exceptions\InvalidAdmissionApplicationTransitionException;
 use App\Domain\Admissions\Infrastructure\AdmissionApplication;
@@ -20,6 +21,7 @@ use App\Domain\Students\Infrastructure\Student;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Tenancy\TenantContext;
+use App\Support\Validation\DateOfBirth;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -135,6 +137,11 @@ class AdmissionConversionService
                 }
 
                 $applicant = $locked->applicant;
+                // SIS 3.2: a legacy future date of birth never becomes a Student;
+                // refused before anything (Student, Guardian, fee intent) is written.
+                if (DateOfBirth::isFuture($locked->school, $applicant->date_of_birth)) {
+                    throw new ApplicantDateOfBirthInFutureException;
+                }
 
                 // Step 1 (ADMISSIONS.md §8): Student identity comes
                 // from the Applicant -- decision_note is never read

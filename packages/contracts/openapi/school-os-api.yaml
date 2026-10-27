@@ -5253,8 +5253,11 @@ paths:
             incompatible Section, a duplicate Student Number, a
             duplicate roll number, or a Guardian create-vs-link
             candidate conflict (AdmissionGuardianSelectionRequiredException
-            -- never returns candidate ids/names/contact values), or a
-            supplied student_number (allocated since SIS 2.3).
+            -- never returns candidate ids/names/contact values), a
+            supplied student_number (allocated since SIS 2.3), or an
+            applicant date of birth after the School's today
+            (APPLICANT_DATE_OF_BIRTH_IN_FUTURE, SIS 3.2 -- legacy data;
+            nothing is written).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -18121,7 +18124,7 @@ components:
     ApplicantInput:
       type: object
       required: [first_name, date_of_birth]
-      description: No school_id, no contact fields, no Guardian fields -- Admissions stores no contact data of any kind (docs/modules/ADMISSIONS.md §9).
+      description: No school_id, no contact fields, no Guardian fields -- Admissions stores no contact data of any kind (docs/modules/ADMISSIONS.md §9). date_of_birth may not be after the School's today (SIS 3.2, the same rule as a Student's; a 422 field error).
       properties:
         first_name: { type: string, maxLength: 255 }
         middle_name: { type: string, maxLength: 255, nullable: true }

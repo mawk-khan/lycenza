@@ -15,6 +15,7 @@ use App\Domain\Admissions\Application\Exceptions\AdmissionCorrectionNotPermitted
 use App\Domain\Admissions\Application\Exceptions\AdmissionGuardianNotActiveException;
 use App\Domain\Admissions\Application\Exceptions\AdmissionGuardianSelectionRequiredException;
 use App\Domain\Admissions\Application\Exceptions\AdmissionRecordChangedException;
+use App\Domain\Admissions\Application\Exceptions\ApplicantDateOfBirthInFutureException;
 use App\Domain\Admissions\Application\Exceptions\CrossSchoolAdmissionReferenceException;
 use App\Domain\Admissions\Application\Exceptions\IncompatibleConversionSectionException;
 use App\Domain\Admissions\Application\Exceptions\InvalidAdmissionApplicationTransitionException;
@@ -148,7 +149,9 @@ class AdmissionApplicationController extends Controller
             // the draft next year stays selectable, labelled.
             'academicYears' => AcademicYearChoices::options($years = AcademicYear::query()->get()),
             'defaultAcademicYearId' => AcademicYearChoices::defaultId($years),
-            'campuses' => $this->campusOptions(),
+            // SIS 3.2: a new application goes on an active Campus only (ActiveCampus
+            // refuses a forged inactive one with a field error).
+            'campuses' => $this->activeCampusOptions(),
             'gradeLevels' => $this->gradeLevelOptions(),
         ]);
     }
@@ -305,7 +308,8 @@ class AdmissionApplicationController extends Controller
             'application' => $this->presentDetail($model),
             'mode' => in_array($model->status, AdmissionApplicationService::CONTEXT_CORRECTABLE, true) ? 'context' : 'note',
             'academicYears' => AcademicYearChoices::options(AcademicYear::query()->get()),
-            'campuses' => $access->campusOptions($scope),
+            // SIS 3.2: active Campuses, plus the recorded one even if it is now inactive.
+            'campuses' => $access->campusOptions($scope, activeOnly: true, keep: $model->campus_id),
             'gradeLevels' => $this->gradeLevelOptions(),
         ]);
     }
@@ -420,7 +424,7 @@ class AdmissionApplicationController extends Controller
             );
         } catch (IncompatibleConversionSectionException|ActiveEnrollmentConflictException|CrossSchoolEnrollmentException $e) {
             throw ValidationException::withMessages(['section_id' => [$e->getMessage()]]);
-        } catch (AdmissionApplicationAlreadyConvertedException|InvalidAdmissionApplicationTransitionException $e) {
+        } catch (AdmissionApplicationAlreadyConvertedException|InvalidAdmissionApplicationTransitionException|ApplicantDateOfBirthInFutureException $e) {
             throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
         } catch (PossibleDuplicateStudentException $e) {
             // SIS 2.3: nothing was written; the page shows the candidates.
@@ -563,11 +567,13 @@ class AdmissionApplicationController extends Controller
     }
 
     /**
+     * SIS 3.2: a new application's Campus choices -- active Campuses only.
+     *
      * @return array<int, array<string, string>>
      */
-    private function campusOptions(): array
+    private function activeCampusOptions(): array
     {
-        return Campus::query()->orderBy('name')->get()
+        return Campus::query()->where('status', 'active')->orderBy('name')->get()
             ->map(fn (Campus $c) => ['id' => $c->id, 'name' => $c->name])
             ->all();
     }
@@ -622,6 +628,8 @@ class AdmissionApplicationController extends Controller
         return [
             ...$this->presentSummary($application),
             'decisionNote' => $application->decision_note,
+            // SIS 3.2: a Campus deactivated later stays the recorded Campus; the page says so.
+            'campusActive' => $application->campus->status === 'active',
             'convertedStudentId' => $application->converted_student_id,
             'convertedStudentEnrollmentId' => $application->converted_student_enrollment_id,
             'updatedAt' => $application->updated_at->toIso8601String(),
