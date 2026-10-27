@@ -86,7 +86,7 @@ class AdmissionFeeSelectionConcurrencyTest extends TestCase
         $w = $this->world();
         // Converted while unconfigured, so its fee-link is still unrecorded; then configured.
         app(AdmissionFeeSelectionService::class)->setFeeHead($w['school'], null, null);
-        $converted = app(AdmissionConversionService::class)->convert($w['application'], 'S-LINK', $w['section'], '01', '2026-06-01')->application;
+        $converted = app(AdmissionConversionService::class)->convert($w['application'], $w['section'], '01', '2026-06-01')->application;
         app(AdmissionFeeSelectionService::class)->setFeeHead($w['school'], $w['admissionHead']->id, null);
         $args = ['link', $w['school']->id, $converted->id];
 
@@ -103,7 +103,7 @@ class AdmissionFeeSelectionConcurrencyTest extends TestCase
     {
         $w = $this->world();
         app(AdmissionFeeSelectionService::class)->setFeeHead($w['school'], null, null);
-        $converted = app(AdmissionConversionService::class)->convert($w['application'], 'S-SEAM', $w['section'], '01', '2026-06-01')->application;
+        $converted = app(AdmissionConversionService::class)->convert($w['application'], $w['section'], '01', '2026-06-01')->application;
         $args = ['select', $w['school']->id, $converted->converted_student_id, $w['year']->id, $w['admissionHead']->id, $converted->id];
 
         [$holder, $contender] = $this->raceWithHeldHolder($this->op(...$args), $this->op(...$args));

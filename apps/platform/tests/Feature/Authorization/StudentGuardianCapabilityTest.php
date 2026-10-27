@@ -90,7 +90,7 @@ class StudentGuardianCapabilityTest extends TestCase
         $this->assertTrue(Gate::forUser($user)->allows('capability', ['students.manage', $school]));
 
         $student = app(StudentService::class)->create($school, [
-            'student_number' => 'S-1001', 'first_name' => 'Asha', 'date_of_birth' => '2015-04-12',
+            'first_name' => 'Asha', 'date_of_birth' => '2015-04-12',
         ], $user);
 
         $this->assertSame($school->id, $student->school_id);

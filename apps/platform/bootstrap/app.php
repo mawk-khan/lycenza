@@ -273,6 +273,12 @@ return Application::configure(basePath: dirname(__DIR__))
             // `null` otherwise. Not a new/parallel error JSON shape.
             $code = method_exists($e, 'errorCode') ? $e->errorCode() : null;
 
+            // SIS 2.3: an optional, exception-defined `details` object --
+            // present only for exceptions that define one (e.g.
+            // PossibleDuplicateStudentException's count + acknowledgement),
+            // omitted otherwise. Same envelope, one optional key.
+            $details = method_exists($e, 'details') ? $e->details() : null;
+
             // Phase 8A.15: this render callback builds a brand-new
             // response, so it does NOT automatically inherit headers
             // Laravel's own default exception rendering would have
@@ -295,6 +301,7 @@ return Application::configure(basePath: dirname(__DIR__))
                     'code' => $code,
                     'requestId' => $request->attributes->get('request_id'),
                     'errors' => $errors,
+                    ...($details === null ? [] : ['details' => $details]),
                 ],
             ], $status, $headers);
         });

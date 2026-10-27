@@ -113,7 +113,7 @@ class AdmissionCorrectionServiceTest extends TestCase
     {
         $section = $this->createSection($this->year, $this->campus, $this->grade);
         $application = $this->application('accepted');
-        $result = app(AdmissionConversionService::class)->convert($application, 'S-COR-1', $section, '01', '2026-06-01');
+        $result = app(AdmissionConversionService::class)->convert($application, $section, '01', '2026-06-01');
 
         try {
             $this->applicants()->correct($this->applicant, ['first_name' => 'Aasha', 'last_name' => 'Verma', 'date_of_birth' => '2016-04-12'], $this->version($this->applicant));
@@ -247,7 +247,7 @@ class AdmissionCorrectionServiceTest extends TestCase
                 'decision_note' => $status === 'converted' ? 'Note' : null,
             ]);
             if ($status === 'converted') {
-                app(AdmissionConversionService::class)->convert($application, 'S-COR-NOTE', $section, '07', '2026-06-01');
+                app(AdmissionConversionService::class)->convert($application, $section, '07', '2026-06-01');
             }
 
             try {

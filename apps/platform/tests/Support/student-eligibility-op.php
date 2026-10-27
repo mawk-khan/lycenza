@@ -72,7 +72,8 @@ use Tests\Support\Concurrency\HeldTransaction;
 //   php student-eligibility-op.php student-rename <schoolId> <userId> <studentId> <firstName>   (ORG.7F-2)
 //   php student-eligibility-op.php onboard <schoolId> <userId> <sectionId> <firstName>          (ORG.7F-2; prints the allocated number)
 //   php student-eligibility-op.php section-inactivate <schoolId> <sectionId>                    (ORG.7F-2)
-//   php student-eligibility-op.php manual-create <schoolId> <studentNumber>                     (ORG.7F-2; a typed number)
+//   php student-eligibility-op.php manual-renumber <schoolId> <studentId> <studentNumber>        (SIS 2.3; a typed number correction)
+//   php student-eligibility-op.php create-student <schoolId> <firstName> [<acknowledgement>]    (SIS 2.3; prints the allocated number)
 //   php student-eligibility-op.php campus-transfer <schoolId> <userId> <studentId> <sectionId>  (ORG.7F-3)
 //   php student-eligibility-op.php elective-enroll <schoolId> <studentId> <offeringId>          (ORG.7F-3)
 //   php student-eligibility-op.php manual-charge <schoolId> <studentId> <yearId> <receivableId> <revenueId>  (ORG.7G-1A)
@@ -184,10 +185,18 @@ try {
                 ], User::query()->findOrFail($userId));
 
                 return 'ok:'.$enrollment->student->student_number;
-            case 'manual-create':
-                $app->make(StudentService::class)->create($school, ['student_number' => $args[0], 'first_name' => 'Manual', 'date_of_birth' => '2016-05-01']);
+            case 'manual-renumber':
+                // SIS 2.3: a typed number now exists only as a correction of an existing Student.
+                [$studentId, $number] = $args;
+                $app->make(StudentService::class)->update(Student::query()->findOrFail($studentId), ['student_number' => $number]);
 
                 return 'ok';
+            case 'create-student':
+                // SIS 2.3: the one creation path (allocated number + duplicate check), whole School.
+                [$firstName, $acknowledgement] = $args + [1 => null];
+                $student = $app->make(StudentService::class)->create($school, ['first_name' => $firstName, 'last_name' => 'Racer', 'date_of_birth' => '2016-05-01'], null, $acknowledgement);
+
+                return 'ok:'.$student->student_number;
             case 'campus-transfer':
                 [$userId, $studentId, $sectionId] = $args;
                 $app->make(CampusStudentTransferService::class)->transfer($school, $scope($userId, 'enrollments.manage'), $studentId, $sectionId, 'T'.random_int(1000, 9999), User::query()->findOrFail($userId));

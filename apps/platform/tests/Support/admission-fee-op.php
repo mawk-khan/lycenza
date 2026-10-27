@@ -17,7 +17,7 @@ use Tests\Support\Concurrency\HeldTransaction;
 // on them (Tests\Concerns\ForcesConcurrentOverlap).
 //
 // Usage:
-//   php admission-fee-op.php convert <schoolId> <applicationId> <sectionId> <studentNumber> <rollNumber>
+//   php admission-fee-op.php convert <schoolId> <applicationId> <sectionId> <studentNumber> <rollNumber>   (<studentNumber> ignored since SIS 2.3)
 //   php admission-fee-op.php link <schoolId> <applicationId>
 //   php admission-fee-op.php select <schoolId> <studentId> <academicYearId> <feeHeadId> <applicationId>
 
@@ -35,7 +35,7 @@ try {
     echo HeldTransaction::run(function () use ($app, $op, $school, $argv): string {
         if ($op === 'convert') {
             $application = AdmissionApplication::query()->findOrFail($argv[3]);
-            $converted = $app->make(AdmissionConversionService::class)->convert($application, $argv[5], Section::query()->findOrFail($argv[4]), $argv[6], '2026-06-01')->application;
+            $converted = $app->make(AdmissionConversionService::class)->convert($application, Section::query()->findOrFail($argv[4]), $argv[6], '2026-06-01')->application;
 
             return 'converted:'.$converted->converted_student_id;
         }

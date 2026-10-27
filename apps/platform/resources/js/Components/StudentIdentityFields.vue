@@ -14,9 +14,15 @@ interface Errors {
     date_of_birth?: string;
 }
 
-defineProps<{ errors: Errors }>();
+// SIS 2.3: a new Student's number is allocated by the server, so Add Student
+// renders no number field (`withNumber: false`); Edit keeps the existing
+// number correction. `maxDate` is the School's today (no future birth date).
+withDefaults(defineProps<{ errors: Errors; withNumber?: boolean; maxDate?: string }>(), {
+    withNumber: true,
+    maxDate: undefined,
+});
 
-const studentNumber = defineModel<string>('studentNumber', { required: true });
+const studentNumber = defineModel<string>('studentNumber', { default: '' });
 const firstName = defineModel<string>('firstName', { required: true });
 const middleName = defineModel<string>('middleName', { required: true });
 const lastName = defineModel<string>('lastName', { required: true });
@@ -25,7 +31,7 @@ const dateOfBirth = defineModel<string>('dateOfBirth', { required: true });
 
 <template>
     <div class="space-y-4">
-        <div>
+        <div v-if="withNumber">
             <label class="block text-sm font-medium text-slate-700" for="student_number"
                 >Student number</label
             >
@@ -54,6 +60,7 @@ const dateOfBirth = defineModel<string>('dateOfBirth', { required: true });
                     v-model="firstName"
                     type="text"
                     required
+                    :autofocus="!withNumber"
                     :aria-invalid="!!errors.first_name"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
                 />
@@ -92,6 +99,7 @@ const dateOfBirth = defineModel<string>('dateOfBirth', { required: true });
                 v-model="dateOfBirth"
                 type="date"
                 required
+                :max="maxDate"
                 :aria-invalid="!!errors.date_of_birth"
                 aria-describedby="date_of_birth-error"
                 class="mt-1 w-full rounded border border-slate-300 px-3 py-2 sm:w-56"

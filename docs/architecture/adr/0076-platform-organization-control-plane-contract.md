@@ -5681,6 +5681,11 @@ therefore takes the date of birth as a WRITE-ONLY creation input:
   - Admissions conversion (typed number, unchanged);
   - Campus onboarding: the ONLY path that uses the allocator.
 
+> **Amended by ADR 0079 (SIS 2.3, 2026-10-27).** The typed-number creation
+> paths below no longer exist. `StudentService::create()` allocates every new
+> Student's number, on web and API create, Admissions conversion and Campus
+> onboarding, so the allocator is no longer onboarding-only.
+
 **46.2 The allocator (F2-D5 to F2-D7).**
 - **Counter table:** `student_number_sequences`, one row per School
   (`next_value`, `last_allocated_value`, CHECKs).

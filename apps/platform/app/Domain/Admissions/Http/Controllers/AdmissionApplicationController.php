@@ -246,7 +246,8 @@ class AdmissionApplicationController extends Controller
         abort_if($model === null, 404);
 
         $validated = $request->validate([
-            'student_number' => ['required', 'string', 'max:255'],
+            'student_number' => ['prohibited'],
+            'duplicate_acknowledgement' => ['nullable', 'string', 'max:128'],
             'section_id' => ['required', 'uuid', Rule::exists('sections', 'id')->where('school_id', $school->id)],
             'roll_number' => ['required', 'string', 'max:255'],
             'starts_on' => ['required', 'date'],
@@ -265,7 +266,7 @@ class AdmissionApplicationController extends Controller
             'guardian.contact_value' => ['required_with:guardian.contact_type', 'nullable', 'string', 'max:255'],
             // link_existing mode only:
             'guardian.guardian_id' => ['required_if:guardian.mode,link_existing', 'uuid', Rule::exists('guardians', 'id')->where('school_id', $school->id)],
-        ]);
+        ], ['student_number.prohibited' => 'The Student number is allocated by the School when the Student is created and cannot be supplied.']);
 
         $section = Section::query()->findOrFail($validated['section_id']);
         $guardianInstruction = $this->buildGuardianInstruction($validated['guardian'] ?? null);
@@ -273,12 +274,12 @@ class AdmissionApplicationController extends Controller
         try {
             $result = $service->convert(
                 $model,
-                $validated['student_number'],
                 $section,
                 $validated['roll_number'],
                 $validated['starts_on'],
                 $guardianInstruction,
                 $request->user(),
+                $validated['duplicate_acknowledgement'] ?? null,
             );
         } catch (InvalidArgumentException $e) {
             // EmailNormalizer/PhoneNormalizer reject malformed contact

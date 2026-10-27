@@ -629,7 +629,7 @@ export interface paths {
         /** List a School's Students. Requires students.view. */
         get: operations["listStudents"];
         put?: never;
-        /** Creates a Student. Requires students.manage. Idempotency-Key required. */
+        /** Creates a Student. Requires students.manage. Idempotency-Key required. The Student number is allocated by the School's counter (SIS 2.3), never supplied. A same-name-and-date-of-birth match in this School is a 409 POSSIBLE_DUPLICATE_STUDENT; resend with its `details.duplicateAcknowledgement` to create a different Student. */
         post: operations["createStudent"];
         delete?: never;
         options?: never;
@@ -6194,6 +6194,10 @@ export interface components {
                 requestId: string | null;
                 /** @description Field-level validation errors, present only on 422 responses. */
                 errors?: Record<string, never> | null;
+                /** @description Optional exception-defined detail, present only for errors that define one (SIS 2.3: POSSIBLE_DUPLICATE_STUDENT carries candidateCount and duplicateAcknowledgement). */
+                details?: {
+                    [key: string]: unknown;
+                };
             };
         };
         /** @description SR.4 (ADR 0071 §26.7): a Highly Sensitive or financially consequential action re-verifies the caller's MFA now -- a current TOTP code of the caller's ACTIVE factor, or one of their unused recovery codes; each is single-use. Missing, wrong or used, or no enrolled factor: 422 with `error.errors.mfa_code`. Checked after the capability (a caller without it gets 403 and spends no code) and before any change. On an `Idempotency-Key` route the 422 is recorded for that key, like any validation failure -- retry with a new key and a new code; a retry of a SUCCESSFUL request with the same key and body is replayed, never re-verified. */
@@ -8177,7 +8181,17 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
-        /** @description student_number uniqueness is enforced by StudentService/the database (school_id, student_number), not by this contract -- a duplicate is a 422 with code DUPLICATE_STUDENT_NUMBER. */
+        /** @description SIS 2.3: no student_number -- it is allocated by the School's counter (a supplied value is a 422). date_of_birth may not be after the School's today. */
+        StudentCreateInput: {
+            first_name: string;
+            middle_name?: string | null;
+            last_name?: string | null;
+            /** Format: date */
+            date_of_birth: string;
+            /** @description The acknowledgement from a 409 POSSIBLE_DUPLICATE_STUDENT; valid only for that exact identity and candidate set. */
+            duplicate_acknowledgement?: string | null;
+        };
+        /** @description Update (PATCH) input: a correction of an existing Student. student_number uniqueness is enforced by StudentService/the database (school_id, student_number), not by this contract -- a duplicate is a 422 with code DUPLICATE_STUDENT_NUMBER. date_of_birth may not be after the School's today (SIS 2.3). */
         StudentInput: {
             student_number: string;
             first_name: string;
@@ -9588,9 +9602,10 @@ export interface components {
              */
             guardian_id?: string;
         };
-        /** @description The Section is the sole authoritative placement input for this conversion -- AdmissionConversionService re-verifies it matches the application's own AcademicYear/Campus/GradeLevel (422 IncompatibleConversionSectionException otherwise, never a partial conversion). */
+        /** @description The Section is the sole authoritative placement input for this conversion -- AdmissionConversionService re-verifies it matches the application's own AcademicYear/Campus/GradeLevel (422 IncompatibleConversionSectionException otherwise, never a partial conversion). The Student number is allocated by the School (SIS 2.3); a supplied `student_number` is refused. */
         AdmissionConversionInput: {
-            student_number: string;
+            /** @description The acknowledgement from a 409 POSSIBLE_DUPLICATE_STUDENT (SIS 2.3); valid only for that exact candidate set. */
+            duplicate_acknowledgement?: string | null;
             /** Format: uuid */
             section_id: string;
             roll_number: string;
@@ -12824,7 +12839,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["StudentInput"];
+                "application/json": components["schemas"]["StudentCreateInput"];
             };
         };
         responses: {
@@ -12840,7 +12855,16 @@ export interface operations {
                     };
                 };
             };
-            /** @description Validation failure (e.g. duplicate Student Number within this School). */
+            /** @description POSSIBLE_DUPLICATE_STUDENT -- nothing was created. `details` carries `candidateCount` and `duplicateAcknowledgement` only (never names or ids). Like any response, the refusal is stored under its Idempotency-Key (a retry with that key replays it); resend with the acknowledgement under a NEW key. The candidates are re-evaluated first and a changed set is refused again. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failure (a supplied student_number, a future date of birth, ...). */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19039,7 +19063,16 @@ export interface operations {
                     };
                 };
             };
-            /** @description Not currently accepted (including already converted -- AdmissionApplicationAlreadyConvertedException), an incompatible Section, a duplicate Student Number, a duplicate roll number, or a Guardian create-vs-link candidate conflict (AdmissionGuardianSelectionRequiredException -- never returns candidate ids/names/contact values). */
+            /** @description POSSIBLE_DUPLICATE_STUDENT (SIS 2.3) -- the applicant's name and date of birth match an existing Student of this School; nothing was converted. Resend with `details.duplicateAcknowledgement` under a new Idempotency-Key to create a different Student (conversion never links or reactivates the existing one). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Not currently accepted (including already converted -- AdmissionApplicationAlreadyConvertedException), an incompatible Section, a duplicate Student Number, a duplicate roll number, or a Guardian create-vs-link candidate conflict (AdmissionGuardianSelectionRequiredException -- never returns candidate ids/names/contact values), or a supplied student_number (allocated since SIS 2.3). */
             422: {
                 headers: {
                     [name: string]: unknown;

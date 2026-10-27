@@ -228,7 +228,7 @@ class OperationalFeeUiTest extends TestCase
         $this->actingAs($manager)->get("/app/admissions/{$application->id}")->assertInertia(fn ($page) => $page
             ->where('feePanel.configured.id', $w['optionalHead']->id)->where('feePanel.intent', null));
 
-        app(AdmissionConversionService::class)->convert($application, 'S-ADM-1', $w['section'], '01', '2026-06-01', null, $manager);
+        app(AdmissionConversionService::class)->convert($application, $w['section'], '01', '2026-06-01', null, $manager);
         $this->actingAs($manager)->get("/app/admissions/{$application->id}")->assertOk()->assertInertia(fn ($page) => $page
             ->where('feePanel.intent.feeHead.id', $w['optionalHead']->id)
             ->where('feePanel.intent.selectionOutcome', 'created')

@@ -311,14 +311,24 @@ role.
 3. **Submit**, then **Accept application**, or **Reject application** /
    **Withdraw** with a note.
 4. On an accepted application, **Convert to Student**:
-   - Student number, Section, roll number and start date;
+   - Section, roll number and start date (the Student number is assigned
+     automatically, SIS 2.3);
    - optionally a **Guardian**: create a new one, link an existing Guardian
      (for siblings), or none.
 5. Open **View converted Student**.
 
 **Good to know:**
 - **A Guardian is optional.** Their email and phone are optional too.
-- **A Student number already in use is refused** with a clear message.
+- **The Student number is assigned automatically** when the Student is
+  created, from the School's one sequence (1, 2, 3, ...). Existing numbers
+  such as LDS-0001 never change.
+- **Possible duplicate:** if an existing Student has the same name and date
+  of birth, conversion stops and shows that Student (number, date of birth,
+  status, class). Nothing has been saved.
+  - If it is the same child, cancel. An inactive Student can be reactivated
+    from their profile.
+  - If it is a different child, choose **These are different people —
+    convert to a new student**.
 - **Correcting a mistake** (SIS 3.1):
   - **Applicant name or date of birth:** on the applicant, select **Correct
     details**. This works until one of their applications is converted;
@@ -338,6 +348,18 @@ role.
 
 ## 9. Students and placements
 
+- **Add student** (SIS 2.3) asks for the name and date of birth only:
+  - the Student number is assigned automatically from the School's sequence;
+  - a date of birth in the future is refused;
+  - if an existing Student, active or inactive, has the same name and date of
+    birth, a **Possible duplicate** warning lists them, with a link to open
+    each record in a new tab, and nothing is saved;
+  - choose **Cancel — do not create** if it is the same child, or **These
+    are different people — add a new student** to continue;
+  - the same check runs on Campus onboarding (only Students you can see) and
+    when converting an admission.
+- **A Student number can still be corrected** on **Edit**, if it was entered
+  wrongly. A number already in use is refused.
 - **Students** is the directory. Search works by:
   - any part of the name ("Isha Nair", "Nair Isha");
   - a Student-number fragment ("0103").

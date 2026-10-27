@@ -77,7 +77,16 @@ class AdmissionConversionService
      * Converts an `accepted` AdmissionApplication into a Student,
      * StudentEnrollment, and (optionally) a Guardian relationship.
      *
-     * `$studentNumber`/`$section`/`$rollNumber`/`$startsOn` are
+     * SIS 2.3: the Student number is never an input -- StudentService::create()
+     * allocates it from the School's one counter, exactly as for any other
+     * new Student, and runs the same duplicate-risk check over the whole
+     * School (`$duplicateAcknowledgement` acknowledges exactly the current
+     * candidates; anything else refuses with
+     * PossibleDuplicateStudentException and rolls the whole conversion
+     * back). Conversion still always creates a NEW Student (§10): it never
+     * links or reactivates a candidate.
+     *
+     * `$section`/`$rollNumber`/`$startsOn` are
      * conversion-time-only inputs (`ADMISSIONS.md` §5/§12) -- never
      * persisted on AdmissionApplication/Applicant. `$guardian` is
      * `null` for the "no Guardian" mode (`ADMISSIONS.md` §11's
@@ -87,12 +96,12 @@ class AdmissionConversionService
      */
     public function convert(
         AdmissionApplication $application,
-        string $studentNumber,
         Section $section,
         string $rollNumber,
         string $startsOn,
         ?GuardianConversionInstruction $guardian = null,
         ?User $actor = null,
+        ?string $duplicateAcknowledgement = null,
     ): AdmissionConversionResult {
         // Checked BEFORE entering the transaction / creating any
         // canonical record -- a Section whose academic context
@@ -109,8 +118,8 @@ class AdmissionConversionService
             throw new IncompatibleConversionSectionException;
         }
 
-        return $this->context->withSchool($application->school, function () use ($application, $studentNumber, $section, $rollNumber, $startsOn, $guardian, $actor) {
-            return DB::transaction(function () use ($application, $studentNumber, $section, $rollNumber, $startsOn, $guardian, $actor) {
+        return $this->context->withSchool($application->school, function () use ($application, $section, $rollNumber, $startsOn, $guardian, $actor, $duplicateAcknowledgement) {
+            return DB::transaction(function () use ($application, $section, $rollNumber, $startsOn, $guardian, $actor, $duplicateAcknowledgement) {
                 // Never trusts the caller's possibly-stale in-memory
                 // $application->status -- reloads and locks the
                 // authoritative row first, exactly like every Phase
@@ -131,12 +140,11 @@ class AdmissionConversionService
                 // from the Applicant -- decision_note is never read
                 // here.
                 $student = $this->studentService->create($locked->school, [
-                    'student_number' => $studentNumber,
                     'first_name' => $applicant->first_name,
                     'middle_name' => $applicant->middle_name,
                     'last_name' => $applicant->last_name,
                     'date_of_birth' => $applicant->date_of_birth->toDateString(),
-                ], $actor);
+                ], $actor, $duplicateAcknowledgement);
 
                 [$guardianModel, $relationship] = $this->applyGuardianInstruction($locked, $student, $guardian, $actor);
 

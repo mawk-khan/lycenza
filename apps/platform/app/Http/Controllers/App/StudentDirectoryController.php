@@ -5,19 +5,23 @@ namespace App\Http\Controllers\App;
 use App\Domain\Students\Application\CampusStudentOnboardingService;
 use App\Domain\Students\Application\Exceptions\DuplicateEnrollmentRollNumberException;
 use App\Domain\Students\Application\Exceptions\InvalidEnrollmentRollNumberException;
+use App\Domain\Students\Application\Exceptions\PossibleDuplicateStudentException;
 use App\Domain\Students\Application\Exceptions\StudentOnboardingUnavailableException;
 use App\Domain\Students\Application\StudentAccess;
 use App\Domain\Students\Application\StudentNameEditService;
 use App\Domain\Students\Application\StudentSearch;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
+use App\Http\Controllers\App\Concerns\PresentsDuplicateStudentWarning;
 use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -41,7 +45,7 @@ use Inertia\Response;
  */
 class StudentDirectoryController extends Controller
 {
-    use AuthorizesCampusScope;
+    use AuthorizesCampusScope, PresentsDuplicateStudentWarning;
 
     public function index(Request $request, TenantContext $context, StudentAccess $access): Response
     {
@@ -184,7 +188,7 @@ class StudentDirectoryController extends Controller
      * Sections of the active year on an active Campus in both scopes. The
      * Student number is never an input (it is allocated by the server).
      */
-    public function onboard(TenantContext $context, CampusStudentOnboardingService $onboarding): Response
+    public function onboard(Request $request, TenantContext $context, CampusStudentOnboardingService $onboarding): Response
     {
         $school = $context->requireSchool();
         $studentScope = $this->authorizeCampusScope('students.manage', $school);
@@ -192,29 +196,40 @@ class StudentDirectoryController extends Controller
 
         return Inertia::render('App/Students/Onboard', [
             'sections' => $onboarding->destinations($school, $studentScope, $enrollmentScope),
+            // SIS 2.3: only Students this actor may already see (Campus surface).
+            'duplicateWarning' => $this->duplicateWarningFor($request, $school, $context->actor(), 'student-onboard', campusSurface: true),
+            'today' => SchoolTimezone::today($school),
         ]);
     }
 
-    public function storeOnboarding(Request $request, TenantContext $context, CampusStudentOnboardingService $onboarding): RedirectResponse
+    public function storeOnboarding(Request $request, TenantContext $context, CampusStudentOnboardingService $onboarding, StudentAccess $access): RedirectResponse
     {
         $school = $context->requireSchool();
         $studentScope = $this->authorizeCampusScope('students.manage', $school);
         $enrollmentScope = $this->authorizeCampusScope('enrollments.manage', $school);
 
-        // Exactly these fields: never a Student number, an existing Student id,
+        // Exactly these fields (plus SIS 2.3's opaque duplicate acknowledgement):
+        // never a Student number, an existing Student id,
         // a status, a Guardian or anything else (owner decisions F2-D5, F2-D9,
         // F2-D12); date of birth is write-only (F2-D13).
         $validated = $request->validate([
             'first_name' => ['required', 'string', 'max:255'],
             'middle_name' => ['nullable', 'string', 'max:255'],
             'last_name' => ['nullable', 'string', 'max:255'],
-            'date_of_birth' => ['required', 'date', 'before_or_equal:today'],
+            'date_of_birth' => ['required', 'date', 'before_or_equal:'.SchoolTimezone::today($school)],
             'section_id' => ['required', 'uuid'],
             'roll_number' => ['required', 'string', 'max:255'],
-        ]);
+            'duplicate_acknowledgement' => ['nullable', 'string', 'max:128'],
+        ], ['date_of_birth.before_or_equal' => 'The date of birth cannot be in the future.']);
+
+        // SIS 2.3: the duplicate-risk check compares only with the Students
+        // this actor may already see (their students.view Campus scope).
+        $viewScope = $access->scopeOf($context->actor(), 'students.view', $school);
 
         try {
-            $enrollment = $onboarding->onboard($school, $studentScope, $enrollmentScope, $validated, $context->actor());
+            $enrollment = $onboarding->onboard($school, $studentScope, $enrollmentScope, Arr::except($validated, ['duplicate_acknowledgement']), $context->actor(), $viewScope, $validated['duplicate_acknowledgement'] ?? null);
+        } catch (PossibleDuplicateStudentException $e) {
+            $this->refuseAsPossibleDuplicate($request, 'student-onboard', $e);
         } catch (StudentOnboardingUnavailableException $e) {
             throw ValidationException::withMessages(['section_id' => [$e->getMessage()]]);
         } catch (DuplicateEnrollmentRollNumberException|InvalidEnrollmentRollNumberException $e) {

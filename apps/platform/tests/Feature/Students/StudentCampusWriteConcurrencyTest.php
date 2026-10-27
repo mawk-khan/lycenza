@@ -189,6 +189,25 @@ class StudentCampusWriteConcurrencyTest extends TestCase
     }
 
     #[Test]
+    public function simultaneous_whole_school_creations_never_share_a_number_and_the_waiter_sees_the_committed_match(): void
+    {
+        // SIS 2.3: the counter lock serializes creation in a School. Distinct
+        // identities: both commit with distinct numbers. The same identity:
+        // the waiter re-evaluates after the holder commits and is warned --
+        // two simultaneous requests can never both skip the warning.
+        [$first, $second] = $this->raceWithHeldHolder($this->op('create-student', 'Alpha'), $this->op('create-student', 'Beta'));
+        $this->assertStringStartsWith('ok:', $first);
+        $this->assertStringStartsWith('ok:', $second);
+        $this->assertNotSame($first, $second, 'distinct Student numbers');
+        $this->assertSame((int) substr($first, 3) + 1, (int) substr($second, 3), 'the waiter takes the next number');
+
+        [$holder, $waiter] = $this->raceWithHeldHolder($this->op('create-student', 'Gamma'), $this->op('create-student', 'Gamma'));
+        $this->assertStringStartsWith('ok:', $holder);
+        $this->assertSame('rejected:PossibleDuplicateStudentException', $waiter);
+        $this->assertSame(1, $this->onboarded('Gamma'));
+    }
+
+    #[Test]
     #[DataProvider('onboardingStateChanges')]
     public function an_onboarding_that_locks_first_commits_and_the_state_change_waits(string $change): void
     {
@@ -216,16 +235,18 @@ class StudentCampusWriteConcurrencyTest extends TestCase
         // The fixture's numeric factory number already moved the counter past it.
         $next = (int) DB::connection('pgsql_admin')->table('student_number_sequences')->where('school_id', $this->school->id)->value('next_value');
 
-        // Onboarding holds the counter and takes $next; the same typed number
-        // queues on the counter (BEFORE trigger), then meets the ordinary
-        // duplicate refusal -- never a deadlock, never a shared number.
-        [$onboarding, $manual] = $this->raceWithHeldHolder($this->onboard('Gen'), $this->op('manual-create', (string) $next));
+        // SIS 2.3: a typed number exists only as a correction of an existing
+        // Student (Edit). Onboarding holds the counter and takes $next; the
+        // same typed correction queues on the counter (BEFORE trigger), then
+        // meets the ordinary duplicate refusal -- never a deadlock, never a
+        // shared number.
+        [$onboarding, $manual] = $this->raceWithHeldHolder($this->onboard('Gen'), $this->op('manual-renumber', $this->student->id, (string) $next));
         $this->assertSame("ok:{$next}", $onboarding);
         $this->assertSame('rejected:DuplicateStudentNumberException', $manual);
 
-        // A typed number committed first moves the counter past it.
+        // A typed correction committed first moves the counter past it.
         $typed = $next + 5;
-        [$manual, $onboarding] = $this->raceWithHeldHolder($this->op('manual-create', (string) $typed), $this->onboard('After'));
+        [$manual, $onboarding] = $this->raceWithHeldHolder($this->op('manual-renumber', $this->student->id, (string) $typed), $this->onboard('After'));
         $this->assertSame('ok', $manual);
         $this->assertSame('ok:'.($typed + 1), $onboarding);
     }

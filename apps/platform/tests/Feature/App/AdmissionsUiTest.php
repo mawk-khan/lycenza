@@ -573,7 +573,7 @@ class AdmissionsUiTest extends TestCase
         $application = $this->applicationService()->create($applicant, $year, $campus, $grade);
         $this->applicationService()->submit($application);
         $this->applicationService()->accept($application);
-        $this->conversionService()->convert($application, 'S-2001', $section, '01', '2026-06-01');
+        $this->conversionService()->convert($application, $section, '01', '2026-06-01');
         [$user] = $this->createSchoolAdmin('school_admin');
         $membership = $this->createMembership($user, $school);
         $this->assignSchoolRole($membership, 'school_admin');
@@ -603,7 +603,7 @@ class AdmissionsUiTest extends TestCase
         $this->activate($user, $school);
 
         $this->post("/app/admissions/{$application->id}/convert", [
-            'student_number' => 'S-3001', 'section_id' => $section->id, 'roll_number' => '01', 'starts_on' => '2026-06-01',
+            'section_id' => $section->id, 'roll_number' => '01', 'starts_on' => '2026-06-01',
         ])->assertForbidden();
     }
 
@@ -620,7 +620,7 @@ class AdmissionsUiTest extends TestCase
         $this->activate($user, $school);
 
         $response = $this->post("/app/admissions/{$application->id}/convert", [
-            'student_number' => 'S-3001', 'section_id' => $section->id, 'roll_number' => '01', 'starts_on' => '2026-06-01',
+            'section_id' => $section->id, 'roll_number' => '01', 'starts_on' => '2026-06-01',
         ]);
 
         $response->assertRedirect("/app/admissions/{$application->id}");
@@ -628,7 +628,7 @@ class AdmissionsUiTest extends TestCase
         $this->assertSame('converted', $fresh->status);
         $this->assertNotNull($fresh->converted_student_id);
         $student = app(TenantContext::class)->withSchool($school, fn () => Student::query()->findOrFail($fresh->converted_student_id));
-        $this->assertSame('S-3001', $student->student_number);
+        $this->assertMatchesRegularExpression('/^[1-9][0-9]*$/', $student->student_number, 'SIS 2.3: allocated by the School counter');
     }
 
     #[Test]
@@ -644,7 +644,7 @@ class AdmissionsUiTest extends TestCase
         $this->activate($user, $school);
 
         $this->post("/app/admissions/{$application->id}/convert", [
-            'student_number' => 'S-3002', 'section_id' => $section->id, 'roll_number' => '02', 'starts_on' => '2026-06-01',
+            'section_id' => $section->id, 'roll_number' => '02', 'starts_on' => '2026-06-01',
             'guardian' => [
                 'mode' => 'create', 'first_name' => 'Priya', 'last_name' => 'Verma',
                 'relationship_type' => 'mother', 'is_legal_guardian' => true,
@@ -669,7 +669,7 @@ class AdmissionsUiTest extends TestCase
         $this->activate($user, $school);
 
         $this->post("/app/admissions/{$application->id}/convert", [
-            'student_number' => 'S-3003', 'section_id' => $section->id, 'roll_number' => '03', 'starts_on' => '2026-06-01',
+            'section_id' => $section->id, 'roll_number' => '03', 'starts_on' => '2026-06-01',
             'guardian' => ['mode' => 'link_existing', 'guardian_id' => $guardian->id, 'relationship_type' => 'mother'],
         ])->assertRedirect("/app/admissions/{$application->id}");
 
@@ -692,7 +692,7 @@ class AdmissionsUiTest extends TestCase
         $this->activate($user, $school);
 
         $response = $this->post("/app/admissions/{$application->id}/convert", [
-            'student_number' => 'S-3004', 'section_id' => $section->id, 'roll_number' => '04', 'starts_on' => '2026-06-01',
+            'section_id' => $section->id, 'roll_number' => '04', 'starts_on' => '2026-06-01',
             'guardian' => [
                 'mode' => 'create', 'first_name' => 'Priya', 'relationship_type' => 'mother',
                 'contact_type' => 'email', 'contact_value' => 'priya@example.com',
@@ -705,10 +705,50 @@ class AdmissionsUiTest extends TestCase
     }
 
     #[Test]
-    public function convert_with_a_duplicate_student_number_shows_a_clean_inline_error(): void
+    public function convert_matching_an_existing_student_warns_with_safe_context_and_converts_only_after_acknowledgement(): void
     {
         ['school' => $school, 'year' => $year, 'campus' => $campus, 'grade' => $grade, 'section' => $section, 'applicant' => $applicant] = $this->buildAdmissionsContext();
-        $this->createStudent($school, ['student_number' => 'S-9999']);
+        $existing = $this->createStudent($school, ['student_number' => 'S-9999', 'first_name' => 'ASHA', 'middle_name' => null, 'last_name' => 'Verma', 'date_of_birth' => $applicant->date_of_birth->toDateString()]);
+        $application = $this->applicationService()->create($applicant, $year, $campus, $grade);
+        $this->applicationService()->submit($application);
+        $this->applicationService()->accept($application);
+        [$user] = $this->createSchoolAdmin('school_admin');
+        $membership = $this->createMembership($user, $school);
+        $this->assignSchoolRole($membership, 'school_admin');
+        $this->activate($user, $school);
+        $payload = ['section_id' => $section->id, 'roll_number' => '01', 'starts_on' => '2026-06-01'];
+
+        $this->from("/app/admissions/{$application->id}")->post("/app/admissions/{$application->id}/convert", $payload)
+            ->assertRedirect("/app/admissions/{$application->id}")
+            ->assertSessionHasErrors('duplicate_acknowledgement');
+        $this->assertSame('accepted', app(TenantContext::class)->withSchool($school, fn () => $application->fresh()->status), 'nothing converted');
+
+        $warning = null;
+        $this->get("/app/admissions/{$application->id}")->assertInertia(function ($page) use (&$warning) {
+            $page->where('duplicateWarning.candidateCount', 1)
+                ->where('duplicateWarning.candidates.0.studentNumber', 'S-9999')
+                ->where('duplicateWarning.candidates.0.status', 'active')
+                ->etc();
+            $warning = $page->toArray()['props']['duplicateWarning'];
+        });
+        $this->assertStringNotContainsString('guardian', strtolower(json_encode($warning)), 'no Guardian or contact data');
+
+        // Another application's page never shows this warning (bound to its form).
+        $this->post("/app/admissions/{$application->id}/convert", $payload);
+        $other = $this->applicationService()->create($this->createApplicant($school, ['first_name' => 'Zoya']), $year, $campus, $grade);
+        $this->get("/app/admissions/{$other->id}")->assertInertia(fn ($page) => $page->where('duplicateWarning', null));
+
+        $this->post("/app/admissions/{$application->id}/convert", [...$payload, 'duplicate_acknowledgement' => $warning['acknowledgement']])
+            ->assertRedirect("/app/admissions/{$application->id}");
+        $fresh = app(TenantContext::class)->withSchool($school, fn () => $application->fresh());
+        $this->assertSame('converted', $fresh->status);
+        $this->assertNotSame($existing->id, $fresh->converted_student_id);
+    }
+
+    #[Test]
+    public function convert_refuses_a_typed_student_number(): void
+    {
+        ['school' => $school, 'year' => $year, 'campus' => $campus, 'grade' => $grade, 'section' => $section, 'applicant' => $applicant] = $this->buildAdmissionsContext();
         $application = $this->applicationService()->create($applicant, $year, $campus, $grade);
         $this->applicationService()->submit($application);
         $this->applicationService()->accept($application);
@@ -717,11 +757,10 @@ class AdmissionsUiTest extends TestCase
         $this->assignSchoolRole($membership, 'school_admin');
         $this->activate($user, $school);
 
-        $response = $this->post("/app/admissions/{$application->id}/convert", [
-            'student_number' => 'S-9999', 'section_id' => $section->id, 'roll_number' => '01', 'starts_on' => '2026-06-01',
-        ]);
-
-        $response->assertSessionHasErrors('student_number');
+        $this->post("/app/admissions/{$application->id}/convert", [
+            'student_number' => 'S-TYPED', 'section_id' => $section->id, 'roll_number' => '01', 'starts_on' => '2026-06-01',
+        ])->assertSessionHasErrors('student_number');
+        $this->assertSame('accepted', app(TenantContext::class)->withSchool($school, fn () => $application->fresh()->status));
     }
 
     #[Test]
@@ -740,7 +779,7 @@ class AdmissionsUiTest extends TestCase
         $this->activate($user, $school);
 
         $response = $this->post("/app/admissions/{$application->id}/convert", [
-            'student_number' => 'S-3005', 'section_id' => $incompatibleSection->id, 'roll_number' => '01', 'starts_on' => '2026-06-01',
+            'section_id' => $incompatibleSection->id, 'roll_number' => '01', 'starts_on' => '2026-06-01',
         ]);
 
         $response->assertSessionHasErrors('section_id');
@@ -753,7 +792,7 @@ class AdmissionsUiTest extends TestCase
         $application = $this->applicationService()->create($applicant, $year, $campus, $grade);
         $this->applicationService()->submit($application);
         $this->applicationService()->accept($application);
-        $this->conversionService()->convert($application, 'S-4001', $section, '01', '2026-06-01');
+        $this->conversionService()->convert($application, $section, '01', '2026-06-01');
         [$user] = $this->createSchoolAdmin('school_admin');
         $membership = $this->createMembership($user, $school);
         $this->assignSchoolRole($membership, 'school_admin');
@@ -762,7 +801,7 @@ class AdmissionsUiTest extends TestCase
         // Simulates a stale second browser tab re-submitting the same
         // convert form after the application was already converted.
         $response = $this->post("/app/admissions/{$application->id}/convert", [
-            'student_number' => 'S-4002', 'section_id' => $section->id, 'roll_number' => '02', 'starts_on' => '2026-06-01',
+            'section_id' => $section->id, 'roll_number' => '02', 'starts_on' => '2026-06-01',
         ]);
 
         $response->assertSessionHasErrors('status');
@@ -784,10 +823,10 @@ class AdmissionsUiTest extends TestCase
         $this->activate($user, $schoolA);
 
         $foreign = $this->post("/app/admissions/{$applicationA->id}/convert", [
-            'student_number' => 'S-5001', 'section_id' => $sectionB->id, 'roll_number' => '01', 'starts_on' => '2026-06-01',
+            'section_id' => $sectionB->id, 'roll_number' => '01', 'starts_on' => '2026-06-01',
         ]);
         $random = $this->post("/app/admissions/{$applicationA->id}/convert", [
-            'student_number' => 'S-5002', 'section_id' => (string) Str::uuid(), 'roll_number' => '01', 'starts_on' => '2026-06-01',
+            'section_id' => (string) Str::uuid(), 'roll_number' => '01', 'starts_on' => '2026-06-01',
         ]);
 
         $foreign->assertSessionHasErrors('section_id');
@@ -808,7 +847,7 @@ class AdmissionsUiTest extends TestCase
         $this->activate($user, $schoolA);
 
         $response = $this->post("/app/admissions/{$applicationA->id}/convert", [
-            'student_number' => 'S-5003', 'section_id' => $sectionA->id, 'roll_number' => '01', 'starts_on' => '2026-06-01',
+            'section_id' => $sectionA->id, 'roll_number' => '01', 'starts_on' => '2026-06-01',
             'guardian' => ['mode' => 'link_existing', 'guardian_id' => $guardianB->id, 'relationship_type' => 'mother'],
         ]);
 

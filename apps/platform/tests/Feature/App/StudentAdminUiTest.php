@@ -7,6 +7,7 @@ use App\Models\MembershipRoleAssignment;
 use App\Models\Role;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\LocalCatalogueFixtures;
 use PHPUnit\Framework\Attributes\Test;
@@ -86,7 +87,7 @@ class StudentAdminUiTest extends TestCase
         // (section 29: direct calls remain forbidden, never relying on
         // a hidden button).
         $this->get('/app/students/create')->assertForbidden();
-        $this->post('/app/students', ['student_number' => 'X', 'first_name' => 'X', 'date_of_birth' => '2015-01-01'])
+        $this->post('/app/students', ['first_name' => 'X', 'date_of_birth' => '2015-01-01'])
             ->assertForbidden();
     }
 
@@ -125,29 +126,80 @@ class StudentAdminUiTest extends TestCase
         $this->activate($user, $school);
 
         $response = $this->post('/app/students', [
-            'student_number' => 'S-1001', 'first_name' => 'Asha', 'last_name' => 'Verma', 'date_of_birth' => '2015-04-12',
+            'student_number' => 'S-TYPED', 'first_name' => 'Asha', 'last_name' => 'Verma', 'date_of_birth' => '2015-04-12',
         ]);
 
-        $student = app(TenantContext::class)->withSchool($school, fn () => Student::query()->where('student_number', 'S-1001')->firstOrFail());
+        // SIS 2.3: the number is the School counter's; a typed one is ignored.
+        $student = app(TenantContext::class)->withSchool($school, fn () => Student::query()->where('student_number', '1')->firstOrFail());
         $response->assertRedirect("/app/students/{$student->id}");
+        $this->assertFalse(app(TenantContext::class)->withSchool($school, fn () => Student::query()->where('student_number', 'S-TYPED')->exists()));
     }
 
     #[Test]
-    public function a_duplicate_student_number_shows_a_clean_inline_error_not_a_broken_page(): void
+    public function the_create_page_has_no_number_field_input_and_offers_todays_date_as_the_birth_date_limit(): void
     {
         [$user, $school] = $this->createSchoolAdmin('school_admin');
         $this->activate($user, $school);
-        $this->createStudent($school, ['student_number' => 'S-1001']);
 
-        $response = $this->post('/app/students', [
-            'student_number' => 'S-1001', 'first_name' => 'Rohit', 'date_of_birth' => '2016-01-01',
-        ]);
+        $this->get('/app/students/create')->assertInertia(fn ($page) => $page
+            ->component('App/Students/Create')
+            ->where('duplicateWarning', null)
+            ->where('today', SchoolTimezone::today($school))
+        );
 
-        // A domain exception translated to Laravel's own
-        // ValidationException redirects back with session errors --
-        // exactly what Inertia's form.errors reads, never a raw 500.
-        $response->assertRedirect();
-        $response->assertSessionHasErrors('student_number');
+        $this->post('/app/students', ['first_name' => 'Asha', 'date_of_birth' => now()->addDays(2)->toDateString()])
+            ->assertSessionHasErrors(['date_of_birth' => 'The date of birth cannot be in the future.']);
+    }
+
+    #[Test]
+    public function a_possible_duplicate_shows_the_warning_with_safe_candidate_context_then_an_acknowledged_submit_creates(): void
+    {
+        [$user, $school] = $this->createSchoolAdmin('school_admin');
+        $this->activate($user, $school);
+        $existing = $this->createStudent($school, ['student_number' => 'S-1001', 'first_name' => 'Rohit', 'middle_name' => null, 'last_name' => "D'Souza", 'date_of_birth' => '2016-01-01', 'status' => 'inactive']);
+        $payload = ['first_name' => ' rohit ', 'last_name' => 'dsouza', 'date_of_birth' => '2016-01-01'];
+
+        $this->from('/app/students/create')->post('/app/students', $payload)
+            ->assertRedirect('/app/students/create')
+            ->assertSessionHasErrors('duplicate_acknowledgement');
+
+        $warning = null;
+        $this->get('/app/students/create')->assertInertia(function ($page) use (&$warning) {
+            $page->component('App/Students/Create')
+                ->where('duplicateWarning.candidateCount', 1)
+                ->where('duplicateWarning.hiddenCount', 0)
+                ->where('duplicateWarning.candidates.0.studentNumber', 'S-1001')
+                ->where('duplicateWarning.candidates.0.name', "Rohit D'Souza")
+                ->where('duplicateWarning.candidates.0.dateOfBirth', '2016-01-01')
+                ->where('duplicateWarning.candidates.0.status', 'inactive')
+                ->etc();
+            $warning = $page->toArray()['props']['duplicateWarning'];
+        });
+        $this->assertSame(1, app(TenantContext::class)->withSchool($school, fn () => Student::query()->count()), 'nothing created');
+
+        // The warning is shown once (a flash): a plain reload has none.
+        $this->get('/app/students/create')->assertInertia(fn ($page) => $page->where('duplicateWarning', null));
+
+        $this->post('/app/students', [...$payload, 'duplicate_acknowledgement' => $warning['acknowledgement']])->assertRedirect();
+        $this->assertSame(2, app(TenantContext::class)->withSchool($school, fn () => Student::query()->count()));
+        $this->assertSame('inactive', app(TenantContext::class)->withSchool($school, fn () => $existing->fresh()->status), 'never reactivated');
+    }
+
+    #[Test]
+    public function a_manager_without_students_view_sees_only_a_count(): void
+    {
+        $school = $this->createSchool();
+        $user = $this->createUserWithCapabilities($school, ['students.manage']);
+        $this->activate($user, $school);
+        $this->createStudent($school, ['first_name' => 'Rohit', 'last_name' => 'Rao', 'date_of_birth' => '2016-01-01']);
+
+        $this->from('/app/students/create')->post('/app/students', ['first_name' => 'Rohit', 'last_name' => 'Rao', 'date_of_birth' => '2016-01-01']);
+
+        $this->get('/app/students/create')->assertInertia(fn ($page) => $page
+            ->where('duplicateWarning.candidateCount', 1)
+            ->where('duplicateWarning.hiddenCount', 1)
+            ->where('duplicateWarning.candidates', [])
+        );
     }
 
     #[Test]
@@ -158,11 +210,11 @@ class StudentAdminUiTest extends TestCase
         $this->activate($user, $schoolA);
 
         $this->post('/app/students', [
-            'student_number' => 'S-1001', 'first_name' => 'Asha', 'date_of_birth' => '2015-04-12',
+            'first_name' => 'Asha', 'date_of_birth' => '2015-04-12',
             'school_id' => $schoolB->id,
         ]);
 
-        $student = app(TenantContext::class)->withSchool($schoolA, fn () => Student::query()->where('student_number', 'S-1001')->firstOrFail());
+        $student = app(TenantContext::class)->withSchool($schoolA, fn () => Student::query()->where('first_name', 'Asha')->firstOrFail());
         $this->assertSame($schoolA->id, $student->school_id);
     }
 
@@ -173,9 +225,9 @@ class StudentAdminUiTest extends TestCase
         $this->activate($user, $school);
 
         $this->post('/app/students', [
-            'student_number' => 'S-1001', 'first_name' => 'Asha', 'date_of_birth' => '2015-04-12',
+            'first_name' => 'Asha', 'date_of_birth' => '2015-04-12',
         ]);
-        $student = app(TenantContext::class)->withSchool($school, fn () => Student::query()->where('student_number', 'S-1001')->firstOrFail());
+        $student = app(TenantContext::class)->withSchool($school, fn () => Student::query()->where('first_name', 'Asha')->firstOrFail());
 
         $this->get("/app/students/{$student->id}")->assertInertia(fn ($page) => $page
             ->where('student.dateOfBirth', '2015-04-12')

@@ -31,9 +31,10 @@ use App\Domain\Guardians\Infrastructure\RelationshipType;
 use App\Domain\Students\Application\Exceptions\ActiveEnrollmentConflictException;
 use App\Domain\Students\Application\Exceptions\CrossSchoolEnrollmentException;
 use App\Domain\Students\Application\Exceptions\DuplicateEnrollmentRollNumberException;
-use App\Domain\Students\Application\Exceptions\DuplicateStudentNumberException;
 use App\Domain\Students\Application\Exceptions\InvalidEnrollmentDateRangeException;
 use App\Domain\Students\Application\Exceptions\InvalidEnrollmentRollNumberException;
+use App\Domain\Students\Application\Exceptions\PossibleDuplicateStudentException;
+use App\Http\Controllers\App\Concerns\PresentsDuplicateStudentWarning;
 use App\Http\Controllers\App\Fees\OperationalFeePanels;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
@@ -93,7 +94,7 @@ use InvalidArgumentException;
  */
 class AdmissionApplicationController extends Controller
 {
-    use AuthorizesCampusScope;
+    use AuthorizesCampusScope, PresentsDuplicateStudentWarning;
 
     // --- Directory ------------------------------------------------------
 
@@ -184,7 +185,7 @@ class AdmissionApplicationController extends Controller
 
     // --- Directory / detail -----------------------------------------------
 
-    public function show(TenantContext $context, CampusScopeResolver $scopes, AdmissionApplicationAccess $access, string $admissionApplication): Response
+    public function show(Request $request, TenantContext $context, CampusScopeResolver $scopes, AdmissionApplicationAccess $access, string $admissionApplication): Response
     {
         $school = $context->requireSchool();
         $scope = $this->authorizeCampusScope('admissions.view', $school);
@@ -212,6 +213,8 @@ class AdmissionApplicationController extends Controller
             // StudentEnrollmentController::sectionOptions()'s
             // `onlyEligible` convenience-filtering precedent.
             'compatibleSections' => ($canConvert && $model->status === 'accepted') ? $this->compatibleSectionOptions($model) : [],
+            // SIS 2.3: the duplicate-risk warning of the last refused conversion.
+            'duplicateWarning' => ($canConvert && $model->status === 'accepted') ? $this->duplicateWarningFor($request, $school, $context->actor(), 'admission-convert:'.$model->id) : null,
             // SWC.3 (ADR 0073 section 19): the School's admission fee head and,
             // once converted, the fee intent the conversion recorded (OPF.3).
             // ORG.7D-3: Fees-linked, so whole-School viewers only.
@@ -382,7 +385,8 @@ class AdmissionApplicationController extends Controller
         abort_if($model === null, 404);
 
         $validated = $request->validate([
-            'student_number' => ['required', 'string', 'max:255'],
+            'student_number' => ['prohibited'],
+            'duplicate_acknowledgement' => ['nullable', 'string', 'max:128'],
             'section_id' => ['required', 'uuid', Rule::exists('sections', 'id')->where('school_id', $school->id)],
             'roll_number' => ['required', 'string', 'max:255'],
             'starts_on' => ['required', 'date'],
@@ -399,7 +403,7 @@ class AdmissionApplicationController extends Controller
             'guardian.contact_type' => ['sometimes', 'nullable', Rule::enum(ContactType::class)],
             'guardian.contact_value' => ['required_with:guardian.contact_type', 'nullable', 'string', 'max:255'],
             'guardian.guardian_id' => ['required_if:guardian.mode,link_existing', 'uuid', Rule::exists('guardians', 'id')->where('school_id', $school->id)],
-        ]);
+        ], ['student_number.prohibited' => 'The Student number is allocated by the School when the Student is created and cannot be supplied.']);
 
         $section = Section::query()->findOrFail($validated['section_id']);
         $guardianInstruction = $this->buildGuardianInstruction($validated['guardian'] ?? null);
@@ -407,19 +411,20 @@ class AdmissionApplicationController extends Controller
         try {
             $result = $service->convert(
                 $model,
-                $validated['student_number'],
                 $section,
                 $validated['roll_number'],
                 $validated['starts_on'],
                 $guardianInstruction,
                 $context->actor(),
+                $validated['duplicate_acknowledgement'] ?? null,
             );
         } catch (IncompatibleConversionSectionException|ActiveEnrollmentConflictException|CrossSchoolEnrollmentException $e) {
             throw ValidationException::withMessages(['section_id' => [$e->getMessage()]]);
         } catch (AdmissionApplicationAlreadyConvertedException|InvalidAdmissionApplicationTransitionException $e) {
             throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
-        } catch (DuplicateStudentNumberException $e) {
-            throw ValidationException::withMessages(['student_number' => [$e->getMessage()]]);
+        } catch (PossibleDuplicateStudentException $e) {
+            // SIS 2.3: nothing was written; the page shows the candidates.
+            $this->refuseAsPossibleDuplicate($request, 'admission-convert:'.$model->id, $e);
         } catch (DuplicateEnrollmentRollNumberException|InvalidEnrollmentRollNumberException $e) {
             throw ValidationException::withMessages(['roll_number' => [$e->getMessage()]]);
         } catch (InvalidEnrollmentDateRangeException $e) {

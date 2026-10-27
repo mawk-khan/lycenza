@@ -11,6 +11,7 @@ interface Props {
         lastName: string | null;
         dateOfBirth: string;
     };
+    today: string;
 }
 
 const props = defineProps<Props>();
@@ -46,6 +47,7 @@ function submit(): void {
                 v-model:last-name="form.last_name"
                 v-model:date-of-birth="form.date_of_birth"
                 :errors="form.errors"
+                :max-date="today"
             />
 
             <div class="mt-6 flex items-center gap-3">

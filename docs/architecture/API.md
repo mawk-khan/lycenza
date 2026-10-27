@@ -196,6 +196,12 @@ extends the existing envelope; it is not a parallel error shape. See
 `apps/platform/tests/Feature/Api/V1/SystemStatusTest.php` for a test
 asserting this shape on a 404.
 
+`details` (added SIS 2.3, ADR 0079) is an optional object, present only
+for exceptions that define one and omitted otherwise. Today only
+`POSSIBLE_DUPLICATE_STUDENT` (409) defines it:
+`{"candidateCount": n, "duplicateAcknowledgement": "<opaque>"}`. It
+carries no names or ids. Same envelope, one optional key.
+
 ## Request IDs
 
 Every request (web and API) receives an `X-Request-Id` — supplied by

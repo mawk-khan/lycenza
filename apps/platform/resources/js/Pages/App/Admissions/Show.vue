@@ -5,6 +5,9 @@ import { computed, ref } from 'vue';
 import StatusBadge from '../../../Components/StatusBadge.vue';
 import ConfirmDialog from '../../../Components/ConfirmDialog.vue';
 import AdmissionFeePanel from '../../../Components/Fees/AdmissionFeePanel.vue';
+import DuplicateStudentWarning, {
+    type DuplicateWarning,
+} from '../../../Components/DuplicateStudentWarning.vue';
 import { RELATIONSHIP_TYPES } from '../../../relationshipTypes';
 
 interface Ref {
@@ -67,6 +70,7 @@ interface Props {
     } | null;
     canViewStudents: boolean;
     compatibleSections: SectionOption[];
+    duplicateWarning: DuplicateWarning | null;
 }
 
 const props = defineProps<Props>();
@@ -156,7 +160,7 @@ function submitDecision(): void {
 type GuardianMode = 'none' | 'create' | 'link_existing';
 
 const convertForm = useForm({
-    student_number: '',
+    duplicate_acknowledgement: '',
     section_id: '',
     roll_number: '',
     starts_on: '',
@@ -185,7 +189,9 @@ function convertError(key: string): string | undefined {
 
 convertForm.transform((data) => {
     const base = {
-        student_number: data.student_number,
+        ...(data.duplicate_acknowledgement
+            ? { duplicate_acknowledgement: data.duplicate_acknowledgement }
+            : {}),
         section_id: data.section_id,
         roll_number: data.roll_number,
         starts_on: data.starts_on,
@@ -226,12 +232,25 @@ convertForm.transform((data) => {
     };
 });
 
-function submitConversion(): void {
-    const confirmed = window.confirm(
-        `Convert this application into a Student record for ${applicantName()}? This creates a permanent Student and Enrollment.`,
-    );
-    if (!confirmed) return;
-    convertForm.post(`/app/admissions/${props.application.id}/convert`, { preserveScroll: true });
+// SIS 2.3: the Student number is allocated when the Student is created. A
+// same-name-and-birthday match refuses the conversion (nothing is written) and
+// comes back as `duplicateWarning`; confirming "different people" resubmits
+// with its acknowledgement, and the server checks the candidates again.
+// A refused submit always shows the warning again, even when identical.
+const duplicateDismissed = ref(false);
+
+function submitConversion(acknowledgement = ''): void {
+    if (!acknowledgement) {
+        const confirmed = window.confirm(
+            `Convert this application into a Student record for ${applicantName()}? This creates a permanent Student and Enrollment.`,
+        );
+        if (!confirmed) return;
+    }
+    convertForm.duplicate_acknowledgement = acknowledgement;
+    convertForm.post(`/app/admissions/${props.application.id}/convert`, {
+        preserveScroll: true,
+        onError: () => (duplicateDismissed.value = false),
+    });
 }
 
 // -- Guardian: link-existing name search ----------------------------------
@@ -462,26 +481,21 @@ function switchToLinkExisting(g: GuardianCandidate): void {
             <h2 class="text-sm font-medium text-slate-500">Convert to Student</h2>
             <p class="mt-1 text-sm text-slate-500">
                 Creates a Student, enrolls them into the Section you choose below, and (optionally)
-                links a Guardian -- all at once. This cannot be undone.
+                links a Guardian -- all at once. This cannot be undone. The student number is
+                assigned automatically.
             </p>
 
-            <form class="mt-4 space-y-4" @submit.prevent="submitConversion">
+            <DuplicateStudentWarning
+                v-if="duplicateWarning && !duplicateDismissed"
+                :warning="duplicateWarning"
+                :processing="convertForm.processing"
+                continue-label="These are different people — convert to a new student"
+                @cancel="duplicateDismissed = true"
+                @continue="submitConversion(duplicateWarning.acknowledgement)"
+            />
+
+            <form class="mt-4 space-y-4" @submit.prevent="submitConversion()">
                 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700" for="student_number"
-                            >Student number</label
-                        >
-                        <input
-                            id="student_number"
-                            v-model="convertForm.student_number"
-                            type="text"
-                            required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                        />
-                        <p class="mt-1 text-sm text-red-600">
-                            {{ convertForm.errors.student_number }}
-                        </p>
-                    </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700" for="roll_number"
                             >Roll number</label

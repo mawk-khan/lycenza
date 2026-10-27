@@ -30,10 +30,14 @@ use Illuminate\Support\Str;
  *      latest, a draft or a previous year);
  *   2. the destination Section (this School, the active year, a Campus in
  *      BOTH the students.manage and the enrollments.manage scope);
- *   3. the Student number from StudentNumberAllocator (the School's counter
- *      row, FOR UPDATE) -- never typed or chosen by the actor;
- *   4. the new Student (active, the allocated number, the given names and
- *      date of birth -- write-only, F2-D13);
+ *   3-4. the new Student through StudentService::create(): the Student
+ *      number from the School's Student-number counter (its row FOR
+ *      UPDATE -- never typed or chosen by the actor), the SIS 2.3
+ *      duplicate-risk check, then the Student (active, the given names and
+ *      date of birth -- write-only, F2-D13). The duplicate check compares
+ *      ONLY with the Students the actor may already see (their
+ *      `students.view` Campus scope): a match elsewhere is never revealed,
+ *      and an actor without that scope is compared with nobody;
  *   5. the placement through StudentEnrollmentService::enroll(): Student,
  *      Section FOR UPDATE, Campus share-lock, the F-2 validity rule.
  * Any refusal rolls everything back: no Campus-less Student can survive.
@@ -48,7 +52,6 @@ final class CampusStudentOnboardingService
 {
     public function __construct(
         private readonly CurrentAcademicYearResolver $years,
-        private readonly StudentNumberAllocator $numbers,
         private readonly StudentService $students,
         private readonly StudentEnrollmentService $enrollments,
         private readonly AuditRecorder $audit,
@@ -57,14 +60,15 @@ final class CampusStudentOnboardingService
 
     /**
      * @param  array{first_name: string, middle_name?: string|null, last_name?: string|null, date_of_birth: string, section_id: string, roll_number: string}  $input
+     * @param  CampusScope|null  $duplicateScope  the actor's `students.view` scope (SIS 2.3); null compares with nobody
      */
-    public function onboard(School $school, CampusScope $studentScope, CampusScope $enrollmentScope, array $input, ?User $actor = null): StudentEnrollment
+    public function onboard(School $school, CampusScope $studentScope, CampusScope $enrollmentScope, array $input, ?User $actor = null, ?CampusScope $duplicateScope = null, ?string $duplicateAcknowledgement = null): StudentEnrollment
     {
         if ($studentScope->isNone() || $enrollmentScope->isNone()) {
             throw new StudentOnboardingUnavailableException;
         }
 
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $studentScope, $enrollmentScope, $input, $actor): StudentEnrollment {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $studentScope, $enrollmentScope, $input, $actor, $duplicateScope, $duplicateAcknowledgement): StudentEnrollment {
             $yearId = $this->years->shareLockActiveId($school);
             $section = Str::isUuid($input['section_id'])
                 ? Section::query()->where('school_id', $school->id)->whereKey($input['section_id'])->first()
@@ -76,12 +80,11 @@ final class CampusStudentOnboardingService
 
             try {
                 $student = $this->students->create($school, [
-                    'student_number' => $this->numbers->allocate($school),
                     'first_name' => $input['first_name'],
                     'middle_name' => $input['middle_name'] ?? null,
                     'last_name' => $input['last_name'] ?? null,
                     'date_of_birth' => $input['date_of_birth'],
-                ], $actor);
+                ], $actor, $duplicateAcknowledgement, $duplicateScope ?? CampusScope::none());
                 $enrollment = $this->enrollments->enroll($student, $section, $input['roll_number'], SchoolTimezone::today($school), $actor);
             } catch (PlacementTargetUnavailableException|InvalidEnrollmentDateRangeException|DuplicateStudentNumberException) {
                 throw new StudentOnboardingUnavailableException;

@@ -1346,7 +1346,12 @@ paths:
                   meta: { $ref: "#/components/schemas/PaginationMeta" }
     post:
       operationId: createStudent
-      summary: Creates a Student. Requires students.manage. Idempotency-Key required.
+      summary: >
+        Creates a Student. Requires students.manage. Idempotency-Key required.
+        The Student number is allocated by the School's counter (SIS 2.3), never
+        supplied. A same-name-and-date-of-birth match in this School is a 409
+        POSSIBLE_DUPLICATE_STUDENT; resend with its
+        `details.duplicateAcknowledgement` to create a different Student.
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { $ref: "#/components/parameters/IdempotencyKey" }
@@ -1354,7 +1359,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/StudentInput" }
+            schema: { $ref: "#/components/schemas/StudentCreateInput" }
       responses:
         "201":
           description: Created.
@@ -1363,8 +1368,19 @@ paths:
           content:
             application/json:
               schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Student" } } }
+        "409":
+          description: >
+            POSSIBLE_DUPLICATE_STUDENT -- nothing was created. `details`
+            carries `candidateCount` and `duplicateAcknowledgement` only (never
+            names or ids). Like any response, the refusal is stored under its
+            Idempotency-Key (a retry with that key replays it); resend with the
+            acknowledgement under a NEW key. The candidates are re-evaluated
+            first and a changed set is refused again.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "422":
-          description: Validation failure (e.g. duplicate Student Number within this School).
+          description: Validation failure (a supplied student_number, a future date of birth, ...).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -5237,7 +5253,18 @@ paths:
             incompatible Section, a duplicate Student Number, a
             duplicate roll number, or a Guardian create-vs-link
             candidate conflict (AdmissionGuardianSelectionRequiredException
-            -- never returns candidate ids/names/contact values).
+            -- never returns candidate ids/names/contact values), or a
+            supplied student_number (allocated since SIS 2.3).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: >
+            POSSIBLE_DUPLICATE_STUDENT (SIS 2.3) -- the applicant's name and
+            date of birth match an existing Student of this School; nothing
+            was converted. Resend with `details.duplicateAcknowledgement`
+            under a new Idempotency-Key to create a different Student
+            (conversion never links or reactivates the existing one).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -14803,6 +14830,13 @@ components:
               type: object
               nullable: true
               description: Field-level validation errors, present only on 422 responses.
+            details:
+              type: object
+              additionalProperties: true
+              description: >
+                Optional exception-defined detail, present only for errors that
+                define one (SIS 2.3: POSSIBLE_DUPLICATE_STUDENT carries
+                candidateCount and duplicateAcknowledgement).
 
     StepUpMfaCode:
       type: object
@@ -16643,13 +16677,33 @@ components:
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
 
+    StudentCreateInput:
+      type: object
+      required: [first_name, date_of_birth]
+      description: >
+        SIS 2.3: no student_number -- it is allocated by the School's counter
+        (a supplied value is a 422). date_of_birth may not be after the
+        School's today.
+      properties:
+        first_name: { type: string, maxLength: 255 }
+        middle_name: { type: string, maxLength: 255, nullable: true }
+        last_name: { type: string, maxLength: 255, nullable: true }
+        date_of_birth: { type: string, format: date }
+        duplicate_acknowledgement:
+          type: string
+          maxLength: 128
+          nullable: true
+          description: The acknowledgement from a 409 POSSIBLE_DUPLICATE_STUDENT; valid only for that exact identity and candidate set.
+
     StudentInput:
       type: object
       required: [student_number, first_name, date_of_birth]
       description: >
+        Update (PATCH) input: a correction of an existing Student.
         student_number uniqueness is enforced by StudentService/the
         database (school_id, student_number), not by this contract --
         a duplicate is a 422 with code DUPLICATE_STUDENT_NUMBER.
+        date_of_birth may not be after the School's today (SIS 2.3).
       properties:
         student_number: { type: string, maxLength: 255 }
         first_name: { type: string, maxLength: 255 }
@@ -18170,15 +18224,20 @@ components:
 
     AdmissionConversionInput:
       type: object
-      required: [student_number, section_id, roll_number, starts_on]
+      required: [section_id, roll_number, starts_on]
       description: >
         The Section is the sole authoritative placement input for this
         conversion -- AdmissionConversionService re-verifies it matches
         the application's own AcademicYear/Campus/GradeLevel (422
         IncompatibleConversionSectionException otherwise, never a
-        partial conversion).
+        partial conversion). The Student number is allocated by the School
+        (SIS 2.3); a supplied `student_number` is refused.
       properties:
-        student_number: { type: string, maxLength: 255 }
+        duplicate_acknowledgement:
+          type: string
+          maxLength: 128
+          nullable: true
+          description: The acknowledgement from a 409 POSSIBLE_DUPLICATE_STUDENT (SIS 2.3); valid only for that exact candidate set.
         section_id: { type: string, format: uuid }
         roll_number: { type: string, maxLength: 255 }
         starts_on: { type: string, format: date }

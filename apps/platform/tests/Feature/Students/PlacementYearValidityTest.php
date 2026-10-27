@@ -251,7 +251,7 @@ class PlacementYearValidityTest extends TestCase
     {
         $application = $this->acceptedApplication($this->active);
 
-        $result = app(AdmissionConversionService::class)->convert($application, 'ADM-1', $this->section, '1', '2026-04-01', $this->guardian());
+        $result = app(AdmissionConversionService::class)->convert($application, $this->section, '1', '2026-04-01', $this->guardian());
 
         $this->assertSame('converted', $result->application->status);
         $this->assertSame('2026-04-01', $result->enrollment->starts_on->toDateString());
@@ -262,11 +262,11 @@ class PlacementYearValidityTest extends TestCase
     {
         $application = $this->acceptedApplication($this->active);
 
-        $this->assertOutOfYear(fn () => app(AdmissionConversionService::class)->convert($application, 'ADM-2', $this->section, '1', '2027-04-01', $this->guardian()), self::ACTIVE_RANGE);
+        $this->assertOutOfYear(fn () => app(AdmissionConversionService::class)->convert($application, $this->section, '1', '2027-04-01', $this->guardian()), self::ACTIVE_RANGE);
         $this->assertNothingConverted($application, 'ADM-2');
 
         // Corrected in the same workflow, the conversion succeeds.
-        $result = app(AdmissionConversionService::class)->convert($application, 'ADM-2', $this->section, '1', '2027-03-31', $this->guardian());
+        $result = app(AdmissionConversionService::class)->convert($application, $this->section, '1', '2027-03-31', $this->guardian());
         $this->assertSame('converted', $result->application->status);
     }
 
@@ -275,7 +275,7 @@ class PlacementYearValidityTest extends TestCase
     {
         $application = $this->acceptedApplication($this->closed);
 
-        $this->assertYearClosed(fn () => app(AdmissionConversionService::class)->convert($application, 'ADM-3', $this->closedSection, '1', '2025-06-01', $this->guardian()));
+        $this->assertYearClosed(fn () => app(AdmissionConversionService::class)->convert($application, $this->closedSection, '1', '2025-06-01', $this->guardian()));
         $this->assertNothingConverted($application, 'ADM-3');
     }
 
@@ -404,7 +404,7 @@ class PlacementYearValidityTest extends TestCase
         $this->admin();
 
         $this->from("/app/admissions/{$application->id}")->post("/app/admissions/{$application->id}/convert", [
-            'student_number' => 'ADM-W', 'section_id' => $this->section->id, 'roll_number' => '1', 'starts_on' => '2027-04-01',
+            'section_id' => $this->section->id, 'roll_number' => '1', 'starts_on' => '2027-04-01',
         ])->assertSessionHasErrors(['starts_on' => self::ACTIVE_RANGE]);
         $this->assertNothingConverted($application, 'ADM-W');
     }

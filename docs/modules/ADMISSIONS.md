@@ -329,6 +329,13 @@ services, in this order, inside one outer `DB::transaction()` (see
   a Students/SIS-owned change, out of Admissions' own boundary — not
   decided here.
 
+**Amended (SIS 2.3, 2026-10-27, ADR 0079).** The open question above is
+closed:
+- conversion takes **no** Student number; `StudentService::create()`
+  allocates it from the School's counter, like every other new Student, and a
+  supplied `student_number` is refused (422);
+- conversion runs the same duplicate-risk check as direct creation (§10).
+
 ## 9. Guardian strategy (avoiding a second identity system) — HARDENED (1D.0A)
 
 **REVISED DECISION, replacing the original Pattern-A draft-column
@@ -456,6 +463,24 @@ implied:**
   future re-admission checkpoint deliberately designs a Student-level
   matching key (which is itself a Students/SIS-owned decision, likely
   requiring `StudentIdentifier`, §4, to exist first).
+
+**Amended (SIS 2.3, 2026-10-27, ADR 0079): a duplicate-risk WARNING now
+exists.**
+- **The rule:** the applicant's name and date of birth matching an existing
+  Student of the same School. Same date of birth, AND the same first and last
+  name or the same full name, ignoring case, spaces and punctuation.
+- **On a match:**
+  - conversion is refused (409 `POSSIBLE_DUPLICATE_STUDENT`) and rolls back
+    whole, with no Student, Guardian or placement;
+  - the page lists the candidates (number, name, date of birth, status,
+    placement) to an actor who may view Students, otherwise a count;
+  - inactive candidates are included.
+- **"These are different people — convert to a new student"** resubmits with
+  the acknowledgement, and conversion proceeds.
+- **Still decided as above:**
+  - conversion always creates a NEW Student;
+  - it never links to or reactivates the candidate;
+  - re-admission remains a future, deliberate design.
 
 ## 11. Conversion idempotency and transaction boundary
 

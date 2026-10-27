@@ -9,8 +9,10 @@ use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Tenancy\SchoolTimezone;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -54,22 +56,28 @@ class StudentController extends Controller
         // ORG.7F-2: students.manage is Campus-adopted; this whole-School-only
         // operation's floor is its route `capability:students.manage` (declared).
 
+        // SIS 2.3: the Student number is allocated by StudentService, never
+        // supplied (a client still sending one gets a field error rather than
+        // a silently different number). A same-name-and-birthday match is a
+        // 409 POSSIBLE_DUPLICATE_STUDENT carrying `details.candidateCount` and
+        // `details.duplicateAcknowledgement` (never names or ids); resending
+        // with that acknowledgement (a new request, so a new Idempotency-Key:
+        // the refusal is stored and replayed under its own key like any other
+        // response) creates a distinct Student, and the candidates are
+        // re-evaluated first.
         $validated = $request->validate([
-            'student_number' => ['required', 'string', 'max:255'],
+            'student_number' => ['prohibited'],
             'first_name' => ['required', 'string', 'max:255'],
             'middle_name' => ['nullable', 'string', 'max:255'],
             'last_name' => ['nullable', 'string', 'max:255'],
-            'date_of_birth' => ['required', 'date'],
+            'date_of_birth' => ['required', 'date', 'before_or_equal:'.SchoolTimezone::today($school)],
+            'duplicate_acknowledgement' => ['nullable', 'string', 'max:128'],
+        ], [
+            'student_number.prohibited' => 'The Student number is allocated by the School and cannot be supplied.',
+            'date_of_birth.before_or_equal' => 'The date of birth cannot be in the future.',
         ]);
 
-        // StudentService::create() catches the database's own
-        // unique(school_id, student_number) violation and translates it
-        // to DuplicateStudentNumberException -- rendered automatically
-        // by bootstrap/app.php's generic exception handler (it defines
-        // getStatusCode()/errorCode()). No Rule::unique() duplicated
-        // here -- the canonical normalizer/service remains final
-        // authority (this checkpoint's brief, section 5/11/19).
-        $student = $service->create($school, $validated, $request->user());
+        $student = $service->create($school, Arr::except($validated, ['duplicate_acknowledgement', 'student_number']), $request->user(), $validated['duplicate_acknowledgement'] ?? null);
 
         return response()->json(['data' => $this->presentDetail($student)], 201);
     }
@@ -87,8 +95,8 @@ class StudentController extends Controller
             'first_name' => ['sometimes', 'string', 'max:255'],
             'middle_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'last_name' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'date_of_birth' => ['sometimes', 'date'],
-        ]);
+            'date_of_birth' => ['sometimes', 'date', 'before_or_equal:'.SchoolTimezone::today($school)],
+        ], ['date_of_birth.before_or_equal' => 'The date of birth cannot be in the future.']);
 
         $updated = $service->update($model, $validated, $request->user());
 

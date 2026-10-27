@@ -105,14 +105,15 @@ class AdmissionConversionApiTest extends TestCase
 
         $response = $this->asUser($user)->withHeader('Idempotency-Key', 'e2e-convert')
             ->postJson("/api/v1/schools/{$school->id}/admission-applications/{$applicationId}/convert", [
-                'student_number' => 'S-E2E-1', 'section_id' => $section->id,
+                'section_id' => $section->id,
                 'roll_number' => '01', 'starts_on' => '2026-06-01',
             ]);
 
         $response->assertOk();
         $this->assertSame('converted', $response->json('data.application.status'));
         $this->assertSame('Rohit', $response->json('data.student.firstName'));
-        $this->assertSame('S-E2E-1', $response->json('data.student.studentNumber'));
+        // SIS 2.3: allocated by the School's counter, never typed.
+        $this->assertMatchesRegularExpression('/^[1-9][0-9]*$/', $response->json('data.student.studentNumber'));
         $this->assertNotNull($response->json('data.enrollment.id'));
         $this->assertNull($response->json('data.guardian'));
         $this->assertSame(1, $this->studentCount($school));
@@ -128,7 +129,7 @@ class AdmissionConversionApiTest extends TestCase
         $response = $this->asUser($user)
             ->withHeader('Idempotency-Key', 'convert-core-001')
             ->postJson("/api/v1/schools/{$school->id}/admission-applications/{$application->id}/convert", [
-                'student_number' => 'S-2001', 'section_id' => $section->id,
+                'section_id' => $section->id,
                 'roll_number' => '02', 'starts_on' => '2026-06-01',
             ]);
 
@@ -156,7 +157,7 @@ class AdmissionConversionApiTest extends TestCase
         $this->asUser($user)
             ->withHeader('Idempotency-Key', 'convert-denied-001')
             ->postJson("/api/v1/schools/{$school->id}/admission-applications/{$application->id}/convert", [
-                'student_number' => 'S-3001', 'section_id' => $section->id,
+                'section_id' => $section->id,
                 'roll_number' => '03', 'starts_on' => '2026-06-01',
             ])->assertForbidden();
 
@@ -179,7 +180,7 @@ class AdmissionConversionApiTest extends TestCase
         $response = $this->asUser($user)
             ->withHeader('Idempotency-Key', 'convert-manage-only-001')
             ->postJson("/api/v1/schools/{$school->id}/admission-applications/{$application->id}/convert", [
-                'student_number' => 'S-3002', 'section_id' => $section->id,
+                'section_id' => $section->id,
                 'roll_number' => '04', 'starts_on' => '2026-06-01',
             ]);
 
@@ -200,7 +201,7 @@ class AdmissionConversionApiTest extends TestCase
         $response = $this->asUser($user)
             ->withHeader('Idempotency-Key', 'convert-guardian-create-001')
             ->postJson("/api/v1/schools/{$school->id}/admission-applications/{$application->id}/convert", [
-                'student_number' => 'S-4001', 'section_id' => $section->id,
+                'section_id' => $section->id,
                 'roll_number' => '05', 'starts_on' => '2026-06-01',
                 'guardian' => [
                     'mode' => 'create',
@@ -238,7 +239,7 @@ class AdmissionConversionApiTest extends TestCase
         $response = $this->asUser($user)
             ->withHeader('Idempotency-Key', 'convert-guardian-link-001')
             ->postJson("/api/v1/schools/{$school->id}/admission-applications/{$application->id}/convert", [
-                'student_number' => 'S-4002', 'section_id' => $section->id,
+                'section_id' => $section->id,
                 'roll_number' => '06', 'starts_on' => '2026-06-01',
                 'guardian' => ['mode' => 'link_existing', 'relationship_type' => 'mother', 'guardian_id' => $existingGuardian->id],
             ]);
@@ -260,7 +261,7 @@ class AdmissionConversionApiTest extends TestCase
         $response = $this->asUser($user)
             ->withHeader('Idempotency-Key', 'convert-guardian-foreign-001')
             ->postJson("/api/v1/schools/{$school->id}/admission-applications/{$application->id}/convert", [
-                'student_number' => 'S-4003', 'section_id' => $section->id,
+                'section_id' => $section->id,
                 'roll_number' => '07', 'starts_on' => '2026-06-01',
                 'guardian' => ['mode' => 'link_existing', 'relationship_type' => 'mother', 'guardian_id' => $foreignGuardian->id],
             ]);
@@ -281,7 +282,7 @@ class AdmissionConversionApiTest extends TestCase
         $response = $this->asUser($user)
             ->withHeader('Idempotency-Key', 'convert-guardian-conflict-001')
             ->postJson("/api/v1/schools/{$school->id}/admission-applications/{$application->id}/convert", [
-                'student_number' => 'S-4004', 'section_id' => $section->id,
+                'section_id' => $section->id,
                 'roll_number' => '08', 'starts_on' => '2026-06-01',
                 'guardian' => [
                     'mode' => 'create', 'relationship_type' => 'mother',
@@ -315,7 +316,7 @@ class AdmissionConversionApiTest extends TestCase
 
         $this->asUser($user)->withHeader('Idempotency-Key', 'convert-already-001')
             ->postJson("/api/v1/schools/{$school->id}/admission-applications/{$application->id}/convert", [
-                'student_number' => 'S-5001', 'section_id' => $section->id,
+                'section_id' => $section->id,
                 'roll_number' => '09', 'starts_on' => '2026-06-01',
             ])->assertOk();
 
@@ -323,7 +324,7 @@ class AdmissionConversionApiTest extends TestCase
 
         $second = $this->asUser($user)->withHeader('Idempotency-Key', 'convert-already-002')
             ->postJson("/api/v1/schools/{$school->id}/admission-applications/{$application->id}/convert", [
-                'student_number' => 'S-5002', 'section_id' => $section->id,
+                'section_id' => $section->id,
                 'roll_number' => '10', 'starts_on' => '2026-06-01',
             ]);
 
@@ -348,7 +349,7 @@ class AdmissionConversionApiTest extends TestCase
         $response = $this->asUser($user)
             ->withHeader('Idempotency-Key', 'convert-wrong-year-001')
             ->postJson("/api/v1/schools/{$school->id}/admission-applications/{$application->id}/convert", [
-                'student_number' => 'S-6001', 'section_id' => $wrongSection->id,
+                'section_id' => $wrongSection->id,
                 'roll_number' => '11', 'starts_on' => '2026-06-01',
             ]);
 
@@ -371,7 +372,7 @@ class AdmissionConversionApiTest extends TestCase
         $response = $this->asUser($user)
             ->withHeader('Idempotency-Key', 'convert-foreign-section-001')
             ->postJson("/api/v1/schools/{$school->id}/admission-applications/{$application->id}/convert", [
-                'student_number' => 'S-6002', 'section_id' => $foreignSection->id,
+                'section_id' => $foreignSection->id,
                 'roll_number' => '12', 'starts_on' => '2026-06-01',
             ]);
 
@@ -385,27 +386,67 @@ class AdmissionConversionApiTest extends TestCase
     // ==================================================================
 
     #[Test]
-    public function a_colliding_student_number_is_rejected_cleanly_without_sqlstate_exposure(): void
+    public function a_supplied_student_number_is_refused_and_nothing_is_converted(): void
     {
+        // SIS 2.3: the number is allocated by the School, never an input.
         [$user, $school] = $this->createSchoolAdmin('school_admin');
         ['section' => $section, 'application' => $application] = $this->buildAcceptedContext($school);
-        $this->createStudent($school, ['student_number' => 'S-DUP']);
 
         $response = $this->asUser($user)
-            ->withHeader('Idempotency-Key', 'convert-dup-number-001')
+            ->withHeader('Idempotency-Key', 'convert-typed-number-001')
             ->postJson("/api/v1/schools/{$school->id}/admission-applications/{$application->id}/convert", [
-                'student_number' => 'S-DUP', 'section_id' => $section->id,
+                'student_number' => 'S-TYPED', 'section_id' => $section->id,
                 'roll_number' => '13', 'starts_on' => '2026-06-01',
             ]);
 
         $response->assertStatus(422);
-        $this->assertSame('DUPLICATE_STUDENT_NUMBER', $response->json('error.code'));
-        $this->assertStringNotContainsString('SQLSTATE', $response->json('error.message'));
+        $this->assertArrayHasKey('student_number', $response->json('error.errors'));
 
         $fresh = app(TenantContext::class)->withSchool($school, fn () => AdmissionApplication::query()->findOrFail($application->id));
         $this->assertSame('accepted', $fresh->status);
-        $this->assertSame(1, $this->studentCount($school), 'Only the pre-existing colliding Student may remain.');
+        $this->assertSame(0, $this->studentCount($school));
         $this->assertSame(0, $this->enrollmentCount($school));
+    }
+
+    #[Test]
+    public function a_matching_existing_student_is_a_409_with_count_and_acknowledgement_only_then_acknowledged_conversion_succeeds(): void
+    {
+        // SIS 2.3: same name + date of birth as an existing Student -> a
+        // warning (409), never names/ids; the acknowledged resend is a new
+        // request under a new Idempotency-Key.
+        [$user, $school] = $this->createSchoolAdmin('school_admin');
+        ['section' => $section, 'application' => $application] = $this->buildAcceptedContext($school);
+        $applicant = app(TenantContext::class)->withSchool($school, fn () => $application->applicant()->firstOrFail());
+        $existing = $this->createStudent($school, [
+            'first_name' => strtoupper($applicant->first_name), 'middle_name' => null, 'last_name' => ' '.$applicant->last_name,
+            'date_of_birth' => $applicant->date_of_birth->toDateString(), 'status' => 'inactive',
+        ]);
+        $url = "/api/v1/schools/{$school->id}/admission-applications/{$application->id}/convert";
+        $payload = ['section_id' => $section->id, 'roll_number' => '13', 'starts_on' => '2026-06-01'];
+
+        $refused = $this->asUser($user)->withHeader('Idempotency-Key', 'convert-dup-identity-001')->postJson($url, $payload);
+        $refused->assertStatus(409);
+        $this->assertSame('POSSIBLE_DUPLICATE_STUDENT', $refused->json('error.code'));
+        $this->assertSame(1, $refused->json('error.details.candidateCount'));
+        $acknowledgement = $refused->json('error.details.duplicateAcknowledgement');
+        $this->assertIsString($acknowledgement);
+        $this->assertStringNotContainsString($existing->id, $refused->getContent());
+        $this->assertStringNotContainsString($existing->student_number, $refused->getContent());
+        $this->assertSame(1, $this->studentCount($school), 'nothing was created');
+
+        // The refusal is stored under its key and replayed, like any response.
+        $this->asUser($user)->withHeader('Idempotency-Key', 'convert-dup-identity-001')->postJson($url, $payload)
+            ->assertStatus(409)->assertHeader('Idempotency-Replayed', 'true');
+
+        $this->asUser($user)->withHeader('Idempotency-Key', 'convert-dup-identity-001-forged')
+            ->postJson($url, [...$payload, 'duplicate_acknowledgement' => 'not-the-token'])->assertStatus(409);
+
+        $converted = $this->asUser($user)->withHeader('Idempotency-Key', 'convert-dup-identity-001-ack')
+            ->postJson($url, [...$payload, 'duplicate_acknowledgement' => $acknowledgement]);
+        $converted->assertOk();
+        $this->assertNotSame($existing->id, $converted->json('data.student.id'), 'always a NEW Student, never a link');
+        $this->assertSame(2, $this->studentCount($school));
+        $this->assertSame('inactive', app(TenantContext::class)->withSchool($school, fn () => $existing->fresh()->status), 'never reactivated');
     }
 
     // ==================================================================
@@ -422,7 +463,7 @@ class AdmissionConversionApiTest extends TestCase
         $this->asUser($user)
             ->withHeader('Idempotency-Key', 'convert-foreign-app-001')
             ->postJson("/api/v1/schools/{$schoolA->id}/admission-applications/{$applicationB->id}/convert", [
-                'student_number' => 'S-7001', 'section_id' => $sectionB->id,
+                'section_id' => $sectionB->id,
                 'roll_number' => '14', 'starts_on' => '2026-06-01',
             ])->assertNotFound();
     }

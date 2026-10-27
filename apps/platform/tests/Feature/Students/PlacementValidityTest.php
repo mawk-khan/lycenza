@@ -132,7 +132,7 @@ class PlacementValidityTest extends TestCase
         $application = $this->createAdmissionApplication($this->createApplicant($this->school), $this->year, $this->a, $this->grade, ['status' => 'accepted']);
         $this->inSchool(fn () => Section::query()->whereKey($this->sectionA->id)->update(['status' => 'inactive']));
 
-        $this->refusedWith(PlacementTargetUnavailableException::SECTION_INACTIVE, fn () => app(AdmissionConversionService::class)->convert($application, 'ADM-1', $this->inSchool(fn () => $this->sectionA->fresh()), '1', '2026-06-02'));
+        $this->refusedWith(PlacementTargetUnavailableException::SECTION_INACTIVE, fn () => app(AdmissionConversionService::class)->convert($application, $this->inSchool(fn () => $this->sectionA->fresh()), '1', '2026-06-02'));
         $this->assertSame(0, $this->inSchool(fn () => Student::query()->where('student_number', 'ADM-1')->count()), 'the conversion rolled back entirely');
     }
 

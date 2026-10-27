@@ -63,21 +63,31 @@ class StudentCampusWriteArchitectureTest extends TestCase
     #[Test]
     public function onboarding_accepts_only_the_approved_fields_and_numbers_come_from_the_allocator(): void
     {
-        $this->assertSame(['date_of_birth', 'first_name', 'last_name', 'middle_name', 'roll_number', 'section_id'], $this->validatedKeys('storeOnboarding'));
+        // SIS 2.3: plus the opaque duplicate acknowledgement (never a number or an id).
+        $this->assertSame(['date_of_birth', 'duplicate_acknowledgement', 'first_name', 'last_name', 'middle_name', 'roll_number', 'section_id'], $this->validatedKeys('storeOnboarding'));
 
         $onboard = $this->body(CampusStudentOnboardingService::class, 'onboard');
-        $this->assertStringContainsString("'student_number' => \$this->numbers->allocate(\$school)", $onboard);
-        foreach (["\$input['student_number']", "\$input['student_id']", "\$input['status']", 'Guardian', 'Student::query()'] as $forbidden) {
+        $this->assertStringContainsString('$this->students->create($school, [', $onboard, 'the one Student creation path (which allocates the number)');
+        foreach (["'student_number'", "\$input['student_id']", "\$input['status']", 'Guardian', 'Student::query()'] as $forbidden) {
             $this->assertStringNotContainsString($forbidden, $onboard, "onboarding never uses {$forbidden}: it creates identity, never finds one");
         }
 
+        // SIS 2.3: ONE numbering policy -- StudentService::create() is the only
+        // allocator caller, and the only writer that creates a Student row.
         $callers = [];
+        $creators = [];
         foreach (Finder::create()->files()->in(app_path())->name('*.php') as $file) {
-            if (str_contains($file->getContents(), 'StudentNumberAllocator') && ! str_ends_with($file->getRelativePathname(), 'StudentNumberAllocator.php')) {
+            $contents = $file->getContents();
+            if (str_contains($contents, 'StudentNumberAllocator') && ! str_ends_with($file->getRelativePathname(), 'StudentNumberAllocator.php')) {
                 $callers[] = $file->getRelativePathname();
             }
+            $code = (string) preg_replace('/^\s*(\*|\/\/|\/\*).*$/m', '', $contents);
+            if (preg_match('/Student::(query\(\)->)?(create|forceCreate|insert|firstOrCreate|updateOrCreate)\(|->students\(\)->create\(/', $code) === 1) {
+                $creators[] = $file->getRelativePathname();
+            }
         }
-        $this->assertSame(['Domain/Students/Application/CampusStudentOnboardingService.php'], $callers, 'the allocator generates Campus-onboarding numbers only');
+        $this->assertSame(['Domain/Students/Application/StudentService.php'], $callers, 'every Student number comes from the School counter, through StudentService');
+        $this->assertSame(['Domain/Students/Application/StudentService.php'], $creators, 'every Student is created by StudentService::create()');
     }
 
     #[Test]

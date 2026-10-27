@@ -16,6 +16,7 @@ use Illuminate\Contracts\Console\Kernel;
 // identical pattern (Phase 0D section 80 / this checkpoint's item 71).
 //
 // Usage: php convert-admission-application.php <schoolId> <applicationId> <sectionId> <studentNumber> <rollNumber> <startsOn>
+// (<studentNumber> is ignored since SIS 2.3: the number is allocated.)
 
 require __DIR__.'/../../vendor/autoload.php';
 
@@ -32,7 +33,7 @@ $context->set($school);
 try {
     $application = AdmissionApplication::query()->findOrFail($applicationId);
     $section = Section::query()->findOrFail($sectionId);
-    $app->make(AdmissionConversionService::class)->convert($application, $studentNumber, $section, $rollNumber, $startsOn);
+    $app->make(AdmissionConversionService::class)->convert($application, $section, $rollNumber, $startsOn);
     echo 'converted';
 } catch (Throwable $e) {
     echo 'rejected:'.$e::class;

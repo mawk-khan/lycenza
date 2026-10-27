@@ -22,7 +22,7 @@ use App\Domain\Guardians\Infrastructure\GuardianContact;
 use App\Domain\Guardians\Infrastructure\RelationshipType;
 use App\Domain\Guardians\Infrastructure\StudentGuardianRelationship;
 use App\Domain\Students\Application\Exceptions\DuplicateEnrollmentRollNumberException;
-use App\Domain\Students\Application\Exceptions\DuplicateStudentNumberException;
+use App\Domain\Students\Application\Exceptions\PossibleDuplicateStudentException;
 use App\Domain\Students\Application\StudentEnrollmentService;
 use App\Domain\Students\Application\StudentService;
 use App\Domain\Students\Infrastructure\Student;
@@ -121,7 +121,7 @@ class AdmissionConversionServiceTest extends TestCase
     {
         ['school' => $school, 'applicant' => $applicant, 'year' => $year, 'campus' => $campus, 'gradeLevel' => $gradeLevel, 'section' => $section, 'application' => $application] = $this->buildAcceptedContext();
 
-        $result = $this->service()->convert($application, 'S-1001', $section, '01', '2026-06-01');
+        $result = $this->service()->convert($application, $section, '01', '2026-06-01');
 
         $this->assertSame('converted', $result->application->status);
         $this->assertSame($result->student->id, $result->application->converted_student_id);
@@ -140,7 +140,7 @@ class AdmissionConversionServiceTest extends TestCase
     {
         ['section' => $section, 'application' => $application] = $this->buildAcceptedContext();
 
-        $result = $this->service()->convert($application, 'S-1002', $section, '02', '2026-06-01');
+        $result = $this->service()->convert($application, $section, '02', '2026-06-01');
 
         $this->assertSame('Asha', $result->student->first_name);
         $this->assertSame('K', $result->student->middle_name);
@@ -153,7 +153,7 @@ class AdmissionConversionServiceTest extends TestCase
     {
         ['year' => $year, 'campus' => $campus, 'gradeLevel' => $gradeLevel, 'section' => $section, 'application' => $application] = $this->buildAcceptedContext();
 
-        $result = $this->service()->convert($application, 'S-1003', $section, '03', '2026-06-01');
+        $result = $this->service()->convert($application, $section, '03', '2026-06-01');
 
         $this->assertSame($year->id, $result->enrollment->academic_year_id);
         $this->assertSame($campus->id, $result->enrollment->campus_id);
@@ -177,7 +177,7 @@ class AdmissionConversionServiceTest extends TestCase
         $application = $lifecycle->submit($application);
         $application = $lifecycle->accept($application, 'Strong interview.');
 
-        $result = $this->service()->convert($application, 'S-PIPE-1', $section, '01', '2026-06-01');
+        $result = $this->service()->convert($application, $section, '01', '2026-06-01');
 
         $this->assertSame('converted', $result->application->status);
         $this->assertSame('Rohit', $result->student->first_name);
@@ -188,7 +188,7 @@ class AdmissionConversionServiceTest extends TestCase
     {
         ['school' => $school, 'year' => $year, 'campus' => $campus, 'gradeLevel' => $gradeLevel, 'section' => $section, 'application' => $application] = $this->buildAcceptedContext();
 
-        $result = $this->service()->convert($application, 'S-1004', $section, '04', '2026-06-01');
+        $result = $this->service()->convert($application, $section, '04', '2026-06-01');
 
         $event = app(TenantContext::class)->withSchool(
             $school,
@@ -224,7 +224,7 @@ class AdmissionConversionServiceTest extends TestCase
             ['section' => $section, 'application' => $application] = $this->buildAcceptedContext($school, ['status' => $status]);
 
             try {
-                $this->service()->convert($application, 'S-'.Str::random(8), $section, '01', '2026-06-01');
+                $this->service()->convert($application, $section, '01', '2026-06-01');
                 $this->fail("Expected InvalidAdmissionApplicationTransitionException for status={$status}.");
             } catch (InvalidAdmissionApplicationTransitionException) {
                 // expected
@@ -248,13 +248,13 @@ class AdmissionConversionServiceTest extends TestCase
     public function converting_an_already_converted_application_is_rejected_without_creating_a_second_student(): void
     {
         ['school' => $school, 'section' => $section, 'application' => $application] = $this->buildAcceptedContext();
-        $first = $this->service()->convert($application, 'S-2001', $section, '01', '2026-06-01');
+        $first = $this->service()->convert($application, $section, '01', '2026-06-01');
 
         $this->assertSame(1, $this->studentCount($school));
         $this->assertSame(1, $this->enrollmentCount($school));
 
         try {
-            $this->service()->convert($this->fresh($school, $application->id), 'S-2002', $section, '02', '2026-06-01');
+            $this->service()->convert($this->fresh($school, $application->id), $section, '02', '2026-06-01');
             $this->fail('Expected AdmissionApplicationAlreadyConvertedException.');
         } catch (AdmissionApplicationAlreadyConvertedException) {
             // expected
@@ -284,7 +284,7 @@ class AdmissionConversionServiceTest extends TestCase
         $this->assertSame('accepted', $staleApplication->status, 'Sanity check: the in-memory model must still be stale.');
 
         $this->expectException(InvalidAdmissionApplicationTransitionException::class);
-        $this->service()->convert($staleApplication, 'S-3001', $section, '01', '2026-06-01');
+        $this->service()->convert($staleApplication, $section, '01', '2026-06-01');
     }
 
     // ==================================================================
@@ -321,7 +321,7 @@ class AdmissionConversionServiceTest extends TestCase
         // exists below to prove the conversion's OWN attempt added no
         // second one.
         $otherStudent = app(StudentService::class)->create($school, [
-            'student_number' => 'S-OTHER', 'first_name' => 'Other', 'date_of_birth' => '2016-01-01',
+            'first_name' => 'Other', 'date_of_birth' => '2016-01-01',
         ]);
         app(StudentEnrollmentService::class)->enroll($otherStudent, $section, '09', '2026-06-01');
 
@@ -335,7 +335,7 @@ class AdmissionConversionServiceTest extends TestCase
         );
 
         try {
-            $this->service()->convert($application, 'S-4001', $section, '09', '2026-06-01', $guardianInstruction);
+            $this->service()->convert($application, $section, '09', '2026-06-01', $guardianInstruction);
             $this->fail('Expected DuplicateEnrollmentRollNumberException.');
         } catch (DuplicateEnrollmentRollNumberException) {
             // expected -- the real forced failure
@@ -383,7 +383,7 @@ class AdmissionConversionServiceTest extends TestCase
     {
         ['school' => $school, 'section' => $section, 'application' => $application] = $this->buildAcceptedContext();
 
-        $result = $this->service()->convert($application, 'S-5001', $section, '01', '2026-06-01');
+        $result = $this->service()->convert($application, $section, '01', '2026-06-01');
 
         $this->assertNull($result->guardian);
         $this->assertNull($result->relationship);
@@ -406,7 +406,7 @@ class AdmissionConversionServiceTest extends TestCase
             isLegalGuardian: true,
         );
 
-        $result = $this->service()->convert($application, 'S-5002', $section, '02', '2026-06-01', $guardianInstruction);
+        $result = $this->service()->convert($application, $section, '02', '2026-06-01', $guardianInstruction);
 
         $this->assertNotNull($result->guardian);
         $this->assertSame('Priya', $result->guardian->first_name);
@@ -433,7 +433,7 @@ class AdmissionConversionServiceTest extends TestCase
 
         $guardianInstruction = GuardianConversionInstruction::linkExisting($existingGuardian, RelationshipType::Mother);
 
-        $result = $this->service()->convert($application, 'S-5003', $section, '03', '2026-06-01', $guardianInstruction);
+        $result = $this->service()->convert($application, $section, '03', '2026-06-01', $guardianInstruction);
 
         $this->assertSame($existingGuardian->id, $result->guardian->id);
         $this->assertSame(1, $this->guardianCount($school), 'No new Guardian should have been created.');
@@ -451,7 +451,7 @@ class AdmissionConversionServiceTest extends TestCase
         $guardianInstruction = GuardianConversionInstruction::linkExisting($foreignGuardian, RelationshipType::Mother);
 
         try {
-            $this->service()->convert($application, 'S-5004', $section, '04', '2026-06-01', $guardianInstruction);
+            $this->service()->convert($application, $section, '04', '2026-06-01', $guardianInstruction);
             $this->fail('Expected CrossSchoolRelationshipException.');
         } catch (CrossSchoolRelationshipException) {
             // expected
@@ -473,7 +473,7 @@ class AdmissionConversionServiceTest extends TestCase
         $inactive = $this->createGuardian($school, ['status' => 'inactive']);
 
         try {
-            $this->service()->convert($application, 'S-5005', $section, '05', '2026-06-01', GuardianConversionInstruction::linkExisting($inactive, RelationshipType::Mother));
+            $this->service()->convert($application, $section, '05', '2026-06-01', GuardianConversionInstruction::linkExisting($inactive, RelationshipType::Mother));
             $this->fail('Expected AdmissionGuardianNotActiveException.');
         } catch (AdmissionGuardianNotActiveException) {
             // expected
@@ -501,7 +501,7 @@ class AdmissionConversionServiceTest extends TestCase
         );
 
         try {
-            $this->service()->convert($application, 'S-5005', $section, '05', '2026-06-01', $guardianInstruction);
+            $this->service()->convert($application, $section, '05', '2026-06-01', $guardianInstruction);
             $this->fail('Expected AdmissionGuardianSelectionRequiredException.');
         } catch (AdmissionGuardianSelectionRequiredException $e) {
             $this->assertSame(1, $e->candidateCount);
@@ -543,7 +543,7 @@ class AdmissionConversionServiceTest extends TestCase
         $foreignSection = $this->createSection($otherYear, $otherCampus, $otherGrade);
 
         $this->expectException(IncompatibleConversionSectionException::class);
-        $this->service()->convert($application, 'S-6001', $foreignSection, '01', '2026-06-01');
+        $this->service()->convert($application, $foreignSection, '01', '2026-06-01');
     }
 
     #[Test]
@@ -554,7 +554,7 @@ class AdmissionConversionServiceTest extends TestCase
         $wrongSection = $this->createSection($wrongYear, $campus, $gradeLevel);
 
         $this->expectException(IncompatibleConversionSectionException::class);
-        $this->service()->convert($application, 'S-6002', $wrongSection, '01', '2026-06-01');
+        $this->service()->convert($application, $wrongSection, '01', '2026-06-01');
     }
 
     #[Test]
@@ -565,7 +565,7 @@ class AdmissionConversionServiceTest extends TestCase
         $wrongSection = $this->createSection($year, $wrongCampus, $gradeLevel);
 
         $this->expectException(IncompatibleConversionSectionException::class);
-        $this->service()->convert($application, 'S-6003', $wrongSection, '01', '2026-06-01');
+        $this->service()->convert($application, $wrongSection, '01', '2026-06-01');
     }
 
     #[Test]
@@ -576,31 +576,97 @@ class AdmissionConversionServiceTest extends TestCase
         $wrongSection = $this->createSection($year, $campus, $wrongGrade);
 
         $this->expectException(IncompatibleConversionSectionException::class);
-        $this->service()->convert($application, 'S-6004', $wrongSection, '01', '2026-06-01');
+        $this->service()->convert($application, $wrongSection, '01', '2026-06-01');
     }
 
     // ==================================================================
-    // I. Invalid Student Number
+    // I. Student number and duplicate risk (SIS 2.3)
     // ==================================================================
 
     #[Test]
-    public function a_colliding_student_number_is_rejected_cleanly_without_sqlstate_exposure(): void
+    public function conversion_takes_the_schools_next_allocated_number_like_any_other_creation(): void
     {
         ['school' => $school, 'section' => $section, 'application' => $application] = $this->buildAcceptedContext();
-        $this->createStudent($school, ['student_number' => 'S-DUP']);
+        $this->createStudent($school, ['student_number' => '0041', 'first_name' => 'Unrelated']);
+        $this->createStudent($school, ['student_number' => 'LEGACY-7', 'first_name' => 'Legacy']);
+
+        $result = $this->service()->convert($application, $section, '01', '2026-06-01');
+
+        $this->assertSame('42', $result->student->student_number, 'the School counter: past every numeric number, alphanumeric never counts');
+        $numbers = app(TenantContext::class)->withSchool($school, fn () => Student::query()->orderBy('student_number')->pluck('student_number')->all());
+        $this->assertSame(['0041', '42', 'LEGACY-7'], $numbers, 'existing numbers are never rewritten');
+    }
+
+    #[Test]
+    public function a_matching_existing_student_refuses_the_conversion_atomically_and_names_the_candidates(): void
+    {
+        ['school' => $school, 'section' => $section, 'application' => $application] = $this->buildAcceptedContext();
+        $existing = $this->createStudent($school, ['first_name' => 'asha', 'middle_name' => null, 'last_name' => 'VERMA', 'date_of_birth' => '2018-04-12', 'status' => 'inactive']);
+        $guardianInstruction = GuardianConversionInstruction::create(firstName: 'Priya', middleName: null, lastName: 'Verma', relationshipType: RelationshipType::Mother, isLegalGuardian: true);
 
         try {
-            $this->service()->convert($application, 'S-DUP', $section, '01', '2026-06-01');
-            $this->fail('Expected DuplicateStudentNumberException.');
-        } catch (DuplicateStudentNumberException $e) {
-            $this->assertStringNotContainsString('SQLSTATE', $e->getMessage());
+            $this->service()->convert($application, $section, '01', '2026-06-01', $guardianInstruction);
+            $this->fail('Expected PossibleDuplicateStudentException.');
+        } catch (PossibleDuplicateStudentException $e) {
+            $this->assertSame([$existing->id], $e->candidateIds);
+            $this->assertSame(409, $e->getStatusCode());
         }
 
-        $fresh = $this->fresh($school, $application->id);
-        $this->assertSame('accepted', $fresh->status);
-        $this->assertNull($fresh->converted_student_id);
-        $this->assertSame(1, $this->studentCount($school), 'Only the pre-existing colliding Student may remain.');
+        $this->assertSame('accepted', $this->fresh($school, $application->id)->status);
+        $this->assertSame(1, $this->studentCount($school), 'no partial Student');
+        $this->assertSame(0, $this->guardianCount($school), 'no partial Guardian');
         $this->assertSame(0, $this->enrollmentCount($school));
-        $this->assertSame(0, $this->auditCount($school, 'admission_application.converted'));
+        $this->assertSame('inactive', app(TenantContext::class)->withSchool($school, fn () => $existing->fresh()->status), 'never reactivated');
+    }
+
+    #[Test]
+    public function an_acknowledged_conversion_creates_a_new_distinct_student_and_audits_the_acknowledgement(): void
+    {
+        ['school' => $school, 'section' => $section, 'application' => $application] = $this->buildAcceptedContext();
+        $existing = $this->createStudent($school, ['first_name' => 'Asha', 'middle_name' => null, 'last_name' => 'Verma', 'date_of_birth' => '2018-04-12']);
+        $acknowledgement = $this->acknowledgementFor(fn () => $this->service()->convert($application, $section, '01', '2026-06-01'));
+
+        $result = $this->service()->convert($application, $section, '01', '2026-06-01', null, null, $acknowledgement);
+
+        $this->assertNotSame($existing->id, $result->student->id);
+        $this->assertSame('converted', $result->application->status);
+        $audit = app(TenantContext::class)->withSchool($school, fn () => SchoolAuditEvent::query()->where('event_type', 'student.created')->where('subject_id', $result->student->id)->firstOrFail());
+        $this->assertTrue($audit->metadata['duplicateWarningAcknowledged']);
+        $this->assertSame([$existing->id], $audit->metadata['duplicateCandidateIds']);
+    }
+
+    #[Test]
+    public function a_stale_acknowledgement_is_refused_when_another_match_appeared_since_the_warning(): void
+    {
+        ['school' => $school, 'section' => $section, 'application' => $application] = $this->buildAcceptedContext();
+        $this->createStudent($school, ['first_name' => 'Asha', 'last_name' => 'Verma', 'date_of_birth' => '2018-04-12']);
+        $acknowledgement = $this->acknowledgementFor(fn () => $this->service()->convert($application, $section, '01', '2026-06-01'));
+
+        // Another matching Student is created after the warning was shown.
+        $this->createStudent($school, ['first_name' => 'Asha', 'middle_name' => 'Kumari', 'last_name' => 'Verma', 'date_of_birth' => '2018-04-12']);
+
+        $this->expectException(PossibleDuplicateStudentException::class);
+        $this->service()->convert($application, $section, '01', '2026-06-01', null, null, $acknowledgement);
+    }
+
+    #[Test]
+    public function another_schools_identical_student_is_never_a_candidate(): void
+    {
+        ['school' => $school, 'section' => $section, 'application' => $application] = $this->buildAcceptedContext();
+        $this->createStudent($this->createSchool(), ['first_name' => 'Asha', 'middle_name' => 'K', 'last_name' => 'Verma', 'date_of_birth' => '2018-04-12']);
+
+        $result = $this->service()->convert($application, $section, '01', '2026-06-01');
+
+        $this->assertSame('converted', $result->application->status);
+    }
+
+    private function acknowledgementFor(callable $refused): string
+    {
+        try {
+            $refused();
+        } catch (PossibleDuplicateStudentException $e) {
+            return $e->acknowledgement;
+        }
+        $this->fail('Expected PossibleDuplicateStudentException.');
     }
 }

@@ -319,6 +319,58 @@ class StudentCampusWritesTest extends TestCase
         }
     }
 
+    // --- SIS 2.3: duplicate risk on Campus onboarding -------------------------------
+
+    #[Test]
+    public function campus_onboarding_warns_only_about_students_the_actor_can_already_see_and_never_shows_a_birth_date(): void
+    {
+        $principalA = $this->actor('principal', [$this->a->id]);
+        $asha = ['first_name' => 'asha', 'last_name' => 'PUPIL', 'date_of_birth' => '2015-04-01'];
+
+        // Asha Pupil is current on Campus A (in scope): a warning, nothing written.
+        $this->web($principalA)->from('/app/students/onboard')->post('/app/students/onboard', $this->onboardPayload($asha))
+            ->assertSessionHasErrors('duplicate_acknowledgement');
+        $warning = null;
+        $this->get('/app/students/onboard')->assertInertia(function (AssertableInertia $page) use (&$warning): void {
+            $warning = $page->toArray()['props']['duplicateWarning'];
+        });
+        $this->assertSame(1, $warning['candidateCount']);
+        $this->assertSame(0, $warning['hiddenCount']);
+        $this->assertSame(['S-Asha', 'Asha Pupil', null, "/app/students/{$this->students['here']->id}/overview"], [$warning['candidates'][0]['studentNumber'], $warning['candidates'][0]['name'], $warning['candidates'][0]['dateOfBirth'], $warning['candidates'][0]['href']]);
+        $this->assertSame(0, $this->inSchool(fn () => Student::query()->where('first_name', 'asha')->count()));
+
+        // Acknowledged: a new, distinct Student.
+        $this->web($principalA)->post('/app/students/onboard', $this->onboardPayload([...$asha, 'duplicate_acknowledgement' => $warning['acknowledgement']]))
+            ->assertRedirect();
+        $this->assertSame(2, $this->inSchool(fn () => Student::query()->whereRaw('lower(first_name) = ?', ['asha'])->count()));
+    }
+
+    #[Test]
+    public function a_match_outside_the_actors_campus_scope_is_never_revealed(): void
+    {
+        $principalA = $this->actor('principal', [$this->a->id]);
+
+        // Bela Pupil is current on Campus B: no warning, no hint of her existence.
+        $this->web($principalA)->post('/app/students/onboard', $this->onboardPayload(['first_name' => 'Bela', 'last_name' => 'Pupil', 'date_of_birth' => '2015-04-01']))
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $this->get('/app/students/onboard')->assertInertia(fn (AssertableInertia $page) => $page->where('duplicateWarning', null));
+    }
+
+    #[Test]
+    public function a_whole_school_creator_is_warned_about_every_match_including_an_inactive_one(): void
+    {
+        $admin = $this->actor('school_admin', [null]);
+
+        $this->web($admin)->from('/app/students/create')->post('/app/students', ['first_name' => 'Farah', 'last_name' => 'Pupil', 'date_of_birth' => '2015-04-01'])
+            ->assertSessionHasErrors('duplicate_acknowledgement');
+        $this->get('/app/students/create')->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('duplicateWarning.candidates.0.studentNumber', 'S-Farah')
+            ->where('duplicateWarning.candidates.0.status', 'inactive')
+            ->where('duplicateWarning.candidates.0.placement', 'Grade 5 · Section A · North · '.$this->current->name)
+        );
+        $this->assertSame('inactive', $this->fresh('inactive')->status, 'never reactivated');
+    }
+
     protected function tearDown(): void
     {
         app('auth')->forgetGuards();

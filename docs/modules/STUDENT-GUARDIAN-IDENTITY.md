@@ -903,13 +903,14 @@ single-record view is exactly the case DATA-CLASSIFICATION.md
 describes as appropriate for a Highly Sensitive field, and it is
 already gated by the same `students.view` capability check.
 
-**Create** (`POST .../students`) — `student_number`, `first_name`,
-`middle_name` (nullable), `last_name` (nullable), `date_of_birth`
-required/validated at the HTTP layer for shape only; the *duplicate
-Student Number* domain check is `StudentService`'s alone (no
-`Rule::unique()` duplicated here — the brief explicitly forbids
-duplicating this logic in the controller). Returns the full detail
-shape, `201`.
+**Create** (`POST .../students`) — `first_name`, `middle_name`
+(nullable), `last_name` (nullable), `date_of_birth` (not in the future),
+optional `duplicate_acknowledgement`. Since SIS 2.3 (ADR 0079) the
+Student number is allocated by `StudentService`; a supplied
+`student_number` is a 422. A likely duplicate is a 409
+`POSSIBLE_DUPLICATE_STUDENT` with `details.candidateCount` and
+`details.duplicateAcknowledgement` (see "Student numbering and duplicate
+safety" below). Returns the full detail shape, `201`.
 
 **Update** (`PATCH .../students/{student}`) — same fields, all
 `sometimes`; never `id`/`school_id`/`created_at`/`status` (status has
@@ -1582,4 +1583,70 @@ includes inactive rows, re-adding a deactivated value failed: recovery was SQL.
   - no plaintext column;
   - no key change or backfill: only the corrected or reactivated row is
     written, with the current key version.
+- **No schema change.**
+
+## Student numbering and duplicate safety (SIS 2.3, 2026-10-27, ADR 0079)
+
+- **One numbering policy.** Every new Student's number comes from the
+  School's counter (`StudentNumberAllocator`), allocated inside
+  `StudentService::create()`. That service is the only way a Student is
+  created: web and API create, Admissions conversion and Campus onboarding.
+  - Numbers are plain decimals (`1`, `2`, ...), School-wide, forward-only and
+    never reused (ADR 0076 §46.2).
+  - A refused creation holds no number.
+  - The `(school_id, student_number)` unique index stays the backstop.
+- **Never typed at creation.**
+  - Add Student has no number field.
+  - The API and conversion endpoints refuse a supplied `student_number` with
+    a 422 field error.
+  - Passing one to the service is a `LogicException`.
+  - `StudentCampusWriteArchitectureTest` pins StudentService as the only
+    allocator caller and the only Student creator.
+- **Correction is unchanged.** Edit (web and API `update`) may still correct
+  an existing Student's number:
+  - same unique rule, field error;
+  - the counter trigger keeps allocation past any digits-only value written.
+- **Existing numbers are never rewritten** (`LDS-0001` stays). The counter
+  starts above every digits-only number, and alphanumeric numbers never
+  count.
+- **Concurrency.** The counter row lock serializes creation per School. Two
+  real processes never share a number. On DDEV, 30 interleaved creations
+  produced 6–35 with no gap.
+- **Date of birth** may not be after the School's local today on create or
+  edit (web, API, onboarding). The field error reads "The date of birth
+  cannot be in the future."
+- **Duplicate risk is a warning, never a merge**
+  (`StudentDuplicateCandidates`).
+  - **Rule:** same School, same date of birth, AND the same first and last
+    name or the same full name.
+  - **Name comparison:** case-insensitive, ignoring spaces and punctuation
+    (`D'Souza` = `DSouza`). A middle name present on one side only still
+    matches.
+  - **Never used:** phonetic, edit-distance or cross-School matching, and
+    Guardian or contact data (ADR 0041).
+  - **Inactive Students are candidates**, with their status shown. Nothing is
+    reactivated.
+- **Refusal and acknowledgement.**
+  - A match refuses with `PossibleDuplicateStudentException` (409
+    `POSSIBLE_DUPLICATE_STUDENT`). Nothing is written, and a conversion rolls
+    back whole.
+  - Resubmitting with `duplicate_acknowledgement` creates a distinct Student.
+    The value is an HMAC of the School, the identity and the exact candidate
+    set, and it is never stored.
+  - Candidates are re-evaluated at commit, under the counter lock. A changed
+    set, an edited name or an invented value is warned again.
+  - Of two simultaneous identical creations, the second is warned.
+- **What the warning shows** (`StudentDuplicateCandidateReader`):
+  - with whole-School `students.view`: name, number, date of birth, status,
+    the placement within `enrollments.view`, and a link (new tab);
+  - without it: a count only;
+  - on Campus onboarding: only Students in the actor's `students.view` Campus
+    scope are compared at all, and there is no date of birth;
+  - on the API: count and acknowledgement only.
+- **Audit:** `student.created` carries `duplicateWarningAcknowledged` and
+  `duplicateCandidateIds` only when there were candidates. A displayed
+  warning is not audited.
+- **Browser:** the shared `DuplicateStudentWarning` is a `role="alert"`
+  panel that takes focus. It offers **Cancel — do not create** and **These
+  are different people — …**, and it fits at 390 px.
 - **No schema change.**

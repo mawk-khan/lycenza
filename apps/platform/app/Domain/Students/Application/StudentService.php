@@ -4,6 +4,7 @@ namespace App\Domain\Students\Application;
 
 use App\Domain\Students\Application\Exceptions\DuplicateStudentNumberException;
 use App\Domain\Students\Application\Exceptions\InvalidStudentStatusException;
+use App\Domain\Students\Application\Exceptions\PossibleDuplicateStudentException;
 use App\Domain\Students\Application\Exceptions\StudentStatusUnchangedException;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentLifecycleEvent;
@@ -12,6 +13,7 @@ use App\Models\User;
 use App\Support\Approval\ApprovalDecisionAuthority;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Auth\Mfa\FreshMfaProof;
+use App\Support\Authorization\Campus\CampusScope;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -47,32 +49,79 @@ class StudentService
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly ApprovalDecisionAuthority $authority,
+        private readonly StudentNumberAllocator $numbers,
+        private readonly StudentDuplicateCandidates $duplicates,
     ) {}
 
     /**
-     * @param  array{student_number: string, first_name: string, middle_name?: string|null, last_name?: string|null, date_of_birth: string}  $attributes
+     * SIS 2.3: THE way a Student comes into existence -- direct creation (web
+     * and API), Admissions conversion and Campus onboarding all call this.
+     * Inside one transaction:
+     *
+     *   1. the Student number from StudentNumberAllocator (the School's
+     *      counter row, FOR UPDATE). Never typed: a caller passing
+     *      `student_number` is a programming error. The lock also serializes
+     *      every Student creation in the School, so step 2 always sees every
+     *      Student committed before it;
+     *   2. the duplicate-risk check (StudentDuplicateCandidates, over
+     *      $duplicateScope -- the whole School unless a Campus caller
+     *      narrows it to what its actor may see). Candidates refuse with
+     *      PossibleDuplicateStudentException unless $duplicateAcknowledgement
+     *      is exactly the acknowledgement of the CURRENT candidate set --
+     *      re-evaluated here, never trusted from the earlier warning;
+     *   3. the Student row (active), then the audit -- naming the
+     *      acknowledged candidate ids when there were any.
+     *
+     * A refusal rolls back, counter included: no Student, no number held.
+     *
+     * @param  array{first_name: string, middle_name?: string|null, last_name?: string|null, date_of_birth: string}  $attributes
      */
-    public function create(School $school, array $attributes, ?User $actor = null): Student
+    public function create(School $school, array $attributes, ?User $actor = null, ?string $duplicateAcknowledgement = null, ?CampusScope $duplicateScope = null): Student
     {
-        return $this->context->withSchool($school, function () use ($school, $attributes, $actor) {
+        // Defensive: the shape forbids it, but a caller passing an untyped array must fail loudly.
+        if (array_key_exists('student_number', $attributes)) { // @phpstan-ignore function.impossibleType
+            throw new LogicException('A Student number is allocated by StudentService::create(), never supplied (SIS 2.3).');
+        }
+
+        return $this->context->withSchool($school, function () use ($school, $attributes, $actor, $duplicateAcknowledgement, $duplicateScope) {
+            $studentNumber = null;
             try {
-                return DB::transaction(function () use ($school, $attributes, $actor) {
-                    $student = Student::query()->create([
-                        'school_id' => $school->id,
-                        'student_number' => $attributes['student_number'],
+                return DB::transaction(function () use ($school, $attributes, $actor, $duplicateAcknowledgement, $duplicateScope, &$studentNumber) {
+                    $studentNumber = $this->numbers->allocate($school);
+
+                    $identity = [
                         'first_name' => $attributes['first_name'],
                         'middle_name' => $attributes['middle_name'] ?? null,
                         'last_name' => $attributes['last_name'] ?? null,
                         'date_of_birth' => $attributes['date_of_birth'],
+                    ];
+                    $candidates = $this->duplicates->find($school, $identity, $duplicateScope);
+                    if ($candidates->isNotEmpty()) {
+                        $expected = $this->duplicates->acknowledgement($school, $identity, $candidates);
+                        if ($duplicateAcknowledgement === null || ! hash_equals($expected, $duplicateAcknowledgement)) {
+                            throw new PossibleDuplicateStudentException($candidates->map(fn (Student $s): string => (string) $s->id)->values()->all(), $expected);
+                        }
+                    }
+
+                    $student = Student::query()->create([
+                        'school_id' => $school->id,
+                        'student_number' => $studentNumber,
+                        ...$identity,
                         'status' => 'active',
                     ]);
 
-                    $this->audit->school($school, 'student.created', actor: $actor, subject: $student);
+                    $this->audit->school($school, 'student.created', actor: $actor, subject: $student, metadata: $candidates->isEmpty() ? [] : [
+                        'duplicateWarningAcknowledged' => true,
+                        'duplicateCandidateIds' => $candidates->map(fn (Student $s): string => (string) $s->id)->values()->all(),
+                    ]);
 
                     return $student;
                 });
             } catch (UniqueConstraintViolationException) {
-                throw new DuplicateStudentNumberException($attributes['student_number']);
+                // Unreachable in correct operation (the allocator skips held
+                // numbers under the counter lock); the unique index stays the
+                // final backstop.
+                throw new DuplicateStudentNumberException((string) $studentNumber);
             }
         });
     }

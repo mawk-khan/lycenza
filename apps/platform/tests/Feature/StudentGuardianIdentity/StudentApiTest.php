@@ -217,11 +217,11 @@ class StudentApiTest extends TestCase
         $response = $this->asUser($user)
             ->withHeader('Idempotency-Key', 'create-student-001')
             ->postJson("/api/v1/schools/{$school->id}/students", [
-                'student_number' => 'S-1001', 'first_name' => 'Asha', 'last_name' => 'Verma', 'date_of_birth' => '2015-04-12',
+                'first_name' => 'Asha', 'last_name' => 'Verma', 'date_of_birth' => '2015-04-12',
             ]);
 
         $response->assertCreated();
-        $this->assertSame('S-1001', $response->json('data.studentNumber'));
+        $this->assertSame('1', $response->json('data.studentNumber'), 'SIS 2.3: allocated by the School counter');
         $stored = app(TenantContext::class)->withSchool($school, fn () => Student::query()->findOrFail($response->json('data.id')));
         $this->assertSame($school->id, $stored->school_id);
     }
@@ -243,7 +243,7 @@ class StudentApiTest extends TestCase
         $this->asUser($user)
             ->withHeader('Idempotency-Key', 'create-student-002')
             ->postJson("/api/v1/schools/{$school->id}/students", [
-                'student_number' => 'S-1001', 'first_name' => 'Asha', 'date_of_birth' => '2015-04-12',
+                'first_name' => 'Asha', 'date_of_birth' => '2015-04-12',
             ])->assertForbidden();
     }
 
@@ -259,15 +259,29 @@ class StudentApiTest extends TestCase
             ]);
 
         $response->assertStatus(422);
-        $this->assertArrayHasKey('student_number', $response->json('error.errors'));
+        $this->assertArrayNotHasKey('student_number', $response->json('error.errors'));
         $this->assertArrayHasKey('date_of_birth', $response->json('error.errors'));
     }
 
     #[Test]
-    public function a_duplicate_student_number_is_mapped_to_a_clean_422(): void
+    public function a_future_date_of_birth_is_refused(): void
     {
         [$user, $school] = $this->createSchoolAdmin('school_admin');
-        $this->createStudent($school, ['student_number' => 'S-1001']);
+
+        $response = $this->asUser($user)
+            ->withHeader('Idempotency-Key', 'create-student-future-dob')
+            ->postJson("/api/v1/schools/{$school->id}/students", [
+                'first_name' => 'Asha', 'date_of_birth' => now()->addDays(3)->toDateString(),
+            ]);
+
+        $response->assertStatus(422);
+        $this->assertSame(['The date of birth cannot be in the future.'], $response->json('error.errors.date_of_birth'));
+    }
+
+    #[Test]
+    public function a_supplied_student_number_is_refused_with_a_field_error(): void
+    {
+        [$user, $school] = $this->createSchoolAdmin('school_admin');
 
         $response = $this->asUser($user)
             ->withHeader('Idempotency-Key', 'create-student-004')
@@ -276,9 +290,37 @@ class StudentApiTest extends TestCase
             ]);
 
         $response->assertStatus(422);
-        $this->assertSame('DUPLICATE_STUDENT_NUMBER', $response->json('error.code'));
-        $this->assertStringNotContainsString('SQLSTATE', $response->json('error.message'));
-        $this->assertStringNotContainsString('students_school_id_student_number', $response->json('error.message'));
+        $this->assertSame(['The Student number is allocated by the School and cannot be supplied.'], $response->json('error.errors.student_number'));
+        $this->assertSame(0, app(TenantContext::class)->withSchool($school, fn () => Student::query()->count()));
+    }
+
+    #[Test]
+    public function a_possible_duplicate_is_a_409_with_count_and_acknowledgement_only(): void
+    {
+        [$user, $school] = $this->createSchoolAdmin('school_admin');
+        $existing = $this->createStudent($school, ['first_name' => 'Rohit', 'middle_name' => null, 'last_name' => 'Rao', 'date_of_birth' => '2016-01-01']);
+        $url = "/api/v1/schools/{$school->id}/students";
+        $payload = ['first_name' => 'rohit', 'last_name' => 'RAO', 'date_of_birth' => '2016-01-01'];
+
+        $refused = $this->asUser($user)->withHeader('Idempotency-Key', 'create-student-dup-1')->postJson($url, $payload);
+        $refused->assertStatus(409);
+        $this->assertSame('POSSIBLE_DUPLICATE_STUDENT', $refused->json('error.code'));
+        $this->assertSame(['candidateCount' => 1, 'duplicateAcknowledgement' => $refused->json('error.details.duplicateAcknowledgement')], $refused->json('error.details'));
+        $this->assertStringNotContainsString($existing->id, $refused->getContent());
+        $this->assertStringNotContainsString($existing->student_number, $refused->getContent());
+
+        // The refusal is stored under its key and replayed, like any response.
+        $this->asUser($user)->withHeader('Idempotency-Key', 'create-student-dup-1')->postJson($url, $payload)
+            ->assertStatus(409)->assertHeader('Idempotency-Replayed', 'true');
+
+        // An invented flag is not an acknowledgement.
+        $this->asUser($user)->withHeader('Idempotency-Key', 'create-student-dup-1-flag')
+            ->postJson($url, [...$payload, 'duplicate_acknowledgement' => 'true'])->assertStatus(409);
+
+        $created = $this->asUser($user)->withHeader('Idempotency-Key', 'create-student-dup-1-ack')
+            ->postJson($url, [...$payload, 'duplicate_acknowledgement' => $refused->json('error.details.duplicateAcknowledgement')]);
+        $created->assertCreated();
+        $this->assertNotSame($existing->id, $created->json('data.id'));
     }
 
     #[Test]
@@ -290,7 +332,7 @@ class StudentApiTest extends TestCase
         $response = $this->asUser($user)
             ->withHeader('Idempotency-Key', 'create-student-005')
             ->postJson("/api/v1/schools/{$schoolA->id}/students", [
-                'student_number' => 'S-1001', 'first_name' => 'Asha', 'date_of_birth' => '2015-04-12',
+                'first_name' => 'Asha', 'date_of_birth' => '2015-04-12',
                 'school_id' => $schoolB->id,
             ]);
 

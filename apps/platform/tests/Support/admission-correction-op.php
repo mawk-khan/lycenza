@@ -32,7 +32,7 @@ try {
     if ($op === 'convert') {
         $application = AdmissionApplication::query()->findOrFail($id);
         $section = Section::query()->findOrFail($argv[4]);
-        HeldTransaction::run(fn () => $app->make(AdmissionConversionService::class)->convert($application, $argv[5], $section, '01', '2026-06-01'));
+        HeldTransaction::run(fn () => $app->make(AdmissionConversionService::class)->convert($application, $section, '01', '2026-06-01'));
         echo 'converted';
     } else {
         $applicant = Applicant::query()->findOrFail($id);

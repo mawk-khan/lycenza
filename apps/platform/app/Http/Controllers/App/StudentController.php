@@ -4,6 +4,7 @@ namespace App\Http\Controllers\App;
 
 use App\Domain\Identity\Application\AccountLinkService;
 use App\Domain\Students\Application\Exceptions\DuplicateStudentNumberException;
+use App\Domain\Students\Application\Exceptions\PossibleDuplicateStudentException;
 use App\Domain\Students\Application\Exceptions\StudentLifecycleReasonException;
 use App\Domain\Students\Application\Exceptions\StudentStatusUnchangedException;
 use App\Domain\Students\Application\StudentAccess;
@@ -13,6 +14,7 @@ use App\Domain\Students\Application\StudentLifecycleReason;
 use App\Domain\Students\Application\StudentService;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
+use App\Http\Controllers\App\Concerns\PresentsDuplicateStudentWarning;
 use App\Http\Controllers\Controller;
 use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
@@ -21,6 +23,7 @@ use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -49,17 +52,29 @@ use Inertia\Response;
  */
 class StudentController extends Controller
 {
-    use AuthorizesCapability;
+    use AuthorizesCapability, PresentsDuplicateStudentWarning;
 
-    public function create(TenantContext $context): Response
+    /** SIS 2.3: a date of birth is never after the School's own today. */
+    private const DATE_OF_BIRTH_MESSAGES = ['date_of_birth.before_or_equal' => 'The date of birth cannot be in the future.'];
+
+    public function create(Request $request, TenantContext $context): Response
     {
         $school = $context->requireSchool();
         // ORG.7F-2: students.manage is Campus-adopted; this whole-School-only
         // operation's floor is its route `capability:students.manage` (declared).
 
-        return Inertia::render('App/Students/Create');
+        return Inertia::render('App/Students/Create', [
+            // SIS 2.3: the duplicate-risk warning of the last refused submit.
+            'duplicateWarning' => $this->duplicateWarningFor($request, $school, $context->actor(), 'student-create'),
+            'today' => SchoolTimezone::today($school),
+        ]);
     }
 
+    /**
+     * SIS 2.3: the Student number is allocated by StudentService (never an
+     * input); a same-name-and-birthday match is a warning the operator must
+     * acknowledge (`duplicate_acknowledgement`), never an automatic block.
+     */
     public function store(Request $request, TenantContext $context, StudentService $service): RedirectResponse
     {
         $school = $context->requireSchool();
@@ -67,19 +82,17 @@ class StudentController extends Controller
         // operation's floor is its route `capability:students.manage` (declared).
 
         $validated = $request->validate([
-            'student_number' => ['required', 'string', 'max:255'],
             'first_name' => ['required', 'string', 'max:255'],
             'middle_name' => ['nullable', 'string', 'max:255'],
             'last_name' => ['nullable', 'string', 'max:255'],
-            'date_of_birth' => ['required', 'date'],
-        ]);
+            'date_of_birth' => ['required', 'date', 'before_or_equal:'.SchoolTimezone::today($school)],
+            'duplicate_acknowledgement' => ['nullable', 'string', 'max:128'],
+        ], self::DATE_OF_BIRTH_MESSAGES);
 
         try {
-            $student = $service->create($school, $validated, $context->actor());
-        } catch (DuplicateStudentNumberException) {
-            throw ValidationException::withMessages([
-                'student_number' => ['This Student Number is already in use.'],
-            ]);
+            $student = $service->create($school, Arr::except($validated, ['duplicate_acknowledgement']), $context->actor(), $validated['duplicate_acknowledgement'] ?? null);
+        } catch (PossibleDuplicateStudentException $e) {
+            $this->refuseAsPossibleDuplicate($request, 'student-create', $e);
         }
 
         return redirect("/app/students/{$student->id}");
@@ -212,6 +225,7 @@ class StudentController extends Controller
 
         return Inertia::render('App/Students/Edit', [
             'student' => $this->presentDetail($model),
+            'today' => SchoolTimezone::today($school),
         ]);
     }
 
@@ -228,8 +242,8 @@ class StudentController extends Controller
             'first_name' => ['required', 'string', 'max:255'],
             'middle_name' => ['nullable', 'string', 'max:255'],
             'last_name' => ['nullable', 'string', 'max:255'],
-            'date_of_birth' => ['required', 'date'],
-        ]);
+            'date_of_birth' => ['required', 'date', 'before_or_equal:'.SchoolTimezone::today($school)],
+        ], self::DATE_OF_BIRTH_MESSAGES);
 
         try {
             $service->update($model, $validated, $context->actor());

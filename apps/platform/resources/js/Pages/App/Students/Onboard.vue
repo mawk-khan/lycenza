@@ -3,10 +3,18 @@
 // current placement together. The Student number is allocated by the server
 // (never typed); date of birth is entered once and never shown back here. No
 // Guardian, status or existing Student is ever part of it.
+// SIS 2.3: a same-name-and-birthday match among the students this user may
+// already see comes back as `duplicateWarning` (never a student elsewhere).
 import { useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
+import DuplicateStudentWarning, {
+    type DuplicateWarning,
+} from '../../../Components/DuplicateStudentWarning.vue';
 
 interface Props {
     sections: Array<{ id: string; label: string }>;
+    duplicateWarning: DuplicateWarning | null;
+    today: string;
 }
 
 defineProps<Props>();
@@ -18,10 +26,16 @@ const form = useForm({
     date_of_birth: '',
     section_id: '',
     roll_number: '',
+    duplicate_acknowledgement: '',
 });
 
-function submit(): void {
-    form.post('/app/students/onboard');
+// A refused submit always shows the warning again, even when it is identical
+// to one the operator dismissed.
+const warningDismissed = ref(false);
+
+function submit(acknowledgement = ''): void {
+    form.duplicate_acknowledgement = acknowledgement;
+    form.post('/app/students/onboard', { onError: () => (warningDismissed.value = false) });
 }
 </script>
 
@@ -37,7 +51,16 @@ function submit(): void {
             No active class of your campus is open in the current academic year.
         </p>
 
-        <form v-else class="mt-6 space-y-4" @submit.prevent="submit">
+        <DuplicateStudentWarning
+            v-if="sections.length > 0 && duplicateWarning && !warningDismissed"
+            :warning="duplicateWarning"
+            :processing="form.processing"
+            continue-label="These are different people — onboard a new student"
+            @cancel="warningDismissed = true"
+            @continue="submit(duplicateWarning.acknowledgement)"
+        />
+
+        <form v-if="sections.length > 0" class="mt-6 space-y-4" @submit.prevent="submit()">
             <div>
                 <label for="first_name" class="block text-sm font-medium">First name</label>
                 <input
@@ -76,6 +99,7 @@ function submit(): void {
                     v-model="form.date_of_birth"
                     type="date"
                     required
+                    :max="today"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                 />
                 <p v-if="form.errors.date_of_birth" class="mt-1 text-sm text-red-700">

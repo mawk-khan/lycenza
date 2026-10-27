@@ -38,7 +38,7 @@ class StudentHistoryUiTest extends TestCase
      *
      * @return array{school: School, student: Student, writer: User, sections: array<string, mixed>}
      */
-    private function studentWithHistory(?School $school = null, string $number = 'H-1', string $yearStatus = 'active'): array
+    private function studentWithHistory(?School $school = null, string $firstName = 'Ira', string $yearStatus = 'active'): array
     {
         $school ??= $this->createSchool();
         $writer = $this->createUserWithCapabilities($school, ['students.manage', 'enrollments.manage', 'guardians.manage']);
@@ -49,7 +49,7 @@ class StudentHistoryUiTest extends TestCase
         $b = $this->createSection($year, $campus, $grade, ['name' => '5 B', 'code' => 'B'.Str::random(5)]);
 
         $student = app(StudentService::class)->create($school, [
-            'student_number' => $number, 'first_name' => 'Ira', 'last_name' => 'Mehta', 'date_of_birth' => '2016-05-05',
+            'first_name' => $firstName, 'last_name' => 'Mehta', 'date_of_birth' => '2016-05-05',
         ], $writer);
         $enrollments = app(StudentEnrollmentService::class);
         $first = $enrollments->enroll($student, $a, '4', '2026-06-01', $writer);
@@ -129,8 +129,8 @@ class StudentHistoryUiTest extends TestCase
     {
         $h = $this->studentWithHistory();
         // Same School: one active year per School, so the second uses a draft year.
-        $sibling = $this->studentWithHistory($h['school'], 'H-2', 'draft');
-        $foreign = $this->studentWithHistory(null, 'H-3');
+        $sibling = $this->studentWithHistory($h['school'], 'Iravati', 'draft');
+        $foreign = $this->studentWithHistory(null, 'Ishaan');
         $viewer = $this->createUserWithCapabilities($h['school'], self::EVERY_SOURCE);
         $this->activate($viewer, $h['school']);
 

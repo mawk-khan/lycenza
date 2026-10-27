@@ -115,7 +115,7 @@ class AdmissionCorrectionUiTest extends TestCase
     public function an_admitted_applicant_offers_no_edit_and_refuses_one_visibly(): void
     {
         $section = $this->createSection($this->year, $this->north, $this->grade);
-        app(AdmissionConversionService::class)->convert($this->application('accepted'), 'S-UI-1', $section, '01', '2026-06-01');
+        app(AdmissionConversionService::class)->convert($this->application('accepted'), $section, '01', '2026-06-01');
         $this->signIn($this->manager());
 
         $this->get("/app/admissions/applicants/{$this->applicant->id}")->assertInertia(fn (AssertableInertia $p) => $p
@@ -207,7 +207,7 @@ class AdmissionCorrectionUiTest extends TestCase
     public function a_converted_application_offers_no_edit_and_refuses_one(): void
     {
         $section = $this->createSection($this->year, $this->north, $this->grade);
-        $application = app(AdmissionConversionService::class)->convert($this->application('accepted'), 'S-UI-2', $section, '01', '2026-06-01')->application;
+        $application = app(AdmissionConversionService::class)->convert($this->application('accepted'), $section, '01', '2026-06-01')->application;
         $this->signIn($this->manager());
 
         $this->get("/app/admissions/{$application->id}")->assertInertia(fn (AssertableInertia $p) => $p->where('canCorrect', false));
@@ -223,7 +223,7 @@ class AdmissionCorrectionUiTest extends TestCase
         $application = $this->application('accepted');
         $opened = $this->version($application);
         $this->travel(2)->seconds();
-        app(AdmissionConversionService::class)->convert($application, 'S-UI-3', $section, '01', '2026-06-01');
+        app(AdmissionConversionService::class)->convert($application, $section, '01', '2026-06-01');
         $this->signIn($this->manager());
 
         $this->from("/app/admissions/{$application->id}/edit")->put("/app/admissions/{$application->id}", ['expected_status' => 'accepted', 'expected_updated_at' => $opened, 'decision_note' => 'Rewritten'])

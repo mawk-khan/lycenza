@@ -105,7 +105,7 @@ class AdmissionFeeSelectionTest extends TestCase
     {
         $n = ++$w['students'];
 
-        return app(AdmissionConversionService::class)->convert($application ?? $this->application($w), "S-ADM-{$n}", $w['section'], $roll ?? sprintf('%02d', $n), '2026-06-01', null, $w['admissions'])->application;
+        return app(AdmissionConversionService::class)->convert($application ?? $this->application($w), $w['section'], $roll ?? sprintf('%02d', $n), '2026-06-01', null, $w['admissions'])->application;
     }
 
     /** @param  array<string, mixed>  $w */
@@ -202,7 +202,7 @@ class AdmissionFeeSelectionTest extends TestCase
         $otherGrade = $this->createGradeLevel($w['school'], ['code' => 'G9', 'name' => 'Grade 9', 'sequence' => 9]);
         $section = $this->createSection($w['year'], $w['campus'], $otherGrade, ['code' => 'G9A', 'name' => 'G9 A']);
         $application = $this->createAdmissionApplication($this->createApplicant($w['school']), $w['year'], $w['campus'], $otherGrade, ['status' => 'accepted']);
-        $converted = app(AdmissionConversionService::class)->convert($application, 'S-ADM-G9', $section, '01', '2026-06-01', null, $w['admissions'])->application;
+        $converted = app(AdmissionConversionService::class)->convert($application, $section, '01', '2026-06-01', null, $w['admissions'])->application;
         $this->assertSame('converted', $converted->status);
 
         $this->assertCount(0, $this->links($w));
@@ -223,7 +223,7 @@ class AdmissionFeeSelectionTest extends TestCase
         $this->map($w);
 
         // 1. A real constraint failure at the enrollment step: the whole conversion rolls back.
-        $other = app(StudentService::class)->create($w['school'], ['student_number' => 'S-OTHER', 'first_name' => 'Other', 'date_of_birth' => '2016-01-01']);
+        $other = app(StudentService::class)->create($w['school'], ['first_name' => 'Other', 'date_of_birth' => '2016-01-01']);
         app(StudentEnrollmentService::class)->enroll($other, $w['section'], '09', '2026-06-01');
         $application = $this->application($w);
         $this->assertThrows(fn () => $this->convert($w, $application, '09'), DuplicateEnrollmentRollNumberException::class);
@@ -398,7 +398,7 @@ class AdmissionFeeSelectionTest extends TestCase
         $as($w['finance'])->putJson("{$base}/admission-fee-head", ['fee_head_id' => null])->assertForbidden();
         $as($w['finance'])->getJson("{$base}/admission-fee-head")->assertForbidden();
         $application = $this->application($w);
-        $payload = ['student_number' => 'S-API-1', 'section_id' => $w['section']->id, 'roll_number' => '41', 'starts_on' => '2026-06-01'];
+        $payload = ['section_id' => $w['section']->id, 'roll_number' => '41', 'starts_on' => '2026-06-01'];
         $as($w['finance'])->withHeader('Idempotency-Key', (string) Str::uuid())->postJson("{$base}/admission-applications/{$application->id}/convert", $payload)->assertForbidden();
         $as($viewer)->withHeader('Idempotency-Key', (string) Str::uuid())->postJson("{$base}/admission-applications/{$application->id}/convert", $payload)->assertForbidden();
 
