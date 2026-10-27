@@ -148,7 +148,8 @@ class GuardianSelfAdministrationTest extends TestCase
 
         $this->flushHeaders();
         $this->actingAs($w['admin'])->post("/app/schools/{$w['school']->id}/activate");
-        $this->delete("/app/relationships/{$w['relationship']->id}")->assertForbidden();
+        // SIS 2.2: still a 403, now saying why (the same fixed text as the API, ExplainedRefusal).
+        $this->delete("/app/relationships/{$w['relationship']->id}")->assertForbidden()->assertSee('Another administrator must make this change.');
         $this->assertTrue($this->relationshipExists($w, $w['relationship']));
     }
 

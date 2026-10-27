@@ -5,6 +5,7 @@ import { router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import RelationshipFlags from '../../../Components/RelationshipFlags.vue';
 import StatusBadge from '../../../Components/StatusBadge.vue';
+import ConfirmDialog from '../../../Components/ConfirmDialog.vue';
 
 interface Contact {
     id: string;
@@ -226,6 +227,9 @@ function studentName(s: LinkedStudent['student']): string {
     return [s.firstName, s.lastName].filter(Boolean).join(' ');
 }
 
+// SIS 2.2: a status change is confirmed first (it changes who is a current Guardian).
+const statusDialog = ref<InstanceType<typeof ConfirmDialog> | null>(null);
+
 function toggleStatus(): void {
     const next = props.guardian.status === 'active' ? 'inactive' : 'active';
     router.post(`/app/guardians/${props.guardian.id}/status`, { status: next });
@@ -319,12 +323,34 @@ function submitContact(): void {
                 <button
                     type="button"
                     class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
-                    @click="toggleStatus"
+                    @click="statusDialog?.open()"
                 >
-                    {{ guardian.status === 'active' ? 'Mark inactive' : 'Mark active' }}
+                    {{ guardian.status === 'active' ? 'Mark inactive…' : 'Mark active…' }}
                 </button>
             </div>
         </div>
+
+        <ConfirmDialog
+            ref="statusDialog"
+            :title="
+                guardian.status === 'active'
+                    ? 'Mark this Guardian inactive?'
+                    : 'Mark this Guardian active?'
+            "
+            :confirm-label="guardian.status === 'active' ? 'Mark inactive' : 'Mark active'"
+            :tone="guardian.status === 'active' ? 'danger' : 'neutral'"
+            @confirm="toggleStatus"
+        >
+            <p v-if="guardian.status === 'active'">
+                {{ fullName() }} stays linked to their Students and keeps their contacts, but is no
+                longer a current Guardian: no Guardian portal access and no school emails such as
+                fee reminders. You can mark them active again.
+            </p>
+            <p v-else>
+                {{ fullName() }} becomes a current Guardian again for the Students they are linked
+                to.
+            </p>
+        </ConfirmDialog>
 
         <!-- Contacts -->
         <section class="mt-8">
@@ -460,10 +486,16 @@ function submitContact(): void {
                             id="contact-value"
                             v-model="contactForm.value"
                             type="text"
+                            :aria-invalid="contactForm.errors.value ? 'true' : undefined"
+                            :aria-describedby="
+                                contactForm.type === 'mobile'
+                                    ? 'contact-value-hint contact-value-error'
+                                    : 'contact-value-error'
+                            "
                             :placeholder="
                                 contactForm.type === 'email'
                                     ? 'parent@example.com'
-                                    : 'Include country code, e.g. +91 9876543210'
+                                    : 'e.g. +919876543210'
                             "
                             class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                         />
@@ -481,11 +513,17 @@ function submitContact(): void {
                         />
                     </div>
                 </div>
-                <p v-if="contactForm.type === 'mobile'" class="mt-2 text-xs text-slate-500">
-                    Mobile numbers must include a country code (e.g. +91 9876543210). We never guess
-                    a country for you.
+                <p
+                    v-if="contactForm.type === 'mobile'"
+                    id="contact-value-hint"
+                    class="mt-2 text-xs text-slate-500"
+                >
+                    Country code first, no spaces, e.g. +919876543210. We never guess a country for
+                    you.
                 </p>
-                <p class="mt-2 text-sm text-red-600">{{ contactForm.errors.value }}</p>
+                <p id="contact-value-error" class="mt-2 text-sm text-red-600">
+                    {{ contactForm.errors.value }}
+                </p>
                 <label class="mt-3 flex items-center gap-2 text-sm">
                     <input v-model="contactForm.is_primary" type="checkbox" /> Set as primary
                     {{ contactForm.type }}

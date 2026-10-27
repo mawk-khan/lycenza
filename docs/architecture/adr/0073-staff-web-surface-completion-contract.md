@@ -2213,3 +2213,20 @@ payment methods or lifecycle states.
   tenancy.
 - `Tests\Feature\App\OutstandingFeesLeaverCampusTest`: leavers, a mover's
   split debt, unavailable Campus, composed filters and tenancy.
+
+## Amendment (SIS 2.2, 2026-10-27): an explained 403
+
+The LC-1 floor renders a 401/403 domain refusal as the bare 403 page, so a
+refusal never says more than its page. One exception is now possible, opt-in
+per exception.
+
+- **What changes:** a domain exception implementing
+  `App\Support\Http\ExplainedRefusal` keeps its 403. The page now shows the
+  exception's own message instead of "Forbidden".
+- **Who may opt in:** only an exception whose fixed text names no record,
+  person or relationship, and is already returned by the JSON API.
+- **First user:** `GuardianSelfAdministrationException` ("Another
+  administrator must make this change.", ORG.8A-R1).
+- **Unchanged:** every other 403, every 404, the JSON envelope and the
+  self-administration rule itself. `GuardianSelfAdministrationTest` asserts
+  the 403 and the text.

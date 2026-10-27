@@ -1679,3 +1679,50 @@ It is used by:
 - `StudentService::create()`/`update()`, as the authoritative backstop.
 
 The rule and message are the same as SIS 2.3's.
+
+## Guardian search, contact safety and route hardening (SIS 2.2, 2026-10-27)
+
+- **Identity search.** Every Guardian name search uses
+  `GuardianNameSearch`:
+  - the Guardian directory, web and API;
+  - the Student page's "link an existing Guardian";
+  - the Admissions conversion picker.
+
+  It is the shared `App\Support\Search\NameSearch` rule, the same one
+  `StudentSearch` uses:
+  - every word (at most 5, split on whitespace) must occur, case-insensitively,
+    in the first, middle or last name;
+  - any order; `%`, `_` and `\` are literal;
+  - names only. No contact value, ciphertext or lookup digest is searched,
+    so a phone number or email finds nobody.
+
+  Exact-match contact lookup stays the separate, governed
+  `findCandidatesBySchool()` (ADR 0041 / SRCH-02, unchanged). School scope
+  and `guardians.view` (or the picker's own capability) are unchanged.
+- **Primary contacts.** The invariant is unchanged: at most one active
+  primary per Guardian and contact type
+  (`guardian_contacts_one_active_primary_per_type`).
+  - `GuardianContactService::setPrimary()` locks every contact of that
+    Guardian and type (id order), then reads the target.
+  - An inactive target is refused (`GUARDIAN_CONTACT_INACTIVE`, 422; a page
+    banner on the web) and nothing changes.
+  - Otherwise the old primary is demoted and the target promoted, in one
+    transaction. Two simultaneous switches are serialized (two real
+    processes); the later one wins.
+  - Reactivation still returns a contact non-primary (SIS 2.1).
+- **Routes.** Every Guardian, contact and relationship record route (web
+  and API) answers a malformed id with 404 (the LC-1 UUID constraint),
+  pinned by one test matrix.
+- **Format.**
+  - A mobile number is strict E.164: `+`, country code, digits, no spaces,
+    e.g. `+919876543210`. Every form now shows that example.
+  - An invalid value's error explains the format and never repeats the
+    value (`GuardianContactService::INVALID_MOBILE` / `INVALID_EMAIL`).
+- **Messages.**
+  - The Guardian self-administration refusal keeps its 403 in the browser
+    and now shows "Another administrator must make this change."
+    (`App\Support\Http\ExplainedRefusal`, opt-in).
+  - A concurrent primary-Guardian change is shown as the page's refusal
+    banner.
+  - Marking a Guardian inactive or active asks for confirmation.
+- No schema, capability, encryption or HMAC change.

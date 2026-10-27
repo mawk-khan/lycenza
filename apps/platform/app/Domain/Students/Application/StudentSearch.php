@@ -2,6 +2,7 @@
 
 namespace App\Domain\Students\Application;
 
+use App\Support\Search\NameSearch;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 
@@ -29,7 +30,7 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
  */
 final class StudentSearch
 {
-    public const MAX_WORDS = 5;
+    public const MAX_WORDS = NameSearch::MAX_WORDS;
 
     private const NAME_COLUMNS = ['first_name', 'middle_name', 'last_name'];
 
@@ -77,12 +78,13 @@ final class StudentSearch
     /** @return list<string> */
     public static function wordsOf(string $term): array
     {
-        $words = preg_split('/\s+/u', trim($term), -1, PREG_SPLIT_NO_EMPTY) ?: [];
-
-        return array_slice($words, 0, self::MAX_WORDS);
+        return NameSearch::wordsOf($term);
     }
 
     /**
+     * SIS 2.2: the shared person-name rule (NameSearch), with the Student
+     * number as one more searchable field for the pickers.
+     *
      * @template TQuery of EloquentBuilder|QueryBuilder
      *
      * @param  TQuery  $query
@@ -90,24 +92,13 @@ final class StudentSearch
      */
     private static function words(EloquentBuilder|QueryBuilder $query, string $term, string $table, bool $withNumber): EloquentBuilder|QueryBuilder
     {
-        foreach (self::wordsOf($term) as $word) {
-            $like = '%'.self::escape($word).'%';
-            $query->where(function ($q) use ($table, $like, $withNumber): void {
-                foreach (self::NAME_COLUMNS as $column) {
-                    $q->orWhere("{$table}.{$column}", 'ilike', $like);
-                }
-                if ($withNumber) {
-                    $q->orWhere("{$table}.student_number", 'ilike', $like);
-                }
-            });
-        }
+        $columns = array_map(fn (string $c): string => "{$table}.{$c}", self::NAME_COLUMNS);
 
-        return $query;
+        return NameSearch::everyWord($query, $term, $withNumber ? [...$columns, "{$table}.student_number"] : $columns);
     }
 
-    /** PostgreSQL LIKE's default escape character is the backslash. */
     private static function escape(string $value): string
     {
-        return str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
+        return NameSearch::escape($value);
     }
 }

@@ -230,7 +230,7 @@ function submitNewGuardian(): void {
                             :placeholder="
                                 contactType === 'email'
                                     ? 'parent@example.com'
-                                    : 'Include country code, e.g. +91 9876543210'
+                                    : 'Country code first, no spaces, e.g. +919876543210'
                             "
                             class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                         />

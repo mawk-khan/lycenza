@@ -3,6 +3,7 @@
 namespace App\Domain\Guardians\Http\Controllers;
 
 use App\Domain\Guardians\Application\GuardianContactService;
+use App\Domain\Guardians\Application\GuardianNameSearch;
 use App\Domain\Guardians\Application\GuardianService;
 use App\Domain\Guardians\Infrastructure\ContactType;
 use App\Domain\Guardians\Infrastructure\Guardian;
@@ -45,8 +46,8 @@ class GuardianController extends Controller
         $query = Guardian::query()->orderBy('first_name')->orderBy('last_name');
 
         if (isset($validated['name'])) {
-            $term = '%'.$validated['name'].'%';
-            $query->where(fn ($q) => $q->where('first_name', 'ilike', $term)->orWhere('last_name', 'ilike', $term));
+            // SIS 2.2: every word in any name field; names only, never a contact value.
+            GuardianNameSearch::apply($query, $validated['name']);
         }
 
         if (isset($validated['status'])) {

@@ -14,6 +14,7 @@ use App\Support\Privacy\EmailNormalizer;
 use App\Support\Privacy\PhoneNormalizer;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -36,6 +37,12 @@ use InvalidArgumentException;
  */
 class GuardianContactService
 {
+    /** The field error for a value that is not a valid mobile number. Never echoes the value. */
+    public const INVALID_MOBILE = 'Enter the mobile number with its country code and no spaces, for example +919876543210.';
+
+    /** The field error for a value that is not a valid email address. Never echoes the value. */
+    public const INVALID_EMAIL = 'Enter a valid email address, for example parent@example.com.';
+
     public function __construct(
         private readonly EmailNormalizer $emailNormalizer,
         private readonly PhoneNormalizer $phoneNormalizer,
@@ -86,22 +93,36 @@ class GuardianContactService
      * Demotes any other active primary contact of the same type on the
      * same Guardian in the SAME transaction as the promotion -- the
      * database's partial unique index
-     * (guardian_contacts_one_active_primary_per_type) is the actual
-     * concurrency guarantee, matching AcademicYearService::activate()'s
-     * "demote then conditionally promote" pattern.
+     * (guardian_contacts_one_active_primary_per_type) is the final
+     * guarantee: at most one active primary per Guardian and type.
+     *
+     * SIS 2.2: only an ACTIVE contact may become primary -- a deactivated one
+     * is reactivated first (reactivate(), which returns it non-primary), then
+     * made primary explicitly. Every contact of this Guardian and type is
+     * locked (id order) before the state is read, so two concurrent switches
+     * are serialized and the second sees the first's result.
      */
     public function setPrimary(GuardianContact $contact, ?User $actor = null): GuardianContact
     {
         return $this->context->withSchool($contact->school, fn () => DB::transaction(function () use ($contact, $actor) {
-            $this->demotePrimaries($contact->guardian, $contact->type, exceptId: $contact->id);
-            $contact->update(['is_primary' => true]);
+            $locked = GuardianContact::query()
+                ->where('guardian_id', $contact->guardian_id)
+                ->where('type', $contact->type)
+                ->orderBy('id')->lockForUpdate()->get()
+                ->firstWhere('id', $contact->id) ?? throw (new ModelNotFoundException)->setModel(GuardianContact::class, [$contact->id]);
+            if (! $locked->is_active) {
+                throw GuardianContactConflictException::inactiveCannotBePrimary();
+            }
 
-            $this->audit->school($contact->school, 'guardian_contact.primary_changed', actor: $actor, subject: $contact, metadata: [
-                'guardianId' => $contact->guardian_id,
-                'type' => $contact->type->value,
+            $this->demotePrimaries($locked->guardian, $locked->type, exceptId: $locked->id);
+            $locked->update(['is_primary' => true]);
+
+            $this->audit->school($locked->school, 'guardian_contact.primary_changed', actor: $actor, subject: $locked, metadata: [
+                'guardianId' => $locked->guardian_id,
+                'type' => $locked->type->value,
             ]);
 
-            return $contact->refresh();
+            return $locked->refresh();
         }));
     }
 
@@ -280,12 +301,24 @@ class GuardianContactService
         }
     }
 
+    /**
+     * SIS 2.2: the one normalization of every Guardian contact path (create,
+     * correct, reactivate, exact lookup). Mobile is strict E.164 (`+`, country
+     * code, digits only -- no spaces), which keeps one lookup digest per
+     * number. An invalid value is an InvalidArgumentException whose message
+     * names the expected form and never repeats the value (the normalizers'
+     * own messages do, and they reach a field error).
+     */
     private function normalize(ContactType $type, string $rawValue): string
     {
-        return match ($type) {
-            ContactType::Email => $this->emailNormalizer->normalize($rawValue),
-            ContactType::Mobile => $this->phoneNormalizer->normalize($rawValue),
-        };
+        try {
+            return match ($type) {
+                ContactType::Email => $this->emailNormalizer->normalize($rawValue),
+                ContactType::Mobile => $this->phoneNormalizer->normalize($rawValue),
+            };
+        } catch (InvalidArgumentException) {
+            throw new InvalidArgumentException($type === ContactType::Mobile ? self::INVALID_MOBILE : self::INVALID_EMAIL);
+        }
     }
 
     private function demotePrimaries(Guardian $guardian, ContactType $type, ?string $exceptId = null): void

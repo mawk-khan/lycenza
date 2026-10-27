@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
 import Pagination from '../../../Components/Pagination.vue';
 import StatusBadge from '../../../Components/StatusBadge.vue';
@@ -53,7 +53,9 @@ function fullName(g: GuardianRow): string {
     return [g.firstName, g.middleName, g.lastName].filter(Boolean).join(' ');
 }
 
-const hasFilters = name.value || status.value;
+// SIS 2.2: reactive, from the filters the list was actually loaded with
+// (filtering keeps this component mounted -- preserveState).
+const hasFilters = computed(() => !!props.filters.name || !!props.filters.status);
 </script>
 
 <template>

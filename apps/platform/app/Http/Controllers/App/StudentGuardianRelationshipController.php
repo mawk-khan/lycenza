@@ -7,6 +7,7 @@ use App\Domain\Guardians\Application\Exceptions\CrossSchoolRelationshipException
 use App\Domain\Guardians\Application\Exceptions\DuplicateRelationshipException;
 use App\Domain\Guardians\Application\Exceptions\GuardianRelationshipInUseException;
 use App\Domain\Guardians\Application\GuardianContactService;
+use App\Domain\Guardians\Application\GuardianNameSearch;
 use App\Domain\Guardians\Application\GuardianService;
 use App\Domain\Guardians\Application\StudentGuardianRelationshipService;
 use App\Domain\Guardians\Infrastructure\ContactType;
@@ -17,6 +18,7 @@ use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
 use App\Models\School;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Http\WebDomainRefusalResponder;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -77,9 +79,8 @@ class StudentGuardianRelationshipController extends Controller
             'q' => ['required', 'string', 'min:2', 'max:255'],
         ]);
 
-        $term = '%'.$validated['q'].'%';
-        $guardians = Guardian::query()
-            ->where(fn ($q) => $q->where('first_name', 'ilike', $term)->orWhere('last_name', 'ilike', $term))
+        // SIS 2.2: the shared Guardian identity rule (names only).
+        $guardians = GuardianNameSearch::apply(Guardian::query(), $validated['q'])
             ->orderBy('first_name')
             ->limit(10)
             ->get();
@@ -236,8 +237,10 @@ class StudentGuardianRelationshipController extends Controller
         try {
             $service->setPrimary($model, $context->actor());
         } catch (ConcurrentPrimaryGuardianConflictException) {
+            // SIS 2.2: the layout's refusal banner shows it (the old `primary`
+            // key had no place on the Student page).
             return redirect("/app/students/{$model->student_id}")->withErrors([
-                'primary' => 'Another primary Guardian change was made at the same time. Please try again.',
+                WebDomainRefusalResponder::ERROR_KEY => 'Another primary Guardian change was made at the same time. Please try again.',
             ]);
         }
 

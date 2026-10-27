@@ -90,4 +90,43 @@ class GuardianContactConcurrencyTest extends TestCase
         $this->assertSame('rejected:'.GuardianContactConflictException::class.':GUARDIAN_CONTACT_DUPLICATE', $contender);
         $this->assertSame(['same@example.com', 'two@example.com'], [$this->fresh($first)->encrypted_value, $this->fresh($second)->encrypted_value]);
     }
+
+    /** @return list<string> ids of this Guardian's active primary mobiles */
+    private function activePrimaryMobiles(): array
+    {
+        return app(TenantContext::class)->withSchool($this->school, fn () => GuardianContact::query()
+            ->where('guardian_id', $this->guardian->id)->where('type', ContactType::Mobile)
+            ->where('is_active', true)->where('is_primary', true)->pluck('id')->map(fn ($id) => (string) $id)->all());
+    }
+
+    #[Test]
+    public function two_simultaneous_primary_switches_leave_exactly_one_active_primary(): void
+    {
+        // SIS 2.2: every contact of the Guardian and type is locked before the
+        // state is read, so the second switch sees the first -- never a raw
+        // unique-index error, never two primaries.
+        $first = $this->createGuardianContact($this->guardian, ContactType::Mobile, '+919800000001', ['is_primary' => true]);
+        $b = $this->createGuardianContact($this->guardian, ContactType::Mobile, '+919800000002');
+        $c = $this->createGuardianContact($this->guardian, ContactType::Mobile, '+919800000003');
+
+        [$holder, $contender] = $this->raceWithHeldHolder($this->op('primary', $b->id), $this->op('primary', $c->id));
+
+        $this->assertSame(['primary', 'primary'], [$holder, $contender]);
+        $this->assertSame([(string) $c->id], $this->activePrimaryMobiles(), 'the later switch wins; the earlier and the original are demoted');
+        $this->assertFalse($this->fresh($first)->is_primary);
+    }
+
+    #[Test]
+    public function a_make_primary_waiting_on_a_deactivation_is_refused(): void
+    {
+        $primary = $this->createGuardianContact($this->guardian, ContactType::Mobile, '+919800000011', ['is_primary' => true]);
+        $other = $this->createGuardianContact($this->guardian, ContactType::Mobile, '+919800000012');
+
+        [$holder, $contender] = $this->raceWithHeldHolder($this->op('deactivate', $other->id), $this->op('primary', $other->id));
+
+        $this->assertSame('deactivated', $holder);
+        $this->assertSame('rejected:'.GuardianContactConflictException::class.':GUARDIAN_CONTACT_INACTIVE', $contender);
+        $this->assertSame([(string) $primary->id], $this->activePrimaryMobiles(), 'the existing primary is untouched');
+        $this->assertSame([false, false], [$this->fresh($other)->is_active, $this->fresh($other)->is_primary]);
+    }
 }

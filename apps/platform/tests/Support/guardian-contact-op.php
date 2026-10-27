@@ -16,6 +16,7 @@ use Tests\Support\Concurrency\HeldTransaction;
 // Usage: php guardian-contact-op.php correct <schoolId> <contactId> <value>
 //        php guardian-contact-op.php reactivate <schoolId> <contactId>
 //        php guardian-contact-op.php deactivate <schoolId> <contactId>
+//        php guardian-contact-op.php primary <schoolId> <contactId>      (SIS 2.2)
 
 require __DIR__.'/../../vendor/autoload.php';
 
@@ -35,6 +36,9 @@ try {
         $version = GuardianContactService::version($contact);
         HeldTransaction::run(fn () => $service->correct($contact, $argv[4], $contact->label, $version));
         echo 'corrected';
+    } elseif ($op === 'primary') {
+        HeldTransaction::run(fn () => $service->setPrimary($contact));
+        echo 'primary';
     } elseif ($op === 'reactivate') {
         HeldTransaction::run(fn () => $service->reactivate($contact));
         echo 'reactivated';

@@ -438,8 +438,23 @@ then lists an inactive Student who still has a placement.
   number.
 - **Not a login.** Correcting a contact's email does not change the
   Guardian's sign-in account.
+- **Make primary** works only on an active contact. A deactivated contact
+  is reactivated first; it returns non-primary, and you then choose **Make
+  primary**. The previous primary of that type stops being primary.
 - **There is no search by phone or email** (privacy decision); open the
   Guardian from the Student or the Guardians list.
+
+**Finding a Guardian** (Guardians list, and "link an existing Guardian" on a
+Student or during conversion, SIS 2.2): type any part of the name, in any
+order. "Aisha Khan", "khan aisha" and "Aisha Noor Khan" all find Aisha Noor
+Khan. Every word must appear in the first, middle or last name. The list
+shows how many Students each Guardian is linked to, so namesakes can be told
+apart. A phone number or email address never finds anyone here.
+
+**Mark inactive / Mark active** on a Guardian asks for confirmation first.
+An inactive Guardian stays linked to their Students and keeps their contacts,
+but has no Guardian portal access and receives no school emails such as fee
+reminders.
 
 ## 10. Timetable and teaching assignments
 
@@ -831,8 +846,8 @@ how you are using Lycenza.
   Lunch meal ×1 · 17 Oct 2026"); a canteen charge recorded before this
   change keeps its original "Canteen order …" description, because posted
   charges are never rewritten.
-- **Guardian search** is by name only. Search by phone or email awaits a
-  privacy decision.
+- **Guardian search** is by name only (any order, any name part). Search by
+  phone or email awaits a privacy decision.
 - **No fee proration** (approved current behaviour).
 - **One-click actions** with no reason captured:
   - attendance corrections;

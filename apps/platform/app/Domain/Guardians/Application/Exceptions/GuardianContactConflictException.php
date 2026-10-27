@@ -31,6 +31,12 @@ class GuardianContactConflictException extends GuardianException
         return new self(422, 'GUARDIAN_CONTACT_NO_LONGER_VALID', 'This contact\'s value is not valid under the current rules. Correct it first, then reactivate it.');
     }
 
+    /** SIS 2.2: only an active contact may be primary; reactivate it first. */
+    public static function inactiveCannotBePrimary(): self
+    {
+        return new self(422, 'GUARDIAN_CONTACT_INACTIVE', 'An inactive contact cannot be made primary. Reactivate it first, then make it primary.');
+    }
+
     public static function changed(): self
     {
         return new self(409, 'GUARDIAN_CONTACT_CHANGED', 'This contact changed after you opened it. Reload the page and make your correction again.');

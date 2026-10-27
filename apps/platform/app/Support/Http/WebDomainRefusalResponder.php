@@ -70,7 +70,8 @@ final class WebDomainRefusalResponder
 
         $mapped = match ($status) {
             404 => new NotFoundHttpException(previous: $e),
-            401, 403 => new AccessDeniedHttpException(previous: $e),
+            // SIS 2.2: an ExplainedRefusal keeps its 403 and shows its own (safe) message.
+            401, 403 => new AccessDeniedHttpException($e instanceof ExplainedRefusal ? self::operatorMessage($e) : '', $e),
             default => ValidationException::withMessages([self::ERROR_KEY => [self::operatorMessage($e)]]),
         };
 

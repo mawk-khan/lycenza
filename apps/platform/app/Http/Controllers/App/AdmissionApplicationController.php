@@ -26,6 +26,7 @@ use App\Domain\Admissions\Infrastructure\Applicant;
 use App\Domain\Guardians\Application\Exceptions\CrossSchoolRelationshipException;
 use App\Domain\Guardians\Application\Exceptions\DuplicateRelationshipException;
 use App\Domain\Guardians\Application\GuardianContactService;
+use App\Domain\Guardians\Application\GuardianNameSearch;
 use App\Domain\Guardians\Infrastructure\ContactType;
 use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Domain\Guardians\Infrastructure\RelationshipType;
@@ -493,10 +494,9 @@ class AdmissionApplicationController extends Controller
 
         $validated = $request->validate(['q' => ['required', 'string', 'min:2', 'max:255']]);
 
-        // ORG.7D-3 (R8): LIKE wildcards in the input are literal.
-        $term = '%'.addcslashes($validated['q'], '%_\\').'%';
-        $guardians = Guardian::query()
-            ->where(fn ($q) => $q->where('first_name', 'ilike', $term)->orWhere('last_name', 'ilike', $term))
+        // SIS 2.2: the shared Guardian identity rule (names only; LIKE
+        // wildcards literal, as ORG.7D-3 R8 required).
+        $guardians = GuardianNameSearch::apply(Guardian::query(), $validated['q'])
             ->orderBy('first_name')
             ->limit(10)
             ->get();
