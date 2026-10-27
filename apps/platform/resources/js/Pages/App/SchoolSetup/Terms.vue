@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatCalendarDate } from '../../../datetime';
 // SWC.2 (ADR 0073 section 10): the Terms of one Academic Year -- list,
 // create and rename over AcademicTermService. A Term's dates must fall
 // inside its Year and not overlap another Term (the service's refusals,
@@ -111,7 +112,8 @@ function submitEdit() {
                 </button>
             </form>
             <p v-if="year" class="mt-2 text-sm text-slate-600">
-                {{ year.name }} runs {{ year.startsOn }} – {{ year.endsOn }}.
+                {{ year.name }} runs {{ formatCalendarDate(year.startsOn) }} –
+                {{ formatCalendarDate(year.endsOn) }}.
             </p>
 
             <p v-if="props.terms.length === 0" class="mt-4 text-sm text-slate-600">
@@ -141,7 +143,10 @@ function submitEdit() {
                             <td class="pr-3 py-2">{{ term.sequence }}</td>
                             <td class="pr-3 py-2 font-medium">{{ term.name }}</td>
                             <td class="pr-3 py-2">{{ term.code }}</td>
-                            <td class="pr-3 py-2">{{ term.startsOn }} – {{ term.endsOn }}</td>
+                            <td class="pr-3 py-2">
+                                {{ formatCalendarDate(term.startsOn) }} –
+                                {{ formatCalendarDate(term.endsOn) }}
+                            </td>
                             <td v-if="props.canManage" class="pr-3 space-x-3 py-2 text-right">
                                 <button type="button" class="underline" @click="startEdit(term)">
                                     Rename<span class="sr-only"> {{ term.name }}</span>

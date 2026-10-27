@@ -92,7 +92,7 @@ class StudentEnrollmentController extends Controller
             throw ValidationException::withMessages(['starts_on' => [$e->getMessage()]]);
         }
 
-        return redirect("/app/students/{$studentModel->id}");
+        return redirect("/app/students/{$studentModel->id}")->with('flash', 'Placement added.');
     }
 
     // --- Lifecycle ----------------------------------------------------------
@@ -143,7 +143,7 @@ class StudentEnrollmentController extends Controller
             throw ValidationException::withMessages(['reason_code' => [$e->getMessage()]]);
         }
 
-        return redirect("/app/students/{$model->student_id}");
+        return redirect("/app/students/{$model->student_id}")->with('flash', 'Placement cancelled before it started.');
     }
 
     /** SIS 4.2: correct an active placement's roll number (unique in its Section for the year). */
@@ -159,7 +159,7 @@ class StudentEnrollmentController extends Controller
             throw ValidationException::withMessages(['roll_number' => [$e->getMessage()]]);
         }
 
-        return redirect("/app/students/{$model->student_id}");
+        return redirect("/app/students/{$model->student_id}")->with('flash', 'Roll number corrected.');
     }
 
     /**
@@ -206,7 +206,7 @@ class StudentEnrollmentController extends Controller
             throw ValidationException::withMessages(['ends_on' => [$e->getMessage()]]);
         }
 
-        return redirect("/app/students/{$studentId}");
+        return redirect("/app/students/{$studentId}")->with('flash', 'Placement ended.');
     }
 
     // --- Transfer -------------------------------------------------------
@@ -259,7 +259,7 @@ class StudentEnrollmentController extends Controller
             throw ValidationException::withMessages(['effective_date' => [$e->getMessage()]]);
         }
 
-        return redirect("/app/students/{$studentId}");
+        return redirect("/app/students/{$studentId}")->with('flash', 'Transfer recorded.');
     }
 
     // --- Reference data for filters/pickers --------------------------------

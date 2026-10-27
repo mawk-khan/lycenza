@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatCalendarDate } from '../../../datetime';
 import { router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
@@ -63,7 +64,7 @@ const notCompleted = computed(
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl px-4 py-6 sm:p-8 font-sans text-slate-900">
         <a class="text-sm underline" href="/app/data-health/enrollment.active_in_closed_year"
             >← Data health</a
         >
@@ -131,7 +132,7 @@ const notCompleted = computed(
                     These {{ preview.placements.length }} placement{{
                         preview.placements.length === 1 ? '' : 's'
                     }}
-                    will be completed with the end date {{ preview.endsOn }}
+                    will be completed with the end date {{ formatCalendarDate(preview.endsOn) }}
                 </h2>
                 <p
                     v-if="preview.total > preview.placements.length"
@@ -168,7 +169,9 @@ const notCompleted = computed(
                                 </td>
                                 <td class="py-2 text-slate-600">{{ row.class }}</td>
                                 <td class="py-2 text-slate-600">{{ row.rollNumber }}</td>
-                                <td class="py-2 text-slate-600">{{ row.startsOn }}</td>
+                                <td class="py-2 text-slate-600">
+                                    {{ formatCalendarDate(row.startsOn) }}
+                                </td>
                             </tr>
                         </tbody>
                     </table>
@@ -187,7 +190,7 @@ const notCompleted = computed(
                     />
                     <span
                         >I have checked this list. Complete these placements as of
-                        {{ preview.endsOn }}.</span
+                        {{ formatCalendarDate(preview.endsOn) }}.</span
                     >
                 </label>
                 <p

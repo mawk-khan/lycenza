@@ -15,7 +15,7 @@ const props = defineProps<{
 
 <template>
     <Head title="Admission fee" />
-    <main class="mx-auto max-w-3xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-3xl px-4 py-6 sm:p-8 font-sans text-slate-900">
         <a class="text-sm underline" href="/app/admissions">← Admissions</a>
         <h1 class="mt-2 text-xl font-semibold">Admission fee</h1>
         <p class="mt-1 text-sm text-slate-600">

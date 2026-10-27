@@ -76,3 +76,7 @@ complete) and classifies every SIS capability. Score: SIS Local Completion
 82/100. It lists 4 Must-Complete items, 9 Should-Complete groups and 13
 decision- or legal-blocked items, and sets out the numbered roadmap SIS
 1.1–10.1. It records and classifies; it builds nothing.)*
+
+*(2026-10-27, SIS 9.1: `SIS-UX-ACCESSIBILITY-CLOSURE-2026-10-27.md` is the
+SIS UX / accessibility findings register: 28 findings reconciled, 13 open
+closed, the 390 px and keyboard evidence, and the decisions still open.)*

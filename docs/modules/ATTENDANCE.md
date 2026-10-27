@@ -873,3 +873,12 @@ Also:
   after its would-be start).
 
 No schema, capability or status change.
+
+## SIS 9.1 UX closure (2026-10-27)
+
+- **Times of day** read "08:30–09:15" (`formatTimeRange`, a wall-clock
+  value never shifted), on Attendance and Timetable pages.
+- **Back link.** A Student's records page links back to "Attendance
+  registers", wherever it was opened from.
+- **Wording.** A no-op correction and a closed-year register refusal read in
+  plain words; the codes are unchanged.

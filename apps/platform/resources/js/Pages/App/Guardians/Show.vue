@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useConfirmation } from '../../../useConfirmation';
 import { formatDate } from '../../../datetime';
 import SearchCombobox from '../../../Components/Form/SearchCombobox.vue';
 import { router, useForm } from '@inertiajs/vue3';
@@ -77,6 +78,9 @@ interface Props {
 
 const props = defineProps<Props>();
 
+// SIS 9.1: the accessible confirmation (replaces window.confirm).
+const { confirmDialog, confirmation, confirmAction, onConfirm, onClose } = useConfirmation();
+
 // --- Phase 5B.2: Lycenza account link ---------------------------------
 
 const showLinkPicker = ref(false);
@@ -132,24 +136,35 @@ function offboardError(key: 'mfa_code' | 'guardian'): string | undefined {
     return (offboardForm.errors as Record<string, string | undefined>)[key];
 }
 
-function offboardGuardian(): void {
-    const confirmed = window.confirm(
-        'Off-board this Guardian from the School? Their portal access and account link end now; ' +
-            'their School membership is suspended unless it also holds a staff role. ' +
-            'Records and history are kept.',
-    );
-    if (!confirmed) return;
+async function offboardGuardian(): Promise<void> {
+    if (
+        !(await confirmAction({
+            title: 'Off-board this Guardian?',
+            body:
+                'Off-board this Guardian from the School? Their portal access and account link end now; ' +
+                'their School membership is suspended unless it also holds a staff role. ' +
+                'Records and history are kept.',
+            confirmLabel: 'Off-board',
+            tone: 'danger',
+        }))
+    )
+        return;
     offboardForm.post(`/app/guardians/${props.guardian.id}/portal-offboard`, {
         preserveScroll: true,
         onFinish: () => offboardForm.reset('mfa_code'),
     });
 }
 
-function unlinkAccount(): void {
-    const confirmed = window.confirm(
-        'Unlink this Lycenza account? The Guardian record and any past communications are kept -- only future in-app reachability changes.',
-    );
-    if (!confirmed) return;
+async function unlinkAccount(): Promise<void> {
+    if (
+        !(await confirmAction({
+            title: 'Unlink this account?',
+            body: 'Unlink this Lycenza account? The Guardian record and any past communications are kept -- only future in-app reachability changes.',
+            confirmLabel: 'Unlink account',
+            tone: 'danger',
+        }))
+    )
+        return;
     unlinking.value = true;
     router.delete(`/app/guardians/${props.guardian.id}/account-link`, {
         preserveScroll: true,
@@ -207,9 +222,16 @@ function resendInvitation(): void {
     );
 }
 
-function revokeInvitation(): void {
-    const confirmed = window.confirm('Revoke this pending invitation? The link will stop working.');
-    if (!confirmed) return;
+async function revokeInvitation(): Promise<void> {
+    if (
+        !(await confirmAction({
+            title: 'Revoke the invitation?',
+            body: 'Revoke this pending invitation? The link will stop working.',
+            confirmLabel: 'Revoke invitation',
+            tone: 'danger',
+        }))
+    )
+        return;
     invitationBusy.value = true;
     router.delete(`/app/guardians/${props.guardian.id}/account-invitation`, {
         preserveScroll: true,
@@ -244,19 +266,29 @@ function setPrimaryContact(contactId: string): void {
 const activeContacts = computed(() => props.contacts.filter((c) => c.isActive));
 const inactiveContacts = computed(() => props.contacts.filter((c) => !c.isActive));
 
-function reactivateContact(contact: Contact): void {
-    const confirmed = window.confirm(
-        `Reactivate this ${contact.type === 'email' ? 'email' : 'mobile'} contact? It becomes an active contact again (not primary).`,
-    );
-    if (!confirmed) return;
+async function reactivateContact(contact: Contact): Promise<void> {
+    if (
+        !(await confirmAction({
+            title: 'Reactivate this contact?',
+            body: `Reactivate this ${contact.type === 'email' ? 'email' : 'mobile'} contact? It becomes an active contact again (not primary).`,
+            confirmLabel: 'Reactivate',
+            tone: 'neutral',
+        }))
+    )
+        return;
     router.post(`/app/contacts/${contact.id}/reactivate`, {}, { preserveScroll: true });
 }
 
-function deactivateContact(contact: Contact): void {
-    const confirmed = window.confirm(
-        `Deactivate this ${contact.type === 'email' ? 'email' : 'mobile'} contact? It will no longer be usable as the primary contact, but the record is kept, not deleted.`,
-    );
-    if (!confirmed) return;
+async function deactivateContact(contact: Contact): Promise<void> {
+    if (
+        !(await confirmAction({
+            title: 'Deactivate this contact?',
+            body: `Deactivate this ${contact.type === 'email' ? 'email' : 'mobile'} contact? It will no longer be usable as the primary contact, but the record is kept, not deleted.`,
+            confirmLabel: 'Deactivate',
+            tone: 'danger',
+        }))
+    )
+        return;
     router.post(`/app/contacts/${contact.id}/deactivate`, {}, { preserveScroll: true });
 }
 
@@ -305,7 +337,7 @@ function submitContact(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-3xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-3xl px-4 py-6 sm:p-8 font-sans text-slate-900">
         <a class="text-sm underline" href="/app/guardians">← Guardians</a>
 
         <div class="mt-2 flex flex-wrap items-start justify-between gap-4">
@@ -824,5 +856,15 @@ function submitContact(): void {
                 </div>
             </div>
         </section>
+        <ConfirmDialog
+            ref="confirmDialog"
+            :title="confirmation?.title ?? ''"
+            :confirm-label="confirmation?.confirmLabel"
+            :tone="confirmation?.tone ?? 'danger'"
+            @confirm="onConfirm"
+            @close="onClose"
+        >
+            <p class="whitespace-pre-line">{{ confirmation?.body }}</p>
+        </ConfirmDialog>
     </main>
 </template>

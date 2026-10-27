@@ -4,6 +4,7 @@ namespace App\Domain\Students\Application;
 
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\Section;
+use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\School;
 use App\Models\User;
@@ -113,17 +114,23 @@ class StudentActivityHistoryService
     }
 
     /**
-     * Section and AcademicYear names for the ids the entries carry, in one
-     * query each (School-scoped). A missing row keeps its id unnamed.
+     * Section, AcademicYear and (SIS 9.1) Guardian names for the ids the
+     * entries carry, in one query each (School-scoped). A missing row keeps
+     * its id unnamed. Guardian entries are shown only to a guardians.view
+     * holder (CATEGORIES), who sees the same names on the Guardian list.
      *
      * @param  list<SchoolAuditSubjectHistoryEntry>  $entries
-     * @return array{sections: array<string, string>, years: array<string, string>}
+     * @return array{sections: array<string, string>, years: array<string, string>, guardians: array<string, string>}
      */
     private function referenceNames(School $school, array $entries): array
     {
         $sectionIds = [];
         $yearIds = [];
+        $guardianIds = [];
         foreach ($entries as $entry) {
+            if (is_string($entry->details['guardianId'] ?? null)) {
+                $guardianIds[] = $entry->details['guardianId'];
+            }
             foreach (['sectionId', 'fromSectionId', 'toSectionId'] as $key) {
                 if (is_string($entry->details[$key] ?? null)) {
                     $sectionIds[] = $entry->details[$key];
@@ -139,11 +146,15 @@ class StudentActivityHistoryService
                 ->whereIn('id', array_unique($sectionIds))->pluck('name', 'id')->all(),
             'years' => $yearIds === [] ? [] : AcademicYear::query()->where('school_id', $school->id)
                 ->whereIn('id', array_unique($yearIds))->pluck('name', 'id')->all(),
+            'guardians' => $guardianIds === [] ? [] : Guardian::query()->where('school_id', $school->id)
+                ->whereIn('id', array_unique($guardianIds))->get(['id', 'first_name', 'middle_name', 'last_name'])
+                ->mapWithKeys(fn (Guardian $g) => [(string) $g->id => trim(implode(' ', array_filter([$g->first_name, $g->middle_name, $g->last_name])))])
+                ->all(),
         ]);
     }
 
     /**
-     * @param  array{sections: array<string, string>, years: array<string, string>}  $names
+     * @param  array{sections: array<string, string>, years: array<string, string>, guardians: array<string, string>}  $names
      * @return array<string, mixed>
      */
     private function present(SchoolAuditSubjectHistoryEntry $entry, array $names): array
@@ -166,6 +177,7 @@ class StudentActivityHistoryService
             'newStatus' => is_string($d['newStatus'] ?? null) ? $d['newStatus'] : null,
             'changedFields' => is_array($d['changedFields'] ?? null) ? array_values(array_filter($d['changedFields'], 'is_string')) : [],
             'guardianId' => is_string($d['guardianId'] ?? null) ? $d['guardianId'] : null,
+            'guardianName' => is_string($d['guardianId'] ?? null) ? ($names['guardians'][$d['guardianId']] ?? null) : null,
             'relationshipType' => is_string($d['relationshipType'] ?? null) ? $d['relationshipType'] : null,
         ];
     }

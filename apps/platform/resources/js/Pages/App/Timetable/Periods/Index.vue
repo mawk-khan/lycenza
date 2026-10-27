@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatClockTime } from '../../../../datetime';
 import { router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import EmptyState from '../../../../Components/EmptyState.vue';
@@ -123,8 +124,8 @@ function toggleStatus(period: PeriodRow): void {
                         <tr v-for="period in periods.data" :key="period.id">
                             <td class="py-3 font-medium">{{ period.code }}</td>
                             <td class="py-3">{{ period.name }}</td>
-                            <td class="py-3 font-mono">{{ period.startTime }}</td>
-                            <td class="py-3 font-mono">{{ period.endTime }}</td>
+                            <td class="py-3 font-mono">{{ formatClockTime(period.startTime) }}</td>
+                            <td class="py-3 font-mono">{{ formatClockTime(period.endTime) }}</td>
                             <td class="py-3"><StatusBadge :status="period.status" /></td>
                             <td class="py-3 text-right whitespace-nowrap">
                                 <a

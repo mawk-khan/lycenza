@@ -184,7 +184,7 @@ class AdmissionApplicationController extends Controller
             throw ValidationException::withMessages(['grade_level_id' => [$e->getMessage()]]);
         }
 
-        return redirect("/app/admissions/{$application->id}");
+        return redirect("/app/admissions/{$application->id}")->with('flash', 'Application created as a draft.');
     }
 
     // --- Directory / detail -----------------------------------------------
@@ -283,7 +283,13 @@ class AdmissionApplicationController extends Controller
             throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
         }
 
-        return redirect("/app/admissions/{$model->id}");
+        // SIS 9.1: say what changed (the status badge alone is easy to miss).
+        return redirect("/app/admissions/{$model->id}")->with('flash', [
+            'submitted' => 'Application submitted.',
+            'accepted' => 'Application accepted. It is not yet a Student: convert it to create the Student record.',
+            'rejected' => 'Application rejected.',
+            'withdrawn' => 'Application withdrawn.',
+        ][$model->refresh()->status] ?? 'Application updated.');
     }
 
     // --- Correction (SIS 3.1) ------------------------------------------------
@@ -446,7 +452,7 @@ class AdmissionApplicationController extends Controller
             ]);
         }
 
-        return redirect("/app/admissions/{$result->application->id}");
+        return redirect("/app/admissions/{$result->application->id}")->with('flash', 'Converted to a Student record.');
     }
 
     private function buildGuardianInstruction(?array $guardian): ?GuardianConversionInstruction

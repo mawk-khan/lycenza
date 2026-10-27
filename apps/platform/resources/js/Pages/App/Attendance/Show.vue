@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatCalendarDate, formatDateTime } from '../../../datetime';
+import { formatCalendarDate, formatDateTime, formatTimeRange } from '../../../datetime';
 import { router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import ConfirmDialog from '../../../Components/ConfirmDialog.vue';
@@ -140,7 +140,7 @@ function confirmCorrection(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl px-4 py-6 sm:p-8 font-sans text-slate-900">
         <a class="text-sm underline" :href="baseUrl">← Registers</a>
 
         <h1 class="mt-2 text-xl font-semibold">
@@ -148,7 +148,9 @@ function confirmCorrection(): void {
         </h1>
         <p class="mt-1 text-sm text-slate-500">
             {{ DAY_NAMES[session.dayOfWeek] }} {{ formatCalendarDate(session.attendanceDate) }} ·
-            {{ session.periodName }} ({{ session.periodStartTime }}–{{ session.periodEndTime }}) ·
+            {{ session.periodName }} ({{
+                formatTimeRange(session.periodStartTime, session.periodEndTime)
+            }}) ·
             {{ session.teacherName }}
         </p>
         <p class="mt-1 text-xs text-slate-400">

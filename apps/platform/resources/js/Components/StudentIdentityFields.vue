@@ -40,7 +40,6 @@ const dateOfBirth = defineModel<string>('dateOfBirth', { required: true });
                 v-model="studentNumber"
                 type="text"
                 required
-                autofocus
                 :aria-invalid="!!errors.student_number"
                 aria-describedby="student_number-error"
                 class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
@@ -60,7 +59,6 @@ const dateOfBirth = defineModel<string>('dateOfBirth', { required: true });
                     v-model="firstName"
                     type="text"
                     required
-                    :autofocus="!withNumber"
                     :aria-invalid="!!errors.first_name"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
                 />

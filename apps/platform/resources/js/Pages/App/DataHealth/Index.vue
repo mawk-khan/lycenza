@@ -39,7 +39,7 @@ const needsAttention = computed(() => props.checks.filter((c) => c.hasFindings).
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl px-4 py-6 sm:p-8 font-sans text-slate-900">
         <a class="text-sm underline" href="/app">← Home</a>
 
         <h1 class="mt-2 text-xl font-semibold">Data health</h1>

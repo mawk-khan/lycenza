@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatTimeRange } from '../../../datetime';
 import { router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
@@ -95,15 +96,13 @@ function clearFilters(): void {
 const hasNarrowing = computed(() => props.filters.sectionId !== '' || props.filters.status !== '');
 
 function periodLabel(row: ExceptionRow): string {
-    const time = row.periodStartTime
-        ? `${row.periodStartTime.slice(0, 5)}–${(row.periodEndTime ?? '').slice(0, 5)}`
-        : '';
+    const time = row.periodStartTime ? formatTimeRange(row.periodStartTime, row.periodEndTime) : '';
     return [row.periodName, time].filter(Boolean).join(' · ') || '—';
 }
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl px-4 py-6 sm:p-8 font-sans text-slate-900">
         <a class="text-sm underline" href="/app/attendance">← Attendance registers</a>
 
         <h1 class="mt-2 text-xl font-semibold">Absent, late and excused</h1>

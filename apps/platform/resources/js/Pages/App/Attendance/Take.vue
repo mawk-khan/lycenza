@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatTimeRange } from '../../../datetime';
 import { router, useForm } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
@@ -106,7 +107,7 @@ function submit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl px-4 py-6 sm:p-8 font-sans text-slate-900">
         <a class="text-sm underline" :href="baseUrl">← Registers</a>
 
         <h1 class="mt-2 text-xl font-semibold">Take a register</h1>
@@ -160,7 +161,9 @@ function submit(): void {
                         >{{ row.classLabel ?? row.sectionCode }} · {{ row.subjectName }}</span
                     >
                     <span class="text-slate-500">
-                        — {{ row.periodName }} ({{ row.periodStartTime }}–{{ row.periodEndTime }}),
+                        — {{ row.periodName }} ({{
+                            formatTimeRange(row.periodStartTime, row.periodEndTime)
+                        }}),
                         {{ row.teacherName }}
                     </span>
                     <span v-if="row.alreadySubmitted" class="ml-2 text-slate-500">

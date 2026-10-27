@@ -40,7 +40,7 @@ function submit(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-xl px-4 py-6 sm:p-8 font-sans text-slate-900">
         <a class="text-sm underline" :href="`/app/students/${student.id}/overview`">← Back</a>
         <h1 class="mt-2 text-xl font-semibold">Transfer {{ fullName }}</h1>
         <p class="mt-1 text-sm text-slate-500">

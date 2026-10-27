@@ -300,6 +300,16 @@ fewest roles their job needs**; a person with two jobs holds two roles.
 Some actions need a **fresh authentication code** even when you hold the
 role.
 
+**Across Students, Guardians, Admissions and Attendance (SIS 9.1):**
+- **Confirmations:** an action that closes, removes or ends something asks
+  first in an on-page box that names the record and the effect. Cancel (or
+  Escape) changes nothing.
+- **Success:** each change says it happened ("Guardian marked inactive.",
+  "Application submitted.", "Placement ended.").
+- **Display:** dates read "1 Apr 2026" and times "08:30".
+- **Searches by name:** any part of the name, in any order. This applies
+  to Students, Guardians and applicants.
+
 ## 8. Admissions
 
 **Goal:** turn an applicant into an active, placed Student.

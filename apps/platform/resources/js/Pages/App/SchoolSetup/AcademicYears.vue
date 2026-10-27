@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatCalendarDate } from '../../../datetime';
 // Academic Years: create, activate, close and (SWC.2) rename over
 // AcademicYearService. One active Year per School (rule 64): activating a
 // draft Year closes the active one in the same transaction (rule 65); a
@@ -104,7 +105,10 @@ const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Active', 
                     <tr v-for="year in props.academicYears" :key="year.id">
                         <td class="pr-3 py-2 font-medium">{{ year.name }}</td>
                         <td class="pr-3 py-2">{{ year.code }}</td>
-                        <td class="pr-3 py-2">{{ year.startsOn }} – {{ year.endsOn }}</td>
+                        <td class="pr-3 py-2">
+                            {{ formatCalendarDate(year.startsOn) }} –
+                            {{ formatCalendarDate(year.endsOn) }}
+                        </td>
                         <td class="pr-3 py-2">{{ statusLabel[year.status] ?? year.status }}</td>
                         <td v-if="props.canManage" class="pr-3 space-x-3 py-2 text-right">
                             <button type="button" class="underline" @click="startEdit(year)">
@@ -126,7 +130,7 @@ const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Active', 
                                 Activate<span class="sr-only"> {{ year.name }}</span>
                             </button>
                             <span v-else-if="year.status === 'draft'" class="text-slate-500">
-                                Can be activated from {{ year.startsOn }}
+                                Can be activated from {{ formatCalendarDate(year.startsOn) }}
                             </span>
                             <button
                                 v-if="year.status === 'active'"
@@ -249,13 +253,15 @@ const statusLabel: Record<string, string> = { draft: 'Draft', active: 'Active', 
         >
             <template v-if="pending?.action === 'activate'">
                 <template v-if="activeYear">
-                    Activating {{ pending.year.name }} (starts {{ pending.year.startsOn }}) will
-                    close {{ activeYear.name }} ({{ activeYear.startsOn }} –
-                    {{ activeYear.endsOn }}). A closed Academic Year cannot be reopened.
+                    Activating {{ pending.year.name }} (starts
+                    {{ formatCalendarDate(pending.year.startsOn) }}) will close
+                    {{ activeYear.name }} ({{ formatCalendarDate(activeYear.startsOn) }} –
+                    {{ formatCalendarDate(activeYear.endsOn) }}). A closed Academic Year cannot be
+                    reopened.
                 </template>
                 <template v-else>
-                    {{ pending.year.name }} (starts {{ pending.year.startsOn }}) becomes the active
-                    Academic Year.
+                    {{ pending.year.name }} (starts {{ formatCalendarDate(pending.year.startsOn) }})
+                    becomes the active Academic Year.
                 </template>
             </template>
             <template v-else>It becomes historical and cannot be reopened.</template>

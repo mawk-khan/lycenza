@@ -94,7 +94,7 @@ class GuardianController extends Controller
 
         $guardian = $service->create($school, $validated, $context->actor());
 
-        return redirect("/app/guardians/{$guardian->id}");
+        return redirect("/app/guardians/{$guardian->id}")->with('flash', 'Guardian added.');
     }
 
     public function show(
@@ -205,7 +205,7 @@ class GuardianController extends Controller
 
         $service->update($model, $validated, $context->actor());
 
-        return redirect("/app/guardians/{$model->id}");
+        return redirect("/app/guardians/{$model->id}")->with('flash', 'Guardian details saved.');
     }
 
     public function changeStatus(Request $request, TenantContext $context, GuardianService $service, string $guardian): RedirectResponse
@@ -221,7 +221,7 @@ class GuardianController extends Controller
 
         $service->changeStatus($model, $validated['status'], $context->actor());
 
-        return redirect("/app/guardians/{$model->id}");
+        return redirect("/app/guardians/{$model->id}")->with('flash', "Guardian marked {$model->status}.");
     }
 
     public function storeContact(Request $request, TenantContext $context, GuardianContactService $service, string $guardian): RedirectResponse
@@ -250,7 +250,7 @@ class GuardianController extends Controller
             ]);
         }
 
-        return redirect("/app/guardians/{$model->id}");
+        return redirect("/app/guardians/{$model->id}")->with('flash', 'Contact added.');
     }
 
     /**
@@ -314,7 +314,7 @@ class GuardianController extends Controller
         $model = GuardianContact::query()->findOrFail($contact);
         $service->setPrimary($model, $context->actor());
 
-        return redirect("/app/guardians/{$model->guardian_id}");
+        return redirect("/app/guardians/{$model->guardian_id}")->with('flash', 'Primary contact changed.');
     }
 
     public function deactivateContact(TenantContext $context, GuardianContactService $service, string $contact): RedirectResponse
@@ -325,7 +325,7 @@ class GuardianController extends Controller
         $model = GuardianContact::query()->findOrFail($contact);
         $service->deactivate($model, $context->actor());
 
-        return redirect("/app/guardians/{$model->guardian_id}");
+        return redirect("/app/guardians/{$model->guardian_id}")->with('flash', 'Contact deactivated.');
     }
 
     /**

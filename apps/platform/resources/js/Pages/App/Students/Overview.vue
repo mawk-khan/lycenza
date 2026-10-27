@@ -46,7 +46,7 @@ const placementLabel = computed(() => {
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl px-4 py-6 sm:p-8 font-sans text-slate-900">
         <a class="text-sm underline" href="/app/students">← Students</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">

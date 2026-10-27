@@ -69,3 +69,25 @@ export function formatCalendarDate(value: string | null | undefined): string {
 
     return month ? `${Number(match[3])} ${month} ${match[1]}` : value;
 }
+
+/**
+ * SIS 9.1: a School-local time of day ("08:30:00", e.g. a timetable period
+ * start) as "08:30". A wall-clock time, not an instant: never parsed into a
+ * Date and never shifted. Anything that is not HH:MM[:SS] is shown as it is.
+ */
+export function formatClockTime(value: string | null | undefined): string {
+    if (!value) {
+        return '—';
+    }
+    const match = /^(\d{2}):(\d{2})(:\d{2})?$/.exec(value);
+
+    return match ? `${match[1]}:${match[2]}` : value;
+}
+
+/** SIS 9.1: "08:30–09:15" from two times of day. */
+export function formatTimeRange(
+    start: string | null | undefined,
+    end: string | null | undefined,
+): string {
+    return `${formatClockTime(start)}–${formatClockTime(end)}`;
+}

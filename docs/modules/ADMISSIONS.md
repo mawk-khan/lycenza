@@ -855,3 +855,16 @@ conversion, by the application's Campus.
     - the Guardian name and search inputs have labels.
   - Both directories' empty states follow the applied filters (reactive).
 - No schema change, no new state, no capability change.
+
+## Applicant search and SIS UX closure (SIS 9.1, 2026-10-27)
+
+- **Applicant search.** The Applicant directory and the Admissions list's
+  applicant-name filter use the shared `App\Support\Search\NameSearch`, the
+  rule Students and Guardians already use.
+  - Every word must occur in the first, middle or last name, in any order.
+  - LIKE wildcards stay literal.
+  - Scope is unchanged.
+- **Confirmations.** Withdraw, Reject and Convert ask through the
+  accessible ConfirmDialog.
+- **Success messages.** Every transition says what happened ("Application
+  accepted. It is not yet a Student: …").

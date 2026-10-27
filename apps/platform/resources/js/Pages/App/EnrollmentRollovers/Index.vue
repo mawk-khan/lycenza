@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { formatDate } from '../../../datetime';
 import { router } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
 import Pagination from '../../../Components/Pagination.vue';
 import StatusBadge from '../../../Components/StatusBadge.vue';
@@ -68,7 +68,8 @@ function applyFilters(): void {
 
 watch([sourceAcademicYearId, targetAcademicYearId, status], applyFilters);
 
-const hasFilters = Object.values(props.filters).some((v) => v !== '');
+// SIS 9.1: reactive -- filtering keeps this component mounted (preserveState).
+const hasFilters = computed(() => Object.values(props.filters).some((v) => v !== ''));
 
 function isReadyForConfigurationVersion(plan: PlanRow): boolean {
     return plan.validatedConfigurationVersion === plan.configurationVersion;
@@ -76,8 +77,8 @@ function isReadyForConfigurationVersion(plan: PlanRow): boolean {
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl p-8 font-sans text-slate-900">
-        <a class="text-sm underline" href="/app">← Dashboard</a>
+    <main class="mx-auto max-w-6xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+        <a class="text-sm underline" href="/app">← Home</a>
 
         <div class="mt-2 flex flex-wrap items-center justify-between gap-3">
             <div>

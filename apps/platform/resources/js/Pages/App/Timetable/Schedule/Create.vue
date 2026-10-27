@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatTimeRange } from '../../../../datetime';
 import SearchCombobox from '../../../../Components/Form/SearchCombobox.vue';
 import { useForm } from '@inertiajs/vue3';
 import { ref, watch, nextTick } from 'vue';
@@ -339,7 +340,7 @@ function submit(): void {
                     @select="selectPeriod"
                 >
                     <template #option="{ option: option }">
-                        {{ option.code }} ({{ option.startTime }}–{{ option.endTime }})
+                        {{ option.code }} ({{ formatTimeRange(option.startTime, option.endTime) }})
                     </template>
                 </SearchCombobox>
             </div>

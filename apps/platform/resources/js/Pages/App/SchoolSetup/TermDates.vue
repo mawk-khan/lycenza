@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatCalendarDate } from '../../../datetime';
 // SIS 5.1 (MC-3, ADR 0077): correct a Term's start and end dates while its
 // Academic Year is a DRAFT. Name, code and order do not change here. The new
 // dates must lie inside the year and not overlap another Term (shown on the
@@ -45,11 +46,11 @@ function submit(): void {
             <dt class="text-slate-500">Order</dt>
             <dd>{{ term.sequence }}</dd>
             <dt class="text-slate-500">Current dates</dt>
-            <dd>{{ term.startsOn }} – {{ term.endsOn }}</dd>
+            <dd>{{ formatCalendarDate(term.startsOn) }} – {{ formatCalendarDate(term.endsOn) }}</dd>
             <dt class="text-slate-500">Academic year</dt>
             <dd>
-                {{ academicYear.name }} (draft), {{ academicYear.startsOn }} –
-                {{ academicYear.endsOn }}
+                {{ academicYear.name }} (draft), {{ formatCalendarDate(academicYear.startsOn) }} –
+                {{ formatCalendarDate(academicYear.endsOn) }}
             </dd>
         </dl>
         <p class="mt-3 text-sm text-slate-600">

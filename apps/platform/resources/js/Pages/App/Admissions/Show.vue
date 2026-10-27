@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useConfirmation } from '../../../useConfirmation';
 import { formatDate } from '../../../datetime';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
@@ -77,6 +78,9 @@ interface Props {
 
 const props = defineProps<Props>();
 
+// SIS 9.1: the accessible confirmation (replaces window.confirm).
+const { confirmDialog, confirmation, confirmAction, onConfirm, onClose } = useConfirmation();
+
 const page = usePage<{ errors: Record<string, string> }>();
 const statusError = computed(() => page.props.errors?.status);
 
@@ -101,11 +105,16 @@ function submitApplication(): void {
     );
 }
 
-function withdrawApplication(): void {
-    const confirmed = window.confirm(
-        `Withdraw this application for ${applicantName()}? A withdrawn application cannot be reopened; the applicant and their other applications stay.`,
-    );
-    if (!confirmed) return;
+async function withdrawApplication(): Promise<void> {
+    if (
+        !(await confirmAction({
+            title: 'Withdraw this application?',
+            body: `Withdraw this application for ${applicantName()}? A withdrawn application cannot be reopened; the applicant and their other applications stay.`,
+            confirmLabel: 'Withdraw application',
+            tone: 'danger',
+        }))
+    )
+        return;
     transitioning.value = true;
     router.post(
         `/app/admissions/${props.application.id}/withdraw`,
@@ -145,11 +154,18 @@ function startDecision(action: DecisionAction): void {
     activeDecision.value = action;
 }
 
-function submitDecision(): void {
+async function submitDecision(): Promise<void> {
     if (!activeDecision.value) return;
     if (activeDecision.value === 'reject') {
-        const confirmed = window.confirm(`Reject this application for ${applicantName()}?`);
-        if (!confirmed) return;
+        if (
+            !(await confirmAction({
+                title: 'Reject this application?',
+                body: `Reject this application for ${applicantName()}?`,
+                confirmLabel: 'Reject application',
+                tone: 'danger',
+            }))
+        )
+            return;
     }
     decisionForm.post(`/app/admissions/${props.application.id}/${activeDecision.value}`, {
         preserveScroll: true,
@@ -241,12 +257,17 @@ convertForm.transform((data) => {
 // A refused submit always shows the warning again, even when identical.
 const duplicateDismissed = ref(false);
 
-function submitConversion(acknowledgement = ''): void {
+async function submitConversion(acknowledgement = ''): Promise<void> {
     if (!acknowledgement) {
-        const confirmed = window.confirm(
-            `Convert this application into a Student record for ${applicantName()}? This creates a permanent Student and Enrollment.`,
-        );
-        if (!confirmed) return;
+        if (
+            !(await confirmAction({
+                title: 'Convert to a Student?',
+                body: `Convert this application into a Student record for ${applicantName()}? This creates a permanent Student and Enrollment.`,
+                confirmLabel: 'Convert to Student',
+                tone: 'neutral',
+            }))
+        )
+            return;
     }
     convertForm.duplicate_acknowledgement = acknowledgement;
     convertForm.post(`/app/admissions/${props.application.id}/convert`, {
@@ -326,7 +347,7 @@ function switchToLinkExisting(g: GuardianCandidate): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-3xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-3xl px-4 py-6 sm:p-8 font-sans text-slate-900">
         <a class="text-sm underline" href="/app/admissions">← Admissions</a>
 
         <div class="mt-2 flex flex-wrap items-start justify-between gap-4">
@@ -856,5 +877,15 @@ function switchToLinkExisting(g: GuardianCandidate): void {
             :panel="props.feePanel"
             :converted="props.application.status === 'converted'"
         />
+        <ConfirmDialog
+            ref="confirmDialog"
+            :title="confirmation?.title ?? ''"
+            :confirm-label="confirmation?.confirmLabel"
+            :tone="confirmation?.tone ?? 'danger'"
+            @confirm="onConfirm"
+            @close="onClose"
+        >
+            <p class="whitespace-pre-line">{{ confirmation?.body }}</p>
+        </ConfirmDialog>
     </main>
 </template>

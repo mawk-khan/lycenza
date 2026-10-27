@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatTimeRange } from '../../../../datetime';
 import { router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import EmptyState from '../../../../Components/EmptyState.vue';
@@ -246,7 +247,9 @@ function toggle(entry: EntryRow): void {
                             <td class="py-3">
                                 {{ entry.periodCode }}
                                 <span v-if="entry.periodStartTime" class="text-xs text-slate-400">
-                                    ({{ entry.periodStartTime }}–{{ entry.periodEndTime }})
+                                    ({{
+                                        formatTimeRange(entry.periodStartTime, entry.periodEndTime)
+                                    }})
                                 </span>
                             </td>
                             <td class="py-3">{{ entry.subjectCode }} — {{ entry.subjectName }}</td>

@@ -4,6 +4,7 @@ namespace App\Domain\Admissions\Application;
 
 use App\Domain\Admissions\Infrastructure\AdmissionApplication;
 use App\Domain\Admissions\Infrastructure\Applicant;
+use App\Support\Search\NameSearch;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 
@@ -53,9 +54,9 @@ class ApplicantReadService
             ->orderBy('id');
 
         if ($name !== null && $name !== '') {
-            // ORG.7D-3 (R8): LIKE wildcards in the input are literal.
-            $term = '%'.addcslashes($name, '%_\\').'%';
-            $query->where(fn ($q) => $q->where('first_name', 'ilike', $term)->orWhere('last_name', 'ilike', $term));
+            // SIS 9.1: the shared person-name rule (every word in any name
+            // field, any order); LIKE wildcards stay literal (ORG.7D-3 R8).
+            NameSearch::everyWord($query, $name, ['applicants.first_name', 'applicants.middle_name', 'applicants.last_name']);
         }
 
         return $query->paginate($perPage);

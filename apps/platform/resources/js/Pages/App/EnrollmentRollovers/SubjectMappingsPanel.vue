@@ -331,6 +331,7 @@ function submitAdd(): void {
                         </p>
                         <select
                             :value="selectValue(o.id)"
+                            :aria-label="`Next year for ${offeringLabel(o)}`"
                             required
                             class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5"
                             @change="

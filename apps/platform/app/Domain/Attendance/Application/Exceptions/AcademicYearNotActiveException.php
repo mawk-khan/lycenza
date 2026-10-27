@@ -9,6 +9,8 @@ class AcademicYearNotActiveException extends AttendanceException
 {
     public function __construct(public readonly string $status)
     {
-        parent::__construct(409, 'ATTENDANCE_ACADEMIC_YEAR_NOT_ACTIVE', "A new register cannot be submitted: this AcademicYear is '{$status}', not 'active'.");
+        // SIS 9.1: the operator's words, never a status key (same code).
+        $state = ['draft' => 'is still a draft', 'closed' => 'is closed'][$status] ?? 'is not active';
+        parent::__construct(409, 'ATTENDANCE_ACADEMIC_YEAR_NOT_ACTIVE', "A register can be taken only in the active academic year; this class's year {$state}.");
     }
 }

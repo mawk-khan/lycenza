@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatTimeRange } from '../../../datetime';
 // ORG.9C-1 (ADR 0076 §69), PV1-05: which of a day's timetabled classes have a
 // submitted register. Counts are of registers, never of people. There is no
 // "missing" status: Lycenza does not record school holidays or cancelled
@@ -90,7 +91,7 @@ function apply(): void {
 function period(row: Row): string {
     const time =
         row.periodStartTime && row.periodEndTime
-            ? ` (${row.periodStartTime.slice(0, 5)}–${row.periodEndTime.slice(0, 5)})`
+            ? ` (${formatTimeRange(row.periodStartTime, row.periodEndTime)})`
             : '';
     return `${row.periodName ?? '—'}${time}`;
 }
@@ -98,7 +99,7 @@ function period(row: Row): string {
 
 <template>
     <Head title="Registers by day" />
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl px-4 py-6 sm:p-8 font-sans text-slate-900">
         <a class="text-sm underline" href="/app/attendance">← Attendance registers</a>
         <h1 class="mt-2 text-xl font-semibold">Registers taken and not taken</h1>
         <p class="mt-1 text-sm text-slate-500">

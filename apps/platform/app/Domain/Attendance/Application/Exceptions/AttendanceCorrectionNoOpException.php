@@ -9,6 +9,7 @@ class AttendanceCorrectionNoOpException extends AttendanceException
 {
     public function __construct(public readonly string $status)
     {
-        parent::__construct(422, 'ATTENDANCE_CORRECTION_NO_OP', "The record is already '{$status}'; a correction must change the status.");
+        // SIS 9.1: the operator's words, never a status key (same code).
+        parent::__construct(422, 'ATTENDANCE_CORRECTION_NO_OP', 'This mark is already '.ucfirst($status).'. Choose a different status to correct it.');
     }
 }

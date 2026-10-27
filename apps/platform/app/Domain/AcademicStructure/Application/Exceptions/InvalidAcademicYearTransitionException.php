@@ -12,10 +12,14 @@ class InvalidAcademicYearTransitionException extends AcademicStructureException
 {
     public function __construct(string $from, string $to)
     {
+        // SIS 9.1: the operator's words, never status keys (same code).
+        $now = ['draft' => 'is still a draft', 'active' => 'is already active', 'closed' => 'is closed'][$from] ?? 'has changed';
+        $action = ['active' => 'activated', 'closed' => 'closed', 'draft' => 'returned to draft'][$to] ?? 'changed this way';
+
         parent::__construct(
             422,
             'INVALID_ACADEMIC_YEAR_TRANSITION',
-            "Cannot transition an Academic Year from '{$from}' to '{$to}'.",
+            "This academic year {$now}, so it can't be {$action}.",
         );
     }
 }

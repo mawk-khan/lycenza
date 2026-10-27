@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatCalendarDate, formatTimeRange } from '../../../datetime';
 import { router } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
@@ -68,8 +69,8 @@ watch(attendanceDate, () => {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
-        <a class="text-sm underline" href="/app">← Dashboard</a>
+    <main class="mx-auto max-w-5xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+        <a class="text-sm underline" href="/app">← Home</a>
 
         <div class="mt-2 flex items-start justify-between gap-4">
             <div>
@@ -143,13 +144,13 @@ watch(attendanceDate, () => {
                         :key="row.id"
                         class="border-b border-slate-100"
                     >
-                        <td class="py-2">{{ row.attendanceDate }}</td>
+                        <td class="py-2">{{ formatCalendarDate(row.attendanceDate) }}</td>
                         <td class="py-2">{{ row.classLabel ?? row.sectionCode }}</td>
                         <td class="py-2">{{ row.subjectName }}</td>
                         <td class="py-2">
                             {{ row.periodName }}
                             <span class="text-slate-500">
-                                ({{ row.periodStartTime }}–{{ row.periodEndTime }})
+                                ({{ formatTimeRange(row.periodStartTime, row.periodEndTime) }})
                             </span>
                         </td>
                         <td class="py-2">{{ row.teacherName }}</td>

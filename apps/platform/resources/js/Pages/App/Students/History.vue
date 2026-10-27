@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatCalendarDate } from '../../../datetime';
 import { computed } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
 
@@ -24,6 +25,8 @@ interface HistoryEntry {
     newStatus: string | null;
     changedFields: string[];
     guardianId: string | null;
+    // SIS 9.1: the Guardian's name (null if no longer resolvable).
+    guardianName: string | null;
     relationshipType: string | null;
 }
 
@@ -127,7 +130,7 @@ const hiddenCategories = computed(() =>
 </script>
 
 <template>
-    <main class="mx-auto max-w-3xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-3xl px-4 py-6 sm:p-8 font-sans text-slate-900">
         <a class="text-sm underline" :href="`/app/students/${student.id}`">← {{ fullName }}</a>
 
         <h1 class="mt-2 text-xl font-semibold">History</h1>
@@ -160,7 +163,7 @@ const hiddenCategories = computed(() =>
                     <p class="mt-0.5 text-xs text-slate-500">
                         {{ categoryLabels[entry.category] }}
                         <template v-if="entry.effectiveOn">
-                            · effective {{ entry.effectiveOn }}</template
+                            · effective {{ formatCalendarDate(entry.effectiveOn) }}</template
                         >
                         <template
                             v-if="
@@ -171,9 +174,9 @@ const hiddenCategories = computed(() =>
                         >
                         <template v-if="entry.guardianId">
                             ·
-                            <a class="underline" :href="`/app/guardians/${entry.guardianId}`"
-                                >Guardian</a
-                            >
+                            <a class="underline" :href="`/app/guardians/${entry.guardianId}`">{{
+                                entry.guardianName ?? 'Guardian'
+                            }}</a>
                         </template>
                     </p>
                 </div>

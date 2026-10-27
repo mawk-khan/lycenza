@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { formatCalendarDate } from '../../../datetime';
+import { useConfirmation } from '../../../useConfirmation';
+import ConfirmDialog from '../../../Components/ConfirmDialog.vue';
 import SearchCombobox from '../../../Components/Form/SearchCombobox.vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
@@ -92,6 +95,9 @@ interface Props {
 
 const props = defineProps<Props>();
 
+// SIS 9.1: the accessible confirmation (replaces window.confirm).
+const { confirmDialog, confirmation, confirmAction, onConfirm, onClose } = useConfirmation();
+
 const canLinkGuardians = props.canManageStudents && props.canManageGuardians;
 
 // --- Phase 5B.2: Lycenza account link ---------------------------------
@@ -134,11 +140,16 @@ function linkAccount(candidate: MembershipCandidate): void {
     );
 }
 
-function unlinkAccount(): void {
-    const confirmed = window.confirm(
-        'Unlink this Lycenza account? The Student record and any past communications are kept -- only future in-app reachability changes.',
-    );
-    if (!confirmed) return;
+async function unlinkAccount(): Promise<void> {
+    if (
+        !(await confirmAction({
+            title: 'Unlink this account?',
+            body: 'Unlink this Lycenza account? The Student record and any past communications are kept -- only future in-app reachability changes.',
+            confirmLabel: 'Unlink account',
+            tone: 'danger',
+        }))
+    )
+        return;
     unlinking.value = true;
     router.delete(`/app/students/${props.student.id}/account-link`, {
         preserveScroll: true,
@@ -365,19 +376,25 @@ const relationshipError = computed(
     () => (page.props.errors as Record<string, string> | undefined)?.relationship ?? null,
 );
 
-function unlink(r: Relationship): void {
-    const confirmed = window.confirm(
-        `Remove this Guardian from ${fullName()}?\n\n` +
-            'This removes their relationship with this student. The Guardian record and links to other students will remain.',
-    );
-    if (!confirmed) return;
+async function unlink(r: Relationship): Promise<void> {
+    if (
+        !(await confirmAction({
+            title: 'Remove this Guardian from the Student?',
+            body:
+                `Remove this Guardian from ${fullName()}?\n\n` +
+                'This removes their relationship with this student. The Guardian record and links to other students will remain.',
+            confirmLabel: 'Remove Guardian',
+            tone: 'danger',
+        }))
+    )
+        return;
 
     router.delete(`/app/relationships/${r.id}`, { preserveScroll: true });
 }
 </script>
 
 <template>
-    <main class="mx-auto max-w-3xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-3xl px-4 py-6 sm:p-8 font-sans text-slate-900">
         <a class="text-sm underline" href="/app/students">← Students</a>
 
         <div class="mt-2 flex flex-wrap items-start justify-between gap-4">
@@ -491,7 +508,7 @@ function unlink(r: Relationship): void {
                 </div>
                 <div>
                     <dt class="text-slate-500">Date of birth</dt>
-                    <dd class="mt-0.5">{{ student.dateOfBirth }}</dd>
+                    <dd class="mt-0.5">{{ formatCalendarDate(student.dateOfBirth) }}</dd>
                 </div>
             </dl>
         </section>
@@ -523,7 +540,7 @@ function unlink(r: Relationship): void {
                         <p class="font-medium">{{ enrollmentPlacement(currentEnrollment) }}</p>
                         <p class="mt-1 text-slate-500">
                             Roll {{ currentEnrollment.rollNumber }} · Since
-                            {{ currentEnrollment.startsOn }}
+                            {{ formatCalendarDate(currentEnrollment.startsOn) }}
                         </p>
                         <div class="mt-2"><StatusBadge :status="currentEnrollment.status" /></div>
                     </div>
@@ -722,13 +739,14 @@ function unlink(r: Relationship): void {
                             Roll {{ e.rollNumber }} ·
                             <template v-if="e.cancelledBeforeStart"
                                 >Cancelled before it started (was to start
-                                {{ e.startsOn }})</template
+                                {{ formatCalendarDate(e.startsOn) }})</template
                             >
                             <template v-else-if="e.startsInFuture"
-                                >Starts {{ e.startsOn }}</template
+                                >Starts {{ formatCalendarDate(e.startsOn) }}</template
                             >
                             <template v-else
-                                >{{ e.startsOn }} – {{ e.endsOn ?? 'present' }}</template
+                                >{{ formatCalendarDate(e.startsOn) }} –
+                                {{ e.endsOn ? formatCalendarDate(e.endsOn) : 'present' }}</template
                             >
                         </p>
                         <p v-if="isOpenInClosedYear(e)" class="mt-1 text-amber-800">
@@ -809,9 +827,9 @@ function unlink(r: Relationship): void {
                             {{ e.gradeLevel.name }} · Section {{ e.section.name }} before it starts
                         </p>
                         <p class="mt-0.5 text-slate-500">
-                            It starts on {{ e.startsOn }} and has not started yet. It stays in the
-                            history as cancelled before it started and never becomes the Student's
-                            placement.
+                            It starts on {{ formatCalendarDate(e.startsOn) }} and has not started
+                            yet. It stays in the history as cancelled before it started and never
+                            becomes the Student's placement.
                         </p>
                         <div class="mt-2">
                             <label
@@ -1202,5 +1220,15 @@ function unlink(r: Relationship): void {
                 </p>
             </div>
         </section>
+        <ConfirmDialog
+            ref="confirmDialog"
+            :title="confirmation?.title ?? ''"
+            :confirm-label="confirmation?.confirmLabel"
+            :tone="confirmation?.tone ?? 'danger'"
+            @confirm="onConfirm"
+            @close="onClose"
+        >
+            <p class="whitespace-pre-line">{{ confirmation?.body }}</p>
+        </ConfirmDialog>
     </main>
 </template>

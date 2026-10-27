@@ -4,6 +4,7 @@ namespace App\Domain\Admissions\Application;
 
 use App\Domain\Admissions\Infrastructure\AdmissionApplication;
 use App\Support\Authorization\Campus\CampusScope;
+use App\Support\Search\NameSearch;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 /**
@@ -103,9 +104,9 @@ class AdmissionApplicationReadService
             $query->where('grade_level_id', $filters['grade_level_id']);
         }
         if (isset($filters['applicant_name']) && $filters['applicant_name'] !== '') {
-            // ORG.7D-3 (R8): LIKE wildcards in the input are literal.
-            $term = '%'.addcslashes($filters['applicant_name'], '%_\\').'%';
-            $query->whereHas('applicant', fn ($q) => $q->where('first_name', 'ilike', $term)->orWhere('last_name', 'ilike', $term));
+            // SIS 9.1: the shared person-name rule (every word in any name
+            // field, any order); LIKE wildcards stay literal (ORG.7D-3 R8).
+            $query->whereHas('applicant', fn ($q) => NameSearch::everyWord($q, $filters['applicant_name'], ['applicants.first_name', 'applicants.middle_name', 'applicants.last_name']));
         }
 
         return $query->paginate($perPage);

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
 import Pagination from '../../../Components/Pagination.vue';
 import StatusBadge from '../../../Components/StatusBadge.vue';
@@ -115,12 +115,13 @@ function enrollmentStudentName(student: EnrollmentRow['student']): string {
     return [student.firstName, student.middleName, student.lastName].filter(Boolean).join(' ');
 }
 
-const hasFilters = Object.values(props.filters).some((v) => v !== '');
+// SIS 9.1: reactive -- filtering keeps this component mounted (preserveState).
+const hasFilters = computed(() => Object.values(props.filters).some((v) => v !== ''));
 </script>
 
 <template>
-    <main class="mx-auto max-w-6xl p-8 font-sans text-slate-900">
-        <a class="text-sm underline" href="/app">← Dashboard</a>
+    <main class="mx-auto max-w-6xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+        <a class="text-sm underline" href="/app">← Home</a>
 
         <div class="mt-2">
             <h1 class="text-xl font-semibold">Enrollments</h1>

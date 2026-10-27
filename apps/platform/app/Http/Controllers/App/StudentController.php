@@ -94,7 +94,7 @@ class StudentController extends Controller
             $this->refuseAsPossibleDuplicate($request, 'student-create', $e);
         }
 
-        return redirect("/app/students/{$student->id}");
+        return redirect("/app/students/{$student->id}")->with('flash', "Student {$student->student_number} added.");
     }
 
     /**
@@ -255,7 +255,7 @@ class StudentController extends Controller
             ]);
         }
 
-        return redirect("/app/students/{$model->id}");
+        return redirect("/app/students/{$model->id}")->with('flash', 'Student details saved.');
     }
 
     /**
@@ -286,7 +286,7 @@ class StudentController extends Controller
             throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
         }
 
-        return redirect("/app/students/{$model->id}");
+        return redirect("/app/students/{$model->id}")->with('flash', "Student marked {$model->status}.");
     }
 
     /**

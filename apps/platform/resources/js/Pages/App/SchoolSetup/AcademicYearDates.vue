@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatCalendarDate } from '../../../datetime';
 // SIS 5.1 (MC-3, ADR 0077): correct a DRAFT Academic Year's start and end
 // dates. Name, code and status do not change here. The service refuses dates
 // that would leave a Term, a placement or another dependent record outside
@@ -45,7 +46,10 @@ function submit(): void {
             <dt class="text-slate-500">Status</dt>
             <dd>Draft</dd>
             <dt class="text-slate-500">Current dates</dt>
-            <dd>{{ academicYear.startsOn }} – {{ academicYear.endsOn }}</dd>
+            <dd>
+                {{ formatCalendarDate(academicYear.startsOn) }} –
+                {{ formatCalendarDate(academicYear.endsOn) }}
+            </dd>
         </dl>
         <p class="mt-3 text-sm text-slate-600">
             For a mistake made while preparing the year. The dates can be corrected only while the

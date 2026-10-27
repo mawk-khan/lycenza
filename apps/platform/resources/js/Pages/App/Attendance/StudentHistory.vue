@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatCalendarDate } from '../../../datetime';
 // ORG.9C-1 (ADR 0076 §69), PV1-05: one Student's attendance records over a date
 // range, newest first -- the same records each register shows, with whether and
 // why each was corrected (a closed reason, never free text). No rate, no
@@ -67,8 +68,8 @@ function apply(): void {
 
 <template>
     <Head :title="`Attendance · ${student.name}`" />
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
-        <a class="text-sm underline" href="/app/attendance/exceptions">← Attendance exceptions</a>
+    <main class="mx-auto max-w-5xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+        <a class="text-sm underline" href="/app/attendance">← Attendance registers</a>
         <h1 class="mt-2 text-xl font-semibold">{{ student.name }} · attendance</h1>
         <p class="mt-1 text-sm text-slate-500">
             Every submitted register record for this Student in the range, newest first. Corrected
@@ -132,9 +133,9 @@ function apply(): void {
                                     v-if="row.sessionId"
                                     class="underline"
                                     :href="`/app/attendance/${row.sessionId}`"
-                                    >{{ row.date }}</a
+                                    >{{ formatCalendarDate(row.date) }}</a
                                 >
-                                <span v-else>{{ row.date }}</span>
+                                <span v-else>{{ formatCalendarDate(row.date) }}</span>
                             </td>
                             <td class="py-2 text-slate-600">{{ row.classLabel ?? '—' }}</td>
                             <td class="py-2 text-slate-600">{{ row.periodName ?? '—' }}</td>

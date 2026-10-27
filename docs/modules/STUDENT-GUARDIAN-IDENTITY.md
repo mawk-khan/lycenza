@@ -1726,3 +1726,15 @@ The rule and message are the same as SIS 2.3's.
     banner.
   - Marking a Guardian inactive or active asks for confirmation.
 - No schema, capability, encryption or HMAC change.
+
+## SIS 9.1 UX closure (2026-10-27)
+
+- **Student history** names the Guardian on Guardian events. The name is
+  shown only to a `guardians.view` holder, the same visibility as the
+  Guardian list, and resolved in one query.
+- **Confirmations:** unlink account, remove Guardian, off-board, revoke
+  invitation, deactivate and reactivate contact, and transfer all use the
+  accessible ConfirmDialog.
+- **Feedback:** every Guardian, relationship, Student and placement change
+  flashes a success message.
+- **Display:** dates read "1 Apr 2026".

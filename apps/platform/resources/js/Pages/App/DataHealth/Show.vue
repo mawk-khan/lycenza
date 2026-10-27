@@ -41,7 +41,7 @@ defineProps<{
 </script>
 
 <template>
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl px-4 py-6 sm:p-8 font-sans text-slate-900">
         <a class="text-sm underline" href="/app/data-health">← Data health</a>
 
         <p class="mt-2 text-xs text-slate-500">{{ check.area }} · {{ kindLabels[check.kind] }}</p>

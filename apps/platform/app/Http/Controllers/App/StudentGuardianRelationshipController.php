@@ -162,7 +162,7 @@ class StudentGuardianRelationshipController extends Controller
             ]);
         }
 
-        return redirect("/app/students/{$studentModel->id}");
+        return redirect("/app/students/{$studentModel->id}")->with('flash', 'Guardian linked.');
     }
 
     /**
@@ -208,7 +208,7 @@ class StudentGuardianRelationshipController extends Controller
             $context->actor(),
         );
 
-        return redirect("/app/students/{$studentModel->id}");
+        return redirect("/app/students/{$studentModel->id}")->with('flash', 'Guardian added and linked.');
     }
 
     public function update(Request $request, TenantContext $context, StudentGuardianRelationshipService $service, string $relationship): RedirectResponse
@@ -224,7 +224,7 @@ class StudentGuardianRelationshipController extends Controller
 
         $service->update($model, $attributes, $context->actor());
 
-        return redirect("/app/students/{$model->student_id}");
+        return redirect("/app/students/{$model->student_id}")->with('flash', 'Guardian relationship saved.');
     }
 
     public function setPrimary(TenantContext $context, StudentGuardianRelationshipService $service, string $relationship): RedirectResponse
@@ -244,7 +244,7 @@ class StudentGuardianRelationshipController extends Controller
             ]);
         }
 
-        return redirect("/app/students/{$model->student_id}");
+        return redirect("/app/students/{$model->student_id}")->with('flash', 'Primary Guardian changed.');
     }
 
     public function destroy(TenantContext $context, StudentGuardianRelationshipService $service, string $relationship): RedirectResponse
@@ -260,7 +260,7 @@ class StudentGuardianRelationshipController extends Controller
             return redirect("/app/students/{$studentId}")->withErrors(['relationship' => $e->getMessage()]);
         }
 
-        return redirect("/app/students/{$studentId}");
+        return redirect("/app/students/{$studentId}")->with('flash', 'Guardian removed from this Student.');
     }
 
     private function authorizeBoth(School $school): void

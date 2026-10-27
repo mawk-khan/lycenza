@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { formatDateTime } from '../../../datetime';
+import { useConfirmation } from '../../../useConfirmation';
+import ConfirmDialog from '../../../Components/ConfirmDialog.vue';
+import { formatCalendarDate, formatDateTime } from '../../../datetime';
 import { router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import StatusBadge from '../../../Components/StatusBadge.vue';
@@ -137,6 +139,9 @@ interface Props {
 
 const props = defineProps<Props>();
 
+// SIS 9.1: the accessible confirmation (replaces window.confirm).
+const { confirmDialog, confirmation, confirmAction, onConfirm, onClose } = useConfirmation();
+
 const configurable = computed(() => ['draft', 'validated'].includes(props.plan.status));
 const canStart = computed(
     () => props.plan.status === 'validated' && props.plan.isValidatedForCurrentConfiguration,
@@ -181,15 +186,21 @@ function runValidation(): void {
 
 const startProcessing = ref(false);
 const startError = ref<string | null>(null);
-function confirmStart(): void {
-    const confirmed = window.confirm(
-        `Start executing this rollover plan?\n\n` +
-            `- Target-year Enrollments will be created for READY and ALREADY-ENROLLED Students.\n` +
-            `- Current-year (source) Enrollments will NOT be completed or otherwise changed.\n` +
-            `- This request processes up to the server's per-request limit; if more Students remain, ` +
-            `the plan will stay "Executing" and you will need to click Resume to continue.`,
-    );
-    if (!confirmed) return;
+async function confirmStart(): Promise<void> {
+    if (
+        !(await confirmAction({
+            title: 'Start this rollover?',
+            body:
+                `Start executing this rollover plan?\n\n` +
+                `- Target-year Enrollments will be created for READY and ALREADY-ENROLLED Students.\n` +
+                `- Current-year (source) Enrollments will NOT be completed or otherwise changed.\n` +
+                `- This request processes up to the server's per-request limit; if more Students remain, ` +
+                `the plan will stay "Executing" and you will need to click Resume to continue.`,
+            confirmLabel: 'Start rollover',
+            tone: 'neutral',
+        }))
+    )
+        return;
 
     startProcessing.value = true;
     startError.value = null;
@@ -209,13 +220,19 @@ function confirmStart(): void {
 
 const resumeProcessing = ref(false);
 const resumeError = ref<string | null>(null);
-function confirmResume(): void {
-    const confirmed = window.confirm(
-        'Process the next batch of pending Students for this plan?\n\n' +
-            'Already-completed Students are not re-processed. This may still leave the plan ' +
-            '"Executing" if more Students remain -- Resume again to continue.',
-    );
-    if (!confirmed) return;
+async function confirmResume(): Promise<void> {
+    if (
+        !(await confirmAction({
+            title: 'Resume this rollover?',
+            body:
+                'Process the next batch of pending Students for this plan?\n\n' +
+                'Already-completed Students are not re-processed. This may still leave the plan ' +
+                '"Executing" if more Students remain -- Resume again to continue.',
+            confirmLabel: 'Resume rollover',
+            tone: 'neutral',
+        }))
+    )
+        return;
 
     resumeProcessing.value = true;
     resumeError.value = null;
@@ -239,7 +256,7 @@ function reload(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-5xl px-4 py-6 sm:p-8 font-sans text-slate-900">
         <a class="text-sm underline" href="/app/enrollment-rollovers">← Enrollment Rollovers</a>
 
         <div class="mt-2 flex flex-wrap items-center justify-between gap-3">
@@ -410,7 +427,7 @@ function reload(): void {
                         <li>
                             <template v-if="yearStatus.target === 'draft'">
                                 Activate {{ plan.targetAcademicYear.name }} on or after
-                                {{ yearStatus.targetStartsOn }} in
+                                {{ formatCalendarDate(yearStatus.targetStartsOn) }} in
                                 <a class="underline" href="/app/school-setup/academic-years"
                                     >Academic years</a
                                 >. Activating it closes {{ plan.sourceAcademicYear.name }}.
@@ -517,5 +534,15 @@ function reload(): void {
                 </button>
             </template>
         </section>
+        <ConfirmDialog
+            ref="confirmDialog"
+            :title="confirmation?.title ?? ''"
+            :confirm-label="confirmation?.confirmLabel"
+            :tone="confirmation?.tone ?? 'danger'"
+            @confirm="onConfirm"
+            @close="onClose"
+        >
+            <p class="whitespace-pre-line">{{ confirmation?.body }}</p>
+        </ConfirmDialog>
     </main>
 </template>

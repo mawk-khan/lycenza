@@ -180,7 +180,7 @@ class StudentDirectoryController extends Controller
         ]);
         $model = $names->edit($school, $scope, $student, $validated, $context->actor());
 
-        return redirect("/app/students/{$model->id}/overview");
+        return redirect("/app/students/{$model->id}/overview")->with('flash', 'Names corrected.');
     }
 
     /**
@@ -237,7 +237,7 @@ class StudentDirectoryController extends Controller
             throw ValidationException::withMessages(['roll_number' => [$e->getMessage()]]);
         }
 
-        return redirect("/app/students/{$enrollment->student_id}/overview");
+        return redirect("/app/students/{$enrollment->student_id}/overview")->with('flash', 'Student added and placed.');
     }
 
     private function canTransfer(StudentAccess $access, User $actor, School $school, string $studentId): bool

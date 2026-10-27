@@ -129,7 +129,7 @@ function submitNewGuardian(): void {
 </script>
 
 <template>
-    <main class="mx-auto max-w-2xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-2xl px-4 py-6 sm:p-8 font-sans text-slate-900">
         <a class="text-sm underline" :href="`/app/students/${student.id}`">← Back</a>
         <h1 class="mt-2 text-xl font-semibold">
             Add guardian to {{ [student.firstName, student.lastName].filter(Boolean).join(' ') }}

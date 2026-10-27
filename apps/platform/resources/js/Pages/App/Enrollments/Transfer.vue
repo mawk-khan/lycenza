@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useConfirmation } from '../../../useConfirmation';
+import ConfirmDialog from '../../../Components/ConfirmDialog.vue';
 import { useForm } from '@inertiajs/vue3';
 import { computed } from 'vue';
 
@@ -37,6 +39,9 @@ interface Props {
 
 const props = defineProps<Props>();
 
+// SIS 9.1: the accessible confirmation (replaces window.confirm).
+const { confirmDialog, confirmation, confirmAction, onConfirm, onClose } = useConfirmation();
+
 function studentName(): string {
     const s = props.enrollment.student;
     return [s.firstName, s.middleName, s.lastName].filter(Boolean).join(' ');
@@ -56,19 +61,25 @@ const targetSection = computed(
     () => props.sections.find((s) => s.id === form.target_section_id) ?? null,
 );
 
-function submit(): void {
-    const confirmed = window.confirm(
-        `Transfer ${studentName()} out of ${props.enrollment.gradeLevel.name} · Section ${props.enrollment.section.name}?\n\n` +
-            'The current placement will be closed (as of the day before the effective date) and a new active placement will be created in the target Section.',
-    );
-    if (!confirmed) return;
+async function submit(): Promise<void> {
+    if (
+        !(await confirmAction({
+            title: 'Transfer this Student?',
+            body:
+                `Transfer ${studentName()} out of ${props.enrollment.gradeLevel.name} · Section ${props.enrollment.section.name}?\n\n` +
+                'The current placement will be closed (as of the day before the effective date) and a new active placement will be created in the target Section.',
+            confirmLabel: 'Transfer',
+            tone: 'neutral',
+        }))
+    )
+        return;
 
     form.post(`/app/enrollments/${props.enrollment.id}/transfer`);
 }
 </script>
 
 <template>
-    <main class="mx-auto max-w-xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-xl px-4 py-6 sm:p-8 font-sans text-slate-900">
         <a class="text-sm underline" :href="`/app/students/${enrollment.student.id}`">← Back</a>
         <h1 class="mt-2 text-xl font-semibold">Transfer {{ studentName() }}</h1>
 
@@ -160,5 +171,15 @@ function submit(): void {
                 >
             </div>
         </form>
+        <ConfirmDialog
+            ref="confirmDialog"
+            :title="confirmation?.title ?? ''"
+            :confirm-label="confirmation?.confirmLabel"
+            :tone="confirmation?.tone ?? 'danger'"
+            @confirm="onConfirm"
+            @close="onClose"
+        >
+            <p class="whitespace-pre-line">{{ confirmation?.body }}</p>
+        </ConfirmDialog>
     </main>
 </template>

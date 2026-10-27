@@ -67,6 +67,16 @@ const SWC_ACCESSIBILITY_FILES = [
     'resources/js/Pages/App/Library/FinePolicy.vue',
     'resources/js/Pages/App/Library/Circulation/Show.vue',
     'resources/js/Pages/App/Library/Circulation/Index.vue',
+    // SIS 9.1 (S-16): the SIS daily-workflow pages and their components.
+    'resources/js/Pages/App/Students/**/*.vue',
+    'resources/js/Pages/App/Guardians/**/*.vue',
+    'resources/js/Pages/App/Admissions/**/*.vue',
+    'resources/js/Pages/App/Enrollments/**/*.vue',
+    'resources/js/Pages/App/EnrollmentRollovers/**/*.vue',
+    'resources/js/Pages/App/Attendance/**/*.vue',
+    'resources/js/Pages/App/DataHealth/**/*.vue',
+    'resources/js/Components/StudentIdentityFields.vue',
+    'resources/js/Components/DuplicateStudentWarning.vue',
 ];
 const swcAccessibility = pluginVueA11y.configs['flat/recommended'].map((config) => ({
     ...config,

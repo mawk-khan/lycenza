@@ -99,8 +99,8 @@ const hasFilters = computed(() => Object.values(props.filters).some((v) => !!v))
 </script>
 
 <template>
-    <main class="mx-auto max-w-5xl p-8 font-sans text-slate-900">
-        <a class="text-sm underline" href="/app">← Dashboard</a>
+    <main class="mx-auto max-w-5xl px-4 py-6 sm:p-8 font-sans text-slate-900">
+        <a class="text-sm underline" href="/app">← Home</a>
 
         <div class="mt-2 flex flex-wrap items-start justify-between gap-4">
             <div>
