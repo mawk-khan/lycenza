@@ -9819,6 +9819,14 @@ compared as calendar dates (normalized), never as the caller's string.
 Residual LOW: "not in the future" is a clock rule enforced by the service,
 not the database.
 
+*Amended 2026-10-27 by ADR 0078 (SIS 4.2, owner decision):* a placement that
+has NOT STARTED may be cancelled before its start; it records the empty
+interval `ends_on = starts_on - 1` (`student_enrollments_date_range_check`
+admits it for `cancelled` only), so it is never effective and never on a
+roster. That `ends_on` is not a cancellation date and may lie in the future;
+the real end is `ended_recorded_at`, the lifecycle event and the audit. Every
+other rule above is unchanged.
+
 **65.4 Fixtures.** No invariant was weakened and no test bypass exists.
 Factories reach ended states the way the database requires
 (`Database\Factories\StudentLifecycleFixture`: insert `active`, then the

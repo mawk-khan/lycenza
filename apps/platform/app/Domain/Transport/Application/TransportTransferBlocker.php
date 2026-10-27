@@ -29,4 +29,9 @@ final class TransportTransferBlocker implements StudentTransferBlocker
             ->whereHas('route', fn ($q) => $q->where('transport_routes.campus_id', $sourceCampusId))
             ->exists();
     }
+
+    public function kind(): string
+    {
+        return 'the active Transport rider assignment on the current Campus (Transport → Student assignments)';
+    }
 }

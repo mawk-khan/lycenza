@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\StudentEnrollment;
 
+use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
@@ -48,6 +49,8 @@ class StudentEnrollmentTest extends TestCase
                     'campus_id' => $section->campus_id,
                     'grade_level_id' => $section->grade_level_id,
                     'section_id' => $section->id,
+                    // SIS 4.2: inside the Section's year (database start-date rule).
+                    'starts_on' => AcademicYear::query()->whereKey($section->academic_year_id)->value('starts_on'),
                 ], $attributes));
             });
         });

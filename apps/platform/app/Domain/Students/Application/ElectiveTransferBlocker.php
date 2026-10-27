@@ -36,4 +36,9 @@ final class ElectiveTransferBlocker implements StudentTransferBlocker
                     ->whereHas('subjectOffering', fn ($o) => $o->where('subject_offerings.campus_id', $sourceCampusId))))
             ->exists();
     }
+
+    public function kind(): string
+    {
+        return 'the active elective(s) on the current Campus (withdraw, cancel or transfer the elective)';
+    }
 }

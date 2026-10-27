@@ -122,6 +122,47 @@ class StudentEnrollmentController extends Controller
     }
 
     /**
+     * SIS 4.2: cancel a placement that has not started yet -- the closed cancel
+     * reasons, confirmation and a fresh code like cancel(), but no end date
+     * (the service records the empty interval). A started placement, or one
+     * other records already depend on, is refused by the service.
+     */
+    public function cancelBeforeStart(Request $request, TenantContext $context, StudentEnrollmentService $service, FreshMfaRequirement $mfa, string $enrollment): RedirectResponse
+    {
+        $context->requireSchool();
+        $model = StudentEnrollment::query()->findOrFail($enrollment);
+        $validated = $request->validate([
+            'reason_code' => ['required', 'string', Rule::in(StudentLifecycleReason::CODES[StudentLifecycleReason::CANCEL_ENROLLMENT])],
+            'confirm' => ['accepted'],
+        ], ['confirm.accepted' => 'Confirm that this placement is cancelled before it starts.']);
+        $proof = $mfa->requireForAction($request, $context->actor());
+
+        try {
+            $service->cancelBeforeStart($model, $validated['reason_code'], $context->actor(), $proof);
+        } catch (InvalidEnrollmentTransitionException|InvalidEnrollmentDateRangeException $e) {
+            throw ValidationException::withMessages(['reason_code' => [$e->getMessage()]]);
+        }
+
+        return redirect("/app/students/{$model->student_id}");
+    }
+
+    /** SIS 4.2: correct an active placement's roll number (unique in its Section for the year). */
+    public function correctRollNumber(Request $request, TenantContext $context, StudentEnrollmentService $service, string $enrollment): RedirectResponse
+    {
+        $context->requireSchool();
+        $model = StudentEnrollment::query()->findOrFail($enrollment);
+        $validated = $request->validate(['roll_number' => ['required', 'string', 'max:255']]);
+
+        try {
+            $service->correctRollNumber($model, $validated['roll_number'], $context->actor());
+        } catch (DuplicateEnrollmentRollNumberException|InvalidEnrollmentRollNumberException|InvalidEnrollmentTransitionException $e) {
+            throw ValidationException::withMessages(['roll_number' => [$e->getMessage()]]);
+        }
+
+        return redirect("/app/students/{$model->student_id}");
+    }
+
+    /**
      * The reason and confirmation are validated first, then the fresh code
      * (outside the transaction).
      *
@@ -178,9 +219,16 @@ class StudentEnrollmentController extends Controller
 
         $model = StudentEnrollment::query()->with(['student', 'academicYear', 'campus', 'gradeLevel', 'section'])->findOrFail($enrollment);
 
+        // ENR-01 (SIS 4.2): only Sections the transfer can accept -- the
+        // placement's own year and Grade, never its current Section.
+        $sections = array_values(array_filter(
+            $this->sectionOptions($school, onlyEligible: true),
+            fn (array $s) => $s['academicYearId'] === $model->academic_year_id && $s['gradeLevelId'] === $model->grade_level_id && $s['id'] !== $model->section_id,
+        ));
+
         return Inertia::render('App/Enrollments/Transfer', [
             'enrollment' => $this->presentSummary($model),
-            'sections' => $this->sectionOptions($school, onlyEligible: true),
+            'sections' => $sections,
         ]);
     }
 
@@ -237,8 +285,12 @@ class StudentEnrollmentController extends Controller
             $query->where('status', 'active')->whereHas('academicYear', fn ($q) => $q->whereIn('status', ['draft', 'active']));
         }
 
+        // ENR-01 (SIS 4.2): the active year first, then draft (next) years
+        // oldest first, then closed; within a year by Grade order and name.
+        $yearRank = ['active' => 0, 'draft' => 1, 'closed' => 2];
+
         return $query->get()
-            ->sortByDesc(fn (Section $s) => $s->academicYear->starts_on)
+            ->sortBy(fn (Section $s) => sprintf('%d|%s|%06d|%s', $yearRank[$s->academicYear->status] ?? 3, $s->academicYear->starts_on->toDateString(), $s->gradeLevel->sequence, mb_strtolower($s->name)))
             ->map(fn (Section $s) => [
                 'id' => $s->id,
                 'label' => "{$s->gradeLevel->name} · Section {$s->name} · {$s->campus->name} · {$s->academicYear->name}",

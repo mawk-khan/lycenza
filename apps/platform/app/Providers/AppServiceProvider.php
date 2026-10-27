@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use App\Domain\AcademicStructure\Application\Calendar\AcademicYearDateDependency;
 use App\Domain\Examinations\Application\ExaminationYearDateDependency;
+use App\Domain\Examinations\Application\Marks\StudentMarkPlacementCancellationBlocker;
+use App\Domain\Fees\Application\FeeAssessmentPlacementCancellationBlocker;
 use App\Domain\Fees\Application\FeeYearDateDependency;
 use App\Domain\Finance\Application\Periods\FinancialPeriodCloseParticipant;
 use App\Domain\Finance\Application\Retention\FinanceRetentionParticipant;
@@ -17,7 +19,9 @@ use App\Domain\Payments\Application\ChargePeriodStateParticipant;
 use App\Domain\Payments\Application\Retention\ChargeRetentionParticipant;
 use App\Domain\Payroll\Application\Retention\PayrollLedgerRetentionParticipant;
 use App\Domain\StaffAttendance\Application\StaffAttendancePresenceReader;
+use App\Domain\Students\Application\ElectivePlacementCancellationBlocker;
 use App\Domain\Students\Application\ElectiveTransferBlocker;
+use App\Domain\Students\Application\PlacementCancellationBlocker;
 use App\Domain\Students\Application\PlacementYearDateDependency;
 use App\Domain\Students\Application\StudentTransferBlocker;
 use App\Domain\TeachingAssignments\Application\EmploymentEndedTeachingOwnership;
@@ -134,6 +138,13 @@ class AppServiceProvider extends ServiceProvider
         // Students, so Students never references Hostel or Transport (which
         // depend on it).
         $this->app->tag([ElectiveTransferBlocker::class, HostelTransferBlocker::class, TransportTransferBlocker::class], StudentTransferBlocker::TAG);
+
+        // SIS 4.2: records that already depend on a placement which has not
+        // started yet, so it cannot be cancelled before its start until they
+        // are resolved in their own module.
+        $this->app->tag([
+            ElectivePlacementCancellationBlocker::class, FeeAssessmentPlacementCancellationBlocker::class, StudentMarkPlacementCancellationBlocker::class,
+        ], PlacementCancellationBlocker::TAG);
 
         // SIS 5.1 (MC-3, ADR 0077): the records that must stay inside a draft
         // Academic Year's dates while they are corrected. Registered here, not

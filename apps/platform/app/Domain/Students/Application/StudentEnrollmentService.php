@@ -12,6 +12,7 @@ use App\Domain\Students\Application\Exceptions\DuplicateEnrollmentRollNumberExce
 use App\Domain\Students\Application\Exceptions\IntraYearGradeChangeException;
 use App\Domain\Students\Application\Exceptions\InvalidEnrollmentDateRangeException;
 use App\Domain\Students\Application\Exceptions\InvalidEnrollmentTransitionException;
+use App\Domain\Students\Application\Exceptions\PlacementDependentsBlockException;
 use App\Domain\Students\Application\Exceptions\PlacementTargetUnavailableException;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
@@ -22,6 +23,7 @@ use App\Support\Audit\AuditRecorder;
 use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Container\Attributes\Tag;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -99,11 +101,17 @@ use Throwable;
  */
 class StudentEnrollmentService
 {
+    /**
+     * @param  iterable<StudentTransferBlocker>  $transferBlockers
+     * @param  iterable<PlacementCancellationBlocker>  $cancellationBlockers
+     */
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly ActiveCampus $campuses,
         private readonly ApprovalDecisionAuthority $authority,
+        #[Tag(StudentTransferBlocker::TAG)] private readonly iterable $transferBlockers = [],
+        #[Tag(PlacementCancellationBlocker::TAG)] private readonly iterable $cancellationBlockers = [],
     ) {}
 
     /**
@@ -184,6 +192,76 @@ class StudentEnrollmentService
     public function cancel(StudentEnrollment $enrollment, string $endedOn, string $reasonCode, User $actor, FreshMfaProof $mfa): StudentEnrollment
     {
         return $this->transitionToTerminalStatus($enrollment, 'cancelled', $endedOn, 'student_enrollment.cancelled', $actor, [StudentLifecycleReason::CANCEL_ENROLLMENT, $reasonCode, $mfa]);
+    }
+
+    /**
+     * SIS 4.2 (owner decision): cancel a placement that has NOT STARTED yet
+     * (its start date is after today, School-local) -- typically a next-year
+     * placement entered by mistake, or a Student who will not join. The same
+     * closed cancel reasons, fresh MFA, current authority and lifecycle event
+     * as cancel(). It was never effective, so it records the empty interval
+     * `ends_on = starts_on - 1` (never on a roster, never current); the real
+     * time is the database's `ended_recorded_at`, the event and the audit.
+     * Refused while a PlacementCancellationBlocker reports a record that
+     * already depends on it. Never deletes the row.
+     */
+    public function cancelBeforeStart(StudentEnrollment $enrollment, string $reasonCode, User $actor, FreshMfaProof $mfa): StudentEnrollment
+    {
+        return $this->transitionToTerminalStatus($enrollment, 'cancelled', '', 'student_enrollment.cancelled', $actor, [StudentLifecycleReason::CANCEL_ENROLLMENT, $reasonCode, $mfa], beforeStart: true);
+    }
+
+    /**
+     * SIS 4.2: correct the roll number of an ACTIVE placement (current or
+     * not yet started) -- the one column of a placement that is not part of
+     * its identity (ADR 0076 §47.1). An ended placement's roll number is
+     * history and stays. Section-before-Enrollment locks; the number stays
+     * unique in the Section for the year (any status, the existing key), so a
+     * number in use -- even on an ended placement -- is the same clean refusal
+     * as at enrollment. Audited with the old and new number.
+     */
+    public function correctRollNumber(StudentEnrollment $enrollment, string $rollNumber, User $actor): StudentEnrollment
+    {
+        $rollNumber = RollNumberNormalizer::normalize($rollNumber);
+
+        return $this->context->withSchool($enrollment->school, function () use ($enrollment, $rollNumber, $actor): StudentEnrollment {
+            try {
+                return DB::transaction(function () use ($enrollment, $rollNumber, $actor): StudentEnrollment {
+                    $discovered = StudentEnrollment::query()->whereKey($enrollment->id)->firstOrFail();
+                    $this->lockSections([$discovered->section_id]);
+                    $locked = StudentEnrollment::query()->whereKey($enrollment->id)->lockForUpdate()->firstOrFail();
+
+                    if ($locked->section_id !== $discovered->section_id || $locked->status !== 'active') {
+                        throw new InvalidEnrollmentTransitionException($locked->status, 'roll number corrected');
+                    }
+                    if ($locked->roll_number === $rollNumber) {
+                        return $locked;
+                    }
+                    $taken = StudentEnrollment::query()
+                        ->where('academic_year_id', $locked->academic_year_id)
+                        ->where('section_id', $locked->section_id)
+                        ->where('roll_number', $rollNumber)
+                        ->whereKeyNot($locked->id)
+                        ->exists();
+                    if ($taken) {
+                        throw new DuplicateEnrollmentRollNumberException($rollNumber);
+                    }
+
+                    $before = $locked->roll_number;
+                    $locked->update(['roll_number' => $rollNumber]);
+
+                    $this->audit->school($locked->school, 'student_enrollment.roll_number_corrected', actor: $actor, subject: $locked, metadata: [
+                        'studentId' => $locked->student_id,
+                        'sectionId' => $locked->section_id,
+                        'before' => $before,
+                        'after' => $rollNumber,
+                    ]);
+
+                    return $locked->refresh();
+                });
+            } catch (UniqueConstraintViolationException $e) {
+                throw $this->translateUniqueViolation($e, $rollNumber);
+            }
+        });
     }
 
     /**
@@ -274,6 +352,22 @@ class StudentEnrollmentService
                     // every lock above (none for the whole School).
                     $campusGuard?->beforeTransfer($lockedStudent, $lockedSource, $sections[$targetSection->id]);
 
+                    // SIS 4.2: the whole-School transfer asks the same blockers
+                    // whenever the Campus changes (a same-Campus Section change
+                    // leaves Hostel, Transport and elective records valid), and
+                    // names what must be resolved first. Same locks, same answer.
+                    if ($campusGuard === null && $lockedSource->campus_id !== $sections[$targetSection->id]->campus_id) {
+                        $kinds = [];
+                        foreach ($this->transferBlockers as $blocker) {
+                            if ($blocker->blocksCampusTransfer($lockedSource->school, $lockedStudent->id, $lockedSource->id, $lockedSource->campus_id)) {
+                                $kinds[] = $blocker->kind();
+                            }
+                        }
+                        if ($kinds !== []) {
+                            throw PlacementDependentsBlockException::transfer($kinds);
+                        }
+                    }
+
                     $sourceEndsOn = Carbon::parse($effectiveDate)->subDay()->toDateString();
                     if ($sourceEndsOn < $lockedSource->starts_on->toDateString()) {
                         throw new InvalidEnrollmentDateRangeException(
@@ -353,10 +447,10 @@ class StudentEnrollmentService
      *
      * @param  array{0: string, 1: string, 2: FreshMfaProof}|null  $assurance
      */
-    private function transitionToTerminalStatus(StudentEnrollment $enrollment, string $newStatus, string $endedOn, string $eventType, ?User $actor, ?array $assurance = null): StudentEnrollment
+    private function transitionToTerminalStatus(StudentEnrollment $enrollment, string $newStatus, string $endedOn, string $eventType, ?User $actor, ?array $assurance = null, bool $beforeStart = false): StudentEnrollment
     {
         // ORG.8G: compare calendar dates, never the caller's string format.
-        $endedOn = Carbon::parse($endedOn)->toDateString();
+        $endedOn = $beforeStart ? '' : Carbon::parse($endedOn)->toDateString();
         if ($assurance !== null) {
             [$action, $reasonCode, $mfa] = $assurance;
             if ($actor === null || ! $mfa->isFor($actor->id)) {
@@ -365,7 +459,7 @@ class StudentEnrollmentService
             StudentLifecycleReason::require($action, $reasonCode);
         }
 
-        return $this->context->withSchool($enrollment->school, fn () => DB::transaction(function () use ($enrollment, $newStatus, $endedOn, $eventType, $actor, $assurance) {
+        return $this->context->withSchool($enrollment->school, fn () => DB::transaction(function () use ($enrollment, $newStatus, $endedOn, $eventType, $actor, $assurance, $beforeStart) {
             $discovered = StudentEnrollment::query()->whereKey($enrollment->id)->firstOrFail();
             $this->lockSections([$discovered->section_id]);
 
@@ -379,19 +473,42 @@ class StudentEnrollmentService
                 throw new InvalidEnrollmentTransitionException($locked->status, $newStatus);
             }
 
-            if ($endedOn < $locked->starts_on->toDateString()) {
-                throw new InvalidEnrollmentDateRangeException(
-                    "End date must not be before the Enrollment's start date ({$locked->starts_on->toDateString()})."
-                );
-            }
+            $startsOn = $locked->starts_on->toDateString();
+            $notStarted = $startsOn > SchoolTimezone::today($locked->school);
+            if ($beforeStart) {
+                // SIS 4.2: only a placement that has not started; the empty
+                // interval ends the day before it would have begun.
+                if (! $notStarted) {
+                    throw new InvalidEnrollmentDateRangeException('This placement has already started. Cancel it with an end date instead.');
+                }
+                $endedOn = $locked->starts_on->copy()->subDay()->toDateString();
+                $kinds = [];
+                foreach ($this->cancellationBlockers as $blocker) {
+                    if ($blocker->blocksCancellation($locked->school, $locked->id)) {
+                        $kinds[] = $blocker->kind();
+                    }
+                }
+                if ($kinds !== []) {
+                    throw PlacementDependentsBlockException::cancellation($kinds);
+                }
+            } else {
+                if ($notStarted) {
+                    throw new InvalidEnrollmentDateRangeException("This placement starts on {$startsOn} and has not started yet. Use \"Cancel before it starts\" instead.");
+                }
+                if ($endedOn < $startsOn) {
+                    throw new InvalidEnrollmentDateRangeException(
+                        "End date must not be before the Enrollment's start date ({$startsOn})."
+                    );
+                }
 
-            // ORG.8G (ADR 0076 §65): a placement never outlives its year
-            // (the database refuses it too), and a withdrawal or
-            // cancellation is never dated in the future -- there is no
-            // scheduled termination.
-            $this->assertEndsWithinYear($locked, $endedOn);
-            if ($endedOn > SchoolTimezone::today($locked->school)) {
-                throw new InvalidEnrollmentDateRangeException('End date must not be in the future.');
+                // ORG.8G (ADR 0076 §65): a placement never outlives its year
+                // (the database refuses it too), and a withdrawal or
+                // cancellation is never dated in the future -- there is no
+                // scheduled termination.
+                $this->assertEndsWithinYear($locked, $endedOn);
+                if ($endedOn > SchoolTimezone::today($locked->school)) {
+                    throw new InvalidEnrollmentDateRangeException('End date must not be in the future.');
+                }
             }
             // Completion is the placement running its normal course: it ends on
             // its academic year's last day, once that day has come. Leaving
@@ -423,7 +540,8 @@ class StudentEnrollmentService
                 'academicYearId' => $locked->academic_year_id,
                 'sectionId' => $locked->section_id,
                 'endsOn' => $endedOn,
-            ] + ($event === null ? [] : ['reasonCode' => $event->reason_code, 'lifecycleEventId' => $event->id, 'freshMfa' => true]));
+            ] + ($event === null ? [] : ['reasonCode' => $event->reason_code, 'lifecycleEventId' => $event->id, 'freshMfa' => true])
+              + ($beforeStart ? ['beforeStart' => true] : []));
 
             return $locked->refresh();
         }));

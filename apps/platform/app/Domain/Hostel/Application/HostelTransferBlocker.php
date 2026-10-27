@@ -29,4 +29,9 @@ final class HostelTransferBlocker implements StudentTransferBlocker
             ->whereHas('bed.room.hostel', fn ($q) => $q->where('hostels.campus_id', $sourceCampusId))
             ->exists();
     }
+
+    public function kind(): string
+    {
+        return 'the active Hostel residency on the current Campus (Hostel → Residency)';
+    }
 }

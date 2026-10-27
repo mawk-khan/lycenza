@@ -470,6 +470,9 @@ trait CreatesTenancyFixtures
                 'campus_id' => $section->campus_id,
                 'grade_level_id' => $section->grade_level_id,
                 'section_id' => $section->id,
+                // SIS 4.2: the database refuses a start outside the Section's
+                // year, so the default is the year's first day (not a random date).
+                'starts_on' => AcademicYear::query()->whereKey($section->academic_year_id)->value('starts_on'),
             ], $attributes)),
         );
     }

@@ -296,6 +296,9 @@ class StudentMarkArchitectureGuardTest extends TestCase
             'Http/Controllers/App/Examinations/TeacherStudentMarkController.php',
             'Http/Middleware/EnsureTeacherStudentMarksDevelopmentOnly.php',
             'Http/Middleware/EnsureStudentMarksDevelopmentOnly.php',
+            // SIS 4.2 (ADR 0078), reviewed: registers StudentMarkPlacementCancellationBlocker under the
+            // Students port tag -- wiring only; the provider never calls marks code.
+            'Providers/AppServiceProvider.php',
         ];
         $consumers = [];
         foreach ($this->appFiles() as $file) {

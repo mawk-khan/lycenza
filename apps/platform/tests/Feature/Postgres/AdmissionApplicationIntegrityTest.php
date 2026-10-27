@@ -134,6 +134,8 @@ class AdmissionApplicationIntegrityTest extends TestCase
                 'grade_level_id' => $grade->id,
                 'section_id' => $section->id,
                 'status' => 'active',
+                // SIS 4.2: inside the year (the database refuses any other start).
+                'starts_on' => $year->starts_on,
             ]);
 
             return compact('student', 'enrollment');

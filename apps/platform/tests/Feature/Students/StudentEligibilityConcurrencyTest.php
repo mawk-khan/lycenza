@@ -211,7 +211,10 @@ class StudentEligibilityConcurrencyTest extends TestCase
         [$holder, $contender] = $this->raceWithHeldHolder($this->assignResidency(), $this->stateChanges()[$change]);
 
         $this->assertSame('ok', $holder);
-        $this->assertSame('ok', $contender, 'the state change then proceeds: one coherent order, write first');
+        // SIS 4.2: the transfer changes the Campus, so after waiting it sees
+        // the residency and refuses (the whole-School transfer now asks the
+        // StudentTransferBlockers); every other state change proceeds.
+        $this->assertSame($change === 'transfer' ? 'rejected:PlacementDependentsBlockException' : 'ok', $contender, 'one coherent order, write first');
         $this->assertSame(1, $this->rows(HostelResidencyAssignment::class));
     }
 
@@ -356,7 +359,8 @@ class StudentEligibilityConcurrencyTest extends TestCase
         [$holder, $contender] = $this->raceWithHeldHolder($this->ride(), $this->stateChanges()[$change]);
 
         $this->assertSame('ok', $holder);
-        $this->assertSame('ok', $contender);
+        // SIS 4.2: a Campus-changing transfer waits, sees the rider assignment and refuses.
+        $this->assertSame($change === 'transfer' ? 'rejected:PlacementDependentsBlockException' : 'ok', $contender);
         $this->assertSame(1, $this->rows(TransportStudentAssignment::class));
     }
 

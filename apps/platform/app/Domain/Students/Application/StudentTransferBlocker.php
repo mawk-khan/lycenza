@@ -18,6 +18,8 @@ use App\Models\School;
  *
  * A blocker only answers; it never ends, moves or rewrites anything, and its
  * answer is never shown to a Campus actor beyond the one generic refusal.
+ * Since SIS 4.2 the whole-School transfer asks too, whenever the Campus
+ * changes (StudentEnrollmentService::transferPlacement()), and names kind().
  */
 interface StudentTransferBlocker
 {
@@ -25,4 +27,11 @@ interface StudentTransferBlocker
 
     /** Runs inside the transfer transaction, under the School's TenantContext. */
     public function blocksCampusTransfer(School $school, string $studentId, string $sourceEnrollmentId, string $sourceCampusId): bool;
+
+    /**
+     * SIS 4.2: what the operator must resolve first, named on a whole-School
+     * transfer's refusal (e.g. "the active Hostel residency"). A Campus actor
+     * still gets the one generic refusal and never sees it.
+     */
+    public function kind(): string;
 }

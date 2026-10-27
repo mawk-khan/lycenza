@@ -333,6 +333,10 @@ class StudentController extends Controller
             'status' => $enrollment->status,
             'startsOn' => $enrollment->starts_on->toDateString(),
             'endsOn' => $enrollment->ends_on?->toDateString(),
+            // SIS 4.2: an active placement that has not started can be
+            // cancelled before it starts; one so cancelled was never effective.
+            'startsInFuture' => $enrollment->status === 'active' && $enrollment->starts_on->toDateString() > SchoolTimezone::today($enrollment->school),
+            'cancelledBeforeStart' => $enrollment->status === 'cancelled' && $enrollment->ends_on !== null && $enrollment->ends_on->lt($enrollment->starts_on),
         ];
     }
 }

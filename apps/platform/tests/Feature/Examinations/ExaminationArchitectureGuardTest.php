@@ -49,6 +49,9 @@ class ExaminationArchitectureGuardTest extends TestCase
         'App\\Domain\\Students\\Application\\StudentPlacementDisplayReadService',
         'App\\Domain\\Students\\Application\\Exceptions\\StudentNotAuthorizedForProcessingException',
         'App\\Domain\\Students\\Domain\\ProcessingAuthorizationPurpose',
+        // SIS 4.2 (ADR 0078): the port StudentMarkPlacementCancellationBlocker implements -- it
+        // answers "is a mark recorded against this placement?" from student_marks, never a Students table.
+        'App\\Domain\\Students\\Application\\PlacementCancellationBlocker',
     ];
 
     private function isStudentMarkFile(string $file): bool

@@ -1030,6 +1030,9 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::post('/{enrollment}/complete', [StudentEnrollmentController::class, 'complete'])->middleware('capability:enrollments.manage')->name('complete');
         Route::post('/{enrollment}/withdraw', [StudentEnrollmentController::class, 'withdraw'])->middleware('capability:enrollments.manage')->name('withdraw');
         Route::post('/{enrollment}/cancel', [StudentEnrollmentController::class, 'cancel'])->middleware('capability:enrollments.manage')->name('cancel');
+        // SIS 4.2: cancel a placement before it starts; correct a roll number.
+        Route::post('/{enrollment}/cancel-before-start', [StudentEnrollmentController::class, 'cancelBeforeStart'])->middleware('capability:enrollments.manage')->whereUuid('enrollment')->name('cancel-before-start');
+        Route::post('/{enrollment}/roll-number', [StudentEnrollmentController::class, 'correctRollNumber'])->middleware('capability:enrollments.manage')->whereUuid('enrollment')->name('roll-number');
         Route::get('/{enrollment}/transfer', [StudentEnrollmentController::class, 'transferCreate'])->middleware('capability:enrollments.manage')->name('transfer.create');
         Route::post('/{enrollment}/transfer', [StudentEnrollmentController::class, 'transfer'])->middleware('capability:enrollments.manage')->name('transfer.store');
     });

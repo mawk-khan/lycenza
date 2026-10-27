@@ -7,7 +7,9 @@ use App\Models\School;
 use App\Models\SchoolAuditEvent;
 use App\Models\User;
 use App\Support\DataHealth\DataHealthService;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -230,13 +232,14 @@ class HistoricalPlacementClosureUiTest extends TestCase
         $w = $this->world();
         [$a, $currentA] = $this->leftover($w, '1');
         [$b] = $this->leftover($w, '2');
-        // Starts after its own year ended: the existing date rule refuses it.
-        $odd = $this->createStudentEnrollment($this->createStudent($w['school']), $w['closedSection'], ['status' => 'active', 'starts_on' => '2026-05-01', 'roll_number' => '9']);
+        // SIS 4.2: a placement starting after its year ended (this test's former
+        // date-conflict row) can no longer exist -- the database refuses it.
+        // The date-conflict outcome stays covered by the early-closed year below.
         $this->member($w['school'], self::MANAGER);
 
         $this->post('/app/enrollments/closed-year-placements/complete', [
             'academic_year_id' => $w['closed']->id,
-            'enrollment_ids' => [$a->id, $b->id, $odd->id],
+            'enrollment_ids' => [$a->id, $b->id],
             'confirm' => true,
         ])->assertRedirect('/app/enrollments/closed-year-placements?academic_year_id='.$w['closed']->id);
 
@@ -245,14 +248,31 @@ class HistoricalPlacementClosureUiTest extends TestCase
             $this->assertSame('2026-03-31', $this->fresh($e)->ends_on->toDateString());
             $this->assertSame(1, $this->auditCount('student_enrollment.completed', $e));
         }
-        $this->assertSame('active', $this->fresh($odd)->status);
         $this->assertSame('active', $this->fresh($currentA)->status);
 
         $results = $this->get('/app/enrollments/closed-year-placements?academic_year_id='.$w['closed']->id)->viewData('page')['props']['results']['rows'];
         $byId = collect($results)->keyBy('id');
         $this->assertSame('completed', $byId[$a->id]['outcome']);
-        $this->assertSame('date_conflict', $byId[$odd->id]['outcome']);
-        $this->assertSame([$odd->id], $this->dataHealthFindings($w['school']), 'Only the refused row remains reported.');
+        $this->assertSame('completed', $byId[$b->id]['outcome']);
+        $this->assertSame([], $this->dataHealthFindings($w['school']), 'No open placement remains reported.');
+    }
+
+    #[Test]
+    public function a_year_closed_before_its_last_day_reports_a_date_conflict_and_changes_nothing(): void
+    {
+        $school = $this->createSchool();
+        $today = CarbonImmutable::parse(SchoolTimezone::today($school));
+        $early = $this->createAcademicYear($school, ['code' => 'E'.Str::random(5), 'starts_on' => $today->subMonths(6)->toDateString(), 'ends_on' => $today->addMonths(6)->toDateString(), 'status' => 'closed']);
+        $section = $this->createSection($early, $this->createCampus($school), $this->createGradeLevel($school), ['code' => 'E'.Str::random(4)]);
+        $open = $this->createStudentEnrollment($this->createStudent($school), $section, ['status' => 'active', 'roll_number' => '1']);
+        $this->member($school, self::MANAGER);
+
+        $this->post('/app/enrollments/closed-year-placements/complete', ['academic_year_id' => $early->id, 'enrollment_ids' => [$open->id], 'confirm' => true])->assertRedirect();
+
+        // Completion ends on the year's last day, which has not come yet.
+        $this->assertSame('active', $this->fresh($open)->status);
+        $results = $this->get('/app/enrollments/closed-year-placements?academic_year_id='.$early->id)->viewData('page')['props']['results']['rows'];
+        $this->assertSame('date_conflict', collect($results)->keyBy('id')[$open->id]['outcome']);
     }
 
     #[Test]

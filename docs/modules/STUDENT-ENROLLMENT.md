@@ -3001,3 +3001,59 @@ that could never be ended or corrected without owner SQL.
 - **Existing data (canonical DDEV demo, 2026-10-26):** 0 placements start
   outside their year, 0 sit in a closed year, 0 disagree with their Section's
   context, 0 have an end before their start.
+
+## Placement safety (SIS 4.2, 2026-10-27, ADR 0078)
+
+- **Transfer blockers on every Campus change.**
+  - `transferPlacement()` now asks the `StudentTransferBlocker`s (Hostel
+    residency, Transport rider assignment, elective on the old Campus) for
+    the whole-School path too, whenever the destination Campus differs.
+    Before, only the Campus-scoped path asked (ORG.7F-3).
+  - The refusal names what to resolve
+    (`PlacementDependentsBlockException::transfer`, 422
+    `STUDENT_TRANSFER_BLOCKED`). Each blocker supplies its `kind()`.
+  - Same locks, same answer: a dependency committed first is seen; a writer
+    arriving later waits and re-reads.
+  - A same-Campus Section change stays unblocked; electives keep their
+    anchor by design.
+  - The Campus path keeps its one generic refusal.
+- **Cancel before it starts** (`cancelBeforeStart()`):
+  - **Scope:** only an `active` placement whose start is after today
+    (School-local).
+  - **Assurance:** the closed cancel reasons, a fresh MFA code, current
+    authority and the lifecycle event, as `cancel()`.
+  - **Representation:** it records the **empty interval**
+    `ends_on = starts_on - 1`, so it is never effective, never current and
+    never on a roster. The row is kept and shown as "Cancelled before it
+    started"; `ended_recorded_at`, the event and the audit (`beforeStart`)
+    carry the real time.
+  - **Refused while records depend on it:** an active elective anchored to it
+    (Students), a live fee assessment (Fees) or a recorded mark
+    (Examinations). These come through `PlacementCancellationBlocker`, and
+    each is resolved in its own module.
+  - Ordinary `cancel()`, `withdraw()` and `complete()` of a not-yet-started
+    placement point to it.
+- **Roll-number correction** (`correctRollNumber()`):
+  - an active placement only (current or not yet started); an ended
+    placement's number is history;
+  - Section-before-Enrollment locks;
+  - unique in the Section for the year in any status (the existing key), with
+    the same clean refusal as at enrollment;
+  - audited with old and new number.
+- **ENR-01 closed:**
+  - Enroll/Transfer pickers list the active year first, then draft years,
+    each by Grade order;
+  - Transfer offers only the placement's own year and Grade, never its
+    current Section.
+- **Database start-date backstop:**
+  - `student_enrollments_end_within_year` also refuses an INSERT starting
+    outside the (Section-bound) academic year;
+  - a closed year stays a service rule, because historical rows in closed
+    years are legitimate.
+- **Web:**
+  - Student page: **Correct roll number** (current and not-yet-started
+    placements) and **Cancel before it starts** (not-yet-started placements
+    in the history).
+  - Routes `app.enrollments.roll-number` and
+    `app.enrollments.cancel-before-start`: `enrollments.manage`, declared
+    whole-School, UUID-constrained.

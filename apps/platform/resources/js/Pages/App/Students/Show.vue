@@ -51,6 +51,8 @@ interface Enrollment {
     status: 'active' | 'completed' | 'withdrawn' | 'transferred' | 'cancelled';
     startsOn: string;
     endsOn: string | null;
+    startsInFuture: boolean;
+    cancelledBeforeStart: boolean;
 }
 
 interface Props {
@@ -268,6 +270,45 @@ function submitHistorical(e: Enrollment): void {
             historical.value = null;
             historicalDone.value = `${e.academicYear.name} placement ${action === 'complete' ? 'completed' : 'withdrawn'}.`;
         },
+    });
+}
+
+// --- SIS 4.2: roll-number correction and cancel-before-start -------------
+// A roll number is the one placement field that is not its identity; the
+// service keeps it unique in the Section for the year. A placement that has
+// not started can be cancelled before it starts (closed reason, confirmation,
+// fresh code): it is kept in history as never effective.
+
+const rollTarget = ref<string | null>(null);
+const rollForm = useForm({ roll_number: '' });
+
+function startRollCorrection(e: Enrollment): void {
+    rollForm.clearErrors();
+    rollForm.roll_number = e.rollNumber;
+    rollTarget.value = e.id;
+}
+
+function submitRollCorrection(e: Enrollment): void {
+    rollForm.post(`/app/enrollments/${e.id}/roll-number`, {
+        preserveScroll: true,
+        onSuccess: () => (rollTarget.value = null),
+    });
+}
+
+const futureCancelTarget = ref<string | null>(null);
+const futureCancelForm = useForm({ reason_code: '', mfa_code: '', confirm: false });
+
+function startFutureCancel(e: Enrollment): void {
+    futureCancelForm.reset();
+    futureCancelForm.clearErrors();
+    futureCancelTarget.value = e.id;
+}
+
+function submitFutureCancel(e: Enrollment): void {
+    futureCancelForm.post(`/app/enrollments/${e.id}/cancel-before-start`, {
+        preserveScroll: true,
+        onError: () => futureCancelForm.reset('mfa_code'),
+        onSuccess: () => (futureCancelTarget.value = null),
     });
 }
 
@@ -492,6 +533,13 @@ function unlink(r: Relationship): void {
                         <button
                             type="button"
                             class="underline"
+                            @click="startRollCorrection(currentEnrollment)"
+                        >
+                            Correct roll number
+                        </button>
+                        <button
+                            type="button"
+                            class="underline"
                             @click="startLifecycleAction('complete')"
                         >
                             Complete
@@ -512,6 +560,40 @@ function unlink(r: Relationship): void {
                         </button>
                     </div>
                 </div>
+
+                <form
+                    v-if="rollTarget === currentEnrollment.id"
+                    class="mt-4 flex flex-wrap items-end gap-3 border-t border-slate-100 pt-4"
+                    @submit.prevent="submitRollCorrection(currentEnrollment)"
+                >
+                    <div>
+                        <label class="block text-sm text-slate-600" for="roll-current"
+                            >Roll number</label
+                        >
+                        <input
+                            id="roll-current"
+                            v-model="rollForm.roll_number"
+                            type="text"
+                            required
+                            :aria-invalid="!!rollForm.errors.roll_number"
+                            aria-describedby="roll-current-error"
+                            class="mt-1 rounded border border-slate-300 px-3 py-2 sm:w-40"
+                        />
+                        <p id="roll-current-error" class="mt-1 text-sm text-red-600">
+                            {{ rollForm.errors.roll_number }}
+                        </p>
+                    </div>
+                    <button
+                        type="submit"
+                        :disabled="rollForm.processing"
+                        class="rounded bg-slate-900 px-3 py-2 font-medium text-white disabled:opacity-50"
+                    >
+                        Save roll number
+                    </button>
+                    <button type="button" class="underline" @click="rollTarget = null">
+                        Cancel
+                    </button>
+                </form>
 
                 <!-- Inline lifecycle form: Complete/Withdraw/Cancel all
                      collect exactly one field (an end date) -- there is
@@ -629,13 +711,35 @@ function unlink(r: Relationship): void {
                     <div>
                         <p>{{ enrollmentPlacement(e) }}</p>
                         <p class="mt-0.5 text-slate-500">
-                            Roll {{ e.rollNumber }} · {{ e.startsOn }} – {{ e.endsOn ?? 'present' }}
+                            Roll {{ e.rollNumber }} ·
+                            <template v-if="e.cancelledBeforeStart"
+                                >Cancelled before it started (was to start
+                                {{ e.startsOn }})</template
+                            >
+                            <template v-else-if="e.startsInFuture"
+                                >Starts {{ e.startsOn }}</template
+                            >
+                            <template v-else
+                                >{{ e.startsOn }} – {{ e.endsOn ?? 'present' }}</template
+                            >
                         </p>
                         <p v-if="isOpenInClosedYear(e)" class="mt-1 text-amber-800">
                             Still open, but {{ e.academicYear.name }} has been closed.
                         </p>
                     </div>
                     <div class="flex flex-wrap items-center gap-3">
+                        <template v-if="e.startsInFuture && canManageEnrollments">
+                            <button type="button" class="underline" @click="startRollCorrection(e)">
+                                Correct roll number
+                            </button>
+                            <button
+                                type="button"
+                                class="text-red-600 underline"
+                                @click="startFutureCancel(e)"
+                            >
+                                Cancel before it starts
+                            </button>
+                        </template>
                         <template v-if="isOpenInClosedYear(e) && canManageEnrollments">
                             <button
                                 type="button"
@@ -654,6 +758,122 @@ function unlink(r: Relationship): void {
                         </template>
                         <StatusBadge :status="e.status" />
                     </div>
+                    <form
+                        v-if="rollTarget === e.id"
+                        class="flex w-full flex-wrap items-end gap-3 border-t border-slate-100 pt-3"
+                        @submit.prevent="submitRollCorrection(e)"
+                    >
+                        <div>
+                            <label class="block text-slate-600" :for="`roll-${e.id}`"
+                                >Roll number</label
+                            >
+                            <input
+                                :id="`roll-${e.id}`"
+                                v-model="rollForm.roll_number"
+                                type="text"
+                                required
+                                :aria-invalid="!!rollForm.errors.roll_number"
+                                :aria-describedby="`roll-error-${e.id}`"
+                                class="mt-1 rounded border border-slate-300 px-3 py-2 sm:w-40"
+                            />
+                            <p :id="`roll-error-${e.id}`" class="mt-1 text-red-600">
+                                {{ rollForm.errors.roll_number }}
+                            </p>
+                        </div>
+                        <button
+                            type="submit"
+                            :disabled="rollForm.processing"
+                            class="rounded bg-slate-900 px-3 py-1.5 font-medium text-white disabled:opacity-50"
+                        >
+                            Save roll number
+                        </button>
+                        <button type="button" class="underline" @click="rollTarget = null">
+                            Cancel
+                        </button>
+                    </form>
+                    <form
+                        v-if="futureCancelTarget === e.id"
+                        class="w-full border-t border-slate-100 pt-3"
+                        @submit.prevent="submitFutureCancel(e)"
+                    >
+                        <p class="font-medium text-slate-700">
+                            Cancel the {{ e.academicYear.name }} placement in
+                            {{ e.gradeLevel.name }} · Section {{ e.section.name }} before it starts
+                        </p>
+                        <p class="mt-0.5 text-slate-500">
+                            It starts on {{ e.startsOn }} and has not started yet. It stays in the
+                            history as cancelled before it started and never becomes the Student's
+                            placement.
+                        </p>
+                        <div class="mt-2">
+                            <label
+                                class="block text-sm text-slate-600"
+                                :for="`future-reason-${e.id}`"
+                                >Reason</label
+                            >
+                            <select
+                                :id="`future-reason-${e.id}`"
+                                v-model="futureCancelForm.reason_code"
+                                required
+                                :aria-invalid="!!futureCancelForm.errors.reason_code"
+                                :aria-describedby="`future-reason-error-${e.id}`"
+                                class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm sm:w-72"
+                            >
+                                <option value="" disabled>Choose a reason</option>
+                                <option
+                                    v-for="r in reasonsFor('enrollment_cancelled')"
+                                    :key="r"
+                                    :value="r"
+                                >
+                                    {{ REASON_LABELS[r] ?? r }}
+                                </option>
+                            </select>
+                            <p
+                                :id="`future-reason-error-${e.id}`"
+                                class="mt-1 text-sm text-red-600"
+                            >
+                                {{ futureCancelForm.errors.reason_code }}
+                            </p>
+                        </div>
+                        <MfaCodeField
+                            :id="`future-mfa-${e.id}`"
+                            v-model="futureCancelForm.mfa_code"
+                            class="mt-2"
+                            :has-mfa-factor="hasMfaFactor"
+                            action="This change"
+                            :error="futureCancelForm.errors.mfa_code"
+                        />
+                        <label class="mt-2 flex items-start gap-2 text-sm text-slate-700">
+                            <input
+                                v-model="futureCancelForm.confirm"
+                                type="checkbox"
+                                class="mt-0.5"
+                            />
+                            <span
+                                >I confirm this placement is cancelled before it starts. It is
+                                recorded with my name and the reason.</span
+                            >
+                        </label>
+                        <p class="mt-1 text-sm text-red-600">
+                            {{ futureCancelForm.errors.confirm }}
+                        </p>
+                        <div class="mt-2 flex items-center gap-3">
+                            <button
+                                type="submit"
+                                :disabled="futureCancelForm.processing"
+                                class="rounded bg-red-700 px-3 py-1.5 font-medium text-white disabled:opacity-50"
+                            >
+                                Cancel placement
+                            </button>
+                            <button
+                                type="button"
+                                class="underline"
+                                @click="futureCancelTarget = null"
+                            >
+                                Keep it
+                            </button>
+                        </div>
+                    </form>
                     <form
                         v-if="historical && historical.id === e.id"
                         class="w-full border-t border-slate-100 pt-3"

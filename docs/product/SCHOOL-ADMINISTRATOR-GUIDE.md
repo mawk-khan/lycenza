@@ -356,9 +356,26 @@ role.
   year's Section works, with a start date inside that year.
 - **A start date cannot be edited afterwards.** If a placement was entered by
   mistake, cancel it (reason: entered in error or duplicate placement) and
-  enroll again; for a wrong Section, use Transfer. A cancellation is dated
-  between the start date and today, so a placement that starts in the
-  future can be cancelled only from its start date on.
+  enroll again; for a wrong Section, use Transfer.
+- **A placement that has not started yet** (for example next year's) has
+  **Cancel before it starts** in the Enrollment history (SIS 4.2):
+  - it asks for a reason, a fresh code and your confirmation;
+  - it stays in the history as "Cancelled before it started" and never
+    becomes the Student's placement.
+
+  It is refused while something already depends on it: an elective on that
+  placement, a fee charge raised for it, or a mark. Resolve that first, in
+  its own module.
+- **Correct roll number** fixes a typed roll number on a current or
+  not-yet-started placement. A number already used in that Section for the
+  year (even by a Student who has left it) is refused.
+- **Changing a Student's Campus with Transfer** is refused while they still
+  have an active Hostel residency, Transport assignment or elective on the
+  current Campus. The message lists them: end or move them first (Hostel →
+  Residency, Transport → Student assignments), then transfer again. A Section
+  change on the same Campus is not affected.
+- **Pickers** list the current year's Sections first. Transfer offers only
+  Sections of the same year and Grade.
 
 **Mark inactive is one click, with no confirmation** (§21). Data Health
 then lists an inactive Student who still has a placement.
@@ -767,8 +784,6 @@ how you are using Lycenza.
   - multi-day absence: absence is shown one day at a time;
   - the Library loans list shows names only;
   - stock issues do not record who received them.
-- **Enroll and Transfer pickers** may list next year's Sections first.
-  Check the year in the label.
 
 ## 22. Daily checks
 
