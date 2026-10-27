@@ -56,6 +56,8 @@ interface Enrollment {
 }
 
 interface Props {
+    // SIS 6.1: the viewer reads Attendance (the records page re-checks).
+    canViewAttendance?: boolean;
     student: {
         id: string;
         studentNumber: string;
@@ -384,6 +386,12 @@ function unlink(r: Relationship): void {
                 <p class="mt-1 text-sm text-slate-500">{{ student.studentNumber }}</p>
                 <p class="mt-1 text-sm">
                     <a class="underline" :href="`/app/students/${student.id}/history`">History</a>
+                    <template v-if="canViewAttendance">
+                        ·
+                        <a class="underline" :href="`/app/attendance/students/${student.id}`"
+                            >Attendance records</a
+                        >
+                    </template>
                 </p>
             </div>
             <div v-if="canManageStudents" class="flex items-center gap-2">

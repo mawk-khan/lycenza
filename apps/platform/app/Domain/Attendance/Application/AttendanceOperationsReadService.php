@@ -6,6 +6,7 @@ use App\Domain\AcademicStructure\Application\CurrentAcademicYearResolver;
 use App\Domain\AcademicStructure\Application\SectionLabel;
 use App\Domain\Attendance\Infrastructure\AttendanceRecord;
 use App\Domain\Attendance\Infrastructure\AttendanceRecordCorrection;
+use App\Domain\Students\Application\StudentPurposeLookup;
 use App\Domain\Timetable\Infrastructure\TimetableEntry;
 use App\Models\School;
 use App\Models\User;
@@ -72,6 +73,7 @@ class AttendanceOperationsReadService
         private readonly AttendanceAdministrationAccess $access,
         private readonly CurrentAcademicYearResolver $years,
         private readonly AuditRecorder $audit,
+        private readonly StudentPurposeLookup $students,
     ) {}
 
     /**
@@ -124,7 +126,7 @@ class AttendanceOperationsReadService
             return $empty;
         }
 
-        $submitted = array_flip($this->access->submittedEntryIds($scope, $date));
+        $submitted = $this->access->submittedSessionIds($scope, $date);
         $nowLocal = CarbonImmutable::now(SchoolTimezone::resolve($school))->format('H:i:s');
         $status = function (TimetableEntry $entry) use ($submitted, $date, $today, $nowLocal): string {
             if (isset($submitted[$entry->id])) {
@@ -168,6 +170,8 @@ class AttendanceOperationsReadService
                 'periodStartTime' => $r['entry']->period?->start_time,
                 'periodEndTime' => $r['entry']->period?->end_time,
                 'status' => $r['status'],
+                // SIS 6.1: the row opens its register, or (not submitted) the Take page.
+                'sessionId' => $submitted[$r['entry']->id] ?? null,
             ])->values()->all(),
             'total' => $rows->count(),
             'counts' => $counts,
@@ -193,7 +197,19 @@ class AttendanceOperationsReadService
             $any = Str::isUuid($studentId) ? $ofStudent()->with('studentEnrollment.student:id,school_id,first_name,middle_name,last_name')->first() : null;
             $student = $any?->studentEnrollment?->student;
             if ($student === null) {
-                throw (new ModelNotFoundException)->setModel(AttendanceRecord::class, [$studentId]);
+                // SIS 6.1: a current Student of the actor's Attendance scope with
+                // no record yet is an empty history, not a 404 (the Student page
+                // links here). Anyone else stays the same unknown 404.
+                $candidate = $this->students->find($school, $scope, $studentId)
+                    ?? throw (new ModelNotFoundException)->setModel(AttendanceRecord::class, [$studentId]);
+                $this->audit->school($school, 'attendance.student_history_viewed', actor: $actor, metadata: [
+                    'studentId' => $candidate->id,
+                    'from' => $from,
+                    'to' => $to,
+                    'resultCount' => 0,
+                ]);
+
+                return ['student' => ['id' => $candidate->id, 'name' => $candidate->displayName], 'total' => 0, 'items' => []];
             }
 
             $records = $ofStudent()

@@ -500,19 +500,32 @@ reminders.
    A register is submitted complete; there is no partial save.
 
 **Restrictions:**
-- **Future dates are refused** by the School's date. Some screens still
-  offer them (§21).
+- **No future dates.** The date picker stops at the School's today. A
+  later date shows "Attendance cannot be taken for a future date" and
+  offers no class, and the server refuses one anyway.
 - **There is no "mark all present"**: each Student is marked
-  individually (§21).
+  individually (an owner decision is pending, §21).
 
 ### Other attendance pages
+- **Registers taken and not taken** (one day): each class shows whether its
+  register was submitted. **Take** opens the register for that class and
+  day; **Open** shows a submitted one.
 - **Absent, late and excused** lists every exception for one day.
   Filter by Section and status, then open the register to correct it.
-- **Correction:** on a submitted register, select a Student's new status.
-  It saves at once (one click) and shows "(Corrected)". Every correction
-  is audited.
+- **Correction:** on a submitted register:
+  1. choose a reason;
+  2. select the Student's new status;
+  3. a confirmation shows the Student, class, date, period, the old and
+     new status and the reason. **Cancel** changes nothing; **Correct the
+     mark** saves it, and it shows "(Corrected)".
+
+  If someone corrected the same mark after you opened the page, nothing is
+  saved and you are told what it is now. Every correction is audited.
+- **One Student's records:** a Student's name on a register, and
+  **Attendance records** on the Student page, open their records over a
+  date range. A Student with no records yet shows an empty list.
 - **Teachers** take their own classes' registers in **My class
-  attendance**.
+  attendance**, with the same future-date rule.
 
 ## 12. Fees: setup, charges and fee runs
 
@@ -838,7 +851,6 @@ how you are using Lycenza.
   Some administrator and configuration pages still scroll sideways on a
   phone (for example Staff accounts, Automation, Communications and
   curriculum pages). Use a tablet or laptop for setup.
-- **No "mark all present"** on registers.
 - **School selection:** a person with one School may still need to pick it
   after signing in.
 - **Formatting:** the Guardian portal shows amounts without thousands
@@ -849,9 +861,9 @@ how you are using Lycenza.
 - **Guardian search** is by name only (any order, any name part). Search by
   phone or email awaits a privacy decision.
 - **No fee proration** (approved current behaviour).
-- **One-click actions** with no reason captured:
-  - attendance corrections;
-  - Mark inactive.
+- **"Mark all present"** awaits an owner decision; each Student is marked
+  individually. (Attendance corrections and Mark inactive now ask for a
+  reason and a confirmation.)
 - **Display gaps:**
   - multi-day absence: absence is shown one day at a time;
   - the Library loans list shows names only;

@@ -20,6 +20,8 @@ interface Row {
     periodStartTime: string | null;
     periodEndTime: string | null;
     status: Status;
+    // SIS 6.1: the submitted register, when there is one.
+    sessionId: string | null;
 }
 
 interface PageLink {
@@ -40,6 +42,8 @@ interface Props {
     };
     filters: { grade_level_id: string; section_id: string; status: string };
     statuses: Status[];
+    // SIS 6.1: the viewer may take registers (the Take page re-checks).
+    canTake: boolean;
 }
 
 const props = defineProps<Props>();
@@ -200,6 +204,9 @@ function period(row: Row): string {
                             <th scope="col" class="py-2 font-medium">Subject</th>
                             <th scope="col" class="py-2 font-medium">Teacher</th>
                             <th scope="col" class="py-2 font-medium">Register</th>
+                            <th scope="col" class="py-2 font-medium">
+                                <span class="sr-only">Action</span>
+                            </th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
@@ -213,6 +220,23 @@ function period(row: Row): string {
                                     class="inline-flex rounded px-2 py-0.5 text-xs font-medium ring-1 ring-inset"
                                     :class="badge[row.status]"
                                     >{{ labels[row.status] }}</span
+                                >
+                            </td>
+                            <!-- SIS 6.1: straight to the register, or to Take for this class and day. -->
+                            <td class="py-2 text-right">
+                                <a
+                                    v-if="row.sessionId"
+                                    class="underline"
+                                    :href="`/app/attendance/${row.sessionId}`"
+                                    :aria-label="`Open register: ${row.classLabel ?? ''} ${row.subjectName ?? ''}`"
+                                    >Open</a
+                                >
+                                <a
+                                    v-else-if="canTake"
+                                    class="underline"
+                                    :href="`/app/attendance/take?attendance_date=${props.date}&timetable_entry_id=${row.timetableEntryId}`"
+                                    :aria-label="`Take register: ${row.classLabel ?? ''} ${row.subjectName ?? ''}`"
+                                    >Take</a
                                 >
                             </td>
                         </tr>

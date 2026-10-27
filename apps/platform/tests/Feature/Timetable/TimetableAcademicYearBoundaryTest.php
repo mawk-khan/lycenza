@@ -11,6 +11,7 @@ use App\Domain\Timetable\Infrastructure\TimetablePeriod;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ViewErrorBag;
 use Inertia\Testing\AssertableInertia;
@@ -140,6 +141,8 @@ class TimetableAcademicYearBoundaryTest extends TestCase
     #[Test]
     public function todays_registers_list_only_the_active_year_and_a_crafted_other_year_register_is_refused(): void
     {
+        // SIS 6.1 (ATT-09): Take lists no class for a future date, so MONDAY is today here.
+        $this->travelTo(CarbonImmutable::parse(self::MONDAY.' 12:00:00', 'UTC'));
         $w = $this->world();
         $current = $this->createTimetableEntry($w['currentOffering'], $w['currentSection'], $w['teacher'], $w['p1'], ['day_of_week' => 1]);
         $next = $this->createTimetableEntry($w['nextOffering'], $w['nextSection'], $w['teacher'], $w['p1'], ['day_of_week' => 1]);

@@ -74,6 +74,22 @@ final class AttendanceAdministrationAccess
      *
      * @return list<string>
      */
+    /**
+     * SIS 6.1: the submitted register of each in-scope class on $date, keyed
+     * by timetable entry id (for linking a Registers row to its register).
+     *
+     * @return array<string, string>
+     */
+    public function submittedSessionIds(CampusScope $scope, string $date): array
+    {
+        return AttendanceSession::query()
+            ->whereDate('attendance_date', $date)
+            ->whereIn('timetable_entry_id', $this->entries($scope)->select('id'))
+            ->pluck('id', 'timetable_entry_id')
+            ->map(fn ($id) => (string) $id)
+            ->all();
+    }
+
     public function submittedEntryIds(CampusScope $scope, string $date): array
     {
         return AttendanceSession::query()

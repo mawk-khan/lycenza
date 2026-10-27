@@ -106,6 +106,10 @@ class MyAttendanceController extends Controller
 
         $date = $validated['attendance_date'] ?? CarbonImmutable::now(SchoolTimezone::resolve($school))->toDateString();
         $submitted = $scope->constrain(AttendanceSession::query())->whereDate('attendance_date', $date)->pluck('timetable_entry_id')->all();
+        // SIS 6.1 (ATT-09): no register is offered for a future School-local date
+        // (the submission service refuses one regardless).
+        $today = SchoolTimezone::today($school);
+        $futureDate = $date > $today;
 
         // Only the teacher's classes on this date: an entry is listed when
         // its Section + SubjectOffering is owned ON $date -- never because
@@ -116,7 +120,7 @@ class MyAttendanceController extends Controller
             ->forAcademicYear(app(CurrentAcademicYearResolver::class)->tryResolve($school)?->id)
             ->where('day_of_week', Carbon::parse($date)->isoWeekday())
             ->get()
-            ->filter(fn (TimetableEntry $e) => $scope->ownsOn($e->section_id, $e->subject_offering_id, $date))
+            ->filter(fn (TimetableEntry $e) => ! $futureDate && $scope->ownsOn($e->section_id, $e->subject_offering_id, $date))
             ->sortBy(fn (TimetableEntry $e) => SectionLabel::sortKey($e->section).'|'.$e->period?->start_time)
             ->values();
 
@@ -143,6 +147,8 @@ class MyAttendanceController extends Controller
 
         return Inertia::render('App/Attendance/Take', [
             'attendanceDate' => $date,
+            'today' => $today,
+            'futureDate' => $futureDate,
             'selectedTimetableEntryId' => $selected,
             'classes' => $owned->map(fn (TimetableEntry $e) => [
                 'timetableEntryId' => $e->id,

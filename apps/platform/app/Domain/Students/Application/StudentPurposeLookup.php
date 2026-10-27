@@ -6,6 +6,7 @@ use App\Domain\Students\Infrastructure\Student;
 use App\Models\School;
 use App\Support\Authorization\Campus\CampusScope;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Str;
 
 /**
  * ORG.7D-2 (ADR 0076 §38, D2-7, D2-8): purpose-limited Student candidate
@@ -44,6 +45,8 @@ final class StudentPurposeLookup
 
     public const int MAX_LIMIT = 50;
 
+    private const array COLUMNS = ['students.id', 'students.first_name', 'students.middle_name', 'students.last_name', 'students.student_number'];
+
     public function __construct(
         private readonly StudentOperationalCampusResolver $operational,
         private readonly TenantContext $context,
@@ -62,12 +65,36 @@ final class StudentPurposeLookup
             ->when(trim((string) $term) !== '', fn ($q) => StudentSearch::anyField($q, (string) $term))
             ->orderBy('students.first_name')->orderBy('students.last_name')->orderBy('students.student_number')->orderBy('students.id')
             ->limit($limit)
-            ->get(['students.id', 'students.first_name', 'students.middle_name', 'students.last_name', 'students.student_number'])
-            ->map(fn (Student $s): StudentLookupCandidate => new StudentLookupCandidate(
-                (string) $s->id,
-                trim(implode(' ', array_filter([$s->first_name, $s->middle_name, $s->last_name], fn (?string $p): bool => $p !== null && $p !== ''))),
-                $s->student_number,
-            ))
+            ->get(self::COLUMNS)
+            ->map(fn (Student $s): StudentLookupCandidate => self::candidate($s))
             ->values()->all());
+    }
+
+    /**
+     * SIS 6.1: ONE Student by id under the same rule as search() -- a current
+     * operational Student within the scope -- or null (unknown, another
+     * School, out of scope, not operational: never distinguished).
+     */
+    public function find(School $school, CampusScope $scope, string $studentId): ?StudentLookupCandidate
+    {
+        if ($scope->isNone() || ! Str::isUuid($studentId)) {
+            return null;
+        }
+
+        $student = $this->context->withSchool($school, fn (): ?Student => $this->operational
+            ->restrictToOperationalCampus(Student::query()->where('students.school_id', $school->id), $school, $scope)
+            ->where('students.id', $studentId)
+            ->first(self::COLUMNS));
+
+        return $student === null ? null : self::candidate($student);
+    }
+
+    private static function candidate(Student $s): StudentLookupCandidate
+    {
+        return new StudentLookupCandidate(
+            (string) $s->id,
+            trim(implode(' ', array_filter([$s->first_name, $s->middle_name, $s->last_name], fn (?string $p): bool => $p !== null && $p !== ''))),
+            $s->student_number,
+        );
     }
 }

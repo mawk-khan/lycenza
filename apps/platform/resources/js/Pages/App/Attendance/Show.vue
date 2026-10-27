@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { formatDateTime } from '../../../datetime';
+import { formatCalendarDate, formatDateTime } from '../../../datetime';
 import { router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import ConfirmDialog from '../../../Components/ConfirmDialog.vue';
 
 /**
  * One submitted register.
@@ -19,6 +20,7 @@ import { computed, ref } from 'vue';
  */
 interface RecordRow {
     id: string;
+    studentId: string | null;
     rollNumber: string | null;
     fullName: string | null;
     status: string;
@@ -34,6 +36,8 @@ interface SessionDetail {
     gradeLevelName: string | null;
     sectionCode: string | null;
     sectionName: string | null;
+    // SIS 6.1: "Grade 6 · A", the class as named everywhere else.
+    classLabel: string | null;
     subjectName: string | null;
     subjectCode: string | null;
     teacherName: string | null;
@@ -94,15 +98,43 @@ const REASON_LABELS: Record<string, string> = {
 };
 const reasonCode = ref('');
 
+// SIS 6.1 (ATT-06): a correction is summarized and confirmed before it is
+// sent. Operator protection only: the service still re-checks the status the
+// page displayed (expected_status) and refuses a stale one.
+const pending = ref<{ record: RecordRow; newStatus: string } | null>(null);
+const confirmDialog = ref<InstanceType<typeof ConfirmDialog> | null>(null);
+
+function statusLabel(status: string): string {
+    return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
 function correct(record: RecordRow, newStatus: string): void {
     if (newStatus === record.status || reasonCode.value === '') {
         return;
     }
-    correcting.value = record.id;
+    pending.value = { record, newStatus };
+    confirmDialog.value?.open();
+}
+
+function confirmCorrection(): void {
+    const target = pending.value;
+    if (target === null) {
+        return;
+    }
+    correcting.value = target.record.id;
     router.post(
-        `${props.baseUrl}/records/${record.id}/correct`,
-        { expected_status: record.status, new_status: newStatus, reason_code: reasonCode.value },
-        { onFinish: () => (correcting.value = null) },
+        `${props.baseUrl}/records/${target.record.id}/correct`,
+        {
+            expected_status: target.record.status,
+            new_status: target.newStatus,
+            reason_code: reasonCode.value,
+        },
+        {
+            onFinish: () => {
+                correcting.value = null;
+                pending.value = null;
+            },
+        },
     );
 }
 </script>
@@ -112,10 +144,10 @@ function correct(record: RecordRow, newStatus: string): void {
         <a class="text-sm underline" :href="baseUrl">← Registers</a>
 
         <h1 class="mt-2 text-xl font-semibold">
-            {{ session.sectionCode }} · {{ session.subjectName }}
+            {{ session.classLabel ?? session.sectionCode }} · {{ session.subjectName }}
         </h1>
         <p class="mt-1 text-sm text-slate-500">
-            {{ DAY_NAMES[session.dayOfWeek] }} {{ session.attendanceDate }} ·
+            {{ DAY_NAMES[session.dayOfWeek] }} {{ formatCalendarDate(session.attendanceDate) }} ·
             {{ session.periodName }} ({{ session.periodStartTime }}–{{ session.periodEndTime }}) ·
             {{ session.teacherName }}
         </p>
@@ -168,7 +200,15 @@ function correct(record: RecordRow, newStatus: string): void {
                     class="border-b border-slate-100"
                 >
                     <td class="py-2">{{ record.rollNumber }}</td>
-                    <td class="py-2">{{ record.fullName }}</td>
+                    <td class="py-2">
+                        <a
+                            v-if="record.studentId && baseUrl === '/app/attendance'"
+                            class="underline"
+                            :href="`/app/attendance/students/${record.studentId}`"
+                            >{{ record.fullName }}</a
+                        >
+                        <template v-else>{{ record.fullName }}</template>
+                    </td>
                     <td class="py-2 capitalize">
                         {{ record.status }}
                         <span v-if="record.correctedAt" class="ml-1 text-xs text-slate-400">
@@ -186,6 +226,7 @@ function correct(record: RecordRow, newStatus: string): void {
                                 correcting === record.id ||
                                 reasonCode === ''
                             "
+                            :aria-label="`Correct ${record.fullName ?? 'this Student'} to ${status}`"
                             @click="correct(record, status)"
                         >
                             {{ status }}
@@ -194,5 +235,27 @@ function correct(record: RecordRow, newStatus: string): void {
                 </tr>
             </tbody>
         </table>
+
+        <ConfirmDialog
+            ref="confirmDialog"
+            title="Correct this attendance mark?"
+            confirm-label="Correct the mark"
+            tone="neutral"
+            @confirm="confirmCorrection"
+        >
+            <p v-if="pending">
+                <strong>{{ pending.record.fullName }}</strong>
+                <span v-if="pending.record.rollNumber"> (roll {{ pending.record.rollNumber }})</span
+                >, {{ session.classLabel ?? session.sectionCode }} · {{ session.subjectName }},
+                {{ formatCalendarDate(session.attendanceDate) }} · {{ session.periodName }}:
+                <strong>{{ statusLabel(pending.record.status) }}</strong> →
+                <strong>{{ statusLabel(pending.newStatus) }}</strong
+                >.
+            </p>
+            <p class="mt-2">
+                Reason: {{ REASON_LABELS[reasonCode] ?? reasonCode }}. The correction is kept with
+                this reason and your name.
+            </p>
+        </ConfirmDialog>
     </main>
 </template>

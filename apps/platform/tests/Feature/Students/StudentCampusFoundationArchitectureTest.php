@@ -146,6 +146,8 @@ class StudentCampusFoundationArchitectureTest extends TestCase
      * route, a controller or a generic Student endpoint.
      */
     private const CONSUMERS = [
+        // SIS 6.1: names a current in-scope Student whose Attendance history is still empty.
+        'app/Domain/Attendance/Application/AttendanceOperationsReadService.php',
         'app/Domain/Hostel/Application/HostelResidencyAccess.php',
         'app/Domain/Hostel/Application/HostelResidencyCampusGuard.php',
         'app/Domain/Canteen/Application/CanteenOrderAccess.php',

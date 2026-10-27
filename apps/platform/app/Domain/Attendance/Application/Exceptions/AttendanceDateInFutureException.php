@@ -11,6 +11,6 @@ class AttendanceDateInFutureException extends AttendanceException
 {
     public function __construct(public readonly string $attendanceDate)
     {
-        parent::__construct(422, 'ATTENDANCE_DATE_IN_FUTURE', "Attendance date {$attendanceDate} is in the future.");
+        parent::__construct(422, 'ATTENDANCE_DATE_IN_FUTURE', 'Attendance cannot be taken for a future date. Choose today or an earlier date.');
     }
 }

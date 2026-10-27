@@ -9,6 +9,7 @@ class AttendanceRecordStatusChangedException extends AttendanceException
 {
     public function __construct(public readonly string $expected, public readonly string $actual)
     {
-        parent::__construct(409, 'ATTENDANCE_RECORD_STATUS_CHANGED', "This attendance record is now '{$actual}', not the expected '{$expected}'; reload before correcting.");
+        // SIS 6.1: the operator's words, never status keys.
+        parent::__construct(409, 'ATTENDANCE_RECORD_STATUS_CHANGED', 'This mark was changed to '.ucfirst($actual).' after you opened the register (you saw '.ucfirst($expected).'). Nothing was corrected.');
     }
 }

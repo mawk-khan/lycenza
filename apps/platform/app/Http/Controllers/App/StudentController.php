@@ -183,6 +183,9 @@ class StudentController extends Controller
             'canManageStudents' => $access->holdsWholeSchool($actor, 'students.manage', $school),
             'canManageGuardians' => $capabilities->canInSchool($actor, 'guardians.manage', $school),
             'canViewGuardianContacts' => $canViewGuardianContacts,
+            // SIS 6.1: a link to this Student's attendance records, for anyone who
+            // reads Attendance (that page re-checks its own Campus scope).
+            'canViewAttendance' => ! $access->scopeOf($actor, 'attendance.view', $school)->isNone(),
         ];
 
         // Phase 1B.6: Enrollment data is included ONLY when the actor

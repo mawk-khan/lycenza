@@ -6,6 +6,7 @@ use App\Domain\Attendance\Application\AttendanceOperationsReadService;
 use App\Domain\Attendance\Infrastructure\AttendanceRecordCorrection;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Authorization\Campus\CampusScopeResolver;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
@@ -60,6 +61,8 @@ class AttendanceOperationsController extends Controller
             'options' => $result['options'],
             'filters' => array_map(fn (?string $v) => $v ?? '', $filters),
             'statuses' => AttendanceOperationsReadService::STATUSES,
+            // SIS 6.1: a "Take register" link only for someone who may take one (the page re-checks).
+            'canTake' => ! app(CampusScopeResolver::class)->campusScope($context->actor(), 'attendance.manage', $school)->isNone(),
         ]);
     }
 

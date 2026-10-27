@@ -104,6 +104,10 @@ class AttendanceController extends Controller
         // UAT-ATT-10: "today" is the School's calendar day, as in My attendance.
         $date = $validated['attendance_date'] ?? CarbonImmutable::now(SchoolTimezone::resolve($school))->toDateString();
         $submitted = $access->submittedEntryIds($scope, $date);
+        // SIS 6.1 (ATT-09): no register is offered for a future School-local date
+        // (the submission service refuses one regardless).
+        $today = SchoolTimezone::today($school);
+        $futureDate = $date > $today;
 
         // LC-2: only the active year's classes -- next year's timetable can be
         // prepared alongside, and must never appear among today's registers.
@@ -129,7 +133,7 @@ class AttendanceController extends Controller
 
         $rosterMembers = [];
         $rosterError = null;
-        $selected = $validated['timetable_entry_id'] ?? null;
+        $selected = $futureDate ? null : ($validated['timetable_entry_id'] ?? null);
 
         if ($selected !== null) {
             $entry = $access->entries($scope)->where('id', $selected)->where('school_id', $school->id)->first();
@@ -150,8 +154,10 @@ class AttendanceController extends Controller
 
         return Inertia::render('App/Attendance/Take', [
             'attendanceDate' => $date,
+            'today' => $today,
+            'futureDate' => $futureDate,
             'selectedTimetableEntryId' => $selected,
-            'classes' => $classes,
+            'classes' => $futureDate ? [] : $classes,
             'roster' => $rosterMembers,
             'rosterError' => $rosterError,
             'statuses' => AttendanceRecord::STATUSES,

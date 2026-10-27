@@ -34,6 +34,9 @@ interface RosterRow {
 
 interface Props {
     attendanceDate: string;
+    // SIS 6.1 (ATT-09): the School's date; a later date offers no register.
+    today: string;
+    futureDate: boolean;
     selectedTimetableEntryId: string | null;
     classes: ClassRow[];
     roster: RosterRow[];
@@ -118,14 +121,24 @@ function submit(): void {
                 id="attendance-date"
                 v-model="attendanceDate"
                 type="date"
+                :max="today"
+                :aria-describedby="futureDate ? 'attendance-date-future' : undefined"
                 class="mt-1 w-56 rounded border border-slate-300 px-3 py-2 text-sm"
                 @change="reload"
             />
+            <p
+                v-if="futureDate"
+                id="attendance-date-future"
+                class="mt-2 text-sm text-red-700"
+                role="alert"
+            >
+                Attendance cannot be taken for a future date. Choose today or an earlier date.
+            </p>
         </div>
 
         <h2 class="mt-8 text-sm font-semibold text-slate-700">Scheduled classes</h2>
         <EmptyState
-            v-if="classes.length === 0"
+            v-if="classes.length === 0 && !futureDate"
             class="mt-2"
             title="Nothing scheduled on this date"
             description="Pick another date, or schedule the class in the Timetable first."
@@ -189,19 +202,23 @@ function submit(): void {
                         <td class="py-2">{{ member.rollNumber }}</td>
                         <td class="py-2">{{ member.fullName }}</td>
                         <td class="py-2">
-                            <label
-                                v-for="status in statuses"
-                                :key="status"
-                                class="mr-3 inline-flex items-center gap-1"
-                            >
-                                <input
-                                    v-model="marks[member.studentEnrollmentId]"
-                                    type="radio"
-                                    :name="`status-${member.studentEnrollmentId}`"
-                                    :value="status"
-                                />
-                                <span class="capitalize">{{ status }}</span>
-                            </label>
+                            <!-- SIS 6.1: each row's statuses are one named group. -->
+                            <fieldset>
+                                <legend class="sr-only">Status for {{ member.fullName }}</legend>
+                                <label
+                                    v-for="status in statuses"
+                                    :key="status"
+                                    class="mr-3 inline-flex items-center gap-1"
+                                >
+                                    <input
+                                        v-model="marks[member.studentEnrollmentId]"
+                                        type="radio"
+                                        :name="`status-${member.studentEnrollmentId}`"
+                                        :value="status"
+                                    />
+                                    <span class="capitalize">{{ status }}</span>
+                                </label>
+                            </fieldset>
                         </td>
                     </tr>
                 </tbody>

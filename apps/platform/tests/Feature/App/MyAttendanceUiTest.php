@@ -4,6 +4,9 @@ namespace Tests\Feature\App;
 
 use App\Domain\Attendance\Infrastructure\AttendanceSession;
 use App\Models\User;
+use App\Support\Tenancy\SchoolTimezone;
+use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTeacherAttendanceFixtures;
@@ -117,5 +120,30 @@ class MyAttendanceUiTest extends TestCase
         $this->actor($w, $user)->get('/app/my-attendance')->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page->where('canManage', false)->has('sessions.data', 0));
         $this->actor($w, $user)->get('/app/my-attendance/take')->assertForbidden();
+    }
+
+    #[Test]
+    public function a_teacher_is_offered_no_register_for_a_future_date(): void
+    {
+        // SIS 6.1 (ATT-09): the School's date bounds the page; the submission
+        // service refuses a forged future register regardless.
+        $w = $this->teacherAttendanceWorld();
+        [$user, $employee] = $this->teacher($w);
+        $this->own($w, $employee, '2026-06-01');
+        $future = CarbonImmutable::parse(SchoolTimezone::today($w['school']))->next(CarbonInterface::MONDAY)->toDateString();
+
+        $this->actor($w, $user)->get("/app/my-attendance/take?attendance_date={$future}&timetable_entry_id={$w['entry']->id}")
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('futureDate', true)
+                ->where('today', SchoolTimezone::today($w['school']))
+                ->has('classes', 0)
+                ->where('selectedTimetableEntryId', null)
+                ->has('roster', 0));
+
+        $before = $this->inSchool($w['school'], fn () => AttendanceSession::query()->count());
+        $this->actor($w, $user)->post('/app/my-attendance', [
+            'timetable_entry_id' => $w['entry']->id, 'attendance_date' => $future, 'records' => $this->allPresent($w['studentsA']),
+        ])->assertSessionHasErrors('timetable_entry_id');
+        $this->assertSame($before, $this->inSchool($w['school'], fn () => AttendanceSession::query()->count()));
     }
 }

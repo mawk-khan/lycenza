@@ -153,7 +153,7 @@ class AttendanceAdminUiTest extends TestCase
             ->post("/app/attendance/records/{$record->id}/correct", ['expected_status' => 'absent', 'new_status' => 'late', 'reason_code' => 'entered_in_error'])
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->component('App/Attendance/Show')
-                ->where('errors.new_status', fn ($message) => str_contains((string) $message, "now 'present'")));
+                ->where('errors.new_status', fn ($message) => str_contains((string) $message, 'changed to Present')));
 
         $view = (string) file_get_contents(resource_path('js/Pages/App/Attendance/Show.vue'));
         $this->assertMatchesRegularExpression('/errors\?\.new_status/', $view);

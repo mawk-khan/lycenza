@@ -53,6 +53,8 @@ trait PresentsAttendancePages
             'gradeLevelName' => $session->gradeLevel?->name,
             'sectionCode' => $session->section?->code,
             'sectionName' => $session->section?->name,
+            // SIS 6.1: the heading names the class as everywhere else ("Grade 6 · A").
+            'classLabel' => SectionLabel::of($session->section),
             'subjectName' => $session->subjectOffering?->subject?->name,
             'subjectCode' => $session->subjectOffering?->subject?->code,
             'teacherName' => $session->teacher?->full_name,
@@ -68,6 +70,8 @@ trait PresentsAttendancePages
 
                 return [
                     'id' => $record->id,
+                    // SIS 6.1: links the row to the Student's attendance history (office page).
+                    'studentId' => $enrollment?->student_id,
                     'rollNumber' => $enrollment?->roll_number,
                     'fullName' => $student === null ? null : trim(implode(' ', array_filter(
                         [$student->first_name, $student->middle_name, $student->last_name],
