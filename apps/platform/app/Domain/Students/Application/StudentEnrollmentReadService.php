@@ -74,6 +74,47 @@ class StudentEnrollmentReadService
     }
 
     /**
+     * SIS 8.1 (SB-02): keeps the rows of `$query` whose date (`$dateColumn`)
+     * lies outside the dates of the placement named by `$enrollmentColumn`
+     * -- before it started, or after it ended. An empty-interval
+     * cancellation (ADR 0078) covers no day, so every date is outside it.
+     * Students' SQL, so a consumer (Attendance) never reads placements
+     * itself (CLAUDE.md rule 4).
+     *
+     * @template TQuery of Builder|QueryBuilder
+     *
+     * @param  TQuery  $query
+     * @return TQuery
+     */
+    public function constrainToDateOutsidePlacement(Builder|QueryBuilder $query, School $school, string $enrollmentColumn, string $dateColumn): Builder|QueryBuilder
+    {
+        return $query->whereExists(fn ($e) => $e->selectRaw('1')->from('student_enrollments as outside_placement')
+            ->where('outside_placement.school_id', $school->id)
+            ->whereColumn('outside_placement.id', $enrollmentColumn)
+            ->where(fn ($w) => $w->whereColumn($dateColumn, '<', 'outside_placement.starts_on')
+                ->orWhere(fn ($x) => $x->whereNotNull('outside_placement.ends_on')->whereColumn($dateColumn, '>', 'outside_placement.ends_on'))));
+    }
+
+    /**
+     * SIS 8.1: placements by id, with their Student (display columns only),
+     * year, Grade and Section -- for a consumer's Data Health finding rows.
+     * Authorization-neutral; keyed by id.
+     *
+     * @param  list<string>  $ids
+     * @return Collection<string, StudentEnrollment>
+     */
+    public function placementsForFindings(School $school, array $ids): Collection
+    {
+        if ($ids === []) {
+            return new Collection;
+        }
+
+        return StudentEnrollment::query()->where('school_id', $school->id)->whereIn('id', $ids)
+            ->with(['student:id,school_id,student_number,first_name,middle_name,last_name', 'academicYear', 'gradeLevel', 'section'])
+            ->get()->keyBy('id');
+    }
+
+    /**
      * The `active` Enrollment for a Student within one AcademicYear --
      * NEVER "the latest row by starts_on/created_at" and NEVER a
      * historical/terminal row silently substituted for "current". If

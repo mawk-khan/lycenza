@@ -5826,3 +5826,17 @@ ORG.9B is read-only. It adds no capability, role, Campus adoption, export, schem
 - **Refusals:** a Campus outside the preparer's scope, whole-School Charges for a Campus-scoped preparer, and a class filter without whole-School `enrollments.view` or without an active academic year.
 - **Never:** Communications writes no Charge, Payment, concession, correction or ledger row, and computes no balance. Sending a reminder changes no financial state.
 - **Details:** `docs/communication-hub/ORG-9D-2-FEE-REMINDER.md`.
+
+## Data Health: fees billed after a placement ended (SIS 8.1, 2026-10-27, ADR 0075 §23, SB-03a)
+
+`fees.charge_after_placement_ended` (Fees-owned, Review) matches when:
+- a live fee assessment has an uncancelled Charge;
+- its billing period starts after the billed placement ended;
+- no other placement of the Student in that year covers the period start,
+  so a transfer never matches.
+
+It is read-only:
+- no amount or balance is computed or shown;
+- the interval is Students SQL
+  (`StudentEnrollmentFeeTargetReadService::constrainToPeriodAfterPlacementEnded()`);
+- the repair stays the existing assessment void, which cancels the Charge.

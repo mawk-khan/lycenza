@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Domain\AcademicStructure\Application\DataHealth\ActiveYearWithoutSectionsCheck;
 use App\Domain\AcademicStructure\Application\DataHealth\NoActiveAcademicYearCheck;
+use App\Domain\Attendance\Application\DataHealth\AttendanceOutsidePlacementCheck;
 use App\Domain\Automation\Application\AutomationTriggerConsumer;
 use App\Domain\Communications\Application\Audience\CommunicationAudienceResolverRegistry;
 use App\Domain\Communications\Application\Audience\FeeReminder\FeeReminderAudienceResolver;
@@ -20,11 +21,14 @@ use App\Domain\Communications\Application\Audience\SubjectOfferingAudienceResolv
 use App\Domain\Communications\Application\Channels\CommunicationChannelRegistry;
 use App\Domain\Communications\Application\Channels\EmailChannelDriver;
 use App\Domain\Communications\Application\Channels\InAppChannelDriver;
+use App\Domain\Fees\Application\DataHealth\ChargeAfterPlacementEndedCheck;
 use App\Domain\Payments\Application\Collections\FeeReminderBalances;
 use App\Domain\Students\Application\DataHealth\ActiveEnrollmentInClosedYearCheck;
 use App\Domain\Students\Application\DataHealth\ActiveEnrollmentInInactiveSectionCheck;
 use App\Domain\Students\Application\DataHealth\ActiveStudentWithoutCurrentPlacementCheck;
 use App\Domain\Students\Application\DataHealth\InactiveStudentWithActiveEnrollmentCheck;
+use App\Domain\Students\Application\DataHealth\PossibleDuplicateStudentsCheck;
+use App\Domain\Students\Application\DataHealth\StudentNumberCaseCollisionCheck;
 use App\Domain\TeachingAssignments\Application\DataHealth\AssignmentOnInactiveConfigurationCheck;
 use App\Domain\Timetable\Application\DataHealth\SectionWithoutScheduleCheck;
 use App\Support\DataHealth\DataHealthRegistry;
@@ -125,6 +129,11 @@ class PlatformServiceProvider extends ServiceProvider
             $registry->register($app->make(ActiveStudentWithoutCurrentPlacementCheck::class));
             $registry->register($app->make(SectionWithoutScheduleCheck::class));
             $registry->register($app->make(AssignmentOnInactiveConfigurationCheck::class));
+            // SIS 8.1: Student identity, attendance and fee consistency.
+            $registry->register($app->make(PossibleDuplicateStudentsCheck::class));
+            $registry->register($app->make(StudentNumberCaseCollisionCheck::class));
+            $registry->register($app->make(AttendanceOutsidePlacementCheck::class));
+            $registry->register($app->make(ChargeAfterPlacementEndedCheck::class));
 
             return $registry;
         });

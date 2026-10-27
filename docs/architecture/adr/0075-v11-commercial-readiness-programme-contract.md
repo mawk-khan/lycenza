@@ -1202,3 +1202,138 @@ register, replacing the §21 recommendations.
 - The product-side staging handoff stays **YES**. This is not a claim that
   actual staging is ready (ADR 0074).
 - The programme focus returns to PPR (ADR 0074 §29).
+
+## 23. SIS 8.1 — Student/SIS Data Health & Integrity Visibility (amendment, 2026-10-27)
+
+Owner brief "SIS 8.1". Baseline `main` = `80a7e862`. **The §10 contract is
+unchanged:**
+- read-only;
+- recomputed on every request;
+- no stored finding, no new capability, no mutation route, no automatic
+  repair, no schema change;
+- no counts on the overview;
+- never a date of birth in a row.
+
+Data Health detects. The owning workflow repairs.
+
+### 23.1 Backlog reconciliation
+
+| ID | Source | Requirement | State before | Outcome |
+|---|---|---|---|---|
+| SB-02 | V11 benchmark delta §Q; ADR 0075 §21 | Attendance recorded after a back-dated placement end; Attendance-owned, Review, `attendance.view` + `enrollments.view` | OPEN: no check | **CLOSED**: `attendance.recorded_outside_placement` |
+| SB-03a | same | Uncancelled Charge for a billing period after the placement ended; Fees-owned, `finance.charges.view` (+ `enrollments.view`) | OPEN: no check | **CLOSED**: `fees.charge_after_placement_ended` |
+| DH-12 | UAT 2026-10-15 (UAT-DH-12, S3 UX) | A Student placed only for next (draft) year read as "no class this year" | OPEN | **CLOSED**: still listed (true for this year's registers), but the row names the later placement and the year |
+| DH-18 | UAT reassessment 2026-10-16 (UAT-DH-18, S3 label) | "C (6C)" where Teaching assignments shows "Grade 6 · C" | OPEN | **CLOSED**: both Section labels (Teaching assignments and Timetable checks) read "Grade · Section" |
+
+### 23.2 New checks
+
+- **`student.possible_duplicate`** (Students; Review; `students.view` +
+  `enrollments.view`).
+  - It IS the SIS 2.3 rule (ADR 0079 §3):
+    `StudentDuplicateCandidates::groupsIn()`.
+    - SQL narrows to Students who share a date of birth with another
+      Student of the School.
+    - The names are compared by the same `matches()`.
+    - Tests pin both: the creation rule's own name cases run through the
+      check, and the source has no second rule.
+  - One finding per connected group. A three-record group is one finding,
+    never three pairs. The total is the number of groups.
+  - Inactive Students are included.
+  - The row shows names, Student numbers, status and the current class,
+    and says "the same date of birth" without showing it.
+  - No merge, no "resolved" marker. A genuine pair of different children
+    stays listed, because Data Health stores no decisions.
+- **`student.number_case_collision`** (Students; Review; `students.view` +
+  `enrollments.view`).
+  - It flags numbers equal apart from letter case, using PostgreSQL
+    `lower()`, the same folding as the searches' `ilike`.
+  - One finding per number. Edit links appear for `students.manage`.
+  - Nothing is normalized (§23.3).
+- **`attendance.recorded_outside_placement`** (Attendance; Review;
+  `attendance.view` + `enrollments.view`). This is SB-02.
+  - It finds register marks dated before the start or after the end of
+    the placement they were taken against.
+  - One finding per placement, with its mark count and date span.
+  - The placement interval is Students SQL
+    (`StudentEnrollmentReadService::constrainToDateOutsidePlacement()`);
+    Attendance never reads placements (rule 4).
+  - The links go to the Student's attendance records over that span and to
+    the Enrollment history.
+- **`fees.charge_after_placement_ended`** (Fees; Review;
+  `finance.charges.view` + `enrollments.view`). This is SB-03a. It matches
+  when all of these hold:
+  - a live fee assessment with an uncancelled Charge;
+  - its billing period starts after the billed placement ended;
+  - no other non-cancelled placement of the Student in that year covers
+    the period start, so a transfer never matches.
+
+  How it is built:
+  - The predicate is Students SQL
+    (`StudentEnrollmentFeeTargetReadService::constrainToPeriodAfterPlacementEnded()`).
+  - It uses the interval rule, never Student status. This defines no
+    "leaver".
+  - No amount, balance or total is computed or shown; the Charge page
+    owns money.
+  - The repair link is the fee run, because a fee-assessed Charge is
+    cancelled only by voiding its assessment (ADR 0062 §11.3).
+  - One finding per Charge.
+
+### 23.3 Student-number case sensitivity: OPERATIONALLY INCONSISTENT
+
+**Exact, case-sensitive:**
+- the unique index `(school_id, student_number)` on the raw column;
+- the API `GET …/students?student_number=` filter;
+- `TransportRiderImport` matching;
+- Edit uniqueness.
+
+**Case-insensitive (`ilike`):** every human search, including:
+- `StudentSearch` and the directories;
+- every picker built on `StudentPurposeLookup` / `StudentIdentityLookup`;
+- the Finance debtor lookup, Outstanding fees and payment search;
+- Library, Hostel, Canteen, Transport and Communications search.
+
+So `ab-1` and `AB-1` can coexist. A search finds both; an exact match finds
+one. Allocated numbers are digits only, so only an edited number can
+collide. Decision:
+- a Data Health warning now;
+- the identifier contract (case-insensitive uniqueness, or normalization)
+  needs a later explicit correction checkpoint. No collation, index or data
+  changed here.
+
+### 23.4 Considered and not added (NO ACTION, with evidence)
+
+| Candidate | Why no check |
+|---|---|
+| Exact duplicate Student numbers | Database unique index |
+| Blank Student number | Every write path requires it (`required`, TrimStrings); allocated numbers are never blank; 0 rows on the canonical demo |
+| Counter drift (`next_value` ≤ highest digits-only number) | `students_advance_number_sequence()` runs BEFORE INSERT OR UPDATE OF `student_number` on every write, and the counter is written only by it and the allocator. Impossible under every supported write; nothing to show the School |
+| Placement outside its year / non-empty reversed interval | `student_enrollments_end_within_year` (ADR 0078) and `student_enrollments_date_range_check`; year dates change only when no dependent would fall outside (SIS 5.1, ADR 0077) |
+| ADR 0078 empty interval | Valid by contract. Proven never flagged by any check, together with a closed-year completion and an ended placement whose marks are inside it |
+| Historical Sections and Terms in closed years | Expected history (SIS 5.2) |
+| Converted Application without a Student | `admission_applications_conversion_provenance_check` + FK; conversion is one transaction (SIS 3.1) |
+| Applicant future date of birth | An input-validation gap owned by SIS 3.2. Audited: 0 rows. The prevention belongs there, not a check |
+| Rollover plan (draft/validated) whose target is no longer draft | No cancel route exists, so a check would offer no repair. It is a Rollover-page gap (the plan should say it can never run), carried with the rollover residual |
+| Resume-needed / failed rollover | Already the plan's own status on the Rollover pages; Data Health is not a second rollover status page |
+
+### 23.5 Authorization, privacy, performance
+
+- **Authorization is unchanged.** The hub requirement is the same, and
+  every new check includes `enrollments.view`, so the hub test holds.
+- **Whole-School only:** grants are read through `canInSchool()`, and a
+  Campus grant never reaches a check (rule 101). Campus onboarding's
+  narrower duplicate comparison (ADR 0079) is unaffected.
+- **Read-only, proven twice:**
+  - at run time, only SELECTs (plus the tenant `RESET`) reach the database
+    across every check's overview and findings;
+  - statically, `DataHealthArchitectureTest` finds no write, lock or
+    transaction call in any check, and no Students table read outside
+    Students.
+- **Performance:**
+  - The duplicate check streams only date-of-birth-sharing Students
+    (`lazy(500)`, eight narrow columns), groups in PHP, and pages the
+    groups. Its query count does not grow with the number of groups
+    (tested).
+  - The other three are aggregate/EXISTS SQL with paginated rows.
+- **Tenancy:** every query carries `school_id`, and runs inside
+  `TenantContext::withSchool()` under RLS. Another School's equivalent
+  records are proven absent from every check.

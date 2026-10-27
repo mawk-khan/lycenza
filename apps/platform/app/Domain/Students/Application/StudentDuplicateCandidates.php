@@ -67,6 +67,80 @@ final class StudentDuplicateCandidates
     }
 
     /**
+     * SIS 8.1: every group of the School's EXISTING Students this same rule
+     * links -- the Data Health view of possible duplicates. SQL narrows to
+     * Students who share a date of birth with another Student of the School;
+     * the name comparison is {@see self::matches()} itself, so creation,
+     * conversion and Data Health can never disagree. A group is the
+     * connected set (A matches B, B matches C: one group of three), each in
+     * Student-number order; groups are ordered by their first Student
+     * number. Inactive Students are included. Whole-School by construction:
+     * the caller authorizes whole-School `students.view` first.
+     *
+     * @return list<list<Student>>
+     */
+    public function groupsIn(School $school): array
+    {
+        $sharedBirthdays = Student::query()->where('school_id', $school->id)
+            ->select('date_of_birth')->groupBy('date_of_birth')->havingRaw('count(*) > 1');
+
+        $groups = [];
+        $bucket = [];
+        $birthday = null;
+        $rows = Student::query()->where('school_id', $school->id)
+            ->whereIn('date_of_birth', $sharedBirthdays)
+            ->select(['id', 'school_id', 'student_number', 'first_name', 'middle_name', 'last_name', 'date_of_birth', 'status'])
+            ->orderBy('date_of_birth')->orderBy('student_number')->orderBy('id')
+            ->lazy(500);
+        foreach ($rows as $student) {
+            $day = $student->date_of_birth->toDateString();
+            if ($day !== $birthday) {
+                array_push($groups, ...self::link($bucket));
+                $bucket = [];
+                $birthday = $day;
+            }
+            $bucket[] = $student;
+        }
+        array_push($groups, ...self::link($bucket));
+
+        usort($groups, fn (array $a, array $b): int => strcmp($a[0]->student_number, $b[0]->student_number));
+
+        return $groups;
+    }
+
+    /**
+     * The connected groups (two or more) among Students of one birthday.
+     *
+     * @param  list<Student>  $students
+     * @return list<list<Student>>
+     */
+    private static function link(array $students): array
+    {
+        $parent = array_keys($students);
+        $root = function (int $i) use (&$parent): int {
+            while ($parent[$i] !== $i) {
+                $i = $parent[$i] = $parent[$parent[$i]];
+            }
+
+            return $i;
+        };
+        foreach ($students as $i => $a) {
+            foreach (array_slice($students, $i + 1, null, true) as $j => $b) {
+                if (self::matches($a->only(['first_name', 'middle_name', 'last_name']), $b->only(['first_name', 'middle_name', 'last_name']))) {
+                    $parent[$root($j)] = $root($i);
+                }
+            }
+        }
+
+        $groups = [];
+        foreach ($students as $i => $student) {
+            $groups[$root($i)][] = $student;
+        }
+
+        return array_values(array_filter($groups, fn (array $group): bool => count($group) > 1));
+    }
+
+    /**
      * The acknowledgement that lets this exact identity be created despite
      * exactly these candidates. Opaque and keyed (never stored): it changes
      * when the names or date of birth are edited, or when a candidate

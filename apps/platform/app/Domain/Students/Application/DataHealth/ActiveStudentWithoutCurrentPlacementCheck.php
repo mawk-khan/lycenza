@@ -5,6 +5,7 @@ namespace App\Domain\Students\Application\DataHealth;
 use App\Domain\AcademicStructure\Application\CurrentAcademicYearResolver;
 use App\Domain\Students\Application\StudentEnrollmentReadService;
 use App\Domain\Students\Infrastructure\Student;
+use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Models\School;
 use App\Support\DataHealth\DataHealthCheck;
 use App\Support\DataHealth\DataHealthCheckDefinition as D;
@@ -38,7 +39,7 @@ class ActiveStudentWithoutCurrentPlacementCheck implements DataHealthCheck
             code: 'student.active_without_current_placement',
             area: 'Student records',
             title: 'Active Students with no class this year',
-            condition: 'The Student is active, but has no active class placement in the current academic year.',
+            condition: 'The Student is active, but has no active class placement in the current academic year. A Student placed only for a later academic year (for example a new admission for next year) is shown with that placement.',
             whyItMatters: 'Registers, class rosters and fee assessment runs all start from class placements, so these Students are left out of them. This is often a newly added Student who has not been placed yet.',
             severity: D::REVIEW,
             kind: D::REVIEW_RECOMMENDED,
@@ -56,20 +57,33 @@ class ActiveStudentWithoutCurrentPlacementCheck implements DataHealthCheck
 
     public function findings(School $school, int $page, int $perPage): LengthAwarePaginator
     {
-        $yearId = $this->years->tryResolve($school)?->id;
-        if ($yearId === null) {
+        $year = $this->years->tryResolve($school);
+        if ($year === null) {
             return new Paginator([], 0, $perPage, $page);
         }
 
-        return $this->query($school, $yearId)
+        $students = $this->query($school, $year->id)
             ->select(self::STUDENT_COLUMNS)
             ->orderBy('last_name')->orderBy('first_name')->orderBy('id')
-            ->paginate($perPage, ['*'], 'page', $page)
+            ->paginate($perPage, ['*'], 'page', $page);
+        // SIS 8.1 (DH-12): a placement in a later (draft) year is named, so a
+        // Student admitted for next year never reads as "no class" at all.
+        $later = StudentEnrollment::query()->where('school_id', $school->id)
+            ->whereIn('student_id', collect($students->items())->pluck('id')->all())
+            ->where('status', 'active')
+            ->whereHas('academicYear', fn ($q) => $q->where('school_id', $school->id)->where('status', 'draft'))
+            ->with(['academicYear', 'gradeLevel', 'section'])
+            ->orderBy('starts_on')->get()
+            ->groupBy('student_id');
+
+        return $students
             ->through(fn (Student $s) => new DataHealthFinding(
                 entityType: 'student',
                 entityId: $s->id,
                 label: self::studentLabel($s),
-                detail: 'Active · no class placement in the current academic year',
+                detail: "Active · no class in {$year->name}".$later->get($s->id, collect())->map(
+                    fn (StudentEnrollment $e) => ' · placed for '.$e->academicYear->name.' ('.trim(implode(' · ', array_filter([$e->gradeLevel?->name, $e->section?->name]))).')',
+                )->implode(''),
                 links: [
                     new DataHealthLink('Open Student', "/app/students/{$s->id}", ['students.view']),
                     new DataHealthLink('Enroll', "/app/students/{$s->id}/enrollments/create", ['students.view', 'enrollments.manage'], isRepair: true),

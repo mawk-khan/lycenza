@@ -26,7 +26,7 @@ class DataHealthChecksTest extends TestCase
 {
     use CreatesAttendanceFixtures, CreatesTeachingAssignmentFixtures;
 
-    private const array ALL_VIEW = ['enrollments.view', 'students.view', 'academics.years.view', 'academics.structure.view', 'timetable.schedule.view', 'teaching.assignments.view'];
+    private const array ALL_VIEW = ['enrollments.view', 'students.view', 'academics.years.view', 'academics.structure.view', 'timetable.schedule.view', 'teaching.assignments.view', 'attendance.view', 'finance.charges.view'];
 
     /** @return list<string> the affected entity ids */
     private function found(School $school, string $code, ?User $viewer = null): array
@@ -59,7 +59,7 @@ class DataHealthChecksTest extends TestCase
     public function every_registered_check_has_a_unique_valid_contract(): void
     {
         $codes = array_keys(app(DataHealthRegistry::class)->all());
-        $this->assertCount(8, $codes);
+        $this->assertCount(12, $codes);
         foreach (app(DataHealthRegistry::class)->all() as $code => $check) {
             $definition = $check->definition();
             $this->assertSame($code, $definition->code);
@@ -130,8 +130,16 @@ class DataHealthChecksTest extends TestCase
         $inactive = $this->createStudent($y['school'], ['status' => 'inactive']);
         // No guardian and no middle name on anyone: optional data is never a finding.
 
+        // SIS 8.1 (DH-12): placed only for next (draft) year -- still listed, but says so.
+        $nextYearOnly = $this->createStudent($y['school'], ['status' => 'active']);
+        $draft = $this->createAcademicYear($y['school'], ['code' => 'D'.Str::random(5), 'name' => '2027-28', 'starts_on' => '2027-04-01', 'ends_on' => '2028-03-31', 'status' => 'draft']);
+        $this->createStudentEnrollment($nextYearOnly, $this->createSection($draft, $y['campus'], $y['grade'], ['code' => 'DS'.Str::random(4), 'name' => 'B']), ['status' => 'active']);
+
         $found = $this->found($y['school'], 'student.active_without_current_placement');
-        $this->assertEqualsCanonicalizing([$unplaced->id, $lastYearOnly->id], $found);
+        $this->assertEqualsCanonicalizing([$unplaced->id, $lastYearOnly->id, $nextYearOnly->id], $found);
+        $details = array_column(app(DataHealthService::class)->findings($y['school'], 'student.active_without_current_placement', $this->createUserWithCapabilities($y['school'], self::ALL_VIEW), 1)['findings']->items(), 'detail', 'entityId');
+        $this->assertSame("Active · no class in {$y['active']->name}", $details[$unplaced->id]);
+        $this->assertStringEndsWith(' · placed for 2027-28 ('.$y['grade']->name.' · B)', $details[$nextYearOnly->id]);
         $this->assertNotContains($placed->id, $found);
         $this->assertNotContains($inactive->id, $found);
     }
@@ -173,6 +181,8 @@ class DataHealthChecksTest extends TestCase
 
         $found = $this->found($w['school'], 'timetable.section_without_schedule');
         $this->assertContains($unscheduled->id, $found);
+        $label = collect(app(DataHealthService::class)->findings($w['school'], 'timetable.section_without_schedule', $this->createUserWithCapabilities($w['school'], self::ALL_VIEW), 1)['findings']->items())->firstWhere('entityId', $unscheduled->id)['label'];
+        $this->assertSame("{$w['grade']->name} · {$unscheduled->name}", $label, 'DH-18');
         $this->assertNotContains($w['section']->id, $found, 'A Section with an active class is fine.');
 
         $this->in($w['school'], fn () => TimetableEntry::query()->whereKey($w['entry']->id)->update(['status' => 'inactive']));
@@ -192,6 +202,12 @@ class DataHealthChecksTest extends TestCase
         $found = $this->found($w['school'], 'teaching.assignment_on_inactive_class');
         $this->assertContains($current->id, $found);
         $this->assertNotContains($ended->id, $found);
+
+        // SIS 8.1 (DH-18): the Section reads "Grade · Section", as on Teaching assignments -- never "C (6C)".
+        $row = collect(app(DataHealthService::class)->findings($w['school'], 'teaching.assignment_on_inactive_class', $this->createUserWithCapabilities($w['school'], self::ALL_VIEW), 1)['findings']->items())->firstWhere('entityId', $current->id);
+        $section = $this->in($w['school'], fn () => Section::query()->with('gradeLevel')->findOrFail($current->section_id));
+        $this->assertStringStartsWith("{$section->gradeLevel->name} · {$section->name} · ", $row['detail']);
+        $this->assertStringNotContainsString("({$section->code})", $row['detail']);
     }
 
     #[Test]

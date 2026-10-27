@@ -50,8 +50,9 @@ class SectionWithoutScheduleCheck implements DataHealthCheck
             ->through(fn (Section $s) => new DataHealthFinding(
                 entityType: 'section',
                 entityId: $s->id,
-                label: "{$s->name} ({$s->code})",
-                detail: trim(implode(' · ', array_filter([$s->academicYear?->name, $s->gradeLevel?->name, 'no scheduled classes']))),
+                // SIS 8.1 (DH-18): "Grade 6 · C", as the rest of the product names a Section.
+                label: trim(implode(' · ', array_filter([$s->gradeLevel?->name, $s->name]))),
+                detail: trim(implode(' · ', array_filter([$s->academicYear?->name, 'no scheduled classes']))),
                 links: [
                     new DataHealthLink('Timetable', '/app/timetable-schedule', ['timetable.schedule.view']),
                     new DataHealthLink('Schedule a class', '/app/timetable-schedule/create', ['timetable.schedule.manage'], isRepair: true),

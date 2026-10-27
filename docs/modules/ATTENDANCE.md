@@ -843,3 +843,14 @@ Both are read-only, under `attendance.view` and the actor's CampusScope through 
   - **Links:** the exceptions list links each row to it.
 
 **OD-9.3 (owner, 2026-10-23): CLOSED for v1.** The register-status model above is the factual model: submitted, pending, not submitted. There is no "missing" or compliance state until a canonical Student academic-calendar or closure model exists.
+
+## Data Health: marks outside a placement (SIS 8.1, 2026-10-27, ADR 0075 §23, SB-02)
+
+`attendance.recorded_outside_placement` lists placements with register marks
+dated before their start or after their end. This is usually a back-dated
+withdrawal or completion after registers were taken.
+- One finding per placement. Review only.
+- It needs `attendance.view` + `enrollments.view`.
+- The interval comes from Students' `constrainToDateOutsidePlacement()`.
+- Marks are history and are never removed. A mark is corrected only if its
+  status is wrong.

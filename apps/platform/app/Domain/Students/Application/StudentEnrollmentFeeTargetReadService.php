@@ -6,6 +6,8 @@ use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Models\School;
 use Carbon\CarbonImmutable;
+use Illuminate\Contracts\Database\Query\Builder as QueryBuilder;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -61,6 +63,38 @@ class StudentEnrollmentFeeTargetReadService
             ->flip();
 
         return $rows->map(fn (StudentEnrollment $e) => $this->toTarget($e, $activeStudents->has($e->student_id)))->values();
+    }
+
+    /**
+     * SIS 8.1 (SB-03a): keeps the rows of `$query` (a fee assessment query)
+     * whose billing period starts after the billed placement
+     * (`$enrollmentColumn`) ended, AND which no other placement of the same
+     * Student in the same year (cancelled ones never count) covers on that
+     * start date. A transfer therefore never matches: the destination
+     * placement covers the period. The interval rule, never Student status
+     * (a Student's status is not the leaver test here). Students' SQL, so
+     * Fees never reads placements itself (CLAUDE.md rule 4).
+     *
+     * @template TQuery of EloquentBuilder|QueryBuilder
+     *
+     * @param  TQuery  $query
+     * @return TQuery
+     */
+    public function constrainToPeriodAfterPlacementEnded(EloquentBuilder|QueryBuilder $query, School $school, string $enrollmentColumn, string $studentColumn, string $yearColumn, string $periodStartColumn): EloquentBuilder|QueryBuilder
+    {
+        return $query
+            ->whereExists(fn ($e) => $e->selectRaw('1')->from('student_enrollments as billed_placement')
+                ->where('billed_placement.school_id', $school->id)
+                ->whereColumn('billed_placement.id', $enrollmentColumn)
+                ->whereNotNull('billed_placement.ends_on')
+                ->whereColumn('billed_placement.ends_on', '<', $periodStartColumn))
+            ->whereNotExists(fn ($e) => $e->selectRaw('1')->from('student_enrollments as covering_placement')
+                ->where('covering_placement.school_id', $school->id)
+                ->whereColumn('covering_placement.student_id', $studentColumn)
+                ->whereColumn('covering_placement.academic_year_id', $yearColumn)
+                ->where('covering_placement.status', '<>', 'cancelled')
+                ->whereColumn('covering_placement.starts_on', '<=', $periodStartColumn)
+                ->where(fn ($w) => $w->whereNull('covering_placement.ends_on')->orWhereColumn('covering_placement.ends_on', '>=', $periodStartColumn)));
     }
 
     /**

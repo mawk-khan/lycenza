@@ -94,6 +94,7 @@ defineProps<{
                             class="underline"
                             :class="link.isRepair ? 'font-medium' : 'text-slate-600'"
                             :href="link.url"
+                            :aria-label="`${link.label}: ${finding.label}`"
                             >{{ link.label }}</a
                         >
                     </div>

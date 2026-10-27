@@ -730,6 +730,14 @@ reviewed operation.
 | Sections with no timetable this year | Scheduling the Section (§10) |
 | Teaching assignments on a deactivated class | **End** the assignment, or reactivate the Section. An assignment ending today stays listed until tomorrow. |
 | Placement still open in a closed academic year | Completing it in **Open placements in closed years** (§16) |
+| Possible duplicate Student records | Comparing the records. Different children who share a name and birthday need no change and stay listed. A record added by mistake is corrected, or marked inactive, on its Student page. Records are never merged. |
+| Student numbers that differ only in letter case | Giving one Student a clearly different number on its **Edit** page |
+| Attendance recorded outside a Student's class dates | Checking the placement's end date. Register marks stay as history; correct a mark only if its status is wrong. |
+| Fees billed for a period after the Student's placement ended | Opening the Charge. If it is not owed, **void** its fee assessment on the fee run (this cancels the Charge). If the School bills that period on purpose, no change is needed. |
+
+**Data Health detects; the record's own page repairs.** No check offers a
+fix, merge or delete button. A Student placed only for next year is listed
+under "Active Students with no class this year" with that placement shown.
 
 ## 18. Library
 

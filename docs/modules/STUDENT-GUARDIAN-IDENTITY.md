@@ -1650,3 +1650,21 @@ includes inactive rows, re-adding a deactivated value failed: recovery was SQL.
   panel that takes focus. It offers **Cancel — do not create** and **These
   are different people — …**, and it fits at 390 px.
 - **No schema change.**
+
+## Data Health identity checks (SIS 8.1, 2026-10-27, ADR 0075 §23)
+
+- **`student.possible_duplicate`** shows existing records that the SIS 2.3
+  creation rule links.
+  - It calls `StudentDuplicateCandidates::groupsIn()`, which uses the same
+    `matches()`. A rule change therefore changes creation, conversion and
+    Data Health together.
+  - One finding per connected group, inactive Students included.
+  - The date of birth is never shown. No merge, no stored decision.
+- **`student.number_case_collision`** flags numbers equal apart from letter
+  case.
+  - Student numbers are **operationally inconsistent** today:
+    - uniqueness, the API `?student_number=` filter and the Transport rider
+      import compare exactly;
+    - every search compares case-insensitively.
+  - Nothing is normalized. Changing the identifier contract is a later,
+    explicit decision.

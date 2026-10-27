@@ -47,7 +47,7 @@ class AssignmentOnInactiveConfigurationCheck implements DataHealthCheck
     public function findings(School $school, int $page, int $perPage): LengthAwarePaginator
     {
         return $this->query($school)
-            ->with(['employee', 'section', 'subjectOffering.subject'])
+            ->with(['employee', 'section.gradeLevel', 'subjectOffering.subject'])
             ->orderBy('starts_on')->orderBy('id')
             ->paginate($perPage, ['*'], 'page', $page)
             ->through(function (TeachingAssignment $a) {
@@ -62,7 +62,8 @@ class AssignmentOnInactiveConfigurationCheck implements DataHealthCheck
                     entityId: $a->id,
                     label: "{$a->employee?->full_name} ({$a->employee?->employee_number})",
                     detail: trim(implode(' · ', array_filter([
-                        $a->section !== null ? "{$a->section->name} ({$a->section->code})" : null,
+                        // SIS 8.1 (DH-18): the Section as Teaching assignments shows it.
+                        $a->section !== null ? trim(implode(' · ', array_filter([$a->section->gradeLevel?->name, $a->section->name]))) : null,
                         $a->subjectOffering?->subject?->name,
                         'from '.$a->starts_on->toDateString(),
                         implode(', ', $inactive),

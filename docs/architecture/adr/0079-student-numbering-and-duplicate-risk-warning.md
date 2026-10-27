@@ -140,3 +140,10 @@ numbering, so it is carried forward unchanged.
   Rejected: twins and namesakes are real.
 - **Automatic linking or reactivation of the candidate.** Out of scope. The
   re-admission design stays open (ADMISSIONS §10).
+
+## 6. Data Health reuse (SIS 8.1, 2026-10-27)
+
+Existing Students are checked with the same rule.
+`StudentDuplicateCandidates::groupsIn()` groups a School's Students through
+`matches()`. Data Health's `student.possible_duplicate` (ADR 0075 §23)
+calls it, so creation, conversion and Data Health share one rule.
