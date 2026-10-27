@@ -36,9 +36,16 @@ use Tests\TestCase;
  * be the holder of rollover's source Enrollment while also holding
  * rollover's target Section.
  *
- * Analysis is not proof, so this test contends the two paths on the
- * SAME target Section with two genuinely separate OS processes and
- * requires a coherent, deadlock-free outcome either way round.
+ * Analysis is not proof, so this test contends the two paths with two
+ * genuinely separate OS processes and requires a coherent, deadlock-free
+ * outcome either way round.
+ *
+ * SIS 5.2 (ADR 0077 §7): a rollover target is always a DRAFT year, and
+ * Attendance registers only inside an active year, so the two can no longer
+ * meet on the TARGET Section at all. The overlap that remains is the SOURCE
+ * side: Attendance locks the source Section and its Enrollment rows while
+ * the rollover item locks the source Enrollment FOR UPDATE and then waits
+ * for the (draft) target Section. That is what this test now contends.
  */
 class AttendanceVersusRolloverConcurrencyTest extends TestCase
 {
@@ -66,59 +73,61 @@ class AttendanceVersusRolloverConcurrencyTest extends TestCase
         for ($round = 0; $round < 3; $round++) {
             $context = app(TenantContext::class);
 
-            // The TARGET year is the current, ACTIVE one (Attendance can
-            // only register a past date inside an active year); the
-            // SOURCE year is a closed prior year, since only one year per
-            // School may be active.
+            // The SOURCE year is the current, ACTIVE one (Attendance can
+            // only register a past date inside an active year); the TARGET
+            // is next year's draft (SIS 5.2: a rollover target stays draft).
             $school = $this->createSchool();
             $this->schools[] = $school;
             $campus = $this->createCampus($school);
             $sourceYear = $this->createAcademicYear($school, [
-                'code' => 'SRC', 'status' => 'closed', 'starts_on' => '2025-06-01', 'ends_on' => '2026-04-30',
+                'code' => 'SRC', 'status' => 'active', 'starts_on' => '2026-06-01', 'ends_on' => '2027-03-31',
             ]);
             $targetYear = $this->createAcademicYear($school, [
-                'code' => 'TGT', 'status' => 'active', 'starts_on' => '2026-06-01', 'ends_on' => '2027-03-31',
+                'code' => 'TGT', 'status' => 'draft', 'starts_on' => '2027-06-01', 'ends_on' => '2028-03-31',
             ]);
             $sourceGrade = $this->createGradeLevel($school, ['name' => 'Grade 5', 'code' => 'G5', 'sequence' => 5]);
             $targetGrade = $this->createGradeLevel($school, ['name' => 'Grade 6', 'code' => 'G6', 'sequence' => 6]);
-            $sourceSection = $this->createSection($sourceYear, $campus, $sourceGrade, ['name' => '5A', 'code' => '5A']);
+            $sourceSection = $this->createSection($sourceYear, $campus, $sourceGrade, ['name' => '5A', 'code' => '5A', 'status' => 'active']);
             $targetSection = $this->createSection($targetYear, $campus, $targetGrade, ['name' => '6B', 'code' => '6B', 'status' => 'active']);
 
-            // Attendance needs a real class on the TARGET Section.
+            // Attendance needs a real class on the SOURCE Section.
             $subject = $this->createSubject($school, ['code' => "M{$round}"]);
-            $offering = $this->createSubjectOffering($targetYear, $campus, $targetGrade, $subject, [
+            $offering = $this->createSubjectOffering($sourceYear, $campus, $sourceGrade, $subject, [
                 'is_required' => true, 'status' => 'active',
             ]);
             $teacher = $this->createEmployee($school, ['record_status' => 'active']);
             $period = $this->createTimetablePeriod($school, ['start_time' => '09:00:00', 'end_time' => '10:00:00']);
-            $entry = $this->createTimetableEntry($offering, $targetSection, $teacher, $period, ['day_of_week' => 1]);
+            $entry = $this->createTimetableEntry($offering, $sourceSection, $teacher, $period, ['day_of_week' => 1]);
             $actor = $this->fullAttendanceActor($school);
 
-            // A Student already placed in the target Section, so
-            // Attendance has a non-empty roster to work with.
-            $sitting = $this->enrollStudent($targetSection, '1', '2026-06-01');
-
-            // A different Student being promoted INTO that same Section.
-            $promoted = $this->createStudent($school, ['student_number' => "S-{$round}"]);
-            // SIS 4.1: the source year is closed, so its placement is
-            // pre-existing history (fixture), not a new service placement.
-            $this->createStudentEnrollment($promoted, $sourceSection, ['roll_number' => '007', 'starts_on' => '2025-06-01']);
+            // Two Students in the source Section: the register covers both,
+            // and one of them is being promoted out of it.
+            $sitting = $this->enrollStudent($sourceSection, '1', '2026-06-01');
+            $promotedPlacement = $this->enrollStudent($sourceSection, '007', '2026-06-01');
+            $promotedId = $promotedPlacement->student_id;
 
             $plan = $this->createEnrollmentRolloverPlan($sourceYear, $targetYear);
             app(EnrollmentRolloverPlanService::class)->upsertMapping($plan, $sourceGrade, null, $targetGrade, $targetSection);
             $context->withSchool($school, fn () => app(EnrollmentRolloverDryRunService::class)->run($plan->fresh()));
             $item = $context->withSchool($school, fn () => EnrollmentRolloverItem::query()
-                ->where('plan_id', $plan->id)->where('student_id', $promoted->id)->firstOrFail());
+                ->where('plan_id', $plan->id)->where('student_id', $promotedId)->firstOrFail());
             app(EnrollmentRolloverPlanService::class)->setItemDecision(
                 $context->withSchool($school, fn () => $plan->fresh()), $item, 'promote', null, 'explicit', '011',
+            );
+            // The other Student stays behind (excluded from this rollover).
+            $stays = $context->withSchool($school, fn () => EnrollmentRolloverItem::query()
+                ->where('plan_id', $plan->id)->where('student_id', $sitting->student_id)->firstOrFail());
+            app(EnrollmentRolloverPlanService::class)->setItemDecision(
+                $context->withSchool($school, fn () => $plan->fresh()), $stays, 'exclude', null, 'preserve_source',
             );
             $summary = $context->withSchool($school, fn () => app(EnrollmentRolloverDryRunService::class)->run($plan->fresh()));
             $this->assertTrue($summary['validated'], "Round {$round}: fixture must produce a validated plan");
 
-            // Race: Attendance register for target Section 6B vs the
-            // rollover that inserts a second Student into 6B.
+            // Race: Attendance register for source Section 5A vs the
+            // rollover that locks the promoted Student's 5A placement and
+            // then places them in 6B.
             $submit = new Process(['php', __DIR__.'/../../Support/submit-attendance-register.php',
-                $school->id, $entry->id, self::MONDAY, $actor->id, "{$sitting->id}:present"]);
+                $school->id, $entry->id, self::MONDAY, $actor->id, "{$sitting->id}:present,{$promotedPlacement->id}:present"]);
             $rollover = new Process(['php', __DIR__.'/../../Support/execute-rollover-item.php',
                 $school->id, $item->id]);
 
@@ -140,26 +149,16 @@ class AttendanceVersusRolloverConcurrencyTest extends TestCase
             // a legitimate membership mutation.
             $this->assertMatchesRegularExpression('/^(succeeded|reconciled):/', $rolloverOutput, $ctx);
 
-            $sessions = $context->withSchool($school, fn () => AttendanceSession::query()->count());
-            $records = $context->withSchool($school, fn () => AttendanceRecord::query()->count());
-
-            if (str_starts_with($submitOutput, 'submitted:')) {
-                // Attendance won the Section lock: its register was
-                // complete as of the roster it derived under that lock.
-                $this->assertSame(1, $sessions, $ctx);
-                $this->assertSame(1, $records, $ctx);
-            } else {
-                // Rollover won: the promoted Student joined the roster
-                // first, so the stale one-record payload no longer
-                // matches and the register is refused ENTIRELY.
-                $this->assertStringContainsString('RegisterDoesNotMatchRosterException', $submitOutput, $ctx);
-                $this->assertSame(0, $sessions, "A refused submission must leave no Session. {$ctx}");
-                $this->assertSame(0, $records, "A refused submission must leave no records. {$ctx}");
-            }
+            // Promotion preserves the source placement (the operator
+            // completes it later), so the roster Attendance locks is the
+            // same either way round: the register always lands whole.
+            $this->assertStringStartsWith('submitted:', $submitOutput, $ctx);
+            $this->assertSame(1, $context->withSchool($school, fn () => AttendanceSession::query()->count()), $ctx);
+            $this->assertSame(2, $context->withSchool($school, fn () => AttendanceRecord::query()->count()), $ctx);
 
             // Either way the promotion landed exactly once.
             $this->assertSame(1, $context->withSchool($school, fn () => StudentEnrollment::query()
-                ->where('student_id', $promoted->id)
+                ->where('student_id', $promotedId)
                 ->where('academic_year_id', $targetYear->id)
                 ->where('status', 'active')->count()), $ctx);
         }

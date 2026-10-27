@@ -34,8 +34,31 @@ fi
 work="$(mktemp -d)"
 dump() { docker exec "${pg}" pg_dump -U school_os -d school_os_test --schema-only 2>/dev/null | grep -v '^\\\(un\)\?restrict'; }
 
-echo "[rollback-proof] the ${steps} migration(s) to prove:"
-lyc_artisan "${root}" migrate:status --database=pgsql_admin | lyc_strip_ansi | grep -E 'Ran|Pending' | tail -n "${steps}"
+# SIS 5.2: never prove against a stale isolated database. The proof database
+# can lag behind the tree (an earlier run, another branch); then "roll back
+# the last N" rolls back somebody else's migration and the proof is
+# meaningless. So: migrate to current FIRST, refuse if anything is still
+# pending, and refuse unless the last N migrations RUN are exactly the newest
+# N migration files on disk -- the slice's own.
+echo "[rollback-proof] bringing the isolated test database to the current tree first"
+lyc_artisan "${root}" migrate --database=pgsql_admin --force | lyc_strip_ansi | grep -E 'DONE|FAIL|ERROR' || true
+status="$(lyc_artisan "${root}" migrate:status --database=pgsql_admin | lyc_strip_ansi)"
+if printf '%s\n' "${status}" | grep -q 'Pending'; then
+  echo "[rollback-proof] refusing: migrations are still pending after migrate -- the isolated database is not at the current tree" >&2
+  printf '%s\n' "${status}" | grep 'Pending' >&2
+  exit 1
+fi
+# Exactly what `migrate:rollback --step=N` will undo (Laravel: batch desc, then
+# name desc) -- not the name-sorted status listing, which can differ.
+ran="$(docker exec "${pg}" psql -U school_os -d school_os_test -Atc "select migration from migrations order by batch desc, migration desc limit ${steps}" | sort)"
+newest="$(ls "${root}/apps/platform/database/migrations" | sed 's/\.php$//' | sort | tail -n "${steps}")"
+if [ "${ran}" != "${newest}" ]; then
+  echo "[rollback-proof] refusing: the ${steps} migration(s) the rollback would undo are not the newest ${steps} on disk -- this would prove the wrong migration" >&2
+  printf 'ran (last %s):\n%s\nnewest on disk:\n%s\n' "${steps}" "${ran}" "${newest}" >&2
+  exit 1
+fi
+echo "[rollback-proof] database current; the ${steps} migration(s) to prove (the newest on disk):"
+printf '  %s\n' ${ran}
 
 dump >"${work}/before.sql"
 lyc_artisan "${root}" migrate:rollback --step="${steps}" --database=pgsql_admin --force | lyc_strip_ansi | grep -E 'DONE|FAIL|ERROR' || true

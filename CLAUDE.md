@@ -1586,7 +1586,9 @@ once several modules copy it.
        placements are INSERTed `active` only; a Student status change needs
        its lifecycle event; statuses are CHECKed; a terminal placement has an
        `ends_on` within its academic year (withdraw/cancel never in the
-       future). Every human end of a Charge goes through
+       future) -- except a placement cancelled before it starts, which
+       records the empty interval `ends_on = starts_on - 1` (ADR 0078,
+       `cancelBeforeStart()` only). Every human end of a Charge goes through
        `ChargeService::cancel()` (closed `ChargeCancellationReason`,
        `FreshMfaProof`, current authority under the Charge lock, never a
        linked Guardian of the Student; DB: `charges_cancellation_evidence`).

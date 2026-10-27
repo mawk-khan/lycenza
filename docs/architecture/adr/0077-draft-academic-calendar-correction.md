@@ -141,3 +141,37 @@ processes:
 - Timetable model.
 - Year name: free text, never derived from dates, so a correction does not
   rename it.
+
+## 7. Amendment: closed-year structure and the rollover target (SIS 5.2, 2026-10-27)
+
+Owner decisions: "A closed Academic Year is historical and must not accept new
+operational academic structure." "Rollover prepares the next Academic Year
+while that target year is still draft." Rollover never activates the year;
+UAT-C1 activation is unchanged. This closes the two items §6 deferred to SIS
+5.2 and supersedes the Phase 1B.7 note that a rollover could target an
+"already-active" year (`STUDENT-ENROLLMENT.md`, "Academic Year activation").
+
+- **Closed year.** `SectionAdministrationService::create()` and
+  `AcademicTermService::create()` refuse a closed year (422
+  `ACADEMIC_YEAR_CLOSED`) under the year's `FOR SHARE` lock, the same
+  serialization as §4. Draft and active years are unchanged (a mid-year
+  Section or Term is legitimate). Service rule only, as for placements (ADR
+  0078): historical closed-year rows inserted by fixtures, imports or repair
+  stay valid.
+- **Rollover target draft.** Plan creation, validation, the execution claim
+  and each item re-read the target `FOR SHARE`; a non-draft target is refused
+  (422 `ROLLOVER_TARGET_YEAR_NOT_DRAFT`), or, mid-run, invalidates the plan as
+  drift `target_year_not_draft`.
+- **Activation vs a running rollover.** A rollover executes over several
+  transactions, so the per-transaction check alone could let activation land
+  between items. `activate()` therefore asks the tagged
+  `AcademicYearActivationBlocker` port (same shape as
+  `AcademicYearDateDependency`, rule 4) under the draft row's `FOR UPDATE`;
+  Students' `RolloverExecutionActivationBlocker` refuses while a plan into the
+  year is `executing` (409 `ACADEMIC_YEAR_ACTIVATION_BLOCKED`). Whichever
+  commits first decides; proven in both orders by
+  `AnnualTransitionConcurrencyTest` (two real processes).
+- **Teaching assignments.** `end()` refuses an end after the year's end;
+  `endForEmployment()` caps at the year end (`TEACHING-ASSIGNMENTS.md` §10).
+- **Not done:** no schema change; no automatic activation or closure; no
+  active → draft path; no closed-year structure deletion.

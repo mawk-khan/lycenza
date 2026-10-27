@@ -17,6 +17,7 @@ use App\Domain\Students\Application\Exceptions\OpenRolloverPlanConflictException
 use App\Domain\Students\Application\Exceptions\RequiredSubjectOfferingRolloverMappingException;
 use App\Domain\Students\Application\Exceptions\RolloverItemAlreadyExecutedException;
 use App\Domain\Students\Application\Exceptions\RolloverPlanNoLongerConfigurableException;
+use App\Domain\Students\Application\Exceptions\RolloverTargetYearNotDraftException;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverMapping;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
@@ -78,6 +79,9 @@ class EnrollmentRolloverPlanService
         return $this->context->withSchool($school, function () use ($school, $sourceYear, $targetYear, $actor) {
             try {
                 return DB::transaction(function () use ($school, $sourceYear, $targetYear, $actor) {
+                    // SIS 5.2: rollover prepares a DRAFT year (read FOR SHARE).
+                    self::assertTargetDraft($targetYear->id);
+
                     $plan = EnrollmentRolloverPlan::query()->create([
                         'school_id' => $school->id,
                         'source_academic_year_id' => $sourceYear->id,
@@ -97,6 +101,20 @@ class EnrollmentRolloverPlanService
                 throw $this->translateUniqueViolation($e);
             }
         });
+    }
+
+    /**
+     * SIS 5.2 (owner decision): the target of a rollover is a DRAFT Academic
+     * Year -- at plan creation, validation, execution claim and every item.
+     * Read FOR SHARE inside the caller's transaction, so an activation either
+     * committed first (seen here) or waits; never trusted from an earlier read.
+     */
+    public static function assertTargetDraft(string $targetAcademicYearId): void
+    {
+        $target = AcademicYear::query()->whereKey($targetAcademicYearId)->sharedLock()->firstOrFail(['id', 'name', 'status']);
+        if ($target->status !== 'draft') {
+            throw new RolloverTargetYearNotDraftException($target->name, $target->status);
+        }
     }
 
     /**

@@ -378,3 +378,40 @@ calendar is fixed, and there is no path back to draft.
   (changed fields, before/after dates).
 - **The year's name is free text,** never derived from dates; a correction
   does not rename it.
+
+## Closed-year structure and rollover target (SIS 5.2, 2026-10-27)
+
+A closed Academic Year is history. It keeps every Section and Term it has, and
+takes no new one.
+
+| Year state | New Section | New Term | Rollover target | Placement (SIS 4.1) |
+|---|---|---|---|---|
+| draft | yes | yes | yes (plan, validate, execute) | yes |
+| active | yes (mid-year class) | yes | **no** | yes |
+| closed | **no** | **no** | **no** | **no** |
+
+- **Sections and Terms.** `SectionAdministrationService::create()` and
+  `AcademicTermService::create()` read the year `FOR SHARE` inside their
+  transaction and refuse a closed year with
+  `AcademicYearClosedForStructureException` (422 `ACADEMIC_YEAR_CLOSED`):
+  "Academic Year <name> is closed. It keeps its existing Sections but takes no
+  new ones." `close()`/`activate()` UPDATE the row, so a close either waits for
+  the create or is seen by it.
+  - Existing closed-year Sections and Terms stay readable, filterable and
+    referenced. Nothing is deleted, deactivated or moved.
+  - The School setup pages replace the Add form with a note for a closed year;
+    a forged web request gets the LC-1 refusal banner (for Terms too: the
+    closed-year refusal is passed through `withFormErrors()`'s page-refusal
+    list instead of becoming a `starts_on` error on a form the page hides).
+  - No database backstop: fixtures, imports and repair legitimately insert
+    closed-year rows, as for placements (ADR 0078).
+- **Rollover target stays draft.** See STUDENT-ENROLLMENT.md "Rollover target
+  year stays draft (SIS 5.2)". The rollover never activates a year;
+  activation stays the separate UAT-C1 action.
+- **Activation waits for a running rollover.** `AcademicYearService::activate()`
+  asks every `AcademicYearActivationBlocker` (tag
+  `academic_structure.year_activation_blockers`) under the draft row's
+  `FOR UPDATE` lock. Students registers `RolloverExecutionActivationBlocker`:
+  while a rollover into the year is `executing`, activation is refused with
+  `ACADEMIC_YEAR_ACTIVATION_BLOCKED` (409), naming Enrollment rollovers →
+  Resume. Academic Structure never reads Students' tables (rule 4).

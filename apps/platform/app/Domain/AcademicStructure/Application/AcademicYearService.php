@@ -2,10 +2,12 @@
 
 namespace App\Domain\AcademicStructure\Application;
 
+use App\Domain\AcademicStructure\Application\Calendar\AcademicYearActivationBlocker;
 use App\Domain\AcademicStructure\Application\Calendar\AcademicYearDateDependency;
 use App\Domain\AcademicStructure\Application\Concerns\AdministersReferenceData;
 use App\Domain\AcademicStructure\Application\Exceptions\AcademicCalendarChangedException;
 use App\Domain\AcademicStructure\Application\Exceptions\AcademicCalendarDatesFixedException;
+use App\Domain\AcademicStructure\Application\Exceptions\AcademicYearActivationBlockedException;
 use App\Domain\AcademicStructure\Application\Exceptions\AcademicYearDependentsOutsideException;
 use App\Domain\AcademicStructure\Application\Exceptions\AcademicYearNotStartedException;
 use App\Domain\AcademicStructure\Application\Exceptions\AcademicYearOverlapException;
@@ -40,11 +42,15 @@ class AcademicYearService
 
     public const string CAPABILITY_MANAGE = 'academics.years.manage';
 
-    /** @param  iterable<AcademicYearDateDependency>  $dependencies */
+    /**
+     * @param  iterable<AcademicYearDateDependency>  $dependencies
+     * @param  iterable<AcademicYearActivationBlocker>  $activationBlockers
+     */
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         #[Tag(AcademicYearDateDependency::TAG)] private readonly iterable $dependencies = [],
+        #[Tag(AcademicYearActivationBlocker::TAG)] private readonly iterable $activationBlockers = [],
     ) {}
 
     /**
@@ -234,6 +240,14 @@ class AcademicYearService
                     }
                     if ($locked->starts_on->toDateString() > self::schoolToday($year->school)) {
                         throw new AcademicYearNotStartedException($locked->starts_on->toDateString());
+                    }
+                    // SIS 5.2: never cut a multi-transaction rollover into this
+                    // year in half (RolloverExecutionActivationBlocker).
+                    foreach ($this->activationBlockers as $blocker) {
+                        $reason = $blocker->blocksActivation($locked);
+                        if ($reason !== null) {
+                            throw new AcademicYearActivationBlockedException($reason);
+                        }
                     }
 
                     $previousActive = AcademicYear::query()

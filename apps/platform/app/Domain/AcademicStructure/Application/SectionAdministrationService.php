@@ -3,6 +3,7 @@
 namespace App\Domain\AcademicStructure\Application;
 
 use App\Domain\AcademicStructure\Application\Concerns\AdministersReferenceData;
+use App\Domain\AcademicStructure\Application\Exceptions\AcademicYearClosedForStructureException;
 use App\Domain\AcademicStructure\Events\SectionCreated;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
@@ -66,6 +67,14 @@ class SectionAdministrationService
             $assertUnique();
 
             return $this->writeUnique(fn (): Section => DB::transaction(function () use ($school, $year, $validated, $actor): Section {
+                // SIS 5.2: a closed year is historical -- it keeps its Sections
+                // but takes no new one. Read FOR SHARE so a concurrent close
+                // waits or is seen. A draft or active year still takes one.
+                $status = AcademicYear::query()->whereKey($year->id)->sharedLock()->value('status');
+                if ($status === 'closed') {
+                    throw new AcademicYearClosedForStructureException($year->name, 'Section');
+                }
+
                 // ORG.7D-0 R5: no new Section on an inactive Campus.
                 $this->activeCampus->require($school, $validated['campus_id']);
 

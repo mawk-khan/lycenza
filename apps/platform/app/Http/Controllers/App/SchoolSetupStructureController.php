@@ -7,6 +7,7 @@ use App\Domain\AcademicStructure\Application\AcademicTermService;
 use App\Domain\AcademicStructure\Application\Exceptions\AcademicCalendarDatesFixedException;
 use App\Domain\AcademicStructure\Application\Exceptions\AcademicTermOutOfRangeException;
 use App\Domain\AcademicStructure\Application\Exceptions\AcademicTermOverlapException;
+use App\Domain\AcademicStructure\Application\Exceptions\AcademicYearClosedForStructureException;
 use App\Domain\AcademicStructure\Application\RoomAdministrationService;
 use App\Domain\AcademicStructure\Application\SectionAdministrationService;
 use App\Domain\AcademicStructure\Infrastructure\AcademicDepartment;
@@ -71,7 +72,13 @@ class SchoolSetupStructureController extends Controller
         $this->authorizeCapability('academics.years.manage', $school);
 
         // Out-of-range and overlapping dates are the service's refusals -- shown on the dates.
-        $this->withFormErrors('starts_on', fn () => $terms->createFromInput($school, $academicYear, $request->only(['name', 'code', 'starts_on', 'ends_on', 'sequence']), $context->actor()));
+        // SIS 5.2: a closed year is the page's state, not a date error -- the refusal banner
+        // (the closed-year page shows no Add form to carry a field error).
+        $this->withFormErrors(
+            'starts_on',
+            fn () => $terms->createFromInput($school, $academicYear, $request->only(['name', 'code', 'starts_on', 'ends_on', 'sequence']), $context->actor()),
+            [AcademicYearClosedForStructureException::class],
+        );
 
         return redirect()->route('app.school-setup.terms', ['academic_year_id' => $academicYear]);
     }

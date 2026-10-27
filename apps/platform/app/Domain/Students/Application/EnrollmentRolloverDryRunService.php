@@ -5,6 +5,7 @@ namespace App\Domain\Students\Application;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Students\Application\Exceptions\InvalidRolloverPlanChronologyException;
+use App\Domain\Students\Application\Exceptions\RolloverTargetYearNotDraftException;
 use App\Domain\Students\Application\Exceptions\StaleRolloverConfigurationException;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
@@ -124,6 +125,10 @@ class EnrollmentRolloverDryRunService
 
             $sourceYear = $plan->sourceAcademicYear;
             $targetYear = $plan->targetAcademicYear;
+            // SIS 5.2: a plan-level refusal before any Student is evaluated.
+            if ($targetYear->status !== 'draft') {
+                throw new RolloverTargetYearNotDraftException($targetYear->name, $targetYear->status);
+            }
             if (! ($targetYear->starts_on > $sourceYear->starts_on)) {
                 throw new InvalidRolloverPlanChronologyException;
             }
@@ -149,6 +154,9 @@ class EnrollmentRolloverDryRunService
                 if ($lockedPlan->configuration_version !== $capturedVersion) {
                     throw new StaleRolloverConfigurationException;
                 }
+                // SIS 5.2: re-checked under lock -- never validated into a year
+                // that stopped being draft while the evaluation ran.
+                EnrollmentRolloverPlanService::assertTargetDraft($lockedPlan->target_academic_year_id);
 
                 foreach ($items as $item) {
                     $r = $results[$item->id];

@@ -34,6 +34,8 @@ const sourceYear = computed(
 const targetYear = computed(
     () => props.academicYears.find((y) => y.id === form.target_academic_year_id) ?? null,
 );
+// SIS 5.2: a rollover target is a draft year (the service refuses any other).
+const draftYears = computed(() => props.academicYears.filter((y) => y.status === 'draft'));
 
 function submit(): void {
     form.post('/app/enrollment-rollovers');
@@ -90,10 +92,14 @@ function submit(): void {
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
                 >
                     <option value="" disabled>Select an Academic Year…</option>
-                    <option v-for="y in academicYears" :key="y.id" :value="y.id">
+                    <option v-for="y in draftYears" :key="y.id" :value="y.id">
                         {{ yearLabel(y) }}
                     </option>
                 </select>
+                <p class="mt-1 text-xs text-slate-500">
+                    Only draft Academic Years are listed: rollover prepares the next year before it
+                    is activated.
+                </p>
                 <p id="target_academic_year_id-error" class="mt-1 text-sm text-red-600">
                     {{ form.errors.target_academic_year_id }}
                 </p>

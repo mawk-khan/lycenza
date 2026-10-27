@@ -1569,7 +1569,7 @@ design).
 | Source Enrollment locking | `lockForUpdate()` on the source row during per-item execution (same primitive `StudentEnrollmentService`'s own lifecycle methods already use) |
 | Target Enrollment race (two executions of the same item) | The idempotency anchor above + `ActiveEnrollmentConflictException` reconciliation |
 | Roll Number race | PostgreSQL's `student_enrollments_school_id_academic_year_id_section_id_roll_` unique constraint is the final backstop; `DuplicateEnrollmentRollNumberException` translation already exists and needs no new code |
-| AcademicYear state race (e.g. someone closes/reactivates the target year mid-execution) | Execution re-checks the target AcademicYear's current status as part of its fresh preflight (not just the dry-run snapshot) — no lock is taken on `AcademicYear` itself; that would risk contending with unrelated, already-existing AcademicYear operations, so revalidate-and-fail-closed is preferred over locking a resource this module does not own the lifecycle of |
+| AcademicYear state race (e.g. someone closes/reactivates the target year mid-execution) | *Superseded (SIS 4.1/5.2): the claim and each item read the target year `FOR SHARE`, and activation is refused while a rollover into the year executes — see "Rollover target year stays draft".* Original: Execution re-checks the target AcademicYear's current status as part of its fresh preflight (not just the dry-run snapshot) — no lock is taken on `AcademicYear` itself; that would risk contending with unrelated, already-existing AcademicYear operations, so revalidate-and-fail-closed is preferred over locking a resource this module does not own the lifecycle of |
 
 **Existing platform risk, not caused by this checkpoint**: Phase 1B.4A
 documented an intermittent `AcademicYearActivationConcurrencyTest`
@@ -1592,6 +1592,11 @@ when target Enrollments were prepared. This is safe precisely because
 `enroll()` never required the target AcademicYear to be `active` in
 the first place (nothing in `StudentEnrollmentService::enroll()`
 checks `AcademicYear.status`).
+
+> **Superseded in part (SIS 5.2, 2026-10-27, ADR 0077 §7):** the target
+> must be **draft** at every stage; an "already-active" target is refused.
+> `enroll()` refuses a closed year since SIS 4.1. Rollover still never
+> activates or closes a year. See "Rollover target year stays draft".
 
 ### Authorization (RECOMMENDATION ONLY — not seeded in this checkpoint)
 
@@ -2979,6 +2984,8 @@ that could never be ended or corrected without owner SQL.
     (`placement_target_unavailable_at_execution`), never to a placement.
     Its start date is the target year's first day, so the date rule never
     refuses it. Target-year status at plan/dry-run time stays SIS 5.2.
+    *Since SIS 5.2 the item's own target-year check reports a non-draft
+    target first, as `target_year_not_draft`.*
   - Campus onboarding and Campus transfer keep their one generic refusal.
   - Admissions conversion rolls back entirely: no Student, Guardian,
     relationship, placement or fee intent.
@@ -3057,3 +3064,40 @@ that could never be ended or corrected without owner SQL.
   - Routes `app.enrollments.roll-number` and
     `app.enrollments.cancel-before-start`: `enrollments.manage`, declared
     whole-School, UUID-constrained.
+
+## Rollover target year stays draft (SIS 5.2, 2026-10-27)
+
+Rollover prepares the next Academic Year while it is still draft. Before SIS
+5.2 a plan could target an active or closed year, and only the placement rule
+(SIS 4.1) caught a closed target at execution.
+
+- **Every stage re-checks the target's CURRENT status, `FOR SHARE`:**
+  - **plan creation** (`EnrollmentRolloverPlanService::createDraft()`,
+    `assertTargetDraft()`): an active or closed target is refused with
+    `RolloverTargetYearNotDraftException` (422
+    `ROLLOVER_TARGET_YEAR_NOT_DRAFT`), shown on the target field; the create
+    page lists draft years only;
+  - **validation** (`EnrollmentRolloverDryRunService::run()`): refused before
+    evaluation and again inside the persistence transaction; the plan stays
+    as it was;
+  - **execution claim** (`EnrollmentRolloverExecutionService::claim()`):
+    refused under the plan lock; no item is touched and the plan stays
+    `validated`;
+  - **each item** (`EnrollmentRolloverItemExecutionService`): a target no
+    longer draft invalidates the plan as drift
+    (`target_year_not_draft`), never a placement.
+- **Activation vs a running rollover.** Execution spans several
+  transactions. Activation of the target is refused while its plan is
+  `executing` (`RolloverExecutionActivationBlocker`, ACADEMIC-STRUCTURE.md).
+  With the claim's and each item's `FOR SHARE` target read against
+  activation's `FOR UPDATE`, whichever commits first decides: a rollover that
+  claims first completes under draft and activation then proceeds; an
+  activation that commits first makes the rollover refuse before any Student.
+  `AnnualTransitionConcurrencyTest` proves both orders with two real
+  processes.
+- **The current year is untouched.** Promotion ends source placements as
+  before; the source year is not closed and the target is not activated by
+  the rollover.
+- **Existing data (canonical DDEV demo, 2026-10-27):** 0 plans target a
+  non-draft year, 0 executing plans, 0 Sections or Terms created in a closed
+  year.

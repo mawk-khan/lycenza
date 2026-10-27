@@ -205,8 +205,14 @@ function submitEdit() {
                 </form>
             </section>
 
+            <p
+                v-if="props.canManage && props.selectedYearId && year?.status === 'closed'"
+                class="mt-8 text-sm text-slate-600"
+            >
+                {{ year.name }} is closed: it keeps its Terms but takes no new ones.
+            </p>
             <section
-                v-if="props.canManage && props.selectedYearId"
+                v-else-if="props.canManage && props.selectedYearId"
                 class="mt-8"
                 aria-labelledby="add-term-heading"
             >

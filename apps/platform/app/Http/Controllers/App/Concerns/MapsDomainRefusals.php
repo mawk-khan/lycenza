@@ -25,15 +25,24 @@ trait MapsDomainRefusals
      * @template T
      *
      * @param  Closure(): T  $action
+     * @param  list<class-string<RuntimeException>>  $pageRefusals  refusals about the page's
+     *                                                              state, not the form's input
+     *                                                              (e.g. a closed year): rethrown
+     *                                                              for the LC-1 refusal banner
      * @return T
      */
-    private function withFormErrors(string $field, Closure $action): mixed
+    private function withFormErrors(string $field, Closure $action, array $pageRefusals = []): mixed
     {
         try {
             return $action();
         } catch (RuntimeException $e) {
             if (! method_exists($e, 'errorCode') || ! method_exists($e, 'getStatusCode')) {
                 throw $e;
+            }
+            foreach ($pageRefusals as $refusal) {
+                if ($e instanceof $refusal) {
+                    throw $e;
+                }
             }
 
             $status = (int) $e->getStatusCode();

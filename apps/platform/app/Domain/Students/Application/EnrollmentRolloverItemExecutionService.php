@@ -2,6 +2,7 @@
 
 namespace App\Domain\Students\Application;
 
+use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Students\Application\Exceptions\ActiveEnrollmentConflictException;
@@ -153,6 +154,13 @@ class EnrollmentRolloverItemExecutionService
             // not `status` alone.
             if (! in_array($plan->status, ['validated', 'executing'], true) || $plan->validated_configuration_version !== $plan->configuration_version) {
                 throw new RolloverPlanNotExecutionReadyException;
+            }
+
+            // SIS 5.2: defense in depth -- the target is still draft (activation
+            // is refused while the plan executes). Drift, never a placement.
+            $targetStatus = AcademicYear::query()->whereKey($plan->target_academic_year_id)->sharedLock()->value('status');
+            if ($targetStatus !== 'draft') {
+                return $this->invalidateForDrift($plan, $lockedItem, 'target_year_not_draft', $actor);
             }
 
             if ($lockedItem->validation_result === 'excluded') {

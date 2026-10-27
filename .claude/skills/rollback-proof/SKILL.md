@@ -25,6 +25,12 @@ test database.
   naming), on `--database=pgsql_admin` (rule 54). It never touches the
   development database.
 
+**Current-tree guard (SIS 5.2).** Before anything else it runs `migrate` on
+the isolated database, refuses if any migration is still pending, and refuses
+unless the last `<steps>` migrations run are exactly the newest `<steps>`
+files in `database/migrations`. A stale proof database (an earlier run,
+another branch) can no longer make it roll back the wrong migration.
+
 **The proof:**
 1. A schema-only `pg_dump` before.
 2. `migrate:rollback --step=<steps>`, then a dump.

@@ -320,7 +320,8 @@ class PlacementYearValidityTest extends TestCase
 
         $executed = app(EnrollmentRolloverItemExecutionService::class)->execute($item);
 
-        $this->assertSame(['failed', 'blocked', 'placement_target_unavailable_at_execution'], [$executed->execution_status, $executed->validation_result, $executed->validation_reason]);
+        // SIS 5.2: the item's own target-year check sees the closed year first.
+        $this->assertSame(['failed', 'blocked', 'target_year_not_draft'], [$executed->execution_status, $executed->validation_result, $executed->validation_reason]);
         $this->assertSame(0, $this->inSchool(fn () => StudentEnrollment::query()->where('academic_year_id', $this->draft->id)->count()));
     }
 

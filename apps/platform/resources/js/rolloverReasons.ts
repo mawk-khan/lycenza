@@ -42,6 +42,9 @@ const ROLLOVER_REASON_LABELS: Record<string, string> = {
         'The previously-matching target Enrollment no longer exists -- revalidate.',
     placement_target_unavailable_at_execution:
         'The Student, target Section or its Campus became inactive during execution -- revalidate.',
+    // SIS 5.2: rollover prepares a draft year only.
+    target_year_not_draft:
+        'The target Academic Year is no longer a draft (it was activated or closed) -- rollover into it is not possible.',
     // Phase 1G.2/1G.3: elective subject-rollover validation/execution.
     missing_subject_mapping:
         'This Student has an active elective with no subject mapping configured -- add one below.',

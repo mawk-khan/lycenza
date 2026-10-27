@@ -135,6 +135,10 @@ class EnrollmentRolloverExecutionService
                 if ($locked->status !== 'validated' || $locked->validated_configuration_version !== $locked->configuration_version) {
                     throw new RolloverPlanNotExecutionReadyException;
                 }
+                // SIS 5.2: the target is still draft, under the plan lock then the
+                // year FOR SHARE. Once claimed ('executing') the year cannot be
+                // activated until the run ends (RolloverExecutionActivationBlocker).
+                EnrollmentRolloverPlanService::assertTargetDraft($locked->target_academic_year_id);
 
                 $affected = EnrollmentRolloverPlan::query()
                     ->whereKey($locked->id)

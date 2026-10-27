@@ -19,6 +19,7 @@ use App\Domain\Students\Application\Exceptions\RolloverPlanAlreadyExecutingExcep
 use App\Domain\Students\Application\Exceptions\RolloverPlanNoLongerConfigurableException;
 use App\Domain\Students\Application\Exceptions\RolloverPlanNotExecutionReadyException;
 use App\Domain\Students\Application\Exceptions\RolloverPlanNotResumableException;
+use App\Domain\Students\Application\Exceptions\RolloverTargetYearNotDraftException;
 use App\Domain\Students\Application\Exceptions\StaleRolloverConfigurationException;
 use App\Domain\Students\Application\StudentAccess;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
@@ -128,7 +129,7 @@ class EnrollmentRolloverController extends Controller
 
         try {
             $plan = $service->createDraft($school, $sourceYear, $targetYear, $context->actor());
-        } catch (InvalidRolloverPlanYearsException|OpenRolloverPlanConflictException|CrossSchoolRolloverPlanException $e) {
+        } catch (InvalidRolloverPlanYearsException|OpenRolloverPlanConflictException|CrossSchoolRolloverPlanException|RolloverTargetYearNotDraftException $e) {
             throw ValidationException::withMessages(['target_academic_year_id' => [$e->getMessage()]]);
         }
 

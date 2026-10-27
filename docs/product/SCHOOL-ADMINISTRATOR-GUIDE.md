@@ -117,8 +117,8 @@ at a time.
 | State | What it means | What you can do |
 |---|---|---|
 | Draft | Being prepared | Rename; **correct its dates and its Terms' dates**; add Sections, offerings and a rollover plan. **Safe before its start date.** |
-| Active | The current operational year | Day-to-day work happens here. Its dates are fixed |
-| Closed | History | Read only; complete its open placements (§16) |
+| Active | The current operational year | Day-to-day work happens here, including adding a Section or Term mid-year. Its dates are fixed. It cannot be a rollover target |
+| Closed | History | Read only: its Sections and Terms stay visible but no new ones are added, and it takes no new placement or rollover. Complete its open placements (§16) |
 
 **Rules that protect you:**
 - **Activation waits for the start date.** A draft year can be activated
@@ -130,6 +130,12 @@ at a time.
 - **A closed year cannot be reopened** through School administration. Do
   not activate early "to get ahead". Prepare the next year as a draft
   instead.
+- **A closed year takes nothing new (SIS 5.2).** The Sections and Terms
+  pages show "<year> is closed: it keeps its Sections but takes no new
+  ones." instead of the Add form.
+- **Activation waits for a running rollover (SIS 5.2).** While a rollover
+  into the year is still running, Activate is refused: finish it first
+  (Enrollment rollovers → Resume).
 
 **Correcting a mistyped date (draft years only, SIS 5.1):**
 - **Academic years → Correct dates** on a draft year. Change the start or end
@@ -168,7 +174,8 @@ at a time.
 - **A Section belongs to one academic year.** "Grade 6 · A" in 2026-27 and
   in 2027-28 are separate Sections.
 - **To add a Section:** **Sections** → choose the year → **Show sections**
-  → **Add a Section** (Grade, Campus, Name, Code, Capacity).
+  → **Add a Section** (Grade, Campus, Name, Code, Capacity). A draft or
+  active year only: a closed year keeps its Sections but takes no new ones.
 - **To deactivate a Section:** use **Deactivate**. Any Students still
   placed there and any teaching assignments on it then show up in Data
   Health (§17), so you can move them.
@@ -425,7 +432,9 @@ then lists an inactive Student who still has a placement.
   Status filter.
 - **Teaching assignments:** who teaches which offering to which Section,
   from which date. **End** an assignment with its last day and a reason.
-  It stays current until that day ends.
+  It stays current until that day ends. The last day must fall inside the
+  assignment's academic year (its final day is allowed); a later date is
+  refused on the date field, never shortened for you.
 - **A teacher's own pages** (My class attendance, My curriculum delivery,
   and others) come from their teaching assignments. **My Attendance**
   needs the teacher to have MFA enabled.
@@ -641,7 +650,8 @@ reviewed operation.
    - **Leave this year's timetable active.** Registers keep using it
      until the draft year is activated.
 2. **Enrollment rollovers → Create Plan**: source and target year, then
-   **Open** it.
+   **Open** it. The target must be a **draft** year; only draft years are
+   offered.
 3. **Mappings:** **Add mapping** from each source Grade (optionally
    Section) to a target Grade and Section. Only the target Grade's Sections
    are offered.
@@ -663,8 +673,13 @@ reviewed operation.
 11. **Confirm Data Health is clear** (§17).
 
 **Caveats:**
-- **Executing and activating are separate.** You can execute the
-  rollover while the target year is still draft.
+- **Executing and activating are separate.** Rollover runs only while the
+  target year is still draft (SIS 5.2): creating the plan, validating it
+  and starting it each check this, and the rollover never activates the
+  year. If the target year was activated or closed after you planned, the
+  rollover is refused (or, mid-run, the plan is marked "Target year is no
+  longer draft") and no Student is placed. Activate only after the rollover
+  has completed; a running rollover blocks activation.
 - **Nothing is closed automatically.** Old placements stay open until you
   complete them (step 10).
 - **A closed year cannot be reopened** through School administration.

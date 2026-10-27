@@ -7,6 +7,7 @@ use App\Domain\AcademicStructure\Application\Exceptions\AcademicCalendarChangedE
 use App\Domain\AcademicStructure\Application\Exceptions\AcademicCalendarDatesFixedException;
 use App\Domain\AcademicStructure\Application\Exceptions\AcademicTermOutOfRangeException;
 use App\Domain\AcademicStructure\Application\Exceptions\AcademicTermOverlapException;
+use App\Domain\AcademicStructure\Application\Exceptions\AcademicYearClosedForStructureException;
 use App\Domain\AcademicStructure\Events\AcademicTermCreated;
 use App\Domain\AcademicStructure\Infrastructure\AcademicTerm;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
@@ -45,6 +46,10 @@ class AcademicTermService
             // SIS 5.1: the year's dates are read FOR SHARE, so a concurrent
             // correction of a draft year's dates either is seen or waits.
             $year = AcademicYear::query()->whereKey($year->id)->sharedLock()->firstOrFail();
+            // SIS 5.2: a closed year keeps its Terms but takes no new one.
+            if ($year->status === 'closed') {
+                throw new AcademicYearClosedForStructureException($year->name, 'Term');
+            }
             $this->assertWithinYear($year, $attributes['starts_on'], $attributes['ends_on']);
             $this->assertNoOverlap($year, $attributes['starts_on'], $attributes['ends_on']);
 

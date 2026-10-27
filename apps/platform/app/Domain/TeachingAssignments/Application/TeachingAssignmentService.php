@@ -213,6 +213,10 @@ class TeachingAssignmentService
             if ($endsOn < $assignment->starts_on->toDateString() || ($previousEndsOn !== null && $endsOn > $previousEndsOn)) {
                 throw new InvalidAssignmentDatesException;
             }
+            // SIS 5.2: an assignment never ends after its academic year (read FOR SHARE).
+            if ($endsOn > $this->yearEndOf($school, $assignment->academic_year_id)) {
+                throw new AssignmentOutsideAcademicYearException;
+            }
 
             $assignment->forceFill([
                 'ends_on' => $endsOn,
@@ -275,6 +279,9 @@ class TeachingAssignmentService
             foreach ($rows as $assignment) {
                 $startsOn = $assignment->starts_on->toDateString();
                 $target = $startsOn > $endsOn ? $assignment->starts_on->copy()->subDay()->toDateString() : $endsOn;
+                // SIS 5.2: an assignment left open past its year ended with the
+                // year -- it never ends after its academic year's last day.
+                $target = min($target, $this->yearEndOf($school, $assignment->academic_year_id));
                 $previousEndsOn = $assignment->ends_on?->toDateString();
 
                 if ($previousEndsOn !== null && $target >= $previousEndsOn) {
@@ -334,5 +341,11 @@ class TeachingAssignmentService
             ->where(fn ($q) => $q->whereNull('ends_on')->orWhere('ends_on', '>=', $startsOn))
             ->where(fn ($q) => $q->whereNull('ends_on')->orWhereColumn('ends_on', '>=', 'starts_on')) // S7: a voided row covers no day
             ->exists();
+    }
+
+    /** SIS 5.2: the owning year's last day (`Y-m-d`), FOR SHARE inside the caller's transaction. */
+    private function yearEndOf(School $school, string $academicYearId): string
+    {
+        return AcademicYear::query()->where('school_id', $school->id)->whereKey($academicYearId)->sharedLock()->firstOrFail()->ends_on->toDateString();
     }
 }

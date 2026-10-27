@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Domain\AcademicStructure\Application\Calendar\AcademicYearActivationBlocker;
 use App\Domain\AcademicStructure\Application\Calendar\AcademicYearDateDependency;
 use App\Domain\Examinations\Application\ExaminationYearDateDependency;
 use App\Domain\Examinations\Application\Marks\StudentMarkPlacementCancellationBlocker;
@@ -23,6 +24,7 @@ use App\Domain\Students\Application\ElectivePlacementCancellationBlocker;
 use App\Domain\Students\Application\ElectiveTransferBlocker;
 use App\Domain\Students\Application\PlacementCancellationBlocker;
 use App\Domain\Students\Application\PlacementYearDateDependency;
+use App\Domain\Students\Application\RolloverExecutionActivationBlocker;
 use App\Domain\Students\Application\StudentTransferBlocker;
 use App\Domain\TeachingAssignments\Application\EmploymentEndedTeachingOwnership;
 use App\Domain\TeachingAssignments\Application\TeachingAssignmentYearDateDependency;
@@ -153,6 +155,10 @@ class AppServiceProvider extends ServiceProvider
             PlacementYearDateDependency::class, TeachingAssignmentYearDateDependency::class, ExaminationYearDateDependency::class,
             AssignmentYearDateDependency::class, FeeYearDateDependency::class,
         ], AcademicYearDateDependency::TAG);
+
+        // SIS 5.2: a rollover executing into a draft year blocks its activation
+        // (Students answers; AcademicStructure asks).
+        $this->app->tag([RolloverExecutionActivationBlocker::class], AcademicYearActivationBlocker::TAG);
 
         // HRX.3 (ADR 0065 §24.5): Leave's approval port, implemented by Staff
         // Attendance. Bound here, not in Leave, so Leave never references the

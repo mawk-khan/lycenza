@@ -241,3 +241,22 @@ Subject Offering from `starts_on` to `ends_on`".
     `examinations.marks.teacher`, MFA, an ActingEmployee, P3 and ADR 0038.
   - Production is refused in code pending RES-L2 (E37), the teacher RES-L0
     re-review (E35) and RES-L1 (E36).
+
+## 10. End date inside the Academic Year (SIS 5.2, 2026-10-27)
+
+`create()` already required both dates inside the year. Before SIS 5.2,
+`end()` accepted any date on or after the start, so an assignment could be
+ended after its year and keep granting ownership on dates the year does not
+cover.
+
+- **`end()`** (both services) refuses an `ends_on` after the owning year's
+  `ends_on` (year read `FOR SHARE`) with
+  `AssignmentOutsideAcademicYearException` (422): "The assignment dates must
+  fall inside the academic year." The year's last day is accepted. The web
+  form shows it on the date field; the operator's date is never silently
+  truncated.
+- **`endForEmployment()`** caps its target at the year end: an employment
+  ending after the year ends the row on the year's last day, reason
+  `employment_ended`. This is the system's own date, not operator input.
+- No schema change: both writers enforce it, and existing data has 0 rows
+  ending after their year.

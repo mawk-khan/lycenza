@@ -47,6 +47,10 @@ const yearOptions = computed(() =>
 const campusOptions = computed(() => props.campuses.map((c) => ({ value: c.id, label: c.name })));
 const gradeOptions = computed(() => props.gradeLevels.map((g) => ({ value: g.id, label: g.name })));
 const selectedYear = ref(props.selectedYearId);
+// SIS 5.2: a closed year keeps its Sections but takes no new one (the service refuses).
+const selectedYearClosed = computed(
+    () => props.academicYears.find((y) => y.id === props.selectedYearId)?.status === 'closed',
+);
 const yearName = computed(
     () => props.academicYears.find((y) => y.id === props.selectedYearId)?.name ?? '',
 );
@@ -264,8 +268,14 @@ function setStatus(section: Section, status: 'active' | 'inactive') {
                 </form>
             </section>
 
+            <p
+                v-if="props.canManage && props.selectedYearId && selectedYearClosed"
+                class="mt-8 text-sm text-slate-600"
+            >
+                {{ yearName }} is closed: it keeps its Sections but takes no new ones.
+            </p>
             <section
-                v-if="props.canManage && props.selectedYearId"
+                v-else-if="props.canManage && props.selectedYearId"
                 class="mt-8"
                 aria-labelledby="add-section-heading"
             >
