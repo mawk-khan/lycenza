@@ -80,3 +80,11 @@ decision- or legal-blocked items, and sets out the numbered roadmap SIS
 *(2026-10-27, SIS 9.1: `SIS-UX-ACCESSIBILITY-CLOSURE-2026-10-27.md` is the
 SIS UX / accessibility findings register: 28 findings reconciled, 13 open
 closed, the 390 px and keyboard evidence, and the decisions still open.)*
+
+*(2026-10-28, SIS 10.1: `SIS-FINAL-LOCAL-UAT-2026-10-28.md` is the final local
+SIS UAT and closure record. The first run on `aedffd2a` was PARTIAL (D-1, F-1 to
+F-4); SIS 10.2 corrected those; the rerun on `1f42d2ca` PASSED. It holds the
+journey matrix, the authorization, tenancy and privacy evidence, browser-only
+operability, regression evidence, the formal rescore (96 / 100), the open
+decisions and the optional residuals. It is ready for owner sign-off and
+claims local DDEV only.)*
