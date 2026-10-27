@@ -5,6 +5,7 @@ namespace App\Support\Http;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Inertia\Support\Header;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -56,9 +57,19 @@ final class WebDomainRefusalResponder
         return $status >= 400 && $status < 500 ? $status : null;
     }
 
+    /**
+     * SIS 10.2 (F-1): an Inertia visit (`X-Inertia`) is a browser request
+     * whatever its Accept header says -- a crafted one without Accept would
+     * otherwise read as an XHR JSON caller and fall through to a 500. API
+     * routes are never browser requests.
+     */
     public static function isBrowserRequest(Request $request): bool
     {
-        return ! $request->is('api/*') && ! $request->expectsJson();
+        if ($request->is('api/*')) {
+            return false;
+        }
+
+        return (bool) $request->header(Header::INERTIA) || ! $request->expectsJson();
     }
 
     public function render(Throwable $e, Request $request): ?Response

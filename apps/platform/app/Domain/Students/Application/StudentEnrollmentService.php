@@ -21,6 +21,7 @@ use App\Models\User;
 use App\Support\Approval\ApprovalDecisionAuthority;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Auth\Mfa\FreshMfaProof;
+use App\Support\Dates\CalendarDate;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Container\Attributes\Tag;
@@ -371,7 +372,7 @@ class StudentEnrollmentService
                     $sourceEndsOn = Carbon::parse($effectiveDate)->subDay()->toDateString();
                     if ($sourceEndsOn < $lockedSource->starts_on->toDateString()) {
                         throw new InvalidEnrollmentDateRangeException(
-                            "Transfer effective date must be after the source Enrollment's start date ({$lockedSource->starts_on->toDateString()})."
+                            'Transfer effective date must be after the source Enrollment\'s start date ('.CalendarDate::human($lockedSource->starts_on).').'
                         );
                     }
                     $this->assertEndsWithinYear($lockedSource, $sourceEndsOn);
@@ -493,11 +494,11 @@ class StudentEnrollmentService
                 }
             } else {
                 if ($notStarted) {
-                    throw new InvalidEnrollmentDateRangeException("This placement starts on {$startsOn} and has not started yet. Use \"Cancel before it starts\" instead.");
+                    throw new InvalidEnrollmentDateRangeException('This placement starts on '.CalendarDate::human($startsOn).' and has not started yet. Use "Cancel before it starts" instead.');
                 }
                 if ($endedOn < $startsOn) {
                     throw new InvalidEnrollmentDateRangeException(
-                        "End date must not be before the Enrollment's start date ({$startsOn})."
+                        'End date must not be before the Enrollment\'s start date ('.CalendarDate::human($startsOn).').'
                     );
                 }
 
@@ -514,7 +515,7 @@ class StudentEnrollmentService
             // its academic year's last day, once that day has come. Leaving
             // earlier is a withdrawal or cancellation (reason, fresh code).
             if ($newStatus === 'completed' && $endedOn !== $locked->academicYear()->firstOrFail()->ends_on->toDateString()) {
-                throw new InvalidEnrollmentDateRangeException("A placement completes on its academic year's last day ({$locked->academicYear()->firstOrFail()->ends_on->toDateString()}); to end it earlier, withdraw or cancel it.");
+                throw new InvalidEnrollmentDateRangeException('A placement completes on its academic year\'s last day ('.CalendarDate::human($locked->academicYear()->firstOrFail()->ends_on).'); to end it earlier, withdraw or cancel it.');
             }
 
             $event = null;
@@ -552,7 +553,7 @@ class StudentEnrollmentService
     {
         $yearEnd = $placement->academicYear()->firstOrFail()->ends_on->toDateString();
         if ($endsOn > $yearEnd) {
-            throw new InvalidEnrollmentDateRangeException("End date must not be after the academic year's end ({$yearEnd}).");
+            throw new InvalidEnrollmentDateRangeException('End date must not be after the academic year\'s end ('.CalendarDate::human($yearEnd).').');
         }
     }
 
@@ -662,7 +663,7 @@ class StudentEnrollmentService
         $yearStart = $lockedYear->starts_on->toDateString();
         $yearEnd = $lockedYear->ends_on->toDateString();
         if ($startsOn < $yearStart || $startsOn > $yearEnd) {
-            throw new InvalidEnrollmentDateRangeException("The start date must fall within Academic Year {$lockedYear->name} ({$yearStart} to {$yearEnd}).");
+            throw new InvalidEnrollmentDateRangeException("The start date must fall within Academic Year {$lockedYear->name} (".CalendarDate::human($yearStart).' to '.CalendarDate::human($yearEnd).').');
         }
 
         return $startsOn;

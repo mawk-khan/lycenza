@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useForm } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import { formatCalendarDate } from '../../../datetime';
 
 interface AcademicYearOption {
     id: string;
@@ -23,7 +24,8 @@ const form = useForm({
 });
 
 function yearLabel(y: AcademicYearOption): string {
-    return `${y.name} (${y.startsOn} – ${y.endsOn})`;
+    // SIS 10.2 (F-4): people read dates, never `YYYY-MM-DD`.
+    return `${y.name} (${formatCalendarDate(y.startsOn)} – ${formatCalendarDate(y.endsOn)})`;
 }
 
 // Presentation only -- the operator deliberately picks both years; no

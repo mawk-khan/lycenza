@@ -281,12 +281,15 @@ class StudentController extends Controller
         $proof = $mfa->requireForAction($request, $context->actor());
 
         try {
-            $service->changeStatus($model, $validated['status'], $validated['reason_code'], $context->actor(), $proof);
+            // SIS 10.2 (D-1): the service changes a separately locked row and
+            // returns it refreshed after commit -- the message names THAT state,
+            // never the stale $model read before the change.
+            $changed = $service->changeStatus($model, $validated['status'], $validated['reason_code'], $context->actor(), $proof);
         } catch (StudentStatusUnchangedException|StudentLifecycleReasonException $e) {
             throw ValidationException::withMessages(['status' => [$e->getMessage()]]);
         }
 
-        return redirect("/app/students/{$model->id}")->with('flash', "Student marked {$model->status}.");
+        return redirect("/app/students/{$changed->id}")->with('flash', "Student marked {$changed->status}.");
     }
 
     /**

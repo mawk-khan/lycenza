@@ -301,6 +301,13 @@ function startRollCorrection(e: Enrollment): void {
     rollTarget.value = e.id;
 }
 
+// SIS 10.2 (F-3): the current placement is also listed in the history; its
+// roll-number editor lives in the Current placement block only, so a history
+// row never opens a second copy of it (decided by placement id, not position).
+function isCurrentPlacement(e: Enrollment): boolean {
+    return props.currentEnrollment?.id === e.id;
+}
+
 function submitRollCorrection(e: Enrollment): void {
     rollForm.post(`/app/enrollments/${e.id}/roll-number`, {
         preserveScroll: true,
@@ -785,7 +792,7 @@ async function unlink(r: Relationship): Promise<void> {
                         <StatusBadge :status="e.status" />
                     </div>
                     <form
-                        v-if="rollTarget === e.id"
+                        v-if="rollTarget === e.id && !isCurrentPlacement(e)"
                         class="flex w-full flex-wrap items-end gap-3 border-t border-slate-100 pt-3"
                         @submit.prevent="submitRollCorrection(e)"
                     >

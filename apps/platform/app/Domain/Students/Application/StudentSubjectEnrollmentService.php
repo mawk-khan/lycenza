@@ -16,6 +16,7 @@ use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Domain\Students\Infrastructure\StudentSubjectEnrollment;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Dates\CalendarDate;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
@@ -164,7 +165,7 @@ class StudentSubjectEnrollmentService
                     $sourceEndsOn = Carbon::parse($effectiveDate)->subDay()->toDateString();
                     if ($sourceEndsOn < $lockedSource->starts_on->toDateString()) {
                         throw new InvalidEnrollmentDateRangeException(
-                            "Switch effective date must be after the source subject enrollment's start date ({$lockedSource->starts_on->toDateString()})."
+                            'Switch effective date must be after the source subject enrollment\'s start date ('.CalendarDate::human($lockedSource->starts_on).').'
                         );
                     }
 
@@ -287,7 +288,7 @@ class StudentSubjectEnrollmentService
 
             if ($endedOn < $locked->starts_on->toDateString()) {
                 throw new InvalidEnrollmentDateRangeException(
-                    "End date must not be before the subject enrollment's start date ({$locked->starts_on->toDateString()})."
+                    'End date must not be before the subject enrollment\'s start date ('.CalendarDate::human($locked->starts_on).').'
                 );
             }
 

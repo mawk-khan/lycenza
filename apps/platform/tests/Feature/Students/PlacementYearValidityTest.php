@@ -118,7 +118,7 @@ class PlacementYearValidityTest extends TestCase
         }
     }
 
-    private const string ACTIVE_RANGE = 'The start date must fall within Academic Year 2026-27 (2026-04-01 to 2027-03-31).';
+    private const string ACTIVE_RANGE = 'The start date must fall within Academic Year 2026-27 (1 Apr 2026 to 31 Mar 2027).';
 
     // --- Manual placement (enroll) -------------------------------------------
 
@@ -169,7 +169,7 @@ class PlacementYearValidityTest extends TestCase
     {
         $student = $this->createStudent($this->school);
 
-        $this->assertOutOfYear(fn () => $this->enroll($student, $this->draftSection, '2027-03-31'), 'The start date must fall within Academic Year 2027-28 (2027-04-01 to 2028-03-31).');
+        $this->assertOutOfYear(fn () => $this->enroll($student, $this->draftSection, '2027-03-31'), 'The start date must fall within Academic Year 2027-28 (1 Apr 2027 to 31 Mar 2028).');
         $this->assertSame($this->draft->id, $this->enroll($student, $this->draftSection, '2027-04-01')->academic_year_id);
     }
 
@@ -179,7 +179,7 @@ class PlacementYearValidityTest extends TestCase
         $student = $this->createStudent($this->school);
 
         // A date inside the ACTIVE year is still outside the draft Section's year.
-        $this->assertOutOfYear(fn () => $this->enroll($student, $this->draftSection, '2026-06-01'), 'The start date must fall within Academic Year 2027-28 (2027-04-01 to 2028-03-31).');
+        $this->assertOutOfYear(fn () => $this->enroll($student, $this->draftSection, '2026-06-01'), 'The start date must fall within Academic Year 2027-28 (1 Apr 2027 to 31 Mar 2028).');
     }
 
     #[Test]
