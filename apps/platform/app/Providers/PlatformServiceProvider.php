@@ -4,8 +4,12 @@ namespace App\Providers;
 
 use App\Domain\AcademicStructure\Application\DataHealth\ActiveYearWithoutSectionsCheck;
 use App\Domain\AcademicStructure\Application\DataHealth\NoActiveAcademicYearCheck;
+use App\Domain\AcademicStructure\Application\Setup\AcademicSetupReadiness;
+use App\Domain\Admissions\Application\Setup\AdmissionsSetupReadiness;
 use App\Domain\Attendance\Application\DataHealth\AttendanceOutsidePlacementCheck;
+use App\Domain\Attendance\Application\Setup\StudentAttendanceSetupReadiness;
 use App\Domain\Automation\Application\AutomationTriggerConsumer;
+use App\Domain\Campuses\Application\Setup\CampusSetupReadiness;
 use App\Domain\Communications\Application\Audience\CommunicationAudienceResolverRegistry;
 use App\Domain\Communications\Application\Audience\FeeReminder\FeeReminderAudienceResolver;
 use App\Domain\Communications\Application\Audience\FeeReminder\FeeReminderBalanceSource;
@@ -21,16 +25,31 @@ use App\Domain\Communications\Application\Audience\SubjectOfferingAudienceResolv
 use App\Domain\Communications\Application\Channels\CommunicationChannelRegistry;
 use App\Domain\Communications\Application\Channels\EmailChannelDriver;
 use App\Domain\Communications\Application\Channels\InAppChannelDriver;
+use App\Domain\Communications\Application\Setup\CommunicationsSetupReadiness;
 use App\Domain\Fees\Application\DataHealth\ChargeAfterPlacementEndedCheck;
+use App\Domain\Fees\Application\Setup\FeesSetupReadiness;
+use App\Domain\Guardians\Application\Setup\GuardianSetupReadiness;
+use App\Domain\HR\Application\Setup\StaffRecordsSetupReadiness;
+use App\Domain\Identity\Application\Portal\GuardianPortalSetupReadiness;
+use App\Domain\Inventory\Application\Setup\InventorySetupReadiness;
+use App\Domain\Leave\Application\Setup\LeaveSetupReadiness;
+use App\Domain\Library\Application\Setup\LibrarySetupReadiness;
 use App\Domain\Payments\Application\Collections\FeeReminderBalances;
+use App\Domain\Schools\Application\Setup\SchoolProfileSetupReadiness;
+use App\Domain\StaffAttendance\Application\Setup\StaffAttendanceSetupReadiness;
 use App\Domain\Students\Application\DataHealth\ActiveEnrollmentInClosedYearCheck;
 use App\Domain\Students\Application\DataHealth\ActiveEnrollmentInInactiveSectionCheck;
 use App\Domain\Students\Application\DataHealth\ActiveStudentWithoutCurrentPlacementCheck;
 use App\Domain\Students\Application\DataHealth\InactiveStudentWithActiveEnrollmentCheck;
 use App\Domain\Students\Application\DataHealth\PossibleDuplicateStudentsCheck;
 use App\Domain\Students\Application\DataHealth\StudentNumberCaseCollisionCheck;
+use App\Domain\Students\Application\Setup\StudentRecordsSetupReadiness;
 use App\Domain\TeachingAssignments\Application\DataHealth\AssignmentOnInactiveConfigurationCheck;
 use App\Domain\Timetable\Application\DataHealth\SectionWithoutScheduleCheck;
+use App\Domain\Timetable\Application\Setup\TimetableSetupReadiness;
+use App\Domain\Transport\Application\Setup\TransportSetupReadiness;
+use App\Support\ApiClients\IntegrationSetupReadiness;
+use App\Support\Audit\ComplianceSetupReadiness;
 use App\Support\DataHealth\DataHealthRegistry;
 use App\Support\Events\Consumers\NotifyActorOfSettingChangeConsumer;
 use App\Support\Events\Consumers\WebhookFanoutConsumer;
@@ -43,6 +62,8 @@ use App\Support\Notifications\Providers\FakeWhatsAppProvider;
 use App\Support\Notifications\Providers\InAppProvider;
 use App\Support\Notifications\Providers\LogEmailProvider;
 use App\Support\Settings\SettingRegistry;
+use App\Support\Setup\OrganizationSetupRegistry;
+use App\Support\Setup\SetupReadinessProviders;
 use App\Support\Webhooks\SsrfSafeUrlValidator;
 use App\Support\Webhooks\WebhookSigner;
 use Illuminate\Support\ServiceProvider;
@@ -136,6 +157,29 @@ class PlatformServiceProvider extends ServiceProvider
             $registry->register($app->make(ChargeAfterPlacementEndedCheck::class));
 
             return $registry;
+        });
+
+        // ORG.12A (ADR 0080): the Organization Control Plane's code-owned
+        // setup catalogue (pure, no tenant state) and its readiness
+        // providers, each in the module that owns the configuration. Scoped,
+        // not singleton: providers may hold TenantContext-backed resolvers,
+        // which a long-running worker must rebuild per job.
+        $this->app->singleton(OrganizationSetupRegistry::class);
+        $this->app->scoped(SetupReadinessProviders::class, function ($app) {
+            $providers = new SetupReadinessProviders;
+            foreach ([
+                SchoolProfileSetupReadiness::class, CampusSetupReadiness::class, AcademicSetupReadiness::class,
+                TimetableSetupReadiness::class, StudentRecordsSetupReadiness::class, GuardianSetupReadiness::class,
+                StaffRecordsSetupReadiness::class, LeaveSetupReadiness::class, StudentAttendanceSetupReadiness::class,
+                StaffAttendanceSetupReadiness::class, FeesSetupReadiness::class, AdmissionsSetupReadiness::class,
+                TransportSetupReadiness::class, LibrarySetupReadiness::class, InventorySetupReadiness::class,
+                CommunicationsSetupReadiness::class, GuardianPortalSetupReadiness::class, ComplianceSetupReadiness::class,
+                IntegrationSetupReadiness::class,
+            ] as $provider) {
+                $providers->register($app->make($provider));
+            }
+
+            return $providers;
         });
 
         $this->app->singleton(EventConsumerRegistry::class, function ($app) {

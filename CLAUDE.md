@@ -1655,3 +1655,11 @@ once several modules copy it.
        - It never makes anyone staff.
        - `communications.view` alone never opens the calendar.
        - Never grant `communications.view` (Hub and announcement-list visibility) to give someone the calendar.
+
+111. **The Organization Control Plane observes configuration; it never owns, stores or writes it (ADR 0080, ORG.12A).**
+     - **One catalogue:** `App\Support\Setup\OrganizationSetupRegistry::DEFINITIONS`, code-owned. Never a table, setting, request input or runtime registration; keys are stable `<area>.<subject>`, order explicit and unique, dependencies ordered first and acyclic. `NETWORK_FUTURE`/`PLATFORM_FUTURE` scopes stay refused until ORG.12D is authorized.
+     - **Readiness is derived:** each key has one `SetupReadinessProvider` in the module that owns the configuration, read-only, School-scoped, bounded EXISTS/aggregate queries. Never a `setup_complete` flag, a setup-state table, stored SQL, a JSON predicate or a School-editable rule.
+     - **Statuses are closed** (`SetupStatus`) and never "production ready". An unentitled optional area is `NOT_APPLICABLE` and is never evaluated; dependencies are guidance, never authorization.
+     - **Authority:** the floor `school.profile.view` in that School plus each area's `view` capabilities, which are never Campus-adopted keys (do not add a `WHOLE_SCHOOL_HUBS` entry for readiness). Platform, elevation and Group authority read nothing; there is no cross-School readiness before ORG.12D.
+     - **Privacy:** facts only -- never a name, email, phone, amount, record id, credential or count of people.
+     - **A new configurable module** adds its definition, its provider and the `OrganizationSetupArchitectureTest` key list in the same change.

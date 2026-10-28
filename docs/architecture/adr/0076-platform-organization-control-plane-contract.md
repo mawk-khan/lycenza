@@ -11142,3 +11142,24 @@ Security: HIGH 0, MEDIUM 0; accepted LOWs are listed in the record (§5).
 **82.4 Regression.** Documentation-only audit, so no full rerun. The latest exact-SHA regression is `66be83a6` (9,584 passed + ESI-12 skip). Counter 0/5.
 
 **82.5 Next.** Owner choice: another ERP phase, staging via R-00a later, or a recorded item. Nothing is started automatically.
+
+## 83. ORG.12A — Organization Control Plane setup registry (cross-reference, 2026-10-28)
+
+ORG.12 is an **additive expansion** recorded in its own decision,
+**ADR 0080** (contract `docs/organization/ORG-12-CONTROL-PLANE-CONTRACT.md`,
+evidence `docs/organization/ORG-12-REFERENCE-CAPABILITY-MAP.md`). It does
+not amend this ADR: §4 (School the only tenant), §10 (Campus the canonical
+Branch), §15 (navigation a projection), §18 (Groups governance only) and
+§19 (platform-curated roles) stand unchanged, and the ORG.LOCAL-CLOSE
+verdict (§82) stays valid.
+
+- **Name.** "Platform & Organization Control-Plane" in this ADR is the
+  platform plane (Registry, onboarding, lifecycle, entitlements). ADR 0080's
+  "Organization Control Plane" is the School-side setup view. They share no
+  code path; the platform Registry readiness (§9.3) is unchanged and is not
+  the School setup registry.
+- **What ORG.12A adds.** A code-owned setup catalogue (21 areas),
+  domain-owned read-only readiness providers, and a School-scoped read
+  service gated by the existing `school.profile.view`. No capability, role,
+  template, entitlement, Campus adoption, route, table or migration.
+- **Next.** ORG.12B (Setup & Readiness Center) needs owner authorization.
