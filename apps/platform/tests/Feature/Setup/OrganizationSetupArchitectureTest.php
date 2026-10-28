@@ -12,6 +12,7 @@ use App\Support\Setup\SetupReadinessProviders;
 use App\Support\Setup\SetupScopeLevel;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\Test;
 use ReflectionClass;
 use Symfony\Component\Finder\Finder;
@@ -30,6 +31,7 @@ use Tests\TestCase;
  * - No parallel tenant (organization/tenant id) and no Branch entity exists,
  *   and navigation never couples to the setup registry (menu != security).
  */
+#[Group('repository-documents')]
 class OrganizationSetupArchitectureTest extends TestCase
 {
     private const array WRITES = [
