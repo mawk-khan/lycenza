@@ -231,8 +231,8 @@ class OrganizationSetupArchitectureTest extends TestCase
     }
 
     /**
-     * ORG.12B: a Setup Center link is offered on `open`, which must be exactly
-     * what the destination page checks. StaffNavigation pins "entry
+     * ORG.12B: a Setup Center link is offered on `open`, every key of which
+     * must open the destination page (a stricter subset is allowed). StaffNavigation pins "entry
      * requirement == the page's own check", so `open` must equal the entry
      * for the same route. Two destinations have no entry of their own; each
      * is pinned to the capability its controller checks (reviewed).
@@ -257,7 +257,9 @@ class OrganizationSetupArchitectureTest extends TestCase
                 $expected = $entry->any !== [] ? $entry->any : $entry->all;
                 $this->assertTrue($entry->any !== [] || count($entry->all) === 1, "{$definition->key}: an all-of entry with several keys cannot be expressed as `open`");
             }
-            $this->assertEqualsCanonicalizing($expected, $definition->openCapabilities, "{$definition->key}: `open` is what {$definition->route} checks");
+            // Every `open` key must open the destination; `open` may be stricter (never wider).
+            $this->assertNotSame([], $definition->openCapabilities);
+            $this->assertSame([], array_values(array_diff($definition->openCapabilities, $expected)), "{$definition->key}: every `open` key opens {$definition->route}");
         }
     }
 

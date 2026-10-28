@@ -38,9 +38,11 @@ final class OrganizationSetupRegistry
      * Such an area names those keys in `adoptedRead`, and the architecture
      * test refuses any role that holds the floor without them.
      *
-     * ORG.12B: `open` is the any-of capability set the destination page
-     * itself checks -- the same requirement as its StaffNavigation entry
-     * (OrganizationSetupArchitectureTest). The Setup Center offers a link
+     * ORG.12B: `open` is an any-of subset of what the destination page itself
+     * checks -- its StaffNavigation entry requirement -- never a key the page
+     * would refuse (OrganizationSetupArchitectureTest). It may be stricter:
+     * the Communications Hub also opens on the consumer-only inbox key, which
+     * setup links never name (ORG.9D-1R1). The Setup Center offers a link
      * only to a viewer holding one of them School-wide; the destination
      * stays authoritative.
      *
@@ -78,7 +80,7 @@ final class OrganizationSetupRegistry
         ['key' => 'inventory.inventory', 'title' => 'Inventory', 'description' => 'Active stock locations and active items.', 'owner' => 'inventory', 'category' => C::OPERATIONS, 'scope' => S::SCHOOL_AND_CAMPUS, 'entitlement' => ['inventory'], 'route' => 'app.inventory-items.index', 'open' => ['inventory.directory.view'], 'view' => ['inventory.directory.view'], 'manage' => ['inventory.directory.manage'], 'dependsOn' => [], 'order' => 160, 'reference' => []],
 
         // -- Communications ----------------------------------------------------
-        ['key' => 'communications.communications', 'title' => 'Communications', 'description' => 'Announcements and conversations work with the School\'s safe default policies.', 'owner' => 'communications', 'category' => C::COMMUNICATIONS, 'scope' => S::SCHOOL, 'entitlement' => ['communications'], 'route' => 'app.communications.index', 'open' => ['communications.view', 'communications.inbox.view'], 'view' => ['communications.view'], 'manage' => ['communications.manage'], 'dependsOn' => [], 'order' => 170, 'reference' => ['RF-23', 'RF-24']],
+        ['key' => 'communications.communications', 'title' => 'Communications', 'description' => 'Announcements and conversations work with the School\'s safe default policies.', 'owner' => 'communications', 'category' => C::COMMUNICATIONS, 'scope' => S::SCHOOL, 'entitlement' => ['communications'], 'route' => 'app.communications.index', 'open' => ['communications.view'], 'view' => ['communications.view'], 'manage' => ['communications.manage'], 'dependsOn' => [], 'order' => 170, 'reference' => ['RF-23', 'RF-24']],
         ['key' => 'communications.events', 'title' => 'School events', 'description' => 'The School events calendar needs no separate setup.', 'owner' => 'communications', 'category' => C::COMMUNICATIONS, 'scope' => S::SCHOOL, 'entitlement' => ['communications'], 'route' => 'app.communications.events.index', 'open' => ['communications.announce'], 'view' => ['communications.announce'], 'manage' => ['communications.announce'], 'dependsOn' => ['communications.communications'], 'order' => 180, 'reference' => []],
 
         // -- Portal ------------------------------------------------------------

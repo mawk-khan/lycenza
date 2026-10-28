@@ -188,11 +188,14 @@ words and icons).
 
 **7.5 Action authorization.** Resolved server-side per area, separately
 from readiness visibility:
-- `open` (new registry field) is the any-of set of capabilities the
+- `open` (new registry field) is an any-of subset of the capabilities the
   destination page itself checks — pinned by
   `OrganizationSetupArchitectureTest` to the destination's StaffNavigation
   requirement (two reviewed exceptions: the profile page and Leave
-  configuration).
+  configuration). It may be stricter, never wider: Communications links on
+  `communications.view` only, because the consumer-only
+  `communications.inbox.view` stays named only by its recipient surfaces
+  (ORG.9D-1R1 guard).
 - **Configure** = holds an `open` capability AND every `manage` capability
   School-wide; **View** = holds an `open` capability only; **none** =
   neither (no link; "Managed in its own module by people with access").
