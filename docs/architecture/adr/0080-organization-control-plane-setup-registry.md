@@ -230,3 +230,13 @@ sent), dependency-name leakage (closed), sensitive values (planted values
 absent from the rendered page), lifecycle bypass, menu-as-security,
 direct-route access, frontend-only authorization (none: every action is
 resolved on the server).
+
+**7.11 Independent review (ORG.12B).** A separate reviewer read the commit
+(code only): **no HIGH, no MEDIUM.** LOWs:
+
+| # | Finding | Resolution |
+|---|---|---|
+| L-1 | A hidden prerequisite's state could be inferred from a visible blocked area plus the public dependency graph | **guarded:** `every_floor_holder_can_see_each_prerequisite_of_the_areas_it_sees` fails if any floor-holding role sees an area without seeing its prerequisites (true today for School Admin and Principal) |
+| L-2 | "Not enabled" areas are listed to any floor holder, including modules whose areas the viewer could not otherwise see | accepted: module availability is School configuration (ORG.12A §9), never records |
+| L-3 | Campus-adopted `open`/`manage` keys are evaluated School-wide | accepted, deliberate: link resolution is presentation, not authorization; errors are false negatives only (no link), never access (§7.5) |
+| I-1 | The `open` pin follows the first navigation entry per route; two destinations are reviewed by hand | accepted: worst case an offered link answers 403 |

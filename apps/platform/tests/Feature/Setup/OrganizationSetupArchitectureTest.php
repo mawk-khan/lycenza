@@ -122,6 +122,37 @@ class OrganizationSetupArchitectureTest extends TestCase
         }
     }
 
+    /**
+     * ORG.12B security review L-1: a blocked area shows "a prerequisite
+     * must be completed first" when the viewer cannot see that prerequisite,
+     * and the dependency graph is public code -- so a viewer could infer a
+     * hidden area's state. Every role holding the setup floor must therefore
+     * see every prerequisite of every area it can see.
+     */
+    #[Test]
+    public function every_floor_holder_can_see_each_prerequisite_of_the_areas_it_sees(): void
+    {
+        $registry = app(OrganizationSetupRegistry::class);
+        $roles = DB::table('roles')->join('role_capabilities', 'role_capabilities.role_id', '=', 'roles.id')
+            ->where('roles.scope', 'school')->where('roles.is_system', true)
+            ->get(['roles.key as role', 'role_capabilities.capability_key as capability'])
+            ->groupBy('role')->map(fn ($rows) => $rows->pluck('capability')->all())
+            ->filter(fn (array $capabilities): bool => in_array(OrganizationSetupReadService::FLOOR_CAPABILITY, $capabilities, true));
+        $this->assertNotEmpty($roles);
+
+        foreach ($roles as $role => $capabilities) {
+            foreach ($registry->all() as $definition) {
+                if (array_diff($definition->viewCapabilities, $capabilities) !== []) {
+                    continue; // the role does not see this area
+                }
+                foreach ($definition->dependsOn as $dependency) {
+                    $missing = array_diff($registry->find($dependency)->viewCapabilities, $capabilities);
+                    $this->assertSame([], array_values($missing), "{$role} sees {$definition->key} but not its prerequisite {$dependency}");
+                }
+            }
+        }
+    }
+
     #[Test]
     public function every_key_has_exactly_one_domain_owned_read_only_provider(): void
     {
