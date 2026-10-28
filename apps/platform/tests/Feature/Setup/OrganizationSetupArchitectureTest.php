@@ -4,6 +4,7 @@ namespace Tests\Feature\Setup;
 
 use App\Domain\Platform\Application\Modules\ModuleCatalogue;
 use App\Support\Authorization\Campus\CampusScopeCatalogue;
+use App\Support\Navigation\StaffNavigation;
 use App\Support\Setup\OrganizationSetupReadService;
 use App\Support\Setup\OrganizationSetupRegistry;
 use App\Support\Setup\SetupCategory;
@@ -75,7 +76,7 @@ class OrganizationSetupArchitectureTest extends TestCase
             $this->assertContains($definition->category, SetupCategory::cases());
 
             $allowedModules = [$definition->ownerModule, ...$definition->entitlementModules, ...ModuleCatalogue::coreKeys()];
-            foreach ([...$definition->viewCapabilities, ...$definition->manageCapabilities] as $capability) {
+            foreach ([...$definition->openCapabilities, ...$definition->viewCapabilities, ...$definition->manageCapabilities] as $capability) {
                 $this->assertSame('school', $catalogue[$capability] ?? null, "{$key}: {$capability} is an existing School capability");
                 $modules = ModuleCatalogue::modulesFor($capability);
                 $this->assertNotSame([], $modules, "{$key}: {$capability} maps to a module");
@@ -198,6 +199,62 @@ class OrganizationSetupArchitectureTest extends TestCase
         }
     }
 
+    /**
+     * ORG.12B: a Setup Center link is offered on `open`, which must be exactly
+     * what the destination page checks. StaffNavigation pins "entry
+     * requirement == the page's own check", so `open` must equal the entry
+     * for the same route. Two destinations have no entry of their own; each
+     * is pinned to the capability its controller checks (reviewed).
+     */
+    #[Test]
+    public function every_setup_link_requires_exactly_what_its_destination_checks(): void
+    {
+        $reviewed = [
+            'app.school-setup.profile' => ['school.profile.view'],   // SchoolSetupController::profile()
+            'app.leave.configuration' => ['hr.leave.view'],          // LeaveAdminController::configuration() (LeaveCapabilities::VIEW)
+        ];
+        $entries = [];
+        foreach (StaffNavigation::entries() as $entry) {
+            $entries[$entry->routeName] ??= $entry;
+        }
+
+        foreach (app(OrganizationSetupRegistry::class)->all() as $definition) {
+            $expected = $reviewed[$definition->route] ?? null;
+            if ($expected === null) {
+                $entry = $entries[$definition->route] ?? null;
+                $this->assertNotNull($entry, "{$definition->key}: {$definition->route} has a navigation entry, or a reviewed requirement here");
+                $expected = $entry->any !== [] ? $entry->any : $entry->all;
+                $this->assertTrue($entry->any !== [] || count($entry->all) === 1, "{$definition->key}: an all-of entry with several keys cannot be expressed as `open`");
+            }
+            $this->assertEqualsCanonicalizing($expected, $definition->openCapabilities, "{$definition->key}: `open` is what {$definition->route} checks");
+        }
+    }
+
+    #[Test]
+    public function the_setup_center_renders_the_served_catalogue_and_claims_no_production_readiness(): void
+    {
+        $sources = [
+            'Readiness.vue' => (string) file_get_contents(resource_path('js/Pages/App/SchoolSetup/Readiness.vue')),
+            'setupReadiness.ts' => (string) file_get_contents(resource_path('js/setupReadiness.ts')),
+        ];
+        foreach ($sources as $name => $source) {
+            foreach (app(OrganizationSetupRegistry::class)->keys() as $key) {
+                $this->assertStringNotContainsString($key, $source, "{$name} holds no second setup catalogue ({$key})");
+            }
+            $this->assertDoesNotMatchRegularExpression('/production.?ready|fully secure|compliance passed/i', $source, "{$name} makes no readiness claim");
+        }
+        foreach ([app_path('Support/Setup'), app_path('Http/Controllers/App/OrganizationSetupController.php')] as $path) {
+            $files = is_dir($path) ? iterator_to_array(Finder::create()->files()->in($path)->name('*.php')) : [new \SplFileInfo($path)];
+            foreach ($files as $file) {
+                $source = $this->codeOnly($file->getRealPath());
+                $this->assertStringNotContainsString('CampusScope', $source, "{$file->getFilename()} never widens Organization setup through Campus scope");
+                foreach (self::WRITES as $write) {
+                    $this->assertStringNotContainsString($write, $source, "{$file->getFilename()} is read-only ({$write})");
+                }
+            }
+        }
+    }
+
     #[Test]
     public function navigation_never_couples_to_the_setup_registry(): void
     {
@@ -205,7 +262,7 @@ class OrganizationSetupArchitectureTest extends TestCase
             $this->assertStringNotContainsString('Support\\Setup', $file->getContents(), 'navigation follows capabilities, never setup state');
         }
         foreach (Finder::create()->files()->in(app_path('Support/Setup'))->name('*.php') as $file) {
-            $this->assertStringNotContainsString('Navigation', $file->getContents(), 'setup readiness is not menu configuration');
+            $this->assertStringNotContainsString('Navigation', $this->codeOnly($file->getRealPath()), 'setup readiness is not menu configuration');
         }
     }
 

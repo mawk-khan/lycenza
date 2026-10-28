@@ -38,7 +38,7 @@ class OrganizationSetupReadServiceTest extends TestCase
 
     private const array ITEM_FIELDS = [
         'key', 'title', 'description', 'ownerModule', 'category', 'scopeLevel', 'core', 'route', 'dependsOn', 'order',
-        'status', 'explanation', 'completedChecks', 'totalChecks', 'blockers',
+        'status', 'explanation', 'completedChecks', 'totalChecks', 'blockers', 'hiddenBlockers',
     ];
 
     private function service(): OrganizationSetupReadService
@@ -170,6 +170,25 @@ class OrganizationSetupReadServiceTest extends TestCase
         $this->assertArrayNotHasKey('academic.academic_year', $items, 'needs academics.years.view');
         $this->assertArrayNotHasKey('finance.fees', $items, 'needs finance.fee_structures.view');
         $this->assertArrayNotHasKey('integrations.integrations', $items);
+    }
+
+    #[Test]
+    public function a_prerequisite_the_viewer_cannot_see_is_counted_never_named(): void
+    {
+        $school = $this->createSchool();
+        $this->createCampus($school);
+        $this->createGradeLevel($school);
+        $this->createSubject($school);
+        // Sees Academic structure but not Academic year (academics.years.view).
+        $viewer = $this->createUserWithCapabilities($school, ['school.profile.view', 'academics.structure.view', 'academics.subjects.view']);
+
+        $structure = $this->items($school, $viewer)['academic.structure'];
+        $this->assertSame('blocked', $structure['status']);
+        $this->assertSame([], $structure['blockers'], 'the hidden Academic year is never named');
+        $this->assertSame(1, $structure['hiddenBlockers']);
+
+        $admin = $this->items($school, $this->schoolAdminFor($school))['academic.structure'];
+        $this->assertSame([['academic.academic_year'], 0], [$admin['blockers'], $admin['hiddenBlockers']]);
     }
 
     // -- Entitlement -----------------------------------------------------------

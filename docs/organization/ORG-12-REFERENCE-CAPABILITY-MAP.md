@@ -1,7 +1,8 @@
 # ORG.12 reference capability map — Organisation pack (515 screens)
 
 Status: **authoritative reference map for the ORG.12 Organization expansion**
-(ORG.12A, 2026-10-28, ADR 0080 §13). Re-used unchanged by ORG.12H and by
+(ORG.12A, 2026-10-28, ADR 0080 §13; RF-01 reclassified by ORG.12B, ADR 0080
+§7). Re-used unchanged by ORG.12H and by
 the two future Organization re-audits (§6).
 
 This map records what the reference ERP's Organisation area **does**, who
@@ -56,7 +57,7 @@ stable; ORG.12A setup definitions cite them
 
 | RF | Reference family | Screens | Observed function | Lycenza owner | Current Lycenza status | ORG.12 | Future programme | Intentional difference | Decision |
 |---|---|---|---|---|---|---|---|---|---|
-| RF-01 | Getting Started | 7 | Per-branch setup summary (settings, key staff, fee-plan coverage) and a step checklist with paths to each setting | Organization Control Plane | School setup progress page (5 flags, `SchoolSetupController::index`) and the platform Registry readiness (ADR 0076 §9.3); ORG.12A setup registry | 12A (spine), 12B (Setup Center) | — | Readiness is derived from owning domains, never stored; no staff identities, usernames or passwords on a setup page | `ORG12_BUILD` |
+| RF-01 | Getting Started | 7 | Per-branch setup summary (settings, key staff, fee-plan coverage) and a step checklist with paths to each setting | Organization Control Plane | **Setup & Readiness Center** (ORG.12B, `/app/school-setup/readiness`): 21 domain-owned areas, core vs enabled-module progress, prerequisites, next actions, capability-resolved links (§4.1) | 12A (spine), 12B (built) | — | Readiness is derived from owning domains, never stored; no staff identities, usernames or passwords on a setup page; no step a School ticks by hand | `EXISTING_DIFFERENT_ACCEPTED` |
 | RF-02 | Organization Profile | 0 dedicated (inside RF-03) | Legal identity, contact, affiliation, tax ids, social links, maps | Schools (Organization) | School profile: legal name, code, contact, address, board | 12C | — | One School profile; tax/legal identifiers follow RF-22 | `PARTIAL` |
 | RF-03 | Branch / Campus | 8 | Branch name/code/type/status, facility flags (day, daycare, boarding, meals, transport), currency/time zone, contact, social links, maps, behaviour flags | Campuses (Organization) | Campus: code, name, status, phone, email, address; School-level time zone | 12C (profile, service profile) | — | Campus is the only Branch (no Branch table); service profile is descriptive, never entitlement or authority; behaviour flags (e.g. fee-due gating of report cards) stay in their owning domain | `PARTIAL` |
 | RF-04 | Academic Year | 10 | Common and per-branch academic months, per-branch/class start dates, age-cut-off date, change of current year | Academic Structure | School AcademicYear + terms, one active per School (rule 64), draft-date correction (ADR 0077) | 12B (readiness only) | Admissions (age criteria) | One School calendar, not per-branch months; age criteria belong to Admissions eligibility | `EXISTING_DIFFERENT_ACCEPTED` |
@@ -104,9 +105,9 @@ their functions are observed inside RF-03 and RF-14 respectively.
 | Classification | Families | Ids |
 |---|---|---|
 | `EXISTING_EQUIVALENT` | 2 | RF-05, RF-13 |
-| `EXISTING_DIFFERENT_ACCEPTED` | 7 | RF-04, RF-07, RF-10, RF-23, RF-36, RF-37, RF-38 |
+| `EXISTING_DIFFERENT_ACCEPTED` | 8 | RF-01, RF-04, RF-07, RF-10, RF-23, RF-36, RF-37, RF-38 |
 | `PARTIAL` | 3 | RF-02, RF-03, RF-08 |
-| `ORG12_BUILD` | 5 | RF-01, RF-15, RF-16, RF-19, RF-20 |
+| `ORG12_BUILD` | 4 | RF-15, RF-16, RF-19, RF-20 |
 | `DOMAIN_FUTURE` | 7 | RF-06, RF-24, RF-25, RF-26, RF-29, RF-32, RF-35 |
 | `PLATFORM_FUTURE` | 3 | RF-30, RF-31, RF-34 |
 | `POST_V1` | 4 | RF-09, RF-18, RF-27, RF-28 |
@@ -119,6 +120,20 @@ By screens, 374 of 515 (73 %) are the reference's user-type / menu /
 module permission machinery (RF-10, RF-14, RF-16–RF-18, RF-36). Lycenza
 meets that need with the capability catalogue, fixed role templates and
 entitlements, and does not copy it.
+
+### 4.1 Getting Started: why Lycenza's Setup Center is different, and stronger (ORG.12B)
+
+| Reference Getting Started | Lycenza Setup & Readiness Center |
+|---|---|
+| A fixed step list and a per-branch summary page | 21 setup areas from the code-owned registry, each answered by the module that owns the configuration |
+| Steps marked done by the summary's own logic | **Derived readiness:** recomputed from canonical domain state on every visit; nothing stored |
+| Same checklist whatever is subscribed | **Entitlement-aware:** a module the School has not enabled is "Not enabled" and never counts against progress |
+| No dependency view | **Dependency-aware:** an area waiting on another is "Blocked", names the prerequisite only when the viewer may see it, and the prerequisite is recommended first |
+| Links open for anyone who can see the menu | **Capability-aware actions:** Configure / View / no link resolved on the server from the capabilities the destination page checks |
+| One progress picture | **Separate core and enabled-module progress** |
+| Menu ticks decide who sees what | **No menu-as-security:** the navigation entry is discoverability; every destination re-checks |
+| The summary lists staff usernames and default credentials | **Facts only:** no people, contacts, credentials or amounts |
+| Branch-wide data on one page | **School isolation:** one School per request, refused for platform and Group operators and for a School that is not active |
 
 **Reclassification note.** PARITY-DO-NOT-BUILD rows ORG-018 (subscription
 invoices), ORG-026 (FAQ) and ORG-031 (support tickets) said "outside the

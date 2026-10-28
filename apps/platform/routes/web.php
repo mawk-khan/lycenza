@@ -108,6 +108,7 @@ use App\Http\Controllers\App\LMS\AssignmentController as LmsAssignmentController
 use App\Http\Controllers\App\LMS\LearningContentController as LmsLearningContentController;
 use App\Http\Controllers\App\LMS\MyAssignmentController;
 use App\Http\Controllers\App\LMS\MyLearningContentController;
+use App\Http\Controllers\App\OrganizationSetupController;
 use App\Http\Controllers\App\Payroll\CompensationController as PayrollCompensationController;
 use App\Http\Controllers\App\Payroll\PayrollAccountingConfigurationController;
 use App\Http\Controllers\App\Payroll\PayrollController;
@@ -555,6 +556,10 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
     // School from TenantContext, never a client-supplied id.
     Route::prefix('app/school-setup')->name('app.school-setup.')->group(function (): void {
         Route::get('/', [SchoolSetupController::class, 'index'])->name('index');
+        // ORG.12B (ADR 0080 §7): the Organization Setup & Readiness Center.
+        Route::get('/readiness', [OrganizationSetupController::class, 'index'])
+            ->middleware('capability:school.profile.view')
+            ->name('readiness');
 
         Route::get('/profile', [SchoolSetupController::class, 'profile'])->name('profile');
         Route::put('/profile', [SchoolSetupController::class, 'updateProfile'])->name('profile.update');

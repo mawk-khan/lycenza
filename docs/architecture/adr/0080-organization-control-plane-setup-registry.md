@@ -1,8 +1,9 @@
 # ADR 0080: Organization Control Plane — Setup Registry and Derived Readiness (ORG.12A)
 
-- Status: **Accepted and implemented (2026-10-28).** ORG.12A. Later ORG.12
-  checkpoints (B–H) are planned here but **not authorized**; each needs
-  explicit owner authorization.
+- Status: **Accepted and implemented (2026-10-28).** ORG.12A (§1–§6) and
+  **ORG.12B Setup & Readiness Center (§7, 2026-10-28)**. ORG.12C–H are
+  planned here but **not authorized**; each needs explicit owner
+  authorization.
 - Date: 2026-10-28
 - Programme: **ORG.12 — Organization Control Plane expansion** (additive to
   ORG, `MASTER-ROADMAP.md` programme 13).
@@ -145,3 +146,87 @@ confirmed no HIGH or MEDIUM finding; its LOWs are L-1, L-2, L-4, L-5 and
 L-6 above.
 
 No HIGH or MEDIUM finding.
+
+## 7. ORG.12B — Organization Setup & Readiness Center (implemented, 2026-10-28)
+
+**7.1 Surface.** `GET /app/school-setup/readiness`
+(`app.school-setup.readiness`, `OrganizationSetupController`), inside the
+`auth` + `school-context` group, route middleware
+`capability:school.profile.view`. Navigation: `setup-readiness`
+("Setup & readiness", School setup group, same requirement). The School
+setup page no longer computes its own five progress flags (it reads no
+domain model for progress) and links to the Center instead.
+
+**7.2 Entry authorization (decided: reuse).** `school.profile.view` stays the
+floor. It is School administration state (ADR 0070 §9.6), held today by
+School Admin and Principal only, never by a Campus grant of a School
+configuration key, a platform role, an elevation or a Group grant. No
+semantic problem was found, so no capability was added. Lifecycle: the
+`school-context` middleware and the read service both refuse a School
+that is not `active`.
+
+**7.3 Presentation layer.** `App\Support\Setup\OrganizationSetupCenter`
+derives everything per request from `OrganizationSetupReadService`; the
+Vue page (`App/SchoolSetup/Readiness`) renders only what it receives and
+holds no catalogue (`setupReadiness.ts` maps the closed status vocabulary to
+words and icons).
+
+**7.4 Progress semantics.** Two figures, never one mixed percentage:
+- **Core setup** = configured core areas / applicable core areas.
+- **Enabled modules** = configured enabled optional areas / enabled
+  optional areas.
+- Only `CONFIGURED` counts as done; `PARTIALLY_CONFIGURED`,
+  `NOT_CONFIGURED`, `BLOCKED` and `ATTENTION_REQUIRED` do not;
+  `NOT_APPLICABLE` is in neither denominator.
+- Progress is computed over the areas the viewer can see; hidden areas are
+  counted, never described.
+- Overall state: getting started (no core area with its own checks is
+  configured) / core in progress / core complete (enabled modules still
+  incomplete) / all applicable areas configured. Never "ready".
+- **Nothing is persisted:** no percentage, completion state, next action or
+  category total is stored or cached.
+
+**7.5 Action authorization.** Resolved server-side per area, separately
+from readiness visibility:
+- `open` (new registry field) is the any-of set of capabilities the
+  destination page itself checks — pinned by
+  `OrganizationSetupArchitectureTest` to the destination's StaffNavigation
+  requirement (two reviewed exceptions: the profile page and Leave
+  configuration).
+- **Configure** = holds an `open` capability AND every `manage` capability
+  School-wide; **View** = holds an `open` capability only; **none** =
+  neither (no link; "Managed in its own module by people with access").
+- A NOT_APPLICABLE area never gets an action. The destination stays
+  authoritative: a link is never authority, and the Center never reads
+  `CampusScopeCatalogue` or the navigation builder at runtime. Whole-School
+  evaluation is conservative: a Campus-only holder gets no link and keeps
+  the module's own Campus-aware navigation.
+
+**7.6 Next actions.** Deterministic, at most three, only areas the viewer can
+Configure: (0) an incomplete area a visible BLOCKED/ATTENTION area waits on;
+(1–3) core not configured / partial / attention; (4–6) the same for enabled
+optional areas; ties by registry order. A BLOCKED area is never recommended
+(its prerequisite is).
+
+**7.7 Dependency privacy (ORG.12A L-2 closed).** The read service names a
+blocker only when the viewer can see that area; any other blocker is
+counted (`hiddenBlockers`) and shown as "A prerequisite setup area must be
+completed first."
+
+**7.8 Campus-read domains.** Student records, Staff records, Student
+attendance and Admissions keep the ORG.12A floor-only rule (EXISTS facts,
+`adoptedRead` guard). Their links follow `open` (the domain's own read
+key), so a deep link still obeys the domain's authorization.
+
+**7.9 Measured.** Full page 57 queries (51 readiness + 6 page), ~50 ms in
+the isolated test stack, Setup Center payload ~11 KB (HTML ~21 KB);
+constant in record volume; budget 70. No caching.
+
+**7.10 Security review (ORG.12B).** See §7.11 for the independent review.
+Checked: cross-School leakage, Platform and Group access, link
+authorization bypass, disabled-module destinations, capability exposure in
+the payload (none: no capability, route name or raw dependency list is
+sent), dependency-name leakage (closed), sensitive values (planted values
+absent from the rendered page), lifecycle bypass, menu-as-security,
+direct-route access, frontend-only authorization (none: every action is
+resolved on the server).

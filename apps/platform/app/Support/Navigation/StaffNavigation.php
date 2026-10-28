@@ -92,6 +92,8 @@ final class StaffNavigation
             new E('my-assignments', 'my-work', 'My assignments', 'app.my-assignments.index', all: ['lms.assignments.teacher']),
 
             new E('school-setup', 'school-setup', 'School setup', 'app.school-setup.index', all: ['school.profile.view']),
+            // ORG.12B (ADR 0080 §7): the Setup & Readiness Center, under the page's own floor.
+            new E('setup-readiness', 'school-setup', 'Setup & readiness', 'app.school-setup.readiness', all: ['school.profile.view']),
             // SWC.2 (ADR 0073 section 10): every Academic Structure screen,
             // under the capability that page itself checks.
             new E('campuses', 'school-setup', 'Campuses', 'app.school-setup.campuses', all: ['school.campuses.view']),

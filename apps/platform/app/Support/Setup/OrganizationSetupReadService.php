@@ -27,7 +27,9 @@ use Illuminate\Auth\Access\AuthorizationException;
  *   answer is incomplete -- or that has no setup of its own -- while a
  *   dependency is unsatisfied is BLOCKED; one configured by its own checks
  *   while a dependency is unsatisfied needs ATTENTION.
- *   Blockers are setup KEYS only -- code constants, never tenant data.
+ *   Blockers are setup KEYS only -- code constants, never tenant data --
+ *   and only for areas the viewer can see; any other blocker is counted
+ *   (`hiddenBlockers`), never named (ORG.12B).
  * - Tenancy: one School per call, an ACTIVE School only (rule 86);
  *   nothing is aggregated across Schools. Readiness itself is never cached;
  *   the capability and entitlement readers it calls keep their existing
@@ -69,19 +71,30 @@ class OrganizationSetupReadService
         $evaluatedAt = now()->toIso8601String();
         $results = $this->context->withSchool($school, fn (): array => $this->evaluateAll($school, $entitled));
 
+        $visible = [];
+        foreach ($this->registry->all() as $definition) {
+            $status = $results[$definition->key]['status'];
+            $visible[$definition->key] = $status === SetupStatus::NOT_APPLICABLE || array_diff($definition->viewCapabilities, $held) === [];
+        }
+
         $items = [];
         foreach ($this->registry->all() as $definition) {
-            $result = $results[$definition->key];
-            if ($result['status'] !== SetupStatus::NOT_APPLICABLE && array_diff($definition->viewCapabilities, $held) !== []) {
+            if (! $visible[$definition->key]) {
                 continue;
             }
+            $result = $results[$definition->key];
+            // ORG.12B: a prerequisite the viewer cannot see is never named,
+            // only counted (ORG.12A L-2 closed).
+            $blockers = $result['blockers'];
+            $named = array_values(array_filter($blockers, fn (string $key): bool => $visible[$key]));
             $items[] = [
                 ...$definition->toArray(),
                 'status' => $result['status']->value,
                 'explanation' => $result['explanation'],
                 'completedChecks' => $result['completedChecks'],
                 'totalChecks' => $result['totalChecks'],
-                'blockers' => $result['blockers'],
+                'blockers' => $named,
+                'hiddenBlockers' => count($blockers) - count($named),
             ];
         }
 

@@ -2,13 +2,6 @@
 interface Props {
     // SWC.2: the remaining structure screens, by the capability each page checks.
     can: { viewYears: boolean; viewStructure: boolean; viewSubjects: boolean };
-    progress: {
-        profileConfigured: boolean;
-        campusCreated: boolean;
-        academicYearActivated: boolean;
-        gradeLevelsConfigured: boolean;
-        subjectsConfigured: boolean;
-    };
 }
 
 const props = defineProps<Props>();
@@ -30,24 +23,14 @@ const more = [
     { label: 'Elective groups', href: '/app/elective-groups', show: () => props.can.viewSubjects },
 ];
 
-const steps: Array<{ key: keyof Props['progress']; label: string; href: string }> = [
-    {
-        key: 'profileConfigured',
-        label: 'School profile configured',
-        href: '/app/school-setup/profile',
-    },
-    { key: 'campusCreated', label: 'Campus created', href: '/app/school-setup/campuses' },
-    {
-        key: 'academicYearActivated',
-        label: 'Academic Year activated',
-        href: '/app/school-setup/academic-years',
-    },
-    {
-        key: 'gradeLevelsConfigured',
-        label: 'Grade Levels configured',
-        href: '/app/school-setup/grade-levels',
-    },
-    { key: 'subjectsConfigured', label: 'Subjects configured', href: '/app/school-setup/subjects' },
+// ORG.12B (ADR 0080 §7): setup progress lives in the Setup & Readiness
+// Center, derived from each owning module -- not as flags on this page.
+const steps = [
+    { label: 'School profile', href: '/app/school-setup/profile' },
+    { label: 'Campuses', href: '/app/school-setup/campuses' },
+    { label: 'Academic years', href: '/app/school-setup/academic-years' },
+    { label: 'Grade levels', href: '/app/school-setup/grade-levels' },
+    { label: 'Subjects', href: '/app/school-setup/subjects' },
 ];
 </script>
 
@@ -59,19 +42,16 @@ const steps: Array<{ key: keyof Props['progress']; label: string; href: string }
             Rooms and Subject Offerings each year needs.
         </p>
 
+        <p class="mt-6 rounded border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+            See what is configured, what needs attention and what to do next in
+            <a class="font-medium underline" href="/app/school-setup/readiness"
+                >Setup &amp; readiness</a
+            >.
+        </p>
+
         <ul class="mt-6 divide-y divide-slate-200 rounded border border-slate-200">
-            <li
-                v-for="step in steps"
-                :key="step.key"
-                class="flex items-center justify-between px-4 py-3"
-            >
+            <li v-for="step in steps" :key="step.href" class="px-4 py-3">
                 <a class="text-sm underline" :href="step.href">{{ step.label }}</a>
-                <span
-                    class="text-xs font-medium"
-                    :class="progress[step.key] ? 'text-emerald-600' : 'text-slate-400'"
-                >
-                    {{ progress[step.key] ? 'Done' : 'Not started' }}
-                </span>
             </li>
         </ul>
 

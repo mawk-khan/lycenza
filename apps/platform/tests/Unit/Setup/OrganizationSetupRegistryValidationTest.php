@@ -33,6 +33,7 @@ class OrganizationSetupRegistryValidationTest extends TestCase
             'scopeLevel' => SetupScopeLevel::SCHOOL,
             'entitlementModules' => [],
             'route' => 'app.school-setup.index',
+            'openCapabilities' => ['school.profile.view'],
             'viewCapabilities' => ['school.profile.view'],
             'manageCapabilities' => [],
             'dependsOn' => $dependsOn,

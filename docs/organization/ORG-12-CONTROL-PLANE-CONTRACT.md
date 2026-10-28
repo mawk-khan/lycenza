@@ -1,7 +1,9 @@
 # ORG.12 — Organization Control Plane contract
 
 Status: **ORG.12A implemented (2026-10-28)** — contract, code-owned setup
-registry, readiness contracts and providers. Decision record: ADR 0080.
+registry, readiness contracts and providers. **ORG.12B implemented
+(2026-10-28)** — the Setup & Readiness Center (§14). Decision record:
+ADR 0080 (§7 for ORG.12B).
 Reference evidence: `ORG-12-REFERENCE-CAPABILITY-MAP.md` (515-screen
 Organisation pack, 38 families).
 
@@ -232,7 +234,7 @@ Branch/Organization/Tenant entity; no navigation coupling.
 
 | Checkpoint | Scope | Boundary |
 |---|---|---|
-| **ORG.12B** Setup & Readiness Center | checklist, category grouping, progress, next action, blockers, entitlement awareness, Campus-specific readiness, deep links | UI over this read service; replaces the 5-flag School setup progress |
+| **ORG.12B** Setup & Readiness Center — **IMPLEMENTED** (§14) | checklist, category grouping, progress, next action, blockers, entitlement awareness, deep links | UI over this read service; replaced the 5-flag School setup progress. Campus-specific readiness deferred (§14.6) |
 | **ORG.12C** Rich School & Campus profiles | legal identity, registration/tax/affiliation references, contact, website, social, timezone, currency, branding; Campus code, name, address, phone, email, coordinates, service profile (day school, early years, boarding, meals, transport), branding override | fields audited first; service profile is descriptive, never entitlement, capability or authority |
 | **ORG.12D** Network / franchise governance | Group/Network, region, zone, owned/franchise/managed, internal code, operating status; governance readiness; safe aggregate reporting | never a tenant boundary; no implicit School business-data access |
 | **ORG.12E** Role, access & sensitive-data administration | read-only role-template, capability, module, scope, sensitive-flag, assurance and effective-user views; sensitive-field projection | no tenant role or capability creation |
@@ -244,3 +246,60 @@ Each checkpoint needs explicit owner authorization. Two future audits reuse
 the reference map: **ORG.REAUDIT-1** (after SIS, HR, Attendance, Admissions,
 Finance, Portal and Integrations mature) and **ORG.REAUDIT-FINAL** (before
 final product / staging acceptance).
+
+## 14. Setup & Readiness Center (ORG.12B)
+
+**14.1 Where.** Organization → School setup → **Setup & readiness**
+(`/app/school-setup/readiness`). Entry: `school.profile.view` in an active
+School through an active membership (School Admin, Principal). Teachers,
+Campus-only grants, platform operators and Group Admins are refused.
+
+**14.2 Page.** Four regions, all from the server:
+1. **Overview** — School name, overall state, Core setup progress, Enabled
+   modules progress, counts of areas needing attention, blocked areas and
+   optional modules not enabled.
+2. **Next actions** — up to three areas the viewer can configure.
+3. **Setup areas** — the applicable areas grouped by category
+   (Organization, Academics, People, Operations, Finance, Communications,
+   Integrations, Portal, Audit & compliance); categories still needing work
+   open by default.
+4. **Optional modules not enabled** — listed apart, never counted.
+
+Each card shows title, description, owning module, scope badge (School /
+Campus / School & Campus — what the setup describes, never the viewer's
+authority), optional-module badge, status (icon + words, never colour
+alone), explanation, check counts, prerequisites and its action.
+
+**14.3 Status words.** Configured · Partially configured · Not configured ·
+Blocked · Needs attention · Not enabled. Machine keys are not shown.
+
+**14.4 Progress and next actions.** ADR 0080 §7.4 and §7.6. Nothing is
+persisted; a refresh shows current state.
+
+**14.5 Actions.** ADR 0080 §7.5: Configure / View / none, resolved on the
+server from the capabilities the destination checks (`open`, `manage`).
+There is no "save all" form and no configuration on this page.
+
+**14.6 Known limitations.**
+- School-level summary only; per-Campus readiness needs providers that take
+  a Campus (ORG.12C or later).
+- Progress covers the areas the viewer can see; a Principal sees fewer
+  areas than a School Admin where an area needs a key they lack.
+- Whole-School link resolution is conservative: a viewer whose only domain
+  access is Campus-scoped gets no link here (the module's own navigation
+  still works).
+- No route gap: every area has a destination page today. A future area
+  without one must show no action rather than an unrelated link.
+- Communications, School events, Student/Staff attendance, Admissions and
+  Audit need no School setup of their own; their status follows their
+  prerequisites.
+
+**14.7 ORG.12C forward contract (not authorized).** Rich School & Campus
+profiles: audit then add legal identity, registration/tax/affiliation
+references (tax and statutory values stay behind RF-22's legal decision),
+contact, website, social links, timezone, currency, branding, Campus code,
+address, phone, email, coordinates and a descriptive service profile (day
+school, early years, boarding, meals, transport — never entitlement or
+authority). Each new field extends the `organization.school_profile` /
+`organization.campuses` providers, so the Setup Center reflects it without
+a second catalogue.

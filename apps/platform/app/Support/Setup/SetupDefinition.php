@@ -16,6 +16,7 @@ final readonly class SetupDefinition
      * @param  string  $ownerModule  the ModuleCatalogue key of the module that owns this configuration
      * @param  list<string>  $entitlementModules  optional modules that must ALL be entitled; [] = core area
      * @param  string  $route  route name of the owning domain's configuration page (a link, never authority)
+     * @param  list<string>  $openCapabilities  any-of: the capabilities that page itself checks (ORG.12B link resolution)
      * @param  list<string>  $viewCapabilities  School capabilities required, besides the setup floor, to see this area's readiness
      * @param  list<string>  $manageCapabilities  the capabilities the owning page itself checks to change it (informational)
      * @param  list<string>  $dependsOn  setup keys that should be configured first (informational, never authorization)
@@ -34,6 +35,7 @@ final readonly class SetupDefinition
         public SetupScopeLevel $scopeLevel,
         public array $entitlementModules,
         public string $route,
+        public array $openCapabilities,
         public array $viewCapabilities,
         public array $manageCapabilities,
         public array $dependsOn,
@@ -44,8 +46,8 @@ final readonly class SetupDefinition
         if (preg_match(self::KEY_PATTERN, $key) !== 1) {
             throw new \InvalidArgumentException("Invalid setup key {$key}.");
         }
-        if (trim($title) === '' || trim($description) === '' || trim($route) === '') {
-            throw new \InvalidArgumentException("{$key} needs a title, a description and a route.");
+        if (trim($title) === '' || trim($description) === '' || trim($route) === '' || $openCapabilities === []) {
+            throw new \InvalidArgumentException("{$key} needs a title, a description, a route and the capabilities that route checks.");
         }
         if ($order < 1) {
             throw new \InvalidArgumentException("{$key} needs a positive order.");
@@ -75,6 +77,7 @@ final readonly class SetupDefinition
             scopeLevel: $row['scope'],
             entitlementModules: $row['entitlement'],
             route: $row['route'],
+            openCapabilities: $row['open'],
             viewCapabilities: $row['view'],
             manageCapabilities: $row['manage'],
             dependsOn: $row['dependsOn'],

@@ -52,20 +52,15 @@ class SchoolSetupController extends Controller
     public function index(TenantContext $context): Response
     {
         $school = $context->requireSchool();
-        // POR.1 (ADR 0070 §9.6): setup progress is School administration
-        // state -- the same read capability its sibling setup pages use. A
+        // POR.1 (ADR 0070 §9.6): School setup is School administration state
+        // -- the same read capability its sibling setup pages use. A
         // membership alone (a Guardian, a role-less member) is not enough.
         $this->authorizeCapability('school.profile.view', $school);
 
         return Inertia::render('App/SchoolSetup/Index', [
-            'progress' => [
-                'profileConfigured' => $school->legal_name !== null || $school->email !== null,
-                'campusCreated' => Campus::query()->exists(),
-                'academicYearActivated' => AcademicYear::query()->where('status', 'active')->exists(),
-                'gradeLevelsConfigured' => GradeLevel::query()->exists(),
-                'subjectsConfigured' => Subject::query()->exists(),
-            ],
             // SWC.2: the remaining structure screens, shown by the capability each page itself checks.
+            // ORG.12B (ADR 0080 §7): setup progress moved to the Setup & Readiness
+            // Center, derived from the owning modules -- no inline model reads here.
             'can' => [
                 'viewYears' => $this->can($context, 'academics.years.view'),
                 'viewStructure' => $this->can($context, 'academics.structure.view'),
