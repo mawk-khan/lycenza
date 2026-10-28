@@ -78,6 +78,28 @@ class OrganizationProfileArchitectureTest extends TestCase
         }
     }
 
+    /** Security review L4: only SchoolIdentityService writes the identity, even around the fillable guard. */
+    #[Test]
+    public function no_other_code_force_writes_the_institutional_identity(): void
+    {
+        foreach (Finder::create()->files()->in(app_path())->name('*.php') as $file) {
+            $source = $file->getContents();
+            if ($file->getFilename() === 'SchoolIdentityService.php' || preg_match("/'(legal_name|registration_reference|affiliation_reference)'/", $source) !== 1) {
+                continue;
+            }
+            $this->assertDoesNotMatchRegularExpression("/forceFill\\(|forceCreate\\(|DB::table\\('schools'\\)|unguarded\\(/", $source, "{$file->getRelativePathname()} names an identity field and force-writes Schools");
+        }
+    }
+
+    /** Security review M1: the Campus address backfill refuses a migration role that RLS would filter. */
+    #[Test]
+    public function the_campus_address_migration_refuses_a_role_without_rls_bypass(): void
+    {
+        $source = (string) file_get_contents(database_path('migrations/2027_01_12_090100_add_structured_campus_profile.php'));
+        $this->assertSame(2, substr_count($source, '$this->assertBypassesRls();'), 'both up() and down() assert RLS bypass first');
+        $this->assertStringContainsString('rolsuper OR rolbypassrls', $source);
+    }
+
     #[Test]
     public function optional_profile_fields_never_make_a_school_incomplete(): void
     {

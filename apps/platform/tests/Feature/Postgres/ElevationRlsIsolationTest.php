@@ -107,8 +107,9 @@ class ElevationRlsIsolationTest extends TestCase
         // + payment_correction_requests (ORG.8C, ADR 0076 §61);
         // + student_lifecycle_events and attendance_record_corrections (ORG.8E, ADR 0076 §63);
         // + communication_announcement_fee_reminders and communication_fee_reminder_lines (ORG.9D-2, ADR 0076 §74);
-        // + communication_events (ORG.9D-3, ADR 0076 §75).
-        $this->assertSame(216, (int) DB::connection('pgsql_admin')->selectOne(
+        // + communication_events (ORG.9D-3, ADR 0076 §75);
+        // + campus_services (ORG.12C, ADR 0080 §8).
+        $this->assertSame(217, (int) DB::connection('pgsql_admin')->selectOne(
             "select count(*) as c from pg_class where relrowsecurity and relforcerowsecurity and relnamespace = 'public'::regnamespace",
         )->c, 'No tenant table gained or lost RLS in Phase 0N.3.');
     }

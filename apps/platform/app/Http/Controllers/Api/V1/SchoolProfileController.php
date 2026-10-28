@@ -36,7 +36,7 @@ class SchoolProfileController extends Controller
         $request->validate(array_fill_keys(SchoolIdentityService::FIELDS, ['prohibited']), [
             'prohibited' => 'The institutional identity is changed only from the School profile page, with a fresh MFA code and a reason.',
         ]);
-        $profiles->update($school, $request->only(SchoolProfileService::FIELDS), $request->user());
+        $profiles->update($school, $request->only(SchoolProfileService::API_FIELDS), $request->user());
 
         return response()->json(['data' => $this->present($school->refresh())]);
     }

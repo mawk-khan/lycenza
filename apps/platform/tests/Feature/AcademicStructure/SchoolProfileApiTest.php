@@ -96,4 +96,31 @@ class SchoolProfileApiTest extends TestCase
 
         $response->assertStatus(422);
     }
+
+    /** ORG.12C security review L1: a case variant of another School's code is a clean 422, never a 500. */
+    #[Test]
+    public function a_case_variant_school_code_is_a_validation_error_not_a_500(): void
+    {
+        $this->createSchool(['code' => 'TAKEN']);
+        [$user, $school] = $this->createSchoolAdmin('school_admin');
+
+        $this->withHeader('Authorization', 'Bearer '.$this->token($user))
+            ->patchJson("/api/v1/schools/{$school->id}", ['code' => 'taken'])
+            ->assertStatus(422)->assertJsonPath('error.errors.code.0', 'This School code is not available.');
+    }
+
+    /** ORG.12C security review L2: a partial coordinate update is checked against the stored pair. */
+    #[Test]
+    public function a_partial_coordinate_patch_is_a_validation_error_not_a_500(): void
+    {
+        [$user, $school] = $this->createSchoolAdmin('school_admin');
+        $campus = $this->createCampus($school);
+        $client = $this->withHeader('Authorization', 'Bearer '.$this->token($user));
+        $url = "/api/v1/schools/{$school->id}/campuses/{$campus->id}";
+
+        $client->patchJson($url, ['latitude' => 12.3])->assertStatus(422);
+        $client->patchJson($url, ['latitude' => 12.3, 'longitude' => 77.5])->assertOk()->assertJsonPath('data.latitude', '12.30000');
+        $client->patchJson($url, ['latitude' => null])->assertStatus(422);
+        $client->patchJson($url, ['longitude' => 77.6])->assertOk()->assertJsonPath('data.longitude', '77.60000');
+    }
 }

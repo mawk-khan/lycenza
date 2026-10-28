@@ -113,6 +113,17 @@ class SchoolProfileTest extends TestCase
     }
 
     #[Test]
+    public function a_legacy_website_or_email_never_blocks_an_unrelated_edit_and_the_web_form_never_edits_name_or_code(): void
+    {
+        $school = $this->createSchool(['website' => 'www.legacy.edu', 'email' => 'legacy@@school', 'name' => 'Legacy School', 'code' => 'LEG']);
+        $this->enter($this->schoolAdminFor($school), $school);
+
+        $this->put('/app/school-setup/profile', ['website' => 'www.legacy.edu', 'email' => 'legacy@@school', 'city' => 'Pune', 'name' => 'Renamed', 'code' => 'NEW'])->assertSessionHasNoErrors();
+        $this->assertSame(['Pune', 'Legacy School', 'LEG'], array_values($school->refresh()->only(['city', 'name', 'code'])));
+        $this->put('/app/school-setup/profile', ['website' => 'www.still-bad.edu'])->assertSessionHasErrors('website');
+    }
+
+    #[Test]
     public function the_ordinary_form_never_changes_identity_status_or_timezone(): void
     {
         $school = $this->createSchool(['legal_name' => 'Original Trust', 'timezone' => 'Asia/Kolkata']);

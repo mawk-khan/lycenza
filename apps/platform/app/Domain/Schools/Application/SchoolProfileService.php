@@ -8,11 +8,12 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\CodeNormalizer;
 use App\Support\Validation\InstitutionalProfileRules;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -30,12 +31,15 @@ use Illuminate\Validation\ValidationException;
  */
 class SchoolProfileService
 {
+    /** The web profile page's fields (the display name lives in Settings; the code is set at onboarding). */
     public const array FIELDS = [
-        'name', 'code',
         'email', 'phone', 'website',
         'address_line1', 'address_line2', 'city', 'state_region', 'postal_code', 'country_code',
         'education_board_id',
     ];
+
+    /** The v1 API also edits the display name and code, as it did before ORG.12C. */
+    public const array API_FIELDS = ['name', 'code', ...self::FIELDS];
 
     public function __construct(
         private readonly CapabilityResolver $capabilities,
@@ -52,10 +56,18 @@ class SchoolProfileService
             throw new AuthorizationException('This action is unauthorized.');
         }
 
-        $input = InstitutionalProfileRules::normalize(array_intersect_key($input, array_flip(self::FIELDS)));
+        $input = InstitutionalProfileRules::normalize(array_intersect_key($input, array_flip(self::API_FIELDS)));
+        if (array_key_exists('code', $input)) {
+            // Rule 74: the code is stored upper-case, so it is compared upper-case.
+            $input['code'] = CodeNormalizer::normalize($input['code']);
+        }
+        // An unchanged value is never re-validated, so a legacy value saved
+        // before ORG.12C (a website without a scheme, an old phone) never
+        // blocks an unrelated edit.
+        $input = array_filter($input, fn ($value, string $key): bool => $value !== $school->getAttribute($key), ARRAY_FILTER_USE_BOTH);
         $validated = Validator::make($input, [
             'name' => ['sometimes', 'required', 'string', 'max:255'],
-            'code' => ['sometimes', 'nullable', 'string', 'max:32', Rule::unique('schools', 'code')->ignore($school->id)],
+            'code' => ['sometimes', 'nullable', 'string', 'max:32'],
             ...InstitutionalProfileRules::contact($school->phone, 'sometimes'),
             'website' => InstitutionalProfileRules::website('sometimes'),
             ...InstitutionalProfileRules::address('sometimes', countryNullable: false),
@@ -73,7 +85,11 @@ class SchoolProfileService
             if ($changed === []) {
                 return [];
             }
-            $school->save();
+            try {
+                $school->save();
+            } catch (UniqueConstraintViolationException) {
+                throw ValidationException::withMessages(['code' => 'This School code is not available.']);
+            }
 
             $this->audit->school($school, 'school.profile_updated', actor: $actor, subject: $school, metadata: ['changed' => $changed]);
             event(new SchoolProfileUpdated($school->id, $changed));

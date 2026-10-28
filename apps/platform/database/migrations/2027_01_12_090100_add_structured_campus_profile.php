@@ -22,6 +22,11 @@ use Illuminate\Support\Facades\Schema;
  * - No Campus timezone or currency (OD-12.3, OD-12.4): the School timezone
  *   and Finance's INR-only scope stay canonical.
  *
+ * The backfill reads and writes every School's Campuses, and `campuses` is
+ * FORCE RLS: on a role without RLS bypass it would silently see no row and
+ * then drop the column. Both directions therefore refuse unless the
+ * migration role bypasses RLS (ADR 0021; the ORG.7G-1A precedent).
+ *
  * down() restores `address` from the structured parts (joined with ", ").
  * The text is kept; the split into parts is not -- acceptable for a
  * development-only rollback, and stated here per rule 10.
@@ -30,6 +35,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        $this->assertBypassesRls();
         $tooLong = DB::table('campuses')->whereRaw('char_length(address) > 255')->count();
         if ($tooLong > 0) {
             throw new RuntimeException("{$tooLong} Campus address(es) exceed 255 characters; shorten them before migrating (no truncation).");
@@ -59,6 +65,7 @@ return new class extends Migration
 
     public function down(): void
     {
+        $this->assertBypassesRls();
         DB::statement('ALTER TABLE campuses DROP CONSTRAINT IF EXISTS campuses_coordinates_range_check');
         DB::statement('ALTER TABLE campuses DROP CONSTRAINT IF EXISTS campuses_coordinates_pair_check');
         DB::statement('ALTER TABLE campuses DROP CONSTRAINT IF EXISTS campuses_country_code_check');
@@ -72,5 +79,13 @@ return new class extends Migration
         Schema::table('campuses', function (Blueprint $table) {
             $table->dropColumn(['address_line1', 'address_line2', 'city', 'state_region', 'postal_code', 'country_code', 'latitude', 'longitude']);
         });
+    }
+
+    private function assertBypassesRls(): void
+    {
+        $role = DB::selectOne('SELECT rolsuper OR rolbypassrls AS bypass FROM pg_roles WHERE rolname = current_user');
+        if ($role === null || ! $role->bypass) {
+            throw new RuntimeException('ORG.12C: this migration must run on the admin connection with RLS bypass (ADR 0021); nothing was changed.');
+        }
     }
 };

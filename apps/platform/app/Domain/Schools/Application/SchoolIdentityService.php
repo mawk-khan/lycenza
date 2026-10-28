@@ -56,13 +56,14 @@ class SchoolIdentityService
             $locked = School::query()->whereKey($school->id)->lockForUpdate()->firstOrFail();
             $this->authority->requireCurrent($actor, 'school.profile.manage', $locked);
 
+            $stored = fn (string $field): ?string => ($value = trim((string) $locked->{$field})) === '' ? null : $value;
             foreach (self::FIELDS as $field) {
-                if (($expected[$field] ?? null) !== $locked->{$field}) {
+                if (($expected[$field] ?? null) !== $stored($field)) {
                     throw ValidationException::withMessages(['identity' => 'The institutional identity changed since you opened this form. Reload the page and try again.']);
                 }
             }
 
-            $changed = array_values(array_filter(self::FIELDS, fn (string $field): bool => ($values[$field] ?? null) !== $locked->{$field}));
+            $changed = array_values(array_filter(self::FIELDS, fn (string $field): bool => ($values[$field] ?? null) !== $stored($field)));
             if ($changed === []) {
                 return [];
             }

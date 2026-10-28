@@ -325,5 +325,19 @@ legal name is no longer required (OD-12.1); website, references, logo,
 coordinates and services never are. Campus readiness is unchanged (an
 active Campus).
 
-**8.10 Security review (ORG.12C).** Recorded in §8.11 after the independent
-review.
+**8.10 Measured.** School profile view 8 queries, save 8; Campus list at
+50 Campuses 8 (constant, one eager service query); Campus detail 8, save
+14; Setup Center page 49. No caching.
+
+**8.11 Independent security review (ORG.12C).** No HIGH. One MEDIUM, fixed:
+
+| # | Finding | Resolution |
+|---|---|---|
+| M1 | The Campus address backfill runs over a FORCE-RLS table; on a migration role without RLS bypass it would copy nothing and then drop `address` | **fixed:** `up()` and `down()` assert `rolsuper OR rolbypassrls` first (the ORG.7G-1A pattern); guarded by a test |
+| L1 | A case variant of another School's code passed validation and hit the unique index (500); the web form also accepted name/code | **fixed:** code normalized before the check, violation becomes a 422; the web form edits contact/address/board only (the API keeps name/code) |
+| L2 | An API PATCH of one coordinate could break the pair CHECK (500) | **fixed:** the pair is checked on the merged state (422) |
+| L3 | The Campus audit "before" could come from a pre-lock copy | **fixed:** the locked row is changed and audited |
+| L4 | "Only SchoolIdentityService writes the identity" was convention | **fixed:** a source guard refuses force-writes of identity fields elsewhere |
+| L5 | The identity step-up route has no per-user attempt throttle | accepted: the same project-wide gap as every FreshMfaRequirement web route (TOTP replay is already refused); a shared limiter is a separate hardening item |
+| L6 | Legacy website/email could block unrelated saves; padded legacy identity could never pass the stale check; the page reads Finance's currency constant | **fixed** (unchanged values are not re-validated; stored values are trimmed for the check); the currency read is accepted (HTTP layer only) |
+| -- | A School code existence oracle through the platform-wide unique code | pre-existing (the API already allowed code edits); not widened |

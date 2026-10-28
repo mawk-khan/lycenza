@@ -14,6 +14,7 @@ use App\Support\Tenancy\TenantContext;
 use App\Support\Validation\InstitutionalProfileRules;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /**
  * SWC.2 (ADR 0073 section 4.2): Campus create/update -- moved unchanged from
@@ -85,6 +86,9 @@ class CampusAdministrationService
 
         return $this->context->withSchool($school, function () use ($school, $campusId, $input, $actor): Campus {
             $campus = Campus::query()->findOrFail($campusId);
+            // An unchanged value is never re-validated, so a legacy value saved
+            // before ORG.12C never blocks an unrelated edit.
+            $input = array_filter($input, fn ($value, string $key): bool => $key === 'services' || ! array_key_exists($key, $campus->getAttributes()) || $value !== $campus->getAttribute($key), ARRAY_FILTER_USE_BOTH);
             $rules = [
                 'name' => ['sometimes', 'string', 'max:255'],
                 'code' => ['sometimes', 'string', 'max:32', Rule::unique('campuses')->where('school_id', $school->id)->ignore($campus->id)],
@@ -94,31 +98,35 @@ class CampusAdministrationService
             $validated = $this->validateInput($input, $rules);
             [$fields, $services] = self::split($validated);
 
-            $this->writeUnique(fn () => DB::transaction(function () use ($school, $campus, $fields, $services, $actor): void {
-                // FOR NO KEY UPDATE: serializes profile/service edits of this
-                // Campus without blocking FK inserts that key-share it.
-                Campus::query()->whereKey($campus->id)->lock('for no key update')->first();
-                $campus->fill($fields);
-                $changed = array_keys($campus->getDirty());
-                $before = array_intersect_key($campus->getOriginal(), array_flip(array_intersect($changed, self::AUDITED_VALUES)));
-                $campus->save();
-                [$added, $removed] = $services === null ? [[], []] : $this->syncServices($school, $campus, $services, $actor);
+            $this->writeUnique(function () use ($school, $campus, $fields, $services, $actor): void {
+                DB::transaction(function () use ($school, &$campus, $fields, $services, $actor): void {
+                    // FOR NO KEY UPDATE: serializes profile/service edits of this
+                    // Campus without blocking FK inserts that key-share it; the
+                    // locked row is the one changed and audited.
+                    $campus = Campus::query()->whereKey($campus->id)->lock('for no key update')->firstOrFail();
+                    self::assertCoordinatePair($campus, $fields);
+                    $campus->fill($fields);
+                    $changed = array_keys($campus->getDirty());
+                    $before = array_intersect_key($campus->getOriginal(), array_flip(array_intersect($changed, self::AUDITED_VALUES)));
+                    $campus->save();
+                    [$added, $removed] = $services === null ? [[], []] : $this->syncServices($school, $campus, $services, $actor);
 
-                if ($changed !== []) {
-                    $this->audit->school($school, 'campus.updated', actor: $actor, subject: $campus, metadata: [
-                        'changed' => $changed,
-                        'before' => $before,
-                        'after' => $campus->only(array_keys($before)),
-                    ]);
-                    event(new CampusUpdated($school->id, $campus->id, $changed));
-                }
-                if ($added !== [] || $removed !== []) {
-                    $this->audit->school($school, 'campus.services_changed', actor: $actor, subject: $campus, metadata: [
-                        'added' => $added,
-                        'removed' => $removed,
-                    ]);
-                }
-            }), fn () => $this->validateInput($input, $rules));
+                    if ($changed !== []) {
+                        $this->audit->school($school, 'campus.updated', actor: $actor, subject: $campus, metadata: [
+                            'changed' => $changed,
+                            'before' => $before,
+                            'after' => $campus->only(array_keys($before)),
+                        ]);
+                        event(new CampusUpdated($school->id, $campus->id, $changed));
+                    }
+                    if ($added !== [] || $removed !== []) {
+                        $this->audit->school($school, 'campus.services_changed', actor: $actor, subject: $campus, metadata: [
+                            'added' => $added,
+                            'removed' => $removed,
+                        ]);
+                    }
+                });
+            }, fn () => $this->validateInput($input, $rules));
 
             return $campus->refresh();
         });
@@ -149,6 +157,22 @@ class CampusAdministrationService
         sort($removed);
 
         return [$added, $removed];
+    }
+
+    /**
+     * Coordinates are a pair on the MERGED state: a partial update (e.g. the
+     * API sending only latitude) must leave both set or both empty. The
+     * database CHECK is the backstop; this turns it into a field error.
+     *
+     * @param  array<string, mixed>  $fields
+     */
+    private static function assertCoordinatePair(Campus $campus, array $fields): void
+    {
+        $latitude = array_key_exists('latitude', $fields) ? $fields['latitude'] : $campus->latitude;
+        $longitude = array_key_exists('longitude', $fields) ? $fields['longitude'] : $campus->longitude;
+        if (($latitude === null) !== ($longitude === null)) {
+            throw ValidationException::withMessages([$latitude === null ? 'latitude' : 'longitude' => 'Set both coordinates or neither.']);
+        }
     }
 
     /** @return array<string, list<mixed>> */
