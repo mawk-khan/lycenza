@@ -4,6 +4,7 @@ namespace Tests\Feature\Setup;
 
 use App\Domain\Platform\Application\Modules\ModuleCatalogue;
 use App\Support\Authorization\Campus\CampusScopeCatalogue;
+use App\Support\Setup\OrganizationSetupReadService;
 use App\Support\Setup\OrganizationSetupRegistry;
 use App\Support\Setup\SetupCategory;
 use App\Support\Setup\SetupReadinessProvider;
@@ -83,6 +84,37 @@ class OrganizationSetupArchitectureTest extends TestCase
             }
             foreach ($definition->referenceFamilies as $family) {
                 $this->assertContains($family, $mapKeys, "{$key}: {$family} is a family of the ORG-12 reference map");
+            }
+        }
+    }
+
+    /**
+     * Security review L-2: a floor-only area (its domain read keys are
+     * Campus-adopted, so readiness cannot check them School-wide) must never
+     * tell a floor holder more than that holder's own roles already could.
+     * A future catalogue release giving `school.profile.view` to a role
+     * without those keys fails here.
+     */
+    #[Test]
+    public function every_role_holding_the_setup_floor_also_holds_each_floor_only_areas_read_keys(): void
+    {
+        $floorOnly = array_filter(app(OrganizationSetupRegistry::class)->all(), fn ($d): bool => $d->viewCapabilities === []);
+        $this->assertNotEmpty($floorOnly);
+
+        $roleCapabilities = DB::table('roles')->join('role_capabilities', 'role_capabilities.role_id', '=', 'roles.id')
+            ->where('roles.scope', 'school')->where('roles.is_system', true)
+            ->get(['roles.key as role', 'role_capabilities.capability_key as capability'])
+            ->groupBy('role')->map(fn ($rows) => $rows->pluck('capability')->all());
+        $floorRoles = $roleCapabilities->filter(fn (array $capabilities): bool => in_array(OrganizationSetupReadService::FLOOR_CAPABILITY, $capabilities, true));
+        $this->assertNotEmpty($floorRoles);
+
+        foreach ($floorOnly as $definition) {
+            foreach ($definition->adoptedReadCapabilities as $capability) {
+                $this->assertTrue(CampusScopeCatalogue::isAdopted($capability), "{$definition->key}: {$capability} is the adopted key that forced floor-only");
+                $this->assertSame([], array_diff(ModuleCatalogue::modulesFor($capability), [$definition->ownerModule, ...$definition->entitlementModules]), "{$definition->key}: {$capability} is the area's own read key");
+                foreach ($floorRoles as $role => $capabilities) {
+                    $this->assertContains($capability, $capabilities, "{$role} holds the setup floor, so it must also hold {$capability} ({$definition->key})");
+                }
             }
         }
     }

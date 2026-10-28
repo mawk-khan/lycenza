@@ -28,10 +28,12 @@ use Illuminate\Auth\Access\AuthorizationException;
  *   dependency is unsatisfied is BLOCKED; one configured by its own checks
  *   while a dependency is unsatisfied needs ATTENTION.
  *   Blockers are setup KEYS only -- code constants, never tenant data.
- * - Tenancy: one School per call; nothing is aggregated across Schools and
- *   nothing is cached (the entitlement reader keeps its own 60 s cache).
- * - Read-only: nothing here or in any provider writes, caches, audits or
- *   stores a result (OrganizationSetupReadOnlyTest).
+ * - Tenancy: one School per call, an ACTIVE School only (rule 86);
+ *   nothing is aggregated across Schools. Readiness itself is never cached;
+ *   the capability and entitlement readers it calls keep their existing
+ *   tenant-namespaced 60 s caches.
+ * - Read-only: nothing here or in any provider writes, audits or stores a
+ *   result (OrganizationSetupReadServiceTest).
  */
 class OrganizationSetupReadService
 {
@@ -48,10 +50,16 @@ class OrganizationSetupReadService
     /**
      * @return array{schoolId: string, evaluatedAt: string, items: list<array<string, mixed>>}
      *
-     * @throws AuthorizationException when the viewer lacks the setup floor in this School
+     * @throws AuthorizationException when the School is not active or the viewer lacks the setup floor in it
      */
     public function evaluate(School $school, User $actor): array
     {
+        // Rule 86: a School operates only while active. The School entry
+        // middlewares already refuse others; this keeps a non-HTTP caller
+        // (console, job, a later route) to the same rule.
+        if (! $school->isActive()) {
+            throw new AuthorizationException('This action is unauthorized.');
+        }
         $held = $this->capabilities->schoolCapabilities($actor, $school);
         if (! in_array(self::FLOOR_CAPABILITY, $held, true)) {
             throw new AuthorizationException('This action is unauthorized.');

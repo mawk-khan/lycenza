@@ -33,7 +33,7 @@ class OrganizationSetupRegistryValidationTest extends TestCase
             'scopeLevel' => SetupScopeLevel::SCHOOL,
             'entitlementModules' => [],
             'route' => 'app.school-setup.index',
-            'viewCapabilities' => [],
+            'viewCapabilities' => ['school.profile.view'],
             'manageCapabilities' => [],
             'dependsOn' => $dependsOn,
             'order' => $order,
@@ -119,6 +119,23 @@ class OrganizationSetupRegistryValidationTest extends TestCase
         $this->assertRefused([$this->definition('a.one', 10, [], ['ownerModule' => 'transport'])], 'core exactly when');
         $this->assertRefused([$this->definition('a.one', 10, [], ['entitlementModules' => ['organization']])], 'must be an optional catalogue module');
         $this->assertRefused([$this->definition('a.one', 10, [], ['ownerModule' => 'transport', 'entitlementModules' => ['library']])], 'its own optional owner module');
+    }
+
+    #[Test]
+    public function a_floor_only_area_names_its_domains_adopted_read_keys_and_only_then(): void
+    {
+        foreach ([
+            ['viewCapabilities' => []],
+            ['viewCapabilities' => ['school.profile.view'], 'adoptedReadCapabilities' => ['students.view']],
+        ] as $invalid) {
+            try {
+                $this->definition('a.one', 10, [], $invalid);
+                $this->fail('accepted an inconsistent floor-only declaration');
+            } catch (InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+        $this->assertSame(['students.view'], $this->definition('a.one', 10, [], ['viewCapabilities' => [], 'adoptedReadCapabilities' => ['students.view']])->adoptedReadCapabilities);
     }
 
     #[Test]

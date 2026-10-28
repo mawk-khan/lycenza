@@ -21,6 +21,9 @@ final readonly class SetupDefinition
      * @param  list<string>  $dependsOn  setup keys that should be configured first (informational, never authorization)
      * @param  int  $order  explicit, unique display and evaluation order; every dependency has a lower order
      * @param  list<string>  $referenceFamilies  ORG-12 reference capability map family ids (RF-nn)
+     * @param  list<string>  $adoptedReadCapabilities  for an area with no `view` capability: the domain's Campus-adopted
+     *                                                 read keys that cannot be checked School-wide here; every role holding
+     *                                                 the setup floor must also hold them (OrganizationSetupArchitectureTest)
      */
     public function __construct(
         public string $key,
@@ -36,6 +39,7 @@ final readonly class SetupDefinition
         public array $dependsOn,
         public int $order,
         public array $referenceFamilies,
+        public array $adoptedReadCapabilities = [],
     ) {
         if (preg_match(self::KEY_PATTERN, $key) !== 1) {
             throw new \InvalidArgumentException("Invalid setup key {$key}.");
@@ -45,6 +49,9 @@ final readonly class SetupDefinition
         }
         if ($order < 1) {
             throw new \InvalidArgumentException("{$key} needs a positive order.");
+        }
+        if (($viewCapabilities === []) !== ($adoptedReadCapabilities !== [])) {
+            throw new \InvalidArgumentException("{$key} names its domain's adopted read keys exactly when it has no view capability.");
         }
     }
 
@@ -73,6 +80,7 @@ final readonly class SetupDefinition
             dependsOn: $row['dependsOn'],
             order: $row['order'],
             referenceFamilies: $row['reference'],
+            adoptedReadCapabilities: $row['adoptedRead'] ?? [],
         );
     }
 

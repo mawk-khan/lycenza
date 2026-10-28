@@ -174,6 +174,8 @@ catalogue size.
 
 ## 9. Authorization and visibility
 
+- **Active School only** (rule 86): a suspended, provisioning or closed
+  School is refused, even to its administrator.
 - **Floor:** `school.profile.view` in the School, through an active
   membership — the capability the existing School setup progress already
   uses (ADR 0070 §9.6). Holders today: School Admin and Principal. No new
@@ -186,7 +188,9 @@ catalogue size.
   `CampusScopeCatalogue` is unchanged (rule 101). Where a domain's only read
   keys are Campus-adopted (Student records, Staff records, Student
   attendance, Admissions) the floor alone governs; those answers are EXISTS
-  facts, never a record or a count of people.
+  facts, never a record or a count of people. Each such area names those
+  keys (`adoptedRead`), and a guard refuses any system role that holds the
+  floor without them.
 - **Platform:** a platform role, the Platform Manager, the Platform Auditor
   and an elevation hold no School capability, so they cannot evaluate a
   School's readiness. The existing platform Registry readiness (ADR 0076
@@ -209,8 +213,9 @@ Measured on ORG.12A (isolated test database, all modules entitled, every
 provider on its longest path): **21 definitions, 51 queries per full
 evaluation** (constant in the number of Students/Guardians — no N+1),
 **~31 ms**. Slowest provider: `academic.structure` (7 queries, ~3.9 ms).
-Budget pinned at **60 queries** (`OrganizationSetupReadServiceTest`). No
-caching is introduced; the entitlement reader keeps its existing 60 s cache.
+Budget pinned at **60 queries** (`OrganizationSetupReadServiceTest`).
+Readiness is never cached; the capability and entitlement readers it calls
+keep their existing tenant-namespaced 60 s caches.
 
 ## 12. Domain boundaries and guards
 

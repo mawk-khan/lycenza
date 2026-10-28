@@ -126,6 +126,19 @@ class OrganizationSetupReadServiceTest extends TestCase
     }
 
     #[Test]
+    public function a_school_that_is_not_active_is_refused_even_to_its_administrator(): void
+    {
+        foreach (['suspended' => School::factory()->suspended()->create(), 'provisioning' => School::factory()->provisioning()->create()] as $state => $school) {
+            try {
+                $this->service()->evaluate($school, $this->schoolAdminFor($school));
+                $this->fail("a {$state} School must be refused (rule 86)");
+            } catch (AuthorizationException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+    }
+
+    #[Test]
     public function platform_and_group_authority_never_read_school_readiness(): void
     {
         $school = $this->createSchool();
@@ -247,6 +260,23 @@ class OrganizationSetupReadServiceTest extends TestCase
         $this->assertSame('1 active Campus.', $items['organization.campuses']['explanation']);
         $this->assertSame('blocked', $items['attendance.student_attendance']['status'], 'no timetable yet');
         $this->assertSame(['academic.timetable'], $items['attendance.student_attendance']['blockers']);
+    }
+
+    #[Test]
+    public function a_future_hire_and_an_inactive_guardian_never_count_as_current_setup(): void
+    {
+        $school = $this->createSchool();
+        $admin = $this->schoolAdminFor($school);
+        $this->createDepartment($school);
+        $this->createPosition($school);
+        $this->createEmploymentRecord($this->createEmployee($school), ['status' => 'active', 'starts_on' => now()->addMonth()->toDateString()]);
+        $student = $this->createStudent($school);
+        $this->createGuardian($school);
+        $this->createStudentGuardianRelationship($student, $this->createGuardian($school, ['status' => 'inactive']), ['is_legal_guardian' => true]);
+
+        $items = $this->items($school, $admin);
+        $this->assertSame(['partially_configured', 2, 3], [$items['staff.staff_records']['status'], $items['staff.staff_records']['completedChecks'], $items['staff.staff_records']['totalChecks']], 'a future hire is not current staff');
+        $this->assertSame('Some active Students have no legal guardian linked.', $items['students.guardian_identity']['explanation'], 'an inactive Guardian covers no Student');
     }
 
     #[Test]

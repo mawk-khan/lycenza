@@ -75,9 +75,14 @@ are done, which are blocked by what, and which do not apply.
 8. **No HTTP surface in ORG.12A.** `OrganizationSetupReadService` is an
    Application service only; the user-facing Setup & Readiness Center is
    ORG.12B.
-9. **No caching** (measured: 51 queries, ~31 ms for the full catalogue).
+9. **Readiness is never cached** (measured: 51 queries, ~31 ms for the full
+   catalogue). The capability and entitlement readers it calls keep their
+   existing tenant-namespaced 60 s caches.
 10. **Readiness logic stays code-owned:** no JSON predicates, stored SQL,
     expression language, workflow DSL or School-editable rule.
+11. **Active Schools only** (rule 86): the read service refuses a School that
+    is not `active`, even to its administrator, so a later non-HTTP caller
+    cannot read a suspended or provisioning School.
 
 ## 3. Rejected alternatives
 
@@ -127,8 +132,16 @@ reference re-audit. Then ORG.REAUDIT-1 and ORG.REAUDIT-FINAL on the same
 | S-8 | Registry mutation | No writer; provider/read-service sources write-free; runtime SELECT-only proof | — | tested |
 | S-9 | Role-name authorization | None; capability checks only | — | review |
 | S-10 | Circular-dependency DoS | Iterative O(V+E) cycle check; 3,000-node hostile chain test | — | tested |
-| L-1 | Floor-only areas | Student/Staff records, Student attendance, Admissions readiness visible to floor holders (adopted read keys cannot be checked School-wide) | LOW | accepted: EXISTS facts only, floor = School Admin/Principal |
-| L-2 | Blocker keys | A blocker may name an area the viewer cannot see | LOW | accepted: keys are code constants, no tenant data |
+| L-1 | Floor-only areas | Student/Staff records, Student attendance, Admissions readiness visible to floor holders (adopted read keys cannot be checked School-wide) | LOW | accepted, guarded: EXISTS facts only; each such area names its adopted read keys (`adoptedRead`) and `OrganizationSetupArchitectureTest` refuses any system role holding the floor without them |
+| L-2 | Blocker keys / NOT_APPLICABLE | A blocker may name an area the viewer cannot see; NOT_APPLICABLE areas show entitlement state to any floor holder | LOW | accepted: code-constant keys and School configuration facts, no tenant records |
 | L-3 | Evaluation breadth | All applicable areas are evaluated even if the viewer sees few (needed for dependency status) | LOW | accepted: bounded (51 queries) |
+| L-4 | Lifecycle | The service did not itself refuse a non-active School (the HTTP entry middlewares did) | LOW | **fixed**: `isActive()` refusal + suspended/provisioning test |
+| L-5 | Students ↔ Guardians | `StudentGuardianCoverage` (Students) reads the Guardian relationship while the Guardians provider calls Students | LOW | accepted: existing precedent (`StudentProcessingAuthorizationReadService`); Students and Guardians are one core family (ADR 0076 §14) |
+| L-6 | Cache wording | Evaluation warms the existing grant and entitlement caches although the docs said "nothing is cached" | LOW | **fixed**: wording corrected (readiness itself is never cached) |
+| C-1 | Correctness | A future-dated `active` employment counted as current staff (ORG10-D01 pattern); a relationship to an inactive Guardian counted as coverage | — | **fixed** + tested |
+
+An independent review of the candidate (separate reviewer, code only)
+confirmed no HIGH or MEDIUM finding; its LOWs are L-1, L-2, L-4, L-5 and
+L-6 above.
 
 No HIGH or MEDIUM finding.
