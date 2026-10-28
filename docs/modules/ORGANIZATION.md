@@ -57,6 +57,14 @@ storage of such identifiers is flagged
 ("Government/statutory identifiers"). None are modeled in this
 checkpoint.
 
+*(2026-10-28, ORG.12C, ADR 0080 §8: owner decision OD-12.2 authorizes two
+jurisdiction-neutral **institutional** references on the School --
+`registration_reference` and `affiliation_reference` -- beside the existing
+`legal_name`. They identify the School itself, never a person, and are
+classified Internal ("School institutional identity and references" in
+DATA-CLASSIFICATION.md). Personal and statutory identifiers, and every tax
+identifier (GST, PAN, VAT, EIN), stay unmodelled and legally gated.)*
+
 ## Campus
 
 `App\Models\Campus` (Phase 0B) gained `phone`, `email`, `address`
@@ -86,6 +94,33 @@ keeps meaning the whole School. No new "Organisation" entity sits above
 School (ADR 0076 §4). Platform onboarding, lifecycle and module
 entitlements are platform-governed (ADR 0076 §6–§7, §12); School profile
 fields stay School-owned.
+
+## Rich School and Campus profiles (ORG.12C, ADR 0080 §8)
+
+- **School:** display `name` (unchanged), optional `legal_name`, `code`,
+  institutional email/phone/website, the structured address
+  (`address_line1/2`, `city`, `state_region`, `postal_code`,
+  `country_code`), `education_board_id`, `registration_reference`,
+  `affiliation_reference`. Timezone stays the School's (`timezone`, edited
+  in Settings); currency is Finance's single INR scope, shown read-only.
+  Ordinary edits: `SchoolProfileService` (`school.profile.manage`).
+  Identity (legal name + references): `SchoolIdentityService` only -- fresh
+  MFA, closed `SchoolIdentityChangeReason`, current authority under the
+  School lock, stale-form check, one audit event of field names.
+- **Campus:** `name`, `code`, `status`, institutional phone/email, the same
+  structured address (country NULL = the School's), optional coordinates
+  `latitude numeric(7,5)` / `longitude numeric(8,5)` (both or neither, in
+  range; ~1 m; no geocoder or map provider) and its current services in
+  `campus_services` (code-owned `CampusServiceType`: day_school,
+  early_years, boarding, meals, transport; forced RLS, composite same-School
+  FK, unique per Campus, insert/delete only). The old free-text `address`
+  moved to `address_line1`. No Campus timezone, currency, legal entity or
+  permission model.
+- **Services are descriptive:** they never enable a module, grant a
+  capability or create Transport, Hostel, Canteen or Finance records, and
+  enabling a module claims nothing about a Campus.
+- **Contacts are institutional:** never a User's account email or phone.
+- **Logo:** deferred (no School-media pipeline exists; ORG.12F).
 
 ## Multi-campus defaults
 

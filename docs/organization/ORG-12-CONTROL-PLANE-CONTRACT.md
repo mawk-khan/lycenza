@@ -2,8 +2,9 @@
 
 Status: **ORG.12A implemented (2026-10-28)** — contract, code-owned setup
 registry, readiness contracts and providers. **ORG.12B implemented
-(2026-10-28)** — the Setup & Readiness Center (§14). Decision record:
-ADR 0080 (§7 for ORG.12B).
+(2026-10-28)** — the Setup & Readiness Center (§14). **ORG.12C implemented
+(2026-10-28)** — rich School & Campus profiles (ADR 0080 §8). Decision
+record: ADR 0080.
 Reference evidence: `ORG-12-REFERENCE-CAPABILITY-MAP.md` (515-screen
 Organisation pack, 38 families).
 
@@ -235,7 +236,7 @@ Branch/Organization/Tenant entity; no navigation coupling.
 | Checkpoint | Scope | Boundary |
 |---|---|---|
 | **ORG.12B** Setup & Readiness Center — **IMPLEMENTED** (§14) | checklist, category grouping, progress, next action, blockers, entitlement awareness, deep links | UI over this read service; replaced the 5-flag School setup progress. Campus-specific readiness deferred (§14.6) |
-| **ORG.12C** Rich School & Campus profiles | legal identity, registration/tax/affiliation references, contact, website, social, timezone, currency, branding; Campus code, name, address, phone, email, coordinates, service profile (day school, early years, boarding, meals, transport), branding override | fields audited first; service profile is descriptive, never entitlement, capability or authority |
+| **ORG.12C** Rich School & Campus profiles — **IMPLEMENTED** (ADR 0080 §8; logo deferred to 12F) | legal identity, registration/tax/affiliation references, contact, website, social, timezone, currency, branding; Campus code, name, address, phone, email, coordinates, service profile (day school, early years, boarding, meals, transport), branding override | fields audited first; service profile is descriptive, never entitlement, capability or authority |
 | **ORG.12D** Network / franchise governance | Group/Network, region, zone, owned/franchise/managed, internal code, operating status; governance readiness; safe aggregate reporting | never a tenant boundary; no implicit School business-data access |
 | **ORG.12E** Role, access & sensitive-data administration | read-only role-template, capability, module, scope, sensitive-flag, assurance and effective-user views; sensitive-field projection | no tenant role or capability creation |
 | **ORG.12F** Navigation & branding presentation | ordering, grouping, optional visibility, labels, icons, banners, School branding, Portal presentation | effective visibility = entitlement AND authorization AND scope AND presentation preference |

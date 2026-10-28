@@ -60,9 +60,9 @@ class AcademicStructureSharedServiceApiTest extends TestCase
         $section = $this->createSection($year, $campus, $grade);
         $term = $this->createAcademicTerm($year);
 
-        $this->api($user, $school)->patchJson("{$base}/campuses/{$campus->id}", ['name' => 'Renamed', 'phone' => '123', 'status' => 'inactive'])
+        $this->api($user, $school)->patchJson("{$base}/campuses/{$campus->id}", ['name' => 'Renamed', 'phone' => '+14155550123', 'status' => 'inactive'])
             ->assertOk()->assertJsonPath('data.name', 'Renamed')->assertJsonPath('data.status', 'inactive')
-            ->assertJsonStructure(['data' => ['id', 'name', 'code', 'status', 'phone', 'email', 'address']]);
+            ->assertJsonStructure(['data' => ['id', 'name', 'code', 'status', 'phone', 'email', 'addressLine1', 'city', 'countryCode', 'latitude', 'longitude', 'services']]);
         $this->api($user, $school)->patchJson("{$base}/grade-levels/{$grade->id}", ['education_stage' => 'primary', 'status' => 'inactive'])
             ->assertOk()->assertJsonPath('data.status', 'inactive');
         $this->api($user, $school)->patchJson("{$base}/academic-departments/{$department->id}", ['code' => 'sci'])

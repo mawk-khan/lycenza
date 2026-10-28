@@ -10,6 +10,13 @@ use App\Support\Setup\SetupReadinessProvider;
  * ORG.12A (ADR 0080 §10): School profile readiness from the School's own
  * profile fields. Reports only which kinds of field are filled, never a
  * value.
+ *
+ * ORG.12C (ADR 0080 §8.9): the required minimum is an institutional
+ * contact (email or phone) and the address fundamentals (first line, city,
+ * country). The display name, timezone and Finance's currency always exist.
+ * The legal name is optional (OD-12.1: it may simply equal the display
+ * name), and so are the website, references, logo and coordinates -- none
+ * of them makes a School incomplete.
  */
 class SchoolProfileSetupReadiness implements SetupReadinessProvider
 {
@@ -21,16 +28,15 @@ class SchoolProfileSetupReadiness implements SetupReadinessProvider
     public function evaluate(string $key, School $school): SetupReadiness
     {
         $profile = School::query()->whereKey($school->id)
-            ->firstOrFail(['id', 'legal_name', 'email', 'phone', 'address_line1', 'city', 'country_code']);
+            ->firstOrFail(['id', 'email', 'phone', 'address_line1', 'city', 'country_code']);
 
         return SetupReadiness::fromChecks(
             [
-                'legal_name' => filled($profile->legal_name),
                 'contact' => filled($profile->email) || filled($profile->phone),
                 'address' => filled($profile->address_line1) && filled($profile->city) && filled($profile->country_code),
             ],
-            configured: 'The School\'s legal name, contact details and address are recorded.',
-            incomplete: 'Add the School\'s legal name, a contact email or phone, and its address.',
+            configured: 'The School\'s contact details and address are recorded.',
+            incomplete: 'Add a contact email or phone, and the School\'s address.',
         );
     }
 }

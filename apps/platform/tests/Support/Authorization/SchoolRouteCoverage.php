@@ -416,6 +416,8 @@ final class SchoolRouteCoverage
             Coverage::gate('app.school-setup.profile', 'school.profile.view'),
             Coverage::gate('app.school-setup.profile.update', 'school.profile.manage'),
             Coverage::gate('app.school-setup.campuses', 'school.campuses.view'),
+            // ORG.12C (ADR 0080 §8): one Campus's profile.
+            Coverage::gate('app.school-setup.campuses.show', 'school.campuses.view'),
             Coverage::gate('app.school-setup.campuses.store', 'school.campuses.manage'),
             Coverage::gate('app.school-setup.campuses.update', 'school.campuses.manage'),
             Coverage::gate('app.school-setup.academic-years', 'academics.years.view'),

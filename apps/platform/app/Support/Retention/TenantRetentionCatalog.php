@@ -168,7 +168,7 @@ final class TenantRetentionCatalog
             'syllabus_units', 'examinations', 'examination_papers',
         ]],
         'academic_structure' => [self::TENANT_LIFETIME, 'School configuration', [
-            'academic_years', 'academic_terms', 'academic_departments', 'campuses', 'grade_levels', 'sections', 'subjects',
+            'academic_years', 'academic_terms', 'academic_departments', 'campuses', 'campus_services', 'grade_levels', 'sections', 'subjects',
             'subject_offerings', 'elective_groups', 'rooms', 'grade_scales', 'grade_bands', 'timetable_periods',
         ]],
         'hr_evidence' => [self::ADOPTED, 'D9: 8 y after final separation', [

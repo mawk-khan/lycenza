@@ -2,7 +2,7 @@
 
 Status: **authoritative reference map for the ORG.12 Organization expansion**
 (ORG.12A, 2026-10-28, ADR 0080 §13; RF-01 reclassified by ORG.12B, ADR 0080
-§7). Re-used unchanged by ORG.12H and by
+§7; RF-02/RF-03 by ORG.12C, ADR 0080 §8). Re-used unchanged by ORG.12H and by
 the two future Organization re-audits (§6).
 
 This map records what the reference ERP's Organisation area **does**, who
@@ -58,8 +58,8 @@ stable; ORG.12A setup definitions cite them
 | RF | Reference family | Screens | Observed function | Lycenza owner | Current Lycenza status | ORG.12 | Future programme | Intentional difference | Decision |
 |---|---|---|---|---|---|---|---|---|---|
 | RF-01 | Getting Started | 7 | Per-branch setup summary (settings, key staff, fee-plan coverage) and a step checklist with paths to each setting | Organization Control Plane | **Setup & Readiness Center** (ORG.12B, `/app/school-setup/readiness`): 21 domain-owned areas, core vs enabled-module progress, prerequisites, next actions, capability-resolved links (§4.1) | 12A (spine), 12B (built) | — | Readiness is derived from owning domains, never stored; no staff identities, usernames or passwords on a setup page; no step a School ticks by hand | `EXISTING_DIFFERENT_ACCEPTED` |
-| RF-02 | Organization Profile | 0 dedicated (inside RF-03) | Legal identity, contact, affiliation, tax ids, social links, maps | Schools (Organization) | School profile: legal name, code, contact, address, board | 12C | — | One School profile; tax/legal identifiers follow RF-22 | `PARTIAL` |
-| RF-03 | Branch / Campus | 8 | Branch name/code/type/status, facility flags (day, daycare, boarding, meals, transport), currency/time zone, contact, social links, maps, behaviour flags | Campuses (Organization) | Campus: code, name, status, phone, email, address; School-level time zone | 12C (profile, service profile) | — | Campus is the only Branch (no Branch table); service profile is descriptive, never entitlement or authority; behaviour flags (e.g. fee-due gating of report cards) stay in their owning domain | `PARTIAL` |
+| RF-02 | Organization Profile | 0 dedicated (inside RF-03) | Legal identity, contact, affiliation, tax ids, social links, maps | Schools (Organization) | **Rich School profile** (ORG.12C): display + optional legal name, code, institutional contacts, structured international address, board, registration and affiliation references, timezone, Finance currency shown | 12C (built) | — | Identity changes need fresh MFA + reason; no tax ids, social links or map URLs; one School profile | `EXISTING_DIFFERENT_ACCEPTED` |
+| RF-03 | Branch / Campus | 8 | Branch name/code/type/status, facility flags (day, daycare, boarding, lunch, transport), currency/time zone, contact, social links, maps, behaviour flags | Campuses (Organization) | **Rich Campus profile** (ORG.12C): code, name, status, contacts, structured address, coordinates, code-owned service profile (day school, early years, boarding, meals, transport) | 12C (built) | — | Campus is the only Branch; services are descriptive, never entitlement or authority; currency and time zone stay School/Finance-wide; behaviour flags (e.g. fee-due gating of report cards) stay in their owning domain; no franchise/revenue flags (ORG.12D) | `EXISTING_DIFFERENT_ACCEPTED` |
 | RF-04 | Academic Year | 10 | Common and per-branch academic months, per-branch/class start dates, age-cut-off date, change of current year | Academic Structure | School AcademicYear + terms, one active per School (rule 64), draft-date correction (ADR 0077) | 12B (readiness only) | Admissions (age criteria) | One School calendar, not per-branch months; age criteria belong to Admissions eligibility | `EXISTING_DIFFERENT_ACCEPTED` |
 | RF-05 | Class / Section | 7 | Grade → section structure per year, sections per branch, master-class mapping | Academic Structure | GradeLevel (explicit `sequence`), Section per AcademicYear × Campus (rules 66, 67), education stage | 12B (readiness only) | — | A Section belongs to exactly one year; history never mutates | `EXISTING_EQUIVALENT` |
 | RF-06 | Attendance configuration | 15 | Daily/period structure with sessions and entry deadline, copy previous year, absent/present reason catalogue, fee-type mapping, absent-SMS template | Attendance (+ Communications for SMS) | Period registers against the timetable; closed absence-neutral correction reasons (ORG.8E) | 12B (readiness only) | Attendance (daily-session model); Communications (SMS, E28) | Attendance is never billing — attendance→fee mapping is not built; no free-text or health reasons | `DOMAIN_FUTURE` |
@@ -105,8 +105,8 @@ their functions are observed inside RF-03 and RF-14 respectively.
 | Classification | Families | Ids |
 |---|---|---|
 | `EXISTING_EQUIVALENT` | 2 | RF-05, RF-13 |
-| `EXISTING_DIFFERENT_ACCEPTED` | 8 | RF-01, RF-04, RF-07, RF-10, RF-23, RF-36, RF-37, RF-38 |
-| `PARTIAL` | 3 | RF-02, RF-03, RF-08 |
+| `EXISTING_DIFFERENT_ACCEPTED` | 10 | RF-01, RF-02, RF-03, RF-04, RF-07, RF-10, RF-23, RF-36, RF-37, RF-38 |
+| `PARTIAL` | 1 | RF-08 |
 | `ORG12_BUILD` | 4 | RF-15, RF-16, RF-19, RF-20 |
 | `DOMAIN_FUTURE` | 7 | RF-06, RF-24, RF-25, RF-26, RF-29, RF-32, RF-35 |
 | `PLATFORM_FUTURE` | 3 | RF-30, RF-31, RF-34 |
@@ -120,6 +120,21 @@ By screens, 374 of 515 (73 %) are the reference's user-type / menu /
 module permission machinery (RF-10, RF-14, RF-16–RF-18, RF-36). Lycenza
 meets that need with the capability catalogue, fixed role templates and
 entitlements, and does not copy it.
+
+### 4.0 Campus service profile vs the reference facility flags (ORG.12C)
+
+| Reference branch flag | Lycenza `CampusServiceType` | Difference |
+|---|---|---|
+| Day scholar | `day_school` | — |
+| Daycare | `early_years` | covers early years and daycare |
+| Boarding | `boarding` | never creates Hostel records |
+| Lunch | `meals` | never creates Canteen records or charges |
+| Transport | `transport` | never enables the Transport module or routes |
+| Revenue / franchise branch | — | governance, ORG.12D (not built) |
+
+Tax/statutory screens (branch tax ids, HR statutory codes) stay **RF-22
+`LEGAL_DECISION_REQUIRED`**: ORG.12C's neutral institutional references are
+not tax identifiers.
 
 ### 4.1 Getting Started: why Lycenza's Setup Center is different, and stronger (ORG.12B)
 

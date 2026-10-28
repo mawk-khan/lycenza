@@ -50,7 +50,7 @@ final class OrganizationSetupRegistry
      */
     public const array DEFINITIONS = [
         // -- Organization ------------------------------------------------------
-        ['key' => 'organization.school_profile', 'title' => 'School profile', 'description' => 'Legal name, contact details and address of the School.', 'owner' => 'organization', 'category' => C::ORGANIZATION, 'scope' => S::SCHOOL, 'entitlement' => [], 'route' => 'app.school-setup.profile', 'open' => ['school.profile.view'], 'view' => ['school.profile.view'], 'manage' => ['school.profile.manage'], 'dependsOn' => [], 'order' => 10, 'reference' => ['RF-02']],
+        ['key' => 'organization.school_profile', 'title' => 'School profile', 'description' => 'Contact details and address of the School (legal name and references optional).', 'owner' => 'organization', 'category' => C::ORGANIZATION, 'scope' => S::SCHOOL, 'entitlement' => [], 'route' => 'app.school-setup.profile', 'open' => ['school.profile.view'], 'view' => ['school.profile.view'], 'manage' => ['school.profile.manage'], 'dependsOn' => [], 'order' => 10, 'reference' => ['RF-02']],
         ['key' => 'organization.campuses', 'title' => 'Campuses', 'description' => 'At least one active Campus where the School operates.', 'owner' => 'organization', 'category' => C::ORGANIZATION, 'scope' => S::SCHOOL_AND_CAMPUS, 'entitlement' => [], 'route' => 'app.school-setup.campuses', 'open' => ['school.campuses.view'], 'view' => ['school.campuses.view'], 'manage' => ['school.campuses.manage'], 'dependsOn' => [], 'order' => 20, 'reference' => ['RF-03']],
 
         // -- Academic ----------------------------------------------------------

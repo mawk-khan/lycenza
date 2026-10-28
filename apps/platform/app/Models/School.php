@@ -39,6 +39,8 @@ use Illuminate\Support\Carbon;
  * @property string $timezone
  * @property string $default_locale
  * @property string|null $legal_name
+ * @property string|null $registration_reference ORG.12C: institutional registration reference, never a tax id
+ * @property string|null $affiliation_reference ORG.12C: affiliation/accreditation number with its board
  * @property string|null $code
  * @property string|null $website
  * @property string|null $email
@@ -58,9 +60,16 @@ class School extends Model
 {
     use GeneratesUuidV7, HasFactory, NormalizesCode;
 
+    /**
+     * ORG.12C (ADR 0080 §8): the institutional identity -- `legal_name`,
+     * `registration_reference`, `affiliation_reference` -- is NOT mass
+     * assignable: only SchoolIdentityService writes it (fresh MFA, closed
+     * reason, stale-form check, audited), so an ordinary profile update can
+     * never change it.
+     */
     protected $fillable = [
         'name', 'slug', 'timezone', 'default_locale',
-        'legal_name', 'code', 'website', 'email', 'phone',
+        'code', 'website', 'email', 'phone',
         'address_line1', 'address_line2', 'city', 'state_region', 'postal_code',
         'country_code', 'education_board_id',
     ];

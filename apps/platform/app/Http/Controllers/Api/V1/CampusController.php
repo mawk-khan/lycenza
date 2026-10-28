@@ -29,7 +29,7 @@ class CampusController extends Controller
             $query->where('status', 'active');
         }
 
-        return response()->json(['data' => $query->get()->map(fn (Campus $c) => $this->present($c))->all()]);
+        return response()->json(['data' => $query->with('services:id,campus_id,service_code')->get()->map(fn (Campus $c) => $this->present($c))->all()]);
     }
 
     public function store(Request $request, School $school, CampusAdministrationService $campuses): JsonResponse
@@ -71,7 +71,16 @@ class CampusController extends Controller
             'status' => $campus->status,
             'phone' => $campus->phone,
             'email' => $campus->email,
-            'address' => $campus->address,
+            // ORG.12C (ADR 0080 §8): the structured address, coordinates and services.
+            'addressLine1' => $campus->address_line1,
+            'addressLine2' => $campus->address_line2,
+            'city' => $campus->city,
+            'stateRegion' => $campus->state_region,
+            'postalCode' => $campus->postal_code,
+            'countryCode' => $campus->country_code,
+            'latitude' => $campus->latitude,
+            'longitude' => $campus->longitude,
+            'services' => $campus->services->pluck('service_code')->sort()->values()->all(),
         ];
     }
 }

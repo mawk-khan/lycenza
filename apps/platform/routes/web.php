@@ -563,8 +563,13 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
 
         Route::get('/profile', [SchoolSetupController::class, 'profile'])->name('profile');
         Route::put('/profile', [SchoolSetupController::class, 'updateProfile'])->name('profile.update');
+        // ORG.12C (ADR 0080 §8): institutional identity -- fresh MFA + closed reason.
+        Route::put('/profile/identity', [SchoolSetupController::class, 'updateIdentity'])
+            ->middleware('capability:school.profile.manage')
+            ->name('profile.identity.update');
 
         Route::get('/campuses', [SchoolSetupController::class, 'campuses'])->name('campuses');
+        Route::get('/campuses/{campus}', [SchoolSetupController::class, 'showCampus'])->name('campuses.show');
         Route::post('/campuses', [SchoolSetupController::class, 'storeCampus'])->name('campuses.store');
         Route::put('/campuses/{campus}', [SchoolSetupController::class, 'updateCampus'])->name('campuses.update');
 

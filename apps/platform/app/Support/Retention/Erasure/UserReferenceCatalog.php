@@ -78,6 +78,8 @@ final class UserReferenceCatalog
         'communication_announcement_recipients' => ['user_id' => self::RETAIN_REFERENCE],
         'communication_announcements' => ['created_by_user_id' => self::RETAIN_REFERENCE, 'emergency_declared_by_user_id' => self::RETAIN_REFERENCE, 'scheduled_by_user_id' => self::RETAIN_REFERENCE],
         // ORG.9D-3 (ADR 0076 §75): who prepared, published and cancelled a School calendar Event.
+        // ORG.12C (ADR 0080 §8): who recorded a Campus's current service offering.
+        'campus_services' => ['created_by_user_id' => self::RETAIN_REFERENCE],
         'communication_events' => ['created_by_user_id' => self::RETAIN_REFERENCE, 'published_by_user_id' => self::RETAIN_REFERENCE, 'cancelled_by_user_id' => self::RETAIN_REFERENCE],
         'communication_approval_requests' => ['decided_by_user_id' => self::RETAIN_REFERENCE, 'requested_by_user_id' => self::RETAIN_REFERENCE],
         'communication_attachments' => ['created_by_user_id' => self::RETAIN_REFERENCE],

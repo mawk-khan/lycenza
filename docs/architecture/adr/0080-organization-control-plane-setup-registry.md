@@ -1,9 +1,9 @@
 # ADR 0080: Organization Control Plane — Setup Registry and Derived Readiness (ORG.12A)
 
-- Status: **Accepted and implemented (2026-10-28).** ORG.12A (§1–§6) and
-  **ORG.12B Setup & Readiness Center (§7, 2026-10-28)**. ORG.12C–H are
-  planned here but **not authorized**; each needs explicit owner
-  authorization.
+- Status: **Accepted and implemented (2026-10-28).** ORG.12A (§1–§6),
+  **ORG.12B Setup & Readiness Center (§7)** and **ORG.12C Rich School &
+  Campus Profiles (§8)**, all 2026-10-28. ORG.12D–H are planned here but
+  **not authorized**; each needs explicit owner authorization.
 - Date: 2026-10-28
 - Programme: **ORG.12 — Organization Control Plane expansion** (additive to
   ORG, `MASTER-ROADMAP.md` programme 13).
@@ -243,3 +243,87 @@ resolved on the server).
 | L-2 | "Not enabled" areas are listed to any floor holder, including modules whose areas the viewer could not otherwise see | accepted: module availability is School configuration (ORG.12A §9), never records |
 | L-3 | Campus-adopted `open`/`manage` keys are evaluated School-wide | accepted, deliberate: link resolution is presentation, not authorization; errors are false negatives only (no link), never access (§7.5) |
 | I-1 | The `open` pin follows the first navigation entry per route; two destinations are reviewed by hand | accepted: worst case an offered link answers 403 |
+
+## 8. ORG.12C — Rich School & Campus Profiles (implemented, 2026-10-28)
+
+**8.1 Owner decisions applied.** OD-12.1 (keep `name` as the display name;
+`legal_name` already existed, optional, may equal it); OD-12.2 (neutral
+institutional references only, no tax/statutory semantics); OD-12.3 (no
+Campus timezone); OD-12.4 (no Campus currency); OD-12.5 (code-owned Campus
+services, descriptive only); OD-12.6 (optional coordinates, no geocoder,
+tracking or map provider); OD-12.7 (no theme system; logo deferred).
+
+**8.2 Audit before design (existing fields).** School: `name`, `slug`,
+`status`, `timezone` (default Asia/Kolkata), `default_locale`, `legal_name`,
+`code`, `website`, `email`, `phone`, `address_line1/2`, `city`,
+`state_region`, `postal_code`, `country_code` (char 2, default IN),
+`education_board_id`, closure columns. Campus: `name`, `code`, `status`,
+`phone`, `email`, free-text `address`. No address value object, country or
+region catalogue, geographic master, School currency column (Finance is
+INR-only, database-enforced: "School currency source: NONE"), logo or
+School-media pipeline, or Campus timezone. Data (DDEV): 2 Schools, 2
+Campuses, no Campus address/phone/email — no backfill needed.
+
+**8.3 Schema (three migrations, rollback-proven).**
+- `2027_01_12_090000_add_school_institutional_references`: `schools.registration_reference`
+  varchar(100), `affiliation_reference` varchar(100), nullable.
+- `2027_01_12_090100_add_structured_campus_profile`: Campus `address_line1/2`,
+  `city`, `state_region`, `postal_code`, `country_code` (nullable, CHECK
+  `^[A-Z]{2}$`), `latitude numeric(7,5)`, `longitude numeric(8,5)` with
+  `campuses_coordinates_pair_check` and `campuses_coordinates_range_check`;
+  existing `address` moved to `address_line1` (refused, not truncated, if
+  longer than 255) and dropped. `down()` rebuilds `address` from the parts.
+- `2027_01_12_090200_create_campus_services_table`: `campus_services`
+  (`school_id`, `campus_id`, `service_code`, `created_by_user_id`,
+  `created_at`), composite FK to `campuses(id, school_id)`, unique
+  `(campus_id, service_code)`, CHECK of the five codes, forced RLS,
+  runtime UPDATE revoked; retention class `academic_structure` (tenant
+  lifetime); `created_by_user_id` classified `retain_reference_to_tombstone`.
+
+**8.4 School profile.** `SchoolProfileService` (web + API) writes email,
+phone (E.164 when changed — legacy values never block an edit), website
+(http/https only), the structured address, `country_code` (two letters,
+required) and the board, under whole-School `school.profile.manage`; never
+`status`, timezone or the identity. Audit `school.profile_updated` names the
+changed fields only (it used to copy the submitted values).
+
+**8.5 Institutional identity (direct, assured).** `SchoolIdentityService`
+is the only writer of `legal_name`, `registration_reference` and
+`affiliation_reference` (none is mass assignable). Route
+`PUT /app/school-setup/profile/identity` (`capability:school.profile.manage`)
+→ fresh MFA (`FreshMfaRequirement`, outside the transaction) → School row
+`FOR UPDATE` → `authority->requireCurrent('school.profile.manage')`
+(operational School) → stale-form check (the values the form opened with
+must equal the stored ones) → write → one `school.institutional_identity_changed`
+event (changed fields, closed `SchoolIdentityChangeReason`, MFA time; never
+values). Declared in `ApprovalWorkflowRegistry::DIRECT_ASSURED`. The v1 API
+refuses these fields (422). The audit ledger is the history (no separate
+legal-name history table).
+
+**8.6 Campus profile.** `CampusAdministrationService` (one writer, web +
+API): structured address, contacts, coordinates (both or neither), and the
+full service set (insert/delete diff, idempotent, `campus.services_changed`
+audit of added/removed codes). `school.campuses.manage` stays whole-School
+(not Campus-adopted). New page `GET /app/school-setup/campuses/{campus}`
+(`school.campuses.view`); the list shows name, code, city, status and
+services in one eager query.
+
+**8.7 Separation.** A Campus service never enables a module, grants a
+capability or creates Transport/Hostel/Canteen/Finance records; module
+entitlement code never reads services (`OrganizationProfileArchitectureTest`).
+No School Group, region, zone or franchise change (ORG.12D).
+
+**8.8 Not implemented, deliberately.** GST, PAN, VAT, EIN, any tax filing or
+statutory field (RF-22 stays `LEGAL_DECISION_REQUIRED`); Campus timezone or
+currency; a street/area/locality master; a geocoder; a provider map URL; a
+logo upload (no media pipeline — ORG.12F); a generic metadata, custom-field
+or `type/value` identifier system; Group display on the profile.
+
+**8.9 Setup Center.** School profile readiness = an institutional contact
+(email or phone) + address fundamentals (first line, city, country). The
+legal name is no longer required (OD-12.1); website, references, logo,
+coordinates and services never are. Campus readiness is unchanged (an
+active Campus).
+
+**8.10 Security review (ORG.12C).** Recorded in §8.11 after the independent
+review.

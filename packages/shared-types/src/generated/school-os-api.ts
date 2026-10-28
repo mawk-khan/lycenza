@@ -7198,15 +7198,20 @@ export interface components {
             countryCode: string;
             /** Format: uuid */
             educationBoardId?: string | null;
+            /** @description ORG.12C: institutional registration reference -- never a tax identifier. Read-only here. */
+            registrationReference?: string | null;
+            /** @description ORG.12C: affiliation/accreditation number with the education board. Read-only here. */
+            affiliationReference?: string | null;
         };
-        /** @description Every field is optional (partial update) -- `status` is never accepted here. */
+        /** @description Every field is optional (partial update) -- `status` is never accepted here. ORG.12C (ADR 0080 §8): the institutional identity (legal_name, registration_reference, affiliation_reference) is refused (422); it changes only from the School profile page with a fresh MFA code and a reason. A changed phone must be E.164; a website must be http(s). */
         SchoolProfileInput: {
             name?: string;
-            legal_name?: string | null;
             code?: string | null;
+            /** @description http:// or https:// only */
             website?: string | null;
             /** Format: email */
             email?: string | null;
+            /** @description E.164 (+<country><number>) when changed */
             phone?: string | null;
             address_line1?: string | null;
             address_line2?: string | null;
@@ -7227,15 +7232,36 @@ export interface components {
             status: "active" | "inactive";
             phone?: string | null;
             email?: string | null;
-            address?: string | null;
+            addressLine1?: string | null;
+            addressLine2?: string | null;
+            city?: string | null;
+            stateRegion?: string | null;
+            postalCode?: string | null;
+            /** @description Null = the School's country. */
+            countryCode?: string | null;
+            /** @description Decimal degrees, 5 places; null exactly when longitude is null. */
+            latitude?: string | null;
+            longitude?: string | null;
+            /** @description ORG.12C: services this Campus offers -- descriptive only, never a module entitlement or permission. */
+            services?: ("boarding" | "day_school" | "early_years" | "meals" | "transport")[];
         };
+        /** @description ORG.12C (ADR 0080 §8): structured address (the School profile's shape), optional coordinates (both or neither) and the full set of offered services (replaces the set when sent). */
         CampusInput: {
             name: string;
             code: string;
+            /** @description E.164 when changed */
             phone?: string | null;
             /** Format: email */
             email?: string | null;
-            address?: string | null;
+            address_line1?: string | null;
+            address_line2?: string | null;
+            city?: string | null;
+            state_region?: string | null;
+            postal_code?: string | null;
+            country_code?: string | null;
+            latitude?: number | null;
+            longitude?: number | null;
+            services?: ("boarding" | "day_school" | "early_years" | "meals" | "transport")[] | null;
         };
         Room: {
             /** Format: uuid */

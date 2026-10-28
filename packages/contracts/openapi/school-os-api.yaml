@@ -15691,23 +15691,29 @@ components:
         postalCode: { type: string, nullable: true }
         countryCode: { type: string, minLength: 2, maxLength: 2 }
         educationBoardId: { type: string, format: uuid, nullable: true }
+        registrationReference: { type: string, nullable: true, description: "ORG.12C: institutional registration reference -- never a tax identifier. Read-only here." }
+        affiliationReference: { type: string, nullable: true, description: "ORG.12C: affiliation/accreditation number with the education board. Read-only here." }
 
     SchoolProfileInput:
       type: object
-      description: Every field is optional (partial update) -- `status` is never accepted here.
+      description: >
+        Every field is optional (partial update) -- `status` is never accepted
+        here. ORG.12C (ADR 0080 §8): the institutional identity (legal_name,
+        registration_reference, affiliation_reference) is refused (422); it
+        changes only from the School profile page with a fresh MFA code and a
+        reason. A changed phone must be E.164; a website must be http(s).
       properties:
         name: { type: string, maxLength: 255 }
-        legal_name: { type: string, maxLength: 255, nullable: true }
         code: { type: string, maxLength: 32, nullable: true }
-        website: { type: string, maxLength: 255, nullable: true }
+        website: { type: string, maxLength: 255, nullable: true, description: "http:// or https:// only" }
         email: { type: string, format: email, nullable: true }
-        phone: { type: string, maxLength: 32, nullable: true }
+        phone: { type: string, maxLength: 32, nullable: true, description: "E.164 (+<country><number>) when changed" }
         address_line1: { type: string, maxLength: 255, nullable: true }
         address_line2: { type: string, maxLength: 255, nullable: true }
         city: { type: string, maxLength: 120, nullable: true }
         state_region: { type: string, maxLength: 120, nullable: true }
         postal_code: { type: string, maxLength: 20, nullable: true }
-        country_code: { type: string, minLength: 2, maxLength: 2 }
+        country_code: { type: string, pattern: "^[A-Z]{2}$" }
         education_board_id: { type: string, format: uuid, nullable: true }
 
     Campus:
@@ -15720,17 +15726,43 @@ components:
         status: { type: string, enum: [active, inactive] }
         phone: { type: string, nullable: true }
         email: { type: string, nullable: true }
-        address: { type: string, nullable: true }
+        addressLine1: { type: string, nullable: true }
+        addressLine2: { type: string, nullable: true }
+        city: { type: string, nullable: true }
+        stateRegion: { type: string, nullable: true }
+        postalCode: { type: string, nullable: true }
+        countryCode: { type: string, nullable: true, description: "Null = the School's country." }
+        latitude: { type: string, nullable: true, description: "Decimal degrees, 5 places; null exactly when longitude is null." }
+        longitude: { type: string, nullable: true }
+        services:
+          type: array
+          description: "ORG.12C: services this Campus offers -- descriptive only, never a module entitlement or permission."
+          items: { type: string, enum: [boarding, day_school, early_years, meals, transport] }
 
     CampusInput:
       type: object
       required: [name, code]
+      description: >
+        ORG.12C (ADR 0080 §8): structured address (the School profile's
+        shape), optional coordinates (both or neither) and the full set of
+        offered services (replaces the set when sent).
       properties:
         name: { type: string, maxLength: 255 }
         code: { type: string, maxLength: 32 }
-        phone: { type: string, maxLength: 32, nullable: true }
+        phone: { type: string, maxLength: 32, nullable: true, description: "E.164 when changed" }
         email: { type: string, format: email, nullable: true }
-        address: { type: string, nullable: true }
+        address_line1: { type: string, maxLength: 255, nullable: true }
+        address_line2: { type: string, maxLength: 255, nullable: true }
+        city: { type: string, maxLength: 120, nullable: true }
+        state_region: { type: string, maxLength: 120, nullable: true }
+        postal_code: { type: string, maxLength: 20, nullable: true }
+        country_code: { type: string, nullable: true, pattern: "^[A-Z]{2}$" }
+        latitude: { type: number, minimum: -90, maximum: 90, nullable: true }
+        longitude: { type: number, minimum: -180, maximum: 180, nullable: true }
+        services:
+          type: array
+          nullable: true
+          items: { type: string, enum: [boarding, day_school, early_years, meals, transport] }
 
     Room:
       type: object

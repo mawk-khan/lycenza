@@ -12,18 +12,22 @@ use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Subject;
 use App\Domain\Campuses\Application\CampusAdministrationService;
-use App\Domain\Schools\Events\SchoolProfileUpdated;
+use App\Domain\Campuses\Application\CampusServiceType;
+use App\Domain\Finance\Application\LedgerService;
+use App\Domain\Schools\Application\SchoolIdentityChangeReason;
+use App\Domain\Schools\Application\SchoolIdentityService;
+use App\Domain\Schools\Application\SchoolProfileService;
 use App\Http\Controllers\App\Concerns\MapsDomainRefusals;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Models\EducationBoard;
-use App\Support\Audit\AuditRecorder;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -49,6 +53,13 @@ class SchoolSetupController extends Controller
 {
     use AuthorizesCapability, MapsDomainRefusals;
 
+    /** ORG.12C: the Campus fields a web edit may submit (CampusAdministrationService validates them). */
+    private const array CAMPUS_FIELDS = [
+        'name', 'code', 'status', 'phone', 'email',
+        'address_line1', 'address_line2', 'city', 'state_region', 'postal_code', 'country_code',
+        'latitude', 'longitude', 'services',
+    ];
+
     public function index(TenantContext $context): Response
     {
         $school = $context->requireSchool();
@@ -69,58 +80,83 @@ class SchoolSetupController extends Controller
         ]);
     }
 
-    public function profile(TenantContext $context): Response
+    public function profile(TenantContext $context, FreshMfaRequirement $mfa): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('school.profile.view', $school);
 
+        // ORG.12C (ADR 0080 §8): sections -- identity, contact, address,
+        // institutional details, operating defaults. Timezone is edited in
+        // Settings; currency is Finance's single, database-enforced currency.
         return Inertia::render('App/SchoolSetup/Profile', [
             'school' => [
-                'id' => $school->id,
                 'name' => $school->name,
                 'legalName' => $school->legal_name,
                 'code' => $school->code,
+                'status' => $school->status,
                 'email' => $school->email,
                 'phone' => $school->phone,
                 'website' => $school->website,
                 'addressLine1' => $school->address_line1,
+                'addressLine2' => $school->address_line2,
                 'city' => $school->city,
                 'stateRegion' => $school->state_region,
                 'postalCode' => $school->postal_code,
                 'countryCode' => $school->country_code,
                 'educationBoardId' => $school->education_board_id,
+                'registrationReference' => $school->registration_reference,
+                'affiliationReference' => $school->affiliation_reference,
+                'timezone' => $school->timezone,
+                'currency' => LedgerService::SUPPORTED_CURRENCY,
             ],
             'educationBoards' => EducationBoard::query()->where('status', 'active')->orderBy('name')->get(['id', 'name'])->all(),
-            'canManage' => app(CapabilityResolver::class)->canInSchool($context->actor(), 'school.profile.manage', $school),
+            'identityReasons' => SchoolIdentityChangeReason::options(),
+            'canManage' => $this->can($context, 'school.profile.manage'),
+            'hasMfaFactor' => $mfa->hasActiveFactor($context->actor()),
         ]);
     }
 
-    public function updateProfile(Request $request, TenantContext $context): RedirectResponse
+    public function updateProfile(Request $request, TenantContext $context, SchoolProfileService $profiles): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('school.profile.manage', $school);
+
+        $profiles->update($school, $request->only(SchoolProfileService::FIELDS), $context->actor());
+
+        return redirect('/app/school-setup/profile');
+    }
+
+    /**
+     * ORG.12C (ADR 0080 §8): legal name, registration and affiliation
+     * references -- capability first, then a fresh MFA code outside the
+     * transaction (rule 95), then SchoolIdentityService (closed reason,
+     * current authority under the School lock, stale-form check, audit).
+     */
+    public function updateIdentity(Request $request, TenantContext $context, FreshMfaRequirement $mfa, SchoolIdentityService $identity): RedirectResponse
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('school.profile.manage', $school);
 
         $validated = $request->validate([
             'legal_name' => ['nullable', 'string', 'max:255'],
-            'email' => ['nullable', 'email', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:32'],
-            'website' => ['nullable', 'string', 'max:255'],
-            'address_line1' => ['nullable', 'string', 'max:255'],
-            'city' => ['nullable', 'string', 'max:120'],
-            'state_region' => ['nullable', 'string', 'max:120'],
-            'postal_code' => ['nullable', 'string', 'max:20'],
-            'education_board_id' => ['nullable', 'string'],
+            'registration_reference' => ['nullable', 'string', 'max:100'],
+            'affiliation_reference' => ['nullable', 'string', 'max:100'],
+            'expected_legal_name' => ['present', 'nullable', 'string'],
+            'expected_registration_reference' => ['present', 'nullable', 'string'],
+            'expected_affiliation_reference' => ['present', 'nullable', 'string'],
+            'reason_code' => ['required', Rule::enum(SchoolIdentityChangeReason::class)],
         ]);
+        $proof = $mfa->requireForAction($request, $context->actor());
 
-        DB::transaction(function () use ($school, $validated) {
-            $school->update($validated);
-
-            app(AuditRecorder::class)->school($school, 'school.profile_updated', subject: $school, metadata: [
-                'after' => $validated,
-            ]);
-
-            event(new SchoolProfileUpdated($school->id, array_keys($validated)));
-        });
+        $clean = fn (?string $value): ?string => $value === null || trim($value) === '' ? null : trim($value);
+        $identity->change(
+            $school,
+            array_combine(SchoolIdentityService::FIELDS, array_map(fn (string $f) => $clean($validated[$f] ?? null), SchoolIdentityService::FIELDS)),
+            array_combine(SchoolIdentityService::FIELDS, array_map(fn (string $f) => $clean($validated["expected_{$f}"] ?? null), SchoolIdentityService::FIELDS)),
+            SchoolIdentityChangeReason::from($validated['reason_code']),
+            $context->actor(),
+            $proof,
+        );
 
         return redirect('/app/school-setup/profile');
     }
@@ -130,11 +166,35 @@ class SchoolSetupController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability('school.campuses.view', $school);
 
+        // ORG.12C: list rows stay short -- name, code, city, status, services (one eager query).
         return Inertia::render('App/SchoolSetup/Campuses', [
-            'campuses' => Campus::query()->orderBy('name')->get()->map(fn (Campus $c) => [
-                'id' => $c->id, 'name' => $c->name, 'code' => $c->code, 'status' => $c->status,
-                'phone' => $c->phone, 'email' => $c->email, 'address' => $c->address,
+            'campuses' => Campus::query()->with('services:id,campus_id,service_code')->orderBy('name')->get()->map(fn (Campus $c) => [
+                'id' => $c->id, 'name' => $c->name, 'code' => $c->code, 'status' => $c->status, 'city' => $c->city,
+                'services' => $c->services->pluck('service_code')->sort()->values()->all(),
             ])->all(),
+            'serviceOptions' => CampusServiceType::options(),
+            'canManage' => $this->can($context, 'school.campuses.manage'),
+        ]);
+    }
+
+    /** ORG.12C (ADR 0080 §8): one Campus's profile -- identity, address, contact, location, services. */
+    public function showCampus(TenantContext $context, string $campus): Response
+    {
+        $school = $context->requireSchool();
+        $this->authorizeCapability('school.campuses.view', $school);
+        $model = Campus::query()->with('services:id,campus_id,service_code')->findOrFail($campus);
+
+        return Inertia::render('App/SchoolSetup/Campus', [
+            'campus' => [
+                'id' => $model->id, 'name' => $model->name, 'code' => $model->code, 'status' => $model->status,
+                'phone' => $model->phone, 'email' => $model->email,
+                'addressLine1' => $model->address_line1, 'addressLine2' => $model->address_line2, 'city' => $model->city,
+                'stateRegion' => $model->state_region, 'postalCode' => $model->postal_code, 'countryCode' => $model->country_code,
+                'latitude' => $model->latitude, 'longitude' => $model->longitude,
+                'services' => $model->services->pluck('service_code')->sort()->values()->all(),
+            ],
+            'schoolCountryCode' => $school->country_code,
+            'serviceOptions' => CampusServiceType::options(),
             'canManage' => $this->can($context, 'school.campuses.manage'),
         ]);
     }
@@ -144,7 +204,7 @@ class SchoolSetupController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability('school.campuses.manage', $school);
 
-        $campuses->create($school, $request->only(['name', 'code', 'phone', 'email', 'address']), $context->actor());
+        $campuses->create($school, $request->only(['name', 'code']), $context->actor());
 
         return redirect('/app/school-setup/campuses');
     }
@@ -155,9 +215,9 @@ class SchoolSetupController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability('school.campuses.manage', $school);
 
-        $campuses->update($school, $campus, $request->only(['name', 'code', 'phone', 'email', 'address', 'status']), $context->actor());
+        $campuses->update($school, $campus, $request->only(self::CAMPUS_FIELDS), $context->actor());
 
-        return redirect('/app/school-setup/campuses');
+        return redirect()->back(fallback: '/app/school-setup/campuses');
     }
 
     public function academicYears(TenantContext $context): Response

@@ -39,14 +39,20 @@ class SchoolProfileApiTest extends TestCase
         $client->getJson("/api/v1/schools/{$school->id}")->assertOk();
 
         $response = $client->patchJson("/api/v1/schools/{$school->id}", [
-            'legal_name' => 'ACME Public School Trust',
             'email' => 'office@acme.example',
             'city' => 'Pune',
         ]);
 
         $response->assertOk();
-        $this->assertSame('ACME Public School Trust', $response->json('data.legalName'));
         $this->assertSame('office@acme.example', $response->json('data.email'));
+        $this->assertSame('Pune', $response->json('data.city'));
+
+        // ORG.12C (ADR 0080 §8): the institutional identity is never changed here
+        // (no fresh MFA or reason on this endpoint) -- refused, nothing applied.
+        foreach (['legal_name' => 'ACME Public School Trust', 'registration_reference' => 'REG-1', 'affiliation_reference' => 'AFF-1'] as $field => $value) {
+            $client->patchJson("/api/v1/schools/{$school->id}", [$field => $value, 'city' => 'Mumbai'])->assertStatus(422);
+        }
+        $this->assertSame(['Pune', null, null, null], array_values($school->refresh()->only(['city', 'legal_name', 'registration_reference', 'affiliation_reference'])));
     }
 
     #[Test]
@@ -57,7 +63,7 @@ class SchoolProfileApiTest extends TestCase
         $response = $this->withHeader('Authorization', 'Bearer '.$this->token($user))
             ->patchJson("/api/v1/schools/{$school->id}", [
                 'status' => 'archived',
-                'legal_name' => 'Still Updates Other Fields',
+                'city' => 'Still Updates Other Fields',
             ]);
 
         $response->assertOk();
@@ -65,7 +71,7 @@ class SchoolProfileApiTest extends TestCase
         // extra input is silently ignored (Laravel's default validate()
         // behavior), never applied.
         $this->assertSame('active', $school->refresh()->status);
-        $this->assertSame('Still Updates Other Fields', $response->json('data.legalName'));
+        $this->assertSame('Still Updates Other Fields', $response->json('data.city'));
     }
 
     #[Test]
@@ -75,7 +81,7 @@ class SchoolProfileApiTest extends TestCase
 
         // Principal has school.profile.view but not .manage (section 48).
         $this->withHeader('Authorization', 'Bearer '.$this->token($user))
-            ->patchJson("/api/v1/schools/{$school->id}", ['legal_name' => 'Nope'])
+            ->patchJson("/api/v1/schools/{$school->id}", ['city' => 'Nope'])
             ->assertForbidden();
     }
 

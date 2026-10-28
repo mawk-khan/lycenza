@@ -180,6 +180,12 @@ final class ApprovalWorkflowRegistry
      * @var array<class-string, array{capability: string, action: string, freshAuthority: true, freshMfa: true, reason: string, evidence: string, relationshipConflict: string|null, dbGuard?: array{trigger: string, refusal: string}, accountingOwner?: string, entryPoints?: list<string>}>
      */
     public const DIRECT_ASSURED = [
+        // ORG.12C (ADR 0080 §8): legal name, registration and affiliation references.
+        'App\Domain\Schools\Application\SchoolIdentityService' => [
+            'capability' => 'school.profile.manage', 'action' => 'School institutional identity change',
+            'freshAuthority' => true, 'freshMfa' => true, 'reason' => 'SchoolIdentityChangeReason (closed)',
+            'evidence' => 'school_audit_events school.institutional_identity_changed (changed fields, reason, MFA time; never values)', 'relationshipConflict' => null,
+        ],
         'App\Domain\Students\Application\StudentService' => [
             'capability' => 'students.manage', 'action' => 'Student status change',
             'freshAuthority' => true, 'freshMfa' => true, 'reason' => 'StudentLifecycleReason (closed)',

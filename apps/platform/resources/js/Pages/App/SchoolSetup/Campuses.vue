@@ -3,8 +3,10 @@
 // deactivate/reactivate (`status`, never a delete) over the shared
 // CampusAdministrationService. The server decides every rule; this page only
 // shows its field errors.
+// ORG.12C (ADR 0080 §8): rows stay short (name, code, city, status,
+// services); the full profile and its edit form are on each Campus's page.
 import { Head, useForm } from '@inertiajs/vue3';
-import { nextTick, ref } from 'vue';
+import { ref } from 'vue';
 import ConfirmDialog from '../../../Components/ConfirmDialog.vue';
 import ErrorSummary from '../../../Components/Form/ErrorSummary.vue';
 import TextField from '../../../Components/Form/TextField.vue';
@@ -14,38 +16,24 @@ interface Campus {
     name: string;
     code: string;
     status: string;
-    phone: string | null;
-    email: string | null;
-    address: string | null;
+    city: string | null;
+    services: string[];
 }
 
-const props = defineProps<{ campuses: Campus[]; canManage: boolean }>();
+const props = defineProps<{
+    campuses: Campus[];
+    serviceOptions: Array<{ code: string; label: string }>;
+    canManage: boolean;
+}>();
 
-const create = useForm({ name: '', code: '', phone: '', email: '', address: '' });
+const serviceLabel = (code: string) =>
+    props.serviceOptions.find((option) => option.code === code)?.label ?? code;
+
+const create = useForm({ name: '', code: '' });
 function submitCreate() {
     create.post('/app/school-setup/campuses', {
         preserveScroll: true,
         onSuccess: () => create.reset(),
-    });
-}
-
-const editing = ref<Campus | null>(null);
-const edit = useForm({ name: '', code: '', phone: '', email: '', address: '' });
-function startEdit(campus: Campus) {
-    editing.value = campus;
-    edit.clearErrors();
-    edit.name = campus.name;
-    edit.code = campus.code;
-    edit.phone = campus.phone ?? '';
-    edit.email = campus.email ?? '';
-    edit.address = campus.address ?? '';
-    nextTick(() => document.getElementById('edit-campus-name')?.focus());
-}
-function submitEdit() {
-    if (!editing.value) return;
-    edit.put(`/app/school-setup/campuses/${editing.value.id}`, {
-        preserveScroll: true,
-        onSuccess: () => (editing.value = null),
     });
 }
 
@@ -64,7 +52,7 @@ function setStatus(campus: Campus, status: 'active' | 'inactive') {
 
 <template>
     <Head title="Campuses" />
-    <main class="mx-auto max-w-4xl p-8 font-sans text-slate-900">
+    <main class="mx-auto max-w-4xl px-4 py-6 font-sans text-slate-900 sm:p-8">
         <a class="text-sm underline" href="/app/school-setup">← School setup</a>
         <h1 class="mt-2 text-xl font-semibold">Campuses</h1>
 
@@ -82,8 +70,9 @@ function setStatus(campus: Campus, status: 'active' | 'inactive') {
                     <tr>
                         <th scope="col" class="pr-3 py-2">Name</th>
                         <th scope="col" class="pr-3 py-2">Code</th>
-                        <th scope="col" class="pr-3 py-2">Contact</th>
+                        <th scope="col" class="pr-3 py-2">City</th>
                         <th scope="col" class="pr-3 py-2">Status</th>
+                        <th scope="col" class="pr-3 py-2">Services</th>
                         <th v-if="props.canManage" scope="col" class="pr-3 py-2">
                             <span class="sr-only">Actions</span>
                         </th>
@@ -91,18 +80,25 @@ function setStatus(campus: Campus, status: 'active' | 'inactive') {
                 </thead>
                 <tbody class="divide-y divide-slate-200">
                     <tr v-for="campus in props.campuses" :key="campus.id">
-                        <td class="pr-3 py-2 font-medium">{{ campus.name }}</td>
-                        <td class="pr-3 py-2">{{ campus.code }}</td>
-                        <td class="pr-3 py-2 text-slate-600">
-                            {{ [campus.phone, campus.email].filter(Boolean).join(' · ') || '—' }}
+                        <td class="pr-3 py-2 font-medium">
+                            <a
+                                class="underline"
+                                :href="`/app/school-setup/campuses/${campus.id}`"
+                                >{{ campus.name }}</a
+                            >
                         </td>
+                        <td class="pr-3 py-2">{{ campus.code }}</td>
+                        <td class="pr-3 py-2 text-slate-600">{{ campus.city ?? '—' }}</td>
                         <td class="pr-3 py-2">
                             {{ campus.status === 'active' ? 'Active' : 'Inactive' }}
                         </td>
+                        <td class="pr-3 py-2 text-slate-600">
+                            {{ campus.services.map(serviceLabel).join(', ') || '—' }}
+                        </td>
                         <td v-if="props.canManage" class="pr-3 space-x-3 py-2 text-right">
-                            <button type="button" class="underline" @click="startEdit(campus)">
+                            <a class="underline" :href="`/app/school-setup/campuses/${campus.id}`">
                                 Edit<span class="sr-only"> {{ campus.name }}</span>
-                            </button>
+                            </a>
                             <button
                                 v-if="campus.status === 'active'"
                                 type="button"
@@ -126,71 +122,11 @@ function setStatus(campus: Campus, status: 'active' | 'inactive') {
             </table>
         </div>
 
-        <section
-            v-if="editing"
-            class="mt-6 rounded border border-slate-300 p-4"
-            aria-labelledby="edit-campus-heading"
-        >
-            <h2 id="edit-campus-heading" class="font-semibold">Edit {{ editing.name }}</h2>
-            <form class="mt-3 grid gap-3 sm:grid-cols-2" @submit.prevent="submitEdit">
-                <TextField
-                    id="edit-campus-name"
-                    v-model="edit.name"
-                    label="Name"
-                    required
-                    :error="edit.errors.name"
-                />
-                <TextField
-                    id="edit-campus-code"
-                    v-model="edit.code"
-                    label="Code"
-                    required
-                    :maxlength="32"
-                    :error="edit.errors.code"
-                />
-                <TextField
-                    id="edit-campus-phone"
-                    v-model="edit.phone"
-                    label="Phone"
-                    type="tel"
-                    :error="edit.errors.phone"
-                />
-                <TextField
-                    id="edit-campus-email"
-                    v-model="edit.email"
-                    label="Email"
-                    type="email"
-                    :error="edit.errors.email"
-                />
-                <div class="sm:col-span-2">
-                    <TextField
-                        id="edit-campus-address"
-                        v-model="edit.address"
-                        label="Address"
-                        :error="edit.errors.address"
-                    />
-                </div>
-                <div class="flex gap-3 sm:col-span-2">
-                    <button
-                        type="submit"
-                        :disabled="edit.processing"
-                        class="rounded bg-slate-900 px-3 py-2 text-white disabled:opacity-50"
-                    >
-                        Save
-                    </button>
-                    <button
-                        type="button"
-                        class="rounded border border-slate-300 px-3 py-2"
-                        @click="editing = null"
-                    >
-                        Cancel
-                    </button>
-                </div>
-            </form>
-        </section>
-
         <section v-if="props.canManage" class="mt-8" aria-labelledby="add-campus-heading">
             <h2 id="add-campus-heading" class="font-semibold">Add a Campus</h2>
+            <p class="mt-1 text-sm text-slate-600">
+                Add the address, contact details, location and services on the Campus's page.
+            </p>
             <form class="mt-3 grid gap-3 sm:grid-cols-2" @submit.prevent="submitCreate">
                 <TextField
                     id="campus-name"
@@ -208,28 +144,6 @@ function setStatus(campus: Campus, status: 'active' | 'inactive') {
                     hint="Unique in this School; letters are stored in capitals."
                     :error="create.errors.code"
                 />
-                <TextField
-                    id="campus-phone"
-                    v-model="create.phone"
-                    label="Phone"
-                    type="tel"
-                    :error="create.errors.phone"
-                />
-                <TextField
-                    id="campus-email"
-                    v-model="create.email"
-                    label="Email"
-                    type="email"
-                    :error="create.errors.email"
-                />
-                <div class="sm:col-span-2">
-                    <TextField
-                        id="campus-address"
-                        v-model="create.address"
-                        label="Address"
-                        :error="create.errors.address"
-                    />
-                </div>
                 <div class="sm:col-span-2">
                     <button
                         type="submit"

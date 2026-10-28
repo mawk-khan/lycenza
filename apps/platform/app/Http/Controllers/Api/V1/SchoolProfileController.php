@@ -2,16 +2,13 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Domain\Schools\Events\SchoolProfileUpdated;
+use App\Domain\Schools\Application\SchoolIdentityService;
+use App\Domain\Schools\Application\SchoolProfileService;
 use App\Http\Controllers\Controller;
-use App\Models\EducationBoard;
 use App\Models\School;
-use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 /**
  * Phase 0D sections 7-8, 52. Deliberately does NOT accept `status` --
@@ -30,46 +27,16 @@ class SchoolProfileController extends Controller
         return response()->json(['data' => $this->present($school)]);
     }
 
-    public function update(Request $request, School $school): JsonResponse
+    public function update(Request $request, School $school, SchoolProfileService $profiles): JsonResponse
     {
         $this->authorizeCapability('school.profile.manage', $school);
 
-        $validated = $request->validate([
-            'name' => ['sometimes', 'string', 'max:255'],
-            'legal_name' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'code' => ['sometimes', 'nullable', 'string', 'max:32'],
-            'website' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'email' => ['sometimes', 'nullable', 'email', 'max:255'],
-            'phone' => ['sometimes', 'nullable', 'string', 'max:32'],
-            'address_line1' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'address_line2' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'city' => ['sometimes', 'nullable', 'string', 'max:120'],
-            'state_region' => ['sometimes', 'nullable', 'string', 'max:120'],
-            'postal_code' => ['sometimes', 'nullable', 'string', 'max:20'],
-            'country_code' => ['sometimes', 'string', 'size:2'],
-            'education_board_id' => ['sometimes', 'nullable', 'string'],
+        // ORG.12C (ADR 0080 §8): the institutional identity changes only through
+        // the web identity form (fresh MFA, closed reason, stale-form check).
+        $request->validate(array_fill_keys(SchoolIdentityService::FIELDS, ['prohibited']), [
+            'prohibited' => 'The institutional identity is changed only from the School profile page, with a fresh MFA code and a reason.',
         ]);
-
-        if (array_key_exists('education_board_id', $validated) && $validated['education_board_id'] !== null) {
-            $board = EducationBoard::query()->find($validated['education_board_id']);
-
-            if ($board === null || ! $board->isActive()) {
-                throw ValidationException::withMessages(['education_board_id' => ['This Education Board is not available.']]);
-            }
-        }
-
-        $before = $school->only(array_keys($validated));
-
-        DB::transaction(function () use ($school, $validated, $before, $request) {
-            $school->update($validated);
-
-            app(AuditRecorder::class)->school($school, 'school.profile_updated', actor: $request->user(), subject: $school, metadata: [
-                'before' => $before,
-                'after' => $validated,
-            ]);
-
-            event(new SchoolProfileUpdated($school->id, array_keys($validated)));
-        });
+        $profiles->update($school, $request->only(SchoolProfileService::FIELDS), $request->user());
 
         return response()->json(['data' => $this->present($school->refresh())]);
     }
@@ -97,6 +64,8 @@ class SchoolProfileController extends Controller
             'postalCode' => $school->postal_code,
             'countryCode' => $school->country_code,
             'educationBoardId' => $school->education_board_id,
+            'registrationReference' => $school->registration_reference,
+            'affiliationReference' => $school->affiliation_reference,
         ];
     }
 }

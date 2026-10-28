@@ -55,7 +55,8 @@ use Illuminate\Support\Facades\DB;
  */
 class LedgerService
 {
-    private const SUPPORTED_CURRENCY = 'INR';
+    /** Finance's single currency (database-enforced, docs/modules/FINANCE.md "Currency scope"); ORG.12C shows it on the School profile. */
+    public const SUPPORTED_CURRENCY = 'INR';
 
     private const MAX_DESCRIPTION_LENGTH = 255;
 
