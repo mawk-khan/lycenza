@@ -296,6 +296,13 @@ A customer's webhook endpoint being unreachable is never a factor in
 integration's problem, tracked in delivery history, not a platform
 outage.
 
+School-facing status (ORG.12G, ADR 0080 §12): the Integration & Device
+Readiness Hub (`/app/school-setup/integrations`) shows the School's
+webhooks as Not configured / Configured / Healthy / Degraded / Needs
+attention. It uses `WebhookIntegrationReadiness`, a bounded 7-day aggregate
+over this School's own delivery rows for active endpoints. It never shows a
+URL, endpoint name or secret, and never calls an endpoint.
+
 ## Payment and webhook-delivery-vs-API-idempotency distinctions
 
 Documented once, in full, in `docs/architecture/RELIABILITY.md`

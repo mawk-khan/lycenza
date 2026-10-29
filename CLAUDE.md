@@ -1700,3 +1700,19 @@ once several modules copy it.
      - **Brand:** a label and one `#RRGGBB` accent with a derived foreground (`BrandColor`). Per field: School value, else the EXPLICITLY chosen Network brand (a composite key to the School's own membership; active Group), else the system default. Never decided by relationship type, never forced by a Network, and never a change to the School's name or identity.
      - **Network brand:** changed only through `NetworkBrandService` (Network Manager of that Group or the platform; reason, fresh MFA, version).
      - **Media:** logo and banner uploads wait for a governed media pipeline; never build object storage for presentation.
+
+116. **The Integration & Device Readiness Hub reports status; it never configures, stores, contacts or reveals an integration (ADR 0080 §12).**
+     - **One catalogue:** `App\Support\Integrations\OrganizationIntegrationCatalogue`, code-owned and frozen by `IntegrationHubArchitectureTest`.
+       - Only real families or families a recorded decision keeps unavailable.
+       - An unavailable family names its decision and has no route, capability, setup area or provider.
+       - Never a table, a setting or a tenant-defined type. Never add a family just to match a reference screen.
+     - **Status ladder:** exists → entitled → configured → healthy (`IntegrationStatus`).
+       - NOT_APPLICABLE comes from module entitlement and ERROR from the Hub, never from a provider.
+       - Never a "connected", "live" or "production ready" status.
+     - **Providers:** one `IntegrationReadinessProvider` per available family, in its owning module, inside `withSchool`, with bounded aggregate reads of its own tables.
+       - Never a secret column, credential, key id, hash, URL, host, name, scope, recipient, subject or count.
+       - Never an outbound call (HTTP, SMTP, DNS, device), a write, an audit or a cache.
+     - **Authority:** an active School and whole-School `school.settings.view`; each family also needs its own view capabilities (hidden families are counted), and a `sensitiveRead` family also needs the same MFA assurance as its own page.
+       - Platform, elevation, Group, Network and Campus authority open nothing.
+       - Links come from the destination's own capabilities.
+     - **Never:** a "test connection", arbitrary URL/IP input, device scan or registration, SMS/DLT or payment-gateway configuration, map/tracking, or a generic integration engine. Those belong to their owning domain's own contract and its legal/provider review.

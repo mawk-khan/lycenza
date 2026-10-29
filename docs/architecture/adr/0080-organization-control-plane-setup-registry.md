@@ -4,9 +4,10 @@
   **ORG.12B Setup & Readiness Center (§7)** and **ORG.12C Rich School &
   Campus Profiles (§8)**, all 2026-10-28; **ORG.12D Network, Franchise,
   Region & Zone Governance (§9)**, **ORG.12E Role, Access & Sensitive
-  Data Administration (§10)** and **ORG.12F Navigation, Branding &
-  Presentation Profiles (§11)**, 2026-10-29. ORG.12G–H are planned here but
-  **not authorized**; each needs explicit owner authorization.
+  Data Administration (§10)**, **ORG.12F Navigation, Branding &
+  Presentation Profiles (§11)** and **ORG.12G Integration & Device
+  Readiness Hub (§12)**, 2026-10-29. ORG.12H is planned here but **not
+  authorized**; it needs explicit owner authorization.
 - Date: 2026-10-28
 - Programme: **ORG.12 — Organization Control Plane expansion** (additive to
   ORG, `MASTER-ROADMAP.md` programme 13).
@@ -808,3 +809,170 @@ RLS).
 Also fixed during testing: navigation change detection compared rows loosely
 (an order of 0 looked unchanged), and the reset audited outside the School
 context (RLS refusal).
+
+## 12. ORG.12G — Integration & Device Readiness Hub (implemented, 2026-10-29)
+
+**12.1 Audit before design (repository truth).**
+
+| Family | What exists | Hub status source |
+|---|---|---|
+| Email | Durable email layer (ADR 0055): platform-operated provider (`MAIL_PROVIDER` `none`/`fake`/`smtp`; SendGrid dormant), School-scoped `email_messages` (RLS) | `EmailIntegrationReadiness` |
+| Outbound webhooks | `webhook_endpoints`/`webhook_deliveries` (RLS), School API management, SSRF re-check at send time (ADR 0026/0027) | `WebhookIntegrationReadiness` |
+| Partner API clients | `api_clients`/`api_client_credentials` (RLS), hashed secrets, web page under MFA; production scope catalogue EMPTY (ADR 0049, ADR 0057 §5.1) | `ApiClientIntegrationReadiness` |
+| SMS | `CommunicationChannel::Sms` enum + local/testing fake only; DEFERRED (ADR 0057 §5, E28) | NOT_AVAILABLE |
+| Payment gateway | No adapter, callback route or credential; manual/offline recording only; DEFERRED (ADR 0057 §2) | NOT_AVAILABLE |
+| Biometric / RFID attendance | Nothing; biometrics behind HRX-L1/L2, documented Attendance non-scope | NOT_AVAILABLE |
+| Transport RFID / VTS (GPS) | Nothing; documented Transport non-scope (`TRANSPORT.md`) | NOT_AVAILABLE |
+| AI Gateway | Platform service (`services/ai`); `AiGatewayClient` has no School-facing caller | NOT_AVAILABLE |
+
+Recorded as well:
+- There is no device, telemetry, SMS or generic integration table anywhere.
+- Provider credentials live only in process configuration (ADR 0050), never
+  in a School row.
+- Operations health (`OperationalStatusService`, `EmailStatus`) is
+  platform-internal (rule 63) and is not reused for School users.
+
+**12.2 Catalogue (`App\Support\Integrations\OrganizationIntegrationCatalogue`).**
+- **Code-owned:** ten families with stable `<area>.<subject>` keys,
+  explicit order, a section, an owner, `managedBy` (`school` or
+  `platform`), entitlement modules, view/open/manage capabilities, an
+  optional web route, an optional ORG.12A setup area and RF ids.
+- **Only real or explicitly decided families:**
+  - three AVAILABLE families: `communications.email`,
+    `integrations.webhooks`, `integrations.api_clients`;
+  - seven NOT_AVAILABLE families, each naming its recorded decision:
+    `communications.sms`, `payments.gateway`, `attendance.biometric`,
+    `attendance.rfid`, `transport.rfid`, `transport.vts`,
+    `platform.ai_gateway`.
+- **An unavailable family** has no route, no capability, no setup area and
+  no provider (enforced by `IntegrationDefinition`).
+- **Never** a table, a setting, request input or a tenant-defined type. The
+  list is frozen by `IntegrationHubArchitectureTest`; changing it is a
+  reviewed change.
+
+**12.3 Status vocabulary (`IntegrationStatus`).** It answers four separate
+questions, in this order:
+1. **Exists?** `not_available` (deferred, out of scope, or not enabled in
+   this environment). Never evaluated.
+2. **Entitled?** `not_applicable`: the optional module is not enabled.
+   Decided by the Hub from `SchoolModuleEntitlements`, never by a provider.
+3. **Configured?** `not_configured` / `configured`.
+4. **Healthy?**
+   - `healthy`: recent success observed (email accepted for delivery,
+     webhook delivered, partner credential used);
+   - `degraded`: delayed or paused;
+   - `attention_required`: something the School should look at;
+   - `error`: the readiness itself could not be read. Decided by the Hub
+     when a provider throws; the page still renders.
+
+There is no "connected", "live" or "production ready" status.
+
+**12.4 Providers** (`IntegrationReadinessProvider`, one per AVAILABLE
+family, in the owning module, wired in `PlatformServiceProvider`). Each
+runs inside `TenantContext::withSchool` and makes bounded EXISTS/aggregate
+reads of its own tables: `bool_or` over a 7-day or 30-day window, or one
+row per active API client.
+- **Email (platform-managed):**
+  - `MAIL_PROVIDER=none` → not configured;
+  - a blocked configuration or a provider auth pause → degraded. The closed
+    block reason is never shown, because the School cannot act on it.
+  - this School's messages: a permanent failure in the last 7 days →
+    attention; a stuck backlog → degraded; accepted in the last 7 days →
+    healthy (submission is never delivery, rule 89); otherwise configured.
+- **Webhooks:**
+  - no active endpoint → not configured;
+  - otherwise, for active endpoints over 7 days: a failed or abandoned
+    delivery → attention; a pending/retrying delivery older than the
+    backlog threshold → degraded; delivered → healthy; otherwise
+    configured.
+- **API clients:**
+  - no active client → not available where no partner scope is approved
+    (production: `PartnerScopeRegistry::PRODUCTION` is empty), otherwise
+    not configured;
+  - an active client with no current credential, or one expiring within
+    30 days → attention;
+  - used in the last 30 days → healthy; otherwise configured.
+- **Never** a secret, key id, hash, URL, host, name, scope, recipient,
+  subject, provider id, count or error text (architecture test and leak
+  tests).
+- **Never** an outbound call (HTTP, SMTP, DNS, socket, device), a write, an
+  audit, a cache or a stored result.
+
+**12.5 Hub (`IntegrationHubReadService`, `/app/school-setup/integrations`).**
+- **Entry:** an ACTIVE School and `school.settings.view` School-wide
+  (route `capability:` middleware, re-checked in the service). This is an
+  existing capability (School Admin, Principal); no capability is added.
+  - It is never Campus-adopted, so a Campus grant never opens the Hub.
+  - Platform, elevation, Group and Network authority confer nothing (rule
+    84, rule 114).
+- **Visibility:** an evaluated family is returned only to a viewer holding
+  ALL of its view capabilities. NOT_AVAILABLE and NOT_APPLICABLE families
+  are product facts every Hub viewer sees (the same rule as ORG.12A).
+  Hidden families are counted, never named.
+- **MFA parity:** a family whose own page needs current MFA assurance
+  (`sensitiveRead`: partner API clients, `SensitiveReadAssurance`) is
+  evaluated only under that assurance. Otherwise it is listed by title as
+  "verify to view", with no status and a link to its page.
+- **Sections:** Overview, Communications, Payments, Attendance & access
+  devices, Transport & tracking, and Platform & other. Only sections with
+  entries are shown.
+- **Links:** resolved on the server from the destination's own `open`
+  capabilities ("Manage" when the viewer also holds every `manage`
+  capability). There is none for NOT_AVAILABLE, NOT_APPLICABLE, email
+  (platform-managed) or webhooks (managed through the School API, no web
+  page).
+- **ORG.12A link:** the Overview reports the `integrations.integrations`
+  setup area from its ONE existing provider, with no parallel setup state.
+  It follows the same visibility rules and links to Setup & readiness for
+  holders of `school.profile.view`.
+- **Navigation:** one entry, `integrations-hub` ("Integrations & devices",
+  School setup group, `school.settings.view`).
+- **Read-only:** GET only. No form, input, "Test connection" or connect
+  button; no write, audit or outbox row on read (test-asserted); no
+  outbound request (`Http::preventStrayRequests()` + `assertNothingSent`).
+
+**12.6 Explicitly not built.** All of the following stay with the owning
+domain, or with the legal/provider decision named in §12.1:
+- device or provider tables, device registration or writes, hardware
+  scanning;
+- SMS/DLT semantics, payment gateway configuration, maps or live
+  tracking;
+- an arbitrary URL/IP input, a connection test or a generic integration
+  engine;
+- AWS/Secrets Manager provisioning.
+
+**12.7 Demo world.**
+- **Gachibowli:** webhooks healthy (one recent delivery to a reserved
+  `.example.test` host, never contacted); a partner client configured.
+- **Horizon:** webhooks not configured; a client credential expiring in 12
+  days (needs attention).
+- **Greenfield and Jubilee Hills:** Integrations not applicable.
+- **Everywhere:** seven families not available.
+- **Credentials:** hashes of discarded random bytes (no usable credential
+  exists).
+- **Verification:** `DemoOrganizationVerifier` checks every state through
+  the real providers.
+
+**12.8 Measured; the one schema change.**
+- At most 30 queries for the whole page, shell included (test-asserted).
+- A props payload under 50 KB.
+- About 0.3 s served in DDEV.
+- **Migration** `2027_01_16_090000_add_integration_readiness_indexes`: two
+  plain indexes, `email_messages (school_id, created_at)` and
+  `webhook_deliveries (school_id, updated_at)`. They let the windowed
+  EXISTS probes read only one School's recent rows. There is no table,
+  column, policy or trigger change, and the forced-RLS table count stays
+  219. The rollback proof is IDENTICAL; `verify-database` failed=0.
+
+**12.9 Independent security review (ORG.12G).** No HIGH or MEDIUM.
+
+| # | Finding | Resolution |
+|---|---|---|
+| L1 | API client lifecycle facts were shown without the MFA assurance their own page requires | **fixed:** the `sensitiveRead` family is shown only under `SensitiveReadAssurance`, otherwise as "verify to view" (tested; DDEV G-8b) |
+| L2 | A throwing ORG.12A setup provider would 500 the page | **fixed:** caught, shown without a status (tested) |
+| L3 | The health aggregates could scan every retained row for the School | **fixed:** split into bounded EXISTS probes on indexes (the §12.8 migration) |
+| L4 | Email failures were windowed on `created_at` (an old message bouncing recently was missed); `suppressed`, an expired-undelivered message and `submitting` backlog were not counted | **fixed:** windowed on `finished_at`; suppressed and expired-undelivered count as undelivered; `submitting` counts as backlog (tested) |
+| I5 | `report($e)` would log an exception message as-is | **fixed:** logs only the family key and exception class (rule 63) |
+| I9 | No Hub-specific elevation test | **added:** `IntegrationHubElevationTest` |
+| I6, I7, I10 | Email status visible to every Hub holder; module state already visible (ORG.12A); 60 s capability cache | accepted as designed |
+| I8 | Demo states age (a 7-day window, a 12-day expiry) | accepted: `ddev demo-reset` refreshes them, and the verifier reports drift |

@@ -240,7 +240,7 @@ Branch/Organization/Tenant entity; no navigation coupling.
 | **ORG.12D** Network / franchise governance — **IMPLEMENTED** (§15, ADR 0080 §9) | Group = Network, Region, Zone, owned/franchise/managed/affiliate, network reference, lifecycle; structural overview and directory | never a tenant boundary or authority scope; Campus count and Network readiness deferred to 12H (tenant reads, ADR 0048) |
 | **ORG.12E** Role, access & sensitive-data administration — **IMPLEMENTED** (§16, ADR 0080 §10) | Network Manager / Network Viewer (whole Group, Region, Zone); School Access Center (role templates, capabilities, matrix, effective access); sensitive-data catalogue | no tenant role or capability creation; deny-only field policy deferred until central enforcement exists |
 | **ORG.12F** Navigation & branding presentation — **IMPLEMENTED** (§17, ADR 0080 §11; logo/banner/icons deferred) | order within groups, optional hiding, plain labels for staff and Guardian portal navigation; School and Network brand (label, accent) with explicit inheritance | effective visibility = entitlement AND authorization AND scope AND presentation preference |
-| **ORG.12G** Integration & device readiness hub | email, SMS, payment gateway, biometric, RFID, VTS/GPS, webhooks, AI Gateway: family, owner, School/Campus, configured, enabled, healthy, last safe health event | no credential or secret ever in Organization |
+| **ORG.12G** Integration & device readiness hub — **IMPLEMENTED** (ADR 0080 §12) | email, SMS, payment gateway, biometric, RFID, VTS/GPS, webhooks, API clients, AI Gateway: family, owner, managed by, exists / entitled / configured / healthy (School-level; no Campus or device dimension exists) | no credential or secret ever in Organization |
 | **ORG.12H** Reports & reference re-audit | setup-completion and configuration-gap reports, safe Network readiness summaries, final classification against the 515-screen pack | Network summaries one School at a time |
 
 Each checkpoint needs explicit owner authorization. Two future audits reuse
@@ -381,3 +381,28 @@ a second catalogue.
 - **Network brand:** Network Manager of that Group (reason, fresh MFA,
   version); never forced on a School.
 - **Deferred:** logo, banner and icon assets (no governed media pipeline).
+
+## 18. Integration & device readiness (ORG.12G)
+
+- **Readiness, never configuration.** The Hub
+  (`/app/school-setup/integrations`) shows each integration family's status
+  from the module that owns it. It stores, configures, tests and contacts
+  nothing.
+- **One code-owned catalogue** (`OrganizationIntegrationCatalogue`):
+  - only real families (email, webhooks, partner API clients);
+  - families a recorded decision keeps unavailable (SMS, payment gateway,
+    biometric, attendance RFID, transport RFID, VTS, AI Gateway), shown as
+    Not available with that decision;
+  - no tenant-defined types and no device records.
+- **Status ladder:** exists → entitled → configured → healthy (`not_available`,
+  `not_applicable`, `not_configured`/`configured`, `healthy`/`degraded`/
+  `attention_required`, plus `error` when a status cannot be read).
+- **Authority:** an active School and the existing `school.settings.view`,
+  School-wide. A family's status also needs its own view capabilities.
+  Platform, elevation, Group, Network and Campus authority open nothing.
+- **Never shown:** a credential, secret, key id, hash, URL, host, endpoint
+  or client name, scope, recipient, subject, provider id or count.
+- **Never done:** an outbound call on page load, a "test connection", a
+  write or audit on read, a device or integration table.
+- **The ORG.12A setup area** `integrations.integrations` is reported from its
+  existing provider; optional families never become mandatory setup.

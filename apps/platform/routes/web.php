@@ -97,6 +97,7 @@ use App\Http\Controllers\App\HR\HrEmployeePersonalDetailController;
 use App\Http\Controllers\App\HR\HrEmployeeQualificationController;
 use App\Http\Controllers\App\HR\HrEmploymentController;
 use App\Http\Controllers\App\HR\HrPositionController;
+use App\Http\Controllers\App\IntegrationHubController;
 use App\Http\Controllers\App\Integrations\ApiClientController;
 use App\Http\Controllers\App\InventoryItemController;
 use App\Http\Controllers\App\InventoryLocationController;
@@ -599,6 +600,11 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::get('/readiness', [OrganizationSetupController::class, 'index'])
             ->middleware('capability:school.profile.view')
             ->name('readiness');
+        // ORG.12G (ADR 0080 §12): the Integration & Device Readiness Hub --
+        // read-only status of each integration family from its owning module.
+        Route::get('/integrations', [IntegrationHubController::class, 'index'])
+            ->middleware('capability:school.settings.view')
+            ->name('integrations');
 
         Route::get('/profile', [SchoolSetupController::class, 'profile'])->name('profile');
         Route::put('/profile', [SchoolSetupController::class, 'updateProfile'])->name('profile.update');

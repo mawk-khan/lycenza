@@ -149,6 +149,24 @@ Jubilee Hills).
 **Deferred:** logo, banner and icon assets; there is no governed media
 pipeline yet.
 
+## 6b. Integration & device readiness (ORG.12G)
+
+All rows are fictional. Nothing is ever contacted: no delivery job runs, the
+endpoint host is a reserved `.example.test` name, and the API credentials
+are hashes of random bytes discarded at once (no usable credential exists).
+
+| Example | Where | What it shows |
+|---|---|---|
+| Healthy | **Gachibowli** webhooks: an active endpoint with a delivery 2 hours ago | recent success, read from the School's own records |
+| Configured | **Gachibowli** partner API client with a current credential (not used yet) | set up, no recent use |
+| Needs attention | **Horizon** partner API client whose credential expires in 12 days | rotate before expiry |
+| Not configured | **Horizon** webhooks | the module is enabled but nothing is registered |
+| Not applicable | **Greenfield**, **Jubilee Hills** (core modules only) | Integrations not enabled: never evaluated |
+| Not available | everywhere: SMS, payment gateway, biometric, attendance RFID, transport RFID, VTS (GPS), AI assistance | the recorded decision (ADR 0057, HRX-L1/L2, module non-scope) |
+| Email | every School | platform-operated; DDEV delivers to Mailpit. The Demo School is Healthy (its invitations), the others Configured |
+| No access for Network | network.manager / network.viewer | a Network role never opens a School's Hub |
+| No secret | any page | no URL, endpoint or client name, scope, key, hash or SMTP detail |
+
 ## 7. Feature mapping
 
 | Checkpoint | Demo records |
@@ -158,6 +176,7 @@ pipeline yet.
 | ORG.12D | Northstar: 2 Regions, 3 Zones, owned/franchise/managed/affiliate, Region-only Warangal, unclassified Mysuru |
 | ORG.12E | Network Manager and Viewers (whole, Region, Zone), shared identity; Access Center with whole-School Accountant, Campus Cashier, disabled former member, Greenfield "module not enabled" |
 | ORG.12F | Northstar brand; Gachibowli inherits; Jubilee Hills own brand; Greenfield default; Gachibowli navigation profile; Jubilee Hills disabled-module preference; Annexe label; Demo School Guardian portal order |
+| ORG.12G | Gachibowli webhooks Healthy + API client Configured; Horizon webhooks Not configured + expiring credential (Needs attention); Greenfield/Jubilee Not applicable; 7 Not available families |
 
 ## 8. Reset guarantees (proven at ORG.12E-D1)
 

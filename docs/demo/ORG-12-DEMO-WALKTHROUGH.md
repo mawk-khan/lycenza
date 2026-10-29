@@ -157,6 +157,36 @@ There is deliberately no switch: this is a security decision (ADR 0080
     starts with School calendar, and Conversations reads "Talk to the
     School". Ownership is unchanged: she still sees only her own child.
 
+## 8b. Integrations & devices (ORG.12G)
+
+1. **Healthy and configured:** as **gachibowli.admin** → *School setup →
+   Integrations & devices*.
+   - Overview: 1 healthy, 2 configured, 7 not available. The
+     *Integrations* setup area reads Configured, with a link to Setup &
+     readiness.
+   - Platform & other: Outbound webhooks are **Healthy** (no link: they are
+     managed through the School API). Partner API clients are
+     **Configured**, with *Manage* (the API clients page asks for MFA).
+2. **Platform-managed email:** Email delivery is "Managed by Lycenza", and
+   Configured: no Gachibowli messages in the last 7 days. As
+   **school.admin** (Demo School) it is Healthy, because of its
+   invitations in Mailpit.
+3. **Needs attention / not configured:** as **horizon.admin**, Partner API
+   clients **Needs attention** (a credential expires within 30 days) and
+   Outbound webhooks **Not configured**.
+4. **Not applicable:** as **greenfield.admin**, Webhooks, API clients and
+   the setup area are **Module not enabled**. The payment gateway is still
+   **Not available**: whether a family exists is decided first.
+5. **Not available:** SMS, Online payment gateway, Biometric, RFID,
+   Transport boarding RFID, Vehicle tracking and AI assistance each state
+   the decision that keeps them unavailable. There is nothing to configure
+   and no button.
+6. **Partial view:** as **network.shared** (Principal of Gachibowli), the
+   Hub opens without webhook or API detail ("2 integrations are not
+   shown").
+7. **Nothing secret:** view the page source. No endpoint URL or name, no
+   client name, scope, key or hash, and no SMTP host or sending domain.
+
 ## 9. Negative checks
 
 | # | Try | Expected |
@@ -169,5 +199,8 @@ There is deliberately no switch: this is a security decision (ADR 0080
 | 6 | network.shared → any School other than Gachibowli | no membership; no access |
 | 7 | gachibowli.cashier → `/app/finance/fee-runs` (a whole-School page) | 403, while `/app/finance/charges` (Campus) opens |
 | 8 | platform.manager → `/app/students`, Access Center, Setup Center | refused |
+| 9 | network.manager, network.viewer, platform.manager, platform.auditor → `/app/school-setup/integrations` | refused |
+| 10 | gachibowli.cashier (Campus), gachibowli.accounts, teacher → Integrations & devices | 403 |
+| 11 | POST to `/app/school-setup/integrations` | 405 (read-only) |
 
 `ddev demo-reset` restores the canonical world after any experiment.

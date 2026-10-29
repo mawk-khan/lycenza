@@ -48,13 +48,17 @@ use App\Domain\TeachingAssignments\Application\DataHealth\AssignmentOnInactiveCo
 use App\Domain\Timetable\Application\DataHealth\SectionWithoutScheduleCheck;
 use App\Domain\Timetable\Application\Setup\TimetableSetupReadiness;
 use App\Domain\Transport\Application\Setup\TransportSetupReadiness;
+use App\Support\ApiClients\ApiClientIntegrationReadiness;
 use App\Support\ApiClients\IntegrationSetupReadiness;
 use App\Support\Audit\ComplianceSetupReadiness;
 use App\Support\DataHealth\DataHealthRegistry;
+use App\Support\Email\EmailIntegrationReadiness;
 use App\Support\Events\Consumers\NotifyActorOfSettingChangeConsumer;
 use App\Support\Events\Consumers\WebhookFanoutConsumer;
 use App\Support\Events\EventConsumerRegistry;
 use App\Support\FeatureFlags\FeatureFlagResolver;
+use App\Support\Integrations\IntegrationReadinessProviders;
+use App\Support\Integrations\OrganizationIntegrationCatalogue;
 use App\Support\Notifications\NotificationDispatcher;
 use App\Support\Notifications\Providers\FakePushProvider;
 use App\Support\Notifications\Providers\FakeSmsProvider;
@@ -65,6 +69,7 @@ use App\Support\Settings\SettingRegistry;
 use App\Support\Setup\OrganizationSetupRegistry;
 use App\Support\Setup\SetupReadinessProviders;
 use App\Support\Webhooks\SsrfSafeUrlValidator;
+use App\Support\Webhooks\WebhookIntegrationReadiness;
 use App\Support\Webhooks\WebhookSigner;
 use Illuminate\Support\ServiceProvider;
 
@@ -176,6 +181,20 @@ class PlatformServiceProvider extends ServiceProvider
                 CommunicationsSetupReadiness::class, GuardianPortalSetupReadiness::class, ComplianceSetupReadiness::class,
                 IntegrationSetupReadiness::class,
             ] as $provider) {
+                $providers->register($app->make($provider));
+            }
+
+            return $providers;
+        });
+
+        // ORG.12G (ADR 0080 §12): the Integration & Device Readiness Hub's
+        // catalogue and its closed provider set -- one per AVAILABLE family,
+        // each in the module that owns the integration. Scoped for the same
+        // reason as the setup providers.
+        $this->app->singleton(OrganizationIntegrationCatalogue::class);
+        $this->app->scoped(IntegrationReadinessProviders::class, function ($app) {
+            $providers = new IntegrationReadinessProviders;
+            foreach ([EmailIntegrationReadiness::class, WebhookIntegrationReadiness::class, ApiClientIntegrationReadiness::class] as $provider) {
                 $providers->register($app->make($provider));
             }
 

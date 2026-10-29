@@ -96,6 +96,8 @@ final class StaffNavigation
             new E('setup-readiness', 'school-setup', 'Setup & readiness', 'app.school-setup.readiness', all: ['school.profile.view']),
             // ORG.12F (ADR 0080 §11.5): branding and navigation presentation (never permissions).
             new E('presentation', 'school-setup', 'Branding & navigation', 'app.school-setup.presentation', all: ['school.settings.view']),
+            // ORG.12G (ADR 0080 §12): read-only integration and device readiness.
+            new E('integrations-hub', 'school-setup', 'Integrations & devices', 'app.school-setup.integrations', all: ['school.settings.view']),
             // SWC.2 (ADR 0073 section 10): every Academic Structure screen,
             // under the capability that page itself checks.
             new E('campuses', 'school-setup', 'Campuses', 'app.school-setup.campuses', all: ['school.campuses.view']),

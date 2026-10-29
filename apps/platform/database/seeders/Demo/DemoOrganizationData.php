@@ -85,6 +85,7 @@ final class DemoOrganizationData
         $this->buildSchoolPersonas();
         $this->buildNetworkPersonas();
         $this->buildPresentation();
+        $this->buildIntegrations();
         $this->b->note('Organization demo (ORG.12E-D1): Northstar Education Network (2 Regions, 3 Zones, 6 Schools incl. one Unclassified), standalone Greenfield Public School and Horizon Academy -- see docs/demo/ORGANIZATION-DEMO-DATA.md.');
     }
 
@@ -386,6 +387,64 @@ final class DemoOrganizationData
         $jubileeAdmin = $this->b->user('Neha Varma (Jubilee Hills School Admin)', 'jubilee.admin@example.test');
         $this->b->assignSchoolRole($this->b->member($jubileeAdmin, $this->schools['jubilee']), 'school_admin');
         $this->b->account('School Admin (Northstar Jubilee Hills)', $jubileeAdmin, $this->schools['jubilee']->name, 'Franchise School with its OWN brand (not the Network\'s), core modules only: a saved Library preference never makes Library appear');
+    }
+
+    // ------------------------------------------------------------------
+    // Integration & Device Readiness (ORG.12G)
+    // ------------------------------------------------------------------
+
+    /**
+     * Real integration rows only, written directly (the guarded demo writes
+     * without a fabricated MFA proof). Nothing here is ever contacted: no
+     * delivery job runs and the endpoint host is a reserved `.example.test`
+     * name. The API credentials are hashes of random bytes that are
+     * discarded at once -- no usable credential exists anywhere.
+     *
+     * - Gachibowli: an active webhook endpoint delivered recently (Healthy)
+     *   and a partner client with a current credential (Configured).
+     * - Horizon: no webhook endpoint (Not configured) and a client whose
+     *   credential expires in 12 days (Needs attention).
+     * - Greenfield and Jubilee Hills: Integrations not enabled (Not applicable).
+     * - SMS, payment gateway, devices, tracking, AI: Not available everywhere.
+     */
+    private function buildIntegrations(): void
+    {
+        $gachibowli = $this->schools['gachibowli'];
+        $horizon = $this->schools['horizon'];
+        $gachibowliAdmin = User::query()->where('email', 'gachibowli.admin@example.test')->firstOrFail();
+        $horizonAdmin = User::query()->where('email', 'horizon.admin@example.test')->firstOrFail();
+
+        $this->b->inSchool(function () use ($gachibowli, $gachibowliAdmin): void {
+            $endpointId = (string) Str::uuid7();
+            DB::table('webhook_endpoints')->insert([
+                'id' => $endpointId, 'school_id' => $gachibowli->id, 'name' => 'Northstar reporting feed (demo)',
+                'url' => 'https://hooks.gachibowli.northstar.example.test/lycenza',
+                'secret_encrypted' => encrypt(Str::random(40), false), 'status' => 'active',
+                'created_by_user_id' => $gachibowliAdmin->id, 'created_at' => now()->subDays(20), 'updated_at' => now()->subDays(20),
+            ]);
+            $deliveredAt = now()->subHours(2);
+            DB::table('webhook_deliveries')->insert([
+                'id' => (string) Str::uuid7(), 'school_id' => $gachibowli->id, 'webhook_endpoint_id' => $endpointId,
+                'event_id' => (string) Str::uuid7(), 'event_type' => 'school.setting.changed.v1', 'status' => 'delivered', 'attempts' => 1,
+                'delivered_at' => $deliveredAt, 'created_at' => $deliveredAt, 'updated_at' => $deliveredAt,
+            ]);
+        }, $gachibowli);
+
+        $client = fn (School $school, User $creator, string $name, int $expiresInDays) => $this->b->inSchool(function () use ($school, $creator, $name, $expiresInDays): void {
+            $clientId = (string) Str::uuid7();
+            DB::table('api_clients')->insert([
+                'id' => $clientId, 'school_id' => $school->id, 'name' => $name, 'scopes' => json_encode(['partner.probe.read']),
+                'status' => 'active', 'created_by_user_id' => $creator->id, 'created_at' => now()->subDays(30), 'updated_at' => now()->subDays(30),
+            ]);
+            DB::table('api_client_credentials')->insert([
+                'id' => (string) Str::uuid7(), 'api_client_id' => $clientId, 'school_id' => $school->id,
+                'key_id' => bin2hex(random_bytes(8)), 'secret_hash' => hash('sha256', random_bytes(32)),
+                'issued_at' => now()->subDays(30), 'expires_at' => now()->addDays($expiresInDays),
+                'created_at' => now()->subDays(30), 'updated_at' => now()->subDays(30),
+            ]);
+        }, $school);
+        $client($gachibowli, $gachibowliAdmin, 'Northstar timetable sync (demo)', 180);
+        $client($horizon, $horizonAdmin, 'Horizon library partner (demo)', 12);
     }
 
     private function grant(User $person, string $roleKey, ?string $region, ?string $zone): void

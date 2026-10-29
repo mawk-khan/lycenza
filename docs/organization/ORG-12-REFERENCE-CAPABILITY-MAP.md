@@ -79,13 +79,13 @@ stable; ORG.12A setup definitions cite them
 | RF-20 | Branding | 1 | Branch logo upload | Schools (Organization) | **School and Network brand** (ORG.12F): label + accent with derived readable text, explicit Network inheritance; logo upload deferred (no media pipeline) | 12F (built, logo deferred) | Media pipeline | School-level branding; Network brand only by explicit choice; never on outbound email From domain; never changes School identity | `PARTIAL` |
 | RF-21 | Sensitive-field visibility | 11 | Per-user and per-user-type masking matrices for Student/staff fields (mobile, email, address, fee amount, national id, tax id, passport, visa, registry ids); field-group edit rights; parent-app profile field exposure | Privacy / Sensitive Field Projection | Highly Sensitive reads behind capabilities + current MFA (rule 95); fixed portal exposure (ADR 0070); **code-owned sensitive-data catalogue and explorer** (ORG.12E: 8 real families, each with its gating capability and why it is not yet School-configurable) | 12E (built: catalogue/explorer; deny-only policy deferred, ADR 0080 §10.8) | Privacy | A School may only ever NARROW access (deny-only, OD-12.15), and only once every exposure path enforces it on the server; UI-only hiding is never the mechanism; new national identifiers need a legal basis | `PARTIAL` |
 | RF-22 | Tax / legal configuration | 2 | Branch tax ids; HR statutory codes and basic-pay % | Schools (identity); Payroll (statutory) | Not built; statutory payroll legally gated (ADR 0034/0036) | 12C (reference fields after decision) | Payroll statutory | Statutory values never configured by a School without a legal decision | `LEGAL_DECISION_REQUIRED` |
-| RF-23 | Email | 1 | Per-purpose notification recipient addresses per branch | Platform email layer; Communications | Durable email layer, fixed sender domain, no School SMTP (ADR 0055/0060) | 12G (readiness) | Communications | No School mail credentials; no per-branch sender | `EXISTING_DIFFERENT_ACCEPTED` |
-| RF-24 | SMS | 2 | Branch SMS gateway credentials, sender id, regulatory sender registration | Communications | Channel placeholder only (E28) | 12G (readiness) | Communications channels (E28) | Credentials never in Organization; provider registration is platform/legal | `DOMAIN_FUTURE` |
-| RF-25 | Payment gateway | 2 | Per-branch bank, gateway and fee-account activation | Payments | Manual/offline recording only; gateway deferred (ADR 0057) | 12G (readiness) | Payments gateway | No bank account numbers or gateway secrets on an Organization page | `DOMAIN_FUTURE` |
-| RF-26 | Biometric | 1 | Device inventory, renewal dates, last-log staleness | Integrations & Devices (new) | Not built | 12G (readiness only) | Integrations & Devices | Readiness overview only; device ingestion is a domain programme with its own privacy review | `DOMAIN_FUTURE` |
-| RF-27 | RFID | 2 | RFID and transport RFID logs (not subscribed in the pack) | Integrations & Devices | Explicit non-scope (INV-012, TRN-037) | 12G (readiness only) | Integrations & Devices | Privacy review before any scanning | `POST_V1` |
-| RF-28 | VTS | 2 | Vehicle tracking and tracking+RFID logs (not subscribed in the pack) | Integrations & Devices; Transport | Not built; GPS filters are privacy-blocked in the filter register | 12G (readiness only) | Integrations & Devices | No live location of people | `POST_V1` |
-| RF-29 | Hardware logs | 1 | Raw biometric punch log with notification flag, export | Integrations & Devices; Staff Attendance | Not built | 12G (readiness only) | Integrations & Devices | Raw device events never become attendance without the owning domain's rules | `DOMAIN_FUTURE` |
+| RF-23 | Email | 1 | Per-purpose notification recipient addresses per branch | Platform email layer; Communications | Durable email layer, fixed sender domain, no School SMTP (ADR 0055/0060); **Hub shows platform delivery state + this School's own delivery health** (ORG.12G) | 12G (built: readiness) | Communications | No School mail credentials; no per-branch sender | `EXISTING_DIFFERENT_ACCEPTED` |
+| RF-24 | SMS | 2 | Branch SMS gateway credentials, sender id, regulatory sender registration | Communications | Channel placeholder only (E28; ADR 0057 §5 deferred); **Hub: Not available** with that decision (ORG.12G) | 12G (built: Not available) | Communications channels (E28) | Credentials never in Organization; provider registration is platform/legal | `DOMAIN_FUTURE` |
+| RF-25 | Payment gateway | 2 | Per-branch bank, gateway and fee-account activation | Payments | Manual/offline recording only; gateway deferred (ADR 0057 §2); **Hub: Not available** (ORG.12G) | 12G (built: Not available) | Payments gateway | No bank account numbers or gateway secrets on an Organization page | `DOMAIN_FUTURE` |
+| RF-26 | Biometric | 1 | Device inventory, renewal dates, last-log staleness | Integrations & Devices (new) | Not built (biometrics behind HRX-L1/L2); **Hub: Not available** (ORG.12G `attendance.biometric`) | 12G (built: Not available) | Integrations & Devices | Readiness overview only; device ingestion is a domain programme with its own privacy review | `DOMAIN_FUTURE` |
+| RF-27 | RFID | 2 | RFID and transport RFID logs (not subscribed in the pack) | Integrations & Devices | Explicit non-scope (INV-012, TRN-037); **Hub: Not available** (ORG.12G `attendance.rfid`, `transport.rfid`) | 12G (built: Not available) | Integrations & Devices | Privacy review before any scanning | `POST_V1` |
+| RF-28 | VTS | 2 | Vehicle tracking and tracking+RFID logs (not subscribed in the pack) | Integrations & Devices; Transport | Not built; GPS filters are privacy-blocked in the filter register; **Hub: Not available** (ORG.12G `transport.vts`) | 12G (built: Not available) | Integrations & Devices | No live location of people | `POST_V1` |
+| RF-29 | Hardware logs | 1 | Raw biometric punch log with notification flag, export | Integrations & Devices; Staff Attendance | Not built; no device or log table exists; **Hub: Not available** under `attendance.biometric` (ORG.12G) | 12G (built: Not available) | Integrations & Devices | Raw device events never become attendance without the owning domain's rules | `DOMAIN_FUTURE` |
 | RF-30 | Subscription invoices | 7 | Vendor tax invoices to the school (per-student subscription, device maintenance), due/paid/receipts, billing accounts | Platform Billing / Subscription Management | Not built; entitlements are availability, never billing (rule 100) | — | Platform Billing | Never confused with Student Fees; never School tenant data | `PLATFORM_FUTURE` |
 | RF-31 | Support tickets | 6 | Ticket list by month and state, conversation and resolution tabs | Platform Support | Not built | — | Platform Support | Vendor support desk, outside the School tenant | `PLATFORM_FUTURE` |
 | RF-32 | Feedback | 10 | Logout satisfaction, public-link feedback, configurable daily feedback types/questions/scale, rating reports | Surveys / Feedback | Not built (ORG-013 post-v1) | — | Surveys / Feedback | Respondent data needs a privacy design; no public link without it | `DOMAIN_FUTURE` |
@@ -159,6 +159,27 @@ not tax identifiers.
 | Per-user field masking checkboxes | **Deny-only sensitive-data customization** by design (a School may only narrow), offered only once enforced on every server path — today a code-owned catalogue explains each family and its gate |
 | "Why can this user see X?" is unanswerable | **Effective-access explanations**: each capability shows its role and scope, or every layer that stops it |
 | Access changes are unaudited settings | **Fresh-MFA access administration**: Network role grants/revocations need a reason and a fresh code; School role grants keep RoleGrantAuthority, MFA and audit |
+
+### 4.0d Integrations and devices: readiness, never configuration (ORG.12G)
+
+The pack shows per-branch provider credentials (SMS gateway user/password/API
+key, sender ids, bank and gateway activation), device inventories, raw
+punch logs and live tracking. Lycenza's Integration & Device Readiness Hub
+(`/app/school-setup/integrations`, ADR 0080 §12) deliberately shows only
+**status**, from each owning module, and never a credential:
+
+| Reference | Lycenza (ORG.12G) |
+|---|---|
+| Branch SMTP / email settings (RF-23) | Platform-operated email; the Hub shows whether delivery is enabled and this School's own recent delivery health |
+| SMS gateway credentials, sender id, regulatory (DLT) registration (RF-24) | **Not available**: deferred (ADR 0057 §5, E28). Any provider, including Indian DLT sender registration, needs its own contract and a legal and provider review; no DLT semantics are modelled |
+| Payment gateway / bank activation (RF-25) | **Not available**: deferred (ADR 0057 §2); manual/offline recording is the v1 path |
+| Biometric devices, renewal, punch logs (RF-26, RF-29) | **Not available**: biometrics behind HRX-L1/L2; no device table, ingestion or log |
+| RFID (attendance and transport) (RF-27) | **Not available**: documented non-scope; privacy review first |
+| VTS / GPS tracking (RF-28) | **Not available**: documented non-scope; no live location of people |
+| (not in the pack) Webhooks, partner API clients | Real, School-managed: status from their own records; never the URL, name, scope or credential |
+
+The classifications are unchanged. The families stay `DOMAIN_FUTURE` /
+`POST_V1`: a readiness row is not the integration.
 
 ### 4.0c Navigation and branding: why Lycenza's model is different, and stronger (ORG.12F)
 

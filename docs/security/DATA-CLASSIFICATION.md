@@ -147,6 +147,16 @@
   a lower-classification escape hatch for data that would otherwise be
   Sensitive/Highly Sensitive in its raw form.
 
+- **Integration readiness (ORG.12G, ADR 0080 §12):**
+  - The Integration & Device Readiness Hub shows Internal-tier operational
+    status only: a closed status and a code-owned explanation.
+  - Provider credentials, webhook secrets, API secret hashes and key ids,
+    endpoint URLs and names, client scopes, email recipients and subjects
+    are never read into, or shown on, that surface.
+  - Biometric, RFID and location (VTS) data does not exist in Lycenza. The
+    Hub shows those families as Not available behind their legal and
+    privacy gates.
+
 ## What this document does not do
 
 It does not implement any technical control itself (no encryption

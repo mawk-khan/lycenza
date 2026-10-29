@@ -15,6 +15,7 @@ use Database\Seeders\Demo\DemoOrganizationVerifier;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use RuntimeException;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -31,6 +32,8 @@ use Tests\TestCase;
  */
 class DemoOrganizationDataTest extends TestCase
 {
+    use ProvidesSensitiveActionMfa;
+
     #[Test]
     public function the_canonical_organization_world_builds_and_verifies(): void
     {
@@ -78,6 +81,41 @@ class DemoOrganizationDataTest extends TestCase
         $this->assertNotSame([], app(CapabilityResolver::class)->schoolCapabilities($shared, $gachibowli));
         $this->assertSame([], app(CapabilityResolver::class)->schoolCapabilities($shared, $secunderabad));
         $this->assertFalse(app(GroupGovernanceAccess::class)->mayManage($shared, $network));
+    }
+
+    #[Test]
+    public function the_integration_hub_shows_each_demo_state_and_never_a_secret(): void
+    {
+        app(DemoDataBuilder::class)->build();
+        $user = fn (string $email): User => User::query()->where('email', $email)->firstOrFail();
+        $school = fn (string $slug): School => School::query()->where('slug', $slug)->firstOrFail();
+        $statuses = function (string $email, string $slug) use ($user, $school): array {
+            $this->actingAs($user($email))->post("/app/schools/{$school($slug)->id}/activate");
+            $this->withMfaAssurance($user($email)); // API client status needs current MFA, as its own page does
+            $response = $this->get('/app/school-setup/integrations')->assertOk();
+            $cards = [];
+            foreach ($response->viewData('page')['props']['hub']['sections'] as $section) {
+                foreach ($section['items'] as $card) {
+                    $cards[$card['key']] = $card['status'];
+                }
+            }
+
+            return [$cards, (string) $response->getContent()];
+        };
+
+        [$gachibowli, $html] = $statuses('gachibowli.admin@example.test', 'northstar-gachibowli');
+        $this->assertSame(['healthy', 'configured', 'not_available', 'not_available'], [$gachibowli['integrations.webhooks'], $gachibowli['integrations.api_clients'], $gachibowli['communications.sms'], $gachibowli['transport.vts']]);
+        foreach (['hooks.gachibowli.northstar', 'Northstar reporting feed', 'Northstar timetable sync', 'partner.probe.read'] as $absent) {
+            $this->assertStringNotContainsString($absent, $html);
+        }
+        [$horizon] = $statuses('horizon.admin@example.test', 'horizon-academy');
+        $this->assertSame(['not_configured', 'attention_required'], [$horizon['integrations.webhooks'], $horizon['integrations.api_clients']]);
+        [$greenfield] = $statuses('greenfield.admin@example.test', 'greenfield-public');
+        $this->assertSame(['not_applicable', 'not_applicable', 'not_available'], [$greenfield['integrations.webhooks'], $greenfield['integrations.api_clients'], $greenfield['payments.gateway']]);
+
+        // A Network Manager governs the Network, never a member School's integrations.
+        $this->actingAs($user('network.manager@example.test'))->post("/app/schools/{$school('northstar-gachibowli')->id}/activate");
+        $this->assertNotSame(200, $this->get('/app/school-setup/integrations')->status());
     }
 
     #[Test]

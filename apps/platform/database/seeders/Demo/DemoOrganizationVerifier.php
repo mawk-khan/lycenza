@@ -5,11 +5,14 @@ namespace Database\Seeders\Demo;
 use App\Domain\Identity\Application\Access\SensitiveDataCatalogue;
 use App\Domain\Platform\Application\Groups\GroupGovernanceAccess;
 use App\Domain\Platform\Application\Groups\SchoolGroupDirectoryReadService;
+use App\Domain\Platform\Application\Modules\SchoolModuleEntitlements;
 use App\Models\Campus;
 use App\Models\School;
 use App\Models\SchoolGroup;
 use App\Models\User;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Integrations\IntegrationReadinessProviders;
+use App\Support\Integrations\OrganizationIntegrationCatalogue;
 use App\Support\Navigation\NavigationPresentation;
 use App\Support\Presentation\BrandResolver;
 use App\Support\Tenancy\TenantContext;
@@ -113,6 +116,17 @@ final class DemoOrganizationVerifier
             $prefs = app(NavigationPresentation::class)->overrides($gachibowli)['staff_web'] ?? [];
             $check((bool) ($prefs['data-health']->hidden ?? false) && ($prefs['students']->label_override ?? null) === 'Learners', 'Gachibowli navigation profile is missing (hidden Data health, Learners)');
         }
+
+        // ORG.12G: integration readiness, through the real providers and entitlement.
+        $integration = fn (?School $s, string $key): ?string => $s === null ? null : app(TenantContext::class)->withSchool($s,
+            fn () => app(IntegrationReadinessProviders::class)->for($key)->evaluate($key, $s)->status->value);
+        $horizon = $school('horizon-academy');
+        $check($integration($gachibowli, 'integrations.webhooks') === 'healthy', 'Gachibowli webhooks are not Healthy');
+        $check($integration($gachibowli, 'integrations.api_clients') === 'configured', 'Gachibowli API clients are not Configured');
+        $check($integration($horizon, 'integrations.webhooks') === 'not_configured', 'Horizon webhooks are not Not configured');
+        $check($integration($horizon, 'integrations.api_clients') === 'attention_required', 'Horizon API clients do not need attention');
+        $check($greenfield !== null && ! in_array('integrations', app(SchoolModuleEntitlements::class)->entitledModules($greenfield), true), 'Greenfield has Integrations enabled');
+        $check(app(OrganizationIntegrationCatalogue::class)->availableKeys() === ['communications.email', 'integrations.webhooks', 'integrations.api_clients'], 'the integration catalogue is not the ORG.12G catalogue');
 
         $check(count(SensitiveDataCatalogue::FAMILIES) === 8 && array_filter(array_column(SensitiveDataCatalogue::FAMILIES, 'configurable')) === [], 'the sensitive-data catalogue is not the eight non-configurable families');
 
