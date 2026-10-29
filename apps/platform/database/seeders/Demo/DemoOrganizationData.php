@@ -84,6 +84,7 @@ final class DemoOrganizationData
         $this->buildNetwork();
         $this->buildSchoolPersonas();
         $this->buildNetworkPersonas();
+        $this->buildPresentation();
         $this->b->note('Organization demo (ORG.12E-D1): Northstar Education Network (2 Regions, 3 Zones, 6 Schools incl. one Unclassified), standalone Greenfield Public School and Horizon Academy -- see docs/demo/ORGANIZATION-DEMO-DATA.md.');
     }
 
@@ -332,6 +333,59 @@ final class DemoOrganizationData
         $this->grant($shared, 'network_viewer', 'KARNATAKA', null);
         $this->b->assignSchoolRole($this->b->member($shared, $this->schools['gachibowli']), 'principal');
         $this->b->account('Network + School (shared identity)', $shared, $this->schools['gachibowli']->name.' + Network (Karnataka)', 'Network Viewer for Karnataka AND Principal of Northstar Gachibowli; no role in Secunderabad or any other School');
+    }
+
+    // ------------------------------------------------------------------
+    // Presentation profiles (ORG.12F)
+    // ------------------------------------------------------------------
+
+    /**
+     * ORG.12F (ADR 0080 §11): the Northstar Network brand; Gachibowli EXPLICITLY
+     * inherits it, Jubilee Hills (a franchise) keeps its own brand, Greenfield
+     * stays on the system default. Navigation: Gachibowli hides Data health,
+     * renames Students to Learners and puts Setup & readiness first; Jubilee
+     * Hills holds a preference for Library, whose module it does not have (it
+     * stays absent); the Annexe (compatibility School) renames Students to
+     * Pupils, which the two-School user sees only there; the Demo School's
+     * Guardian portal shows the calendar first. Direct, database-validated
+     * writes like the rest of the demo (no fabricated MFA proof).
+     */
+    private function buildPresentation(): void
+    {
+        DB::table('school_group_brand_profiles')->insert([
+            'id' => (string) Str::uuid7(), 'school_group_id' => $this->network->id,
+            'display_label' => 'Northstar Education', 'primary_accent' => '#1D4E89', 'version' => 1,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $brand = fn (School $school, array $values) => $this->b->inSchool(fn () => DB::table('school_brand_profiles')->insert([
+            'id' => (string) Str::uuid7(), 'school_id' => $school->id, 'created_at' => now(), 'updated_at' => now(),
+            'brand_source_group_id' => null, 'display_label' => null, 'primary_accent' => null, ...$values,
+        ]), $school);
+        $brand($this->schools['gachibowli'], ['brand_source_group_id' => $this->network->id]);
+        $brand($this->schools['jubilee'], ['display_label' => 'Jubilee Little Stars', 'primary_accent' => '#7A3E9D']);
+
+        $navigation = fn (School $school, string $audience, array $rows) => $this->b->inSchool(fn () => DB::table('school_navigation_preferences')->insert(array_map(
+            fn (array $row) => ['id' => (string) Str::uuid7(), 'school_id' => $school->id, 'audience' => $audience, 'hidden' => false,
+                'sort_order' => null, 'label_override' => null, 'created_at' => now(), 'updated_at' => now(), ...$row],
+            $rows,
+        )), $school);
+        $navigation($this->schools['gachibowli'], 'staff_web', [
+            ['navigation_key' => 'data-health', 'hidden' => true],
+            ['navigation_key' => 'students', 'label_override' => 'Learners'],
+            ['navigation_key' => 'setup-readiness', 'sort_order' => 0],
+            ['navigation_key' => 'school-setup', 'sort_order' => 1],
+        ]);
+        $navigation($this->schools['jubilee'], 'staff_web', [['navigation_key' => 'library-catalogue', 'label_override' => 'Story books']]);
+        $navigation($this->b->secondSchool, 'staff_web', [['navigation_key' => 'students', 'label_override' => 'Pupils']]);
+        $navigation($this->b->school, 'guardian_portal', [
+            ['navigation_key' => 'portal-calendar', 'sort_order' => 0],
+            ['navigation_key' => 'portal-communications', 'sort_order' => 1],
+            ['navigation_key' => 'portal-conversations', 'label_override' => 'Talk to the School'],
+        ]);
+
+        $jubileeAdmin = $this->b->user('Neha Varma (Jubilee Hills School Admin)', 'jubilee.admin@example.test');
+        $this->b->assignSchoolRole($this->b->member($jubileeAdmin, $this->schools['jubilee']), 'school_admin');
+        $this->b->account('School Admin (Northstar Jubilee Hills)', $jubileeAdmin, $this->schools['jubilee']->name, 'Franchise School with its OWN brand (not the Network\'s), core modules only: a saved Library preference never makes Library appear');
     }
 
     private function grant(User $person, string $roleKey, ?string $region, ?string $zone): void

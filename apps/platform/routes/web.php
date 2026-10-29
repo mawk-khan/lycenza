@@ -134,6 +134,7 @@ use App\Http\Controllers\App\Portal\GuardianCalendarController;
 use App\Http\Controllers\App\Portal\GuardianCommunicationController;
 use App\Http\Controllers\App\Portal\GuardianConversationController;
 use App\Http\Controllers\App\Portal\GuardianFeeController;
+use App\Http\Controllers\App\SchoolPresentationController;
 use App\Http\Controllers\App\SchoolSettingsController;
 use App\Http\Controllers\App\SchoolSetupController;
 use App\Http\Controllers\App\SchoolSetupStructureController;
@@ -482,6 +483,8 @@ Route::middleware('auth')->where(WebRouteParameters::uuidPatterns())->group(func
         // governance. Authorized per request by GroupGovernanceAccess and the
         // services; never School context.
         Route::get('/{schoolGroup}/access', [NetworkGovernanceController::class, 'access'])->name('access');
+        // ORG.12F (ADR 0080 §11.7): the Network brand -- fresh MFA, reason, version.
+        Route::put('/{schoolGroup}/network/brand', [NetworkGovernanceController::class, 'updateBrand'])->name('network.brand.update');
         Route::post('/{schoolGroup}/access/operators', [NetworkGovernanceController::class, 'grantOperator'])->name('access.operators.store');
         Route::post('/{schoolGroup}/access/operators/{grant}/revoke', [NetworkGovernanceController::class, 'revokeOperator'])->name('access.operators.revoke');
         Route::put('/{schoolGroup}/network/schools/{school}/classification', [NetworkGovernanceController::class, 'classify'])->name('network.schools.classify');
@@ -603,6 +606,17 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::put('/profile/identity', [SchoolSetupController::class, 'updateIdentity'])
             ->middleware('capability:school.profile.manage')
             ->name('profile.identity.update');
+
+        // ORG.12F (ADR 0080 §11.5): presentation profile -- branding and
+        // navigation presentation (never permissions).
+        Route::get('/presentation', [SchoolPresentationController::class, 'show'])
+            ->middleware('capability:school.settings.view')->name('presentation');
+        Route::put('/presentation/brand', [SchoolPresentationController::class, 'updateBrand'])
+            ->middleware('capability:school.settings.manage')->name('presentation.brand.update');
+        Route::put('/presentation/navigation/{audience}', [SchoolPresentationController::class, 'updateNavigation'])
+            ->middleware('capability:school.settings.manage')->where('audience', '[a-z0-9_-]{1,64}')->name('presentation.navigation.update');
+        Route::delete('/presentation/navigation/{audience}', [SchoolPresentationController::class, 'resetNavigation'])
+            ->middleware('capability:school.settings.manage')->where('audience', '[a-z0-9_-]{1,64}')->name('presentation.navigation.reset');
 
         Route::get('/campuses', [SchoolSetupController::class, 'campuses'])->name('campuses');
         Route::get('/campuses/{campus}', [SchoolSetupController::class, 'showCampus'])->name('campuses.show');

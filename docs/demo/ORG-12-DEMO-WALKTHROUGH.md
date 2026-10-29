@@ -120,6 +120,43 @@ There is deliberately no switch: this is a security decision (ADR 0080
 2. effective access cannot yet tell which role granted a capability;
 3. statutory identifiers are legally gated.
 
+## 8a. Branding and navigation (ORG.12F)
+
+1. **Network brand:** as **network.manager** → Northstar → *Network brand*.
+   Change the label or accent with a reason and a fresh code (enroll MFA
+   first). Then, as **gachibowli.admin**, the shell's stripe and chip show
+   the change. Only Schools that chose Northstar are affected.
+2. **Inherited brand:** as **gachibowli.admin** → *School setup →
+   Branding & navigation → Branding*.
+   - Source: "School Group brand (Northstar Education Network)".
+   - The preview updates as you type and saves nothing until you save.
+   - Choose "None" to return to the Lycenza default, or set your own
+     colour.
+3. **School override:** as **jubilee.admin**, the shell shows "Jubilee
+   Little Stars" in purple, although Jubilee Hills is a franchise of
+   Northstar. Franchise status never forces a brand.
+4. **System default:** as **greenfield.admin**, there is no stripe and no
+   chip: exactly the default shell.
+5. **Staff navigation:** as **gachibowli.admin** → *Staff navigation*.
+   - Data health is hidden, Students reads "Learners", and Setup &
+     readiness is first in School setup.
+   - Use ↑/↓, *Hidden* and the label field, then save or *Reset to
+     defaults*.
+   - The note says it plainly: navigation preferences do not change
+     permissions.
+6. **Hidden is not denied:** Data health is not in the menu, but
+   `/app/data-health` opens for the School Admin.
+7. **Visible is not granted:** as **gachibowli.cashier**, there is no
+   "Learners" item, and `/app/students` returns 403.
+8. **Disabled module:** as **jubilee.admin**, there is no Library item,
+   although a "Story books" preference exists. Library is not enabled for
+   this School.
+9. **No bleed:** as **multi.school**, Students reads "Pupils" in the Annexe
+   and "Students" in the Demo School.
+10. **Guardian portal:** as **guardian01** (Demo School), the portal menu
+    starts with School calendar, and Conversations reads "Talk to the
+    School". Ownership is unchanged: she still sees only her own child.
+
 ## 9. Negative checks
 
 | # | Try | Expected |

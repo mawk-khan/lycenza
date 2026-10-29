@@ -211,6 +211,9 @@ final class TenantRetentionCatalog
             // counter -- no personal data; kept with the School so a number is
             // never re-issued.
             'student_number_sequences',
+            // ORG.12F (ADR 0080 §11): School presentation (navigation overrides,
+            // branding) -- no personal data, kept with the School.
+            'school_navigation_preferences', 'school_brand_profiles',
         ]],
     ];
 

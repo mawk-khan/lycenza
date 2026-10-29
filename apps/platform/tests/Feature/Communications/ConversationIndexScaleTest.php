@@ -70,7 +70,9 @@ class ConversationIndexScaleTest extends TestCase
         }
 
         $this->assertSame($withFifteen, $measure(), 'The conversation index must not issue one query per thread.');
-        $this->assertLessThan(35, $withFifteen, "Expected a bounded query count, got {$withFifteen}.");
+        // ORG.12F (ADR 0080 §11.10): +2 fixed shell queries (the School's navigation
+        // presentation and its effective brand).
+        $this->assertLessThan(37, $withFifteen, "Expected a bounded query count, got {$withFifteen}.");
     }
 
     private function activate($user, $school): void

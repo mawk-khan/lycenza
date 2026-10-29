@@ -37,7 +37,15 @@ const page = usePage<{
     auth?: { user: AuthUser | null };
     product?: { name: string };
     navigation?: Navigation | null;
+    brand?: { label: string | null; accent: string; foreground: string; source: string } | null;
 }>();
+// ORG.12F (ADR 0080 §11.6): the School's effective brand -- an accent stripe
+// and an optional label chip, nothing else. Set through the DOM (allowed by the
+// CSP), never as markup; the foreground is derived on the server for contrast.
+// A School on the system default renders exactly as before.
+const brand = computed(() =>
+    page.props.brand && page.props.brand.source !== 'system' ? page.props.brand : null,
+);
 const user = computed(() => page.props.auth?.user ?? null);
 const productName = computed(() => page.props.product?.name ?? '');
 const navigation = computed(() => (user.value ? (page.props.navigation ?? null) : null));
@@ -97,6 +105,8 @@ const accountLinkClass =
         >
         <header
             class="border-b border-slate-200 bg-slate-50 font-sans text-sm text-slate-700"
+            :class="brand ? 'border-t-4' : ''"
+            :style="brand ? { borderTopColor: brand.accent } : undefined"
             data-testid="account-bar"
         >
             <div class="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2">
@@ -123,6 +133,13 @@ const accountLinkClass =
                     class="min-w-0 truncate text-slate-600"
                     data-testid="shell-school"
                     >{{ navigation.school.name }}</span
+                >
+                <span
+                    v-if="brand?.label"
+                    class="rounded px-2 py-0.5 text-xs font-medium"
+                    :style="{ backgroundColor: brand.accent, color: brand.foreground }"
+                    data-testid="shell-brand"
+                    >{{ brand.label }}</span
                 >
                 <div class="ml-auto flex min-w-0 max-w-full flex-wrap items-center gap-x-4 gap-y-2">
                     <span class="min-w-0 max-w-full truncate">

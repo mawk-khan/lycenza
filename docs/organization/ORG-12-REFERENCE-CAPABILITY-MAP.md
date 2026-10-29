@@ -71,12 +71,12 @@ stable; ORG.12A setup definitions cite them
 | RF-12 | Zonal access | 2 | Zone tier above branch, restricting which zonal user types switch access level | Platform (School Groups) | **Group Regions and Zones** (ORG.12D) plus **Region/Zone-scoped read-only Network Viewers** and a whole-Group **Network Manager** (ORG.12E, ADR 0080 §10): governance metadata visibility per Region or exact Zone | 12D (structure), 12E (built: scoped governance visibility) | — | Zonal *governance visibility* exists on the Group layer; a zonal *School business authority* (zone-scoped Student/Staff/Finance access) is still never built — a Region or Zone is never a School scope or tenant boundary | `EXISTING_DIFFERENT_ACCEPTED` |
 | RF-13 | Branch restriction | 3 | Per-user assigned/restricted branches | Identity & Access | Campus-scoped role assignments (ORG.7A, rule 101), shown per assignment in the Access Center effective-access view (ORG.12E) | 12E (built: scope visualization) | — | Scope sits on the grant, resolved by `CampusScopeResolver` | `EXISTING_EQUIVALENT` |
 | RF-14 | Access levels (menu-permission matrix) | 259 | Per user type: module grants and submenu checkboxes per product area, at org/branch/staff level; read-only "menus per user type" report; profile-tab visibility per user type | Identity & Access | Capability catalogue, route authorization contracts (rule 98), entitlement intersection (rule 100) | 12E (built: read-only capability explorer, filters by module, read/manage, sensitive, Campus scope) | — | A ticked menu is a permission there; here a menu is a projection of capabilities and never authority | `DO_NOT_BUILD` |
-| RF-15 | Menu management | 0 dedicated (inside RF-14) | Menu titles, descriptions, order sequence, "refresh menus" publish step | Navigation (presentation) | `StaffNavigation` single catalogue | 12F | — | Presentation only (order, grouping, labels, icons); never stored as authorization (ADR 0076 §15) | `ORG12_BUILD` |
-| RF-16 | Parent menus | 6 | Parent web/app menus: rename, order, per-audience toggles, per-branch availability, translations | Guardian Portal (presentation) | Portal surfaces from `portal.*` capabilities + source modules; production-refused until POR-L1 | 12F | — | Presentation only; per-branch or per-family menu toggles are never access (PARITY-DO-NOT-BUILD ORG-004) | `ORG12_BUILD` |
+| RF-15 | Menu management | 0 dedicated (inside RF-14) | Menu titles, descriptions, order sequence, "refresh menus" publish step | Navigation (presentation) | **School presentation profile** (ORG.12F, `/app/school-setup/presentation`): order within code-owned groups, optional hiding, plain-text labels over the one `StaffNavigation` catalogue | 12F (built) | — | Presentation only; applied after security; never stored as authorization (ADR 0076 §15, ADR 0080 §11); no icons or tenant groups | `EXISTING_DIFFERENT_ACCEPTED` |
+| RF-16 | Parent menus | 6 | Parent web/app menus: rename, order, per-audience toggles, per-branch availability, translations | Guardian Portal (presentation) | **Guardian portal presentation** (ORG.12F): order, hide (not required notices), labels for the portal navigation; ownership unchanged; production-refused until POR-L1 | 12F (built) | — | Presentation only; per-branch or per-family menu toggles are never access (PARITY-DO-NOT-BUILD ORG-004); "Guardian", never a parallel Parent identity | `EXISTING_DIFFERENT_ACCEPTED` |
 | RF-17 | Student menus | 1 | Student app menus, same structure as parent menus | Portal | No Student accounts | — | POR (Student portal) | Student accounts are gated by POR-L1 (E46) | `LEGAL_DECISION_REQUIRED` |
 | RF-18 | Mobile menus | 16 | Staff/parent/student mobile menu matrices per user type (incl. approval menus), app name/logo/store links per branch | Mobile client | No mobile client in production (`apps/mobile` skeleton) | — | Mobile programme | No mobile menu projection before a real client (ADR 0076 §21); approvals are capabilities + maker/checker, never menus | `POST_V1` |
-| RF-19 | Banners | 2 | Mobile-app banners per branch with image limits | Portal / Navigation presentation | Not built | 12F | — | Presentation only; no tenant HTML or script | `ORG12_BUILD` |
-| RF-20 | Branding | 1 | Branch logo upload | Schools (Organization) | Not built (sender name "<School> via Lycenza", ADR 0055) | 12C / 12F | — | School-level branding with optional Campus override; never on outbound email From domain | `ORG12_BUILD` |
+| RF-19 | Banners | 2 | Mobile-app banners per branch with image limits | Portal / Navigation presentation | Not built: needs a governed media pipeline (ORG.12F deferral, ADR 0080 §11.8) | — | Media pipeline | Presentation only; no tenant HTML or script; never a Communication | `POST_V1` |
+| RF-20 | Branding | 1 | Branch logo upload | Schools (Organization) | **School and Network brand** (ORG.12F): label + accent with derived readable text, explicit Network inheritance; logo upload deferred (no media pipeline) | 12F (built, logo deferred) | Media pipeline | School-level branding; Network brand only by explicit choice; never on outbound email From domain; never changes School identity | `PARTIAL` |
 | RF-21 | Sensitive-field visibility | 11 | Per-user and per-user-type masking matrices for Student/staff fields (mobile, email, address, fee amount, national id, tax id, passport, visa, registry ids); field-group edit rights; parent-app profile field exposure | Privacy / Sensitive Field Projection | Highly Sensitive reads behind capabilities + current MFA (rule 95); fixed portal exposure (ADR 0070); **code-owned sensitive-data catalogue and explorer** (ORG.12E: 8 real families, each with its gating capability and why it is not yet School-configurable) | 12E (built: catalogue/explorer; deny-only policy deferred, ADR 0080 §10.8) | Privacy | A School may only ever NARROW access (deny-only, OD-12.15), and only once every exposure path enforces it on the server; UI-only hiding is never the mechanism; new national identifiers need a legal basis | `PARTIAL` |
 | RF-22 | Tax / legal configuration | 2 | Branch tax ids; HR statutory codes and basic-pay % | Schools (identity); Payroll (statutory) | Not built; statutory payroll legally gated (ADR 0034/0036) | 12C (reference fields after decision) | Payroll statutory | Statutory values never configured by a School without a legal decision | `LEGAL_DECISION_REQUIRED` |
 | RF-23 | Email | 1 | Per-purpose notification recipient addresses per branch | Platform email layer; Communications | Durable email layer, fixed sender domain, no School SMTP (ADR 0055/0060) | 12G (readiness) | Communications | No School mail credentials; no per-branch sender | `EXISTING_DIFFERENT_ACCEPTED` |
@@ -105,12 +105,12 @@ their functions are observed inside RF-03 and RF-14 respectively.
 | Classification | Families | Ids |
 |---|---|---|
 | `EXISTING_EQUIVALENT` | 2 | RF-05, RF-13 |
-| `EXISTING_DIFFERENT_ACCEPTED` | 11 | RF-01, RF-02, RF-03, RF-04, RF-07, RF-10, RF-12, RF-23, RF-36, RF-37, RF-38 |
-| `PARTIAL` | 2 | RF-08, RF-21 |
-| `ORG12_BUILD` | 4 | RF-15, RF-16, RF-19, RF-20 |
+| `EXISTING_DIFFERENT_ACCEPTED` | 13 | RF-01, RF-02, RF-03, RF-04, RF-07, RF-10, RF-12, RF-15, RF-16, RF-23, RF-36, RF-37, RF-38 |
+| `PARTIAL` | 3 | RF-08, RF-20, RF-21 |
+| `ORG12_BUILD` | 0 | — |
 | `DOMAIN_FUTURE` | 7 | RF-06, RF-24, RF-25, RF-26, RF-29, RF-32, RF-35 |
 | `PLATFORM_FUTURE` | 3 | RF-30, RF-31, RF-34 |
-| `POST_V1` | 4 | RF-09, RF-18, RF-27, RF-28 |
+| `POST_V1` | 5 | RF-09, RF-18, RF-19, RF-27, RF-28 |
 | `DO_NOT_BUILD` | 2 | RF-11, RF-14 |
 | `OWNER_DECISION_REQUIRED` | 1 | RF-33 |
 | `LEGAL_DECISION_REQUIRED` | 2 | RF-17, RF-22 |
@@ -159,6 +159,17 @@ not tax identifiers.
 | Per-user field masking checkboxes | **Deny-only sensitive-data customization** by design (a School may only narrow), offered only once enforced on every server path — today a code-owned catalogue explains each family and its gate |
 | "Why can this user see X?" is unanswerable | **Effective-access explanations**: each capability shows its role and scope, or every layer that stops it |
 | Access changes are unaudited settings | **Fresh-MFA access administration**: Network role grants/revocations need a reason and a fresh code; School role grants keep RoleGrantAuthority, MFA and audit |
+
+### 4.0c Navigation and branding: why Lycenza's model is different, and stronger (ORG.12F)
+
+| Reference | Lycenza (ORG.12F) |
+|---|---|
+| Menu checkboxes are the permission | **Permission, scope, module entitlement, navigation presentation and branding are separate layers.** A menu is computed from security; a School preference can only hide, reorder or relabel what security already allows |
+| Hiding a menu "removes access" | Hidden is not denied: an authorized person can still open the page |
+| Showing a menu "grants access" | Visible is not granted: an unauthorized person never sees it and is refused |
+| Franchise branches carry the franchisor's branding automatically | **Network brand inheritance is explicit.** Franchise, owned, managed or affiliate status never forces a brand; a School chooses one Group it belongs to |
+| Renaming menus renames the concept | A label alias is presentation only: routes, capabilities, data, reports and APIs keep their canonical names |
+| Free-form colours and uploads | Bounded tokens: one accent with a derived readable foreground; no CSS, HTML or script; uploads wait for a governed media pipeline |
 
 ### 4.1 Getting Started: why Lycenza's Setup Center is different, and stronger (ORG.12B)
 

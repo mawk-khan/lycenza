@@ -46,7 +46,7 @@ class DemoOrganizationDataTest extends TestCase
             'regions' => 2,
             'zones' => 3,
             'networkSchools' => 6,
-            'schools' => 10,
+            'schools' => 8,
             'groups' => 2,
             'networkGrants' => 5,
         ], $verifier->summary());

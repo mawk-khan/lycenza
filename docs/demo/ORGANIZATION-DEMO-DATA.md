@@ -128,6 +128,27 @@ no policy table and no seeded denial.** The deny-only policy is deferred
 2. `CapabilityResolver` keeps no per-role provenance;
 3. statutory identifiers are legally gated.
 
+## 6a. Presentation profiles (ORG.12F)
+
+| Example | Where | What it proves |
+|---|---|---|
+| Network brand | **Northstar Education Network**: label "Northstar Education", accent `#1D4E89` | Network Managers own Network brand values (reason and fresh MFA to change) |
+| Inherited brand | **Gachibowli** explicitly chose Northstar | inheritance is a choice; the accent stripe and "Northstar Education" chip show, while the School name stays its own |
+| School override | **Jubilee Hills** (a *franchise*) uses its own brand: "Jubilee Little Stars", `#7A3E9D` | franchise status never forces the Network brand |
+| System default | **Greenfield** | no presentation rows; the shell looks exactly as before |
+| Custom staff navigation | **Gachibowli**: Data health hidden; Students relabelled "Learners"; Setup & readiness moved to the top of School setup | order, hide and label |
+| Hidden is not denied | gachibowli.admin | Data health is absent from the menu, but `/app/data-health` opens |
+| Visible is not granted | gachibowli.cashier | no "Learners" item, and `/app/students` returns 403 |
+| Disabled module | **Jubilee Hills** has a "Story books" preference for Library but no Library module (jubilee.admin) | the item stays absent; the route stays denied |
+| School-specific | **Annexe** relabels Students "Pupils"; multi.school@example.test sees "Pupils" only in the Annexe and "Students" in the Demo School | no bleed between Schools |
+| Guardian portal | **Demo School**: School calendar first, Messages second, Conversations relabelled "Talk to the School" (guardian01) | Guardian presentation; ownership unchanged |
+
+**New persona:** `jubilee.admin@example.test` (School Admin, Northstar
+Jubilee Hills).
+
+**Deferred:** logo, banner and icon assets; there is no governed media
+pipeline yet.
+
 ## 7. Feature mapping
 
 | Checkpoint | Demo records |
@@ -136,6 +157,7 @@ no policy table and no seeded denial.** The deny-only policy is deferred
 | ORG.12C | Gachibowli and Horizon profiles; 11 Campuses with addresses, coordinates and all five services |
 | ORG.12D | Northstar: 2 Regions, 3 Zones, owned/franchise/managed/affiliate, Region-only Warangal, unclassified Mysuru |
 | ORG.12E | Network Manager and Viewers (whole, Region, Zone), shared identity; Access Center with whole-School Accountant, Campus Cashier, disabled former member, Greenfield "module not enabled" |
+| ORG.12F | Northstar brand; Gachibowli inherits; Jubilee Hills own brand; Greenfield default; Gachibowli navigation profile; Jubilee Hills disabled-module preference; Annexe label; Demo School Guardian portal order |
 
 ## 8. Reset guarantees (proven at ORG.12E-D1)
 

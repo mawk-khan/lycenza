@@ -37,6 +37,8 @@ final class DemoAccountCatalog
         ['Network Viewer — Region: Telangana', 'network.region@example.test', 'Read-only: Telangana Schools only (Hyderabad Central, Hyderabad West, Warangal); never Karnataka.'],
         ['Network Viewer — Zone: Hyderabad Central', 'network.zone@example.test', 'Read-only: Jubilee Hills and Secunderabad only.'],
         ['Network + School — shared identity', 'network.shared@example.test', 'Karnataka Network Viewer AND Principal of Northstar Gachibowli; no role in any other School.'],
+        // ORG.12F (ADR 0080 §11): a franchise School that keeps its own brand.
+        ['School Admin — Northstar Jubilee Hills (franchise, own brand)', 'jubilee.admin@example.test', 'Keeps its own brand (the Network brand is never forced); core modules only, so its saved Library preference never shows Library.'],
     ];
 
     /**

@@ -4,6 +4,8 @@ namespace App\Http\Controllers\App\Groups;
 
 use App\Domain\Platform\Application\Elevation\SchoolElevationService;
 use App\Domain\Platform\Application\Groups\GroupGovernanceAccess;
+use App\Domain\Platform\Application\Groups\NetworkBrandChangeReason;
+use App\Domain\Platform\Application\Groups\NetworkBrandService;
 use App\Domain\Platform\Application\Groups\SchoolGroupDirectoryReadService;
 use App\Domain\Platform\Application\Groups\SchoolGroupMembershipReason;
 use App\Domain\Platform\Application\Groups\SchoolGroupRelationship;
@@ -86,6 +88,8 @@ class SchoolGroupController extends Controller
             'canManage' => $canManage,
             'canManageOperators' => $access->mayManageOperators($user, $schoolGroup),
             'reasons' => $canManage ? SchoolGroupMembershipReason::options() : [],
+            // ORG.12F (ADR 0080 §11.7): the Network brand (presentation only), editable by its managers.
+            'networkBrand' => [...app(NetworkBrandService::class)->current($schoolGroup), 'reasons' => $canManage ? NetworkBrandChangeReason::options() : []],
             'hasMfaFactor' => $canManage && $mfa->hasActiveFactor($user),
             'filters' => $filters,
             'relationships' => SchoolGroupRelationship::options(),

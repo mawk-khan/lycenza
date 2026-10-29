@@ -3,8 +3,9 @@
 - Status: **Accepted and implemented (2026-10-28).** ORG.12A (§1–§6),
   **ORG.12B Setup & Readiness Center (§7)** and **ORG.12C Rich School &
   Campus Profiles (§8)**, all 2026-10-28; **ORG.12D Network, Franchise,
-  Region & Zone Governance (§9)** and **ORG.12E Role, Access & Sensitive
-  Data Administration (§10)**, 2026-10-29. ORG.12F–H are planned here but
+  Region & Zone Governance (§9)**, **ORG.12E Role, Access & Sensitive
+  Data Administration (§10)** and **ORG.12F Navigation, Branding &
+  Presentation Profiles (§11)**, 2026-10-29. ORG.12G–H are planned here but
   **not authorized**; each needs explicit owner authorization.
 - Date: 2026-10-28
 - Programme: **ORG.12 — Organization Control Plane expansion** (additive to
@@ -667,3 +668,143 @@ Turning a family on needs:
 | L5 | The trigger trusts the recorded grantor | documented (§10.3 trust boundary, rule 102); revoke and `group_admin` grants were never trigger-checked |
 | -- | Effective access could show a non-staff membership by its UUID | **fixed:** staff memberships only (404 otherwise) |
 | -- | The shared fresh-MFA web-route throttling LOW | unchanged, still recorded as shared (not fixed per route) |
+
+## 11. ORG.12F — Navigation, Branding & Presentation Profiles (implemented, 2026-10-29)
+
+**11.1 Owner decisions applied.**
+- **OD-12.16:** School presentation profiles cover implemented audiences
+  only.
+- **OD-12.17:** a Network brand profile.
+- **OD-12.18:** a School inherits a Network brand only by explicit choice.
+- **OD-12.19:** navigation customization means order, hide and label,
+  never destination, capability, module, scope or ownership.
+
+**11.2 Audit before design.**
+- **Navigation:** one authoritative code catalogue (`StaffNavigation`, 86
+  entries in code-owned groups), evaluated per request by
+  `NavigationBuilder`, which sends only the entries the actor may see
+  (module entitlement, capability, Campus scope, portal availability).
+  There are no icons anywhere in the shell.
+- **Audiences:** the Guardian portal's entries are a group of the same
+  catalogue (development-only until POR-L1). There is no Student portal and
+  no mobile navigation.
+- **Branding:** only the product name (`ProductIdentity`).
+- **CSP:** `style-src 'self'` (no inline styles in markup).
+- **Media:** no logo, banner or general media pipeline. Documents storage
+  is record-owned and tenant-scoped, so it cannot serve a Group-owned asset
+  to member Schools.
+
+**11.3 Presentation catalogue (`NavigationPresentationCatalogue`).**
+- **Derivation:** derived from `StaffNavigation`, never a second list.
+- **Audiences:** `staff_web` (every School entry outside the Guardian
+  portal group) and `guardian_portal`.
+- **Items:** each is a School-scope entry with its stable key, default
+  label, code-owned group and default order. Platform, Group and account
+  entries, and Home and Log out, are never School presentation.
+- **Required (never hideable):**
+  - `presentation`: the editor itself;
+  - `portal-communications`: it carries required notices.
+- **Icons:** none (no code-owned icon set exists, and a School cannot
+  supply one).
+
+**11.4 Resolution order** (`NavigationBuilder::forRequest()` →
+`NavigationPresentation::apply()`).
+1. The code-owned entry exists.
+2. `visibleEntries()` applies security (unchanged).
+3. Presentation is applied: hidden (unless required), order within the
+   group, label.
+
+Presentation only removes or relabels an entry it was given. It never adds
+one and changes no route. Unknown keys are ignored. It costs one query.
+
+**11.5 Navigation overrides** (`school_navigation_preferences`, forced
+RLS).
+- **What is stored:** overrides only: `hidden`, `sort_order` (0–999,
+  within the group), and `label_override` (plain text, at most 40
+  characters, no `<`/`>` or control characters, enforced by a DB CHECK).
+- **Constraints:** unique per (School, audience, key); the audience is
+  CHECKed.
+- **Never stored:** no role, User or Campus column, and no backfill.
+- **Writer:** `SchoolPresentationService`.
+  - Authority: `school.settings.manage`, re-read under the School lock
+    (ApprovalDecisionAuthority).
+  - Refuses a stale form (fingerprint); an unchanged save is a no-op.
+  - Reset deletes the overrides, stale keys included.
+  - Audit: `school.presentation.navigation_updated` (hidden, shown,
+    relabelled and reordered keys) and `.navigation_reset`.
+- **Who:** `school.settings.view` (School Admin, Principal) views;
+  `school.settings.manage` (School Admin) changes. There is no new
+  capability and no fresh MFA.
+
+**11.6 Branding.**
+- **Values:** a label (plain text, at most 60 characters) and one primary
+  accent (`#RRGGBB`). The readable foreground is DERIVED (white or
+  near-black, whichever contrasts more, always at least 4.5:1;
+  `BrandColor`).
+- **Never brand-controlled:** body text and backgrounds, a User's
+  appearance and accessibility settings, and the School's name, legal
+  identity and references.
+- **Shell:** an accent stripe and a label chip, set through the DOM (which
+  the CSP allows), and nothing at all on the system default.
+- **School brand** (`school_brand_profiles`, forced RLS, one per School):
+  - its own label and accent;
+  - an optional `brand_source_group_id`, a composite key to the School's
+    OWN `school_group_members (school_group_id, school_id)` row, with `ON
+    DELETE SET NULL (brand_source_group_id)`;
+  - changed through `SchoolPresentationService` (`school.settings.manage`,
+    stale-safe, audited as `school.presentation.brand_updated`).
+
+**11.7 Network brand and inheritance.**
+- **Storage:** `school_group_brand_profiles` (a Group-owned platform table,
+  versioned).
+- **Writer:** `NetworkBrandService`. The platform, or a whole-Group Network
+  Manager of THAT Group, re-read in the transaction, with a closed
+  `NetworkBrandChangeReason` and a fresh MFA proof. The version guards
+  against stale forms. Audited as `platform.school_group.brand_updated`
+  (changed fields, reason, MFA time, authority).
+- **Never:** it writes no School row and opts in no School.
+- **Effective brand per field (`BrandResolver`):**
+  1. the School's own value;
+  2. else the EXPLICITLY chosen Network brand, while the School is a
+     member and the Group is active;
+  3. else the system default.
+- **Relationship type never decides.** In a School with several Groups,
+  only the selected one applies.
+- **Leaving the source Group** clears the source atomically (the
+  composite key). This was chosen over refusing the removal: it needs no
+  Group code to read tenant data.
+- **An archived source Group** falls back to the School and system values,
+  and an attention note is shown.
+
+**11.8 Media, banners, icons: deferred.**
+- **Logo and banner upload:** not implemented. No safe reusable media
+  abstraction exists for Group-owned and School-owned public assets, and
+  ORG.12F must not create an object-storage architecture (stop condition
+  13).
+- **Icons:** not implemented (no code-owned icon catalogue).
+- **Banners:** are not Communications. A future static brand banner needs
+  the same media pipeline.
+
+**11.9 Not implemented, deliberately.**
+- Student or mobile menus (no surfaces exist).
+- Role-, User- or Campus-specific menus; tenant-created groups or links.
+- CSS, HTML or script; a secondary accent; a Campus brand.
+
+**11.10 Measured.**
+- A customized School (30 overrides plus an inherited Network brand) costs
+  at most two queries more than a default School (test-asserted).
+- No per-item or per-Campus query, and no cache.
+
+**11.11 Independent security review (ORG.12F).** No HIGH or MEDIUM.
+
+| # | Finding | Resolution |
+|---|---|---|
+| L1 | Labels accepted bidi and invisible format characters (`\p{Cf}`, e.g. U+202E) | **fixed:** refused in School and Network labels (tested) |
+| L2 | The brand-source membership check was an unlocked read (a concurrent removal could raise a 500) | **fixed:** the membership row is share-locked in the transaction |
+| L3 | The Network brand form could spend a fresh code before its label/colour rules ran | **fixed:** the rules are validated before MFA |
+| -- | Unstored items ranked by visible position, not the catalogue scale | **fixed:** default rank is the catalogue order |
+| -- | Found in the DDEV walkthrough: the presentation page's `navigation`/`brand` props shadowed the shared shell props and blanked the layout | **fixed:** renamed (`profiles`, `brandProfile`); a test pins the shell props |
+
+Also fixed during testing: navigation change detection compared rows loosely
+(an order of 0 looked unchanged), and the reset audited outside the School
+context (RLS refusal).

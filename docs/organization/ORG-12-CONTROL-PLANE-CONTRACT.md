@@ -239,7 +239,7 @@ Branch/Organization/Tenant entity; no navigation coupling.
 | **ORG.12C** Rich School & Campus profiles — **IMPLEMENTED** (ADR 0080 §8; logo deferred to 12F) | legal identity, registration/tax/affiliation references, contact, website, social, timezone, currency, branding; Campus code, name, address, phone, email, coordinates, service profile (day school, early years, boarding, meals, transport), branding override | fields audited first; service profile is descriptive, never entitlement, capability or authority |
 | **ORG.12D** Network / franchise governance — **IMPLEMENTED** (§15, ADR 0080 §9) | Group = Network, Region, Zone, owned/franchise/managed/affiliate, network reference, lifecycle; structural overview and directory | never a tenant boundary or authority scope; Campus count and Network readiness deferred to 12H (tenant reads, ADR 0048) |
 | **ORG.12E** Role, access & sensitive-data administration — **IMPLEMENTED** (§16, ADR 0080 §10) | Network Manager / Network Viewer (whole Group, Region, Zone); School Access Center (role templates, capabilities, matrix, effective access); sensitive-data catalogue | no tenant role or capability creation; deny-only field policy deferred until central enforcement exists |
-| **ORG.12F** Navigation & branding presentation | ordering, grouping, optional visibility, labels, icons, banners, School branding, Portal presentation | effective visibility = entitlement AND authorization AND scope AND presentation preference |
+| **ORG.12F** Navigation & branding presentation — **IMPLEMENTED** (§17, ADR 0080 §11; logo/banner/icons deferred) | order within groups, optional hiding, plain labels for staff and Guardian portal navigation; School and Network brand (label, accent) with explicit inheritance | effective visibility = entitlement AND authorization AND scope AND presentation preference |
 | **ORG.12G** Integration & device readiness hub | email, SMS, payment gateway, biometric, RFID, VTS/GPS, webhooks, AI Gateway: family, owner, School/Campus, configured, enabled, healthy, last safe health event | no credential or secret ever in Organization |
 | **ORG.12H** Reports & reference re-audit | setup-completion and configuration-gap reports, safe Network readiness summaries, final classification against the 515-screen pack | Network summaries one School at a time |
 
@@ -361,3 +361,23 @@ a second catalogue.
 - **Never:** menus as authority, cloned per-scope roles, tenant-created
   roles or capabilities, Region/Zone School authority, Group-to-School
   escalation, or UI-only field hiding.
+
+## 17. Navigation, branding and presentation profiles (ORG.12F)
+
+- **Presentation is an output of security, never an input.**
+  - An entry is shown only if security already allows it.
+  - A School preference can then only hide it (never a required item),
+    reorder it within its code-owned group, or relabel it in plain text.
+  - Hidden pages stay reachable for authorized people; "visible" never
+    grants anything.
+- **Audiences:** `staff_web` and `guardian_portal` (development-only); no
+  Student or mobile audience.
+- **Granularity:** per School and audience. Never per role, User or Campus;
+  no tenant groups or links.
+- **Brand:** a label and one accent colour with a derived readable
+  foreground. Per field: the School's own value, else the explicitly chosen
+  Network brand (member, active Group), else the system default. It never
+  changes the School's identity.
+- **Network brand:** Network Manager of that Group (reason, fresh MFA,
+  version); never forced on a School.
+- **Deferred:** logo, banner and icon assets (no governed media pipeline).

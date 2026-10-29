@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Support\Navigation\NavigationBuilder;
+use App\Support\Presentation\BrandResolver;
 use App\Support\ProductIdentity;
 use App\Support\Tenancy\ElevationContext;
 use App\Support\Tenancy\SchoolTimezone;
@@ -85,6 +86,13 @@ class HandleInertiaRequests extends Middleware
             // Discoverability only: every destination re-checks its own
             // capability (CLAUDE.md rule 6).
             'navigation' => $user !== null ? fn () => app(NavigationBuilder::class)->forRequest($request) : null,
+            // ORG.12F (ADR 0080 §11.6): the active School's effective brand
+            // (label, accent and its derived readable foreground) -- presentation
+            // only; resolved lazily after the School context, never for an
+            // elevated session or without a School.
+            'brand' => $user !== null ? fn () => ($school = app(TenantContext::class)->school()) !== null && ! app(ElevationContext::class)->isElevated()
+                ? array_intersect_key(app(BrandResolver::class)->forSchool($school), array_flip(['label', 'accent', 'foreground', 'source']))
+                : null : null,
             // X-01 (OD-V11-7, ADR 0075 section 12): the success message a
             // controller flashed on its redirect. 64 actions flash `flash` or
             // `status`; nothing shared them, so none was ever shown. Namespaced

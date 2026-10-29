@@ -5,6 +5,8 @@ namespace App\Http\Controllers\App\Groups;
 use App\Domain\Platform\Application\Groups\GroupGovernanceAccess;
 use App\Domain\Platform\Application\Groups\GroupGovernanceScope;
 use App\Domain\Platform\Application\Groups\NetworkAccessService;
+use App\Domain\Platform\Application\Groups\NetworkBrandChangeReason;
+use App\Domain\Platform\Application\Groups\NetworkBrandService;
 use App\Domain\Platform\Application\Groups\NetworkRoleChangeReason;
 use App\Domain\Platform\Application\Groups\SchoolGroupDirectoryReadService;
 use App\Domain\Platform\Application\Groups\SchoolGroupGovernanceService;
@@ -49,6 +51,7 @@ class NetworkGovernanceController extends Controller
         private readonly SchoolGroupStructureService $structure,
         private readonly NetworkAccessService $network,
         private readonly SchoolGroupDirectoryReadService $directory,
+        private readonly NetworkBrandService $brands,
     ) {}
 
     public function access(Request $request, SchoolGroup $schoolGroup, FreshMfaRequirement $mfa): Response
@@ -201,6 +204,25 @@ class NetworkGovernanceController extends Controller
         $this->structure->updateZone($request->user(), $schoolGroup, $zone, $request->only(['code', 'name', 'description', 'sort_order', 'status', 'region_id']));
 
         return back();
+    }
+
+    /** ORG.12F (ADR 0080 §11.7): the Network brand -- floor, fresh MFA, then the service (reason, version, audit). */
+    public function updateBrand(Request $request, SchoolGroup $schoolGroup, FreshMfaRequirement $mfa): RedirectResponse
+    {
+        $this->visible($request, $schoolGroup);
+        $this->brands->assertMayManage($request->user(), $schoolGroup);
+        $data = $request->validate([
+            // The service's rules, checked before a fresh code is spent.
+            'display_label' => ['nullable', 'string', 'max:60', 'not_regex:/[<>\p{Cc}\p{Cf}]/u'],
+            'primary_accent' => ['nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'version' => ['required', 'integer', 'min:0'],
+            'reason_code' => ['required', Rule::enum(NetworkBrandChangeReason::class)],
+        ]);
+        $proof = $mfa->requireForAction($request, $request->user());
+        $this->brands->update($request->user(), $schoolGroup, $data['display_label'] ?? null, $data['primary_accent'] ?? null,
+            (int) $data['version'], NetworkBrandChangeReason::from($data['reason_code']), $proof);
+
+        return back()->with('status', 'Network brand saved. Schools that chose it now show it.');
     }
 
     /** 404 unless the actor holds Network authority in this Group; returns the read scope. */

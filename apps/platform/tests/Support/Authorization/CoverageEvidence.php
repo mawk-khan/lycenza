@@ -5,6 +5,7 @@ namespace Tests\Support\Authorization;
 use App\Domain\Identity\Application\Staff\StaffRoleCatalog;
 use App\Domain\Platform\Application\Groups\GroupGovernanceAccess;
 use App\Domain\Platform\Application\Groups\NetworkAccessService;
+use App\Domain\Platform\Application\Groups\NetworkBrandService;
 use App\Domain\Platform\Application\Groups\Reporting\GroupCurriculumCoverageReportService;
 use App\Domain\Platform\Application\Groups\SchoolGroupGovernanceService;
 use App\Domain\Platform\Application\Modules\SchoolModuleEntitlementService;
@@ -53,6 +54,8 @@ final class CoverageEvidence
         // the Network-role writer's floor (platform OR a whole-Group grant).
         GroupGovernanceAccess::class => ['mayManage', 'mayManageOperators', 'requireManageNow', 'requireOperatorsManageNow'],
         NetworkAccessService::class => ['assertMayAdminister'],
+        // ORG.12F (ADR 0080 §11.7): the Network brand writer's floor.
+        NetworkBrandService::class => ['assertMayManage'],
         // ADR 0048: Group-safe reporting needs an unrevoked group.reporting.view grant.
         GroupCurriculumCoverageReportService::class => ['authorizingGrant'],
         // ORG.5 (ADR 0076 §31): platform.school_entitlements.manage, audited when refused.

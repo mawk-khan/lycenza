@@ -1693,3 +1693,10 @@ once several modules copy it.
        - effective access is `CapabilityResolver`'s answer, explained, never persisted;
        - role grants stay on Staff accounts.
      - **Sensitive data:** `SensitiveDataCatalogue` is explanation only, and every family is `configurable: false`. Never add a School field policy that can grant, a UI-only hide, an `allow` column or a per-User override. A deny-only policy needs a central server projection for that family on every path (web, API, search, lookup, report, export, notification) and per-role evaluation first.
+
+115. **Navigation and branding are presentation, applied after security (ADR 0080 §11).**
+     - **Navigation:** `NavigationPresentation::apply()` runs only on the entries `NavigationBuilder::visibleEntries()` already allowed. It may hide (never a `NavigationPresentationCatalogue::REQUIRED` item), reorder within the code-owned group, or set a plain-text label. Never add an entry, change a destination, capability, module, scope or ownership, or let routes, Gates or `CapabilityResolver` read presentation tables.
+     - **Preferences:** overrides only, keyed by (School, audience, code-owned key). Audiences are `staff_web` and `guardian_portal`; there is no Student or mobile audience until those surfaces exist. Never a role, User or Campus menu, a tenant group or link, CSS, HTML, script or an icon a School supplies.
+     - **Brand:** a label and one `#RRGGBB` accent with a derived foreground (`BrandColor`). Per field: School value, else the EXPLICITLY chosen Network brand (a composite key to the School's own membership; active Group), else the system default. Never decided by relationship type, never forced by a Network, and never a change to the School's name or identity.
+     - **Network brand:** changed only through `NetworkBrandService` (Network Manager of that Group or the platform; reason, fresh MFA, version).
+     - **Media:** logo and banner uploads wait for a governed media pipeline; never build object storage for presentation.

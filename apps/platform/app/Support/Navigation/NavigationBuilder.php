@@ -72,10 +72,12 @@ final class NavigationBuilder
         $groups = [];
         $account = [];
 
-        foreach ($visible as $entry) {
+        // ORG.12F (ADR 0080 §11.4): the School's presentation profile, applied
+        // AFTER every security decision above -- it can only drop or relabel.
+        foreach (app(NavigationPresentation::class)->apply($visible, $school) as ['entry' => $entry, 'label' => $label]) {
             $item = [
                 'key' => $entry->key,
-                'label' => $entry->label,
+                'label' => $label,
                 'href' => route($entry->routeName, absolute: false),
                 'active' => $entry->key === $activeKey,
             ];

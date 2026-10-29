@@ -760,6 +760,17 @@ ADR 0045.
 - **Never:** a School capability, membership or elevation, and nothing
   School-side reads these grants. `CapabilityResolver` is unchanged.
 
+**Presentation is never authorization (ORG.12F, ADR 0080 §11).**
+- **Navigation:** shows only what `NavigationBuilder::visibleEntries()` (the
+  security filter) allows. A School's presentation profile can then hide
+  (never a required item), reorder within a group or relabel it.
+- **Routes:** hidden routes stay reachable for authorized people, and
+  "visible" grants nothing. Routes, Gates and `CapabilityResolver` never
+  read presentation tables (guarded).
+- **Network brand:** a Network brand change needs that Group's Network
+  Manager (or the platform), a reason and fresh MFA. It never touches a
+  School.
+
 **School Access Center (ORG.12E).**
 - Read-only: the catalogue (`school.members.view` or `school.roles.view`),
   and assignments plus effective access (`school.roles.view`), this School

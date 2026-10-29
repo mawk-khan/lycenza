@@ -10,6 +10,8 @@ use App\Models\School;
 use App\Models\SchoolGroup;
 use App\Models\User;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\Navigation\NavigationPresentation;
+use App\Support\Presentation\BrandResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -100,6 +102,18 @@ final class DemoOrganizationVerifier
         $check($shared !== null && $gachibowli !== null && in_array('students.view', $resolver->schoolCapabilities($shared, $gachibowli), true), 'the shared persona is not Principal of Gachibowli');
         $check($shared !== null && $secunderabad !== null && $resolver->schoolCapabilities($shared, $secunderabad) === [], 'the shared persona holds access in another School');
 
+        // ORG.12F: presentation semantics (not every cosmetic value).
+        $brands = app(BrandResolver::class);
+        $jubilee = $school('northstar-jubilee-hills');
+        $greenfield = $school('greenfield-public');
+        $check($gachibowli !== null && $brands->forSchool($gachibowli)['source'] === 'network' && ($brands->forSchool($gachibowli)['network']['id'] ?? null) === $network->id, 'Gachibowli does not inherit the Northstar brand');
+        $check($jubilee !== null && $brands->forSchool($jubilee)['source'] === 'school', 'Jubilee Hills does not keep its own brand');
+        $check($greenfield !== null && $brands->forSchool($greenfield)['source'] === 'system', 'Greenfield is not on the system default');
+        if ($gachibowli !== null) {
+            $prefs = app(NavigationPresentation::class)->overrides($gachibowli)['staff_web'] ?? [];
+            $check((bool) ($prefs['data-health']->hidden ?? false) && ($prefs['students']->label_override ?? null) === 'Learners', 'Gachibowli navigation profile is missing (hidden Data health, Learners)');
+        }
+
         $check(count(SensitiveDataCatalogue::FAMILIES) === 8 && array_filter(array_column(SensitiveDataCatalogue::FAMILIES, 'configurable')) === [], 'the sensitive-data catalogue is not the eight non-configurable families');
 
         return $problems;
@@ -115,8 +129,9 @@ final class DemoOrganizationVerifier
             'regions' => DB::table('school_group_regions')->where('school_group_id', $network->id)->count(),
             'zones' => DB::table('school_group_zones')->where('school_group_id', $network->id)->count(),
             'networkSchools' => DB::table('school_group_members')->where('school_group_id', $network->id)->count(),
-            'schools' => School::query()->count(),
-            'groups' => SchoolGroup::query()->count(),
+            // The demo world's own Schools (other data may coexist, e.g. in the suite).
+            'schools' => School::query()->where(fn ($q) => $q->where('slug', 'like', 'northstar-%')->orWhereIn('slug', ['greenfield-public', 'horizon-academy']))->count(),
+            'groups' => SchoolGroup::query()->whereIn('slug', [DemoOrganizationData::NETWORK_SLUG, DemoDataBuilder::SCHOOL_GROUP_SLUG])->count(),
             'networkGrants' => DB::table('group_role_assignments')->where('school_group_id', $network->id)->whereNull('revoked_at')->count(),
         ];
     }

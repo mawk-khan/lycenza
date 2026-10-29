@@ -91,6 +91,7 @@ final class RouteUniverse
         'app.groups.elevation.confirm' => [self::PLATFORM, 'Group scope: SchoolElevationService authorizes + MFA (ADR 0045)'],
         'app.groups.reports.curriculum-coverage' => [self::PLATFORM, 'Group scope: GroupSafeReportGate, group.reporting.view (ADR 0048)'],
         // ORG.12E (ADR 0080 §10): Network governance in Group context.
+        'app.groups.network.brand.update' => [self::PLATFORM, 'Group scope: NetworkBrandService::assertMayManage + fresh MFA + in-transaction re-read (ADR 0080 §11.7)'],
         'app.groups.access' => [self::PLATFORM, 'Group scope: GroupGovernanceAccess::viewScope(), else 404 (ADR 0080 §10)'],
         'app.groups.access.operators.store' => [self::PLATFORM, 'Group scope: NetworkAccessService::assertMayAdminister + fresh MFA + in-transaction re-read (ADR 0080 §10)'],
         'app.groups.access.operators.revoke' => [self::PLATFORM, 'Group scope: NetworkAccessService::assertMayAdminister + fresh MFA + in-transaction re-read (ADR 0080 §10)'],

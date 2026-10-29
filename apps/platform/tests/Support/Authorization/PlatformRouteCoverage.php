@@ -5,6 +5,7 @@ namespace Tests\Support\Authorization;
 use App\Domain\Platform\Application\Elevation\SchoolElevationService;
 use App\Domain\Platform\Application\Groups\GroupGovernanceAccess;
 use App\Domain\Platform\Application\Groups\NetworkAccessService;
+use App\Domain\Platform\Application\Groups\NetworkBrandService;
 use App\Domain\Platform\Application\Groups\Reporting\GroupCurriculumCoverageReportService;
 use App\Domain\Platform\Application\Groups\SchoolGroupGovernanceService;
 use App\Domain\Platform\Application\Groups\SchoolGroupStructureService;
@@ -78,6 +79,7 @@ final class PlatformRouteCoverage
             Coverage::owned('app.groups.access', GroupGovernanceAccess::class, 'viewScope', 'Group scope: a Network read scope in that Group, else 404'),
             Coverage::service('app.groups.access.operators.store', NetworkAccessService::class, 'grant'),
             Coverage::service('app.groups.access.operators.revoke', NetworkAccessService::class, 'revoke'),
+            Coverage::service('app.groups.network.brand.update', NetworkBrandService::class, 'update'),
             Coverage::service('app.groups.network.schools.classify', SchoolGroupGovernanceService::class, 'classifyMembership'),
             Coverage::service('app.groups.network.schools.place', SchoolGroupGovernanceService::class, 'placeMembership'),
             Coverage::service('app.groups.network.schools.destroy', SchoolGroupGovernanceService::class, 'removeSchool'),

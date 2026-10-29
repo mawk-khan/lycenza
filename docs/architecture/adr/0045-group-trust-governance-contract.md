@@ -604,3 +604,17 @@ authority is still never School authority.
 - **§12 Directory:** a scoped viewer sees only its Region's or Zone's
   memberships, counts and structure, never unplaced ones. Platform tables
   only, as before.
+
+## Amendment — Network brand (ORG.12F, 2026-10-29; ADR 0080 §11)
+
+- **The brand:** a Group may hold a brand label and accent colour
+  (`school_group_brand_profiles`, a Group-owned platform table). It is
+  changed by the platform or a whole-Group Network Manager of that Group,
+  with a reason, a fresh MFA proof and a version check, and audited as
+  `platform.school_group.brand_updated`.
+- **Explicit choice only:** a member School uses it only if the School
+  chooses it. Membership and relationship type never apply it, and a
+  Network never opts a School in. Leaving the Group clears the choice
+  through a composite key.
+- **Group invariants:** no Group code reads or writes School presentation,
+  and a brand never confers anything.
