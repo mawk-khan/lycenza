@@ -23,12 +23,14 @@ use Illuminate\Support\Carbon;
  * @property Carbon $granted_at
  * @property string|null $revoked_by_user_id
  * @property Carbon|null $revoked_at
+ * @property string|null $region_id ORG.12E: a Network-governance read scope (one Region of the same Group)
+ * @property string|null $zone_id ORG.12E: or exactly one Zone of it; both null = the whole Group
  */
 class GroupRoleAssignment extends Model
 {
     use GeneratesUuidV7;
 
-    protected $fillable = ['user_id', 'school_group_id', 'role_id', 'granted_by_user_id', 'granted_at'];
+    protected $fillable = ['user_id', 'school_group_id', 'role_id', 'granted_by_user_id', 'granted_at', 'region_id', 'zone_id'];
 
     protected function casts(): array
     {
@@ -54,6 +56,26 @@ class GroupRoleAssignment extends Model
     public function role(): BelongsTo
     {
         return $this->belongsTo(Role::class);
+    }
+
+    /**
+     * ORG.12E: the Region scope of a read-only Network grant (same Group, composite key).
+     *
+     * @return BelongsTo<SchoolGroupRegion, $this>
+     */
+    public function region(): BelongsTo
+    {
+        return $this->belongsTo(SchoolGroupRegion::class, 'region_id');
+    }
+
+    /**
+     * ORG.12E: the Zone scope of a read-only Network grant (same Group, composite key).
+     *
+     * @return BelongsTo<SchoolGroupZone, $this>
+     */
+    public function zone(): BelongsTo
+    {
+        return $this->belongsTo(SchoolGroupZone::class, 'zone_id');
     }
 
     public function isActive(): bool

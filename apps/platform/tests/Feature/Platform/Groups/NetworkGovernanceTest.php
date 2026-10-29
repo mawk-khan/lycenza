@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Platform\Groups;
 
+use App\Domain\Platform\Application\Groups\GroupGovernanceScope;
 use App\Domain\Platform\Application\Groups\SchoolGroupDirectoryReadService;
 use App\Domain\Platform\Application\Groups\SchoolGroupGovernanceService;
 use App\Domain\Platform\Application\Groups\SchoolGroupMembershipReason;
@@ -149,7 +150,7 @@ class NetworkGovernanceTest extends TestCase
         $other = $this->createSchool();
         $this->governance()->addSchool($root, $group, $other->id, SchoolGroupRelationship::MANAGED, SchoolGroupMembershipReason::NETWORK_JOIN, $this->freshProof($root));
         $this->assertThrows(fn () => $this->governance()->placeMembership($root, $group, $other, null, $zone->id, ['region_id' => null, 'zone_id' => null], SchoolGroupMembershipReason::OPERATIONAL_REORGANIZATION), ValidationException::class);
-        $this->assertSame(1, app(SchoolGroupDirectoryReadService::class)->overview($group)['attention']['inInactiveStructure']);
+        $this->assertSame(1, app(SchoolGroupDirectoryReadService::class)->overview($group, GroupGovernanceScope::whole())['attention']['inInactiveStructure']);
 
         // A Zone with Schools cannot silently change Region; its code is frozen once used.
         $region2 = $this->structure()->createRegion($root, $group, ['code' => 'WEST', 'name' => 'West']);

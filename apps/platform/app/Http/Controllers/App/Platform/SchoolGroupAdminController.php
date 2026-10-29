@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers\App\Platform;
 
+use App\Domain\Platform\Application\Groups\GroupGovernanceScope;
+use App\Domain\Platform\Application\Groups\NetworkAccessService;
+use App\Domain\Platform\Application\Groups\NetworkRoleChangeReason;
 use App\Domain\Platform\Application\Groups\SchoolGroupDirectoryReadService;
 use App\Domain\Platform\Application\Groups\SchoolGroupGovernanceService;
 use App\Domain\Platform\Application\Groups\SchoolGroupMembershipReason;
@@ -29,12 +32,19 @@ use Inertia\Response;
  * which re-checks the capability and audits. Exact identifiers only: a
  * School by UUID or verified domain, a person by exact email or UUID.
  * Holding these capabilities never makes the operator a Group Admin.
+ *
+ * ORG.12E (ADR 0080 §10): the platform reads every Group whole, and also
+ * appoints Network Managers and read-only Network Viewers (whole Group, one
+ * Region or one Zone) through NetworkAccessService -- floor check, then a
+ * fresh MFA code, then the service. Group Admin grants keep their ADR 0045
+ * path unchanged.
  */
 class SchoolGroupAdminController extends Controller
 {
     public function __construct(
         private readonly SchoolGroupGovernanceService $governance,
         private readonly SchoolGroupStructureService $structure,
+        private readonly NetworkAccessService $network,
     ) {}
 
     public function index(Request $request, CapabilityResolver $capabilities): Response
@@ -56,20 +66,28 @@ class SchoolGroupAdminController extends Controller
             'group' => ['id' => $schoolGroup->id, 'name' => $schoolGroup->name, 'slug' => $schoolGroup->slug, 'status' => $schoolGroup->status],
             // ORG.12D (ADR 0080 §9): structure, classification and the directory
             // -- platform tables only (SchoolGroupDirectoryReadService).
-            'overview' => $directory->overview($schoolGroup),
+            'overview' => $directory->overview($schoolGroup, GroupGovernanceScope::whole()),
             'filters' => $filters,
-            'directory' => $directory->directory($schoolGroup, $filters, (int) $request->query('page', 1))
+            'directory' => $directory->directory($schoolGroup, $filters, (int) $request->query('page', 1), GroupGovernanceScope::whole())
                 ->withQueryString()
                 ->through(fn (object $row): array => SchoolGroupDirectoryReadService::present($row)),
             'relationships' => SchoolGroupRelationship::options(),
             'reasons' => SchoolGroupMembershipReason::options(),
+            'grantReasons' => NetworkRoleChangeReason::options(),
+            'groupRoles' => [
+                ['code' => 'group_admin', 'label' => 'Group Admin'],
+                ['code' => NetworkAccessService::MANAGER, 'label' => 'Network Manager'],
+                ['code' => NetworkAccessService::VIEWER, 'label' => 'Network Viewer (read-only)'],
+            ],
             'grants' => $canManageGrants
-                ? $schoolGroup->grants()->active()->with(['user:id,name,email', 'role:id,key'])->orderBy('granted_at')->get()
+                ? $schoolGroup->grants()->active()->with(['user:id,name,email', 'role:id,key,name', 'region:id,name', 'zone:id,name'])->orderBy('granted_at')->get()
                     ->map(fn (GroupRoleAssignment $g) => [
                         'id' => $g->id,
                         'userName' => $g->user->name,
                         'userEmail' => $g->user->email,
                         'role' => $g->role->key,
+                        'roleName' => $g->role->name,
+                        'scope' => NetworkAccessService::scopeLabel($g->region_id, $g->zone_id, $g->region?->name, $g->zone?->name),
                         'grantedAt' => $g->granted_at->toIso8601String(),
                     ])->values()
                 : null,
@@ -194,18 +212,46 @@ class SchoolGroupAdminController extends Controller
         return back();
     }
 
-    public function grant(Request $request, SchoolGroup $schoolGroup): RedirectResponse
+    public function grant(Request $request, SchoolGroup $schoolGroup, FreshMfaRequirement $mfa): RedirectResponse
     {
-        $this->governance->grant($request->user(), $schoolGroup, (string) $request->input('user'));
+        $role = (string) $request->input('role', 'group_admin');
+        if ($role === 'group_admin') {
+            $this->governance->grant($request->user(), $schoolGroup, (string) $request->input('user'));
+
+            return back();
+        }
+
+        // ORG.12E: a Network role -- floor first, so a refused caller never spends a code.
+        $networkRole = $this->network->networkRole($role);
+        $this->network->assertMayAdminister($request->user(), $schoolGroup, $networkRole === null ? null : NetworkAccessService::classOf($networkRole));
+        $data = $request->validate([
+            'user' => ['required', 'string', 'max:255'],
+            'role' => ['required', Rule::in(NetworkAccessService::ROLES)],
+            'region_id' => ['nullable', 'uuid'],
+            'zone_id' => ['nullable', 'uuid'],
+            'reason_code' => ['required', Rule::enum(NetworkRoleChangeReason::class)],
+        ]);
+        $proof = $mfa->requireForAction($request, $request->user());
+        $this->network->grant($request->user(), $schoolGroup, $data['user'], $data['role'], $data['region_id'] ?? null, $data['zone_id'] ?? null, NetworkRoleChangeReason::from($data['reason_code']), $proof);
 
         return back();
     }
 
-    public function revoke(Request $request, SchoolGroup $schoolGroup, GroupRoleAssignment $grant): RedirectResponse
+    public function revoke(Request $request, SchoolGroup $schoolGroup, GroupRoleAssignment $grant, FreshMfaRequirement $mfa): RedirectResponse
     {
         abort_unless($grant->school_group_id === $schoolGroup->id, 404);
 
-        $this->governance->revoke($request->user(), $grant);
+        $class = $this->network->classOfGrant($grant);
+        if ($class === null) {
+            $this->governance->revoke($request->user(), $grant);
+
+            return back();
+        }
+
+        $this->network->assertMayAdminister($request->user(), $schoolGroup, $class);
+        $data = $request->validate(['reason_code' => ['required', Rule::enum(NetworkRoleChangeReason::class)]]);
+        $proof = $mfa->requireForAction($request, $request->user());
+        $this->network->revoke($request->user(), $schoolGroup, $grant, NetworkRoleChangeReason::from($data['reason_code']), $proof);
 
         return back();
     }

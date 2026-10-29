@@ -572,3 +572,35 @@ additive and reopens no Group invariant.
 - **Regions and Zones** are Group-owned classifications. They are never a
   tenant, an authorization scope, a role-assignment column or a grant
   target. No Group or School capability was added.
+
+## Amendment — Network roles and Region/Zone read scope (ORG.12E, 2026-10-29; ADR 0080 §10)
+
+This amendment is additive. It reopens no Group invariant, and Group
+authority is still never School authority.
+- **§4 Capabilities:** three more `group.*` keys: `group.network.view`,
+  `group.network.manage`, `group.network.operators.manage`.
+- **§4 Roles:** two more Group roles: `network_manager` and the read-only
+  `network_viewer`. `group_admin` is unchanged.
+- **§3 The grant:**
+  - `group_role_assignments` may carry a Region or Zone read scope, only on
+    a role whose every capability is `group.network.view` (database);
+  - existing grants stay whole-Group;
+  - the scope never changes after the grant.
+- **§5 Governance:**
+  - a whole-Group Network Manager governs its own Group's Regions, Zones and
+    member-School classification, placement and removal (assured as in the
+    ORG.12D amendment);
+  - adding a School, creating, renaming or archiving a Group, and Group
+    Admin grants stay platform-only;
+  - Network management is appointed only by the platform (database
+    trigger);
+  - a Network Manager grants only read-only Network Viewers in its own
+    Group.
+- **Invariant 6 (a Group Admin changes nothing)** still holds for
+  `group_admin`. Network management is a separate, platform-appointed role.
+- **§11 Audit:** Network grants and revocations record `role_key`,
+  `scope_type`, Region/Zone id, reason code, MFA time and the deciding
+  authority. Never an email or name.
+- **§12 Directory:** a scoped viewer sees only its Region's or Zone's
+  memberships, counts and structure, never unplaced ones. Platform tables
+  only, as before.

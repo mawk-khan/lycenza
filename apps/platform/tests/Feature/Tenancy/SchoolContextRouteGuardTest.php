@@ -73,6 +73,16 @@ class SchoolContextRouteGuardTest extends TestCase
         'app.platform.groups.zones.update',
         'app.platform.groups.grants.store',
         'app.platform.groups.grants.revoke',
+        'app.groups.access',                      // ORG.12E (ADR 0080 §10):
+        'app.groups.access.operators.store',      // Network governance in
+        'app.groups.access.operators.revoke',     // Group context, never
+        'app.groups.network.schools.classify',    // School context
+        'app.groups.network.schools.place',
+        'app.groups.network.schools.destroy',
+        'app.groups.network.regions.store',
+        'app.groups.network.regions.update',
+        'app.groups.network.zones.store',
+        'app.groups.network.zones.update',
         'app.groups.index',                       // Phase 0N.5: the Group
         'app.groups.show',                        // Admin's own Groups and
         'app.groups.elevation.create',            // Group-derived entry --

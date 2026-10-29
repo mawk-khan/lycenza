@@ -60,6 +60,13 @@ class CapabilityAndRoleSeeder extends Seeder
             // Phase 0N.11 (ADR 0048): the Group's registered Group-safe
             // reports (v1: curriculum.coverage only), read one School at a time.
             ['key' => 'group.reporting.view', 'label' => 'View the registered Group-safe reports of the assigned Group', 'namespace' => 'group'],
+            // ORG.12E (ADR 0080 §10, OD-12.13/OD-12.14): Network governance on the
+            // Group layer -- platform metadata only, never a School capability.
+            // `group.network.view` is the one capability a Region/Zone-scoped
+            // grant may carry (database trigger).
+            ['key' => 'group.network.view', 'label' => 'View the Network directory and structure of the assigned Group (whole Group, or one Region or Zone)', 'namespace' => 'group'],
+            ['key' => 'group.network.manage', 'label' => 'Manage the assigned Group\'s Regions, Zones and member-School classification, placement and removal', 'namespace' => 'group'],
+            ['key' => 'group.network.operators.manage', 'label' => 'Grant and revoke read-only Network operators in the assigned Group', 'namespace' => 'group'],
             ['key' => 'school.settings.view', 'label' => 'View school settings', 'namespace' => 'school'],
             ['key' => 'school.settings.manage', 'label' => 'Manage school settings', 'namespace' => 'school'],
             ['key' => 'school.members.view', 'label' => 'View school members', 'namespace' => 'school'],
@@ -1058,6 +1065,28 @@ class CapabilityAndRoleSeeder extends Seeder
                     'group.schools.view',
                     'group.schools.elevate',
                     'group.reporting.view',
+                ],
+            ],
+            // ORG.12E (ADR 0080 §10, OD-12.13): appointed and removed only by the
+            // platform (database trigger). Manages the Network's structure and
+            // read-only operators; never elevation, Group reporting or any
+            // School capability, and never appoints another Network Manager.
+            'network_manager' => [
+                'name' => 'Network Manager',
+                'scope' => 'group',
+                'capabilities' => [
+                    'group.network.view',
+                    'group.network.manage',
+                    'group.network.operators.manage',
+                ],
+            ],
+            // ORG.12E (OD-12.14): read-only Network operator -- the whole Group,
+            // or exactly one Region or Zone of it.
+            'network_viewer' => [
+                'name' => 'Network Viewer',
+                'scope' => 'group',
+                'capabilities' => [
+                    'group.network.view',
                 ],
             ],
             'school_admin' => [

@@ -186,6 +186,8 @@ final class StaffNavigation
 
             new E('school-settings', 'administration', 'School settings', 'app.settings.show', all: ['school.settings.view']),
             new E('staff-accounts', 'administration', 'Staff accounts', 'app.settings.staff.index', all: ['school.members.view']),
+            // ORG.12E (ADR 0080 §10): the read-only Access Center (role templates, capabilities, effective access).
+            new E('access-center', 'administration', 'Access Center', 'app.settings.access.index', any: ['school.members.view', 'school.roles.view']),
             new E('automation', 'administration', 'Automation', 'app.automation', all: ['automation.view']),
             // V11.5 (ADR 0075 section 10): a hub -- each capability opens at least one check.
             new E('data-health', 'administration', 'Data health', 'app.data-health.index', any: ['enrollments.view', 'academics.years.view', 'academics.structure.view', 'timetable.schedule.view', 'teaching.assignments.view']),
@@ -193,7 +195,8 @@ final class StaffNavigation
             new E('api-clients', 'administration', 'API clients', 'app.integrations.api-clients.index', all: ['integrations.api_clients.view']),
 
             // Group authority (ADR 0045; rule 84) -- never School authority.
-            new E('school-groups', 'school-groups', 'Your School Groups', 'app.groups.index', scope: E::SCOPE_GROUP, all: ['group.schools.view'], platformHostOnly: true),
+            // ORG.12E (ADR 0080 §10): or a Network role (group.network.view).
+            new E('school-groups', 'school-groups', 'Your School Groups', 'app.groups.index', scope: E::SCOPE_GROUP, any: ['group.schools.view', 'group.network.view'], platformHostOnly: true),
 
             // Platform authority (ADR 0046/0047) -- never School authority.
             new E('platform-schools', 'platform', 'Schools', 'app.platform.schools.index', scope: E::SCOPE_PLATFORM, all: ['platform.schools.view'], platformHostOnly: true),

@@ -7,7 +7,6 @@ use App\Models\SchoolGroupRegion;
 use App\Models\SchoolGroupZone;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
-use App\Support\Authorization\CapabilityResolver;
 use App\Support\CodeNormalizer;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Model;
@@ -22,7 +21,9 @@ use Illuminate\Validation\ValidationException;
  * ORG.12D (ADR 0080 §9, OD-12.10): the ONE writer of a School Group's
  * optional Regions and Zones -- platform-governed like the rest of the Group
  * layer (ADR 0045 §5, invariant 6: a Group Admin changes nothing), under
- * `platform.school_groups.manage`.
+ * `platform.school_groups.manage` -- and, since ORG.12E (ADR 0080 §10.4), a
+ * whole-Group Network Manager of THAT Group (GroupGovernanceAccess, re-read
+ * inside each transaction; audits record which authority decided).
  *
  * - Governance classifications only: no tenant data, no School membership,
  *   no capability, no authorization scope.
@@ -37,9 +38,9 @@ use Illuminate\Validation\ValidationException;
 class SchoolGroupStructureService
 {
     public function __construct(
-        private readonly CapabilityResolver $capabilities,
         private readonly AuditRecorder $audit,
         private readonly SchoolGroupGovernanceService $groups,
+        private readonly GroupGovernanceAccess $access,
     ) {}
 
     /** @param  array<string, mixed>  $input */
@@ -50,8 +51,9 @@ class SchoolGroupStructureService
 
         return $this->unique(fn (): SchoolGroupRegion => DB::transaction(function () use ($actor, $group, $data): SchoolGroupRegion {
             $this->groups->requireActiveLocked($group);
+            $authority = $this->access->requireManageNow($actor, $group);
             $region = SchoolGroupRegion::query()->create([...$data, 'school_group_id' => $group->id]);
-            $this->audit->platform('platform.school_group.region_created', actor: $actor, subject: $group, metadata: ['region_id' => $region->id, 'code' => $region->code]);
+            $this->audit->platform('platform.school_group.region_created', actor: $actor, subject: $group, metadata: ['region_id' => $region->id, 'code' => $region->code, 'authority' => $authority]);
 
             return $region;
         }));
@@ -66,11 +68,12 @@ class SchoolGroupStructureService
 
         return $this->unique(fn (): SchoolGroupRegion => DB::transaction(function () use ($actor, $group, $region, $data): SchoolGroupRegion {
             $this->groups->requireActiveLocked($group);
+            $authority = $this->access->requireManageNow($actor, $group);
             $region = SchoolGroupRegion::query()->whereKey($region->id)->lockForUpdate()->firstOrFail();
             $this->refuseCodeChangeOnceReferenced($region, $data, fn (): bool => SchoolGroupZone::query()->where('region_id', $region->id)->exists()
                 || DB::table('school_group_members')->where('region_id', $region->id)->exists());
 
-            return $this->save($actor, $group, $region, $data, 'platform.school_group.region_updated', 'region_id');
+            return $this->save($actor, $group, $region, $data, 'platform.school_group.region_updated', 'region_id', $authority);
         }));
     }
 
@@ -82,8 +85,9 @@ class SchoolGroupStructureService
 
         return $this->unique(fn (): SchoolGroupZone => DB::transaction(function () use ($actor, $group, $data): SchoolGroupZone {
             $this->groups->requireActiveLocked($group);
+            $authority = $this->access->requireManageNow($actor, $group);
             $zone = SchoolGroupZone::query()->create([...$data, 'school_group_id' => $group->id]);
-            $this->audit->platform('platform.school_group.zone_created', actor: $actor, subject: $group, metadata: ['zone_id' => $zone->id, 'code' => $zone->code, 'region_id' => $zone->region_id]);
+            $this->audit->platform('platform.school_group.zone_created', actor: $actor, subject: $group, metadata: ['zone_id' => $zone->id, 'code' => $zone->code, 'region_id' => $zone->region_id, 'authority' => $authority]);
 
             return $zone;
         }));
@@ -98,6 +102,7 @@ class SchoolGroupStructureService
 
         return $this->unique(fn (): SchoolGroupZone => DB::transaction(function () use ($actor, $group, $zone, $data): SchoolGroupZone {
             $this->groups->requireActiveLocked($group);
+            $authority = $this->access->requireManageNow($actor, $group);
             $zone = SchoolGroupZone::query()->whereKey($zone->id)->lockForUpdate()->firstOrFail();
             $referenced = fn (): bool => DB::table('school_group_members')->where('zone_id', $zone->id)->exists();
             $this->refuseCodeChangeOnceReferenced($zone, $data, $referenced);
@@ -105,13 +110,14 @@ class SchoolGroupStructureService
                 throw ValidationException::withMessages(['region_id' => 'Move this Zone\'s Schools before changing its Region.']);
             }
 
-            return $this->save($actor, $group, $zone, $data, 'platform.school_group.zone_updated', 'zone_id');
+            return $this->save($actor, $group, $zone, $data, 'platform.school_group.zone_updated', 'zone_id', $authority);
         }));
     }
 
     private function authorize(User $actor, SchoolGroup $group): void
     {
-        if (! $this->capabilities->canPlatform($actor, SchoolGroupGovernanceService::MANAGE)) {
+        // ORG.12E: the platform, or a whole-Group Network Manager of THIS Group.
+        if (! $this->access->mayManage($actor, $group)) {
             throw new AuthorizationException('This action is unauthorized.');
         }
         if (! $group->isActive()) {
@@ -164,7 +170,7 @@ class SchoolGroupStructureService
      * @param  array<string, mixed>  $data
      * @return T
      */
-    private function save(User $actor, SchoolGroup $group, Model $structure, array $data, string $event, string $idKey): Model
+    private function save(User $actor, SchoolGroup $group, Model $structure, array $data, string $event, string $idKey, string $authority): Model
     {
         $structure->fill(array_diff_key($data, ['status' => true]));
         if (array_key_exists('status', $data)) {
@@ -181,6 +187,7 @@ class SchoolGroupStructureService
             'changed' => $changed,
             'before' => $before,
             'after' => $structure->only(array_keys($before)),
+            'authority' => $authority,
         ]);
 
         return $structure;

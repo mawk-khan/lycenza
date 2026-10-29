@@ -25,6 +25,11 @@ use Illuminate\Support\Facades\DB;
  *
  * Counts here are counts of member Schools, Regions and Zones -- facts the
  * directory itself lists -- never counts of anything inside a School.
+ *
+ * ORG.12E (ADR 0080 §10.3): every read takes the viewer's
+ * GroupGovernanceScope. A Region or Zone operator sees only the memberships,
+ * counts and structure inside that Region or Zone (never an unplaced
+ * membership); the platform and whole-Group viewers pass the whole scope.
  * Bounded: a fixed number of queries whatever the Group size; the
  * directory is paginated.
  */
@@ -40,13 +45,14 @@ class SchoolGroupDirectoryReadService
      * @param  array{relationship?: ?string, region_id?: ?string, zone_id?: ?string, status?: ?string, q?: ?string}  $filters
      * @return LengthAwarePaginator<int, object>
      */
-    public function directory(SchoolGroup $group, array $filters, int $page): LengthAwarePaginator
+    public function directory(SchoolGroup $group, array $filters, int $page, GroupGovernanceScope $scope): LengthAwarePaginator
     {
         $query = DB::table('school_group_members as m')
             ->join('schools as s', 's.id', '=', 'm.school_id')
             ->leftJoin('school_group_regions as r', 'r.id', '=', 'm.region_id')
             ->leftJoin('school_group_zones as z', 'z.id', '=', 'm.zone_id')
             ->where('m.school_group_id', $group->id);
+        $scope->constrain($query);
 
         // Query-string filters may arrive as arrays; anything not a string is ignored.
         $filters = array_filter($filters, 'is_string');
@@ -87,13 +93,14 @@ class SchoolGroupDirectoryReadService
      *
      * @return array<string, mixed>
      */
-    public function overview(SchoolGroup $group): array
+    public function overview(SchoolGroup $group, GroupGovernanceScope $scope): array
     {
         $members = DB::table('school_group_members as m')
             ->join('schools as s', 's.id', '=', 'm.school_id')
             ->leftJoin('school_group_regions as r', 'r.id', '=', 'm.region_id')
             ->leftJoin('school_group_zones as z', 'z.id', '=', 'm.zone_id')
             ->where('m.school_group_id', $group->id)
+            ->tap(fn ($q) => $scope->constrain($q))
             ->selectRaw("count(*) as total,
                 count(*) filter (where s.status = 'active') as active,
                 count(*) filter (where s.status <> 'active') as not_active,
@@ -105,7 +112,7 @@ class SchoolGroupDirectoryReadService
                 count(*) filter (where r.status = 'inactive' or z.status = 'inactive') as in_inactive_structure")
             ->first();
 
-        $structure = $this->structure($group);
+        $structure = $this->structure($group, $scope);
 
         return [
             'schools' => [
@@ -132,17 +139,23 @@ class SchoolGroupDirectoryReadService
 
     /**
      * Regions and Zones in their explicit order, each with its member count
-     * (two queries).
+     * (two queries) -- for a scoped viewer only its own Region(s), the
+     * Zones inside them and its own Zone(s), counted within the scope.
      *
      * @return array{regions: list<array<string, mixed>>, zones: list<array<string, mixed>>}
      */
-    public function structure(SchoolGroup $group): array
+    public function structure(SchoolGroup $group, GroupGovernanceScope $scope): array
     {
+        $count = fn ($q) => $q->where('school_group_id', $group->id)->tap(fn ($inner) => $scope->constrain($inner->getQuery(), 'school_group_members'));
+        $zoneRegions = $scope->wholeGroup ? [] : SchoolGroupZone::query()->where('school_group_id', $group->id)
+            ->whereIn('id', $scope->zoneIds)->whereNotNull('region_id')->pluck('region_id')->all();
         $regions = SchoolGroupRegion::query()->where('school_group_id', $group->id)
-            ->withCount(['members' => fn ($q) => $q->where('school_group_id', $group->id)])
+            ->when(! $scope->wholeGroup, fn ($q) => $q->whereIn('id', array_values(array_unique([...$scope->regionIds, ...$zoneRegions]))))
+            ->withCount(['members' => $count])
             ->orderBy('sort_order')->orderBy('code')->get();
         $zones = SchoolGroupZone::query()->where('school_group_id', $group->id)
-            ->withCount(['members' => fn ($q) => $q->where('school_group_id', $group->id)])
+            ->when(! $scope->wholeGroup, fn ($q) => $q->where(fn ($w) => $w->whereIn('id', $scope->zoneIds)->orWhereIn('region_id', $scope->regionIds)))
+            ->withCount(['members' => $count])
             ->orderBy('sort_order')->orderBy('code')->get();
 
         return [

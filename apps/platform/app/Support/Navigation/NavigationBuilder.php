@@ -198,6 +198,16 @@ final class NavigationBuilder
                 return false;
             }
         }
+        // ORG.12E: an any-of Group entry (the legacy Group Admin view or a Network role).
+        if ($entry->any !== []) {
+            foreach ($entry->any as $capability) {
+                if ($this->capabilities->groupsWith($user, $capability)->isNotEmpty()) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
 
         return $entry->all !== [];
     }

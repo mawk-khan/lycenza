@@ -154,6 +154,19 @@ final class StaffRoleCatalog
      * @throws StaffAccountException
      */
     /**
+     * ORG.12E (ADR 0080 §10.7): a role's display presentation for the read-only
+     * Access Center -- the same StaffRolePresentation the catalogue listing
+     * uses, read only through this class (display only, never authorization).
+     *
+     * @param  list<string>  $capabilities
+     * @return array{group: string, groupLabel: string, order: int, purpose: ?string, addOn: bool, sensitivity: list<string>}
+     */
+    public static function presentationOf(string $roleKey, array $capabilities): array
+    {
+        return StaffRolePresentation::describe($roleKey, $capabilities);
+    }
+
+    /**
      * ORG.7A (ADR 0076 §11.3, §11.4): a role may be Campus-scoped only when it
      * is a school-scope role carrying NO access administration
      * (school.members.manage, school.roles.manage, the grant rights of

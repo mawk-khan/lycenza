@@ -238,7 +238,7 @@ Branch/Organization/Tenant entity; no navigation coupling.
 | **ORG.12B** Setup & Readiness Center — **IMPLEMENTED** (§14) | checklist, category grouping, progress, next action, blockers, entitlement awareness, deep links | UI over this read service; replaced the 5-flag School setup progress. Campus-specific readiness deferred (§14.6) |
 | **ORG.12C** Rich School & Campus profiles — **IMPLEMENTED** (ADR 0080 §8; logo deferred to 12F) | legal identity, registration/tax/affiliation references, contact, website, social, timezone, currency, branding; Campus code, name, address, phone, email, coordinates, service profile (day school, early years, boarding, meals, transport), branding override | fields audited first; service profile is descriptive, never entitlement, capability or authority |
 | **ORG.12D** Network / franchise governance — **IMPLEMENTED** (§15, ADR 0080 §9) | Group = Network, Region, Zone, owned/franchise/managed/affiliate, network reference, lifecycle; structural overview and directory | never a tenant boundary or authority scope; Campus count and Network readiness deferred to 12H (tenant reads, ADR 0048) |
-| **ORG.12E** Role, access & sensitive-data administration | read-only role-template, capability, module, scope, sensitive-flag, assurance and effective-user views; sensitive-field projection | no tenant role or capability creation |
+| **ORG.12E** Role, access & sensitive-data administration — **IMPLEMENTED** (§16, ADR 0080 §10) | Network Manager / Network Viewer (whole Group, Region, Zone); School Access Center (role templates, capabilities, matrix, effective access); sensitive-data catalogue | no tenant role or capability creation; deny-only field policy deferred until central enforcement exists |
 | **ORG.12F** Navigation & branding presentation | ordering, grouping, optional visibility, labels, icons, banners, School branding, Portal presentation | effective visibility = entitlement AND authorization AND scope AND presentation preference |
 | **ORG.12G** Integration & device readiness hub | email, SMS, payment gateway, biometric, RFID, VTS/GPS, webhooks, AI Gateway: family, owner, School/Campus, configured, enabled, healthy, last safe health event | no credential or secret ever in Organization |
 | **ORG.12H** Reports & reference re-audit | setup-completion and configuration-gap reports, safe Network readiness summaries, final classification against the 515-screen pack | Network summaries one School at a time |
@@ -334,3 +334,30 @@ a second catalogue.
     amendment, one School at a time).
   - Group-side management (an ORG.12E owner decision).
   - Region/Zone Managers and zonal authority (never as a School scope).
+
+## 16. Role, access and sensitive-data administration (ORG.12E)
+
+- **Network access (Group layer).**
+  - `network_manager` (platform-appointed) governs its own Group's
+    structure and memberships and grants read-only `network_viewer`s.
+  - A viewer reads the whole Group, one Region (direct members and its
+    Zones' members) or one exact Zone; unplaced memberships are whole-Group
+    only.
+  - Resolved only by `GroupGovernanceAccess`. Never a School capability,
+    membership or entry.
+- **School access (School layer, read-only).**
+  - The Access Center explains code-owned role templates, capabilities by
+    module, the role × module matrix and each staff member's effective
+    access.
+  - Effective access is the canonical resolver's answer, explained per
+    assignment; one School at a time.
+  - Role grants stay on Staff accounts.
+- **Sensitive data.**
+  - A code-owned catalogue of the real families, each with its gating
+    capability.
+  - School policy may only ever narrow access (deny-only). It is not
+    switchable for any family until every exposure path goes through one
+    server projection and per-role evaluation exists (ADR 0080 §10.8).
+- **Never:** menus as authority, cloned per-scope roles, tenant-created
+  roles or capabilities, Region/Zone School authority, Group-to-School
+  escalation, or UI-only field hiding.

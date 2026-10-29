@@ -94,14 +94,24 @@ class GroupArchitectureGuardTest extends TestCase
     }
 
     #[Test]
-    public function the_group_capability_catalog_is_exactly_three_and_has_no_management_power(): void
+    public function the_group_capability_catalog_is_pinned_and_group_admin_is_unchanged(): void
     {
-        // ADR 0045 section 4 plus ADR 0048 section 3 (group.reporting.view).
+        // ADR 0045 section 4 plus ADR 0048 section 3 (group.reporting.view),
+        // plus ORG.12E (ADR 0080 §10) Network governance.
         $this->assertSame(
-            ['group.reporting.view', 'group.schools.elevate', 'group.schools.view'],
+            ['group.network.manage', 'group.network.operators.manage', 'group.network.view', 'group.reporting.view', 'group.schools.elevate', 'group.schools.view'],
             DB::table('capabilities')->where('namespace', 'group')->orderBy('key')->pluck('key')->all(),
         );
-        $this->assertSame(['group_admin'], DB::table('roles')->where('scope', 'group')->pluck('key')->all());
+        $roles = DB::table('roles')->where('scope', 'group')->orderBy('key')->get(['id', 'key'])->mapWithKeys(fn ($r) => [
+            $r->key => DB::table('role_capabilities')->where('role_id', $r->id)->orderBy('capability_key')->pluck('capability_key')->all(),
+        ])->all();
+        $this->assertSame([
+            // OD-12.13: group_admin keeps exactly its ADR 0045/0048 semantics -- no management.
+            'group_admin' => ['group.reporting.view', 'group.schools.elevate', 'group.schools.view'],
+            // Never elevation, Group reporting or anything outside the Group namespace.
+            'network_manager' => ['group.network.manage', 'group.network.operators.manage', 'group.network.view'],
+            'network_viewer' => ['group.network.view'],
+        ], $roles);
         $this->assertSame(
             ['platform.school_group_grants.manage', 'platform.school_groups.manage', 'platform.school_groups.view'],
             DB::table('capabilities')->where('key', 'like', 'platform.school_group%')->orderBy('key')->pluck('key')->all(),
@@ -143,7 +153,8 @@ class GroupArchitectureGuardTest extends TestCase
         $columns = DB::table('information_schema.columns')->whereRaw('table_schema = current_schema()')
             ->whereIn('column_name', ['region_id', 'zone_id', 'network_id', 'organization_id', 'school_group_region_id', 'school_group_zone_id'])
             ->orderBy('table_name')->orderBy('column_name')->get()->map(fn ($c) => "{$c->table_name}.{$c->column_name}")->all();
-        $this->assertSame(['school_group_members.region_id', 'school_group_members.zone_id', 'school_group_zones.region_id'], $columns);
+        // ORG.12E: a read-only Network grant may name a Region or Zone -- still the Group layer only.
+        $this->assertSame(['group_role_assignments.region_id', 'group_role_assignments.zone_id', 'school_group_members.region_id', 'school_group_members.zone_id', 'school_group_zones.region_id'], $columns);
 
         foreach (['school_group_regions', 'school_group_zones'] as $table) {
             $this->assertFalse(DB::getSchemaBuilder()->hasColumn($table, 'school_id'), "{$table} is not tenant-owned");

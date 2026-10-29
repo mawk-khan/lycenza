@@ -50,6 +50,7 @@ class SchoolGroupGovernanceService
         private readonly ElevationTargetResolver $schools,
         private readonly SchoolElevationService $elevations,
         private readonly AuditRecorder $audit,
+        private readonly GroupGovernanceAccess $access,
     ) {}
 
     public function create(User $actor, string $name, string $slug): SchoolGroup
@@ -207,11 +208,11 @@ class SchoolGroupGovernanceService
      */
     public function removeSchool(User $actor, SchoolGroup $group, School $school, SchoolGroupMembershipReason $reason, FreshMfaProof $mfa): void
     {
-        $this->require($actor, self::MANAGE);
+        $this->requireMayManage($actor, $group);
         $this->requireProof($actor, $mfa);
 
         DB::transaction(function () use ($actor, $group, $school, $reason, $mfa): void {
-            $this->requireNow($actor);
+            $authority = $this->access->requireManageNow($actor, $group);
             // Waits for any in-flight Group-derived start holding this row
             // FOR SHARE, so that start is visible to the termination below.
             $removed = DB::table('school_group_members')
@@ -233,6 +234,7 @@ class SchoolGroupGovernanceService
                 'terminated_elevation_count' => $terminated,
                 'reason_code' => $reason->value,
                 'mfa_verified_at' => $mfa->verifiedAt->toIso8601String(),
+                'authority' => $authority,
             ]);
         });
     }
@@ -249,7 +251,7 @@ class SchoolGroupGovernanceService
      */
     public function classifyMembership(User $actor, SchoolGroup $group, School $school, SchoolGroupRelationship $relationship, ?string $networkReference, array $expected, SchoolGroupMembershipReason $reason, FreshMfaProof $mfa): array
     {
-        $this->require($actor, self::MANAGE);
+        $this->requireMayManage($actor, $group);
         $this->requireActive($group);
         $this->requireProof($actor, $mfa);
         $networkReference = $this->networkReference($networkReference);
@@ -258,7 +260,7 @@ class SchoolGroupGovernanceService
             return DB::transaction(function () use ($actor, $group, $school, $relationship, $networkReference, $expected, $reason, $mfa): array {
                 $this->requireActiveLocked($group);
                 $member = $this->lockedMember($group, $school);
-                $this->requireNow($actor);
+                $authority = $this->access->requireManageNow($actor, $group);
                 if (($expected['relationship_type'] ?? null) !== $member->relationship_type || $this->networkReference($expected['network_reference'] ?? null) !== $member->network_reference) {
                     throw ValidationException::withMessages(['membership' => 'This School\'s classification changed since you opened the form. Reload and try again.']);
                 }
@@ -277,6 +279,7 @@ class SchoolGroupGovernanceService
                     'relationship_after' => $relationship->value,
                     'reason_code' => $reason->value,
                     'mfa_verified_at' => $mfa->verifiedAt->toIso8601String(),
+                    'authority' => $authority,
                 ]);
 
                 return $changed;
@@ -298,7 +301,7 @@ class SchoolGroupGovernanceService
      */
     public function placeMembership(User $actor, SchoolGroup $group, School $school, ?string $regionId, ?string $zoneId, array $expected, SchoolGroupMembershipReason $reason): array
     {
-        $this->require($actor, self::MANAGE);
+        $this->requireMayManage($actor, $group);
         $this->requireActive($group);
 
         // UUIDs compare case-sensitively; PostgreSQL returns lower case.
@@ -308,7 +311,7 @@ class SchoolGroupGovernanceService
         return DB::transaction(function () use ($actor, $group, $school, $regionId, $zoneId, $expected, $reason): array {
             $this->requireActiveLocked($group);
             $member = $this->lockedMember($group, $school);
-            $this->requireNow($actor);
+            $authority = $this->access->requireManageNow($actor, $group);
             if (($expected['region_id'] ?? null) !== $member->region_id || ($expected['zone_id'] ?? null) !== $member->zone_id) {
                 throw ValidationException::withMessages(['membership' => 'This School\'s placement changed since you opened the form. Reload and try again.']);
             }
@@ -350,6 +353,7 @@ class SchoolGroupGovernanceService
                 'zone_before' => $member->zone_id,
                 'zone_after' => $zoneId,
                 'reason_code' => $reason->value,
+                'authority' => $authority,
             ]);
 
             return $changed;
@@ -357,9 +361,22 @@ class SchoolGroupGovernanceService
     }
 
     /** The early, cached gate: refuse before a fresh MFA code is ever spent. */
+    /** Platform-only steps (create, rename, archive, add a School): the platform capability. */
     public function assertMayManage(User $actor): void
     {
         $this->require($actor, self::MANAGE);
+    }
+
+    /**
+     * ORG.12E (ADR 0080 §10.4): the steps a whole-Group Network Manager may
+     * also take for its OWN Group -- remove, classify, place (the cached
+     * floor; each re-reads inside its transaction).
+     */
+    public function requireMayManage(User $actor, SchoolGroup $group): void
+    {
+        if (! $this->access->mayManage($actor, $group)) {
+            throw new AccessDeniedHttpException('This account cannot govern this School Group.');
+        }
     }
 
     private function requireNow(User $actor): void
@@ -426,6 +443,10 @@ class SchoolGroupGovernanceService
         if ($role === null) {
             throw ValidationException::withMessages(['role' => 'That is not a Group role.']);
         }
+        // ORG.12E: Network roles have their own assured path (reason, fresh MFA).
+        if (NetworkAccessService::classOf($role) !== null) {
+            throw ValidationException::withMessages(['role' => 'Network roles are granted through Network role administration.']);
+        }
 
         try {
             return DB::transaction(function () use ($actor, $group, $user, $role): GroupRoleAssignment {
@@ -457,6 +478,11 @@ class SchoolGroupGovernanceService
     public function revoke(User $actor, GroupRoleAssignment $grant): void
     {
         $this->require($actor, self::MANAGE_GRANTS);
+        // ORG.12E: a Network role is revoked only through its assured path.
+        $role = Role::query()->find($grant->role_id);
+        if ($role !== null && NetworkAccessService::classOf($role) !== null) {
+            throw ValidationException::withMessages(['grant' => 'Network roles are revoked through Network role administration.']);
+        }
 
         DB::transaction(function () use ($actor, $grant): void {
             if ($this->revokeGrant($actor, $grant, ElevationEndReason::GroupAuthorityRevoked) === null) {

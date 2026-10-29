@@ -27,6 +27,8 @@ class Role extends Model
     /** POR.1 (ADR 0070 §8.2): the fourth scope, database-separated from staff roles. */
     public const SCOPE_GUARDIAN = 'guardian';
 
+    public const SCOPE_GROUP = 'group';
+
     /** The one Guardian system role (capability delivery only; never checked by name). */
     public const GUARDIAN = 'guardian';
 

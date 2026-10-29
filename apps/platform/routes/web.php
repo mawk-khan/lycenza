@@ -70,6 +70,7 @@ use App\Http\Controllers\App\Finance\OutstandingFeesController as FinanceOutstan
 use App\Http\Controllers\App\Finance\PaymentCorrectionRequestController as FinancePaymentCorrectionRequestController;
 use App\Http\Controllers\App\Finance\PaymentRecordController as FinancePaymentRecordController;
 use App\Http\Controllers\App\Groups\GroupReportController;
+use App\Http\Controllers\App\Groups\NetworkGovernanceController;
 use App\Http\Controllers\App\Groups\SchoolGroupController;
 use App\Http\Controllers\App\GuardianAccountInvitationController;
 use App\Http\Controllers\App\GuardianAccountLinkController;
@@ -138,6 +139,7 @@ use App\Http\Controllers\App\SchoolSetupController;
 use App\Http\Controllers\App\SchoolSetupStructureController;
 use App\Http\Controllers\App\SchoolSwitchController;
 use App\Http\Controllers\App\SelfService\StaffSelfServiceController;
+use App\Http\Controllers\App\Staff\AccessCenterController;
 use App\Http\Controllers\App\Staff\StaffAccountController;
 use App\Http\Controllers\App\StaffAttendance\StaffAttendanceAdminController;
 use App\Http\Controllers\App\StudentAccountLinkController;
@@ -474,6 +476,21 @@ Route::middleware('auth')->where(WebRouteParameters::uuidPatterns())->group(func
         // read one School at a time through Analytics' Group-safe gate.
         Route::get('/{schoolGroup}/reports/curriculum-coverage', [GroupReportController::class, 'curriculumCoverage'])
             ->name('reports.curriculum-coverage');
+        // ORG.12E (ADR 0080 §10): Network governance in Group context -- the
+        // Network Access page, read-only operator administration (fresh MFA)
+        // and a whole-Group Network Manager's structure and membership
+        // governance. Authorized per request by GroupGovernanceAccess and the
+        // services; never School context.
+        Route::get('/{schoolGroup}/access', [NetworkGovernanceController::class, 'access'])->name('access');
+        Route::post('/{schoolGroup}/access/operators', [NetworkGovernanceController::class, 'grantOperator'])->name('access.operators.store');
+        Route::post('/{schoolGroup}/access/operators/{grant}/revoke', [NetworkGovernanceController::class, 'revokeOperator'])->name('access.operators.revoke');
+        Route::put('/{schoolGroup}/network/schools/{school}/classification', [NetworkGovernanceController::class, 'classify'])->name('network.schools.classify');
+        Route::put('/{schoolGroup}/network/schools/{school}/placement', [NetworkGovernanceController::class, 'place'])->name('network.schools.place');
+        Route::delete('/{schoolGroup}/network/schools/{school}', [NetworkGovernanceController::class, 'removeSchool'])->name('network.schools.destroy');
+        Route::post('/{schoolGroup}/network/regions', [NetworkGovernanceController::class, 'storeRegion'])->name('network.regions.store');
+        Route::put('/{schoolGroup}/network/regions/{region}', [NetworkGovernanceController::class, 'updateRegion'])->name('network.regions.update');
+        Route::post('/{schoolGroup}/network/zones', [NetworkGovernanceController::class, 'storeZone'])->name('network.zones.store');
+        Route::put('/{schoolGroup}/network/zones/{zone}', [NetworkGovernanceController::class, 'updateZone'])->name('network.zones.update');
     });
 });
 
@@ -517,6 +534,16 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
             Route::post('/members/{membership}/roles/{role}/revoke', [StaffAccountController::class, 'revokeRole'])
                 ->whereUuid('membership')->where('role', '[a-z0-9_-]{1,100}')->name('members.roles.revoke');
         });
+    });
+
+    // ORG.12E (ADR 0080 §10.7): the read-only School Access Center -- role
+    // templates, capabilities, the role matrix, the sensitive-data catalogue,
+    // assignments and one person's effective access. Mutations stay on Staff
+    // accounts.
+    Route::prefix('app/settings/access')->name('app.settings.access.')->group(function (): void {
+        Route::get('/', [AccessCenterController::class, 'index'])->middleware('capability:school.members.view|school.roles.view')->name('index');
+        Route::get('/users', [AccessCenterController::class, 'users'])->middleware('capability:school.roles.view')->name('users');
+        Route::get('/users/{membership}', [AccessCenterController::class, 'show'])->middleware('capability:school.roles.view')->name('users.show');
     });
 
     Route::prefix('app/settings/domains')->name('app.settings.domains.')->group(function (): void {

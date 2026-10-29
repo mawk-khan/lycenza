@@ -1680,3 +1680,16 @@ once several modules copy it.
      - **Audit:** ids and codes only, never names or the network reference value.
      - **Reads:** `SchoolGroupDirectoryReadService` reads platform tables only: no TenantContext, cache or tenant model. Counts are of member Schools, Regions and Zones only.
      - **Never:** a relationship, Region or Zone granting a capability, School membership, lifecycle, entitlement or profile access; a Region/Zone Manager or zone-scoped authority; Group-side management. Group-side management is an ORG.12E owner decision.
+
+114. **Network roles are Group governance; the Access Center explains, never grants; sensitive-data policy is deny-only and central (ADR 0080 §10).**
+     - **Roles:** `network_manager` and `network_viewer` live on `group_role_assignments`.
+     - **Scope:** a Region or Zone scope is allowed only on a role whose every capability is `group.network.view`, never changes after the grant, and narrows Network reads only (whole Group, Region including its Zones, or exact Zone). Unplaced memberships are whole-Group only.
+     - **Appointment:** only the platform appoints Network management. A Network Manager grants only read-only viewers in its own Group, with a reason and fresh MFA, never to itself. Both rules are backed by `trg_group_role_assignments_network`, which checks the recorded grantor; who actually acted stays an application boundary (rule 102).
+     - **Network Manager:** governs its own Group's structure, classification, placement and removal, never School addition.
+     - **Resolution:** only `GroupGovernanceAccess` resolves Network authority. Never read it School-side, never let it touch `CapabilityResolver`, and decide Network role classes by capability, never by name.
+     - **School Access Center** (`/app/settings/access`) is read-only:
+       - the catalogue needs `school.members.view` or `school.roles.view`;
+       - assignments and effective access need `school.roles.view`, for this School only;
+       - effective access is `CapabilityResolver`'s answer, explained, never persisted;
+       - role grants stay on Staff accounts.
+     - **Sensitive data:** `SensitiveDataCatalogue` is explanation only, and every family is `configurable: false`. Never add a School field policy that can grant, a UI-only hide, an `allow` column or a per-User override. A deny-only policy needs a central server projection for that family on every path (web, API, search, lookup, report, export, notification) and per-role evaluation first.

@@ -748,6 +748,26 @@ ADR 0045.
   `group.schools.view` (platform tables only). The Platform Manager and
   Auditor read the platform Group pages and change nothing.
 
+**Network roles (ORG.12E, ADR 0080 §10).**
+- **The roles:** `network_manager` and `network_viewer` are Group roles on
+  the same grant table.
+  - A Network Manager (platform-appointed, database-enforced) governs its
+    own Group through `GroupGovernanceAccess`, with an in-transaction
+    re-read.
+  - It grants only read-only viewers (fresh MFA, reason, never to itself).
+- **Scope:** a viewer may be scoped to one Region or Zone. The scope
+  narrows Network directory reads only.
+- **Never:** a School capability, membership or elevation, and nothing
+  School-side reads these grants. `CapabilityResolver` is unchanged.
+
+**School Access Center (ORG.12E).**
+- Read-only: the catalogue (`school.members.view` or `school.roles.view`),
+  and assignments plus effective access (`school.roles.view`), this School
+  only.
+- Effective access is the resolver's own answer, explained.
+- No School sensitive-data policy exists yet. If one is added, it must be
+  deny-only and enforced centrally on the server (ADR 0080 §10.8).
+
 ## Group cross-School reporting (ADR 0048 — built in Phase 0N.11)
 
 - A Group report needs the Group capability **`group.reporting.view`** on

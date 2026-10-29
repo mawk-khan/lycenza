@@ -3,6 +3,8 @@
 namespace Tests\Support\Authorization;
 
 use App\Domain\Platform\Application\Elevation\SchoolElevationService;
+use App\Domain\Platform\Application\Groups\GroupGovernanceAccess;
+use App\Domain\Platform\Application\Groups\NetworkAccessService;
 use App\Domain\Platform\Application\Groups\Reporting\GroupCurriculumCoverageReportService;
 use App\Domain\Platform\Application\Groups\SchoolGroupGovernanceService;
 use App\Domain\Platform\Application\Groups\SchoolGroupStructureService;
@@ -71,7 +73,18 @@ final class PlatformRouteCoverage
 
             // Group scope (ADR 0045, rule 84): resolved only through canInGroup().
             Coverage::owned('app.groups.index', CapabilityResolver::class, 'groupsWith', "Group scope: the actor's own Group grants"),
-            Coverage::owned('app.groups.show', CapabilityResolver::class, 'canInGroup', 'Group scope: group.schools.view in that Group, else 404'),
+            Coverage::owned('app.groups.show', GroupGovernanceAccess::class, 'viewScope', 'Group scope: a Network read scope in that Group (group.schools.view or group.network.view), else 404 (ADR 0080 §10)'),
+            // ORG.12E (ADR 0080 §10): Network governance in Group context.
+            Coverage::owned('app.groups.access', GroupGovernanceAccess::class, 'viewScope', 'Group scope: a Network read scope in that Group, else 404'),
+            Coverage::service('app.groups.access.operators.store', NetworkAccessService::class, 'grant'),
+            Coverage::service('app.groups.access.operators.revoke', NetworkAccessService::class, 'revoke'),
+            Coverage::service('app.groups.network.schools.classify', SchoolGroupGovernanceService::class, 'classifyMembership'),
+            Coverage::service('app.groups.network.schools.place', SchoolGroupGovernanceService::class, 'placeMembership'),
+            Coverage::service('app.groups.network.schools.destroy', SchoolGroupGovernanceService::class, 'removeSchool'),
+            Coverage::service('app.groups.network.regions.store', SchoolGroupStructureService::class, 'createRegion'),
+            Coverage::service('app.groups.network.regions.update', SchoolGroupStructureService::class, 'updateRegion'),
+            Coverage::service('app.groups.network.zones.store', SchoolGroupStructureService::class, 'createZone'),
+            Coverage::service('app.groups.network.zones.update', SchoolGroupStructureService::class, 'updateZone'),
             Coverage::owned('app.groups.elevation.create', CapabilityResolver::class, 'canInGroup', 'Group scope: group.schools.elevate in that Group, else 404'),
             Coverage::service('app.groups.elevation.confirm', SchoolElevationService::class, 'prepare'),
             Coverage::service('app.groups.elevation.store', SchoolElevationService::class, 'start'),

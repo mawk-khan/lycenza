@@ -48,3 +48,10 @@ export interface Option {
     code: string;
     label: string;
 }
+
+// ORG.12E (ADR 0080 §10): the viewer's Network-governance read scope.
+export interface GovernanceScope {
+    type: 'whole_group' | 'scoped';
+    regionIds: string[];
+    zoneIds: string[];
+}

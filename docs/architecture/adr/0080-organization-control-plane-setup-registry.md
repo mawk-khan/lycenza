@@ -3,8 +3,9 @@
 - Status: **Accepted and implemented (2026-10-28).** ORG.12A (§1–§6),
   **ORG.12B Setup & Readiness Center (§7)** and **ORG.12C Rich School &
   Campus Profiles (§8)**, all 2026-10-28; **ORG.12D Network, Franchise,
-  Region & Zone Governance (§9)**, 2026-10-29. ORG.12E–H are planned here
-  but **not authorized**; each needs explicit owner authorization.
+  Region & Zone Governance (§9)** and **ORG.12E Role, Access & Sensitive
+  Data Administration (§10)**, 2026-10-29. ORG.12F–H are planned here but
+  **not authorized**; each needs explicit owner authorization.
 - Date: 2026-10-28
 - Programme: **ORG.12 — Organization Control Plane expansion** (additive to
   ORG, `MASTER-ROADMAP.md` programme 13).
@@ -490,3 +491,179 @@ Also verified by the review:
 - the directory search pattern is escaped;
 - no tenant read, and no names or reference values in audit;
 - no relationship, Region or Zone is ever read for authorization.
+
+## 10. ORG.12E — Role, Access & Sensitive Data Administration (implemented, 2026-10-29)
+
+**10.1 Owner decisions applied.**
+- **OD-12.13:** Network-side management is authorized through a new
+  code-owned `network_manager` Group role.
+  - The platform appoints and removes it; a Network Manager never appoints
+    another.
+  - `group_admin` is unchanged.
+  - It gets no School capability.
+- **OD-12.14:** a Region or Zone may scope a READ-only Network grant
+  (`network_viewer`). Neither ever becomes a School scope.
+- **OD-12.15:** School sensitive-data policy may only be deny-only. It is
+  NOT enabled in this phase (§10.8): the catalogue and explorer ship, and
+  the policy store does not.
+
+**10.2 Audit before design.**
+- **School side:**
+  - 17 code-owned staff role templates (ADR 0071), with capabilities
+    classified (`CapabilityClasses`) and mapped to modules
+    (`ModuleCatalogue`);
+  - each assignment is whole School or one Campus (ORG.7A);
+  - `CapabilityResolver` unions every assignment's capabilities and keeps
+    no per-role path;
+  - `school.roles.view` / `.manage` and the staff-account flows already
+    govern assignments (RoleGrantAuthority, fresh MFA, audit).
+- **Group side:**
+  - one grant table (`group_role_assignments`): one active grant per
+    person, Group and role; immutable once revoked; no self-grant; no
+    expiry;
+  - one Group role (`group_admin`), granted only by the platform;
+  - no grantor rule in the database.
+- **Sensitive fields:** the real families are those in §10.8. No government
+  ID, immigration, medical or bank-account data is stored.
+
+**10.3 Network roles and scope** (migration
+`2027_01_14_090000_add_network_scope_to_group_role_assignments`,
+rollback-proven).
+- **Capabilities:** `group.network.view`, `group.network.manage`,
+  `group.network.operators.manage`.
+- **Roles:**
+  - `network_manager`: view + manage + operators.manage. No elevation,
+    no Group reporting.
+  - `network_viewer`: view only.
+- **Scope columns:** `group_role_assignments.region_id` / `zone_id`, with
+  composite keys to the same Group's Region and Zone and at most one set.
+  Both NULL means the whole Group, which every existing grant keeps.
+- **Trigger `trg_group_role_assignments_network`:**
+  - a scoped grant only for a role whose every capability is
+    `group.network.view` (decided by capability);
+  - a role carrying Network management is granted only by a holder of
+    `platform.school_group_grants.manage`;
+  - a read-only role is granted by that holder or by a whole-Group
+    `group.network.operators.manage` holder of the same Group;
+  - the scope never changes (re-scoping is revoke + grant).
+- **Trust boundary:** the trigger checks the RECORDED grantor
+  (`granted_by_user_id`). Which human actually acted stays an application
+  boundary (rule 102, ORG.8F), as for every grant table. Revocation and
+  `group_admin` grants have no database grantor rule (pre-existing).
+  Rolling the migration back refuses while any scoped grant is active,
+  rather than silently widening it to the whole Group.
+- **Visibility (`GroupGovernanceScope`):**
+  - whole Group: every membership;
+  - Region: members placed in the Region directly or through its Zones;
+  - Zone: that exact Zone;
+  - unplaced memberships: whole Group only.
+  The directory, overview counts and structure all follow the scope. A
+  filter never widens it.
+- **Resolver:** `GroupGovernanceAccess` is the bounded resolver: uncached,
+  no School capability, no tenant read, and the only Group-layer user of
+  the scope. `CapabilityResolver` is unchanged.
+
+**10.4 Network Manager.**
+- **May, for its own Group only:** create and update Regions and Zones;
+  classify (fresh MFA); place; remove a School (fresh MFA). Every change
+  re-reads authority in its transaction, and audits record
+  `authority: platform|network`.
+- **May not:**
+  - add a School: that extends the Group's elevation reach into another
+    tenant (ADR 0045 §5), so it stays platform-only;
+  - enter a School, change lifecycle, entitlements, profile or Campus;
+  - read any School record;
+  - appoint a manager.
+
+**10.5 Network role administration (`NetworkAccessService`).** Grant and
+revoke take a closed `NetworkRoleChangeReason` and a fresh MFA proof.
+Authority is re-read in the transaction and never applies to oneself.
+Audit carries ids and codes only (`role_key`, `scope_type`, Region/Zone
+id, reason, MFA time, authority). Platform Group Admin grants keep their
+ADR 0045 path.
+
+**10.6 Surfaces.**
+- **Group context:**
+  - `/app/groups/{group}`: a scoped directory, plus the governance
+    workspace for managers;
+  - `/app/groups/{group}/access`: Network roles, the viewer's own access,
+    and the assignments list, shown only to operator managers;
+  - `/app/groups/{group}/network/*`.
+- **Platform:** role and scope choice when granting.
+- **School context:** the Access Center (`/app/settings/access`, §10.7).
+- **Navigation:** "Your School Groups" now also shows for Network roles.
+
+**10.7 School Access Center (read-only).**
+- **Catalogue** (`school.members.view` or `school.roles.view`):
+  - role templates (purpose, modules, capability count, assignment scope,
+    access-administration marker, sensitivity);
+  - capabilities by module with Read/Manage, Sensitive, Approval, Fresh MFA
+    and Campus-scopable markers;
+  - the role × module matrix (Read/Manage/none, never menu entries);
+  - the sensitive-data catalogue.
+- **Users & effective access** (`school.roles.view`):
+  - this School's staff, paginated and searchable;
+  - per person, `CapabilityResolver`'s real answer, explained per
+    capability: where it comes from (role, whole School or Campus) or every
+    layer that stops it (module not enabled, Campus not adopted, Campus
+    inactive, account disabled, access suspended).
+- **Boundaries:**
+  - each School is computed separately;
+  - no Group or platform authority is shown;
+  - nothing is persisted;
+  - no write route: assignments stay on Staff accounts.
+
+**10.8 Sensitive data: catalogue shipped, deny-only policy deferred.**
+`SensitiveDataCatalogue` lists the real families: Guardian contact,
+employee personal contact, home address, emergency contacts, date of birth,
+statutory identifiers, highly sensitive HR documents and visitor phone.
+Each has its gating capability and `configurable: false` with the reason.
+
+The policy is not implementable safely yet, for these reasons (stop
+conditions 13–15):
+1. No family has one projection: Guardian contact and date of birth are
+   built per controller, and the HR families have write echoes outside the
+   workspace.
+2. `CapabilityResolver` keeps no per-role path, so "deny for role R" needs
+   a new resolution output.
+3. Statutory identifiers are legally gated.
+
+Turning a family on needs:
+- a central projection;
+- a per-role evaluation (any non-denied qualifying path permits);
+- an owner decision on whether view-denial also covers edit.
+
+**10.9 Not implemented, deliberately.**
+- Tenant or Network role creation, capability editing, menu customization.
+- A Region or Zone Manager with write authority; zone-scoped School
+  authority.
+- Per-User field overrides; Campus-level sensitive policy; an access
+  simulator; new exports.
+- No change to the shared fresh-MFA throttling LOW (still recorded as
+  shared).
+
+**10.10 Measured** (no new cache):
+- **Effective access:**
+  - simple whole-School user: 30 queries (the first request also warms
+    the resolver's existing 60 s grant cache);
+  - multi-role user: 22;
+  - multi-Campus user: 29;
+  - Group + School user: 22.
+  No query per capability (the catalogue is read once).
+- **Access Center catalogue:** 10 queries.
+- **Group page:** 18 queries at 1, 10 and 100 Schools (ORG.12D's 12 plus
+  the scope and management checks).
+- **Platform Group page:** 13 at every size.
+- `NetworkGovernanceTest` and `AccessCenterTest` assert these bounds.
+
+**10.11 Independent security review (ORG.12E).** No HIGH or MEDIUM.
+
+| # | Finding | Resolution |
+|---|---|---|
+| L1 | The Network Access list returned Group Admin holders too, with their raw email | **fixed:** Network-role grants only, address through `publicEmail()` |
+| L2 | A Network Manager can test whether an email exists on the platform (exact match) | accepted: each probe costs a fresh MFA code (TOTP replay refused); the message for a missing or disabled account is the same |
+| L3 | The legacy Group Admin grant/revoke accepted any Group role | **fixed:** they refuse Network roles, which keep their assured path |
+| L4 | Rolling the migration back would silently widen scoped viewers | **fixed:** `down()` refuses while an active scoped grant exists (tested) |
+| L5 | The trigger trusts the recorded grantor | documented (§10.3 trust boundary, rule 102); revoke and `group_admin` grants were never trigger-checked |
+| -- | Effective access could show a non-staff membership by its UUID | **fixed:** staff memberships only (404 otherwise) |
+| -- | The shared fresh-MFA web-route throttling LOW | unchanged, still recorded as shared (not fixed per route) |

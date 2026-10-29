@@ -195,7 +195,7 @@ class SchoolGroupGovernanceTest extends TestCase
         $this->assertSame([$school->id], $groupB->schools()->pluck('schools.id')->all());
         $this->assertSame(1, SchoolMembership::query()->where('user_id', $member->id)->where('school_id', $school->id)->count());
         [$removed] = $this->events('platform.school_group.school_removed');
-        $this->assertEquals(['school_id' => $school->id, 'terminated_elevation_count' => 0, 'reason_code' => 'network_exit'], $removed[1]);
+        $this->assertEquals(['school_id' => $school->id, 'terminated_elevation_count' => 0, 'reason_code' => 'network_exit', 'authority' => 'platform'], $removed[1]);
 
         $this->expectException(ValidationException::class);
         $this->governance()->removeSchool($admin, $groupA, $school, SchoolGroupMembershipReason::NETWORK_EXIT, $this->freshProof($admin));

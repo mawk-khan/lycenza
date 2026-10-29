@@ -42,12 +42,15 @@ use App\Models\PlatformRoleAssignment;
 use App\Models\Role;
 use App\Models\School;
 use App\Models\SchoolGroup;
+use App\Models\SchoolGroupRegion;
+use App\Models\SchoolGroupZone;
 use App\Models\SchoolMembership;
 use App\Models\User;
 use App\Support\FeatureFlags\FeatureFlagResolver;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\LocalCatalogueFixtures;
 use Database\Factories\SchoolFactory;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -337,6 +340,39 @@ final class DemoDataBuilder
             'granted_at' => now(),
         ]);
         $this->account('Group Admin', $groupAdmin, '(none -- Group scope: Lycenza Demo Trust)', 'group_admin for both demo Schools\' Group: Group view and Group-derived elevation; no School permission');
+
+        // ORG.12D/12E (ADR 0080 §9-§10): the Trust as a Network -- classified
+        // memberships, a Region with a Zone, and Network roles (whole Group,
+        // one Region, one Zone). Governance metadata only: no School access.
+        DB::table('school_group_members')->where('school_group_id', $group->id)->where('school_id', $this->school->id)
+            ->update(['relationship_type' => 'owned', 'network_reference' => 'TRUST-001']);
+        DB::table('school_group_members')->where('school_group_id', $group->id)->where('school_id', $this->secondSchool->id)
+            ->update(['relationship_type' => 'franchise', 'network_reference' => 'TRUST-002']);
+        $south = SchoolGroupRegion::query()->create(['school_group_id' => $group->id, 'code' => 'SOUTH', 'name' => 'South Region', 'sort_order' => 1]);
+        $north = SchoolGroupRegion::query()->create(['school_group_id' => $group->id, 'code' => 'NORTH', 'name' => 'North Region', 'sort_order' => 2]);
+        $central = SchoolGroupZone::query()->create(['school_group_id' => $group->id, 'region_id' => $south->id, 'code' => 'CENTRAL', 'name' => 'Central Zone', 'sort_order' => 1]);
+        DB::table('school_group_members')->where('school_group_id', $group->id)->where('school_id', $this->school->id)
+            ->update(['region_id' => $south->id, 'zone_id' => $central->id]);
+        DB::table('school_group_members')->where('school_group_id', $group->id)->where('school_id', $this->secondSchool->id)
+            ->update(['region_id' => $north->id]);
+
+        foreach ([
+            ['Network Manager', 'Ravi Menon (Network Manager)', 'network.manager@example.test', 'network_manager', null, null, 'Whole Group: manages Regions, Zones, member-School classification, placement and removal, and read-only Network Viewers (fresh MFA for classification, removal and viewers); never adds a School, enters a School or holds a School permission'],
+            ['Network Viewer (Region)', 'Sana Iyer (South Region)', 'network.region@example.test', 'network_viewer', $south->id, null, 'Read-only, South Region: sees only the Schools placed in the South Region or its Zones; no School permission'],
+            ['Network Viewer (Zone)', 'Arjun Das (Central Zone)', 'network.zone@example.test', 'network_viewer', null, $central->id, 'Read-only, Central Zone: sees only the Schools in the Central Zone; no School permission'],
+        ] as [$persona, $name, $email, $roleKey, $regionId, $zoneId, $access]) {
+            $person = $this->user($name, $email);
+            GroupRoleAssignment::query()->create([
+                'user_id' => $person->id,
+                'school_group_id' => $group->id,
+                'role_id' => $this->role($roleKey, 'group')->id,
+                'granted_by_user_id' => $platformAdmin->id,
+                'granted_at' => now(),
+                'region_id' => $regionId,
+                'zone_id' => $zoneId,
+            ]);
+            $this->account($persona, $person, '(none -- Group scope: Lycenza Demo Trust)', $access);
+        }
     }
 
     private function buildSecondSchool(): void
