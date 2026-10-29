@@ -1,0 +1,158 @@
+# SIS expansion roadmap (SIS.EXP)
+
+Status: **proposed programme, documentation only** (SIS.EXP-0, 2026-10-29).
+Nothing here is started or authorised. Each wave needs the owner's explicit
+authorisation, and the waves marked *decision-gated* also need the named
+owner (and, where stated, legal) decision recorded first. Evidence:
+`SIS-EXP-0-CURRENT-STATE-AUDIT.md`, `SIS-REFERENCE-CAPABILITY-MAP.md`.
+
+## 1. Principles
+
+Every wave:
+1. has **one coherent business outcome**;
+2. keeps domain ownership (`SIS-DOMAIN-OWNERSHIP-MAP.md`). SIS reads
+   another domain only through that domain's Application read service,
+   under that domain's capability and Campus rules (rules 4, 101);
+3. adds no capability, role, Campus adoption, export, schema or setup
+   definition unless the wave's own brief names it;
+4. **extends the canonical Organization demo world** (`SIS-DEMO-PLAN.md`),
+   never a separate SIS universe;
+5. ends with an owner walkthrough on a fresh `ddev demo-reset`;
+6. uses risk-based regression (§4) and publishes through
+   `integration/<slice>` → exact-SHA `CI gate` →
+   `lycenza-ci publication-check --push` (rule 96).
+
+**Numbering:**
+- `SIS.EXP-n` is the expansion programme.
+- The completion programme's hierarchical ids (SIS 1.1 … 10.2) are closed
+  history and are not reused.
+- Corrections are `SIS.EXP-n.1`, `.2`, …
+
+## 2. Waves
+
+The brief's candidate order was re-sequenced on repository evidence:
+- Enrollment, placement, re-enrollment, promotion, transfer and lifecycle
+  (the brief's candidate EXP-2 and EXP-4) are **already complete**
+  (SIS 4.x/5.x, ORG.7F, ORG.8E/8G), so they get no wave.
+- Guardian & family (the brief's EXP-3) is complete except a family block,
+  which folds into EXP-1.
+- The P1 items are decision-gated, so they follow the decision-free waves.
+
+| Wave | Name | Outcome | Gate | Size | Schema | Map rows |
+|---|---|---|---|---|---|---|
+| **SIS.EXP-1** | Student 360 Profile & Directory Enhancement | A whole-School Student profile that shows safe summaries from the owning domains. A directory filterable by Grade/Section/Campus. A family block. A hardened edit path | owner authorisation only | M | none | SR-03, SR-04 (hardening), SR-25 (family block) |
+| **SIS.EXP-2** | Student Movement & Exit Register | One School-wide, date-ranged register of admissions/conversions, placements, transfers, completions, withdrawals, cancellations, deactivations and reactivations, with closed reason labels and Campus. Plus the rollover bulk Repeat/Manual-Review residual | owner authorisation only | S–M | none (read model over `student_lifecycle_events`, placements, rollover items, Admissions conversions) | SR-12, SR-36, SR-37 |
+| **SIS.EXP-3** | Student Documents | Activate the `student` (and, if decided, `guardian`) owner type in the one Documents repository, with a closed category catalogue, upload, view, archive, optional verification and expiry, a per-class checklist and its own capabilities | *decision-gated* OD-SIS-1 + E21 retention classes; health-tier review for immunisation records | M–L | yes (§5) | SR-21 (SR-14 for applicants only if OD-SIS-1 includes them) |
+| **SIS.EXP-4** | Leaving / Transfer Certificate | Issue a numbered certificate from a leaver's lifecycle facts, with an append-only issue register and the stored output in Documents. Never withheld for dues without a legal basis | *decision-gated* OD-SIS-2 (format, numbering, wording) + legal review; needs EXP-3 | M | yes (§5) | SR-41, SR-12 (certificate checkpoint) |
+| **SIS.EXP-5** | Bulk Student & Guardian Import | An add-only, all-or-nothing import adapter over `StudentService`, `StudentEnrollmentService` and the Guardian services. Preview is read-only and signed; commit is one transaction; no match by name (rule 107 pattern) | *decision-gated* OD-SIS-3 (OD-SWC-4 / OD-PPR-20) | M–L | none expected (server-issued form key) | SR-06 |
+| **SIS.EXP-6** | Annual Record Confirmation & Guardian Acknowledgement | Before a new year, a Guardian confirms the Student's record and acknowledges named School terms. The Portal owns the UX; SIS owns the confirmation record | *decision-gated* OD-SIS-5 + legal review of electronic acceptance; Guardian portal production gates still apply (POR-L1) | M | yes (§5) | SR-13 |
+| **SIS.EXP-7** | House (or Club) Membership | The one named concept a pilot asks for: per-year membership, one House per Student per year, optional responsibility labels from a closed list. No generic group engine, no gender analytics, no badges | *decision-gated* OD-SIS-4 (D-17 revisit) | M | yes (§5) | SR-17 (part) |
+| **SIS.EXP-8** | SIS Parity Closure Re-audit | Re-read the 42-family map; reclassify; rescore; verify the demo world; record the remaining owner/legal gates | after the chosen waves | audit | none | all |
+
+### 2.1 SIS.EXP-1 detail (the recommended first checkpoint)
+
+**Profile (whole School, `students.view`)** gains sections. Each appears
+only when the viewer holds that domain's own view capability in a scope
+covering the Student; each is one bounded read through the owner's
+read service.
+
+| Section | Owner and read service | Gate | Shows | Never shows |
+|---|---|---|---|---|
+| Overview | Students | `students.view` | number, names, status, current class, Campus | — |
+| Guardians & family | Guardians | `students.view`; contacts `guardians.view` | relationships, flags; **other Students linked to the same Guardians** (names, number, link) | contacts without `guardians.view`; dues |
+| Placement | Students | `enrollments.view` (whole School) | current + history (exists) | — |
+| Subjects & electives | Students (subject enrollments) | `enrollments.view` | current subject enrollments | — |
+| Attendance | Attendance | `attendance.view` in scope | a link plus the last N records (no rate, no tally) | percentages, counts |
+| Fees | Fees/Payments (Outstanding fees read model) | `finance.charges.view` in scope (stored Charge Campus, rule 101) | outstanding balance + link to the fee statement | payments of other Students; family totals |
+| Transport | Transport | its view capability in scope | current route and stop | vehicle tracking |
+| Hostel | Hostel | its view capability in scope | current residency | — |
+| Library | Library | its view capability in scope | open loans count + link | fines detail beyond the link |
+| Lifecycle & history | Students | `students.view` | link to history; last lifecycle event with reason label | actor (stays in the audit log) |
+
+**Directory:**
+- Grade, Section, Campus and active-year filters on `/app/students`,
+  applied after `StudentAccess` scope (they only narrow);
+- a primary-Guardian name column for whole-School viewers holding
+  `guardians.view`;
+- no counts tiles.
+
+**Edit hardening:**
+- **L-1:** remove `status` and `school_id` from `$fillable`, and whitelist
+  in `StudentService::update()`;
+- **L-2:** a stale-form token on the identity edit;
+- **L-3:** record only the fields that actually changed.
+
+**Not in EXP-1:**
+- documents, certificates, photo, address or any new field;
+- any export;
+- any Campus adoption (the profile stays a declared whole-School
+  operation).
+
+**Performance budget:** profile ≤ 50 queries, with every summary O(1) in
+queries; directory unchanged at 27 ± 2.
+
+## 3. Owner decisions (OD-SIS)
+
+| Id | Decision | Recommendation | Blocks |
+|---|---|---|---|
+| OD-SIS-1 | Activate Student (and Guardian?) documents (= OD-SWC-2, PV1-15): categories, who uploads and views, Guardian visibility, verification, expiry, retention class | Activate Student only first; closed category catalogue; staff-only visibility; health-classified tier for immunisation; no applicant documents until Admissions decides | EXP-3 |
+| OD-SIS-2 | Leaving/transfer certificate (CRT-001/002): format, numbering, wording, dues policy | One numbered register per School; output stored as a Document; never withheld for dues without a legal basis; statutory wording via legal review | EXP-4 |
+| OD-SIS-3 | Bulk import (OD-SWC-4 / OD-PPR-20) | Add-only CSV of Students + first placement (+ optional Guardians), whole School only, all-or-nothing | EXP-5 |
+| OD-SIS-4 | Houses/clubs (D-17 revisit) | Wait for a pilot to name one concept; model House first if any | EXP-7 |
+| OD-SIS-5 | Annual record confirmation and Guardian acknowledgement ("contracts") | Confirmation of existing fields + acknowledgement of named, versioned School terms; no IP address stored; legal review before calling it an agreement | EXP-6 |
+| OD-SIS-6 | Operational Section headcount vs advisory capacity | Allow an operational, whole-School, no-attribute headcount per Section next to capacity, outside the Analytics gate; no gender/age/fee splits | small read in EXP-2 if approved |
+| OD-SIS-7 | Student home address | Do not add until a named purpose (Transport stop planning, statutory register) is approved; then the ORG.12C address shape | — |
+| OD-SIS-8 | Effective-dated lifecycle / back-dating (D-13) | Keep `now()`: the reference's own exit audit flags back-dating as a risk | — |
+| OD-SIS-9 | Cross-School transfer | Not a transfer: the destination School admits a new Student; no cross-tenant copy without a separate data-portability decision | — |
+| OD-SIS-10 | Student Portal | Stays legally gated (POR-L1 Q16–Q21, E46) | Portal |
+| OD-SIS-11 | Student-number case policy (open since SIS 8.1) | Case-insensitive uniqueness for new numbers | — |
+| OD-SIS-12 | Guardian status change reason (open since SIS 2.2) | A closed reason like Student status | — |
+| OD-SIS-13 | Student merge / deduplication | Do not build; `duplicate_record` deactivation is the path; any merge needs its own ADR across every owning domain | — |
+
+## 4. Test and regression plan
+
+| Wave | Unit / domain | Authorization (allow + deny) | RLS / isolation | Concurrency | Idempotency | Privacy | Frontend | DDEV walkthrough | Regression level |
+|---|---|---|---|---|---|---|---|---|---|
+| EXP-1 | summary assemblers; changed-field audit; whitelist | each section hidden without its capability, and with a Campus scope not covering the Student; profile refused to Campus-only grants | foreign-School 404 for profile and each summary | stale-form token: two editors, second refused | n/a (no new retryable mutation) | DOB/Guardian contact never on Campus surfaces; no rates | type-check, lint, a11y lint, 390 px | `school.admin` vs `gachibowli.cashier` (no Fees for an out-of-scope Student) | scoped Students/Guardians/Finance/Attendance suites + query-budget test; full suite only if a shared presenter changes |
+| EXP-2 | register query per action type; reason labels | `students.view` + `enrollments.view` required; Campus actor sees only in-scope rows (if adopted later — not in EXP-2) | raw RLS read of the register's sources | n/a (read) | n/a | no Guardian contact, no actor | filters, empty states | walkthrough over the seeded leavers | scoped + Data Health suites |
+| EXP-3 | category catalogue; tier mapping; archive | upload/view/archive deny cases; Guardian visibility per decision | raw RLS on documents for the Student owner; storage path through `TenantStoragePath` | concurrent archive | upload form key | health tier; filename never in audit | upload UI, 390 px | upload, verify, archive | **full regression** (Documents is cross-domain; real-MinIO tests reported separately) |
+| EXP-4 | numbering; eligibility from lifecycle facts | issue/void deny cases; fresh MFA if DIRECT_ASSURED | RLS + composite FKs | two issuers for one leaver; number uniqueness (DB) | server-issued key | no bank data; no dues text | print view | issue for a seeded leaver | scoped + Documents; full if Documents changes |
+| EXP-5 | parser, preview signature, row re-evaluation | whole-School only; deny for Campus actors | foreign-School rows refused | lock order; all-or-nothing rollback | form key; replay never writes twice | no PII in logs | preview/commit UI | import a fixture CSV into Northstar Gachibowli | **full regression** (write path into Students, Enrollments, Guardians) |
+| EXP-6 | confirmation record; versioned terms | Guardian of the Student only; staff read | RLS; composite FKs to Guardian and Student | confirm twice | idempotent confirm | minimal stored evidence | portal pages | `guardian01` confirms | scoped + Portal; full if Identity changes |
+| EXP-7 | membership rules (one per year) | manage/view deny cases | RLS + composite FKs | concurrent assignment; partial unique | bulk form key | no gender analytics | assign UI | assign a Section to Houses | scoped |
+| EXP-8 | — | — | — | — | — | — | — | full demo re-verification | full regression (closure) |
+
+The counter stays at the regression-cadence rule:
+- a full regression at 5/5, or sooner after a major cross-domain wave
+  (EXP-3, EXP-5);
+- a code-lane candidate's remote exact-SHA `CI gate` is the canonical
+  full suite (rule 96).
+
+## 5. Schema gap map (proposed concepts only — nothing migrated)
+
+| Concept | Wave | Why existing schema cannot support it | Owner | Tenancy / RLS | Integrity |
+|---|---|---|---|---|---|
+| Student document category, verification and expiry | EXP-3 | `documents` has no category, verification state or expiry (unlike `employee_documents`); the owner type is refused in code, not schema | Documents | School-owned; existing forced RLS on `documents`; `BelongsToSchool` | closed category CHECK; `verified_by_user_id` same-School; `expires_on ≥ issued_on`; archive, never delete |
+| Certificate issue register | EXP-4 | No certificate concept; lifecycle events record the exit, not an issued document | Students | new School-owned table, `TenantRls::enable` + `makeAppendOnly` | unique `(school_id, certificate_number)`; composite FK `(student_id, school_id)`; link to the lifecycle event and the stored Document; `ON DELETE RESTRICT` to School/User (rule 97) |
+| Record confirmation / acknowledgement | EXP-6 | `student_processing_authorizations` is a processing basis, not an acknowledgement of terms | Students (record) + Portal (UX) | new School-owned, append-only table | composite FKs to Student and Guardian; terms version; one confirmation per Student × Guardian × year |
+| House and House membership | EXP-7 | Only Grade/Section cohorts exist | Students | two School-owned tables, forced RLS | House per School (code normalized, rule 74); membership per year with a composite FK to the year; partial unique one active per Student per year; deactivate, never delete (rule 73) |
+| Directory filters, Student 360, movement register | EXP-1/2 | — (existing tables suffice) | Students | — | — |
+| Bulk import | EXP-5 | — (server-issued form key, existing write paths) | Students | — | — |
+
+## 6. Organization Control Plane integration
+
+- **Setup Registry:** no change now.
+  - EXP-3 adds `SR-21` (and EXP-4 `SR-41`) to the `reference` field of
+    `students.student_records`.
+  - Any new readiness fact is a bounded EXISTS in a Students-owned
+    provider (rule 111).
+- **Access Center:** new capabilities (EXP-3/4/6/7) appear automatically
+  through the code-owned catalogue. They are classified in
+  `ModuleCatalogue`, and must be granted to roles by a reviewed catalogue
+  release (rule 93), never at runtime.
+- **Presentation:** any new Student navigation entry is subject to ORG.12F
+  presentation (menu ≠ permission).
+- **Integration Hub:** SMS, biometric and RFID stay owning-domain gaps
+  (rule 116). No SIS family is added there.
+- **Organization reporting:** no SIS figures. Person counts stay behind the
+  Analytics gate (rule 117).

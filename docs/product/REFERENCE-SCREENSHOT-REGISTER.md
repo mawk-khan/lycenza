@@ -139,6 +139,8 @@ and after values, or a lifecycle.
 
 ### Student Information (11), Inventory (10), Transport (8), MIS (3), Organisation (6)
 
+> **SIS.EXP-0 (2026-10-29):** for the Student area only, the `SF-SIS-*` families below are superseded by the 318-screen Student Information System pack and its 42 families (`docs/sis/SIS-REFERENCE-CAPABILITY-MAP.md`). The rows are kept as history and are not rewritten; function ids are unchanged.
+
 | Family | Purpose | Screens | Evidence |
 |---|---|---|---|
 | SF-SIS-01 | Student list and record edit | 6 | E3 |
