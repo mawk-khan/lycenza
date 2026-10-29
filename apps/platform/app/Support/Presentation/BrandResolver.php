@@ -28,8 +28,10 @@ final class BrandResolver
      */
     public function forSchool(School $school): array
     {
-        $own = $this->context->withSchool($school, fn () => DB::table('school_brand_profiles')
-            ->where('school_id', $school->id)->first(['brand_source_group_id', 'display_label', 'primary_accent']));
+        $read = fn () => DB::table('school_brand_profiles')
+            ->where('school_id', $school->id)->first(['brand_source_group_id', 'display_label', 'primary_accent']);
+        // Already in this School's context (every School request): read directly, no context round trip.
+        $own = $this->context->school()?->id === $school->id ? $read() : $this->context->withSchool($school, $read);
 
         $ownLabel = $own->display_label ?? null;
         $ownAccent = $own->primary_accent ?? null;

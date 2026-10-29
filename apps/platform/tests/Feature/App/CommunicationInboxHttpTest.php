@@ -146,7 +146,8 @@ class CommunicationInboxHttpTest extends TestCase
         // aggregate 1), capability checks, session/auth bookkeeping --
         // NOT one query per item. 10 threads + 10 announcements must
         // not multiply this.
-        $this->assertLessThan(40, $queryCount, "Expected a bounded query count, got {$queryCount}.");
+        // ORG.12F (ADR 0080 §11.10): +2 fixed shell queries (navigation presentation, effective brand).
+        $this->assertLessThan(42, $queryCount, "Expected a bounded query count, got {$queryCount}.");
     }
 
     /**

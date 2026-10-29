@@ -77,9 +77,11 @@ final class NavigationPresentation
     /** @return array<string, array<string, object>> audience => key => override row */
     public function overrides(School $school): array
     {
-        $rows = $this->context->withSchool($school, fn () => DB::table('school_navigation_preferences')
+        $read = fn () => DB::table('school_navigation_preferences')
             ->where('school_id', $school->id)
-            ->get(['audience', 'navigation_key', 'hidden', 'sort_order', 'label_override']));
+            ->get(['audience', 'navigation_key', 'hidden', 'sort_order', 'label_override']);
+        // Already in this School's context (every School request): read directly, no context round trip.
+        $rows = $this->context->school()?->id === $school->id ? $read() : $this->context->withSchool($school, $read);
 
         $byAudience = [];
         foreach ($rows as $row) {

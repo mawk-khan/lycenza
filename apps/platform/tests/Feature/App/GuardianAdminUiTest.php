@@ -100,7 +100,8 @@ class GuardianAdminUiTest extends TestCase
             $this->createStudentGuardianRelationship($this->createStudent($school, ['student_number' => "S-20{$i}"]), $more);
         }
         $this->assertSame($withOneGuardian, $count(), 'Guardian index must not perform one query per row.');
-        $this->assertLessThan(15, $withOneGuardian, 'Guardian index query budget.');
+        // ORG.12F (ADR 0080 §11.10): +2 fixed shell queries (navigation presentation, effective brand).
+        $this->assertLessThan(17, $withOneGuardian, 'Guardian index query budget.');
     }
 
     #[Test]

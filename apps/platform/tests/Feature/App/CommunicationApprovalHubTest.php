@@ -263,6 +263,7 @@ class CommunicationApprovalHubTest extends TestCase
         // Brief §69/§92: bounded and flat regardless of row count --
         // NOT one query per row (20 rows on this page would mean 40+
         // queries under an N+1 requester/announcement lookup).
-        $this->assertLessThan(20, $queryCount);
+        // ORG.12F (ADR 0080 §11.10): +2 fixed shell queries (navigation presentation, effective brand).
+        $this->assertLessThan(22, $queryCount);
     }
 }
