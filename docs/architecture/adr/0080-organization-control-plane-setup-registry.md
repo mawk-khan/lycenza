@@ -1083,14 +1083,19 @@ stays separate), snapshot or score.
   0.4 s in DDEV.
 - No N+1, no new cache, no migration.
 
-**13.7 Final 515-screen audit.**
-- **Scope:** all 38 families re-checked against the pack inventory and the
-  repository (reference map §4.00).
-- **One change:** RF-35 moves from `DOMAIN_FUTURE` to `PARTIAL`.
-- **Totals:** 2 existing equivalent, 13 existing different-accepted, 4
-  partial, **0 ORG.12 build**, 6 domain future, 3 platform future, 5
-  post-v1, 2 do-not-build, 1 owner decision, 2 legal decision (38).
-- **Owners:** every remaining family has a named owner or programme.
+**13.7 Final 515-screen audit** (corrected after publication of
+`eb9814d2`).
+- **Independent screen-level re-audit:** 41 of 65 contact sheets, every
+  screen outside the RF-14/RF-36 permission matrices. Its stricter findings
+  are adopted:
+  - RF-16 and RF-23 → `PARTIAL`;
+  - RF-26 and RF-29 → `LEGAL_DECISION_REQUIRED` (HRX-L2);
+  - RF-35 stays `DOMAIN_FUTURE` (the month-wise business MIS is not built).
+- **Totals:** 2 existing equivalent, 11 existing different-accepted, 5
+  partial, **0 ORG.12 build**, 5 domain future, 3 platform future, 5
+  post-v1, 2 do-not-build, 1 owner decision, 4 legal decision (38).
+- **Owners:** every remaining family, and every unmapped capability the
+  re-audit found, has a named owner (reference map §4.00).
 
 **13.8 Independent final security review (ORG.12H and the integrated ORG.12
 surface).** No HIGH.
