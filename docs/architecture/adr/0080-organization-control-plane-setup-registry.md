@@ -2,8 +2,9 @@
 
 - Status: **Accepted and implemented (2026-10-28).** ORG.12A (§1–§6),
   **ORG.12B Setup & Readiness Center (§7)** and **ORG.12C Rich School &
-  Campus Profiles (§8)**, all 2026-10-28. ORG.12D–H are planned here but
-  **not authorized**; each needs explicit owner authorization.
+  Campus Profiles (§8)**, all 2026-10-28; **ORG.12D Network, Franchise,
+  Region & Zone Governance (§9)**, 2026-10-29. ORG.12E–H are planned here
+  but **not authorized**; each needs explicit owner authorization.
 - Date: 2026-10-28
 - Programme: **ORG.12 — Organization Control Plane expansion** (additive to
   ORG, `MASTER-ROADMAP.md` programme 13).
@@ -341,3 +342,151 @@ active Campus).
 | L5 | The identity step-up route has no per-user attempt throttle | accepted: the same project-wide gap as every FreshMfaRequirement web route (TOTP replay is already refused); a shared limiter is a separate hardening item |
 | L6 | Legacy website/email could block unrelated saves; padded legacy identity could never pass the stale check; the page reads Finance's currency constant | **fixed** (unchanged values are not re-validated; stored values are trimmed for the check); the currency read is accepted (HTTP layer only) |
 | -- | A School code existence oracle through the platform-wide unique code | pre-existing (the API already allowed code edits); not widened |
+
+## 9. ORG.12D — Network, Franchise, Region & Zone Governance (implemented, 2026-10-29)
+
+**9.1 Owner decisions applied.**
+- **OD-12.8:** the existing School Group is the canonical Network. There is
+  no Network, Organization, Franchise or tenant entity.
+- **OD-12.9:** the relationship is classified on the membership. It is one
+  of owned, franchise, managed or affiliate, and is descriptive only.
+- **OD-12.10:** a membership has an optional Group → Region → Zone
+  placement. Regions and Zones are owned by the Group. They are never
+  tenants, authorization scopes or a hierarchy engine.
+- **OD-12.11:** a safe directory with structural counts. This amends ADR
+  0045 §12; see the ADR 0045 ORG.12D amendment.
+- **OD-12.12:** sensitive network changes are direct and assured. They are
+  not an approval workflow.
+
+**9.2 Audit before design.**
+- **Tables:** `school_groups` (name, slug, status, archived_at),
+  `school_group_members` (id, Group, School, timestamps, unique pair) and
+  `group_role_assignments`. There was no Region, Zone, relationship,
+  network code or Network table.
+- **Cardinality:** many-to-many (ADR 0045 §7). A School may belong to
+  several Groups.
+- **Who writes:** only the platform writes the membership, through
+  `SchoolGroupGovernanceService` under `platform.school_groups.manage`.
+  Only `platform_super_admin` holds that capability (ADR 0045 §5,
+  invariant 6).
+- **What a Group Admin may do:** view, elevate, and read the one Group-safe
+  report.
+- **Data:** DDEV has 1 Group and 2 memberships, with nothing to classify.
+- **Not reused:** `campus_services` (ORG.12C) is a tenant table and is
+  never read by Group code.
+
+**9.3 Schema** (one migration,
+`2027_01_13_090000_add_school_group_structure_and_relationships`,
+rollback-proven).
+- **New tables `school_group_regions` and `school_group_zones`:**
+  - columns: `school_group_id`, `code` (upper-case,
+    `^[A-Z0-9][A-Z0-9_-]{0,31}$`, unique per Group), `name` (not blank),
+    `description`, `sort_order`, `status` (active/inactive);
+  - unique `(id, school_group_id)`;
+  - a Zone's optional `region_id` uses a composite FK to the regions'
+    `(id, school_group_id)`, so it stays inside the Group;
+  - runtime `DELETE` is revoked;
+  - no `school_id`, no RLS, no `parent_id` (these are platform tables).
+- **New columns on `school_group_members`:**
+  - `relationship_type`, nullable, CHECKed against the four codes;
+  - `region_id` and `zone_id`, each with a composite FK to the same
+    Group's row (RESTRICT);
+  - `network_reference`, upper-case, `^[A-Z0-9][A-Z0-9._/-]{0,39}$`, with a
+    partial unique index per Group.
+- **Triggers:**
+  - `trg_school_group_members_placement`: a member's Region must be its
+    Zone's Region;
+  - `trg_school_group_zones_region_move`: a Zone that has Schools cannot
+    change Region.
+- **Backfill:** none. Legacy memberships stay `NULL` (unclassified), never
+  guessed.
+
+**9.4 Assurance** (`SchoolGroupGovernanceService`; the
+`PlatformRoleGovernanceService` precedent, not
+`ApprovalWorkflowRegistry`).
+
+| Operation | Capability (cached floor) | Fresh re-read in the transaction | Fresh MFA | Closed reason | Stale check | Audit event |
+|---|---|---|---|---|---|---|
+| Add a School (must be classified) | `platform.school_groups.manage` | `holdsPlatformNow` | yes | yes | — (the unique pair) | `school_added` + relationship, reason, MFA time |
+| Remove a School | same | yes | yes | yes | — | `school_removed` + reason, MFA time |
+| Change the relationship or network reference | same | yes (member row `FOR UPDATE`) | yes | yes | the values the form opened with | `membership_classified` (before/after relationship, reason, MFA time; never the reference value) |
+| Move Region/Zone | same | yes (row `FOR UPDATE`) | no | yes | yes | `membership_placed` (region/zone ids before/after, reason) |
+| Region/Zone create/update/inactivate | same | — | no | — | — | `region_*` / `zone_*` (ids, codes, status; never names) |
+
+- **`CapabilityResolver::holdsPlatformNow()`** share-locks the actor's
+  unrevoked platform grants. A bearer token or a disabled User is always
+  refused.
+- **Order of checks:** capability, then fresh MFA (web), then the
+  transaction (fresh authority, lock, stale check, write, audit).
+- **Codes:** the frozen-code rule from ADR 0045 §11 applies. A
+  Region/Zone code is fixed once a Zone or School references it.
+- **Inactivating** a Region or Zone moves no School. The overview reports
+  any School in inactive structure. New placements into inactive structure
+  are refused.
+
+**9.5 The directory** (`SchoolGroupDirectoryReadService`).
+- **Two surfaces:**
+  - Group Admin: `GET /app/groups/{group}`, under `group.schools.view`;
+  - platform: `GET /app/platform/groups/{group}`, under
+    `platform.school_groups.view`.
+- **What it reads:** only `school_groups`, `school_group_members`,
+  `school_group_regions`, `school_group_zones` and `schools`.
+- **What each row shows:** id, name, code, lifecycle status, relationship,
+  network reference, Region and Zone.
+- **Navigation:** 25 rows per page; filters for relationship (including
+  unclassified), Region, Zone and lifecycle; an escaped search on name or
+  code only.
+- **Overview:** member Schools by lifecycle and by relationship, Regions
+  and Zones with their member counts, and attention items (unclassified,
+  inactive structure, School not active). These are **counts of member
+  Schools**, never of anything inside a School.
+- **Never:** a TenantContext, a cache, or a Student, Staff, Guardian,
+  Finance, attendance or Campus read.
+- **Deferred:** Campus count and setup readiness on Group pages read
+  tenant tables. They are deferred to an ADR 0048 amendment (ORG.12H).
+
+**9.6 No escalation.** No relationship type grants anything. A Group Admin
+gets no School capability, membership, lifecycle change, entitlement or
+profile access. A person holding School A authority and a Group grant
+still cannot select School B. The Group capability catalogue is unchanged
+(three keys) and no capability was added. The platform side stays
+`platform_super_admin` for every write. The Platform Manager and Auditor
+read the platform Group pages (`platform.school_groups.view`) and change
+nothing. Moving management to the Group side (a Network operator) is an
+**owner decision for ORG.12E**, not built.
+
+**9.7 Not implemented, deliberately.**
+- No Region or Zone Manager, and no zonal or region-scoped authority.
+- No recursive hierarchy, no user types and no franchise-scoped roles.
+- No revenue share, royalty, billing or commercial terms.
+- No cross-School business reporting and no Group impersonation.
+- No Group page reads tenant data.
+- No automatic School membership.
+- No API route.
+
+**9.8 Measured** (no caching):
+- Group Admin page: **12 queries** at 1, 10 and 100 member Schools.
+- Platform Group page: **12 queries** at 1, 10 and 100 member Schools.
+- `NetworkGovernanceTest` asserts that both counts stay constant.
+- Each page runs one aggregate overview query, two structure queries and
+  one paginated directory query with its count.
+
+**9.9 Independent security review (ORG.12D).** No HIGH or MEDIUM. Five
+LOW, all fixed and covered by tests:
+
+| # | Finding | Resolution |
+|---|---|---|
+| L1 | A duplicate School was reported as a duplicate network reference: the unique violation was matched on the exception message, which contains the whole INSERT | matched on the constraint name |
+| L2 | Array-shaped query filters (`?q[]=`) caused a 500 on the directory | non-string filters are ignored (controllers and the read service) |
+| L3 | Upper-case UUIDs gave a false "stale" refusal or a no-op audited move | ids are lower-cased before comparing |
+| L4 | A concurrent archive could slip between the active-Group check and a write | every write re-checks the Group `FOR SHARE` inside its transaction (`requireActiveLocked`) |
+| L5 | `holdsPlatformNow`'s disabled-User read was unlocked | now share-locked |
+
+Also verified by the review:
+- every write needs `platform.school_groups.manage`, checked before an MFA
+  code is spent;
+- no IDOR: every Region, Zone and School is scoped to the route's Group,
+  backed by the composite FKs and the trigger;
+- the directory search pattern is escaped;
+- no tenant read, and no names or reference values in audit;
+- no relationship, Region or Zone is ever read for authorization.

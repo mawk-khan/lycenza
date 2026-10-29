@@ -3,6 +3,8 @@
 namespace Tests\Feature\Platform\Groups;
 
 use App\Domain\Platform\Application\Groups\SchoolGroupGovernanceService;
+use App\Domain\Platform\Application\Groups\SchoolGroupMembershipReason;
+use App\Domain\Platform\Application\Groups\SchoolGroupRelationship;
 use App\Models\GroupRoleAssignment;
 use App\Models\PlatformAuditEvent;
 use App\Models\SchoolGroup;
@@ -39,7 +41,8 @@ class SchoolGroupGovernanceTest extends TestCase
     private function events(string $prefix): array
     {
         return PlatformAuditEvent::query()->where('event_type', 'like', $prefix.'%')->orderBy('occurred_at')->orderBy('id')->get()
-            ->map(fn (PlatformAuditEvent $e) => [$e->event_type, $e->metadata, $e->subject_id])->all();
+            // ORG.12D: the proof timestamp varies per run; its presence is asserted in NetworkGovernanceTest.
+            ->map(fn (PlatformAuditEvent $e) => [$e->event_type, array_diff_key($e->metadata ?? [], ['mfa_verified_at' => true]), $e->subject_id])->all();
     }
 
     #[Test]
@@ -52,8 +55,8 @@ class SchoolGroupGovernanceTest extends TestCase
 
         $group = $this->governance()->create($admin, 'North Trust', 'north-trust');
         $this->governance()->rename($admin, $group, 'North Education Trust');
-        $this->governance()->addSchool($admin, $group, $schoolA->id);
-        $this->governance()->addSchool($admin, $group, 'erp.b-school.org');
+        $this->governance()->addSchool($admin, $group, $schoolA->id, SchoolGroupRelationship::AFFILIATE, SchoolGroupMembershipReason::NETWORK_JOIN, $this->freshProof($admin));
+        $this->governance()->addSchool($admin, $group, 'erp.b-school.org', SchoolGroupRelationship::AFFILIATE, SchoolGroupMembershipReason::NETWORK_JOIN, $this->freshProof($admin));
 
         $this->assertSame('North Education Trust', $group->fresh()->name);
         $this->assertSame('active', $group->fresh()->status);
@@ -62,8 +65,8 @@ class SchoolGroupGovernanceTest extends TestCase
         $this->assertEquals([
             ['platform.school_group.created', [], $group->id],
             ['platform.school_group.renamed', [], $group->id],
-            ['platform.school_group.school_added', ['school_id' => $schoolA->id], $group->id],
-            ['platform.school_group.school_added', ['school_id' => $schoolB->id], $group->id],
+            ['platform.school_group.school_added', ['school_id' => $schoolA->id, 'reason_code' => 'network_join', 'relationship_type' => 'affiliate'], $group->id],
+            ['platform.school_group.school_added', ['school_id' => $schoolB->id, 'reason_code' => 'network_join', 'relationship_type' => 'affiliate'], $group->id],
         ], $this->events('platform.school_group.'));
 
         foreach (PlatformAuditEvent::query()->where('event_type', 'like', 'platform.school_group%')->get() as $event) {
@@ -81,18 +84,18 @@ class SchoolGroupGovernanceTest extends TestCase
 
         foreach (['Exact School', 'exact', (string) Str::uuid()] as $wrong) {
             try {
-                $this->governance()->addSchool($admin, $groupA, $wrong);
+                $this->governance()->addSchool($admin, $groupA, $wrong, SchoolGroupRelationship::AFFILIATE, SchoolGroupMembershipReason::NETWORK_JOIN, $this->freshProof($admin));
                 $this->fail("{$wrong} must not resolve");
             } catch (ValidationException $e) {
                 $this->assertArrayHasKey('school', $e->errors());
             }
         }
 
-        $this->governance()->addSchool($admin, $groupA, $school->id);
-        $this->governance()->addSchool($admin, $groupB, $school->id);
+        $this->governance()->addSchool($admin, $groupA, $school->id, SchoolGroupRelationship::AFFILIATE, SchoolGroupMembershipReason::NETWORK_JOIN, $this->freshProof($admin));
+        $this->governance()->addSchool($admin, $groupB, $school->id, SchoolGroupRelationship::AFFILIATE, SchoolGroupMembershipReason::NETWORK_JOIN, $this->freshProof($admin));
 
         $this->expectException(ValidationException::class);
-        $this->governance()->addSchool($admin, $groupA, $school->id);
+        $this->governance()->addSchool($admin, $groupA, $school->id, SchoolGroupRelationship::AFFILIATE, SchoolGroupMembershipReason::NETWORK_JOIN, $this->freshProof($admin));
     }
 
     #[Test]
@@ -164,7 +167,7 @@ class SchoolGroupGovernanceTest extends TestCase
 
         foreach ([
             fn () => $this->governance()->grant($admin, $group, $this->createUser()->email),
-            fn () => $this->governance()->addSchool($admin, $group, $this->createSchool()->id),
+            fn () => $this->governance()->addSchool($admin, $group, $this->createSchool()->id, SchoolGroupRelationship::AFFILIATE, SchoolGroupMembershipReason::NETWORK_JOIN, $this->freshProof($admin)),
             fn () => $this->governance()->rename($admin, $group, 'X'),
             fn () => $this->governance()->archive($admin, $group),
         ] as $operation) {
@@ -186,16 +189,16 @@ class SchoolGroupGovernanceTest extends TestCase
         $groupA = $this->createGroup([$school]);
         $groupB = $this->createGroup([$school]);
 
-        $this->governance()->removeSchool($admin, $groupA, $school);
+        $this->governance()->removeSchool($admin, $groupA, $school, SchoolGroupMembershipReason::NETWORK_EXIT, $this->freshProof($admin));
 
         $this->assertSame([], $groupA->schools()->pluck('schools.id')->all());
         $this->assertSame([$school->id], $groupB->schools()->pluck('schools.id')->all());
         $this->assertSame(1, SchoolMembership::query()->where('user_id', $member->id)->where('school_id', $school->id)->count());
         [$removed] = $this->events('platform.school_group.school_removed');
-        $this->assertEquals(['school_id' => $school->id, 'terminated_elevation_count' => 0], $removed[1]);
+        $this->assertEquals(['school_id' => $school->id, 'terminated_elevation_count' => 0, 'reason_code' => 'network_exit'], $removed[1]);
 
         $this->expectException(ValidationException::class);
-        $this->governance()->removeSchool($admin, $groupA, $school);
+        $this->governance()->removeSchool($admin, $groupA, $school, SchoolGroupMembershipReason::NETWORK_EXIT, $this->freshProof($admin));
     }
 
     #[Test]
@@ -211,8 +214,8 @@ class SchoolGroupGovernanceTest extends TestCase
                 fn () => $this->governance()->create($actor, 'X', 'x-trust'),
                 fn () => $this->governance()->rename($actor, $group, 'X'),
                 fn () => $this->governance()->archive($actor, $group),
-                fn () => $this->governance()->addSchool($actor, $group, $this->createSchool()->id),
-                fn () => $this->governance()->removeSchool($actor, $group, $school),
+                fn () => $this->governance()->addSchool($actor, $group, $this->createSchool()->id, SchoolGroupRelationship::AFFILIATE, SchoolGroupMembershipReason::NETWORK_JOIN, $this->freshProof($actor)),
+                fn () => $this->governance()->removeSchool($actor, $group, $school, SchoolGroupMembershipReason::NETWORK_EXIT, $this->freshProof($actor)),
                 fn () => $this->governance()->grant($actor, $group, $this->createUser()->email),
                 fn () => $this->governance()->revoke($actor, GroupRoleAssignment::query()->firstOrFail()),
             ] as $operation) {
@@ -250,7 +253,7 @@ class SchoolGroupGovernanceTest extends TestCase
             ->where('canManage', true)
         );
         $this->get("/app/platform/groups/{$group->id}")->assertOk()->assertInertia(fn (AssertableInertia $p) => $p
-            ->where('schools.0.name', 'Listed School')
+            ->where('directory.data.0.name', 'Listed School')
             ->where('grants.0.userEmail', 'holder@example.test')
             ->where('canManageGrants', true)
         );

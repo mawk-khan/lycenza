@@ -376,6 +376,15 @@ Route::middleware('auth')->where(WebRouteParameters::uuidPatterns())->group(func
             Route::post('/{schoolGroup}/archive', [SchoolGroupAdminController::class, 'archive'])->name('archive');
             Route::post('/{schoolGroup}/schools', [SchoolGroupAdminController::class, 'addSchool'])->name('schools.store');
             Route::delete('/{schoolGroup}/schools/{school}', [SchoolGroupAdminController::class, 'removeSchool'])->name('schools.destroy');
+            // ORG.12D (ADR 0080 §9): membership classification (fresh MFA) and
+            // placement, and the Group's Regions and Zones -- all authorized by
+            // platform.school_groups.manage in the services.
+            Route::put('/{schoolGroup}/schools/{school}/classification', [SchoolGroupAdminController::class, 'classify'])->name('schools.classify');
+            Route::put('/{schoolGroup}/schools/{school}/placement', [SchoolGroupAdminController::class, 'place'])->name('schools.place');
+            Route::post('/{schoolGroup}/regions', [SchoolGroupAdminController::class, 'storeRegion'])->name('regions.store');
+            Route::put('/{schoolGroup}/regions/{region}', [SchoolGroupAdminController::class, 'updateRegion'])->whereUuid('region')->name('regions.update');
+            Route::post('/{schoolGroup}/zones', [SchoolGroupAdminController::class, 'storeZone'])->name('zones.store');
+            Route::put('/{schoolGroup}/zones/{zone}', [SchoolGroupAdminController::class, 'updateZone'])->whereUuid('zone')->name('zones.update');
             Route::post('/{schoolGroup}/grants', [SchoolGroupAdminController::class, 'grant'])->name('grants.store');
             Route::post('/{schoolGroup}/grants/{grant}/revoke', [SchoolGroupAdminController::class, 'revoke'])->name('grants.revoke');
         });

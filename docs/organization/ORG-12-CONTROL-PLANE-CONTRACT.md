@@ -31,7 +31,7 @@ another module's configuration.
 | setup navigation metadata (route names per area) | Students, enrollments, Guardians |
 | readiness aggregation (`OrganizationSetupReadService`) | Staff employment, leave configuration |
 | (12B) the School/Campus setup overview | Attendance registers, Charges, fee structures |
-| (12D) a future Network overview — not built | Admissions applications, Library, Transport, Inventory stock |
+| (12D) the Network overview and member directory (platform tables only) | Admissions applications, Library, Transport, Inventory stock |
 | | Announcements, events, payment-gateway credentials, device events |
 
 ## 3. Tenancy (frozen)
@@ -237,7 +237,7 @@ Branch/Organization/Tenant entity; no navigation coupling.
 |---|---|---|
 | **ORG.12B** Setup & Readiness Center — **IMPLEMENTED** (§14) | checklist, category grouping, progress, next action, blockers, entitlement awareness, deep links | UI over this read service; replaced the 5-flag School setup progress. Campus-specific readiness deferred (§14.6) |
 | **ORG.12C** Rich School & Campus profiles — **IMPLEMENTED** (ADR 0080 §8; logo deferred to 12F) | legal identity, registration/tax/affiliation references, contact, website, social, timezone, currency, branding; Campus code, name, address, phone, email, coordinates, service profile (day school, early years, boarding, meals, transport), branding override | fields audited first; service profile is descriptive, never entitlement, capability or authority |
-| **ORG.12D** Network / franchise governance | Group/Network, region, zone, owned/franchise/managed, internal code, operating status; governance readiness; safe aggregate reporting | never a tenant boundary; no implicit School business-data access |
+| **ORG.12D** Network / franchise governance — **IMPLEMENTED** (§15, ADR 0080 §9) | Group = Network, Region, Zone, owned/franchise/managed/affiliate, network reference, lifecycle; structural overview and directory | never a tenant boundary or authority scope; Campus count and Network readiness deferred to 12H (tenant reads, ADR 0048) |
 | **ORG.12E** Role, access & sensitive-data administration | read-only role-template, capability, module, scope, sensitive-flag, assurance and effective-user views; sensitive-field projection | no tenant role or capability creation |
 | **ORG.12F** Navigation & branding presentation | ordering, grouping, optional visibility, labels, icons, banners, School branding, Portal presentation | effective visibility = entitlement AND authorization AND scope AND presentation preference |
 | **ORG.12G** Integration & device readiness hub | email, SMS, payment gateway, biometric, RFID, VTS/GPS, webhooks, AI Gateway: family, owner, School/Campus, configured, enabled, healthy, last safe health event | no credential or secret ever in Organization |
@@ -304,3 +304,33 @@ school, early years, boarding, meals, transport — never entitlement or
 authority). Each new field extends the `organization.school_profile` /
 `organization.campuses` providers, so the Setup Center reflects it without
 a second catalogue.
+
+## 15. Network, franchise, Region & Zone governance (ORG.12D)
+
+- **Model.**
+  - Network = the existing School Group.
+  - The membership carries the relationship (owned, franchise, managed,
+    affiliate; NULL = legacy, unclassified), an optional network reference
+    (unique per Group) and an optional Region/Zone placement.
+  - Regions and Zones belong to one Group. The database keeps every
+    reference inside the same Group, and a member's Region always equals
+    its Zone's Region.
+- **Authority.** Platform-governed under `platform.school_groups.manage`.
+  - Membership add, remove and reclassify need fresh authority, a closed
+    reason and fresh MFA.
+  - A placement move needs fresh authority and a reason.
+  - A Group Admin reads the overview and directory (`group.schools.view`)
+    and changes nothing.
+  - No relationship, Region or Zone ever grants a capability, School
+    membership, lifecycle change, entitlement or profile access.
+- **Directory.**
+  - Shows the School's name, code and lifecycle, plus the Group's own
+    classification of it.
+  - Paginated, filtered and searchable on name/code only.
+  - Overview counts are of member Schools, Regions and Zones only.
+  - Platform tables only: no TenantContext, no tenant read, no cache.
+- **Deferred.**
+  - Campus count and setup readiness per member School (ORG.12H, ADR 0048
+    amendment, one School at a time).
+  - Group-side management (an ORG.12E owner decision).
+  - Region/Zone Managers and zonal authority (never as a School scope).

@@ -4,6 +4,7 @@ namespace Tests\Feature\Platform\Groups;
 
 use App\Domain\Platform\Application\Elevation\ElevationAudit;
 use App\Domain\Platform\Application\Groups\SchoolGroupGovernanceService;
+use App\Domain\Platform\Application\Groups\SchoolGroupMembershipReason;
 use App\Http\Middleware\RequireSchoolContext;
 use App\Http\Middleware\ResolvePlatformElevation;
 use App\Models\GroupRoleAssignment;
@@ -69,9 +70,12 @@ class GroupDerivedElevationTest extends TestCase
         $response->assertOk()->assertInertia(fn (AssertableInertia $p) => $p
             ->component('App/Groups/Show')
             ->where('group', ['id' => $group->id, 'name' => 'Own Trust', 'status' => 'active'])
-            ->has('schools', 2)
-            ->where('schools.0', ['id' => $schoolA->id, 'name' => 'Alpha', 'status' => 'active', 'canEnter' => true, 'isMember' => false])
-            ->where('schools.1', ['id' => $schoolB->id, 'name' => 'Beta', 'status' => 'suspended', 'canEnter' => false, 'isMember' => false])
+            // ORG.12D: the paginated network directory (platform metadata only).
+            ->has('directory.data', 2)
+            ->where('directory.data.0.id', $schoolA->id)->where('directory.data.0.name', 'Alpha')->where('directory.data.0.status', 'active')
+            ->where('directory.data.0.canEnter', true)->where('directory.data.0.isMember', false)->where('directory.data.0.relationshipLabel', 'Unclassified')
+            ->where('directory.data.1.id', $schoolB->id)->where('directory.data.1.status', 'suspended')->where('directory.data.1.canEnter', false)
+            ->where('overview.schools', ['total' => 2, 'active' => 1, 'notActive' => 1])
             ->missing('grants')
         );
         $this->assertStringNotContainsString('Elsewhere', $response->getContent());
@@ -205,7 +209,7 @@ class GroupDerivedElevationTest extends TestCase
         $this->actingAs($viewer)->post("/app/groups/{$group->id}/elevation", ['target' => $inGroup->id, 'reason_code' => 'operational_support', 'confirmed' => '1', 'code' => '000000'])
             ->assertForbidden();
         $this->assertDenied($viewer, 'group_capability_missing');
-        $this->get("/app/groups/{$group->id}")->assertOk()->assertInertia(fn (AssertableInertia $p) => $p->where('schools.0.canEnter', false));
+        $this->get("/app/groups/{$group->id}")->assertOk()->assertInertia(fn (AssertableInertia $p) => $p->where('directory.data.0.canEnter', false));
 
         // A member of the target School uses ordinary selection instead.
         $this->createMembership($admin, $inGroup);
@@ -238,7 +242,8 @@ class GroupDerivedElevationTest extends TestCase
 
         // Group A's authority is irrelevant: removing the School from B ends
         // it although A still contains the School and A's grant is intact.
-        app(SchoolGroupGovernanceService::class)->removeSchool($this->platformAdmin(), $groupB, $school);
+        $platformActor = $this->platformAdmin();
+        app(SchoolGroupGovernanceService::class)->removeSchool($platformActor, $groupB, $school, SchoolGroupMembershipReason::NETWORK_EXIT, $this->freshProof($platformActor));
         $this->assertSame('school_left_group', $elevation->refresh()->end_reason);
         $this->assertSame('terminated', $elevation->status);
     }
@@ -252,7 +257,7 @@ class GroupDerivedElevationTest extends TestCase
         $governance = app(SchoolGroupGovernanceService::class);
 
         $cases = [
-            'school_left_group' => fn ($group, $school, $grant) => $governance->removeSchool($platform, $group, $school),
+            'school_left_group' => fn ($group, $school, $grant) => $governance->removeSchool($platform, $group, $school, SchoolGroupMembershipReason::NETWORK_EXIT, $this->freshProof($platform)),
             'group_authority_revoked' => fn ($group, $school, $grant) => $governance->revoke($platform, $grant),
             'group_inactive' => fn ($group, $school, $grant) => $governance->archive($platform, $group),
         ];
@@ -335,7 +340,8 @@ class GroupDerivedElevationTest extends TestCase
         $admin = $this->platformAdmin();
         $elevation = $this->elevate($admin, $school);
 
-        app(SchoolGroupGovernanceService::class)->removeSchool($this->platformAdmin(), $group, $school);
+        $platformActor = $this->platformAdmin();
+        app(SchoolGroupGovernanceService::class)->removeSchool($platformActor, $group, $school, SchoolGroupMembershipReason::NETWORK_EXIT, $this->freshProof($platformActor));
 
         $this->get('/app')->assertInertia(fn (AssertableInertia $p) => $p->where('platformElevation.isElevated', true));
         $this->assertSame('active', $elevation->refresh()->status);

@@ -65,6 +65,12 @@ class SchoolContextRouteGuardTest extends TestCase
         'app.platform.groups.archive',            // School context
         'app.platform.groups.schools.store',
         'app.platform.groups.schools.destroy',
+        'app.platform.groups.schools.classify',   // ORG.12D (ADR 0080 §9):
+        'app.platform.groups.schools.place',      // network classification
+        'app.platform.groups.regions.store',      // and Regions/Zones --
+        'app.platform.groups.regions.update',     // platform scope, never
+        'app.platform.groups.zones.store',        // School context
+        'app.platform.groups.zones.update',
         'app.platform.groups.grants.store',
         'app.platform.groups.grants.revoke',
         'app.groups.index',                       // Phase 0N.5: the Group

@@ -68,7 +68,7 @@ stable; ORG.12A setup definitions cite them
 | RF-09 | Recruitment | 4 | Applicant grid, public careers link per branch, manual add | HR | Not built | — | HR depth (E47 sensitivity first) | Public intake needs a privacy/retention decision | `POST_V1` |
 | RF-10 | User Types | 14 | Tenant-defined user types from a role-name catalogue with module checkboxes, dashboard/PIN/settings flags, per level (org/zone/branch/staff) | Identity & Access | 17 platform-curated School role templates (ADR 0071), assigned per School or Campus | 12E (read-only role explorer) | — | No tenant role creation (rule 93); roles carry capabilities, not menus | `EXISTING_DIFFERENT_ACCEPTED` |
 | RF-11 | User hierarchy | 4 | Numeric hierarchy level (1–10) and reporting user type per user type | — | HR reporting line exists as ownership (ADR 0076 §62) | — | — | A role hierarchy number is not authority; reporting lines are HR facts | `DO_NOT_BUILD` |
-| RF-12 | Zonal access | 2 | Zone tier above branch, restricting which zonal user types switch access level | — | School Groups (governance only) | 12D (descriptive region/zone only) | — | A region/zone is never an access tier or tenant boundary (filter register "never" wave) | `DO_NOT_BUILD` |
+| RF-12 | Zonal access | 2 | Zone tier above branch, restricting which zonal user types switch access level | Platform (School Groups) | **Group Regions and Zones** (ORG.12D): platform-governed, Group-owned placement of member Schools, shown in the Network directory and overview | 12D (built: descriptive structure) | — | The zonal *structure* exists as governance metadata; a zonal *access tier* (zonal users, zone-scoped authority) is still not built — a region/zone is never an access tier or tenant boundary | `DO_NOT_BUILD` (access tier) |
 | RF-13 | Branch restriction | 3 | Per-user assigned/restricted branches | Identity & Access | Campus-scoped role assignments (ORG.7A, rule 101) | 12E (scope visualization) | — | Scope sits on the grant, resolved by `CampusScopeResolver` | `EXISTING_EQUIVALENT` |
 | RF-14 | Access levels (menu-permission matrix) | 259 | Per user type: module grants and submenu checkboxes per product area, at org/branch/staff level; read-only "menus per user type" report; profile-tab visibility per user type | Identity & Access | Capability catalogue, route authorization contracts (rule 98), entitlement intersection (rule 100) | 12E (read-only capability explorer) | — | A ticked menu is a permission there; here a menu is a projection of capabilities and never authority | `DO_NOT_BUILD` |
 | RF-15 | Menu management | 0 dedicated (inside RF-14) | Menu titles, descriptions, order sequence, "refresh menus" publish step | Navigation (presentation) | `StaffNavigation` single catalogue | 12F | — | Presentation only (order, grouping, labels, icons); never stored as authorization (ADR 0076 §15) | `ORG12_BUILD` |
@@ -130,11 +130,21 @@ entitlements, and does not copy it.
 | Boarding | `boarding` | never creates Hostel records |
 | Lunch | `meals` | never creates Canteen records or charges |
 | Transport | `transport` | never enables the Transport module or routes |
-| Revenue / franchise branch | — | governance, ORG.12D (not built) |
+| Revenue / franchise branch | — | governance on the Group membership (ORG.12D relationship: owned, franchise, managed, affiliate); no revenue terms |
 
 Tax/statutory screens (branch tax ids, HR statutory codes) stay **RF-22
 `LEGAL_DECISION_REQUIRED`**: ORG.12C's neutral institutional references are
 not tax identifiers.
+
+### 4.0a Network and franchise governance vs the reference zonal model (ORG.12D)
+
+| Reference | Lycenza (ORG.12D) |
+|---|---|
+| Org → Zone → Branch, where a zone is also an access tier for zonal user types | Group (Network) → optional Region → optional Zone → member School. These are descriptive governance placements. Access never follows them. |
+| Franchise/revenue flags on a branch | The relationship on the Group membership (owned, franchise, managed, affiliate) is classification only. There are no revenue, royalty or billing terms. |
+| Zonal admins see the zone's branches and their data | A Group Admin sees member School identity and the Group's own classification only. School data stays behind School membership; entering a School is a 30-minute, MFA-gated elevation with no School permissions. |
+| Structure changes are unaudited settings | Add, remove and reclassify need fresh authority, a closed reason and fresh MFA. Moves need a reason. All are audited on the platform ledger without names. |
+| One school, one zone | Many-to-many Groups (ADR 0045 §7). Each membership is classified and placed independently. |
 
 ### 4.1 Getting Started: why Lycenza's Setup Center is different, and stronger (ORG.12B)
 

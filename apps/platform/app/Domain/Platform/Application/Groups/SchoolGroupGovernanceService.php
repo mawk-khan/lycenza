@@ -9,9 +9,13 @@ use App\Models\GroupRoleAssignment;
 use App\Models\Role;
 use App\Models\School;
 use App\Models\SchoolGroup;
+use App\Models\SchoolGroupRegion;
+use App\Models\SchoolGroupZone;
 use App\Models\User;
 use App\Support\Audit\AuditRecorder;
+use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Authorization\CapabilityResolver;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -139,11 +143,21 @@ class SchoolGroupGovernanceService
         $group->refresh();
     }
 
-    /** Adds ONE exactly identified School (UUID or verified domain) to the Group. */
-    public function addSchool(User $actor, SchoolGroup $group, string $identifier): School
+    /**
+     * Adds ONE exactly identified School (UUID or verified domain) to the Group.
+     *
+     * ORG.12D (ADR 0080 §9, OD-12.12): an assured change -- a classified
+     * relationship (every new membership is classified), a closed reason, a
+     * FreshMfaProof minted after the capability check, and the platform
+     * capability re-read fresh inside the transaction. The membership grants
+     * nothing in the School.
+     */
+    public function addSchool(User $actor, SchoolGroup $group, string $identifier, SchoolGroupRelationship $relationship, SchoolGroupMembershipReason $reason, FreshMfaProof $mfa, ?string $networkReference = null): School
     {
         $this->require($actor, self::MANAGE);
         $this->requireActive($group);
+        $this->requireProof($actor, $mfa);
+        $networkReference = $this->networkReference($networkReference);
 
         [$school] = $this->schools->resolve($identifier);
 
@@ -152,19 +166,31 @@ class SchoolGroupGovernanceService
         }
 
         try {
-            DB::transaction(function () use ($actor, $group, $school): void {
+            DB::transaction(function () use ($actor, $group, $school, $relationship, $reason, $mfa, $networkReference): void {
+                $this->requireActiveLocked($group);
+                $this->requireNow($actor);
                 DB::table('school_group_members')->insert([
                     'id' => (string) Str::uuid7(),
                     'school_group_id' => $group->id,
                     'school_id' => $school->id,
+                    'relationship_type' => $relationship->value,
+                    'network_reference' => $networkReference,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
 
-                $this->audit->platform('platform.school_group.school_added', actor: $actor, subject: $group, metadata: ['school_id' => $school->id]);
+                $this->audit->platform('platform.school_group.school_added', actor: $actor, subject: $group, metadata: [
+                    'school_id' => $school->id,
+                    'relationship_type' => $relationship->value,
+                    'reason_code' => $reason->value,
+                    'mfa_verified_at' => $mfa->verifiedAt->toIso8601String(),
+                ]);
             });
-        } catch (UniqueConstraintViolationException) {
-            throw ValidationException::withMessages(['school' => 'That School is already in this Group.']);
+        } catch (UniqueConstraintViolationException $e) {
+            // The constraint name, never the message (which carries the whole INSERT).
+            throw ValidationException::withMessages(str_contains((string) ($e->errorInfo[2] ?? ''), 'school_group_members_network_reference_unique')
+                ? ['network_reference' => 'That network reference is already used in this Group.']
+                : ['school' => 'That School is already in this Group.']);
         }
 
         return $school;
@@ -175,12 +201,17 @@ class SchoolGroupGovernanceService
      * Group authorized into that School is terminated (school_left_group) in
      * the same transaction; the School's memberships, roles and data are
      * untouched, as is its membership of any other Group.
+     *
+     * ORG.12D: assured like addSchool() (closed reason, fresh MFA, fresh
+     * authority).
      */
-    public function removeSchool(User $actor, SchoolGroup $group, School $school): void
+    public function removeSchool(User $actor, SchoolGroup $group, School $school, SchoolGroupMembershipReason $reason, FreshMfaProof $mfa): void
     {
         $this->require($actor, self::MANAGE);
+        $this->requireProof($actor, $mfa);
 
-        DB::transaction(function () use ($actor, $group, $school): void {
+        DB::transaction(function () use ($actor, $group, $school, $reason, $mfa): void {
+            $this->requireNow($actor);
             // Waits for any in-flight Group-derived start holding this row
             // FOR SHARE, so that start is visible to the termination below.
             $removed = DB::table('school_group_members')
@@ -200,8 +231,172 @@ class SchoolGroupGovernanceService
             $this->audit->platform('platform.school_group.school_removed', actor: $actor, subject: $group, metadata: [
                 'school_id' => $school->id,
                 'terminated_elevation_count' => $terminated,
+                'reason_code' => $reason->value,
+                'mfa_verified_at' => $mfa->verifiedAt->toIso8601String(),
             ]);
         });
+    }
+
+    /**
+     * ORG.12D (ADR 0080 §9, OD-12.12): changes a member School's relationship
+     * classification and/or its Group-specific network reference -- assured
+     * (closed reason, fresh MFA, fresh authority) and stale-safe: the values
+     * the form opened with must still be stored. Changes nothing in the
+     * School. Returns the changed fields ([] when nothing changed).
+     *
+     * @param  array{relationship_type: ?string, network_reference: ?string}  $expected
+     * @return list<string>
+     */
+    public function classifyMembership(User $actor, SchoolGroup $group, School $school, SchoolGroupRelationship $relationship, ?string $networkReference, array $expected, SchoolGroupMembershipReason $reason, FreshMfaProof $mfa): array
+    {
+        $this->require($actor, self::MANAGE);
+        $this->requireActive($group);
+        $this->requireProof($actor, $mfa);
+        $networkReference = $this->networkReference($networkReference);
+
+        try {
+            return DB::transaction(function () use ($actor, $group, $school, $relationship, $networkReference, $expected, $reason, $mfa): array {
+                $this->requireActiveLocked($group);
+                $member = $this->lockedMember($group, $school);
+                $this->requireNow($actor);
+                if (($expected['relationship_type'] ?? null) !== $member->relationship_type || $this->networkReference($expected['network_reference'] ?? null) !== $member->network_reference) {
+                    throw ValidationException::withMessages(['membership' => 'This School\'s classification changed since you opened the form. Reload and try again.']);
+                }
+
+                $after = ['relationship_type' => $relationship->value, 'network_reference' => $networkReference];
+                $changed = array_keys(array_filter($after, fn ($value, string $key): bool => $value !== $member->{$key}, ARRAY_FILTER_USE_BOTH));
+                if ($changed === []) {
+                    return [];
+                }
+
+                DB::table('school_group_members')->where('id', $member->id)->update([...$after, 'updated_at' => now()]);
+                $this->audit->platform('platform.school_group.membership_classified', actor: $actor, subject: $group, metadata: [
+                    'school_id' => $school->id,
+                    'changed' => $changed,
+                    'relationship_before' => $member->relationship_type,
+                    'relationship_after' => $relationship->value,
+                    'reason_code' => $reason->value,
+                    'mfa_verified_at' => $mfa->verifiedAt->toIso8601String(),
+                ]);
+
+                return $changed;
+            });
+        } catch (UniqueConstraintViolationException) {
+            throw ValidationException::withMessages(['network_reference' => 'That network reference is already used in this Group.']);
+        }
+    }
+
+    /**
+     * ORG.12D (ADR 0080 §9): places a member School in a Region and/or Zone of
+     * THIS Group (or clears them) -- a closed reason and the fresh platform
+     * authority; no MFA (OD-12.12 keeps MFA for classification). A Zone sets
+     * its Region; a new placement must be active (an existing one stays when
+     * its Region/Zone is inactivated). Stale-safe like classifyMembership().
+     *
+     * @param  array{region_id: ?string, zone_id: ?string}  $expected
+     * @return list<string>
+     */
+    public function placeMembership(User $actor, SchoolGroup $group, School $school, ?string $regionId, ?string $zoneId, array $expected, SchoolGroupMembershipReason $reason): array
+    {
+        $this->require($actor, self::MANAGE);
+        $this->requireActive($group);
+
+        // UUIDs compare case-sensitively; PostgreSQL returns lower case.
+        [$regionId, $zoneId] = [$regionId !== null ? strtolower($regionId) : null, $zoneId !== null ? strtolower($zoneId) : null];
+        $expected = array_map(fn ($id) => is_string($id) ? strtolower($id) : $id, $expected);
+
+        return DB::transaction(function () use ($actor, $group, $school, $regionId, $zoneId, $expected, $reason): array {
+            $this->requireActiveLocked($group);
+            $member = $this->lockedMember($group, $school);
+            $this->requireNow($actor);
+            if (($expected['region_id'] ?? null) !== $member->region_id || ($expected['zone_id'] ?? null) !== $member->zone_id) {
+                throw ValidationException::withMessages(['membership' => 'This School\'s placement changed since you opened the form. Reload and try again.']);
+            }
+
+            if ($zoneId !== null) {
+                $zone = SchoolGroupZone::query()->where('school_group_id', $group->id)->whereKey($zoneId)->sharedLock()->first();
+                if ($zone === null) {
+                    throw ValidationException::withMessages(['zone_id' => 'Choose a Zone of this Group.']);
+                }
+                if ($regionId !== null && $regionId !== $zone->region_id) {
+                    throw ValidationException::withMessages(['zone_id' => 'That Zone belongs to another Region.']);
+                }
+                $regionId = $zone->region_id;
+                if ($zoneId !== $member->zone_id && ! $zone->isActive()) {
+                    throw ValidationException::withMessages(['zone_id' => 'Choose an active Zone.']);
+                }
+            }
+            if ($regionId !== null) {
+                $region = SchoolGroupRegion::query()->where('school_group_id', $group->id)->whereKey($regionId)->sharedLock()->first();
+                if ($region === null) {
+                    throw ValidationException::withMessages(['region_id' => 'Choose a Region of this Group.']);
+                }
+                if ($regionId !== $member->region_id && ! $region->isActive()) {
+                    throw ValidationException::withMessages(['region_id' => 'Choose an active Region.']);
+                }
+            }
+
+            $after = ['region_id' => $regionId, 'zone_id' => $zoneId];
+            $changed = array_keys(array_filter($after, fn ($value, string $key): bool => $value !== $member->{$key}, ARRAY_FILTER_USE_BOTH));
+            if ($changed === []) {
+                return [];
+            }
+
+            DB::table('school_group_members')->where('id', $member->id)->update([...$after, 'updated_at' => now()]);
+            $this->audit->platform('platform.school_group.membership_placed', actor: $actor, subject: $group, metadata: [
+                'school_id' => $school->id,
+                'region_before' => $member->region_id,
+                'region_after' => $regionId,
+                'zone_before' => $member->zone_id,
+                'zone_after' => $zoneId,
+                'reason_code' => $reason->value,
+            ]);
+
+            return $changed;
+        });
+    }
+
+    /** The early, cached gate: refuse before a fresh MFA code is ever spent. */
+    public function assertMayManage(User $actor): void
+    {
+        $this->require($actor, self::MANAGE);
+    }
+
+    private function requireNow(User $actor): void
+    {
+        if (! $this->capabilities->holdsPlatformNow($actor, self::MANAGE)) {
+            throw new AuthorizationException('This action is unauthorized.');
+        }
+    }
+
+    private function requireProof(User $actor, FreshMfaProof $mfa): void
+    {
+        if (! $mfa->isFor($actor->id)) {
+            throw new AuthorizationException('This action is unauthorized.');
+        }
+    }
+
+    private function lockedMember(SchoolGroup $group, School $school): object
+    {
+        $member = DB::table('school_group_members')->where('school_group_id', $group->id)->where('school_id', $school->id)->lockForUpdate()->first();
+        if ($member === null) {
+            throw ValidationException::withMessages(['school' => 'That School is not in this Group.']);
+        }
+
+        return $member;
+    }
+
+    private function networkReference(?string $value): ?string
+    {
+        $value = $value === null ? null : strtoupper(trim($value));
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if (preg_match('/^[A-Z0-9][A-Z0-9._\/-]{0,39}$/', $value) !== 1) {
+            throw ValidationException::withMessages(['network_reference' => 'Use up to 40 letters, digits, dots, hyphens, underscores or slashes.']);
+        }
+
+        return $value;
     }
 
     /**
@@ -309,6 +504,18 @@ class SchoolGroupGovernanceService
     private function requireActive(SchoolGroup $group): void
     {
         if (SchoolGroup::query()->whereKey($group->id)->value('status') !== SchoolGroup::STATUS_ACTIVE) {
+            throw ValidationException::withMessages(['group' => 'That Group is archived.']);
+        }
+    }
+
+    /**
+     * ORG.12D: the in-transaction re-check -- FOR SHARE conflicts with
+     * archive()'s UPDATE, so a concurrent archive is ordered before or after
+     * this write, never between the check and the write.
+     */
+    public function requireActiveLocked(SchoolGroup $group): void
+    {
+        if (SchoolGroup::query()->whereKey($group->id)->sharedLock()->value('status') !== SchoolGroup::STATUS_ACTIVE) {
             throw ValidationException::withMessages(['group' => 'That Group is archived.']);
         }
     }

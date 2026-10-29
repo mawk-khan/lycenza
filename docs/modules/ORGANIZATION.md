@@ -141,7 +141,7 @@ The platform's read view of every School (`/app/platform/schools`, under
 | --- | --- | --- |
 | identity (name, legal name, slug, code, time zone, locale), lifecycle and closure | `schools` (platform table) | directly; search, filters and keyset pagination run here |
 | custom-domain state (never hostnames) | `school_domains` (platform table) | batched for the page |
-| School Group membership | `school_group_members` (platform table) | batched for the page |
+| School Group membership (ORG.12D adds each membership's relationship and Region/Zone placement, shown on the Group pages, not here) | `school_group_members` (platform table) | batched for the page |
 | Campus counts (and, on the overview, Campus names/codes) | Campuses (FORCE RLS) | `CampusStructureSummary`, inside that one School's TenantContext |
 | active academic-year name | Academic Structure (FORCE RLS) | `CurrentAcademicYearResolver::tryResolve()`, one School at a time |
 | administrator readiness (yes / not activated / missing) | Identity (role grants, FORCE RLS) | `SchoolAdministrators::readiness()`, the one definition |

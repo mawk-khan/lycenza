@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Platform\Groups;
 
+use App\Domain\Platform\Application\Groups\SchoolGroupDirectoryReadService;
+use App\Domain\Platform\Application\Groups\SchoolGroupRelationship;
 use App\Support\Authorization\CapabilityResolver;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\DB;
@@ -64,6 +66,9 @@ class GroupArchitectureGuardTest extends TestCase
                 app_path('Http/Controllers/App/Platform/SchoolGroupAdminController.php'),
                 app_path('Models/SchoolGroup.php'),
                 app_path('Models/GroupRoleAssignment.php'),
+                app_path('Models/SchoolGroupMember.php'),
+                app_path('Models/SchoolGroupRegion.php'),
+                app_path('Models/SchoolGroupZone.php'),
             ],
         );
 
@@ -125,6 +130,51 @@ class GroupArchitectureGuardTest extends TestCase
                     $this->assertFalse(is_string($middleware) && str_starts_with($middleware, 'school-context'), "{$name} must never be School context");
                 }
             }
+        }
+    }
+
+    #[Test]
+    public function the_network_structure_is_group_owned_platform_metadata_never_a_tenant_or_an_authority_scope(): void
+    {
+        // ORG.12D (ADR 0080 §9, OD-12.8/OD-12.10): no Network/Organization
+        // entity, no hierarchy engine, and Region/Zone exist ONLY on the
+        // Group layer -- no role assignment, membership, capability or
+        // tenant table can carry one, so nothing can be zone-scoped.
+        $columns = DB::table('information_schema.columns')->whereRaw('table_schema = current_schema()')
+            ->whereIn('column_name', ['region_id', 'zone_id', 'network_id', 'organization_id', 'school_group_region_id', 'school_group_zone_id'])
+            ->orderBy('table_name')->orderBy('column_name')->get()->map(fn ($c) => "{$c->table_name}.{$c->column_name}")->all();
+        $this->assertSame(['school_group_members.region_id', 'school_group_members.zone_id', 'school_group_zones.region_id'], $columns);
+
+        foreach (['school_group_regions', 'school_group_zones'] as $table) {
+            $this->assertFalse(DB::getSchemaBuilder()->hasColumn($table, 'school_id'), "{$table} is not tenant-owned");
+            $this->assertFalse(DB::getSchemaBuilder()->hasColumn($table, 'parent_id'), "{$table}: no recursive hierarchy");
+            $this->assertFalse((bool) DB::selectOne('select relrowsecurity from pg_class where oid = ?::regclass', [$table])->relrowsecurity, "{$table} is a platform table");
+        }
+        $this->assertSame([], DB::table('information_schema.tables')->whereRaw('table_schema = current_schema()')
+            ->whereIn('table_name', ['networks', 'school_networks', 'organizations', 'franchises', 'regions', 'zones'])->pluck('table_name')->all());
+    }
+
+    #[Test]
+    public function the_relationship_catalogue_is_code_owned_and_matches_the_database(): void
+    {
+        $definition = (string) DB::selectOne("select pg_get_constraintdef(oid) as d from pg_constraint where conname = 'school_group_members_relationship_check'")->d;
+        preg_match_all("/'([a-z_]+)'::/", $definition, $values);
+
+        $this->assertSame(array_column(SchoolGroupRelationship::cases(), 'value'), $values[1]);
+        $this->assertSame(['owned', 'franchise', 'managed', 'affiliate'], array_column(SchoolGroupRelationship::cases(), 'value'));
+    }
+
+    #[Test]
+    public function the_group_directory_reads_only_platform_tables_and_nothing_inside_a_school(): void
+    {
+        $source = $this->codeOnly((string) file_get_contents((new \ReflectionClass(SchoolGroupDirectoryReadService::class))->getFileName()));
+        preg_match_all("/DB::table\\('([a-z_]+)(?: as [a-z]+)?'\\)|[jJ]oin\\('([a-z_]+)(?: as [a-z]+)?'/", $source, $matches);
+        $tables = array_values(array_unique(array_filter(array_merge($matches[1], $matches[2]))));
+        sort($tables);
+
+        $this->assertSame(['school_group_members', 'school_group_regions', 'school_group_zones', 'schools'], $tables);
+        foreach (['App\\Models\\Student', 'App\\Models\\Employee', 'App\\Models\\Guardian', 'App\\Models\\Campus', 'withSchool', 'Cache::', 'cache(', 'App\\Domain\\Students', 'App\\Domain\\HR', 'App\\Domain\\Payments', 'App\\Domain\\Fees'] as $forbidden) {
+            $this->assertStringNotContainsString($forbidden, $source, $forbidden);
         }
     }
 }

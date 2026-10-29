@@ -3,8 +3,9 @@
 namespace App\Http\Controllers\App\Groups;
 
 use App\Domain\Platform\Application\Elevation\SchoolElevationService;
+use App\Domain\Platform\Application\Groups\SchoolGroupDirectoryReadService;
+use App\Domain\Platform\Application\Groups\SchoolGroupRelationship;
 use App\Http\Controllers\Controller;
-use App\Models\School;
 use App\Models\SchoolGroup;
 use App\Models\SchoolMembership;
 use App\Support\Authorization\CapabilityResolver;
@@ -17,11 +18,14 @@ use Inertia\Response;
  * Phase 0N.5 (ADR 0045 section 12): the Group Admin's read-only view of
  * the Groups they hold `group.schools.view` in -- and nothing else. Only
  * platform tables are read (`school_groups`, `school_group_members`,
- * `schools`): the Group's id, name and status, and each member School's
- * id, name and status (all Confidential, owner-approved v1). No counts,
- * no tenant record, no other Group, no list of the other people holding
- * grants (grants are Sensitive and platform-governed). TenantContext is
- * never touched; the Group is authorized per request from the route.
+ * `schools`, and since ORG.12D the Group's `school_group_regions`/`_zones`):
+ * Group metadata and each member School's id, name, code, status and the
+ * Group's own classification of it (all Confidential, OD-12.11). Counts
+ * are of member Schools, Regions and Zones only -- never of a tenant record.
+ * No other Group, no list of the other people holding grants (grants are
+ * Sensitive and platform-governed). TenantContext is never touched; the
+ * Group is authorized per request from the route. Read-only: a Group Admin
+ * changes nothing (ADR 0045 invariant 6).
  */
 class SchoolGroupController extends Controller
 {
@@ -34,7 +38,16 @@ class SchoolGroupController extends Controller
         ]);
     }
 
-    public function show(Request $request, SchoolGroup $schoolGroup, CapabilityResolver $capabilities, ElevationContext $elevated): Response
+    /**
+     * ORG.12D (ADR 0080 §9, OD-12.11): the Group overview and member-School
+     * directory -- platform tables only, through SchoolGroupDirectoryReadService
+     * (structural counts of member Schools, Regions and Zones; each School's
+     * name, code, lifecycle status, relationship, Region, Zone and network
+     * reference). No tenant table, no count of people, no Campus or setup data.
+     * The directory is paginated and filterable; entering a School is still
+     * ADR 0044 elevation, which grants no School permission.
+     */
+    public function show(Request $request, SchoolGroup $schoolGroup, CapabilityResolver $capabilities, ElevationContext $elevated, SchoolGroupDirectoryReadService $directory): Response
     {
         $user = $request->user();
 
@@ -45,22 +58,25 @@ class SchoolGroupController extends Controller
         $canElevate = ! $elevated->isElevated()
             && $capabilities->canInGroup($user, SchoolElevationService::GROUP_CAPABILITY, $schoolGroup);
         $memberOf = SchoolMembership::query()->active()->where('user_id', $user->id)->pluck('school_id')->all();
+        $filters = array_filter($request->only(['relationship', 'region_id', 'zone_id', 'status', 'q']), 'is_string');
 
         return Inertia::render('App/Groups/Show', [
             'group' => ['id' => $schoolGroup->id, 'name' => $schoolGroup->name, 'status' => $schoolGroup->status],
             // Phase 0N.11 (ADR 0048): the Group report link, UX only -- the
             // report re-authorizes everything itself.
             'canViewReports' => $capabilities->canInGroup($user, 'group.reporting.view', $schoolGroup),
-            'schools' => $schoolGroup->schools()->orderBy('schools.name')->get(['schools.id', 'schools.name', 'schools.status'])
-                ->map(fn (School $s) => [
-                    'id' => $s->id,
-                    'name' => $s->name,
-                    'status' => $s->status,
+            'overview' => $directory->overview($schoolGroup),
+            'filters' => $filters,
+            'relationships' => SchoolGroupRelationship::options(),
+            'directory' => $directory->directory($schoolGroup, $filters, (int) $request->query('page', 1))
+                ->withQueryString()
+                ->through(fn (object $row): array => [
+                    ...SchoolGroupDirectoryReadService::present($row),
                     // Elevation is refused into a School the actor already
                     // belongs to (ADR 0044): offer ordinary selection instead.
-                    'canEnter' => $canElevate && $s->status === 'active' && ! in_array($s->id, $memberOf, true),
-                    'isMember' => in_array($s->id, $memberOf, true),
-                ])->values(),
+                    'canEnter' => $canElevate && $row->status === 'active' && ! in_array($row->id, $memberOf, true),
+                    'isMember' => in_array($row->id, $memberOf, true),
+                ]),
         ]);
     }
 }

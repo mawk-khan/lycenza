@@ -2,10 +2,13 @@
 
 use App\Domain\Platform\Application\Groups\Reporting\GroupCurriculumCoverageReportService;
 use App\Domain\Platform\Application\Groups\SchoolGroupGovernanceService;
+use App\Domain\Platform\Application\Groups\SchoolGroupMembershipReason;
 use App\Models\GroupRoleAssignment;
 use App\Models\School;
 use App\Models\SchoolGroup;
 use App\Models\User;
+use App\Support\Auth\Mfa\FreshMfaProof;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -49,7 +52,7 @@ try {
                 return 'report:'.implode(',', $included);
             case 'remove':
                 [$actorId, $groupId, $schoolId] = $args;
-                $governance->removeSchool(User::query()->findOrFail($actorId), SchoolGroup::query()->findOrFail($groupId), School::query()->findOrFail($schoolId));
+                $governance->removeSchool(User::query()->findOrFail($actorId), SchoolGroup::query()->findOrFail($groupId), School::query()->findOrFail($schoolId), SchoolGroupMembershipReason::NETWORK_EXIT, new FreshMfaProof($actorId, CarbonImmutable::now()));
 
                 return 'removed';
             case 'revoke':

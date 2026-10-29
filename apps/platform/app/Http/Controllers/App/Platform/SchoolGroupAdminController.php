@@ -2,14 +2,20 @@
 
 namespace App\Http\Controllers\App\Platform;
 
+use App\Domain\Platform\Application\Groups\SchoolGroupDirectoryReadService;
 use App\Domain\Platform\Application\Groups\SchoolGroupGovernanceService;
+use App\Domain\Platform\Application\Groups\SchoolGroupMembershipReason;
+use App\Domain\Platform\Application\Groups\SchoolGroupRelationship;
+use App\Domain\Platform\Application\Groups\SchoolGroupStructureService;
 use App\Http\Controllers\Controller;
 use App\Models\GroupRoleAssignment;
 use App\Models\School;
 use App\Models\SchoolGroup;
+use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\CapabilityResolver;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -26,7 +32,10 @@ use Inertia\Response;
  */
 class SchoolGroupAdminController extends Controller
 {
-    public function __construct(private readonly SchoolGroupGovernanceService $governance) {}
+    public function __construct(
+        private readonly SchoolGroupGovernanceService $governance,
+        private readonly SchoolGroupStructureService $structure,
+    ) {}
 
     public function index(Request $request, CapabilityResolver $capabilities): Response
     {
@@ -37,15 +46,23 @@ class SchoolGroupAdminController extends Controller
         ]);
     }
 
-    public function show(Request $request, SchoolGroup $schoolGroup, CapabilityResolver $capabilities): Response
+    public function show(Request $request, SchoolGroup $schoolGroup, CapabilityResolver $capabilities, SchoolGroupDirectoryReadService $directory, FreshMfaRequirement $mfa): Response
     {
         $user = $request->user();
         $canManageGrants = $capabilities->canPlatform($user, SchoolGroupGovernanceService::MANAGE_GRANTS);
+        $filters = array_filter($request->only(['relationship', 'region_id', 'zone_id', 'status', 'q']), 'is_string');
 
         return Inertia::render('App/Platform/Groups/Show', [
             'group' => ['id' => $schoolGroup->id, 'name' => $schoolGroup->name, 'slug' => $schoolGroup->slug, 'status' => $schoolGroup->status],
-            'schools' => $schoolGroup->schools()->orderBy('schools.name')->get(['schools.id', 'schools.name', 'schools.status'])
-                ->map(fn (School $s) => ['id' => $s->id, 'name' => $s->name, 'status' => $s->status])->values(),
+            // ORG.12D (ADR 0080 §9): structure, classification and the directory
+            // -- platform tables only (SchoolGroupDirectoryReadService).
+            'overview' => $directory->overview($schoolGroup),
+            'filters' => $filters,
+            'directory' => $directory->directory($schoolGroup, $filters, (int) $request->query('page', 1))
+                ->withQueryString()
+                ->through(fn (object $row): array => SchoolGroupDirectoryReadService::present($row)),
+            'relationships' => SchoolGroupRelationship::options(),
+            'reasons' => SchoolGroupMembershipReason::options(),
             'grants' => $canManageGrants
                 ? $schoolGroup->grants()->active()->with(['user:id,name,email', 'role:id,key'])->orderBy('granted_at')->get()
                     ->map(fn (GroupRoleAssignment $g) => [
@@ -58,6 +75,7 @@ class SchoolGroupAdminController extends Controller
                 : null,
             'canManage' => $capabilities->canPlatform($user, SchoolGroupGovernanceService::MANAGE),
             'canManageGrants' => $canManageGrants,
+            'hasMfaFactor' => $mfa->hasActiveFactor($user),
         ]);
     }
 
@@ -82,16 +100,96 @@ class SchoolGroupAdminController extends Controller
         return back();
     }
 
-    public function addSchool(Request $request, SchoolGroup $schoolGroup): RedirectResponse
+    /** ORG.12D (OD-12.12): capability, then a fresh MFA code, then the assured service call. */
+    public function addSchool(Request $request, SchoolGroup $schoolGroup, FreshMfaRequirement $mfa): RedirectResponse
     {
-        $this->governance->addSchool($request->user(), $schoolGroup, (string) $request->input('school'));
+        $this->governance->assertMayManage($request->user());
+        $validated = $request->validate([
+            'school' => ['required', 'string', 'max:255'],
+            'relationship_type' => ['required', Rule::enum(SchoolGroupRelationship::class)],
+            'reason_code' => ['required', Rule::enum(SchoolGroupMembershipReason::class)],
+            'network_reference' => ['nullable', 'string', 'max:40'],
+        ]);
+        $proof = $mfa->requireForAction($request, $request->user());
+
+        $this->governance->addSchool($request->user(), $schoolGroup, $validated['school'],
+            SchoolGroupRelationship::from($validated['relationship_type']), SchoolGroupMembershipReason::from($validated['reason_code']), $proof, $validated['network_reference'] ?? null);
 
         return back();
     }
 
-    public function removeSchool(Request $request, SchoolGroup $schoolGroup, School $school): RedirectResponse
+    public function removeSchool(Request $request, SchoolGroup $schoolGroup, School $school, FreshMfaRequirement $mfa): RedirectResponse
     {
-        $this->governance->removeSchool($request->user(), $schoolGroup, $school);
+        $this->governance->assertMayManage($request->user());
+        $validated = $request->validate(['reason_code' => ['required', Rule::enum(SchoolGroupMembershipReason::class)]]);
+        $proof = $mfa->requireForAction($request, $request->user());
+
+        $this->governance->removeSchool($request->user(), $schoolGroup, $school, SchoolGroupMembershipReason::from($validated['reason_code']), $proof);
+
+        return back();
+    }
+
+    public function classify(Request $request, SchoolGroup $schoolGroup, School $school, FreshMfaRequirement $mfa): RedirectResponse
+    {
+        $this->governance->assertMayManage($request->user());
+        $validated = $request->validate([
+            'relationship_type' => ['required', Rule::enum(SchoolGroupRelationship::class)],
+            'network_reference' => ['nullable', 'string', 'max:40'],
+            'expected_relationship_type' => ['present', 'nullable', 'string'],
+            'expected_network_reference' => ['present', 'nullable', 'string'],
+            'reason_code' => ['required', Rule::enum(SchoolGroupMembershipReason::class)],
+        ]);
+        $proof = $mfa->requireForAction($request, $request->user());
+
+        $this->governance->classifyMembership($request->user(), $schoolGroup, $school,
+            SchoolGroupRelationship::from($validated['relationship_type']), $validated['network_reference'] ?? null,
+            ['relationship_type' => $validated['expected_relationship_type'] ?? null, 'network_reference' => $validated['expected_network_reference'] ?? null],
+            SchoolGroupMembershipReason::from($validated['reason_code']), $proof);
+
+        return back();
+    }
+
+    public function place(Request $request, SchoolGroup $schoolGroup, School $school): RedirectResponse
+    {
+        $validated = $request->validate([
+            'region_id' => ['nullable', 'uuid'],
+            'zone_id' => ['nullable', 'uuid'],
+            'expected_region_id' => ['present', 'nullable', 'uuid'],
+            'expected_zone_id' => ['present', 'nullable', 'uuid'],
+            'reason_code' => ['required', Rule::enum(SchoolGroupMembershipReason::class)],
+        ]);
+
+        $this->governance->placeMembership($request->user(), $schoolGroup, $school, $validated['region_id'] ?? null, $validated['zone_id'] ?? null,
+            ['region_id' => $validated['expected_region_id'] ?? null, 'zone_id' => $validated['expected_zone_id'] ?? null],
+            SchoolGroupMembershipReason::from($validated['reason_code']));
+
+        return back();
+    }
+
+    public function storeRegion(Request $request, SchoolGroup $schoolGroup): RedirectResponse
+    {
+        $this->structure->createRegion($request->user(), $schoolGroup, $request->only(['code', 'name', 'description', 'sort_order']));
+
+        return back();
+    }
+
+    public function updateRegion(Request $request, SchoolGroup $schoolGroup, string $region): RedirectResponse
+    {
+        $this->structure->updateRegion($request->user(), $schoolGroup, $region, $request->only(['code', 'name', 'description', 'sort_order', 'status']));
+
+        return back();
+    }
+
+    public function storeZone(Request $request, SchoolGroup $schoolGroup): RedirectResponse
+    {
+        $this->structure->createZone($request->user(), $schoolGroup, $request->only(['code', 'name', 'description', 'sort_order', 'region_id']));
+
+        return back();
+    }
+
+    public function updateZone(Request $request, SchoolGroup $schoolGroup, string $zone): RedirectResponse
+    {
+        $this->structure->updateZone($request->user(), $schoolGroup, $zone, $request->only(['code', 'name', 'description', 'sort_order', 'status', 'region_id']));
 
         return back();
     }

@@ -5,6 +5,7 @@ namespace Tests\Support\Authorization;
 use App\Domain\Platform\Application\Elevation\SchoolElevationService;
 use App\Domain\Platform\Application\Groups\Reporting\GroupCurriculumCoverageReportService;
 use App\Domain\Platform\Application\Groups\SchoolGroupGovernanceService;
+use App\Domain\Platform\Application\Groups\SchoolGroupStructureService;
 use App\Domain\Platform\Application\Modules\SchoolModuleEntitlementService;
 use App\Domain\Platform\Application\Roles\PlatformRoleGovernanceService;
 use App\Domain\Platform\Application\Schools\SchoolLifecycleService;
@@ -58,6 +59,13 @@ final class PlatformRouteCoverage
             Coverage::service('app.platform.groups.archive', SchoolGroupGovernanceService::class, 'archive'),
             Coverage::service('app.platform.groups.schools.store', SchoolGroupGovernanceService::class, 'addSchool'),
             Coverage::service('app.platform.groups.schools.destroy', SchoolGroupGovernanceService::class, 'removeSchool'),
+            // ORG.12D (ADR 0080 §9): classification, placement, Regions and Zones.
+            Coverage::service('app.platform.groups.schools.classify', SchoolGroupGovernanceService::class, 'classifyMembership'),
+            Coverage::service('app.platform.groups.schools.place', SchoolGroupGovernanceService::class, 'placeMembership'),
+            Coverage::service('app.platform.groups.regions.store', SchoolGroupStructureService::class, 'createRegion'),
+            Coverage::service('app.platform.groups.regions.update', SchoolGroupStructureService::class, 'updateRegion'),
+            Coverage::service('app.platform.groups.zones.store', SchoolGroupStructureService::class, 'createZone'),
+            Coverage::service('app.platform.groups.zones.update', SchoolGroupStructureService::class, 'updateZone'),
             Coverage::service('app.platform.groups.grants.store', SchoolGroupGovernanceService::class, 'grant'),
             Coverage::service('app.platform.groups.grants.revoke', SchoolGroupGovernanceService::class, 'revoke'),
 

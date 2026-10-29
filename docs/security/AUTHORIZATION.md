@@ -731,6 +731,23 @@ ends the moment that authority goes (no fallback to platform authority). Platfor
 ordinary member of several Schools holds no Group authority. See
 ADR 0045.
 
+**Network governance (ORG.12D, ADR 0080 §9).**
+- **Writes.** A membership's relationship (owned, franchise, managed,
+  affiliate), network reference and Region/Zone placement, and the
+  Group's Regions and Zones, are written only under
+  `platform.school_groups.manage`.
+  - Add, remove and reclassify re-read that capability inside the
+    transaction (`CapabilityResolver::holdsPlatformNow()`, never for a
+    bearer token or a disabled User), need a closed reason and need a
+    fresh MFA proof minted by `FreshMfaRequirement`.
+  - A placement move needs the fresh re-read and a reason.
+- **Never authority.** None of these values is authority: no relationship,
+  Region or Zone grants a School capability, membership, lifecycle change
+  or entitlement, and no role assignment can reference a Region or Zone.
+- **Reads.** The Group Admin reads the directory and overview under
+  `group.schools.view` (platform tables only). The Platform Manager and
+  Auditor read the platform Group pages and change nothing.
+
 ## Group cross-School reporting (ADR 0048 — built in Phase 0N.11)
 
 - A Group report needs the Group capability **`group.reporting.view`** on

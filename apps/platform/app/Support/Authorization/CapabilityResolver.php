@@ -376,6 +376,31 @@ class CapabilityResolver
         return in_array($capability, $this->platformCapabilities($actor), true);
     }
 
+    /**
+     * ORG.12D (ADR 0080 §9): whether the actor holds the PLATFORM capability
+     * NOW -- the same rule as canPlatform(), read fresh (never the 60 s
+     * cache), with the actor's active platform role assignments share-locked
+     * until the caller's transaction ends, so a concurrent revocation is
+     * ordered strictly before or after the decision. Disabled Users and
+     * bearer tokens never count. For assured platform governance writes.
+     */
+    public function holdsPlatformNow(User $actor, string $capability): bool
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new LogicException('CapabilityResolver::holdsPlatformNow() must run inside the decision transaction.');
+        }
+        if (self::isBearerAuthenticated($actor) || ! User::query()->whereKey($actor->id)->where('is_disabled', false)->sharedLock()->exists()) {
+            return false;
+        }
+
+        return $actor->platformRoleAssignments()
+            ->whereNull('revoked_at')
+            ->sharedLock()
+            ->with('role.capabilities')
+            ->get()
+            ->contains(fn ($assignment): bool => $assignment->role->capabilities->contains('key', $capability));
+    }
+
     public function canInSchool(User $actor, string $capability, School $school): bool
     {
         return in_array($capability, $this->schoolCapabilities($actor, $school), true);

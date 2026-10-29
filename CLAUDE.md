@@ -1671,3 +1671,12 @@ once several modules copy it.
      - **Campus services** (`campus_services`, code-owned `CampusServiceType`) are descriptive: never a module entitlement, capability, billing plan or authorization, and never create Transport, Hostel, Canteen or Finance records; enabling a module never sets a service.
      - **No Campus timezone or currency:** the School timezone and Finance's single currency stay canonical.
      - **Profile audits name changed fields,** never contact, address or identity values. Contacts are institutional, never a User's account details.
+
+113. **A Network is a School Group; its classification and structure are governance, never authority (ADR 0080 §9, ADR 0045 ORG.12D amendment).**
+     - **No new entity:** never a Network, Organization or Franchise table, and never a tenant above School.
+     - **Relationship:** each membership carries one (`SchoolGroupRelationship`: owned, franchise, managed, affiliate). The enum matches the DB CHECK. NULL is a legacy, unclassified membership and is never guessed.
+     - **Regions and Zones** belong to one Group. Composite keys and `trg_school_group_members_placement` keep every reference inside the Group and keep a member's Region equal to its Zone's Region. They are inactivated, never deleted, and codes are frozen once used. Never a `school_id`, RLS, `parent_id` or recursive hierarchy, and never a Region/Zone column on a role assignment, membership or tenant table (`GroupArchitectureGuardTest`).
+     - **Writes:** only `SchoolGroupGovernanceService` and `SchoolGroupStructureService`, under `platform.school_groups.manage`. Add, remove and reclassify need `holdsPlatformNow()` in the transaction, a closed `SchoolGroupMembershipReason` and a `FreshMfaProof`. A placement move needs the re-read and a reason. Stale forms are refused.
+     - **Audit:** ids and codes only, never names or the network reference value.
+     - **Reads:** `SchoolGroupDirectoryReadService` reads platform tables only: no TenantContext, cache or tenant model. Counts are of member Schools, Regions and Zones only.
+     - **Never:** a relationship, Region or Zone granting a capability, School membership, lifecycle, entitlement or profile access; a Region/Zone Manager or zone-scoped authority; Group-side management. Group-side management is an ORG.12E owner decision.

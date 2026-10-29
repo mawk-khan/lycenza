@@ -541,3 +541,34 @@ database-enforced) and rule 84 records the Group-scope invariants.
   on a membership grant, and none of either scope's capabilities on a
   Guardian role).
 - CLAUDE.md rule 25 is amended accordingly.
+
+## Amendment — Network governance (ORG.12D, 2026-10-29; ADR 0080 §9)
+
+The School Group is the canonical Network (OD-12.8). This amendment is
+additive and reopens no Group invariant.
+- **§11 Audit:**
+  - `school_added` now also records `relationship_type`, `reason_code` and
+    `mfa_verified_at`;
+  - `school_removed` records `reason_code` and `mfa_verified_at`;
+  - new events: `platform.school_group.membership_classified`,
+    `.membership_placed`, `.region_created`, `.region_updated`,
+    `.zone_created` and `.zone_updated`;
+  - identifiers and codes only, never a name or network reference value.
+- **§5 Governance:** adding, removing and reclassifying a member School now
+  need a closed reason, a fresh MFA proof and a fresh in-transaction
+  re-read of `platform.school_groups.manage`. A new membership must be
+  classified (owned, franchise, managed or affiliate). Placement in a
+  Region or Zone needs a reason. Still platform-governed: a Group Admin
+  changes nothing (invariant 6).
+- **§12 Directory (OD-12.11):**
+  - the Group view may show the member Schools' code, the Group's own
+    classification of each membership (relationship, network reference,
+    Region, Zone), and **counts of member Schools, Regions and Zones**;
+  - "never counts" still holds for anything inside a School: people,
+    records or money;
+  - still platform tables only, and still no TenantContext.
+- **§7 Cardinality:** many-to-many is unchanged. Classification and
+  placement belong to each membership, independently.
+- **Regions and Zones** are Group-owned classifications. They are never a
+  tenant, an authorization scope, a role-assignment column or a grant
+  target. No Group or School capability was added.
