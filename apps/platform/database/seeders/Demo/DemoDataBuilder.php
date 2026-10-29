@@ -42,8 +42,6 @@ use App\Models\PlatformRoleAssignment;
 use App\Models\Role;
 use App\Models\School;
 use App\Models\SchoolGroup;
-use App\Models\SchoolGroupRegion;
-use App\Models\SchoolGroupZone;
 use App\Models\SchoolMembership;
 use App\Models\User;
 use App\Support\FeatureFlags\FeatureFlagResolver;
@@ -120,6 +118,9 @@ final class DemoDataBuilder
 
     public User $admin;
 
+    /** ORG.12E-D1: the demo's one platform root, for the Organization world's governance steps. */
+    public User $platformAdmin;
+
     public AcademicYear $currentYear;
 
     public AcademicYear $nextYear;
@@ -183,6 +184,9 @@ final class DemoDataBuilder
         $this->buildOperationsDeskAccounts();
 
         (new DemoModuleData($this))->build();
+        // ORG.12E-D1: the canonical Organization reference world (Northstar
+        // Network, standalone Schools, Network and access personas).
+        (new DemoOrganizationData($this))->build();
 
         return new DemoBuildResult($this->school, $this->secondSchool, $this->accounts, $this->notes);
     }
@@ -258,6 +262,7 @@ final class DemoDataBuilder
         // `platform.role_grant.provisioned` with method `demo_seed`.
         $platformAdmin = $this->user('Platform Admin (Demo)', 'platform.admin@example.test', PlatformRootProvisioningService::CONNECTION);
         app(PlatformRootProvisioningService::class)->provision($platformAdmin, 'demo_seed');
+        $this->platformAdmin = $platformAdmin;
         $this->account('Platform Super Admin', $platformAdmin, '(none -- platform scope)', 'Platform capabilities: School Registry and lifecycle, School elevation (no School page opens), School Group governance, platform audit review, Platform Manager and Auditor grants');
 
         // Phase 0N.7 (ADR 0046): the one runtime-assignable platform role,
@@ -341,38 +346,13 @@ final class DemoDataBuilder
         ]);
         $this->account('Group Admin', $groupAdmin, '(none -- Group scope: Lycenza Demo Trust)', 'group_admin for both demo Schools\' Group: Group view and Group-derived elevation; no School permission');
 
-        // ORG.12D/12E (ADR 0080 §9-§10): the Trust as a Network -- classified
-        // memberships, a Region with a Zone, and Network roles (whole Group,
-        // one Region, one Zone). Governance metadata only: no School access.
+        // ORG.12D (ADR 0080 §9): the Trust's memberships are classified; its
+        // Network structure, Network roles and Regions/Zones live in the
+        // canonical Organization world (DemoOrganizationData, ORG.12E-D1).
         DB::table('school_group_members')->where('school_group_id', $group->id)->where('school_id', $this->school->id)
             ->update(['relationship_type' => 'owned', 'network_reference' => 'TRUST-001']);
         DB::table('school_group_members')->where('school_group_id', $group->id)->where('school_id', $this->secondSchool->id)
             ->update(['relationship_type' => 'franchise', 'network_reference' => 'TRUST-002']);
-        $south = SchoolGroupRegion::query()->create(['school_group_id' => $group->id, 'code' => 'SOUTH', 'name' => 'South Region', 'sort_order' => 1]);
-        $north = SchoolGroupRegion::query()->create(['school_group_id' => $group->id, 'code' => 'NORTH', 'name' => 'North Region', 'sort_order' => 2]);
-        $central = SchoolGroupZone::query()->create(['school_group_id' => $group->id, 'region_id' => $south->id, 'code' => 'CENTRAL', 'name' => 'Central Zone', 'sort_order' => 1]);
-        DB::table('school_group_members')->where('school_group_id', $group->id)->where('school_id', $this->school->id)
-            ->update(['region_id' => $south->id, 'zone_id' => $central->id]);
-        DB::table('school_group_members')->where('school_group_id', $group->id)->where('school_id', $this->secondSchool->id)
-            ->update(['region_id' => $north->id]);
-
-        foreach ([
-            ['Network Manager', 'Ravi Menon (Network Manager)', 'network.manager@example.test', 'network_manager', null, null, 'Whole Group: manages Regions, Zones, member-School classification, placement and removal, and read-only Network Viewers (fresh MFA for classification, removal and viewers); never adds a School, enters a School or holds a School permission'],
-            ['Network Viewer (Region)', 'Sana Iyer (South Region)', 'network.region@example.test', 'network_viewer', $south->id, null, 'Read-only, South Region: sees only the Schools placed in the South Region or its Zones; no School permission'],
-            ['Network Viewer (Zone)', 'Arjun Das (Central Zone)', 'network.zone@example.test', 'network_viewer', null, $central->id, 'Read-only, Central Zone: sees only the Schools in the Central Zone; no School permission'],
-        ] as [$persona, $name, $email, $roleKey, $regionId, $zoneId, $access]) {
-            $person = $this->user($name, $email);
-            GroupRoleAssignment::query()->create([
-                'user_id' => $person->id,
-                'school_group_id' => $group->id,
-                'role_id' => $this->role($roleKey, 'group')->id,
-                'granted_by_user_id' => $platformAdmin->id,
-                'granted_at' => now(),
-                'region_id' => $regionId,
-                'zone_id' => $zoneId,
-            ]);
-            $this->account($persona, $person, '(none -- Group scope: Lycenza Demo Trust)', $access);
-        }
     }
 
     private function buildSecondSchool(): void
@@ -778,7 +758,7 @@ final class DemoDataBuilder
     // helpers
     // ------------------------------------------------------------------
 
-    private function user(string $name, string $email, ?string $connection = null): User
+    public function user(string $name, string $email, ?string $connection = null): User
     {
         $user = User::on($connection)->create([
             'name' => $name,
@@ -790,7 +770,7 @@ final class DemoDataBuilder
         return $connection === null ? $user : User::query()->findOrFail($user->id);
     }
 
-    private function member(User $user, School $school): SchoolMembership
+    public function member(User $user, School $school): SchoolMembership
     {
         return SchoolMembership::query()->create([
             'user_id' => $user->id,
@@ -800,19 +780,20 @@ final class DemoDataBuilder
         ]);
     }
 
-    private function role(string $key, string $scope): Role
+    public function role(string $key, string $scope): Role
     {
         return Role::query()->where('key', $key)->where('scope', $scope)->firstOrFail();
     }
 
-    private function assignSchoolRole(SchoolMembership $membership, string $roleKey): void
+    public function assignSchoolRole(SchoolMembership $membership, string $roleKey, ?string $campusId = null): void
     {
         // SR.1 (ADR 0071 §11): the demo's grants carry no assigning User, so
         // they are written through the local/testing seam (demo-guarded).
-        LocalCatalogueFixtures::grantRole($membership, $this->role($roleKey, 'school'));
+        // ORG.12E-D1: optionally for one Campus (ORG.7A).
+        LocalCatalogueFixtures::grantRole($membership, $this->role($roleKey, 'school'), $campusId);
     }
 
-    private function account(string $persona, User $user, string $school, string $access): void
+    public function account(string $persona, User $user, string $school, string $access): void
     {
         $this->accounts[] = [
             'persona' => $persona,

@@ -71,9 +71,10 @@ class DemoDataBuilderTest extends TestCase
         $this->assertSame([
             'platform.admin@example.test', 'platform.auditor@example.test', 'platform.manager@example.test', 'school.admin@example.test', 'principal@example.test',
             'hr.payroll@example.test', 'multi.school@example.test', 'annexe.admin@example.test',
-            'group.admin@example.test', 'network.manager@example.test', 'network.region@example.test', 'network.zone@example.test',
-            'teacher@example.test', 'student@example.test', 'guardian01@example.test',
+            'group.admin@example.test', 'teacher@example.test', 'student@example.test', 'guardian01@example.test',
             ...array_column(DemoAccountCatalog::OPERATIONS_DESKS, 'email'),
+            // ORG.12E-D1: the canonical Organization demo personas.
+            ...array_column(DemoAccountCatalog::ORGANIZATION, 1),
         ], $emails);
 
         // Every login-page shortcut is a real seeded account (and vice versa).

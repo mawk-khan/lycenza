@@ -95,7 +95,7 @@ const show = (value: string | null | undefined) => (value && value !== '' ? valu
         <div class="mt-6 grid gap-4 sm:grid-cols-2">
             <section aria-labelledby="identity-heading" class="rounded border border-slate-200 p-4">
                 <h2 id="identity-heading" class="text-sm font-semibold">Identity</h2>
-                <dl class="mt-2 space-y-1 text-sm">
+                <dl class="mt-2 space-y-1 text-sm [overflow-wrap:anywhere]">
                     <div>
                         <dt class="inline text-slate-500">Display name:</dt>
                         <dd class="inline">{{ school.name }}</dd>
@@ -116,7 +116,7 @@ const show = (value: string | null | undefined) => (value && value !== '' ? valu
             </section>
             <section aria-labelledby="contact-heading" class="rounded border border-slate-200 p-4">
                 <h2 id="contact-heading" class="text-sm font-semibold">Contact</h2>
-                <dl class="mt-2 space-y-1 text-sm break-words">
+                <dl class="mt-2 space-y-1 text-sm [overflow-wrap:anywhere]">
                     <div>
                         <dt class="inline text-slate-500">Email:</dt>
                         <dd class="inline">{{ show(school.email) }}</dd>
@@ -151,7 +151,7 @@ const show = (value: string | null | undefined) => (value && value !== '' ? valu
                 <h2 id="institution-heading" class="text-sm font-semibold">
                     Institutional details
                 </h2>
-                <dl class="mt-2 space-y-1 text-sm">
+                <dl class="mt-2 space-y-1 text-sm [overflow-wrap:anywhere]">
                     <div>
                         <dt class="inline text-slate-500">Education board:</dt>
                         <dd class="inline">{{ show(boardName(school.educationBoardId)) }}</dd>
@@ -171,7 +171,7 @@ const show = (value: string | null | undefined) => (value && value !== '' ? valu
                 class="rounded border border-slate-200 p-4 sm:col-span-2"
             >
                 <h2 id="defaults-heading" class="text-sm font-semibold">Operating defaults</h2>
-                <dl class="mt-2 space-y-1 text-sm">
+                <dl class="mt-2 space-y-1 text-sm [overflow-wrap:anywhere]">
                     <div>
                         <dt class="inline text-slate-500">Time zone:</dt>
                         <dd class="inline">

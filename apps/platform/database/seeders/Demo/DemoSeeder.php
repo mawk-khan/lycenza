@@ -42,5 +42,13 @@ class DemoSeeder extends Seeder
         foreach ($result->notes as $note) {
             $this->command->line('  - '.$note);
         }
+
+        // ORG.12E-D1: prove the canonical Organization demo world, fail loudly otherwise.
+        $verifier = new DemoOrganizationVerifier;
+        $problems = $verifier->problems();
+        if ($problems !== []) {
+            throw new \RuntimeException('Organization demo verification failed: '.implode('; ', $problems));
+        }
+        $this->command->info('Organization demo verified: '.json_encode($verifier->summary()));
     }
 }

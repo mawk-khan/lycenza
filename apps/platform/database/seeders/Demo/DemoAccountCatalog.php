@@ -22,6 +22,23 @@ final class DemoAccountCatalog
 
     public const GROUP_OPERATIONS = 'Operations desks (production roles)';
 
+    /** ORG.12E-D1: the canonical Organization demo world (docs/demo/ORGANIZATION-DEMO-DATA.md). */
+    public const GROUP_ORGANIZATION = 'Organization demo (Northstar Network, standalone Schools)';
+
+    /** ORG.12E-D1 personas, in the order DemoOrganizationData seeds them. */
+    public const ORGANIZATION = [
+        ['School Admin — Northstar Gachibowli', 'gachibowli.admin@example.test', 'Multi-Campus Network School: Setup & readiness (partial and blocked areas), rich School and Campus profiles with services, the Access Center and effective access.'],
+        ['Accountant — Whole School', 'gachibowli.accounts@example.test', 'Effective access reads "Accountant — Whole School" (Finance enabled).'],
+        ['Cashier — Campus: Gachibowli Main Campus', 'gachibowli.cashier@example.test', 'Effective on Gachibowli Main Campus only; never the Early Years Campus, never School-wide.'],
+        ['School Admin — Greenfield (standalone, 1 Campus)', 'greenfield.admin@example.test', 'No School Group; core modules only, so optional Setup areas show "Not enabled".'],
+        ['School Admin — Horizon Academy (standalone, 3 Campuses)', 'horizon.admin@example.test', 'No School Group; three Campuses with different services.'],
+        ['Network Manager — Northstar', 'network.manager@example.test', 'Whole Network: Regions, Zones, classification, placement, removal and read-only viewers (enroll MFA first for classification, removal and viewers); cannot add or enter a School.'],
+        ['Network Viewer — whole Network', 'network.viewer@example.test', 'Read-only: all six Northstar Schools, including the unclassified one.'],
+        ['Network Viewer — Region: Telangana', 'network.region@example.test', 'Read-only: Telangana Schools only (Hyderabad Central, Hyderabad West, Warangal); never Karnataka.'],
+        ['Network Viewer — Zone: Hyderabad Central', 'network.zone@example.test', 'Read-only: Jubilee Hills and Secunderabad only.'],
+        ['Network + School — shared identity', 'network.shared@example.test', 'Karnataka Network Viewer AND Principal of Northstar Gachibowli; no role in any other School.'],
+    ];
+
     /**
      * Persona => the production School role keys it holds (additive grants).
      *
@@ -87,9 +104,6 @@ final class DemoAccountCatalog
             ['Platform Manager', 'platform.manager@example.test', 'Platform scope, onboarding: the School Registry and Groups (read), creating a School in provisioning with its bootstrap administrator (enroll MFA first); cannot activate, suspend or close a School.'],
             ['Platform Auditor', 'platform.auditor@example.test', 'Platform scope, read-only: the School Registry, School Groups and the platform audit log (enroll MFA first); changes nothing.'],
             ['Group Admin', 'group.admin@example.test', 'Group scope only: views the Lycenza Demo Trust and its two Schools, enters one via elevated access (MFA required); no School permission.'],
-            ['Network Manager', 'network.manager@example.test', 'Group scope, whole network: manages the Trust\'s Regions, Zones, member-School classification and placement, and read-only Network Viewers (enroll MFA first for classification, removal and viewers); never enters a School or holds a School permission.'],
-            ['Network Viewer (Region)', 'network.region@example.test', 'Group scope, read-only: sees only the South Region\'s Schools in the network directory; no School permission.'],
-            ['Network Viewer (Zone)', 'network.zone@example.test', 'Group scope, read-only: sees only the Central Zone\'s Schools in the network directory; no School permission.'],
             ['Teacher', 'teacher@example.test', 'Teacher role + Staff Self-Service role, linked to an Employee: My Curriculum Delivery, My Attendance, My Learning Content and My Assignments for the one class she is assigned (G8-A Mathematics); My Leave, My Staff Attendance and My Payslips for herself; the School calendar (whole-School and Staff Events, ORG.9D-3R1); the Communication Hub inbox with only what she received (ORG.9D-1R1, no announcement list or administration); every other module is 403.'],
             ['Student', 'student@example.test', 'Linked Student account: no student portal exists; modules are 403.'],
             ['Guardian', 'guardian01@example.test', 'Activated Guardian account: the Guardian portal inbox, her child\'s attendance and fees, and replies in conversations the School starts with her (POR.1–POR.4, development only; all but the inbox need MFA); every staff module is 403.'],
@@ -113,6 +127,10 @@ final class DemoAccountCatalog
 
         foreach (self::OPERATIONS_DESKS as $key => $desk) {
             $shortcuts[] = ['persona' => $desk['persona'], 'email' => $desk['email'], 'hint' => $operationsHints[$key], 'group' => self::GROUP_OPERATIONS];
+        }
+
+        foreach (self::ORGANIZATION as [$persona, $email, $hint]) {
+            $shortcuts[] = ['persona' => $persona, 'email' => $email, 'hint' => $hint, 'group' => self::GROUP_ORGANIZATION];
         }
 
         return $shortcuts;
