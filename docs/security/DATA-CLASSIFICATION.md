@@ -157,6 +157,19 @@
     Hub shows those families as Not available behind their legal and
     privacy gates.
 
+- **Organization reports (ORG.12H, ADR 0080 §13):**
+  - The School Control Plane report is Internal-tier configuration status for
+    one School: setup statuses and closed explanations, integration and
+    presentation status, and counts of role templates and role assignments.
+  - It never includes a person, contact, identifier, record or amount.
+  - The Network report is Internal-tier governance metadata from platform
+    tables only: member School name, code, lifecycle, relationship, Region,
+    Zone, Network reference, and counts of member Schools.
+  - No cross-School business data (students, staff, guardians, finance,
+    attendance, admissions, library, inventory, transport, communications)
+    and no Campus count is aggregated.
+  - Neither report is exported or stored.
+
 ## What this document does not do
 
 It does not implement any technical control itself (no encryption

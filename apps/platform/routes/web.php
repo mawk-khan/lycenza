@@ -71,6 +71,7 @@ use App\Http\Controllers\App\Finance\PaymentCorrectionRequestController as Finan
 use App\Http\Controllers\App\Finance\PaymentRecordController as FinancePaymentRecordController;
 use App\Http\Controllers\App\Groups\GroupReportController;
 use App\Http\Controllers\App\Groups\NetworkGovernanceController;
+use App\Http\Controllers\App\Groups\NetworkReportController;
 use App\Http\Controllers\App\Groups\SchoolGroupController;
 use App\Http\Controllers\App\GuardianAccountInvitationController;
 use App\Http\Controllers\App\GuardianAccountLinkController;
@@ -110,6 +111,7 @@ use App\Http\Controllers\App\LMS\AssignmentController as LmsAssignmentController
 use App\Http\Controllers\App\LMS\LearningContentController as LmsLearningContentController;
 use App\Http\Controllers\App\LMS\MyAssignmentController;
 use App\Http\Controllers\App\LMS\MyLearningContentController;
+use App\Http\Controllers\App\OrganizationReportController;
 use App\Http\Controllers\App\OrganizationSetupController;
 use App\Http\Controllers\App\Payroll\CompensationController as PayrollCompensationController;
 use App\Http\Controllers\App\Payroll\PayrollAccountingConfigurationController;
@@ -478,6 +480,10 @@ Route::middleware('auth')->where(WebRouteParameters::uuidPatterns())->group(func
         // read one School at a time through Analytics' Group-safe gate.
         Route::get('/{schoolGroup}/reports/curriculum-coverage', [GroupReportController::class, 'curriculumCoverage'])
             ->name('reports.curriculum-coverage');
+        // ORG.12H (ADR 0080 §13.3): the Network MIS -- platform tables only,
+        // scoped by GroupGovernanceAccess (whole Group, Region or Zone).
+        Route::get('/{schoolGroup}/reports/network', [NetworkReportController::class, 'index'])
+            ->name('reports.network');
         // ORG.12E (ADR 0080 §10): Network governance in Group context -- the
         // Network Access page, read-only operator administration (fresh MFA)
         // and a whole-Group Network Manager's structure and membership
@@ -605,6 +611,10 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::get('/integrations', [IntegrationHubController::class, 'index'])
             ->middleware('capability:school.settings.view')
             ->name('integrations');
+        // ORG.12H (ADR 0080 §13.2): the School Control Plane report (read-only).
+        Route::get('/organization-report', [OrganizationReportController::class, 'index'])
+            ->middleware('capability:school.profile.view')
+            ->name('organization-report');
 
         Route::get('/profile', [SchoolSetupController::class, 'profile'])->name('profile');
         Route::put('/profile', [SchoolSetupController::class, 'updateProfile'])->name('profile.update');

@@ -90,6 +90,7 @@ class SchoolContextRouteGuardTest extends TestCase
         'app.groups.elevation.confirm',           // Group scope, never
         'app.groups.elevation.store',             // School context
         'app.groups.reports.curriculum-coverage', // Phase 0N.11: Group report (ADR 0048) -- its reads enter one School at a time internally
+        'app.groups.reports.network',             // ORG.12H Network MIS (ADR 0080 §13.3) -- platform tables only, never School context
         'app.platform.audit-log',                 // Phase 0N.7: platform
         'app.platform.roles.index',               // audit review and
         'app.platform.roles.grants.store',        // platform-role

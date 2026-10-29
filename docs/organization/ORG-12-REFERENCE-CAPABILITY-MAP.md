@@ -91,7 +91,7 @@ stable; ORG.12A setup definitions cite them
 | RF-32 | Feedback | 10 | Logout satisfaction, public-link feedback, configurable daily feedback types/questions/scale, rating reports | Surveys / Feedback | Not built (ORG-013 post-v1) | — | Surveys / Feedback | Respondent data needs a privacy design; no public link without it | `DOMAIN_FUTURE` |
 | RF-33 | Complaints / reviews | 1 | Teacher compliments/reviews log by branch | HR (conduct) | Not built (HR-052 owner decision) | — | HR | Conduct data is sensitive; follows HR-052 | `OWNER_DECISION_REQUIRED` |
 | RF-34 | FAQs | 3 | Organisation FAQ list with web/Android/iOS types and rich-text answers | Help / Knowledge Base | Not built | — | Help / Knowledge Base | Product help, not tenant data | `PLATFORM_FUTURE` |
-| RF-35 | Organization MIS | 1 | Organisation MIS with month tabs and refresh | Analytics / Organization Reporting | Analytics foundation (one non-person report); Group-safe report (ADR 0048) | 12H (setup reports only) | Analytics | Network reporting never bypasses School tenancy; person-counting gated (ADR 0040) | `DOMAIN_FUTURE` |
+| RF-35 | Organization MIS | 1 | Organisation MIS with month tabs and refresh | Analytics / Organization Reporting | **Organization MIS built (ORG.12H):** School Control Plane report (setup, gaps, integrations, presentation, access) and the scoped Network report (lifecycle, relationships, Region/Zone distribution, attention, directory). Business MIS (student/staff/fee figures by month) not built | 12H (built: structural/setup MIS) | Analytics (business MIS, Network Campus counts and setup readiness need a future cross-School read-model decision, ADR 0080 §13.4) | Network reporting never bypasses School tenancy; person-counting gated (ADR 0040) | `PARTIAL` |
 | RF-36 | Module catalogue / per-user-type module grants | 78 | Subscribed vs available modules (licence tier, upsell catalogue), module × user-type tick matrices per level | Platform (module entitlements) | Code-owned `ModuleCatalogue`, platform-governed School entitlements (ORG.5) | 12B (entitlement awareness) | — | Modules are School entitlements, never per-person grants (PARITY-DO-NOT-BUILD ORG-023); no licence tier | `EXISTING_DIFFERENT_ACCEPTED` |
 | RF-37 | Admin user accounts | 13 | Org/zone/branch admin user lists, create user with branches, reset password, app PIN, login history with IP, settings change log | Identity & Access | Staff accounts by invitation only, MFA, off-boarding by suspension (ADR 0059, rule 92); audit ledgers | 12E (built: effective-access view per staff member, this School only) | — | No admin-set passwords or PINs, no plaintext credential columns, no vendor user inside a School | `EXISTING_DIFFERENT_ACCEPTED` |
 | RF-38 | Per-user approval delegation | 5 | Per-user flags "can approve teaching / non-teaching / transport staff leave" | Leave / approval foundation | Leave approval by capability + current reporting line, maker/checker (ORG.8D, rule 102) | 12E (built: approval and fresh-MFA markers in the role explorer) | — | Approval authority is capability + relationship, never a per-user flag | `EXISTING_DIFFERENT_ACCEPTED` |
@@ -106,9 +106,9 @@ their functions are observed inside RF-03 and RF-14 respectively.
 |---|---|---|
 | `EXISTING_EQUIVALENT` | 2 | RF-05, RF-13 |
 | `EXISTING_DIFFERENT_ACCEPTED` | 13 | RF-01, RF-02, RF-03, RF-04, RF-07, RF-10, RF-12, RF-15, RF-16, RF-23, RF-36, RF-37, RF-38 |
-| `PARTIAL` | 3 | RF-08, RF-20, RF-21 |
+| `PARTIAL` | 4 | RF-08, RF-20, RF-21, RF-35 |
 | `ORG12_BUILD` | 0 | — |
-| `DOMAIN_FUTURE` | 7 | RF-06, RF-24, RF-25, RF-26, RF-29, RF-32, RF-35 |
+| `DOMAIN_FUTURE` | 6 | RF-06, RF-24, RF-25, RF-26, RF-29, RF-32 |
 | `PLATFORM_FUTURE` | 3 | RF-30, RF-31, RF-34 |
 | `POST_V1` | 5 | RF-09, RF-18, RF-19, RF-27, RF-28 |
 | `DO_NOT_BUILD` | 2 | RF-11, RF-14 |
@@ -120,6 +120,48 @@ By screens, 374 of 515 (73 %) are the reference's user-type / menu /
 module permission machinery (RF-10, RF-14, RF-16–RF-18, RF-36). Lycenza
 meets that need with the capability catalogue, fixed role templates and
 entitlements, and does not copy it.
+
+### 4.00 ORG.12H final closure audit (2026-10-29)
+
+All 38 families were re-checked against the pack inventory (515 screens,
+fingerprint `d11eee52…`) and the repository as of ORG.12H. One
+classification changed: **RF-35 Organization MIS, `DOMAIN_FUTURE` →
+`PARTIAL`** (structural and setup MIS built; business MIS stays Analytics).
+`ORG12_BUILD` is **0**: no Organization-owned gap remains.
+
+**Every remaining non-complete family has a named owner:**
+
+| Class | Family | Owner / programme | Blocker | Blocks Organization closure? |
+|---|---|---|---|---|
+| PARTIAL | RF-08 Admissions configuration | Admissions | Public enquiry and print templates (ADM-022, post-v1) | No |
+| PARTIAL | RF-20 Branding | Media pipeline (platform) | No governed media pipeline for logo uploads (ADR 0080 §11.8) | No (recorded prerequisite) |
+| PARTIAL | RF-21 Sensitive-field visibility | Identity & Access (security architecture) | A central server projection and per-role evaluation are needed before any deny-only policy (ADR 0080 §10.8) | No (recorded prerequisite) |
+| PARTIAL | RF-35 Organization MIS | Analytics | Business MIS is person-counting (ADR 0040); Network Campus counts and setup readiness need a cross-School read-model decision (ADR 0080 §13.4) | No |
+| DOMAIN_FUTURE | RF-06 Attendance configuration | Attendance (daily-session model); Communications (absence SMS, E28) | Domain programme | No |
+| DOMAIN_FUTURE | RF-24 SMS | Communications channels (E28) | ADR 0057 §5, legal and provider review (incl. DLT) | No |
+| DOMAIN_FUTURE | RF-25 Payment gateway | Payments gateway | ADR 0057 §2: provider, merchant scope, jurisdiction, PCI | No |
+| DOMAIN_FUTURE | RF-26 Biometric | Attendance / HR devices (Integrations & Devices) | HRX-L1/L2 legal gate; privacy review | No |
+| DOMAIN_FUTURE | RF-29 Hardware logs | Attendance / HR devices | As RF-26 | No |
+| DOMAIN_FUTURE | RF-32 Feedback | Surveys / Feedback | Respondent privacy design (ORG-013) | No |
+| PLATFORM_FUTURE | RF-30 Subscription invoices | Platform Billing | Entitlements are never billing (rule 100) | No |
+| PLATFORM_FUTURE | RF-31 Support tickets | Platform Support | — | No |
+| PLATFORM_FUTURE | RF-34 FAQs | Help / Knowledge Base | — | No |
+| POST_V1 | RF-09 Recruitment | HR (recruitment) | Not in v1 scope; staff join by invitation | No |
+| POST_V1 | RF-18 Mobile menus | Mobile app (`apps/mobile`) | No mobile surface exists yet | No |
+| POST_V1 | RF-19 Banners | Portal presentation + media pipeline | Media prerequisite; never a Communication | No |
+| POST_V1 | RF-27 RFID | Attendance / Transport devices | Documented non-scope; privacy review | No |
+| POST_V1 | RF-28 VTS | Transport (tracking) | No live location of people without a privacy design | No |
+| DO_NOT_BUILD | RF-11 User hierarchy | — | Replaced by Network governance roles plus HR reporting lines; a hierarchy is never authority | — |
+| DO_NOT_BUILD | RF-14 Access levels (menu matrix) | — | Replaced by capability + scope + entitlement, with presentation kept separate (rules 98, 100, 115) | — |
+| OWNER_DECISION | RF-33 Complaints / reviews | HR (conduct) | HR-052 owner decision | No |
+| LEGAL_DECISION | RF-17 Student menus | Student Portal | No Student portal; Student-data legal gate | No |
+| LEGAL_DECISION | RF-22 Tax / legal configuration | Schools (identity) after a legal decision | GST/PAN/VAT identifiers stay gated (rule 112) | No |
+
+**ORG.REAUDIT-1** is satisfied for Organization-owned surfaces by ORG.12. A
+cross-domain re-audit stays planned for when SIS, HR, Finance, Admissions,
+Portal and Integrations mature. ORG.12H acts as **ORG.REAUDIT-FINAL** for
+the current product state. A pre-production global parity audit may
+follow.
 
 ### 4.0 Campus service profile vs the reference facility flags (ORG.12C)
 

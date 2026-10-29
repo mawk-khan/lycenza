@@ -14,7 +14,18 @@ const props = defineProps<{
     relationships: Option[];
     regions: StructureItem[];
     zones: StructureItem[];
+    // ORG.12H (ADR 0080 §13.3): the Network report adds the attention filter and a closed sort.
+    sorts?: string[];
+    withAttention?: boolean;
 }>();
+
+const sortLabels: Record<string, string> = {
+    name: 'School name',
+    relationship: 'Relationship',
+    region: 'Region',
+    zone: 'Zone',
+    status: 'Lifecycle',
+};
 
 const state = reactive({
     q: props.filters.q ?? '',
@@ -22,10 +33,15 @@ const state = reactive({
     region_id: props.filters.region_id ?? '',
     zone_id: props.filters.zone_id ?? '',
     status: props.filters.status ?? '',
+    attention: props.filters.attention ?? '',
+    sort: props.filters.sort ?? 'name',
 });
 
 function apply() {
-    const query = Object.fromEntries(Object.entries(state).filter(([, v]) => v !== ''));
+    // 'name' is the default order, so it is never sent.
+    const query = Object.fromEntries(
+        Object.entries(state).filter(([k, v]) => v !== '' && !(k === 'sort' && v === 'name')),
+    );
     router.get(props.baseUrl, query, { preserveScroll: true, preserveState: true });
 }
 </script>
@@ -35,9 +51,9 @@ function apply() {
         <h2 id="directory-heading" class="text-base font-semibold">Member Schools</h2>
         <form class="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-6" @submit.prevent="apply">
             <div class="sm:col-span-2">
-                <label class="block text-sm text-slate-700" for="directory-q"
-                    >School name or code</label
-                >
+                <label class="block text-sm text-slate-700" for="directory-q">{{
+                    withAttention ? 'School name, code or Network reference' : 'School name or code'
+                }}</label>
                 <input
                     id="directory-q"
                     v-model="state.q"
@@ -96,6 +112,34 @@ function apply() {
                     <option value="provisioning">Provisioning</option>
                     <option value="suspended">Suspended</option>
                     <option value="archived">Archived</option>
+                </select>
+            </div>
+            <div v-if="withAttention">
+                <label class="block text-sm text-slate-700" for="directory-attention"
+                    >Governance attention</label
+                >
+                <select
+                    id="directory-attention"
+                    v-model="state.attention"
+                    class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
+                >
+                    <option value="">Any</option>
+                    <option value="any">Needs attention</option>
+                    <option value="unclassified">Unclassified</option>
+                    <option value="inactive_structure">Inactive Region or Zone</option>
+                    <option value="not_active">School not active</option>
+                </select>
+            </div>
+            <div v-if="sorts && sorts.length">
+                <label class="block text-sm text-slate-700" for="directory-sort">Sort by</label>
+                <select
+                    id="directory-sort"
+                    v-model="state.sort"
+                    class="mt-1 w-full rounded border border-slate-300 px-2 py-2"
+                >
+                    <option v-for="key in sorts" :key="key" :value="key">
+                        {{ sortLabels[key] ?? key }}
+                    </option>
                 </select>
             </div>
             <div class="sm:col-span-3 lg:col-span-6">

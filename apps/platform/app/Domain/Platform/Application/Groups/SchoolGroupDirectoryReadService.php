@@ -41,8 +41,20 @@ class SchoolGroupDirectoryReadService
 
     public const string UNCLASSIFIED = 'unclassified';
 
+    /** ORG.12H: the governance attention filter -- the same three rules as overview()['attention'], never another rule. */
+    public const array ATTENTION = ['any', 'unclassified', 'inactive_structure', 'not_active'];
+
+    /** ORG.12H: the closed sort keys (never a caller-supplied column). */
+    public const array SORTS = [
+        'name' => ['s.name'],
+        'relationship' => ['m.relationship_type', 's.name'],
+        'region' => ['r.code', 'z.code', 's.name'],
+        'zone' => ['z.code', 's.name'],
+        'status' => ['s.status', 's.name'],
+    ];
+
     /**
-     * @param  array{relationship?: ?string, region_id?: ?string, zone_id?: ?string, status?: ?string, q?: ?string}  $filters
+     * @param  array{relationship?: ?string, region_id?: ?string, zone_id?: ?string, status?: ?string, q?: ?string, attention?: ?string, sort?: ?string}  $filters
      * @return LengthAwarePaginator<int, object>
      */
     public function directory(SchoolGroup $group, array $filters, int $page, GroupGovernanceScope $scope): LengthAwarePaginator
@@ -73,10 +85,24 @@ class SchoolGroupDirectoryReadService
         $search = trim((string) ($filters['q'] ?? ''));
         if ($search !== '') {
             $pattern = '%'.addcslashes(mb_substr($search, 0, self::MAX_SEARCH_LENGTH), '\\%_').'%';
-            $query->where(fn ($q) => $q->where('s.name', 'ilike', $pattern)->orWhere('s.code', 'ilike', $pattern));
+            // ORG.12H: the Network reference is the Group's own label, so it is searchable too.
+            $query->where(fn ($q) => $q->where('s.name', 'ilike', $pattern)->orWhere('s.code', 'ilike', $pattern)->orWhere('m.network_reference', 'ilike', $pattern));
+        }
+        $unclassified = fn ($q) => $q->whereNull('m.relationship_type');
+        $inactiveStructure = fn ($q) => $q->where(fn ($w) => $w->where('r.status', 'inactive')->orWhere('z.status', 'inactive'));
+        $notActive = fn ($q) => $q->where('s.status', '<>', 'active');
+        match ($filters['attention'] ?? null) {
+            'unclassified' => $unclassified($query),
+            'inactive_structure' => $inactiveStructure($query),
+            'not_active' => $notActive($query),
+            'any' => $query->where(fn ($w) => $w->where($unclassified)->orWhere($inactiveStructure)->orWhere($notActive)),
+            default => null,
+        };
+        foreach (self::SORTS[$filters['sort'] ?? 'name'] ?? self::SORTS['name'] as $column) {
+            $query->orderBy($column);
         }
 
-        return $query->orderBy('s.name')->orderBy('s.id')
+        return $query->orderBy('s.id')
             ->select([
                 's.id', 's.name', 's.code', 's.status',
                 'm.relationship_type', 'm.network_reference', 'm.region_id', 'm.zone_id',

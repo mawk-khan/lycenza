@@ -119,6 +119,45 @@ class DemoOrganizationDataTest extends TestCase
     }
 
     #[Test]
+    public function the_organization_reports_show_each_demo_scope_and_state(): void
+    {
+        app(DemoDataBuilder::class)->build();
+        $network = SchoolGroup::query()->where('slug', DemoOrganizationData::NETWORK_SLUG)->firstOrFail();
+        $user = fn (string $email): User => User::query()->where('email', $email)->firstOrFail();
+        $networkReport = fn (string $email): array => $this->actingAs($user($email))->get("/app/groups/{$network->id}/reports/network")->assertOk()->viewData('page')['props'];
+
+        $whole = $networkReport('network.viewer@example.test');
+        $this->assertSame([6, 1, 1], [$whole['overview']['schools']['total'], $whole['overview']['relationships']['unclassified'], $whole['distribution']['unplaced']]);
+        $this->assertContains('NHS-MYS', array_column($whole['directory']['data'], 'code'), 'the whole-Network viewer sees unclassified Mysuru');
+        $region = $networkReport('network.region@example.test');
+        $this->assertSame([4, ['TELANGANA'], null], [$region['overview']['schools']['total'], array_column($region['distribution']['regions'], 'code'), $region['distribution']['unplaced']]);
+        $zone = $networkReport('network.zone@example.test');
+        $this->assertEqualsCanonicalizing(['NAC-SEC', 'NEL-JBH'], array_column($zone['directory']['data'], 'code'));
+
+        $schoolReport = function (string $email, string $slug) use ($user): array {
+            $school = School::query()->where('slug', $slug)->firstOrFail();
+            $this->actingAs($user($email))->post("/app/schools/{$school->id}/activate");
+
+            return $this->get('/app/school-setup/organization-report')->assertOk()->viewData('page')['props']['report'];
+        };
+        $gachibowli = $schoolReport('gachibowli.admin@example.test', 'northstar-gachibowli');
+        $this->assertNotSame([], $gachibowli['gaps'], 'Gachibowli is partial / blocked');
+        $this->assertSame('network', $gachibowli['presentation']['brandSource']);
+        $this->assertSame(1, $gachibowli['access']['campusAssignments'], 'the Campus Cashier');
+        $this->assertSame(3, $gachibowli['access']['wholeSchoolAssignments'], 'admin, accountant, shared Principal -- never the disabled former member');
+        $greenfield = $schoolReport('greenfield.admin@example.test', 'greenfield-public');
+        $this->assertNotSame([], $greenfield['setup']['notEnabled']);
+        $this->assertSame('system', $greenfield['presentation']['brandSource']);
+        $this->assertSame('school', $schoolReport('jubilee.admin@example.test', 'northstar-jubilee-hills')['presentation']['brandSource']);
+        $demo = $schoolReport('school.admin@example.test', DemoDataBuilder::SCHOOL_SLUG);
+        $this->assertContains($demo['setup']['overview']['state'], ['complete', 'core_complete'], 'the Demo School is configured');
+
+        // A Network role never opens a member School's report.
+        $this->actingAs($user('network.manager@example.test'))->post("/app/schools/{$network->schools()->first()->id}/activate");
+        $this->assertNotSame(200, $this->get('/app/school-setup/organization-report')->status());
+    }
+
+    #[Test]
     public function the_demo_world_is_refused_outside_local_ddev(): void
     {
         foreach (['production', 'staging'] as $environment) {

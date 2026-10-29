@@ -1716,3 +1716,16 @@ once several modules copy it.
        - Platform, elevation, Group, Network and Campus authority open nothing.
        - Links come from the destination's own capabilities.
      - **Never:** a "test connection", arbitrary URL/IP input, device scan or registration, SMS/DLT or payment-gateway configuration, map/tracking, or a generic integration engine. Those belong to their owning domain's own contract and its legal/provider review.
+
+117. **Organization reports are fixed, read-only projections of existing owners; Network reports never read tenant data (ADR 0080 §13).**
+     - **One catalogue:** `App\Support\Reports\OrganizationReportCatalogue`, code-owned, with explicit authority per report. Never a report builder, query language, tenant formula, score, export (D-11 is separate) or stored snapshot.
+     - **School reports** (`SchoolControlPlaneReport`):
+       - They run in the selected School only and read the existing owners: setup (registry via `OrganizationSetupCenter`), integrations (`IntegrationHubReadService`), presentation (`BrandResolver`, `NavigationPresentation`) and the role catalogue.
+       - Never hard-code a setup or module list.
+       - A not-enabled module is never a gap; core and enabled-module progress stay separate.
+       - Each section re-checks its own capability.
+       - Access counts are staff grants only.
+     - **Network reports** (`NetworkReportReadService`, `SchoolGroupDirectoryReadService`) read platform tables only, under `GroupGovernanceAccess::viewScope()`.
+       - Filters, search and sort only narrow, and the sort is a closed map.
+       - Never a tenant table, `TenantContext`, RLS bypass, cache or link into a School.
+     - **Network Campus counts and Network setup readiness are deferred.** They need tenant reads, and a bounded design needs either an RLS exception or a cross-School read model. That is a future Analytics architecture decision; never add it ad hoc.

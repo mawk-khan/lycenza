@@ -1722,6 +1722,31 @@ UAT plan: `docs/product/APPROVAL-AUTHORITY-UAT.md`.
 - **Production prerequisites:** M-1, OD-8.4, OD-8.9/G-5 and the legal gates
   (matrix §5, §6).
 
+## Organization Control Plane reporting (ORG.12H, ADR 0080 §13 — built 2026-10-29)
+
+- **School Control Plane report**
+  (`/app/school-setup/organization-report`):
+  - Route floor: `capability:school.profile.view`, School-wide. A Campus
+    grant never counts. Re-checked in `SchoolControlPlaneReport` through the
+    ORG.12A read service, together with the active-School check.
+  - Each section needs its own authority:
+    - integrations: `school.settings.view`, plus the ORG.12G per-family view
+      capabilities and MFA parity;
+    - presentation: `school.settings.view`;
+    - access administration: `school.roles.view`.
+  - A section the viewer cannot read is absent, never empty.
+- **Network report** (`/app/groups/{group}/reports/network`):
+  - Authority: `GroupGovernanceAccess::viewScope()` only; with no scope,
+    404. Every read is constrained by the scope (whole Group, Region or
+    Zone).
+  - Filters, search and sort only narrow it. Unplaced memberships are
+    whole-Group only.
+  - It never sets School context, reads a tenant table or links into a
+    School.
+- **Neither report** grants, implies or caches any authority. Platform,
+  elevation, Group and Network roles read no School report.
+- **Both are read-only:** GET only, no export, no audit on read.
+
 ## What is NOT yet implemented
 
 The ADR 0076 ORG.1 items once listed here (the Platform Manager role,

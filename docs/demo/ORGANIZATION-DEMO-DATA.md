@@ -167,6 +167,19 @@ are hashes of random bytes discarded at once (no usable credential exists).
 | No access for Network | network.manager / network.viewer | a Network role never opens a School's Hub |
 | No secret | any page | no URL, endpoint or client name, scope, key, hash or SMTP detail |
 
+## 6c. Organization MIS (ORG.12H)
+
+No new records: every report derives from the canonical world above.
+
+| Report | Persona | Expected (verified on every reset) |
+|---|---|---|
+| Network distribution, whole | network.viewer | Telangana 4 (Hyderabad Central 2, Hyderabad West 1, Region only 1), Karnataka 1 (Bengaluru North 1), Not placed 1 |
+| Network distribution, Region | network.region | Telangana only; no Not placed row |
+| Network distribution, Zone | network.zone | Hyderabad Central 2 only |
+| School Control Plane | gachibowli.admin / greenfield.admin / school.admin | partial and blocked with gaps / optional modules not enabled / core complete |
+
+The owner path is `docs/demo/ORGANIZATION-OWNER-VERIFICATION.md`.
+
 ## 7. Feature mapping
 
 | Checkpoint | Demo records |
@@ -176,6 +189,7 @@ are hashes of random bytes discarded at once (no usable credential exists).
 | ORG.12D | Northstar: 2 Regions, 3 Zones, owned/franchise/managed/affiliate, Region-only Warangal, unclassified Mysuru |
 | ORG.12E | Network Manager and Viewers (whole, Region, Zone), shared identity; Access Center with whole-School Accountant, Campus Cashier, disabled former member, Greenfield "module not enabled" |
 | ORG.12F | Northstar brand; Gachibowli inherits; Jubilee Hills own brand; Greenfield default; Gachibowli navigation profile; Jubilee Hills disabled-module preference; Annexe label; Demo School Guardian portal order |
+| ORG.12H | Network report for whole / Region / Zone viewers; Organization report for Gachibowli (gaps), Greenfield (not enabled), Demo School (configured) |
 | ORG.12G | Gachibowli webhooks Healthy + API client Configured; Horizon webhooks Not configured + expiring credential (Needs attention); Greenfield/Jubilee Not applicable; 7 Not available families |
 
 ## 8. Reset guarantees (proven at ORG.12E-D1)

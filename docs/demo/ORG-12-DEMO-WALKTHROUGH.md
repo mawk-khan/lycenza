@@ -187,6 +187,41 @@ There is deliberately no switch: this is a security decision (ADR 0080
 7. **Nothing secret:** view the page source. No endpoint URL or name, no
    client name, scope, key or hash, and no SMTP host or sending domain.
 
+## 8c. Organization MIS (ORG.12H)
+
+1. **Whole Network:** as **network.viewer** → Northstar → **Network
+   report**.
+   - 6 Schools; relationships owned 2 / franchise 1 / managed 1 /
+     affiliate 1 / unclassified 1; lifecycle 6 active.
+   - Telangana 4 (Hyderabad Central 2, Hyderabad West 1, Region only 1),
+     Karnataka 1, Not placed 1.
+   - Governance attention: *List* on "Relationship not classified" shows
+     Mysuru.
+   - Search finds name, code or Network reference; sort by name,
+     relationship, Region, Zone or lifecycle.
+2. **Region:** as **network.region**, only the four Telangana Schools, and
+   no "Not placed" row. Searching "Mysuru" finds nothing.
+3. **Zone:** as **network.zone**, only Jubilee Hills and Secunderabad.
+4. **Network Manager:** **network.manager** sees the same report. The
+   governance actions stay on the Group page; the report changes nothing.
+5. **Setup at Network level:** the report's *Setup* section explains that
+   setup readiness and Campus counts are not shown. They live in each
+   School's own records, which the Network does not read.
+6. **School Control Plane:** as **gachibowli.admin** → *School setup →
+   Organization report*.
+   - Core in progress; 15 gaps, blocked first, each with its owner and a
+     *Configure* link.
+   - Integrations: 1 healthy, 2 configured, 7 not available.
+   - Presentation: inherited from the Network; 4 staff navigation
+     preferences; logo and banner not available.
+   - Access: 17 templates, 3 whole-School and 1 Campus assignment (the
+     disabled former member is not counted).
+   - The sensitive-data policy is stated as not implemented.
+7. **Optional modules:** as **greenfield.admin**, 13 optional modules are
+   listed as *not enabled*, never as gaps. Lycenza default brand.
+8. **Configured School:** as **school.admin**, Lycenza Demo School is core
+   complete.
+
 ## 9. Negative checks
 
 | # | Try | Expected |
@@ -202,5 +237,8 @@ There is deliberately no switch: this is a security decision (ADR 0080
 | 9 | network.manager, network.viewer, platform.manager, platform.auditor → `/app/school-setup/integrations` | refused |
 | 10 | gachibowli.cashier (Campus), gachibowli.accounts, teacher → Integrations & devices | 403 |
 | 11 | POST to `/app/school-setup/integrations` | 405 (read-only) |
+| 12 | network.manager → `/app/school-setup/organization-report`, `/app/students` | refused |
+| 13 | platform.manager, platform.auditor → Network report, Organization report | 404 / refused |
+| 14 | network.region → Network report `?region_id=<Karnataka>` or `?q=Hebbal` | no rows (filters only narrow) |
 
 `ddev demo-reset` restores the canonical world after any experiment.

@@ -225,8 +225,13 @@ const scopeLabel = computed(() => {
             </form>
         </section>
 
-        <p v-if="canViewReports" class="mt-6 text-sm" data-testid="group-reports">
-            <a class="underline" :href="`${pageUrl}/reports/curriculum-coverage`"
+        <p class="mt-6 flex flex-wrap gap-x-4 text-sm" data-testid="group-reports">
+            <!-- ORG.12H: every Network viewer (scope re-checked by the report). -->
+            <a class="underline" :href="`${pageUrl}/reports/network`">Network report</a>
+            <a
+                v-if="canViewReports"
+                class="underline"
+                :href="`${pageUrl}/reports/curriculum-coverage`"
                 >Curriculum coverage report</a
             >
         </p>

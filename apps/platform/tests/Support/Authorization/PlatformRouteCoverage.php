@@ -77,6 +77,7 @@ final class PlatformRouteCoverage
             Coverage::owned('app.groups.show', GroupGovernanceAccess::class, 'viewScope', 'Group scope: a Network read scope in that Group (group.schools.view or group.network.view), else 404 (ADR 0080 §10)'),
             // ORG.12E (ADR 0080 §10): Network governance in Group context.
             Coverage::owned('app.groups.access', GroupGovernanceAccess::class, 'viewScope', 'Group scope: a Network read scope in that Group, else 404'),
+            Coverage::owned('app.groups.reports.network', GroupGovernanceAccess::class, 'viewScope', 'Group scope: a Network read scope in that Group, else 404 (ORG.12H, ADR 0080 §13.3)'),
             Coverage::service('app.groups.access.operators.store', NetworkAccessService::class, 'grant'),
             Coverage::service('app.groups.access.operators.revoke', NetworkAccessService::class, 'revoke'),
             Coverage::service('app.groups.network.brand.update', NetworkBrandService::class, 'update'),

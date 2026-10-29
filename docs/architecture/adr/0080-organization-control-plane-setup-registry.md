@@ -5,9 +5,9 @@
   Campus Profiles (§8)**, all 2026-10-28; **ORG.12D Network, Franchise,
   Region & Zone Governance (§9)**, **ORG.12E Role, Access & Sensitive
   Data Administration (§10)**, **ORG.12F Navigation, Branding &
-  Presentation Profiles (§11)** and **ORG.12G Integration & Device
-  Readiness Hub (§12)**, 2026-10-29. ORG.12H is planned here but **not
-  authorized**; it needs explicit owner authorization.
+  Presentation Profiles (§11)**, **ORG.12G Integration & Device
+  Readiness Hub (§12)** and **ORG.12H Organization MIS & final re-audit
+  (§13)**, 2026-10-29. **ORG.12 CLOSED** (§13.9).
 - Date: 2026-10-28
 - Programme: **ORG.12 — Organization Control Plane expansion** (additive to
   ORG, `MASTER-ROADMAP.md` programme 13).
@@ -976,3 +976,160 @@ domain, or with the legal/provider decision named in §12.1:
 | I9 | No Hub-specific elevation test | **added:** `IntegrationHubElevationTest` |
 | I6, I7, I10 | Email status visible to every Hub holder; module state already visible (ORG.12A); 60 s capability cache | accepted as designed |
 | I8 | Demo states age (a 7-day window, a 12-day expiry) | accepted: `ddev demo-reset` refreshes them, and the verifier reports drift |
+
+## 13. ORG.12H — Organization MIS, Control-Plane Reporting & 515-Screen Final Re-Audit (implemented, 2026-10-29)
+
+**13.1 Owner decisions applied.**
+- **OD-12.20:** Organization MIS is limited to structural, governance,
+  setup, configuration and integration-readiness metadata. There are no
+  cross-School business analytics.
+- **OD-12.21:** Network setup readiness is built only if a bounded, safe
+  read model exists. None exists (§13.4), so it is deferred, together with
+  Network Campus counts.
+
+**13.2 School Control Plane report** (`SchoolControlPlaneReport`,
+`/app/school-setup/organization-report`, floor `school.profile.view`).
+- **Sources:** every section comes from its existing owner. There is no
+  second catalogue: no setup key is hard-coded (architecture test).
+  - **Setup summary:** the ORG.12B Center over the ORG.12A registry, per
+    category: configured / applicable, incomplete, attention, blocked. Core
+    and enabled-module progress stay separate (ORG.12B metric definitions).
+    Modules that are not enabled are listed by title and are never counted
+    or treated as gaps.
+  - **Configuration gaps:** applicable areas that are not configured, in
+    the order blocked, attention, partial, not configured, then registry
+    order. Each shows its owner, the reason, any visible prerequisites and
+    the action resolved for the viewer (Configure / View / none).
+  - **Integrations** (`school.settings.view`): the ORG.12G Hub's own counts,
+    hidden families and "verify to view" list.
+  - **Presentation** (`school.settings.view`): the effective brand source
+    (system / School / Network / mixed), the attention note, the number of
+    navigation preferences per audience, and the statement that logo and
+    banner are not available. It is never permission state.
+  - **Access administration** (`school.roles.view`): the number of system
+    role templates, and active staff role assignments in this School (not
+    revoked, active membership, enabled account, `school`-scope role)
+    split whole-School / Campus (active Campus only). It also states the
+    sensitive-data status verbatim: "Sensitive field catalogue available;
+    configurable deny policy not implemented."
+- **Authority:** each section needs its own authority. One the viewer
+  cannot read is null.
+- **Failures:** a section whose source throws is `available: false`, logged
+  by report key and exception class only, and the page still renders.
+- **Never:** a person, contact, record id or amount; another School; a
+  write, audit, cache, export or snapshot.
+
+**13.3 Network MIS** (`NetworkReportReadService` and
+`SchoolGroupDirectoryReadService`, `/app/groups/{group}/reports/network`).
+- **Authority:** `GroupGovernanceAccess::viewScope()`; with no scope, 404.
+  Network Manager, whole / Region / Zone viewer and the legacy Group Admin
+  view each see their own scope.
+- **Sections:**
+  - Overview: member Schools, active, Regions and Zones; counts by
+    relationship and by canonical lifecycle.
+  - Schools: the ORG.12D directory, paginated (25). Search covers name,
+    code and Network reference. Filters: relationship, Region, Zone,
+    lifecycle, and attention (`any`, `unclassified`, `inactive_structure`,
+    `not_active`: exactly the existing ORG.12D attention rules). Sort is a
+    closed map (name, relationship, Region, Zone, lifecycle); an unknown or
+    non-string value falls back.
+  - Governance: Schools per Region, per Zone, Region-only, Zones outside a
+    Region, and Not placed (whole-Group only). Attention counts link to the
+    filtered list.
+  - Setup: a statement that setup readiness and Campus counts are not shown.
+- **Scope:**
+  - A Region viewer sees its Region and its Zones; a Zone viewer sees
+    exactly its Zone, plus its parent Region's own metadata (as in
+    ORG.12E).
+  - Filters only narrow, and an unplaced membership never matches a scoped
+    viewer.
+- **Data:** platform tables only (`school_group_members`, `schools`,
+  `school_group_regions`, `school_group_zones`). Never a tenant table, a
+  School context, an RLS bypass, a cache or a link into a School
+  (architecture test and SQL-listener test).
+
+**13.4 Deferred: Network Campus counts and Network setup readiness.**
+Both live in tenant tables (`campuses` is forced-RLS; readiness runs 21
+providers inside one School's context). The options:
+- **Fan out one School at a time** through the ADR 0048 gate. This costs
+  about five queries per School, so it is not bounded at Network scale
+  (§47). It is also limited to `group.reporting.view`, and each new report
+  needs an ADR 0048 amendment.
+- **Bounded live SQL** needs a cross-tenant RLS exception (stop condition
+  5).
+- **A cross-School materialized or cached read model** is new architecture
+  (stop condition 10).
+
+None is adopted. Both stay a future Analytics read-model decision: a
+platform-side, event-maintained structural projection. Owner approval is
+required; the owner of the decision is Analytics.
+
+**13.5 Report catalogue** (`OrganizationReportCatalogue`). Nine keys:
+- five School reports: `organization.setup_summary`,
+  `organization.configuration_gaps`, `organization.integration_summary`,
+  `organization.presentation_summary`, `organization.access_summary`;
+- four Network reports: `network.overview`, `network.school_directory`,
+  `network.governance_distribution`, `network.structure_attention`.
+
+Each definition has an audience, explicit authority, a source, filters and
+RF ids. There is no builder, query language, tenant formula, export (D-11
+stays separate), snapshot or score.
+
+**13.6 Measured.**
+- **Network page:** 14 queries with 1, 10 or 100 member Schools (identical,
+  test-asserted); 6 queries for 500 memberships at the service level;
+  about 0.3 s in DDEV.
+- **School report:** 68 queries (budget 80); props about 8 KB; about
+  0.4 s in DDEV.
+- No N+1, no new cache, no migration.
+
+**13.7 Final 515-screen audit.**
+- **Scope:** all 38 families re-checked against the pack inventory and the
+  repository (reference map §4.00).
+- **One change:** RF-35 moves from `DOMAIN_FUTURE` to `PARTIAL`.
+- **Totals:** 2 existing equivalent, 13 existing different-accepted, 4
+  partial, **0 ORG.12 build**, 6 domain future, 3 platform future, 5
+  post-v1, 2 do-not-build, 1 owner decision, 2 legal decision (38).
+- **Owners:** every remaining family has a named owner or programme.
+
+**13.8 Independent final security review (ORG.12H and the integrated ORG.12
+surface).** No HIGH.
+
+| # | Finding | Resolution |
+|---|---|---|
+| M1 | The access summary counted Guardian portal (`guardian`-scope) grants as staff assignments | **fixed:** `school`-scope roles only (tested) |
+| L1 | Campus grants on an inactive Campus were counted | **fixed:** active Campus only (tested) |
+| L2 | ADR and CLAUDE.md text had not yet been written | **fixed:** §13, rule 117 |
+| L3 | A docblock understated one query | **fixed** |
+| (own) | A disabled former member's assignment was counted | **fixed:** enabled accounts only (DDEV walkthrough) |
+| (own) | `sr-only` table cells escaped their scroll wrapper on phones (page overflow) | **fixed:** wrappers are `relative` |
+| I1, I2 | A Zone viewer sees its parent Region's metadata; scoped figures differ from whole-Group figures | accepted as designed (ORG.12E) |
+
+The reviewer's tenancy and authorization audit found:
+- School is the only tenant, and Campus is an authority filter inside it.
+- Group, Region and Zone are platform-table governance only.
+- There is no implicit Group-to-School authority (entry is ADR 0044
+  elevation, which grants no School capability).
+- There is no menu-as-security, tenant-defined role or capability,
+  presentation grant path, or Network-to-School grant path.
+
+**13.9 Closure decision.** The Organization Control Plane closes:
+- no `ORG12_BUILD` family remains;
+- every partial family has a named owner and blocker;
+- the Organization-owned workflows are implemented;
+- tenancy and security are intact;
+- the canonical demo verifies on every reset;
+- the exact-SHA regression is green;
+- no HIGH or MEDIUM remains.
+
+The remaining work is owned outside Organization or recorded as
+prerequisites:
+- the ORG.12E sensitive-field projection and deny-only policy;
+- the ORG.12F governed media pipeline;
+- the ORG.12G domain integrations;
+- the Network read model (§13.4);
+- the ESI-12 legal skip and the production legal and privacy gates.
+
+**Closure is not product completion.** SIS, HR, Finance, Admissions,
+Integrations and the portals are not complete, and the product is not
+production ready.

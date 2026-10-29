@@ -98,6 +98,8 @@ final class StaffNavigation
             new E('presentation', 'school-setup', 'Branding & navigation', 'app.school-setup.presentation', all: ['school.settings.view']),
             // ORG.12G (ADR 0080 §12): read-only integration and device readiness.
             new E('integrations-hub', 'school-setup', 'Integrations & devices', 'app.school-setup.integrations', all: ['school.settings.view']),
+            // ORG.12H (ADR 0080 §13.2): the read-only School Control Plane report.
+            new E('organization-report', 'school-setup', 'Organization report', 'app.school-setup.organization-report', all: ['school.profile.view']),
             // SWC.2 (ADR 0073 section 10): every Academic Structure screen,
             // under the capability that page itself checks.
             new E('campuses', 'school-setup', 'Campuses', 'app.school-setup.campuses', all: ['school.campuses.view']),

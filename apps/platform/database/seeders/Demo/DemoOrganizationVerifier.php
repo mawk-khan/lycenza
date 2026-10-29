@@ -4,6 +4,7 @@ namespace Database\Seeders\Demo;
 
 use App\Domain\Identity\Application\Access\SensitiveDataCatalogue;
 use App\Domain\Platform\Application\Groups\GroupGovernanceAccess;
+use App\Domain\Platform\Application\Groups\NetworkReportReadService;
 use App\Domain\Platform\Application\Groups\SchoolGroupDirectoryReadService;
 use App\Domain\Platform\Application\Modules\SchoolModuleEntitlements;
 use App\Models\Campus;
@@ -127,6 +128,25 @@ final class DemoOrganizationVerifier
         $check($integration($horizon, 'integrations.api_clients') === 'attention_required', 'Horizon API clients do not need attention');
         $check($greenfield !== null && ! in_array('integrations', app(SchoolModuleEntitlements::class)->entitledModules($greenfield), true), 'Greenfield has Integrations enabled');
         $check(app(OrganizationIntegrationCatalogue::class)->availableKeys() === ['communications.email', 'integrations.webhooks', 'integrations.api_clients'], 'the integration catalogue is not the ORG.12G catalogue');
+
+        // ORG.12H: Network MIS distribution through the real read model and each persona's real scope.
+        $distribution = function (string $email) use ($network): ?array {
+            $user = User::query()->where('email', $email)->first();
+            $scope = $user === null ? null : app(GroupGovernanceAccess::class)->viewScope($user, $network);
+            if ($scope === null) {
+                return null;
+            }
+            $read = app(NetworkReportReadService::class)->distribution($network, $scope);
+            $regions = [];
+            foreach ($read['regions'] as $region) {
+                $regions[$region['code']] = [$region['schools'], $region['regionOnly'], array_column($region['zones'], 'schools', 'code')];
+            }
+
+            return [$regions, $read['unplaced']];
+        };
+        $check($distribution('network.viewer@example.test') === [['TELANGANA' => [4, 1, ['HYD-CENTRAL' => 2, 'HYD-WEST' => 1]], 'KARNATAKA' => [1, 0, ['BLR-NORTH' => 1]]], 1], 'the whole-Network distribution is not Telangana 4 (Central 2, West 1, Region-only 1), Karnataka 1, unplaced 1');
+        $check($distribution('network.region@example.test') === [['TELANGANA' => [4, 1, ['HYD-CENTRAL' => 2, 'HYD-WEST' => 1]]], null], 'the Telangana viewer\'s distribution is not exactly Telangana');
+        $check($distribution('network.zone@example.test') === [['TELANGANA' => [2, 0, ['HYD-CENTRAL' => 2]]], null], 'the Hyderabad Central viewer\'s distribution is not exactly its Zone');
 
         $check(count(SensitiveDataCatalogue::FAMILIES) === 8 && array_filter(array_column(SensitiveDataCatalogue::FAMILIES, 'configurable')) === [], 'the sensitive-data catalogue is not the eight non-configurable families');
 

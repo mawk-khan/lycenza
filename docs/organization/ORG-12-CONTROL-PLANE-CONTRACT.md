@@ -406,3 +406,28 @@ a second catalogue.
   write or audit on read, a device or integration table.
 - **The ORG.12A setup area** `integrations.integrations` is reported from its
   existing provider; optional families never become mandatory setup.
+
+## 19. Organization MIS and control-plane reporting (ORG.12H)
+
+- **One code-owned report catalogue** (`OrganizationReportCatalogue`).
+  - School reports: `organization.setup_summary`,
+    `organization.configuration_gaps`, `organization.integration_summary`,
+    `organization.presentation_summary`, `organization.access_summary`.
+  - Network reports: `network.overview`, `network.school_directory`,
+    `network.governance_distribution`, `network.structure_attention`.
+  - No report builder, query language, tenant formula, export or snapshot.
+- **School reports** read one School through the existing owners: the
+  Setup Registry, the Integration Hub, presentation and the role catalogue.
+  Core and enabled-module progress stay separate, and a module that is not
+  enabled is never a gap.
+- **Network reports** read platform tables only, within the viewer's
+  Network scope. Allowed: member Schools, lifecycle, relationship,
+  Region/Zone distribution, Network reference, and the existing governance
+  attention rules.
+- **Deferred:** Network Campus counts and Network setup readiness need
+  tenant reads. The only sanctioned path is a per-School fan-out (ADR 0048),
+  which is not bounded; a bounded version needs an RLS exception or a
+  cross-School materialized read model. Both are a future Analytics
+  architecture decision (ADR 0080 §13.4).
+- **Never:** cross-School business analytics, a Network score, an implied
+  School authority, or a link from a Network report into a School.

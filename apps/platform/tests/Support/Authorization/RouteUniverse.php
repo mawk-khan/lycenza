@@ -93,6 +93,7 @@ final class RouteUniverse
         // ORG.12E (ADR 0080 §10): Network governance in Group context.
         'app.groups.network.brand.update' => [self::PLATFORM, 'Group scope: NetworkBrandService::assertMayManage + fresh MFA + in-transaction re-read (ADR 0080 §11.7)'],
         'app.groups.access' => [self::PLATFORM, 'Group scope: GroupGovernanceAccess::viewScope(), else 404 (ADR 0080 §10)'],
+        'app.groups.reports.network' => [self::PLATFORM, 'Group scope: GroupGovernanceAccess::viewScope(), else 404 (ADR 0080 §13.3)'],
         'app.groups.access.operators.store' => [self::PLATFORM, 'Group scope: NetworkAccessService::assertMayAdminister + fresh MFA + in-transaction re-read (ADR 0080 §10)'],
         'app.groups.access.operators.revoke' => [self::PLATFORM, 'Group scope: NetworkAccessService::assertMayAdminister + fresh MFA + in-transaction re-read (ADR 0080 §10)'],
         'app.groups.network.schools.classify' => [self::PLATFORM, 'Group scope: SchoolGroupGovernanceService::requireMayManage + GroupGovernanceAccess re-read in the transaction (ADR 0080 §10)'],
