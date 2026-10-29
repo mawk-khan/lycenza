@@ -127,6 +127,40 @@ final class StudentAccess
     }
 
     /**
+     * SIS.EXP-1: narrows a Student directory query to Students whose CURRENT
+     * placement (the active year's active Enrollment) is on the given Campus,
+     * Grade and/or Section -- in SQL, through the same current-placement rule
+     * as currentPlacements(), under the viewer's `enrollments.view` scope.
+     *
+     * - Filters only narrow: an id outside the scope, of another School, or
+     *   a Section that is not in the chosen Campus/Grade simply matches no
+     *   placement (no error that would confirm it exists).
+     * - A viewer without placement read (scope none) cannot filter by
+     *   placement at all: the query then matches nothing.
+     *
+     * @param  Builder<Student>  $students
+     * @param  array<string, mixed>  $filters  only campus_id, grade_level_id and section_id are read (request input: may be null or malformed)
+     * @return Builder<Student>
+     */
+    public function narrowToCurrentPlacement(Builder $students, School $school, CampusScope $placementScope, array $filters): Builder
+    {
+        $filters = array_filter(array_intersect_key($filters, array_flip(['campus_id', 'grade_level_id', 'section_id'])), fn ($v) => is_string($v) && $v !== '');
+        if ($filters === []) {
+            return $students;
+        }
+        if ($placementScope->isNone() || array_filter($filters, fn (string $v) => ! Str::isUuid($v)) !== []) {
+            return $students->whereRaw('1 = 0');
+        }
+
+        $placements = $this->restrictEnrollments(StudentEnrollment::query(), $school, $placementScope, currentOnly: true);
+        foreach ($filters as $column => $value) {
+            $placements->where("student_enrollments.{$column}", $value);
+        }
+
+        return $students->whereIn('students.id', $placements->select('student_enrollments.student_id'));
+    }
+
+    /**
      * Whole-School reads only: the active placement in a NAMED academic year
      * (an unknown or another School's year is NOT FOUND, never a fallback to
      * the School's active year). Any other scope gets nothing: another year

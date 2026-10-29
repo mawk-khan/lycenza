@@ -14,7 +14,7 @@ switch windows, between steps.
 | 2 | `network.region@example.test` | Same Network → **Network report** | Telangana only: Gachibowli, Jubilee Hills, Secunderabad, Warangal. No "Not placed" row | find Hebbal or Mysuru, even by searching their names |
 | 3 | `network.zone@example.test` | Same → **Network report** | Hyderabad Central only: Jubilee Hills and Secunderabad | see any other Zone or Region |
 | 4 | `network.manager@example.test` | Same → the Group page (**Northstar Education Network**) | The governance workspace (Regions, Zones, classification, placement). **Network report** shows the same 6 Schools | open `/app/students` or any School page: refused |
-| 5 | `gachibowli.admin@example.test` | *School setup* → **Setup & readiness** | Core in progress: Academic year needs work, and dependent areas are blocked | — |
+| 5 | `horizon.admin@example.test` | *School setup* → **Setup & readiness** | Core in progress: Academic year needs work, and dependent areas are blocked (moved from Gachibowli by SIS.EXP-1) | — |
 | 6 | (same) | *School setup* → **School setup** → School profile; **Campuses** | Full institutional profile; two Campuses with addresses and services | change identity references without a reason and a fresh code |
 | 7 | (same) | *Settings* → **Access Center** | 17 role templates; effective access per person, e.g. "Cashier — Campus: Gachibowli Main Campus" | grant anything here (read-only) |
 | 8 | (same) | *School setup* → **Branding & navigation** | Brand inherited from the Northstar Network (stripe and chip); Data health hidden; Students reads "Learners" | gain or lose access through a menu change |

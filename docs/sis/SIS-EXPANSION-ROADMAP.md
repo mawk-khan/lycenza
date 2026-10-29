@@ -49,7 +49,37 @@ The brief's candidate order was re-sequenced on repository evidence:
 | **SIS.EXP-7** | House (or Club) Membership | The one named concept a pilot asks for: per-year membership, one House per Student per year, optional responsibility labels from a closed list. No generic group engine, no gender analytics, no badges | *decision-gated* OD-SIS-4 (D-17 revisit) | M | yes (§5) | SR-17 (part) |
 | **SIS.EXP-8** | SIS Parity Closure Re-audit | Re-read the 42-family map; reclassify; rescore; verify the demo world; record the remaining owner/legal gates | after the chosen waves | audit | none | all |
 
-### 2.1 SIS.EXP-1 detail (the recommended first checkpoint)
+### 2.1 SIS.EXP-1 detail — IMPLEMENTED (2026-10-29)
+
+> **Status:** built as designed below, with these recorded differences:
+> - the directory's primary-Guardian column was not in the authorised
+>   scope and stays open (P3);
+> - Attendance shows the latest records of the last 30 days through
+>   Attendance's own audited read (no rate or tally);
+> - the profile budget is 85 queries (measured 67 with every module and
+>   no data, constant as data grows), not 50: the Fees section is the
+>   canonical charge-state read;
+> - the API PATCH keeps its contract (no stale token).
+>
+> **Independent security review** (fresh reviewer, read-only, before publication):
+> - **H-1 HIGH, found and fixed before publication.** The first stale-form
+>   token was an unkeyed SHA-256 over the visible fields plus the date of
+>   birth, so a Campus name editor could have recovered the date by trying
+>   candidate days. It is now an HMAC under a purpose key derived from the
+>   application key, with a regression test. The token never reached
+>   `main`.
+> - **LOW, fixed:** the profile performs no business write, but the owners'
+>   own read audits (Attendance, Payments) do apply, and the wording now
+>   says so; deterministic Guardian order in the sibling read.
+> - **LOW, carried:**
+>   - the API PATCH has no stale token;
+>   - filter options list inactive Sections (they match nobody);
+>   - sibling truncation is computed before the viewer filter (harmless
+>     on this whole-School route).
+>
+> Evidence: `docs/modules/STUDENT-GUARDIAN-IDENTITY.md` ("Student 360,
+> directory filters and edit integrity") and
+> `docs/demo/SIS-EXP-1-WALKTHROUGH.md`.
 
 **Profile (whole School, `students.view`)** gains sections. Each appears
 only when the viewer holds that domain's own view capability in a scope

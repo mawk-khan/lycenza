@@ -186,7 +186,10 @@ final class DemoDataBuilder
         (new DemoModuleData($this))->build();
         // ORG.12E-D1: the canonical Organization reference world (Northstar
         // Network, standalone Schools, Network and access personas).
-        (new DemoOrganizationData($this))->build();
+        $organization = new DemoOrganizationData($this);
+        $organization->build();
+        // SIS.EXP-1: the canonical SIS demonstration, inside that world.
+        (new DemoSisData($this, $organization->campuses))->build($organization->schools['gachibowli']);
 
         return new DemoBuildResult($this->school, $this->secondSchool, $this->accounts, $this->notes);
     }
@@ -367,7 +370,7 @@ final class DemoDataBuilder
 
             foreach (['Kiran Annexe', 'Lata Annexe', 'Mohan Annexe'] as $i => $name) {
                 [$first, $last] = explode(' ', $name);
-                Student::query()->create([
+                Student::query()->forceCreate([
                     'school_id' => $this->secondSchool->id,
                     'student_number' => 'ANX-'.str_pad((string) ($i + 1), 4, '0', STR_PAD_LEFT),
                     'first_name' => $first,
@@ -557,7 +560,7 @@ final class DemoDataBuilder
                 $grade = (int) substr($sectionKey, 1, 1);
                 $lastName = self::LAST_NAMES[$index % count(self::LAST_NAMES)];
 
-                $student = $this->inSchool(fn () => Student::query()->create([
+                $student = $this->inSchool(fn () => Student::query()->forceCreate([
                     'school_id' => $this->school->id,
                     'student_number' => 'LDS-'.str_pad((string) ($index + 1), 4, '0', STR_PAD_LEFT),
                     'first_name' => self::FIRST_NAMES[$index % count(self::FIRST_NAMES)],
@@ -577,7 +580,7 @@ final class DemoDataBuilder
                     $guardian = end($this->guardians);
                 } else {
                     $guardianFirst = self::GUARDIAN_FIRST_NAMES[count($this->guardians) % count(self::GUARDIAN_FIRST_NAMES)];
-                    $guardian = $this->inSchool(fn () => Guardian::query()->create([
+                    $guardian = $this->inSchool(fn () => Guardian::query()->forceCreate([
                         'school_id' => $this->school->id,
                         'first_name' => $guardianFirst,
                         'last_name' => $lastName,

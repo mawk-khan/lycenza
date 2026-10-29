@@ -12,6 +12,8 @@ interface Props {
         dateOfBirth: string;
     };
     today: string;
+    // SIS.EXP-1: the stale-form token; the server refuses a save if the details changed since.
+    version: string;
 }
 
 const props = defineProps<Props>();
@@ -27,6 +29,7 @@ const form = useForm({
     middle_name: props.student.middleName ?? '',
     last_name: props.student.lastName ?? '',
     date_of_birth: props.student.dateOfBirth,
+    expected_version: props.version,
 });
 
 function submit(): void {

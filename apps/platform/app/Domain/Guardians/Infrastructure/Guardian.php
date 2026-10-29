@@ -33,7 +33,12 @@ class Guardian extends Model
 
     protected $table = 'guardians';
 
-    protected $fillable = ['school_id', 'first_name', 'middle_name', 'last_name', 'status'];
+    /**
+     * SIS.EXP-1 (SIS.EXP-0 finding L-1): names only. `school_id` and `status`
+     * are written only by GuardianService's explicit create and
+     * changeStatus() paths (StudentMassAssignmentTest).
+     */
+    protected $fillable = ['first_name', 'middle_name', 'last_name'];
 
     protected static function newFactory(): GuardianFactory
     {

@@ -50,5 +50,13 @@ class DemoSeeder extends Seeder
             throw new \RuntimeException('Organization demo verification failed: '.implode('; ', $problems));
         }
         $this->command->info('Organization demo verified: '.json_encode($verifier->summary()));
+
+        // SIS.EXP-1: prove the canonical SIS demonstration too.
+        $sis = new DemoSisVerifier;
+        $sisProblems = $sis->problems();
+        if ($sisProblems !== []) {
+            throw new \RuntimeException('SIS demo verification failed: '.implode('; ', $sisProblems));
+        }
+        $this->command->info('SIS demo verified: '.json_encode($sis->summary()));
     }
 }

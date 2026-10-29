@@ -218,16 +218,18 @@ final class DemoOrganizationData
 
         // ORG.12B "Partially configured" + "Blocked": a DRAFT academic year
         // (not yet active) makes Academic year partial, and Grades/sections
-        // -- which needs an active year -- shows as Blocked.
+        // -- which needs an active year -- shows as Blocked. SIS.EXP-1 moved
+        // it from Gachibowli (now the canonical SIS School, with an active
+        // year: DemoSisData) to Horizon, so both demonstrations hold.
         $start = Carbon::now('Asia/Kolkata')->startOfYear()->addYear()->setMonth(6)->startOfMonth();
         $this->b->inSchool(fn () => AcademicYear::query()->create([
-            'school_id' => $this->schools['gachibowli']->id,
+            'school_id' => $this->schools['horizon']->id,
             'name' => $start->format('Y').'–'.$start->copy()->addYear()->format('y'),
             'code' => 'AY'.$start->format('Y'),
             'starts_on' => $start->toDateString(),
             'ends_on' => $start->copy()->addYear()->setMonth(3)->endOfMonth()->toDateString(),
             'status' => 'draft',
-        ]), $this->schools['gachibowli']);
+        ]), $this->schools['horizon']);
     }
 
     // ------------------------------------------------------------------

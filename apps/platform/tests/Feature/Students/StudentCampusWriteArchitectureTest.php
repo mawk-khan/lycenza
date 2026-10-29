@@ -52,7 +52,8 @@ class StudentCampusWriteArchitectureTest extends TestCase
     public function the_name_edit_writes_and_accepts_exactly_the_three_names(): void
     {
         $this->assertSame(['first_name', 'middle_name', 'last_name'], StudentNameEditService::FIELDS);
-        $this->assertSame(['first_name', 'last_name', 'middle_name'], $this->validatedKeys('updateNames'));
+        // SIS.EXP-1: plus the opaque stale-form token (StudentProfileVersion), never a field.
+        $this->assertSame(['expected_version', 'first_name', 'last_name', 'middle_name'], $this->validatedKeys('updateNames'));
         $edit = $this->body(StudentNameEditService::class, 'edit');
         $this->assertStringContainsString('lockedWriteTarget(', $edit);
         foreach (['student_number', 'date_of_birth', "'status'", '->update(', '->fill('] as $forbidden) {

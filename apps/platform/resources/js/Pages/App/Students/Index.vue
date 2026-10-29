@@ -43,7 +43,17 @@ interface Props {
         student_number: string;
         name: string;
         status: string;
+        campus_id: string;
+        grade_level_id: string;
+        section_id: string;
     };
+    // SIS.EXP-1: current-placement filter options, cut by the server to the
+    // viewer's own reach (null without placement read or an active year).
+    placementFilters: {
+        campuses: { id: string; name: string }[];
+        gradeLevels: { id: string; name: string }[];
+        sections: { id: string; label: string; campusId: string; gradeLevelId: string }[];
+    } | null;
     canManage: boolean;
     canViewEnrollments: boolean;
     // ORG.7F-1 (ADR 0076 §45): a Campus-scoped reader -- rows open the
@@ -58,6 +68,27 @@ const props = defineProps<Props>();
 const studentNumber = ref(props.filters.student_number);
 const name = ref(props.filters.name);
 const status = ref(props.filters.status);
+const campusId = ref(props.filters.campus_id);
+const gradeLevelId = ref(props.filters.grade_level_id);
+const sectionId = ref(props.filters.section_id);
+
+// SIS.EXP-1: only Sections that fit the chosen Campus and Grade are offered;
+// choosing a Campus or Grade that excludes the chosen Section clears it (the
+// server would match nothing for such a combination anyway).
+const sectionOptions = computed(() =>
+    (props.placementFilters?.sections ?? []).filter(
+        (s) =>
+            (campusId.value === '' || s.campusId === campusId.value) &&
+            (gradeLevelId.value === '' || s.gradeLevelId === gradeLevelId.value),
+    ),
+);
+
+function onPlacementChange(): void {
+    if (sectionId.value !== '' && !sectionOptions.value.some((s) => s.id === sectionId.value)) {
+        sectionId.value = '';
+    }
+    applyFilters();
+}
 
 let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -68,6 +99,9 @@ function applyFilters(): void {
             student_number: studentNumber.value || undefined,
             name: name.value || undefined,
             status: status.value || undefined,
+            campus_id: campusId.value || undefined,
+            grade_level_id: gradeLevelId.value || undefined,
+            section_id: sectionId.value || undefined,
         },
         { preserveState: true, preserveScroll: true, replace: true },
     );
@@ -89,13 +123,19 @@ const hasFilters = computed(
     () =>
         props.filters.student_number !== '' ||
         props.filters.name !== '' ||
-        props.filters.status !== '',
+        props.filters.status !== '' ||
+        props.filters.campus_id !== '' ||
+        props.filters.grade_level_id !== '' ||
+        props.filters.section_id !== '',
 );
 
 function resetFilters(): void {
     studentNumber.value = '';
     name.value = '';
     status.value = '';
+    campusId.value = '';
+    gradeLevelId.value = '';
+    sectionId.value = '';
     clearTimeout(debounceTimer);
     applyFilters();
 }
@@ -177,6 +217,50 @@ function studentHref(student: StudentRow): string {
                     <option value="inactive">Inactive</option>
                 </select>
             </div>
+            <template v-if="placementFilters">
+                <div v-if="placementFilters.campuses.length > 1">
+                    <label class="block text-sm text-slate-600" for="filter-campus">Campus</label>
+                    <select
+                        id="filter-campus"
+                        v-model="campusId"
+                        class="mt-1 w-44 rounded border border-slate-300 px-3 py-2 text-sm"
+                        @change="onPlacementChange"
+                    >
+                        <option value="">All</option>
+                        <option v-for="c in placementFilters.campuses" :key="c.id" :value="c.id">
+                            {{ c.name }}
+                        </option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-600" for="filter-grade">Grade</label>
+                    <select
+                        id="filter-grade"
+                        v-model="gradeLevelId"
+                        class="mt-1 w-36 rounded border border-slate-300 px-3 py-2 text-sm"
+                        @change="onPlacementChange"
+                    >
+                        <option value="">All</option>
+                        <option v-for="g in placementFilters.gradeLevels" :key="g.id" :value="g.id">
+                            {{ g.name }}
+                        </option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-600" for="filter-section">Section</label>
+                    <select
+                        id="filter-section"
+                        v-model="sectionId"
+                        class="mt-1 w-56 rounded border border-slate-300 px-3 py-2 text-sm"
+                        @change="applyFilters"
+                    >
+                        <option value="">All</option>
+                        <option v-for="o in sectionOptions" :key="o.id" :value="o.id">
+                            {{ o.label }}
+                        </option>
+                    </select>
+                </div>
+            </template>
             <button
                 v-if="hasFilters"
                 type="button"
@@ -186,8 +270,9 @@ function studentHref(student: StudentRow): string {
                 Clear filters
             </button>
         </form>
-        <p v-if="canViewEnrollments && !campusView" class="mt-2 text-sm text-slate-500">
-            To find Students by academic year, campus, grade, Section or roll number, use the
+        <p v-if="placementFilters" class="mt-2 text-sm text-slate-500">
+            Campus, Grade and Section filter by the current class (this academic year). For other
+            years or roll numbers, use the
             <a class="underline" href="/app/enrollments">Enrollments directory</a>.
         </p>
 
@@ -197,7 +282,7 @@ function studentHref(student: StudentRow): string {
             :title="hasFilters ? 'No students match your search' : 'No students yet'"
             :description="
                 hasFilters
-                    ? 'Try a different Student Number, name, or status.'
+                    ? 'Try a different Student Number, name, status or class filter.'
                     : 'Add the first student to begin building your School\'s student directory.'
             "
         >

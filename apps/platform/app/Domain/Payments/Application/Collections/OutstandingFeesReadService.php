@@ -97,7 +97,7 @@ class OutstandingFeesReadService
         $only = $studentIds === null ? null : array_flip($studentIds);
 
         $facts = array_values(array_filter(
-            $this->charges->collectionFacts($school, $scope, $academicYearId, $campus, includeCancelled: $asAt !== null),
+            $this->charges->collectionFacts($school, $scope, $academicYearId, $campus, includeCancelled: $asAt !== null, studentIds: $studentIds),
             fn ($f) => $only === null || isset($only[$f->studentId]),
         ));
         $ids = array_map(fn ($f) => $f->id, $facts);

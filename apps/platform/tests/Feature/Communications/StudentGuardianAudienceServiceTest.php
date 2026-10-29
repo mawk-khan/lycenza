@@ -617,7 +617,7 @@ class StudentGuardianAudienceServiceTest extends TestCase
         );
         $published = $this->service()->publish($announcement, $creator);
 
-        app(TenantContext::class)->withSchool($school, fn () => $guardian->update(['status' => 'inactive']));
+        app(TenantContext::class)->withSchool($school, fn () => $guardian->forceFill(['status' => 'inactive'])->save());
 
         $snapshot = $this->recipientSnapshot($school, $published->id);
         $this->assertCount(1, $snapshot);

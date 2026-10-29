@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\App;
 
+use App\Domain\Students\Application\StudentProfileVersion;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\MembershipRoleAssignment;
 use App\Models\Role;
@@ -278,6 +279,7 @@ class StudentAdminUiTest extends TestCase
         $response = $this->put("/app/students/{$student->id}", [
             'student_number' => 'S-1001', 'first_name' => $student->first_name, 'last_name' => 'Sharma',
             'date_of_birth' => $student->date_of_birth->toDateString(),
+            'expected_version' => StudentProfileVersion::of($student),
         ]);
 
         $response->assertRedirect("/app/students/{$student->id}");

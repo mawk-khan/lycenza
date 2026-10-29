@@ -2,6 +2,10 @@
 
 namespace App\Http\Controllers\App;
 
+use App\Domain\AcademicStructure\Application\CurrentAcademicYearResolver;
+use App\Domain\AcademicStructure\Application\SectionLabel;
+use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
+use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\Students\Application\CampusStudentOnboardingService;
 use App\Domain\Students\Application\Exceptions\DuplicateEnrollmentRollNumberException;
 use App\Domain\Students\Application\Exceptions\InvalidEnrollmentRollNumberException;
@@ -9,14 +13,17 @@ use App\Domain\Students\Application\Exceptions\PossibleDuplicateStudentException
 use App\Domain\Students\Application\Exceptions\StudentOnboardingUnavailableException;
 use App\Domain\Students\Application\StudentAccess;
 use App\Domain\Students\Application\StudentNameEditService;
+use App\Domain\Students\Application\StudentProfileVersion;
 use App\Domain\Students\Application\StudentSearch;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Http\Controllers\App\Concerns\PresentsDuplicateStudentWarning;
 use App\Http\Controllers\Controller;
+use App\Models\Campus;
 use App\Models\School;
 use App\Models\User;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
+use App\Support\Authorization\Campus\CampusScope;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Validation\DateOfBirth;
@@ -48,7 +55,7 @@ class StudentDirectoryController extends Controller
 {
     use AuthorizesCampusScope, PresentsDuplicateStudentWarning;
 
-    public function index(Request $request, TenantContext $context, StudentAccess $access): Response
+    public function index(Request $request, TenantContext $context, StudentAccess $access, CurrentAcademicYearResolver $years): Response
     {
         $school = $context->requireSchool();
         $scope = $this->authorizeCampusScope('students.view', $school);
@@ -58,6 +65,10 @@ class StudentDirectoryController extends Controller
             'student_number' => ['sometimes', 'string', 'max:255'],
             'name' => ['sometimes', 'string', 'max:255'],
             'status' => ['sometimes', Rule::in(['active', 'inactive'])],
+            // SIS.EXP-1: current-placement filters (they only narrow, in SQL).
+            'campus_id' => ['sometimes', 'nullable', 'uuid'],
+            'grade_level_id' => ['sometimes', 'nullable', 'uuid'],
+            'section_id' => ['sometimes', 'nullable', 'uuid'],
             'page' => ['sometimes', 'integer', 'min:1'],
         ]);
 
@@ -76,13 +87,16 @@ class StudentDirectoryController extends Controller
         if (isset($validated['status'])) {
             $query->where('students.status', $validated['status']);
         }
+        // V11.2 (ADR 0075): the actor's enrollments.view scope (the
+        // independent-capability rule) gates both the class column and,
+        // SIS.EXP-1, the Campus / Grade / Section filters of the CURRENT
+        // placement (StudentAccess, in SQL; a forged id matches nothing).
+        $placementScope = $access->scopeOf($actor, 'enrollments.view', $school);
+        $access->narrowToCurrentPlacement($query, $school, $placementScope, $validated);
 
         $paginator = $query->paginate(20)->withQueryString();
 
-        // V11.2 (ADR 0075): each row's current class, loaded for the whole
-        // page in one query -- only where the actor's enrollments.view scope
-        // reaches that placement (the independent-capability rule).
-        $placementScope = $access->scopeOf($actor, 'enrollments.view', $school);
+        // V11.2: each row's current class, loaded for the whole page in one query.
         $placements = $access->currentPlacements($school, $placementScope, $paginator->getCollection()->pluck('id')->all());
         $campusView = ! $scope->isWholeSchool();
 
@@ -96,7 +110,12 @@ class StudentDirectoryController extends Controller
                 'student_number' => $validated['student_number'] ?? '',
                 'name' => $validated['name'] ?? '',
                 'status' => $validated['status'] ?? '',
+                'campus_id' => $validated['campus_id'] ?? '',
+                'grade_level_id' => $validated['grade_level_id'] ?? '',
+                'section_id' => $validated['section_id'] ?? '',
             ],
+            // SIS.EXP-1: options cut to the viewer's reach (null without placement read).
+            'placementFilters' => $this->placementFilterOptions($school, $placementScope->intersect($scope), $years),
             // ORG.7F-2: the legacy create form is whole-School; Campus
             // onboarding needs both keys (and re-decides everything itself).
             'canManage' => ! $campusView && $access->holdsWholeSchool($actor, 'students.manage', $school),
@@ -161,6 +180,8 @@ class StudentDirectoryController extends Controller
                 'middleName' => $model->middle_name,
                 'lastName' => $model->last_name,
             ],
+            // SIS.EXP-1 (L-2): the stale-form token, checked under the lock on save.
+            'version' => StudentProfileVersion::of($model),
         ]);
     }
 
@@ -168,17 +189,21 @@ class StudentDirectoryController extends Controller
      * ORG.7F-2: first, middle and last name only (StudentNameEditService,
      * under StudentAccess::lockedWriteTarget()). Other input is ignored.
      */
-    public function updateNames(Request $request, TenantContext $context, StudentNameEditService $names, string $student): RedirectResponse
+    public function updateNames(Request $request, TenantContext $context, StudentAccess $access, StudentNameEditService $names, string $student): RedirectResponse
     {
         $school = $context->requireSchool();
         $scope = $this->authorizeCampusScope('students.manage', $school);
+        // Out of scope is NOT FOUND before any input is judged (the locked
+        // write target below re-decides it under the lock).
+        $access->student($school, $scope, $student);
 
         $validated = $request->validate([
             'first_name' => ['required', 'string', 'max:255'],
             'middle_name' => ['nullable', 'string', 'max:255'],
             'last_name' => ['nullable', 'string', 'max:255'],
+            'expected_version' => ['required', 'string', 'size:64'],
         ]);
-        $model = $names->edit($school, $scope, $student, $validated, $context->actor());
+        $model = $names->edit($school, $scope, $student, $validated, $context->actor(), $validated['expected_version']);
 
         return redirect("/app/students/{$model->id}/overview")->with('flash', 'Names corrected.');
     }
@@ -297,6 +322,37 @@ class StudentDirectoryController extends Controller
             'gradeLevel' => $enrollment->gradeLevel?->name,
             'section' => $enrollment->section?->name,
             'rollNumber' => $enrollment->roll_number,
+        ];
+    }
+
+    /**
+     * SIS.EXP-1: the directory's placement filter options -- the active
+     * year's Sections (and their Campuses and Grades) the viewer's placement
+     * scope reaches. Null without placement read or an active year.
+     *
+     * @return array{campuses: list<array{id: string, name: string}>, gradeLevels: list<array{id: string, name: string}>, sections: list<array<string, string>>}|null
+     */
+    private function placementFilterOptions(School $school, CampusScope $scope, CurrentAcademicYearResolver $years): ?array
+    {
+        $year = $scope->isNone() ? null : $years->tryResolve($school);
+        if ($year === null) {
+            return null;
+        }
+        $sections = $scope->restrict(Section::query()->where('sections.school_id', $school->id)->where('sections.academic_year_id', $year->id), 'sections.campus_id')
+            ->with(['campus:id,name', 'gradeLevel:id,name,sequence'])
+            ->get()
+            ->sortBy(fn (Section $s) => sprintf('%08d|%s|%s', $s->gradeLevel->sequence, $s->name, $s->campus->name))
+            ->values();
+
+        return [
+            'campuses' => $sections->pluck('campus')->unique('id')->sortBy('name')->map(fn (Campus $c) => ['id' => (string) $c->id, 'name' => $c->name])->values()->all(),
+            'gradeLevels' => $sections->pluck('gradeLevel')->unique('id')->sortBy('sequence')->map(fn (GradeLevel $g) => ['id' => (string) $g->id, 'name' => $g->name])->values()->all(),
+            'sections' => $sections->map(fn (Section $s) => [
+                'id' => (string) $s->id,
+                'label' => SectionLabel::of($s).' · '.$s->campus->name,
+                'campusId' => (string) $s->campus_id,
+                'gradeLevelId' => (string) $s->grade_level_id,
+            ])->all(),
         ];
     }
 }

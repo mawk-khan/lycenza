@@ -1738,3 +1738,67 @@ The rule and message are the same as SIS 2.3's.
 - **Feedback:** every Guardian, relationship, Student and placement change
   flashes a success message.
 - **Display:** dates read "1 Apr 2026".
+
+## Student 360, directory filters and edit integrity (SIS.EXP-1, 2026-10-29)
+
+Programme record: `docs/sis/SIS-EXPANSION-ROADMAP.md` §2.1. Demo:
+`docs/demo/SIS-EXP-1-WALKTHROUGH.md`. No schema, capability, role or
+Campus-adoption change.
+
+**Student 360 (the whole-School profile, `students.view`).**
+`App\Support\StudentProfile\StudentProfileSections` adds sections, each
+read through its OWNER's read path under that owner's capability and
+CampusScope:
+
+| Section | Owner and read path | Gate |
+|---|---|---|
+| Family | Guardians `StudentSiblingReader` (siblings = other Students sharing an ACTIVE Guardian), shown through `StudentAccess` | `students.view` scope (siblings filtered by it); placement via `enrollments.view` |
+| Subjects | Students `SubjectOfferingRosterReadService::currentOfferingsFor()` (the roster rule read from the Student's side) | whole-School `academics.subjects.view` + `enrollments.view` |
+| Attendance | Attendance `studentHistory()` (records only, audited, its own 404 → section absent) | `attendance.view` scope |
+| Fees | Payments `OutstandingFeesReadService` narrowed to the Student (in SQL) | `finance.charges.view` ∩ `finance.payments.view` scope; statement link only whole-School |
+| Transport | Transport `TransportStudentSummaryReader` | `transport.assignments.view` scope |
+| Hostel | Hostel `HostelStudentSummaryReader` | `hostel.residency.view` scope |
+| Library | Library `LibraryStudentSummaryReader` (active and overdue counts; no fines) | `library.circulation.view` scope |
+
+- **Absent, not hidden:** a section the viewer may not read is never
+  in the payload. An authorized section with no data is present and
+  empty. Module entitlement is part of capability resolution.
+- **Campus-scoped domain grants:** they show only that domain's in-scope
+  records, marked "your Campuses".
+- **No business write:** the profile changes nothing (the owners' read
+  audits still apply: Attendance and Payments record their reads). Its
+  links lead to the owner's page, which re-checks.
+- **Bounded:** query count is constant as data grows
+  (`StudentProfile360Test`, budget 85). The Campus overview is unchanged
+  (no Guardian or cross-domain data on Campus surfaces, rule 101).
+
+**Directory filters.** `/app/students` accepts `campus_id`,
+`grade_level_id` and `section_id`:
+- They filter by the CURRENT placement (the active year), in SQL, through
+  `StudentAccess::narrowToCurrentPlacement()` under the viewer's own
+  `enrollments.view` scope.
+- They only narrow: a foreign, forged, out-of-scope or mismatched id
+  matches nothing; a malformed id is a validation error.
+- Options are the active year's Sections the scope reaches. Without
+  placement read, no filters are offered and any filter matches nothing.
+
+**Edit integrity:**
+- **Structural fields.** `Student` and `Guardian` no longer mass-assign
+  `school_id` or `status`. Trusted paths (`StudentService::create`/
+  `changeStatus`, `GuardianService::create`/`changeStatus`, the demo
+  builder) set them explicitly (`forceCreate`/`forceFill`), and
+  `StudentService::update()` whitelists `PROFILE_FIELDS`.
+- **Stale edits.** Both identity edit paths (full edit and Campus name
+  edit) carry `StudentProfileVersion`, a KEYED digest (HMAC, purpose key
+  derived from the application key) of the editable fields (`updated_at`
+  has second precision, and status changes must not stale a form). Keyed
+  because the digest covers the date of birth, which a Campus name editor
+  must never recover by trying candidate dates (security review H-1). The save locks the Student FOR NO KEY UPDATE, re-reads
+  whole-School `students.manage` (full edit), and refuses a mismatch with
+  `StudentProfileChangedException` (409, shown as a page refusal).
+- **Precise audit.** `student.updated` names only the fields whose
+  stored value changed (Eloquent dirty state after casts). An unchanged
+  save writes and audits nothing.
+- **API residual:** `PATCH /api/v1/.../students/{id}` keeps its contract
+  (no version token, so last write wins), with the same lock, authority
+  re-read and precise audit.

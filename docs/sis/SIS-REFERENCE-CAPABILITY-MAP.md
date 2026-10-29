@@ -242,6 +242,21 @@ SIS completeness. Lycenza's own SIS local score is 96/100
 The gap between the two is the reference's breadth, most of it consciously
 gated (§4).
 
+## 5.1 After SIS.EXP-1 (2026-10-29)
+
+SIS.EXP-1 improved three families **inside** their existing
+classification; none changes class, so every score in §5 is unchanged
+(same formula):
+
+| SR | Built by SIS.EXP-1 | Still open (unchanged class) |
+|---|---|---|
+| SR-03 | Campus / Grade / Section filters on the directory (current class) | primary-Guardian ("point of contact") column, P3; KPI counts, gender, photo stay gated |
+| SR-04 | edit hardening: no mass-assigned School/status, stale-form refusal, precise changed-field audit | Student home address (OD-SIS-7); demographics (legal) |
+| SR-25 | the family block on the Student profile (siblings through an active shared Guardian) | the School-wide sibling list (SIS-019 / PV1-17); family dues (D-14) |
+
+Not reclassified, as required: documents (SR-21), certificates (SR-41),
+import (SR-06), groups (SR-17) and the report families.
+
 ## 6. Re-use
 
 - SIS.EXP checkpoints cite `SR-nn` ids in their records and, where a

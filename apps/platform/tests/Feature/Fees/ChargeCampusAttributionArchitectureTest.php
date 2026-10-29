@@ -32,6 +32,8 @@ class ChargeCampusAttributionArchitectureTest extends TestCase
         'app/Domain/Payments/Application/LateFeeItemExecutor.php' => 'ChargeCampusAttribution::fromCharge(',
         'app/Http/Controllers/App/Finance/ChargeController.php' => 'ChargeCampusAttribution::placementOnAssessmentDate()',
         'database/seeders/Demo/DemoModuleData.php' => 'ChargeCampusAttribution::placementOnAssessmentDate()',
+        // SIS.EXP-1: the Gachibowli SIS demonstration (manual-style Charges on the placement).
+        'database/seeders/Demo/DemoSisData.php' => 'ChargeCampusAttribution::placementOnAssessmentDate()',
     ];
 
     /** Every source-module Charge (the event-charge seam), and its source. */

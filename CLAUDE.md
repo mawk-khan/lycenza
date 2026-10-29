@@ -1729,3 +1729,11 @@ once several modules copy it.
        - Filters, search and sort only narrow, and the sort is a closed map.
        - Never a tenant table, `TenantContext`, RLS bypass, cache or link into a School.
      - **Network Campus counts and Network setup readiness are deferred.** They need tenant reads, and a bounded design needs either an RLS exception or a cross-School read model. That is a future Analytics architecture decision; never add it ad hoc.
+
+118. **The Student 360 profile is presentation over owners' read paths, never an owner (SIS.EXP-1, `docs/sis/SIS-EXPANSION-ROADMAP.md` §2.1).**
+     - **One assembler:** `App\Support\StudentProfile\StudentProfileSections`, outside every domain. It reads each section ONLY through the owning domain's read path, under that domain's own capability and CampusScope; `students.view` opens no other domain. No domain depends on it (`StudentProfileArchitectureTest`).
+     - **Absent, never hidden:** an unauthorized section is not in the payload; the Vue code holds no capability names. An authorized empty section is shown empty.
+     - **Read-only and bounded:** no business write and no edit control on a card (the owners' own read audits still apply); each section a constant number of queries (`StudentProfile360Test`). Never a rate or tally of attendance, a fine computation or family finance totals.
+     - **Siblings** are Students sharing an ACTIVE Guardian (`StudentSiblingReader`), shown only to a viewer who may view them; never on a Campus surface or a Guardian-facing view.
+     - **Directory placement filters** narrow the current placement in SQL under the viewer's `enrollments.view` scope; a forged or out-of-scope id matches nothing.
+     - **Student and Guardian `school_id`/`status` are never mass assignable**; identity edits carry `StudentProfileVersion` (KEYED: it digests the date of birth, which a Campus name editor must never be able to recover) and refuse a stale form; `student.updated` names only changed fields.

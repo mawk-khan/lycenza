@@ -123,7 +123,8 @@ class DataHealthStudentIdentityTest extends TestCase
         $typo = $this->student($school, 'A-2', 'Riya', 'Kapoor');
         $this->assertSame(1, $this->healthOf($school, 'student.possible_duplicate')['total']);
 
-        app(StudentService::class)->update($typo, ['first_name' => 'Rhea'], $this->createUser());
+        // SIS.EXP-1: the update re-reads the actor's current students.manage under the lock.
+        app(StudentService::class)->update($typo, ['first_name' => 'Rhea'], $this->createUserWithCapabilities($school, ['students.manage']));
 
         $this->assertSame(0, $this->healthOf($school, 'student.possible_duplicate')['total']);
     }

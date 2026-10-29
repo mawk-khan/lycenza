@@ -75,6 +75,8 @@ class DemoDataBuilderTest extends TestCase
             ...array_column(DemoAccountCatalog::OPERATIONS_DESKS, 'email'),
             // ORG.12E-D1: the canonical Organization demo personas.
             ...array_column(DemoAccountCatalog::ORGANIZATION, 1),
+            // SIS.EXP-1: the canonical SIS demonstration persona.
+            ...array_column(DemoAccountCatalog::SIS, 1),
         ], $emails);
 
         // Every login-page shortcut is a real seeded account (and vice versa).

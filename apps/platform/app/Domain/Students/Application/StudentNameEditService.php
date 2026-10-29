@@ -2,6 +2,7 @@
 
 namespace App\Domain\Students\Application;
 
+use App\Domain\Students\Application\Exceptions\StudentProfileChangedException;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\School;
 use App\Models\User;
@@ -34,9 +35,13 @@ final class StudentNameEditService
     ) {}
 
     /**
+     * SIS.EXP-1 (L-2): with $expectedVersion (StudentProfileVersion, always
+     * sent by the web form), a form opened before another identity change
+     * is refused under the lock, before anything is written.
+     *
      * @param  array<string, mixed>  $input  only the three name fields are read
      */
-    public function edit(School $school, CampusScope $scope, string $studentId, array $input, ?User $actor = null): Student
+    public function edit(School $school, CampusScope $scope, string $studentId, array $input, ?User $actor = null, ?string $expectedVersion = null): Student
     {
         $names = [
             'first_name' => (string) $input['first_name'],
@@ -44,8 +49,11 @@ final class StudentNameEditService
             'last_name' => isset($input['last_name']) && $input['last_name'] !== '' ? (string) $input['last_name'] : null,
         ];
 
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $scope, $studentId, $names, $actor): Student {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $scope, $studentId, $names, $actor, $expectedVersion): Student {
             $student = $this->access->lockedWriteTarget($school, $scope, $studentId);
+            if ($expectedVersion !== null && ! StudentProfileVersion::matches($student, $expectedVersion)) {
+                throw new StudentProfileChangedException;
+            }
             $changed = array_keys(array_filter($names, fn ($value, string $field) => $student->{$field} !== $value, ARRAY_FILTER_USE_BOTH));
             if ($changed === []) {
                 return $student;

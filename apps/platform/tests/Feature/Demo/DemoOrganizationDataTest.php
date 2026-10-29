@@ -143,7 +143,7 @@ class DemoOrganizationDataTest extends TestCase
         $gachibowli = $schoolReport('gachibowli.admin@example.test', 'northstar-gachibowli');
         $this->assertNotSame([], $gachibowli['gaps'], 'Gachibowli is partial / blocked');
         $this->assertSame('network', $gachibowli['presentation']['brandSource']);
-        $this->assertSame(1, $gachibowli['access']['campusAssignments'], 'the Campus Cashier');
+        $this->assertSame(2, $gachibowli['access']['campusAssignments'], 'the Campus Cashier and (SIS.EXP-1) the Early Years Principal');
         $this->assertSame(3, $gachibowli['access']['wholeSchoolAssignments'], 'admin, accountant, shared Principal -- never the disabled former member');
         $greenfield = $schoolReport('greenfield.admin@example.test', 'greenfield-public');
         $this->assertNotSame([], $greenfield['setup']['notEnabled']);

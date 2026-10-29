@@ -5,6 +5,7 @@ namespace Tests\Feature\Students;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Section;
+use App\Domain\Students\Application\StudentProfileVersion;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Models\Campus;
@@ -155,6 +156,7 @@ class StudentCampusWritesTest extends TestCase
         });
         $this->web($principalA)->put("/app/students/{$id}/names", [
             'first_name' => 'Ashaa', 'middle_name' => 'K', 'last_name' => 'Rao',
+            'expected_version' => StudentProfileVersion::of($this->fresh('here')),
             // Over-posted fields are ignored, never mass-assigned.
             'student_number' => 'HACK-1', 'date_of_birth' => '2000-01-01', 'status' => 'inactive', 'school_id' => Str::uuid()->toString(),
         ])->assertRedirect("/app/students/{$id}/overview");
@@ -194,7 +196,7 @@ class StudentCampusWritesTest extends TestCase
     public function a_whole_school_editor_keeps_the_full_identity_edit_and_may_rename_anyone(): void
     {
         $admin = $this->actor('school_admin', [null]);
-        $this->web($admin)->put("/app/students/{$this->students['unplaced']->id}/names", ['first_name' => 'Gitanjali'])->assertRedirect();
+        $this->web($admin)->put("/app/students/{$this->students['unplaced']->id}/names", ['first_name' => 'Gitanjali', 'expected_version' => StudentProfileVersion::of($this->fresh('unplaced'))])->assertRedirect()->assertSessionHasNoErrors();
         $this->assertSame('Gitanjali', $this->fresh('unplaced')->first_name);
         $this->web($admin)->get("/app/students/{$this->students['here']->id}/edit")->assertOk();
     }

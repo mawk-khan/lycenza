@@ -67,7 +67,7 @@ class LogoutAccessTest extends TestCase
         $this->build();
 
         $emails = array_column(DemoAccountCatalog::loginShortcuts(), 'email');
-        $this->assertCount(30, $emails); // ORG.4 adds the demo Platform Manager; ORG.12E-D1 the ten Organization personas; ORG.12F Jubilee Hills
+        $this->assertCount(31, $emails); // ORG.4 adds the demo Platform Manager; ORG.12E-D1 the ten Organization personas; ORG.12F Jubilee Hills; SIS.EXP-1 the Early Years Principal
         $this->assertContains('platform.admin@example.test', $emails);
         $this->assertContains('group.admin@example.test', $emails);
 

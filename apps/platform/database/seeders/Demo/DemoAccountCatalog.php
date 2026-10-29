@@ -25,6 +25,14 @@ final class DemoAccountCatalog
     /** ORG.12E-D1: the canonical Organization demo world (docs/demo/ORGANIZATION-DEMO-DATA.md). */
     public const GROUP_ORGANIZATION = 'Organization demo (Northstar Network, standalone Schools)';
 
+    /** SIS.EXP-1: the canonical SIS demonstration (docs/demo/SIS-EXP-1-WALKTHROUGH.md). */
+    public const GROUP_SIS = 'SIS demo (Northstar Gachibowli)';
+
+    /** SIS.EXP-1 personas, in the order DemoSisData seeds them. */
+    public const SIS = [
+        ['Principal — Campus: Gachibowli Early Years', 'gachibowli.ey.principal@example.test', 'Principal for ONE Campus: the Student directory and Campus overview of Early Years Students only; never the whole-School profile or the Main Campus.'],
+    ];
+
     /** ORG.12E-D1 personas, in the order DemoOrganizationData seeds them. */
     public const ORGANIZATION = [
         ['School Admin — Northstar Gachibowli', 'gachibowli.admin@example.test', 'Multi-Campus Network School: Setup & readiness (partial and blocked areas), rich School and Campus profiles with services, the Access Center and effective access.'],
@@ -133,6 +141,9 @@ final class DemoAccountCatalog
 
         foreach (self::ORGANIZATION as [$persona, $email, $hint]) {
             $shortcuts[] = ['persona' => $persona, 'email' => $email, 'hint' => $hint, 'group' => self::GROUP_ORGANIZATION];
+        }
+        foreach (self::SIS as [$persona, $email, $hint]) {
+            $shortcuts[] = ['persona' => $persona, 'email' => $email, 'hint' => $hint, 'group' => self::GROUP_SIS];
         }
 
         return $shortcuts;

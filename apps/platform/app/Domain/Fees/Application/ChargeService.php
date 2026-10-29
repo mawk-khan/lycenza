@@ -671,11 +671,12 @@ class ChargeService
      * ORG.7G-1 (§50): `$scope` is the reader's resolved CampusScope (the
      * authority); `$campus` is only ever a request filter inside it.
      *
+     * @param  list<string>|null  $studentIds  null: every Student; a list narrows in SQL
      * @return list<ChargeCollectionFact>
      */
-    public function collectionFacts(School $school, CampusScope $scope, ?string $academicYearId = null, ?ChargeCampusFilter $campus = null, bool $includeCancelled = false): array
+    public function collectionFacts(School $school, CampusScope $scope, ?string $academicYearId = null, ?ChargeCampusFilter $campus = null, bool $includeCancelled = false, ?array $studentIds = null): array
     {
-        return $this->context->withSchool($school, function () use ($school, $scope, $academicYearId, $campus, $includeCancelled) {
+        return $this->context->withSchool($school, function () use ($school, $scope, $academicYearId, $campus, $includeCancelled, $studentIds) {
             $facts = [];
             // ORG.9B (ADR 0076 §68): an as-at read also needs Charges cancelled
             // LATER than its date; Payments' charge-state read decides what
@@ -683,6 +684,9 @@ class ChargeService
             foreach ($scope->restrict(Charge::query()->where('school_id', $school->id))->when(! $includeCancelled, fn ($q) => $q->whereNull('cancelled_at'))
                 ->when($academicYearId !== null, fn ($q) => $q->where('academic_year_id', $academicYearId))
                 ->when($campus !== null, fn ($q) => $campus->apply($q))
+                // SIS.EXP-1: a caller narrowed to named Students (e.g. one
+                // Student's profile) reads only their Charges, in SQL.
+                ->when($studentIds !== null, fn ($q) => $q->whereIn('student_id', $studentIds))
                 ->orderBy('id')->toBase()->select(['id', 'student_id', 'academic_year_id', 'amount', 'currency', 'due_date'])
                 ->cursor() as $row) {
                 $facts[] = new ChargeCollectionFact(

@@ -5,6 +5,7 @@ namespace App\Domain\Students\Application;
 use App\Domain\Students\Application\Exceptions\DuplicateStudentNumberException;
 use App\Domain\Students\Application\Exceptions\InvalidStudentStatusException;
 use App\Domain\Students\Application\Exceptions\PossibleDuplicateStudentException;
+use App\Domain\Students\Application\Exceptions\StudentProfileChangedException;
 use App\Domain\Students\Application\Exceptions\StudentStatusUnchangedException;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentLifecycleEvent;
@@ -14,8 +15,10 @@ use App\Support\Approval\ApprovalDecisionAuthority;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Auth\Mfa\FreshMfaProof;
 use App\Support\Authorization\Campus\CampusScope;
+use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Validation\DateOfBirth;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -46,12 +49,16 @@ use LogicException;
  */
 class StudentService
 {
+    /** SIS.EXP-1: the identity fields update() may write (never school_id or status). */
+    public const array PROFILE_FIELDS = ['student_number', 'first_name', 'middle_name', 'last_name', 'date_of_birth'];
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly ApprovalDecisionAuthority $authority,
         private readonly StudentNumberAllocator $numbers,
         private readonly StudentDuplicateCandidates $duplicates,
+        private readonly CapabilityResolver $capabilities,
     ) {}
 
     /**
@@ -106,7 +113,9 @@ class StudentService
                         }
                     }
 
-                    $student = Student::query()->create([
+                    // SIS.EXP-1: school_id and status are not mass assignable;
+                    // this trusted creation path sets them explicitly.
+                    $student = Student::query()->forceCreate([
                         'school_id' => $school->id,
                         'student_number' => $studentNumber,
                         ...$identity,
@@ -135,23 +144,51 @@ class StudentService
      * AcademicYearController::update()'s doc comment: "status changes go
      * through activate()/close() below").
      *
+     * SIS.EXP-1 (SIS.EXP-0 findings L-1..L-3):
+     * - only PROFILE_FIELDS are read (an explicit whitelist here, not only in
+     *   the controllers); anything else in $attributes is ignored;
+     * - the Student row is locked FOR NO KEY UPDATE (rule 101) and, with an
+     *   $actor, whole-School `students.manage` is re-read fresh under the
+     *   lock (holdsInSchoolNow);
+     * - with $expectedVersion, a form opened before another change is
+     *   refused (StudentProfileChangedException) -- the web form always
+     *   sends it; the API may;
+     * - `changedFields` names only the fields whose stored value changed
+     *   (Eloquent dirty state, after casts); an unchanged save writes and
+     *   audits nothing.
+     *
      * @param  array{student_number?: string, first_name?: string, middle_name?: string|null, last_name?: string|null, date_of_birth?: string}  $attributes
      */
-    public function update(Student $student, array $attributes, ?User $actor = null): Student
+    public function update(Student $student, array $attributes, ?User $actor = null, ?string $expectedVersion = null): Student
     {
-        return $this->context->withSchool($student->school, function () use ($student, $attributes, $actor) {
+        $attributes = array_intersect_key($attributes, array_flip(self::PROFILE_FIELDS));
+
+        return $this->context->withSchool($student->school, function () use ($student, $attributes, $actor, $expectedVersion) {
             try {
-                return DB::transaction(function () use ($student, $attributes, $actor) {
+                return DB::transaction(function () use ($student, $attributes, $actor, $expectedVersion) {
+                    $locked = Student::query()->whereKey($student->id)->lock('for no key update')->firstOrFail();
+                    if ($actor !== null && ! $this->capabilities->holdsInSchoolNow($actor, 'students.manage', $student->school)) {
+                        throw new AuthorizationException('This action is unauthorized.');
+                    }
+                    if ($expectedVersion !== null && ! StudentProfileVersion::matches($locked, $expectedVersion)) {
+                        throw new StudentProfileChangedException;
+                    }
                     if (array_key_exists('date_of_birth', $attributes)) {
                         DateOfBirth::assert($student->school, $attributes['date_of_birth']);
                     }
-                    $student->update($attributes);
 
-                    $this->audit->school($student->school, 'student.updated', actor: $actor, subject: $student, metadata: [
-                        'changedFields' => array_keys($attributes),
+                    $locked->fill($attributes);
+                    $changed = array_values(array_intersect(self::PROFILE_FIELDS, array_keys($locked->getDirty())));
+                    if ($changed === []) {
+                        return $locked;
+                    }
+                    $locked->save();
+
+                    $this->audit->school($student->school, 'student.updated', actor: $actor, subject: $locked, metadata: [
+                        'changedFields' => $changed,
                     ]);
 
-                    return $student->refresh();
+                    return $locked->refresh();
                 });
             } catch (UniqueConstraintViolationException) {
                 throw new DuplicateStudentNumberException($attributes['student_number'] ?? $student->student_number);
@@ -193,7 +230,7 @@ class StudentService
                 'school_id' => $locked->school_id, 'student_id' => $locked->id, 'action' => $action,
                 'reason_code' => $reasonCode, 'acted_by_user_id' => $actor->id,
             ]);
-            $locked->update(['status' => $status]);
+            $locked->forceFill(['status' => $status])->save();
 
             $this->audit->school($student->school, 'student.status_changed', actor: $actor, subject: $locked, metadata: [
                 'previousStatus' => $previousStatus,

@@ -10,6 +10,9 @@ import MfaCodeField from '../../../Components/MfaCodeField.vue';
 import RelationshipFlags from '../../../Components/RelationshipFlags.vue';
 import StatusBadge from '../../../Components/StatusBadge.vue';
 import { RELATIONSHIP_TYPES } from '../../../relationshipTypes';
+import StudentFamily from '../../../Components/Students/StudentFamily.vue';
+import StudentProfileSummaries from '../../../Components/Students/StudentProfileSummaries.vue';
+import type { StudentProfileSections } from '../../../Components/Students/studentProfileSections';
 
 interface Relationship {
     id: string;
@@ -91,9 +94,18 @@ interface Props {
     hasMfaFactor: boolean;
     currentEnrollment?: Enrollment | null;
     enrollmentHistory?: Enrollment[];
+    // SIS.EXP-1: the Student 360 sections the server authorized (absent = not shown).
+    sections: StudentProfileSections;
 }
 
 const props = defineProps<Props>();
+
+// SIS.EXP-1: whether any "At a glance" card is present (for the page navigation).
+const hasGlance = computed(() =>
+    (['subjects', 'attendance', 'fees', 'transport', 'hostel', 'library'] as const).some(
+        (key) => props.sections[key] !== undefined,
+    ),
+);
 
 // SIS 9.1: the accessible confirmation (replaces window.confirm).
 const { confirmDialog, confirmation, confirmAction, onConfirm, onClose } = useConfirmation();
@@ -495,8 +507,22 @@ async function unlink(r: Relationship): Promise<void> {
             </div>
         </form>
 
+        <!-- SIS.EXP-1: in-page navigation over the sections this page actually has. -->
+        <nav aria-label="Profile sections" class="mt-6 border-y border-slate-200 py-2">
+            <ul class="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                <li><a class="underline" href="#identity">Identity</a></li>
+                <li v-if="canViewEnrollments">
+                    <a class="underline" href="#placement">Placement</a>
+                </li>
+                <li><a class="underline" href="#guardians">Guardians</a></li>
+                <li v-if="sections.family"><a class="underline" href="#family">Family</a></li>
+                <li v-if="hasGlance"><a class="underline" href="#at-a-glance">At a glance</a></li>
+                <li><a class="underline" href="#account">Account</a></li>
+            </ul>
+        </nav>
+
         <!-- Identity -->
-        <section class="mt-8">
+        <section id="identity" class="mt-8 scroll-mt-4">
             <h2 class="text-sm font-medium text-slate-500">Identity</h2>
             <dl
                 class="mt-2 grid grid-cols-1 gap-x-8 gap-y-3 rounded border border-slate-200 p-4 text-sm sm:grid-cols-2"
@@ -522,7 +548,7 @@ async function unlink(r: Relationship): Promise<void> {
 
         <!-- Academic placement (Phase 1B.6) -- absent entirely (not
              just hidden) unless the actor holds enrollments.view. -->
-        <section v-if="canViewEnrollments" class="mt-8">
+        <section v-if="canViewEnrollments" id="placement" class="mt-8 scroll-mt-4">
             <div class="flex items-center justify-between">
                 <h2 class="text-sm font-medium text-slate-500">Current placement</h2>
                 <a
@@ -1003,7 +1029,7 @@ async function unlink(r: Relationship): Promise<void> {
         </section>
 
         <!-- Guardians -->
-        <section class="mt-8">
+        <section id="guardians" class="mt-8 scroll-mt-4">
             <div class="flex items-center justify-between">
                 <h2 class="text-sm font-medium text-slate-500">Guardians</h2>
                 <a
@@ -1146,8 +1172,17 @@ async function unlink(r: Relationship): Promise<void> {
             </ul>
         </section>
 
+        <!-- SIS.EXP-1: family (siblings through a shared active Guardian) and the
+             read-only summaries of the owning modules. -->
+        <StudentFamily
+            v-if="sections.family"
+            :siblings="sections.family.siblings"
+            :truncated="sections.family.truncated"
+        />
+        <StudentProfileSummaries :sections="sections" />
+
         <!-- Lycenza account link -->
-        <section class="mt-8">
+        <section id="account" class="mt-8 scroll-mt-4">
             <h2 class="text-sm font-medium text-slate-500">Lycenza account</h2>
             <p class="mt-1 text-xs text-slate-400">
                 Optional. Linking an existing Lycenza account lets this Student receive in-app

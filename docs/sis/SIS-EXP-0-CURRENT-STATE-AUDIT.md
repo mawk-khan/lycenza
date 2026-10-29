@@ -464,6 +464,17 @@ existing isolation test inventory (SIS 1.1 §19). No penetration test.
 
 No prerequisite remediation is required before expansion planning.
 
+> **Update (SIS.EXP-1, 2026-10-29):**
+> - **Closed:** L-1 (Student and Guardian `school_id`/`status` no longer
+>   fillable; trusted paths explicit; `StudentService::update()`
+>   whitelists), L-2 (stale-form token on both identity edit paths) and
+>   L-3 (`changedFields` precise; an unchanged save writes nothing).
+> - **Carried forward, informational:** L-4 (cascading School keys).
+> - **Residual LOW, new:** the Guardian name edit has no stale token and
+>   lists submitted fields, and `StudentEnrollment` still mass-assigns
+>   `school_id`/`status` (DB-frozen and evidence-guarded). Neither is in
+>   SIS.EXP-1's scope.
+
 ## V. Performance
 
 Measured on DDEV against `school_os_test`, as School Admin, with fixtures

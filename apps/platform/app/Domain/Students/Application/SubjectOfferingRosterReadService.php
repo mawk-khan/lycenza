@@ -65,6 +65,48 @@ class SubjectOfferingRosterReadService
     }
 
     /**
+     * SIS.EXP-1: the same roster rule read from the Student's side -- the
+     * ACTIVE offerings whose current roster includes this placement's
+     * Student: every active REQUIRED offering of the placement's year,
+     * Grade and Campus (implied), plus every active ELECTIVE offering of
+     * that context the Student holds an active StudentSubjectEnrollment
+     * for. One query; an ended placement has no current subjects.
+     *
+     * @return list<array{subjectName: string, subjectCode: ?string, required: bool}>
+     */
+    public function currentOfferingsFor(StudentEnrollment $placement): array
+    {
+        if ($placement->status !== 'active') {
+            return [];
+        }
+
+        return $this->context->withSchool($placement->school, fn () => SubjectOffering::query()
+            ->with('subject:id,name,code')
+            ->where('subject_offerings.school_id', $placement->school_id)
+            ->where('subject_offerings.status', 'active')
+            ->where('subject_offerings.academic_year_id', $placement->academic_year_id)
+            ->where('subject_offerings.grade_level_id', $placement->grade_level_id)
+            ->where('subject_offerings.campus_id', $placement->campus_id)
+            ->where(fn ($q) => $q->where('subject_offerings.is_required', true)
+                ->orWhereExists(fn ($e) => $e->selectRaw('1')->from('student_subject_enrollments')
+                    ->whereColumn('student_subject_enrollments.subject_offering_id', 'subject_offerings.id')
+                    ->where('student_subject_enrollments.school_id', $placement->school_id)
+                    ->where('student_subject_enrollments.student_id', $placement->student_id)
+                    ->where('student_subject_enrollments.status', 'active')))
+            ->orderByDesc('subject_offerings.is_required')
+            ->orderBy('subject_offerings.sequence')
+            ->orderBy('subject_offerings.id')
+            ->get()
+            ->map(fn (SubjectOffering $o): array => [
+                'subjectName' => $o->subject->name,
+                'subjectCode' => $o->subject->code,
+                'required' => $o->is_required,
+            ])
+            ->values()
+            ->all());
+    }
+
+    /**
      * A REQUIRED offering's roster is every Student whose CURRENT active
      * StudentEnrollment matches this offering's AcademicYear/GradeLevel/
      * Campus -- no StudentSubjectEnrollment row is ever consulted. Every

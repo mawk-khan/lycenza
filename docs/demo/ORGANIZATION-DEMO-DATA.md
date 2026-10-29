@@ -69,8 +69,8 @@ Finance, HR, …) that the other module walkthroughs use.
 | State | Where | Why (canonical data, no flag) |
 |---|---|---|
 | Strongly configured | **Lycenza Demo School** (school.admin) | full operational dataset: core 8/8 configured |
-| Partially configured | **Northstar Gachibowli**, Academic year | a *draft* academic year exists, not yet active |
-| Blocked | **Northstar Gachibowli**, Grades/sections (and Fees) | waits on an active academic year |
+| Partially configured | **Horizon Academy**, Academic year | a *draft* academic year exists, not yet active (SIS.EXP-1 moved this from Gachibowli) |
+| Blocked | **Horizon Academy**, Grades/sections (and Fees) | waits on an active academic year |
 | Not enabled | **Greenfield** and **Jubilee Hills** (core modules only) | optional modules are not entitled |
 | Needs attention | *not demonstrated* | only arises when an area is configured while its prerequisite is not (e.g. Leave set up with no staff). No demo School reaches it naturally, and a half-configured module would be invented state |
 
@@ -97,6 +97,7 @@ Finance, HR, …) that the other module walkthroughs use.
 | School Admin (Gachibowli) | gachibowli.admin@example.test | Northstar Gachibowli | `school_admin`, whole School | Setup Center, profiles, Campuses, Access Center, effective access | other Schools |
 | Accountant | gachibowli.accounts@example.test | Northstar Gachibowli | `accountant`, whole School | Finance School-wide ("Accountant — Whole School") | other Schools |
 | Cashier (Campus) | gachibowli.cashier@example.test | Northstar Gachibowli | `cashier`, Campus: Gachibowli Main Campus | Campus finance pages for Main Campus | the Early Years Campus; whole-School Finance pages (e.g. fee runs) |
+| Principal (Campus) — SIS.EXP-1 | gachibowli.ey.principal@example.test | Northstar Gachibowli | `principal`, Campus: Gachibowli Early Years Campus | the Student directory and Campus overview of Early Years Students | the whole-School Student profile; Main Campus Students |
 | Former librarian | gachibowli.former@example.test | Northstar Gachibowli | `librarian`, account **disabled** | — (cannot sign in) | everything; shown as "Account disabled" in the Access Center |
 | School Admin (Greenfield) | greenfield.admin@example.test | Greenfield (standalone) | `school_admin` | Setup Center with "Not enabled" areas; effective access showing "Module not enabled" | any Group page |
 | School Admin (Horizon) | horizon.admin@example.test | Horizon (standalone, 3 Campuses) | `school_admin` | multi-Campus profiles without a Group | any Group page |
@@ -176,7 +177,7 @@ No new records: every report derives from the canonical world above.
 | Network distribution, whole | network.viewer | Telangana 4 (Hyderabad Central 2, Hyderabad West 1, Region only 1), Karnataka 1 (Bengaluru North 1), Not placed 1 |
 | Network distribution, Region | network.region | Telangana only; no Not placed row |
 | Network distribution, Zone | network.zone | Hyderabad Central 2 only |
-| School Control Plane | gachibowli.admin / greenfield.admin / school.admin | partial and blocked with gaps / optional modules not enabled / core complete |
+| School Control Plane | gachibowli.admin / greenfield.admin / school.admin | gaps in optional areas / optional modules not enabled / core complete |
 
 The owner path is `docs/demo/ORGANIZATION-OWNER-VERIFICATION.md`.
 
@@ -184,7 +185,8 @@ The owner path is `docs/demo/ORGANIZATION-OWNER-VERIFICATION.md`.
 
 | Checkpoint | Demo records |
 |---|---|
-| ORG.12B | Lycenza Demo School (configured), Gachibowli (partial/blocked), Greenfield and Jubilee Hills (Not enabled) |
+| ORG.12B | Lycenza Demo School (configured), Horizon (partial/blocked; Gachibowli until SIS.EXP-1), Greenfield and Jubilee Hills (Not enabled) |
+| SIS.EXP-1 | Gachibowli: active 2026-27, 13 Students on both Campuses, the Menon siblings, Aarav's Student 360, the Early Years Principal (`SIS-EXP-1-WALKTHROUGH.md`) |
 | ORG.12C | Gachibowli and Horizon profiles; 11 Campuses with addresses, coordinates and all five services |
 | ORG.12D | Northstar: 2 Regions, 3 Zones, owned/franchise/managed/affiliate, Region-only Warangal, unclassified Mysuru |
 | ORG.12E | Network Manager and Viewers (whole, Region, Zone), shared identity; Access Center with whole-School Accountant, Campus Cashier, disabled former member, Greenfield "module not enabled" |

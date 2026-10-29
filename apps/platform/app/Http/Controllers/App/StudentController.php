@@ -11,6 +11,7 @@ use App\Domain\Students\Application\StudentAccess;
 use App\Domain\Students\Application\StudentActivityHistoryService;
 use App\Domain\Students\Application\StudentEnrollmentReadService;
 use App\Domain\Students\Application\StudentLifecycleReason;
+use App\Domain\Students\Application\StudentProfileVersion;
 use App\Domain\Students\Application\StudentService;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
@@ -19,6 +20,7 @@ use App\Http\Controllers\Controller;
 use App\Support\Auth\Mfa\FreshMfaRequirement;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Authorization\CapabilityResolver;
+use App\Support\StudentProfile\StudentProfileSections;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Validation\DateOfBirth;
@@ -123,7 +125,7 @@ class StudentController extends Controller
         ]);
     }
 
-    public function show(TenantContext $context, CapabilityResolver $capabilities, AccountLinkService $accountLinks, StudentEnrollmentReadService $enrollmentReads, StudentAccess $access, string $student): Response
+    public function show(TenantContext $context, CapabilityResolver $capabilities, AccountLinkService $accountLinks, StudentEnrollmentReadService $enrollmentReads, StudentAccess $access, StudentProfileSections $sections, string $student): Response
     {
         // ORG.7F-1 (ADR 0076 §45): the full Profile is a declared
         // whole-School-only operation -- the route carries the ordinary
@@ -198,6 +200,7 @@ class StudentController extends Controller
         // canViewEnrollments.
         // ORG.7F-1: Enrollment history is whole-School (a Campus-scoped
         // enrollments.view grant reads current placements elsewhere).
+        $current = null;
         if ($access->holdsWholeSchool($actor, 'enrollments.view', $school)) {
             $current = $enrollmentReads->currentFor($model);
             $history = $enrollmentReads->historyFor($model);
@@ -209,6 +212,13 @@ class StudentController extends Controller
         } else {
             $props['canViewEnrollments'] = false;
         }
+
+        // SIS.EXP-1: the Student 360 sections, each already filtered by its
+        // OWNING domain's capability and scope (an unauthorized section is
+        // absent from the payload, never hidden in Vue).
+        $props['sections'] = $sections->for($school, $actor, $model, $current, $model->guardianRelationships
+            ->mapWithKeys(fn ($r) => [(string) $r->guardian->id => trim(implode(' ', array_filter([$r->guardian->first_name, $r->guardian->last_name])))])
+            ->all());
 
         // ORG.8E (ADR 0076 §63): the closed reasons of the high-impact actions, and whether a fresh code can be given.
         $props['lifecycleReasons'] = StudentLifecycleReason::CODES;
@@ -227,6 +237,8 @@ class StudentController extends Controller
 
         return Inertia::render('App/Students/Edit', [
             'student' => $this->presentDetail($model),
+            // SIS.EXP-1 (L-2): the stale-form token, checked under the lock on save.
+            'version' => StudentProfileVersion::of($model),
             'today' => SchoolTimezone::today($school),
         ]);
     }
@@ -245,10 +257,11 @@ class StudentController extends Controller
             'middle_name' => ['nullable', 'string', 'max:255'],
             'last_name' => ['nullable', 'string', 'max:255'],
             'date_of_birth' => DateOfBirth::rules($school),
+            'expected_version' => ['required', 'string', 'size:64'],
         ], DateOfBirth::messages());
 
         try {
-            $service->update($model, $validated, $context->actor());
+            $service->update($model, Arr::except($validated, 'expected_version'), $context->actor(), $validated['expected_version']);
         } catch (DuplicateStudentNumberException) {
             throw ValidationException::withMessages([
                 'student_number' => ['This Student Number is already in use.'],

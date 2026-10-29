@@ -10,12 +10,16 @@ dataset (`docs/demo/ORGANIZATION-DEMO-DATA.md`).
 
 ## 1. Setup & Readiness Center (ORG.12B)
 
-1. Sign in as **gachibowli.admin@example.test** → *Setup & readiness*.
+1. Sign in as **horizon.admin@example.test** → *Setup & readiness*.
    - School profile and Campuses: **Configured**.
    - Academic year: **Partially configured** (a draft year exists, not yet
      active).
    - Grades, sections and subjects, and Fees: **Blocked**. They wait on the
      active year, which is named as the prerequisite and recommended first.
+   - *SIS.EXP-1:* these two states moved here from Gachibowli, which is now
+     the canonical SIS School with an active 2026-27 year
+     (`SIS-EXP-1-WALKTHROUGH.md`); Gachibowli's academic areas read
+     **Configured** and its remaining gaps are elsewhere (e.g. Fees).
 2. Sign in as **greenfield.admin@example.test** → *Setup & readiness*.
    Optional areas (Fees, Transport, Library, …) are listed as **Not
    enabled**. They never count against progress.

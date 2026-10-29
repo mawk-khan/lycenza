@@ -41,7 +41,9 @@ class GuardianService
     public function create(School $school, array $attributes, ?User $actor = null): Guardian
     {
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $attributes, $actor) {
-            $guardian = Guardian::query()->create([
+            // SIS.EXP-1: school_id and status are not mass assignable;
+            // this trusted creation path sets them explicitly.
+            $guardian = Guardian::query()->forceCreate([
                 'school_id' => $school->id,
                 'first_name' => $attributes['first_name'],
                 'middle_name' => $attributes['middle_name'] ?? null,
@@ -79,7 +81,7 @@ class GuardianService
 
         return $this->context->withSchool($guardian->school, fn () => DB::transaction(function () use ($guardian, $status, $actor) {
             $previousStatus = $guardian->status;
-            $guardian->update(['status' => $status]);
+            $guardian->forceFill(['status' => $status])->save();
 
             $this->audit->school($guardian->school, 'guardian.status_changed', actor: $actor, subject: $guardian, metadata: [
                 'previousStatus' => $previousStatus,

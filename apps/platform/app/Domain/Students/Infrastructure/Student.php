@@ -44,9 +44,15 @@ class Student extends Model
 
     protected $table = 'students';
 
+    /**
+     * SIS.EXP-1 (SIS.EXP-0 finding L-1): the identity fields only. `school_id`
+     * (set by BelongsToSchool or an explicit trusted create) and `status`
+     * (StudentService::changeStatus(), with its lifecycle event) are
+     * structural and never mass assignable, so a slipped whitelist can never
+     * move a Student or change its lifecycle (StudentMassAssignmentTest).
+     */
     protected $fillable = [
-        'school_id', 'student_number', 'first_name', 'middle_name', 'last_name',
-        'date_of_birth', 'status',
+        'student_number', 'first_name', 'middle_name', 'last_name', 'date_of_birth',
     ];
 
     protected function casts(): array

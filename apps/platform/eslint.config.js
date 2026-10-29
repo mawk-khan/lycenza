@@ -77,6 +77,8 @@ const SWC_ACCESSIBILITY_FILES = [
     'resources/js/Pages/App/DataHealth/**/*.vue',
     'resources/js/Components/StudentIdentityFields.vue',
     'resources/js/Components/DuplicateStudentWarning.vue',
+    // SIS.EXP-1: the Student 360 profile components.
+    'resources/js/Components/Students/**/*.vue',
 ];
 const swcAccessibility = pluginVueA11y.configs['flat/recommended'].map((config) => ({
     ...config,

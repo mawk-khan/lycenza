@@ -1,0 +1,60 @@
+// SIS.EXP-1: the server's Student 360 payload (App\Support\StudentProfile\
+// StudentProfileSections). Every key is optional: a section is present only
+// when the server authorized it.
+
+export type SectionScope = 'school' | 'campus';
+
+export interface StudentSibling {
+    id: string;
+    name: string;
+    studentNumber: string;
+    status: 'active' | 'inactive';
+    currentPlacement: { gradeLevel: string; section: string; campus: string } | null;
+    sharedGuardians: string[];
+}
+
+export interface StudentProfileSections {
+    family?: { siblings: StudentSibling[]; truncated: boolean };
+    subjects?: { items: { subjectName: string; subjectCode: string | null; required: boolean }[] };
+    attendance?: {
+        from: string;
+        to: string;
+        recent: {
+            date: string | null;
+            classLabel: string | null;
+            subjectName: string | null;
+            periodName: string | null;
+            status: string;
+            corrected: boolean;
+        }[];
+        link: string;
+    };
+    fees?: {
+        scope: SectionScope;
+        hasCharges: boolean;
+        billed: string | null;
+        concession: string | null;
+        paid: string | null;
+        outstanding: string | null;
+        overdue: string | null;
+        openCharges: number;
+        nextDueDate: string | null;
+        earliestOverdueDueDate: string | null;
+        currency: string | null;
+        statementLink: string | null;
+    };
+    transport?: {
+        scope: SectionScope;
+        assignments: {
+            routeName: string;
+            pickupStopName: string | null;
+            dropoffStopName: string | null;
+            startsOn: string;
+        }[];
+    };
+    hostel?: {
+        scope: SectionScope;
+        residencies: { hostelName: string; roomCode: string; bedCode: string; startsOn: string }[];
+    };
+    library?: { scope: SectionScope; activeLoans: number; overdueLoans: number; link: string };
+}
