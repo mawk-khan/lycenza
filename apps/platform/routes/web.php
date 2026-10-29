@@ -382,9 +382,9 @@ Route::middleware('auth')->where(WebRouteParameters::uuidPatterns())->group(func
             Route::put('/{schoolGroup}/schools/{school}/classification', [SchoolGroupAdminController::class, 'classify'])->name('schools.classify');
             Route::put('/{schoolGroup}/schools/{school}/placement', [SchoolGroupAdminController::class, 'place'])->name('schools.place');
             Route::post('/{schoolGroup}/regions', [SchoolGroupAdminController::class, 'storeRegion'])->name('regions.store');
-            Route::put('/{schoolGroup}/regions/{region}', [SchoolGroupAdminController::class, 'updateRegion'])->whereUuid('region')->name('regions.update');
+            Route::put('/{schoolGroup}/regions/{region}', [SchoolGroupAdminController::class, 'updateRegion'])->name('regions.update');
             Route::post('/{schoolGroup}/zones', [SchoolGroupAdminController::class, 'storeZone'])->name('zones.store');
-            Route::put('/{schoolGroup}/zones/{zone}', [SchoolGroupAdminController::class, 'updateZone'])->whereUuid('zone')->name('zones.update');
+            Route::put('/{schoolGroup}/zones/{zone}', [SchoolGroupAdminController::class, 'updateZone'])->name('zones.update');
             Route::post('/{schoolGroup}/grants', [SchoolGroupAdminController::class, 'grant'])->name('grants.store');
             Route::post('/{schoolGroup}/grants/{grant}/revoke', [SchoolGroupAdminController::class, 'revoke'])->name('grants.revoke');
         });
