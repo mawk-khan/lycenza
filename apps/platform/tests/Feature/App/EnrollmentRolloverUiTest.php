@@ -732,7 +732,7 @@ class EnrollmentRolloverUiTest extends TestCase
                 // irrelevant to production, not worth touching for one
                 // test. A direct create() with every field this
                 // Enrollment's five parents require sidesteps it.
-                StudentEnrollment::query()->create([
+                StudentEnrollment::query()->forceCreate([
                     'school_id' => $school->id,
                     'student_id' => $student->id,
                     'academic_year_id' => $sourceSection->academic_year_id,

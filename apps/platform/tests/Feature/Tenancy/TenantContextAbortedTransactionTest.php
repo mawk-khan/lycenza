@@ -93,7 +93,7 @@ class TenantContextAbortedTransactionTest extends TestCase
         ['student' => $studentA, 'section' => $section] = $this->buildContext($school);
         $studentB = $this->createStudent($school, ['student_number' => 'S-9002']);
 
-        app(TenantContext::class)->withSchool($school, fn () => StudentEnrollment::query()->create(
+        app(TenantContext::class)->withSchool($school, fn () => StudentEnrollment::query()->forceCreate(
             $this->enrollmentAttributes($school, $studentA, $section),
         ));
 
@@ -101,7 +101,7 @@ class TenantContextAbortedTransactionTest extends TestCase
         try {
             // Deliberately NOT wrapped in its own DB::transaction() --
             // the exact shape that reproduces the defect.
-            app(TenantContext::class)->withSchool($school, fn () => StudentEnrollment::query()->create(
+            app(TenantContext::class)->withSchool($school, fn () => StudentEnrollment::query()->forceCreate(
                 $this->enrollmentAttributes($school, $studentB, $section),
             ));
         } catch (Throwable $e) {
@@ -132,7 +132,7 @@ class TenantContextAbortedTransactionTest extends TestCase
 
         $thrown = null;
         try {
-            app(TenantContext::class)->withSchool($school, fn () => StudentEnrollment::query()->create(
+            app(TenantContext::class)->withSchool($school, fn () => StudentEnrollment::query()->forceCreate(
                 $this->enrollmentAttributes($school, $student, $section, ['starts_on' => '2027-01-01', 'ends_on' => '2026-01-01']),
             ));
         } catch (Throwable $e) {
@@ -151,7 +151,7 @@ class TenantContextAbortedTransactionTest extends TestCase
         ['student' => $student, 'section' => $section] = $this->buildContext($school);
 
         try {
-            app(TenantContext::class)->withSchool($school, fn () => StudentEnrollment::query()->create(
+            app(TenantContext::class)->withSchool($school, fn () => StudentEnrollment::query()->forceCreate(
                 $this->enrollmentAttributes($school, $student, $section, ['starts_on' => '2027-01-01', 'ends_on' => '2026-01-01']),
             ));
         } catch (Throwable) {
@@ -178,13 +178,13 @@ class TenantContextAbortedTransactionTest extends TestCase
         ['student' => $studentA, 'section' => $section] = $this->buildContext($school);
         $studentB = $this->createStudent($school, ['student_number' => 'S-9002']);
 
-        app(TenantContext::class)->withSchool($school, fn () => DB::transaction(fn () => StudentEnrollment::query()->create(
+        app(TenantContext::class)->withSchool($school, fn () => DB::transaction(fn () => StudentEnrollment::query()->forceCreate(
             $this->enrollmentAttributes($school, $studentA, $section),
         )));
 
         $thrown = null;
         try {
-            app(TenantContext::class)->withSchool($school, fn () => DB::transaction(fn () => StudentEnrollment::query()->create(
+            app(TenantContext::class)->withSchool($school, fn () => DB::transaction(fn () => StudentEnrollment::query()->forceCreate(
                 $this->enrollmentAttributes($school, $studentB, $section),
             )));
         } catch (Throwable $e) {
@@ -198,7 +198,7 @@ class TenantContextAbortedTransactionTest extends TestCase
         // A genuinely subsequent operation, in a fresh withSchool()
         // call, on the SAME connection, succeeds immediately.
         $studentC = $this->createStudent($school, ['student_number' => 'S-9003']);
-        $result = app(TenantContext::class)->withSchool($school, fn () => DB::transaction(fn () => StudentEnrollment::query()->create(
+        $result = app(TenantContext::class)->withSchool($school, fn () => DB::transaction(fn () => StudentEnrollment::query()->forceCreate(
             $this->enrollmentAttributes($school, $studentC, $section, ['roll_number' => '02']),
         )));
         $this->assertNotNull($result->id);
@@ -211,12 +211,12 @@ class TenantContextAbortedTransactionTest extends TestCase
         ['student' => $studentA1, 'section' => $sectionA] = $this->buildContext($schoolA);
         $studentA2 = $this->createStudent($schoolA, ['student_number' => 'A-9002']);
 
-        app(TenantContext::class)->withSchool($schoolA, fn () => DB::transaction(fn () => StudentEnrollment::query()->create(
+        app(TenantContext::class)->withSchool($schoolA, fn () => DB::transaction(fn () => StudentEnrollment::query()->forceCreate(
             $this->enrollmentAttributes($schoolA, $studentA1, $sectionA),
         )));
 
         try {
-            app(TenantContext::class)->withSchool($schoolA, fn () => DB::transaction(fn () => StudentEnrollment::query()->create(
+            app(TenantContext::class)->withSchool($schoolA, fn () => DB::transaction(fn () => StudentEnrollment::query()->forceCreate(
                 $this->enrollmentAttributes($schoolA, $studentA2, $sectionA),
             )));
         } catch (Throwable) {
@@ -235,7 +235,7 @@ class TenantContextAbortedTransactionTest extends TestCase
             $visible = StudentEnrollment::query()->count();
             $this->assertSame(0, $visible, "School B must see zero rows -- School A's Enrollment (created above) must not be visible.");
 
-            DB::transaction(fn () => StudentEnrollment::query()->create(
+            DB::transaction(fn () => StudentEnrollment::query()->forceCreate(
                 $this->enrollmentAttributes($schoolB, $studentB, $sectionB),
             ));
 
@@ -254,7 +254,7 @@ class TenantContextAbortedTransactionTest extends TestCase
             $this->assertSame($outer->id, $this->currentSchoolIdSetting());
 
             try {
-                app(TenantContext::class)->withSchool($inner, fn () => DB::transaction(fn () => StudentEnrollment::query()->create(
+                app(TenantContext::class)->withSchool($inner, fn () => DB::transaction(fn () => StudentEnrollment::query()->forceCreate(
                     $this->enrollmentAttributes($inner, $innerStudent, $innerSection, ['starts_on' => '2027-01-01', 'ends_on' => '2026-01-01']),
                 )));
                 $this->fail('Expected a CHECK constraint violation.');
@@ -285,7 +285,7 @@ class TenantContextAbortedTransactionTest extends TestCase
         ['student' => $studentA, 'section' => $section] = $this->buildContext($school);
         $studentB = $this->createStudent($school, ['student_number' => 'S-9002']);
 
-        app(TenantContext::class)->withSchool($school, fn () => StudentEnrollment::query()->create(
+        app(TenantContext::class)->withSchool($school, fn () => StudentEnrollment::query()->forceCreate(
             $this->enrollmentAttributes($school, $studentA, $section),
         ));
 
@@ -298,7 +298,7 @@ class TenantContextAbortedTransactionTest extends TestCase
         // this succeeded.
         app(TenantContext::class)->withSchool($school, function () use ($school, $studentB, $section) {
             try {
-                return StudentEnrollment::query()->create(
+                return StudentEnrollment::query()->forceCreate(
                     $this->enrollmentAttributes($school, $studentB, $section),
                 );
             } catch (UniqueConstraintViolationException) {
@@ -320,7 +320,7 @@ class TenantContextAbortedTransactionTest extends TestCase
         $result = app(TenantContext::class)->withSchool($school, function () use ($school, $student, $section) {
             $this->assertSame($school->id, $this->currentSchoolIdSetting());
 
-            return StudentEnrollment::query()->create(
+            return StudentEnrollment::query()->forceCreate(
                 $this->enrollmentAttributes($school, $student, $section),
             );
         });

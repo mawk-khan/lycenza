@@ -1896,6 +1896,56 @@ step-up; the list page does.
 - Plus Documents' own `document.*` events.
 - Ids and codes only: never a title, file name or content.
 
+## Residual hardening (SIS.HARDEN-1, 2026-10-30)
+
+Closes SIS.EXP-R1 findings R-1, R-5 and R-6 for this module (R-3, R-4 and
+R-7 are in `STUDENT-ENROLLMENT.md` and below).
+
+**Guardian name edit (R-1)** now has the Student identity edit's contract:
+- **Token:** the edit form carries `GuardianProfileVersion`, a keyed HMAC
+  (its own purpose key, derived from the application key) of the Guardian's
+  id and names. It reveals nothing and cannot be computed from the visible
+  names.
+- **Save:** `GuardianService::update()` reads only `PROFILE_FIELDS` and
+  locks the Guardian FOR NO KEY UPDATE. With an actor, it re-reads
+  whole-School `guardians.manage` under the lock.
+  - A mismatched token is refused with `GuardianProfileChangedException`
+    (409, a page refusal, "reload and review"). Nothing is written or
+    audited.
+  - The web form always sends the token. The API PATCH keeps its contract
+    (no token, so last write wins), with the same lock, re-read and audit.
+- **Audit:** names are canonicalised first (trimmed; an empty middle or
+  last name is null). `guardian.updated` then names only the fields whose
+  stored value changed. An unchanged or equivalent save writes nothing,
+  audits nothing and keeps the token.
+
+**Directory Section options (R-5).** The directory offers:
+- active Sections of the current year in the viewer's placement scope;
+- an inactive Section that still holds a current placement, labelled
+  "(inactive)". Deactivating a Section never ends its placements, so such a
+  Section still matches.
+
+An inactive Section nobody is placed in is not offered, and a forged id
+still only narrows. History (the movement register) keeps every Section.
+
+**Siblings (R-6).**
+- `StudentSiblingReader::siblingIds()` is an unexecuted sub-query with no
+  limit of its own.
+- Student 360 applies the viewer's `students.view` scope in that same query,
+  then `LIMIT 21`. A hidden Student never takes one of the 20 slots, and
+  "more" is shown only when more authorized siblings exist.
+- No count of the candidate set exists anywhere.
+- The block is now two queries lighter: Student 360 went from 73 to 71
+  queries, constant with 9 or 39 siblings.
+
+**Concurrent archive (R-7).** Two simultaneous archives of one Student
+document: the loser now gets the same 409 as a second sequential attempt
+(`StudentDocumentArchivedException`), not a 404.
+- Documents locks the Student-owned Document without a status filter and
+  throws `DocumentArchivedException` when another request archived it first.
+- Another School's or another Student's id is still NOT FOUND.
+- Proven with two real processes (`StudentTerminalActionConcurrencyTest`).
+
 ## Bulk Student & Guardian import (SIS.EXP-5, 2026-10-30, OD-SIS-3)
 
 An add-only onboarding tool for Students already at the School. One

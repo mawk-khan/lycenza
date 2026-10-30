@@ -62,7 +62,7 @@ final class DemoSisVerifier
                 return [...$problems, 'the Menon siblings are missing'];
             }
             $check(DB::table('student_guardian_relationships')->where('student_id', $aarav->id)->count() === 2, 'Aarav Menon does not have two Guardians');
-            $check(array_keys(app(StudentSiblingReader::class)->siblingsOf($aarav)) === [(string) $diya->id], 'Aarav Menon\'s only sibling is not Diya Menon');
+            $check(app(StudentSiblingReader::class)->siblingIds($aarav)->distinct()->pluck('student_id')->map(fn ($id) => (string) $id)->all() === [(string) $diya->id], 'Aarav Menon\'s only sibling is not Diya Menon');
             $placement = DB::table('student_enrollments as e')->join('sections as s', 's.id', '=', 'e.section_id')->join('grade_levels as g', 'g.id', '=', 'e.grade_level_id')->join('campuses as c', 'c.id', '=', 'e.campus_id')
                 ->where('e.student_id', $aarav->id)->where('e.status', 'active')->first(['g.name as grade', 's.name as section', 'c.code as campus']);
             $check($placement !== null && [$placement->grade, $placement->section, $placement->campus] === ['Grade 5', 'A', 'GCB-MAIN'], 'Aarav Menon is not in Grade 5 · A on the Main Campus');

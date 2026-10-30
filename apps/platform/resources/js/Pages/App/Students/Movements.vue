@@ -29,6 +29,8 @@ interface Movement {
     from: Placement | null;
     to: Placement | null;
     reasonCode: string | null;
+    // SIS.HARDEN-1: a lifecycle event dated in no academic year (never moved into a neighbouring one).
+    outsideAcademicYear: boolean;
 }
 
 interface Option {
@@ -58,6 +60,7 @@ interface Props {
         }[];
         categories: { value: string; label: string }[];
         types: { value: string; label: string; category: string }[];
+        canFilterOutsideYear: boolean;
     };
     canOpenStudent: boolean;
 }
@@ -197,6 +200,9 @@ function reason(code: string | null): string {
                     <option v-for="y in options.academicYears" :key="y.id" :value="y.id">
                         {{ y.name }}
                     </option>
+                    <option v-if="options.canFilterOutsideYear" value="outside">
+                        Outside academic year
+                    </option>
                 </select>
             </div>
             <div>
@@ -329,6 +335,11 @@ function reason(code: string | null): string {
                         <tr v-for="m in movements.data" :key="m.id">
                             <td class="whitespace-nowrap px-3 py-2">
                                 {{ formatCalendarDate(m.effectiveDate) }}
+                                <span
+                                    v-if="m.outsideAcademicYear"
+                                    class="block text-xs text-slate-500"
+                                    >Outside academic year</span
+                                >
                             </td>
                             <td class="px-3 py-2">
                                 <a

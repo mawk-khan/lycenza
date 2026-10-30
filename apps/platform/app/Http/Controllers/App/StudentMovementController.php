@@ -13,7 +13,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Models\School;
 use App\Support\Tenancy\TenantContext;
+use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -46,7 +48,12 @@ class StudentMovementController extends Controller
             : array_values(array_filter(StudentMovementType::cases(), fn (StudentMovementType $t) => ! $t->isStudentLifecycle()));
 
         $validated = $request->validate([
-            'academic_year_id' => ['sometimes', 'nullable', 'uuid'],
+            // A year id, or (R-4) the events dated in no academic year.
+            'academic_year_id' => ['sometimes', 'nullable', 'bail', 'string', function (string $attribute, mixed $value, Closure $fail) use ($canViewStudents): void {
+                if (! Str::isUuid($value) && ! ($canViewStudents && $value === StudentMovementRegister::OUTSIDE_ACADEMIC_YEAR)) {
+                    $fail('Choose an academic year from the list.');
+                }
+            }],
             'from' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
             'to' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
             'category' => ['sometimes', 'nullable', Rule::in(StudentMovementType::CATEGORIES)],
@@ -65,7 +72,7 @@ class StudentMovementController extends Controller
             'movements' => $rows,
             'filters' => collect(['academic_year_id', 'from', 'to', 'category', 'type', 'campus_id', 'grade_level_id', 'section_id', 'q', 'sort'])
                 ->mapWithKeys(fn (string $k) => [$k => (string) ($validated[$k] ?? '')])->all(),
-            'options' => $this->options($school, $types),
+            'options' => [...$this->options($school, $types), 'canFilterOutsideYear' => $canViewStudents],
             'canOpenStudent' => $canViewStudents,
         ]);
     }

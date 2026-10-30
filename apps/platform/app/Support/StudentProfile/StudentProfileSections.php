@@ -149,15 +149,16 @@ final class StudentProfileSections
         if ($scope->isNone()) {
             return null;
         }
-        $shared = $this->siblings->siblingsOf($student);
-        if ($shared === []) {
+        // SIS.HARDEN-1 (R-6): the viewer's scope first, then the display
+        // limit (one more row only says "more" about Students they may see).
+        $visible = $this->students->students($school, $scope)->whereIn('students.id', $this->siblings->siblingIds($student))
+            ->orderBy('first_name')->orderBy('last_name')->orderBy('students.id')->limit(StudentSiblingReader::LIMIT + 1)->get();
+        $truncated = $visible->count() > StudentSiblingReader::LIMIT;
+        $visible = $visible->take(StudentSiblingReader::LIMIT);
+        if ($visible->isEmpty()) {
             return ['siblings' => [], 'truncated' => false];
         }
-        $truncated = count($shared) > StudentSiblingReader::LIMIT;
-        $shared = array_slice($shared, 0, StudentSiblingReader::LIMIT, preserve_keys: true);
-
-        $visible = $this->students->students($school, $scope)->whereIn('students.id', array_keys($shared))
-            ->orderBy('first_name')->orderBy('last_name')->orderBy('students.id')->get();
+        $shared = $this->siblings->sharedGuardians($student, $visible->pluck('id')->map(fn ($id) => (string) $id)->all());
         $placementScope = $this->scopes->campusScope($actor, 'enrollments.view', $school);
         $placements = $this->students->currentPlacements($school, $placementScope, $visible->pluck('id')->map(fn ($id) => (string) $id)->all());
 

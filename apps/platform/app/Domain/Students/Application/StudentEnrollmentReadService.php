@@ -74,6 +74,26 @@ class StudentEnrollmentReadService
     }
 
     /**
+     * SIS.HARDEN-1 (SIS.EXP-R1 finding R-5): keeps the Sections (of
+     * `$academicYearId`) a current-placement filter can match -- active ones,
+     * plus an inactive one still holding a current placement (deactivating a
+     * Section never ends its placements). For filter OPTIONS only.
+     *
+     * @template TQuery of Builder|QueryBuilder
+     *
+     * @param  TQuery  $sections  a `sections` query
+     * @return TQuery
+     */
+    public function matchableSections(Builder|QueryBuilder $sections, string $academicYearId): Builder|QueryBuilder
+    {
+        return $sections->where(fn ($q) => $q->where('sections.status', 'active')->orWhereExists(fn (QueryBuilder $placed) => $this->constrainToCurrentPlacement(
+            $placed->selectRaw('1')->from('student_enrollments as se')->whereColumn('se.section_id', 'sections.id')->whereColumn('se.school_id', 'sections.school_id'),
+            $academicYearId,
+            'se',
+        )));
+    }
+
+    /**
      * SIS 8.1 (SB-02): keeps the rows of `$query` whose date (`$dateColumn`)
      * lies outside the dates of the placement named by `$enrollmentColumn`
      * -- before it started, or after it ended. An empty-interval

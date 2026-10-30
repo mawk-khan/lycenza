@@ -49,6 +49,13 @@ The brief's candidate order was re-sequenced on repository evidence:
 | **SIS.EXP-7** | House (or Club) Membership | The one named concept a pilot asks for: per-year membership, one House per Student per year, optional responsibility labels from a closed list. No generic group engine, no gender analytics, no badges | *decision-gated* OD-SIS-4 (D-17 revisit) | M | yes (§5) | SR-17 (part) |
 | **SIS.EXP-8** | SIS Parity Closure Re-audit | Re-read the 42-family map; reclassify; rescore; verify the demo world; record the remaining owner/legal gates | after the chosen waves | audit | none | all |
 
+### 2.0e SIS.HARDEN-1 — IMPLEMENTED (2026-10-30)
+
+The decision-free residuals R-1 and R-3 … R-7 are closed (audit §9.0).
+- No migration, capability, role, Campus adoption or API-contract change.
+- **R-2** stays deferred; **R-9** stays with Documents/security.
+- **Next:** `SIS.EXP-CLOSE` (owner authorisation; not started).
+
 ### 2.0d SIS.EXP-R1 — POST-P1 AUDIT (2026-10-30, documentation only)
 
 `SIS-EXP-R1-POST-P1-AUDIT.md`:

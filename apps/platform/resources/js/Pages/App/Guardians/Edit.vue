@@ -9,6 +9,8 @@ interface Props {
         middleName: string | null;
         lastName: string | null;
     };
+    // SIS.HARDEN-1: the stale-form token; the server refuses a save if the details changed since.
+    version: string;
 }
 
 const props = defineProps<Props>();
@@ -17,6 +19,7 @@ const form = useForm({
     first_name: props.guardian.firstName,
     middle_name: props.guardian.middleName ?? '',
     last_name: props.guardian.lastName ?? '',
+    expected_version: props.version,
 });
 
 function submit(): void {

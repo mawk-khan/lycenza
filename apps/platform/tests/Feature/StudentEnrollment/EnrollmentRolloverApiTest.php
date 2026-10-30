@@ -903,7 +903,7 @@ class EnrollmentRolloverApiTest extends TestCase
                 // StudentEnrollment factory's faker default exhausts
                 // its 60-value unique pool before 101 rows, so a
                 // direct create() sidesteps it.
-                StudentEnrollment::query()->create([
+                StudentEnrollment::query()->forceCreate([
                     'school_id' => $school->id,
                     'student_id' => $student->id,
                     'academic_year_id' => $sourceSection->academic_year_id,

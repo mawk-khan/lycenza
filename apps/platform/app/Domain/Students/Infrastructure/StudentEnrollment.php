@@ -50,9 +50,18 @@ class StudentEnrollment extends Model
 
     protected $table = 'student_enrollments';
 
+    /**
+     * SIS.HARDEN-1 (SIS.EXP-R1 finding R-3): ownership and lifecycle are never
+     * mass assignable -- `school_id` (BelongsToSchool fills it from the trusted
+     * context), `status` and `ends_on` (only StudentEnrollmentService's
+     * transitions write them). The one creation path sets them explicitly
+     * (forceCreate). Pinned by StudentEnrollmentMassAssignmentTest.
+     */
+    public const PROTECTED_FIELDS = ['school_id', 'status', 'ends_on'];
+
     protected $fillable = [
-        'school_id', 'student_id', 'academic_year_id', 'campus_id', 'grade_level_id', 'section_id',
-        'roll_number', 'status', 'starts_on', 'ends_on',
+        'student_id', 'academic_year_id', 'campus_id', 'grade_level_id', 'section_id',
+        'roll_number', 'starts_on',
     ];
 
     protected function casts(): array

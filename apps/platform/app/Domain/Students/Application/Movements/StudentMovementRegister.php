@@ -41,7 +41,10 @@ use Illuminate\Support\Facades\DB;
  * exits, nor as either end of a rollover; a transfer whose destination was
  * later cancelled still shows its (cancelled) destination, so its type
  * stays right. A Student status change (no academic-year link) falls in a
- * year filter by its date: one between two years matches no year. A
+ * year filter by its date. SIS.HARDEN-1 (R-4): one dated between two years
+ * belongs to NO year -- it is never moved into a neighbouring one; it is
+ * marked `outsideAcademicYear` and found by the OUTSIDE_ACADEMIC_YEAR
+ * filter (and, as always, unfiltered or by date). A
  * rollover row belongs to its TARGET year. A withdrawal's
  * own lifecycle event only supplies its reason (never a second row).
  *
@@ -60,6 +63,9 @@ use Illuminate\Support\Facades\DB;
 final class StudentMovementRegister
 {
     public const int PER_PAGE = 25;
+
+    /** SIS.HARDEN-1 (R-4): the academic-year filter value for events dated in no year of the School. */
+    public const string OUTSIDE_ACADEMIC_YEAR = 'outside';
 
     /** sort key => ORDER BY (a closed map: no request input reaches SQL). */
     public const array SORTS = [
@@ -84,8 +90,9 @@ final class StudentMovementRegister
             /** @var LengthAwarePaginator<int, object> $raw */
             $raw = $query->orderByRaw($order)->paginate(self::PER_PAGE, ['*'], 'page', max(1, $page));
             $placements = $this->placements($raw->getCollection());
+            $years = $this->yearsFor($school, $raw->getCollection());
 
-            return $raw->through(fn (object $row): array => $this->present($row, $placements));
+            return $raw->through(fn (object $row): array => $this->present($row, $placements, $years));
         });
     }
 
@@ -114,7 +121,12 @@ final class StudentMovementRegister
         if (! empty($filters['to'])) {
             $query->where('r.effective_date', '<=', $filters['to']);
         }
-        if (! empty($filters['academic_year_id'])) {
+        if (($filters['academic_year_id'] ?? null) === self::OUTSIDE_ACADEMIC_YEAR) {
+            // SIS.HARDEN-1 (R-4): no canonical year link, and no year of this
+            // School contains the date (the years are few: a bounded anti-join).
+            $query->whereNull('r.academic_year_id')->whereNotExists(fn (Builder $y) => $y->selectRaw('1')->from('academic_years as ay')
+                ->where('ay.school_id', $school->id)->whereRaw('r.effective_date BETWEEN ay.starts_on AND ay.ends_on'));
+        } elseif (! empty($filters['academic_year_id'])) {
             // The canonical year link where one exists; a Student lifecycle
             // event has none, so it falls in the year whose dates contain it.
             $year = AcademicYear::query()->where('school_id', $school->id)->find($filters['academic_year_id']);
@@ -255,11 +267,30 @@ final class StudentMovementRegister
     }
 
     /**
+     * The School's year date ranges, read once and only when the page holds
+     * a row without a canonical year link (R-4).
+     *
+     * @param  Collection<int, object>  $rows
+     * @return list<array{0: string, 1: string}>
+     */
+    private function yearsFor(School $school, Collection $rows): array
+    {
+        if (! $rows->contains(fn (object $r) => $r->academic_year_id === null)) {
+            return [];
+        }
+
+        return AcademicYear::query()->where('school_id', $school->id)->get(['starts_on', 'ends_on'])
+            ->map(fn (AcademicYear $y) => [$y->starts_on->toDateString(), $y->ends_on->toDateString()])->values()->all();
+    }
+
+    /**
      * @param  Collection<string, StudentEnrollment>  $placements
+     * @param  list<array{0: string, 1: string}>  $years
      * @return array<string, mixed>
      */
-    private function present(object $row, Collection $placements): array
+    private function present(object $row, Collection $placements, array $years): array
     {
+        $date = substr((string) $row->effective_date, 0, 10);
         $type = StudentMovementType::from((string) $row->type);
         $placement = fn (?string $id): ?array => ($p = $id === null ? null : $placements->get($id)) === null ? null : [
             'academicYear' => $p->academicYear?->name,
@@ -271,7 +302,10 @@ final class StudentMovementRegister
 
         return [
             'id' => (string) $row->event_key,
-            'effectiveDate' => substr((string) $row->effective_date, 0, 10),
+            'effectiveDate' => $date,
+            // R-4: honest, never a neighbouring year.
+            'outsideAcademicYear' => $row->academic_year_id === null
+                && ! collect($years)->contains(fn (array $y) => $date >= $y[0] && $date <= $y[1]),
             'category' => $type->category(),
             'type' => $type->value,
             'typeLabel' => $type->label(),

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\App;
 
+use App\Domain\Guardians\Application\GuardianProfileVersion;
 use App\Domain\Guardians\Infrastructure\ContactType;
 use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Models\MembershipRoleAssignment;
@@ -163,7 +164,7 @@ class GuardianAdminUiTest extends TestCase
         $this->post('/app/guardians', ['first_name' => 'Sunita']);
         $guardian = app(TenantContext::class)->withSchool($school, fn () => Guardian::query()->where('first_name', 'Sunita')->firstOrFail());
 
-        $this->put("/app/guardians/{$guardian->id}", ['first_name' => 'Sunita', 'last_name' => 'Devi']);
+        $this->put("/app/guardians/{$guardian->id}", ['first_name' => 'Sunita', 'last_name' => 'Devi', 'expected_version' => GuardianProfileVersion::of($guardian)]);
         $fresh = app(TenantContext::class)->withSchool($school, fn () => $guardian->fresh());
         $this->assertSame('Devi', $fresh->last_name);
 

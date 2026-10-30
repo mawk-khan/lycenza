@@ -682,7 +682,9 @@ class StudentEnrollmentService
      */
     private function createEnrollmentRow(Student $student, Section $section, string $rollNumber, string $startsOn, ?User $actor): StudentEnrollment
     {
-        $enrollment = StudentEnrollment::query()->create([
+        // SIS.HARDEN-1 (R-3): school_id and status are not mass assignable;
+        // this trusted creation path sets them explicitly.
+        $enrollment = StudentEnrollment::query()->forceCreate([
             'school_id' => $student->school_id,
             'student_id' => $student->id,
             'academic_year_id' => $section->academic_year_id,

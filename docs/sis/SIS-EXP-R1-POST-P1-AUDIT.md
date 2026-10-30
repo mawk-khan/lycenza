@@ -469,6 +469,36 @@ none of them (`StudentGuardianImportArchitectureTest`).
 
 **First to fix:** R-1, the Guardian edit.
 
+### 9.0 After SIS.HARDEN-1 (2026-10-30)
+
+| # | Status after SIS.HARDEN-1 |
+|---|---|
+| R-1 | **Closed.** `GuardianProfileVersion` (keyed HMAC over a JSON encoding), FOR NO KEY UPDATE row lock, `guardians.manage` re-read under the lock, canonical names, `changedFields` from the stored change. Web only; the API keeps its contract like R-2 |
+| R-2 | **Deferred, unchanged.** No production partner Student scope; the staff web never uses the API; the mobile client is not shipped. Reopen with the mobile/partner Student write contract |
+| R-3 | **Closed.** `StudentEnrollment::PROTECTED_FIELDS` (`school_id`, `status`, `ends_on`) are not fillable; the one creation path uses `forceCreate` |
+| R-4 | **Closed.** A status change dated in no year is marked "Outside academic year" and found by its own filter, never assigned to a neighbouring year |
+| R-5 | **Closed, corrected.** The finding said inactive Sections "match nobody", but deactivating a Section never ends its placements. The directory now offers active Sections plus an inactive Section that still holds a current placement, labelled "(inactive)" |
+| R-6 | **Closed.** The viewer's scope is applied before the display limit, in one query; nothing counts hidden siblings |
+| R-7 | **Closed, corrected.** Measured with two real processes: the certificate-void loser already received 409, because it waits on the certificate lock. Only the document-archive loser received 404, from a status-filtered Document lock. Both now give 409; other Schools' ids stay 404 |
+| R-8 | Accepted INFO (no bypass found by the HARDEN-1 review) |
+| R-9 | Transferred to the Documents/security backlog (§9.1) |
+| R-10 | Accepted |
+| R-11 | Not a finding |
+| R-12 | Informational |
+| R-13 | None |
+
+**New in the HARDEN-1 review**, both fixed before publication:
+- **LOW:** an array `academic_year_id` raised a 500 (the rule now bails
+  first).
+- **INFO:** a separator collision in the Guardian token (now JSON-encoded).
+
+**Pre-existing, local only:** each local Students-suite run leaves 33
+committed fixture Schools in the test database, already visible before
+HARDEN-1. After enough runs, the Platform Registry tests page past them.
+CI builds a fresh database per shard and is unaffected.
+`bin/safe-test --reset-db` clears them. Recorded for test hygiene, not
+changed here.
+
 ### 9.1 Document content sanitisation
 
 EXIF stripping, PDF active-content sanitisation and malware scanning are

@@ -3,6 +3,7 @@
 namespace App\Domain\Students\Application\Certificates;
 
 use App\Domain\Documents\Application\DocumentService;
+use App\Domain\Documents\Application\Exceptions\DocumentArchivedException;
 use App\Domain\Documents\Infrastructure\Document;
 use App\Domain\Students\Application\Documents\StudentDocumentArchiveReason;
 use App\Domain\Students\Application\Documents\StudentDocumentCategory;
@@ -273,13 +274,21 @@ final class StudentCertificateService
         }
 
         // Lock order: the certificate, then its Document, then its record.
-        $this->documents->archiveCertificateForStudent($school, $student->id, $certificate->document_id, $actor, function (Document $document) use ($school, $actor): void {
-            $record = StudentDocument::query()->where('school_id', $school->id)->where('document_id', $document->id)->lockForUpdate()->firstOrFail();
-            $record->forceFill([
-                'archived_at' => now(), 'archived_by_user_id' => $actor->id,
-                'archive_reason' => StudentDocumentArchiveReason::CERTIFICATE_VOIDED, 'version' => $record->version + 1,
-            ])->save();
-        });
+        // SIS.HARDEN-1 (R-7): a concurrent void waits on the certificate lock
+        // above and then sees it void (409); its Document can never be
+        // archived while the certificate is still issued, but if it were, that
+        // is the same conflict, never NOT FOUND.
+        try {
+            $this->documents->archiveCertificateForStudent($school, $student->id, $certificate->document_id, $actor, function (Document $document) use ($school, $actor): void {
+                $record = StudentDocument::query()->where('school_id', $school->id)->where('document_id', $document->id)->lockForUpdate()->firstOrFail();
+                $record->forceFill([
+                    'archived_at' => now(), 'archived_by_user_id' => $actor->id,
+                    'archive_reason' => StudentDocumentArchiveReason::CERTIFICATE_VOIDED, 'version' => $record->version + 1,
+                ])->save();
+            });
+        } catch (DocumentArchivedException) {
+            throw new StudentCertificateNotIssuedException;
+        }
 
         $certificate->forceFill([
             'status' => 'voided', 'voided_at' => now(), 'voided_by_user_id' => $actor->id,

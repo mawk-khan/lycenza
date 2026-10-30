@@ -3168,6 +3168,15 @@ text, Guardian, contact, date of birth or Finance data.
   year by its date), date range, category, type, Campus, Grade and Section
   (either end of the movement), and name or number search
   (`StudentSearch`).
+- **Outside an academic year** (SIS.HARDEN-1, R-4):
+  - A Student status change dated in NO year of the School (between two
+    years) belongs to neither neighbour, and is never moved into one.
+  - Such a row is marked "Outside academic year". It is found unfiltered, by
+    its date, or by the year filter's **Outside academic year** option
+    (`academic_year_id=outside`).
+  - That option is offered and accepted only to viewers who see Student
+    status rows (`students.view`).
+  - Placement-based rows always carry their placement's year.
 - Filters only narrow; ids are UUID-validated, and a foreign id matches
   nothing.
 - Sorts come from a closed map: newest first (default), oldest first,
@@ -3175,9 +3184,18 @@ text, Guardian, contact, date of birth or Finance data.
 - Pages of 25, server-side.
 
 **Bounded.** One count, one page query and one eager-loaded placement read
-(plus the page's context). The query count is identical for page 1, a
+(plus the page's context, and one read of the School's year dates when the
+page holds a Student status row). The query count is identical for page 1, a
 later page and a combined filter, whatever the history size
 (`StudentMovementRegisterTest`).
+
+**Write surface** (SIS.HARDEN-1, R-3).
+- `StudentEnrollment` never mass-assigns its ownership or lifecycle:
+  `school_id`, `status` and `ends_on` (`StudentEnrollment::PROTECTED_FIELDS`,
+  pinned by `SisResidualHardeningArchitectureTest`).
+- `StudentEnrollmentService` creates the one placement row with
+  `forceCreate` and writes transitions explicitly.
+- No enrollment behaviour changed.
 
 ## Leaving and Transfer certificates (SIS.EXP-4, 2026-10-30, ADR 0081)
 
@@ -3255,6 +3273,10 @@ never reach an issued certificate.
   exit's.
 - **A double submit of the same form** waits on the Student lock and then
   replays the first certificate (proven with two real processes).
+- **Two simultaneous voids** (SIS.HARDEN-1, R-7): the loser waits on the
+  certificate lock and then gets 409 ("already void"), never 404, and
+  nothing is audited twice. Another School's id stays NOT FOUND (two real
+  processes, `StudentTerminalActionConcurrencyTest`).
 - **Known trade-off:** the PDF is rendered and stored while the Student and
   counter locks are held, because the number is printed on it. Issuance in
   one School is therefore serialized for about 0.1 s plus the object write.

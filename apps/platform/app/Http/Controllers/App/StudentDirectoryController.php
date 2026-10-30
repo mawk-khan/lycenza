@@ -12,6 +12,7 @@ use App\Domain\Students\Application\Exceptions\InvalidEnrollmentRollNumberExcept
 use App\Domain\Students\Application\Exceptions\PossibleDuplicateStudentException;
 use App\Domain\Students\Application\Exceptions\StudentOnboardingUnavailableException;
 use App\Domain\Students\Application\StudentAccess;
+use App\Domain\Students\Application\StudentEnrollmentReadService;
 use App\Domain\Students\Application\StudentNameEditService;
 use App\Domain\Students\Application\StudentProfileVersion;
 use App\Domain\Students\Application\StudentSearch;
@@ -330,6 +331,11 @@ class StudentDirectoryController extends Controller
      * year's Sections (and their Campuses and Grades) the viewer's placement
      * scope reaches. Null without placement read or an active year.
      *
+     * SIS.HARDEN-1 (R-5): only Sections that can match a current placement --
+     * active ones, plus an inactive one that still holds an active placement
+     * (deactivating a Section never ends its placements), labelled
+     * "(inactive)". Options only: a forged id still just narrows.
+     *
      * @return array{campuses: list<array{id: string, name: string}>, gradeLevels: list<array{id: string, name: string}>, sections: list<array<string, string>>}|null
      */
     private function placementFilterOptions(School $school, CampusScope $scope, CurrentAcademicYearResolver $years): ?array
@@ -339,6 +345,7 @@ class StudentDirectoryController extends Controller
             return null;
         }
         $sections = $scope->restrict(Section::query()->where('sections.school_id', $school->id)->where('sections.academic_year_id', $year->id), 'sections.campus_id')
+            ->tap(fn ($q) => app(StudentEnrollmentReadService::class)->matchableSections($q, $year->id))
             ->with(['campus:id,name', 'gradeLevel:id,name,sequence'])
             ->get()
             ->sortBy(fn (Section $s) => sprintf('%08d|%s|%s', $s->gradeLevel->sequence, $s->name, $s->campus->name))
@@ -349,7 +356,7 @@ class StudentDirectoryController extends Controller
             'gradeLevels' => $sections->pluck('gradeLevel')->unique('id')->sortBy('sequence')->map(fn (GradeLevel $g) => ['id' => (string) $g->id, 'name' => $g->name])->values()->all(),
             'sections' => $sections->map(fn (Section $s) => [
                 'id' => (string) $s->id,
-                'label' => SectionLabel::of($s).' · '.$s->campus->name,
+                'label' => SectionLabel::of($s).' · '.$s->campus->name.($s->status === 'active' ? '' : ' (inactive)'),
                 'campusId' => (string) $s->campus_id,
                 'gradeLevelId' => (string) $s->grade_level_id,
             ])->all(),

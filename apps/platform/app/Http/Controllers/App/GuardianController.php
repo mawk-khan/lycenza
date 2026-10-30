@@ -6,6 +6,7 @@ use App\Domain\Communications\Application\Channels\GuardianEmailAddressResolver;
 use App\Domain\Communications\Application\Policy\DomainCommunicationPreferenceReadModel;
 use App\Domain\Guardians\Application\GuardianContactService;
 use App\Domain\Guardians\Application\GuardianNameSearch;
+use App\Domain\Guardians\Application\GuardianProfileVersion;
 use App\Domain\Guardians\Application\GuardianService;
 use App\Domain\Guardians\Infrastructure\ContactType;
 use App\Domain\Guardians\Infrastructure\Guardian;
@@ -20,6 +21,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -187,6 +189,8 @@ class GuardianController extends Controller
 
         return Inertia::render('App/Guardians/Edit', [
             'guardian' => $this->presentSummary($model),
+            // SIS.HARDEN-1 (R-1): the stale-form token, checked under the lock on save.
+            'version' => GuardianProfileVersion::of($model),
         ]);
     }
 
@@ -201,9 +205,10 @@ class GuardianController extends Controller
             'first_name' => ['required', 'string', 'max:255'],
             'middle_name' => ['nullable', 'string', 'max:255'],
             'last_name' => ['nullable', 'string', 'max:255'],
+            'expected_version' => ['required', 'string', 'size:64'],
         ]);
 
-        $service->update($model, $validated, $context->actor());
+        $service->update($model, Arr::except($validated, 'expected_version'), $context->actor(), $validated['expected_version']);
 
         return redirect("/app/guardians/{$model->id}")->with('flash', 'Guardian details saved.');
     }

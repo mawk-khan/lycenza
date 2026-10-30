@@ -151,7 +151,7 @@ class StudentEnrollmentRosterReadServiceTest extends TestCase
         $student = $this->createStudentFor($w['school']);
 
         try {
-            $this->inSchool($w['school'], fn () => DB::transaction(fn () => StudentEnrollment::query()->create([
+            $this->inSchool($w['school'], fn () => DB::transaction(fn () => StudentEnrollment::query()->forceCreate([
                 'school_id' => $w['school']->id,
                 'student_id' => $student->id,
                 'academic_year_id' => $w['year']->id,

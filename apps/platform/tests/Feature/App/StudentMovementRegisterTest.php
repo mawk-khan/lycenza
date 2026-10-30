@@ -16,8 +16,10 @@ use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Models\Campus;
 use App\Models\School;
 use App\Models\User;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\LocalCatalogueFixtures;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -277,7 +279,7 @@ class StudentMovementRegisterTest extends TestCase
         foreach (['dateOfBirth', 'date_of_birth', 'guardian', 'contact', 'actor', 'acted_by', 'email', 'note'] as $absent) {
             $this->assertStringNotContainsStringIgnoringCase($absent, (string) $json);
         }
-        $this->assertSame(['id', 'effectiveDate', 'category', 'type', 'typeLabel', 'student', 'from', 'to', 'reasonCode'], array_keys($props['movements']['data'][0]));
+        $this->assertSame(['id', 'effectiveDate', 'outsideAcademicYear', 'category', 'type', 'typeLabel', 'student', 'from', 'to', 'reasonCode'], array_keys($props['movements']['data'][0]));
         $this->assertSame(['id', 'name', 'studentNumber'], array_keys($props['movements']['data'][0]['student']));
     }
 
@@ -350,5 +352,66 @@ class StudentMovementRegisterTest extends TestCase
         $this->assertNotNull($transfer, 'still a Campus transfer, not a Section change');
         $this->assertSame(['Main', 'Early Years', 'cancelled'], [$transfer['from']['campus'], $transfer['to']['campus'], $transfer['to']['status']]);
         $this->assertSame(['initial_enrollment|C-1|-|A'], $this->rows(['category' => 'entry']), 'the cancelled destination is never an entry');
+    }
+
+    /**
+     * SIS.HARDEN-1 (SIS.EXP-R1 finding R-4): a Student status change dated
+     * between two academic years belongs to neither. It is never moved into a
+     * neighbouring year, yet stays findable: unfiltered, by date and by the
+     * "Outside academic year" filter.
+     */
+    #[Test]
+    public function a_status_change_between_academic_years_is_outside_every_year_and_still_findable(): void
+    {
+        // A status change is dated by the database clock (the lifecycle
+        // event's occurred_at = now(), trigger-checked) and a year's dates are
+        // frozen once it leaves draft, so this School's years are placed
+        // around today: this year ended 30 days ago, the next starts in 30
+        // days -- a change made now is genuinely between them.
+        [$this->admin, $this->school] = $this->createSchoolAdmin();
+        $today = SchoolTimezone::today($this->school);
+        $day = fn (int $offset): string => CarbonImmutable::parse($today)->addDays($offset)->toDateString();
+        $this->year = $this->createAcademicYear($this->school, ['name' => 'Last', 'code' => 'AYL', 'status' => 'active', 'starts_on' => $day(-400), 'ends_on' => $day(-30)]);
+        $next = $this->createAcademicYear($this->school, ['name' => 'Next', 'code' => 'AYN', 'status' => 'draft', 'starts_on' => $day(30), 'ends_on' => $day(400)]);
+        $section = $this->createSection($this->year, $this->createCampus($this->school, ['name' => 'Main', 'code' => 'MAIN']), $this->createGradeLevel($this->school, ['name' => 'Grade 5', 'code' => 'G5', 'sequence' => 5]), ['name' => 'B', 'code' => 'B']);
+        $gap = $this->student('Gap', 'G-1');
+        $this->placements()->enroll($gap, $section, '7', $day(-400), $this->admin);
+        $this->placements()->withdraw($this->current($gap), $day(-30), 'left_school', $this->admin, $this->freshProof($this->admin));
+        app(StudentService::class)->changeStatus($gap, 'inactive', 'left_school', $this->admin, $this->freshProof($this->admin));
+
+        $statusRows = fn (array $query): array => array_values(array_map(
+            fn (array $r) => "{$r['type']}|{$r['effectiveDate']}|".($r['outsideAcademicYear'] ? 'outside' : 'in-year'),
+            $this->props($query)['movements']['data'],
+        ));
+
+        $this->assertSame(["student_deactivated|{$today}|outside", "withdrawal|{$day(-30)}|in-year", "initial_enrollment|{$day(-400)}|in-year"], $statusRows([]), 'unfiltered: every row, the status change marked outside');
+        $this->assertSame(["student_deactivated|{$today}|outside"], $statusRows(['from' => $day(-1), 'to' => $day(1)]), 'the date filter finds it');
+        $this->assertSame(["withdrawal|{$day(-30)}|in-year", "initial_enrollment|{$day(-400)}|in-year"], $statusRows(['academic_year_id' => $this->year->id]), 'the year before never claims it');
+        $this->assertSame([], $statusRows(['academic_year_id' => $next->id]), 'the year after never claims it');
+        $this->assertSame(["student_deactivated|{$today}|outside"], $statusRows(['academic_year_id' => 'outside']), 'only events with no year link and no containing year');
+    }
+
+    #[Test]
+    public function the_outside_year_filter_is_offered_only_with_student_status_rows_and_is_validated(): void
+    {
+        $this->assertTrue($this->props()['options']['canFilterOutsideYear']);
+        $this->get('/app/students/movements?academic_year_id=elsewhere')->assertSessionHasErrors('academic_year_id');
+        $this->get('/app/students/movements?academic_year_id[]=outside')->assertSessionHasErrors('academic_year_id');
+
+        $placementsOnly = $this->createUser();
+        LocalCatalogueFixtures::grantRole($this->createMembership($placementsOnly, $this->school), $this->createFixtureRole(['enrollments.view']));
+        $this->assertFalse($this->props([], $placementsOnly)['options']['canFilterOutsideYear']);
+        $this->get('/app/students/movements?academic_year_id=outside')->assertSessionHasErrors('academic_year_id');
+    }
+
+    /** SIS.HARDEN-1 (R-5): history keeps every Section; only the current directory narrows its options. */
+    #[Test]
+    public function history_keeps_an_inactive_sections_movements_and_filter_option(): void
+    {
+        $this->mover();
+        app(TenantContext::class)->withSchool($this->school, fn () => $this->sections['5A']->forceFill(['status' => 'inactive'])->save());
+
+        $this->assertContains($this->sections['5A']->id, array_column($this->props()['options']['sections'], 'id'));
+        $this->assertContains('section_change|M-1|A|B', $this->rows(['section_id' => $this->sections['5A']->id]));
     }
 }

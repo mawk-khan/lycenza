@@ -2,6 +2,7 @@
 
 namespace App\Domain\Documents\Application;
 
+use App\Domain\Documents\Application\Exceptions\DocumentArchivedException;
 use App\Domain\Documents\Application\Exceptions\DocumentNotFoundException;
 use App\Domain\Documents\Application\Exceptions\DocumentOwnerNotFoundException;
 use App\Domain\Documents\Application\Exceptions\DocumentOwnerTypeNotSupportedException;
@@ -228,8 +229,13 @@ class DocumentService
 
             return DB::transaction(function () use ($school, $studentId, $documentId, $actor, $within) {
                 $document = Document::query()->where('school_id', $school->id)->where('student_id', $studentId)
-                    ->where('status', 'active')->lockForUpdate()->find($documentId)
+                    ->lockForUpdate()->find($documentId)
                     ?? throw new DocumentNotFoundException($documentId);
+                // SIS.HARDEN-1 (R-7): a concurrent archive won the lock --
+                // a conflict on a record the caller may see, never NOT FOUND.
+                if ($document->status !== 'active') {
+                    throw new DocumentArchivedException;
+                }
 
                 $document->update(['status' => 'archived']);
                 $within($document);

@@ -3,6 +3,7 @@
 namespace App\Domain\Students\Application\Documents;
 
 use App\Domain\Documents\Application\DocumentService;
+use App\Domain\Documents\Application\Exceptions\DocumentArchivedException;
 use App\Domain\Documents\Infrastructure\Document;
 use App\Domain\Students\Application\Exceptions\StudentDocumentArchivedException;
 use App\Domain\Students\Application\Exceptions\StudentDocumentChangedException;
@@ -170,26 +171,32 @@ final class StudentDocumentService
 
             $record = null;
             // Lock order: the Document (Documents), then this record.
-            $this->documents->archiveForStudent($school, $student->id, $current->document_id, $actor, function () use ($school, $actor, $student, $recordId, $reason, $expectedVersion, &$record): void {
-                $record = $this->lockedRecord($school, $student, $recordId);
-                if ($record->version !== $expectedVersion) {
-                    throw new StudentDocumentChangedException;
-                }
+            // SIS.HARDEN-1 (R-7): a concurrent archive that won the Document
+            // lock is the same conflict as an already archived record (409).
+            try {
+                $this->documents->archiveForStudent($school, $student->id, $current->document_id, $actor, function () use ($school, $actor, $student, $recordId, $reason, $expectedVersion, &$record): void {
+                    $record = $this->lockedRecord($school, $student, $recordId);
+                    if ($record->version !== $expectedVersion) {
+                        throw new StudentDocumentChangedException;
+                    }
 
-                $record->forceFill([
-                    'archived_at' => now(),
-                    'archived_by_user_id' => $actor->id,
-                    'archive_reason' => $reason,
-                    'version' => $record->version + 1,
-                ])->save();
+                    $record->forceFill([
+                        'archived_at' => now(),
+                        'archived_by_user_id' => $actor->id,
+                        'archive_reason' => $reason,
+                        'version' => $record->version + 1,
+                    ])->save();
 
-                $this->audit->school($school, 'student_document.archived', actor: $actor, subject: $student, metadata: [
-                    'studentId' => $student->id,
-                    'studentDocumentId' => $record->id,
-                    'documentId' => $record->document_id,
-                    'reason' => $reason->value,
-                ]);
-            });
+                    $this->audit->school($school, 'student_document.archived', actor: $actor, subject: $student, metadata: [
+                        'studentId' => $student->id,
+                        'studentDocumentId' => $record->id,
+                        'documentId' => $record->document_id,
+                        'reason' => $reason->value,
+                    ]);
+                });
+            } catch (DocumentArchivedException) {
+                throw new StudentDocumentArchivedException;
+            }
 
             /** @var StudentDocument $record */
             return $record;

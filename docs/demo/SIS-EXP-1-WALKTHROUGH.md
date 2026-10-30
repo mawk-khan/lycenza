@@ -218,3 +218,29 @@ checks passed on a fresh `ddev demo-reset`, including 1280/768/390 widths,
 keyboard order and no email sent. Run `ddev demo-reset` afterwards:
 the imported Students disappear, and the verifier confirms the canonical
 world.
+
+## 8. SIS.HARDEN-1 — write integrity (owner path)
+
+Nothing new is seeded. Every step below is undone by `ddev demo-reset`.
+
+| # | Persona | Route | Expected | Must not happen |
+|---|---|---|---|---|
+| 1 | `gachibowli.admin` | *Guardians* → Lakshmi Menon → **Edit**, opened in **two tabs** | the same form in both | — |
+| 2 | (same) | tab A: change the last name, **Save changes** | "Guardian details saved." | — |
+| 3 | (same) | tab B (still the old form): change the first name, **Save changes** | "Not saved: This Guardian's details were changed by someone else after you opened this form. Nothing was saved. Reload the page, review the current details and make your change again." | B overwriting A's last name |
+| 4 | (same) | reload the Guardian | A's last name; B's first name absent; one `guardian.updated` audit naming `last_name` only | an audit from tab B |
+| 5 | (same) | *School setup* → **Sections**: add an empty Section, then mark it inactive; open *Learners* | the empty active Section is offered under Section; once inactive it is not | an inactive Section with nobody placed in it |
+| 6 | (same) | *Student movements* → Academic year | an **Outside academic year** option; the canonical world has no such event ("No movements match these filters") | a between-years status change shown under a neighbouring year |
+| 7 | (same) | Aarav's profile → **Family** | Diya Menon, through the shared Guardian, with no "more" note | — |
+| 8 | `gachibowli.cashier`, `network.manager` | the Guardian edit link | 403 / back to the dashboard | — |
+
+The between-years case needs a status change dated between two academic
+years. The canonical world has none, and a seeder never fabricates one, so
+it is proven by `StudentMovementRegisterTest`. Concurrent void and archive
+are proven by `StudentTerminalActionConcurrencyTest`, because seeders never
+fabricate MFA proofs.
+
+**Verified on 2026-10-30** (DDEV, real browser, Playwright 1.62.1): 21/21
+checks passed on a fresh `ddev demo-reset`, including 1280/768/390 widths
+and keyboard order. A second reset restored the world: the walkthrough
+Section is gone, Lakshmi is "Menon" again, and no Guardian audit remains.
