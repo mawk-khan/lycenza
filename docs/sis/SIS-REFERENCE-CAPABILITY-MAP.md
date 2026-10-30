@@ -339,11 +339,26 @@ stays 7.
 Not reclassified: generic data migration, Student update import, groups
 (SR-17), statutory documents and the Student Portal.
 
+## 5.6 SIS.EXP-R1 re-audit (2026-10-30)
+
+The post-P1 re-audit (`SIS-EXP-R1-POST-P1-AUDIT.md` §3) re-verified every
+class change since SIS.EXP-0 against the code at `74b28b93`, and
+**reclassified nothing**. The totals and scores are those of §5.5:
+
+| Class | EE | EDA | PARTIAL | SIS_BUILD | DOMAIN_FUTURE | PLATFORM_FUTURE | POST_V1 | DO_NOT_BUILD | OWNER | LEGAL |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Families | 0 | 12 (incl. SR-42) | 7 | 0 | 8 | 0 | 1 | 4 | 5 | 5 |
+
+SR-13 (annual record confirmation) stays `OWNER_DECISION_REQUIRED`. The
+re-read shows a parent-facing verification and electronic "contract"
+acceptance, with time and IP address, that gates the next year's fee-based
+promotion. Its OD-SIS-5 recommendation is `LEGAL_REVIEW_REQUIRED` (audit §4).
+
 ## 6. Re-use
 
 - SIS.EXP checkpoints cite `SR-nn` ids in their records and, where a
   Setup Registry definition changes, in its `reference` field.
-- The SIS.EXP-8 closure re-audit re-reads this map unchanged and records
-  each family's new status.
+- The SIS.EXP-8 closure re-audit (SIS.EXP-R1, then SIS.EXP-CLOSE) re-reads
+  this map unchanged and records each family's new status.
 - The id → file index is kept with the pack; a future re-audit regenerates
   it from the same fingerprinted pack.

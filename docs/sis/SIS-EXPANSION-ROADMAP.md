@@ -49,6 +49,28 @@ The brief's candidate order was re-sequenced on repository evidence:
 | **SIS.EXP-7** | House (or Club) Membership | The one named concept a pilot asks for: per-year membership, one House per Student per year, optional responsibility labels from a closed list. No generic group engine, no gender analytics, no badges | *decision-gated* OD-SIS-4 (D-17 revisit) | M | yes (§5) | SR-17 (part) |
 | **SIS.EXP-8** | SIS Parity Closure Re-audit | Re-read the 42-family map; reclassify; rescore; verify the demo world; record the remaining owner/legal gates | after the chosen waves | audit | none | all |
 
+### 2.0d SIS.EXP-R1 — POST-P1 AUDIT (2026-10-30, documentation only)
+
+`SIS-EXP-R1-POST-P1-AUDIT.md`:
+- **P1:** all three original P1 gaps are delivered (EXP-3/4/5). The EXP-4
+  certificate remains development complete / production legally gated.
+- **OD-SIS-5 (annual record confirmation):** `LEGAL_REVIEW_REQUIRED`. It is
+  cross-domain and Portal-led (POR-L1), and its reference form is an
+  electronic contract acceptance that gates fee-based promotion. **EXP-6 as
+  written below is not authorised and not recommended next.**
+- **OD-SIS-14 (new):** Admissions/Registrar import authority. The
+  recommendation keeps `students.import` School-Admin-only; the Admissions
+  Officer creates Students only through conversion. No Registrar role exists
+  or is proposed.
+- **Residual LOWs:** R-1 … R-13 (audit §9). The Guardian name edit (R-1) and
+  the register's between-year lifecycle rows (R-4) are the decision-free,
+  SIS-owned items left.
+- **Recommended next:** `SIS.HARDEN-1 — SIS write-integrity & residual
+  hardening` (owner authorisation only; no schema, capability, role, Campus
+  or API-contract change), then `SIS.EXP-CLOSE`, which takes the place of
+  EXP-8. Publication of either depends on E16 (last valid day 2026-11-12) or
+  a successor. **Not started.**
+
 ### 2.0c SIS.EXP-5 — IMPLEMENTED (2026-10-30)
 
 OD-SIS-3 was decided by the owner on 2026-10-30. Per the brief's stated
@@ -206,7 +228,7 @@ queries; directory unchanged at 27 ± 2.
 | OD-SIS-2 | Leaving/transfer certificate (CRT-001/002): format, numbering, wording, dues policy | One numbered register per School; output stored as a Document; never withheld for dues without a legal basis; statutory wording via legal review | EXP-4 |
 | OD-SIS-3 | Bulk import (OD-SWC-4 / OD-PPR-20) | Add-only CSV of Students + first placement (+ optional Guardians), whole School only, all-or-nothing | EXP-5 |
 | OD-SIS-4 | Houses/clubs (D-17 revisit) | Wait for a pilot to name one concept; model House first if any | EXP-7 |
-| OD-SIS-5 | Annual record confirmation and Guardian acknowledgement ("contracts") | Confirmation of existing fields + acknowledgement of named, versioned School terms; no IP address stored; legal review before calling it an agreement | EXP-6 |
+| OD-SIS-5 | Annual record confirmation and Guardian acknowledgement ("contracts") | Confirmation of existing fields + acknowledgement of named, versioned School terms; no IP address stored; legal review before calling it an agreement. **SIS.EXP-R1: `LEGAL_REVIEW_REQUIRED` first** (audit §4) | EXP-6 |
 | OD-SIS-6 | Operational Section headcount vs advisory capacity | Allow an operational, whole-School, no-attribute headcount per Section next to capacity, outside the Analytics gate; no gender/age/fee splits | small read in EXP-2 if approved |
 | OD-SIS-7 | Student home address | Do not add until a named purpose (Transport stop planning, statutory register) is approved; then the ORG.12C address shape | — |
 | OD-SIS-8 | Effective-dated lifecycle / back-dating (D-13) | Keep `now()`: the reference's own exit audit flags back-dating as a risk | — |
@@ -215,6 +237,7 @@ queries; directory unchanged at 27 ± 2.
 | OD-SIS-11 | Student-number case policy (open since SIS 8.1) | Case-insensitive uniqueness for new numbers | — |
 | OD-SIS-12 | Guardian status change reason (open since SIS 2.2) | A closed reason like Student status | — |
 | OD-SIS-13 | Student merge / deduplication | Do not build; `duplicate_record` deactivation is the path; any merge needs its own ADR across every owning domain | — |
+| OD-SIS-14 | Admissions/Registrar import authority (SIS.EXP-R1) | Keep `students.import` School-Admin-only; granting it would also need `students.manage`, `guardians.manage` and `enrollments.manage`; conversion stays the Admissions path | — |
 
 ## 4. Test and regression plan
 
