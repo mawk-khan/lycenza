@@ -143,7 +143,7 @@ class SubjectOfferingRosterReadServiceTest extends TestCase
         // uses, mirroring what StudentEnrollmentService::transferPlacement()
         // would do (a new active row, the old one closed).
         app(TenantContext::class)->withSchool($school, function () use ($school, $original, $student, $sectionB) {
-            $original->update(['status' => 'transferred', 'ends_on' => '2026-08-31']);
+            $original->forceFill(['status' => 'transferred', 'ends_on' => '2026-08-31'])->save(); // SIS.HARDEN-1: lifecycle is never mass assigned
             StudentEnrollment::factory()->create([
                 'school_id' => $school->id,
                 'student_id' => $student->id,
@@ -175,7 +175,7 @@ class SubjectOfferingRosterReadServiceTest extends TestCase
         $membership = $this->writes()->enroll($student, $offering, '2026-06-01');
 
         app(TenantContext::class)->withSchool($school, function () use ($school, $original, $student, $sectionB) {
-            $original->update(['status' => 'transferred', 'ends_on' => '2026-08-31']);
+            $original->forceFill(['status' => 'transferred', 'ends_on' => '2026-08-31'])->save(); // SIS.HARDEN-1: lifecycle is never mass assigned
             StudentEnrollment::factory()->create([
                 'school_id' => $school->id,
                 'student_id' => $student->id,
