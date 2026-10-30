@@ -2063,3 +2063,18 @@ is not granted it (an owner decision if wanted).
 - The preview reads references in a constant ~31 queries.
 - 200 rows grow faster than linearly (nested service transactions), hence the
   100-row limit.
+
+## Programme closure (SIS.EXP-CLOSE, 2026-10-30)
+
+The SIS expansion is closed (`docs/sis/SIS-EXPANSION-CLOSURE.md`). For this
+module:
+- **Stale-write protection:** the web Student identity edits
+  (`StudentProfileVersion`) and the web Guardian name edit
+  (`GuardianProfileVersion`) refuse a stale form under the row lock.
+- **Deferred (R-2):** the API PATCH endpoints for Students and Guardians do
+  **not** carry a version token (last write wins), though they take the same
+  lock, fresh authority re-read and precise audit. Reopen when a partner
+  Student write scope, a mobile Student write client or another production
+  API consumer exists.
+- **Import:** the contract is frozen as `student_guardian_import_v1` (100
+  rows, School Admin only, add-only).

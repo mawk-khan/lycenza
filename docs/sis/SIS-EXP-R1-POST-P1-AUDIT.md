@@ -486,6 +486,7 @@ none of them (`StudentGuardianImportArchitectureTest`).
 | R-11 | Not a finding |
 | R-12 | Informational |
 | R-13 | None |
+| R-14 | **New at SIS.EXP-CLOSE (LOW).** Certificate issue, void and reissue check whole-School `students.view` before the transaction (cached) and re-read only `students.certificates.issue` under the Student lock; rule 121 wording corrected to the code. Destination: SIS post-v1 (one fresh re-read per entry point). See `SIS-EXPANSION-CLOSURE.md` §7 |
 
 **New in the HARDEN-1 review**, both fixed before publication:
 - **LOW:** an array `academic_year_id` raised a 500 (the rule now bails

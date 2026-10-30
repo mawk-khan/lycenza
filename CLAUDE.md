@@ -1754,7 +1754,7 @@ once several modules copy it.
 
 121. **Leaving/Transfer certificates are immutable numbered records of a recorded exit, legally gated for production (SIS.EXP-4, ADR 0081).**
      - **One writer:** `StudentCertificateService`. Eligibility comes only from `StudentCertificateEligibility`: no active placement, a final `withdrawn`/`completed` placement, and an exit RECORDED with a qualifying closed reason. Never a new lifecycle state, a back-dated exit, a cross-School effect or an audit-log read.
-     - **Authority:** `students.certificates.issue` (`school_admin`, `principal`; whole-School, never Campus-adopted) plus whole-School `students.view`, re-read fresh under the Student lock (FOR NO KEY UPDATE). Each issue, void and reissue needs a FreshMfaProof and an explicit confirmation. Never ride on `students.documents.manage`.
+     - **Authority:** `students.certificates.issue` (`school_admin`, `principal`; whole-School, never Campus-adopted) plus whole-School `students.view` (checked before the transaction; only the issue key is re-read fresh under the Student lock, FOR NO KEY UPDATE -- residual R-14). Each issue, void and reissue needs a FreshMfaProof and an explicit confirmation. Never ride on `students.documents.manage`.
      - **Immutability:** the snapshot is bounded columns (never JSON, DOB, Guardian, statutory ID, caste, religion, health or Finance). Only ISSUED → VOIDED is allowed (trigger); there is no runtime DELETE.
      - **Numbering:** one forward-only counter per School and type, allocated in the issuing transaction; numbers are never reused or renumbered.
      - **Correction:** void with a closed reason, then reissue a linked replacement with a new number. One issued certificate per exit and type.

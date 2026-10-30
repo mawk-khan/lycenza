@@ -1,6 +1,6 @@
 # SIS expansion roadmap (SIS.EXP)
 
-Status: **proposed programme, documentation only** (SIS.EXP-0, 2026-10-29).
+Status: **CLOSED 2026-10-30** (`SIS-EXPANSION-CLOSURE.md`); originally a proposed programme, documentation only (SIS.EXP-0, 2026-10-29).
 Nothing here is started or authorised. Each wave needs the owner's explicit
 authorisation, and the waves marked *decision-gated* also need the named
 owner (and, where stated, legal) decision recorded first. Evidence:
@@ -48,6 +48,17 @@ The brief's candidate order was re-sequenced on repository evidence:
 | **SIS.EXP-6** | Annual Record Confirmation & Guardian Acknowledgement | Before a new year, a Guardian confirms the Student's record and acknowledges named School terms. The Portal owns the UX; SIS owns the confirmation record | *decision-gated* OD-SIS-5 + legal review of electronic acceptance; Guardian portal production gates still apply (POR-L1) | M | yes (§5) | SR-13 |
 | **SIS.EXP-7** | House (or Club) Membership | The one named concept a pilot asks for: per-year membership, one House per Student per year, optional responsibility labels from a closed list. No generic group engine, no gender analytics, no badges | *decision-gated* OD-SIS-4 (D-17 revisit) | M | yes (§5) | SR-17 (part) |
 | **SIS.EXP-8** | SIS Parity Closure Re-audit | Re-read the 42-family map; reclassify; rescore; verify the demo world; record the remaining owner/legal gates | after the chosen waves | audit | none | all |
+
+### 2.0f SIS.EXP-CLOSE — PROGRAMME CLOSED (2026-10-30)
+
+**The SIS expansion programme is closed** (`SIS-EXPANSION-CLOSURE.md`).
+- `SIS_BUILD = 0`, no HIGH/MEDIUM finding, all P1 gaps delivered.
+- Every remaining item has a named owner (closure record §6).
+- **Not built:** EXP-6 (annual confirmation: legal review first) and EXP-7
+  (House: pilot-driven).
+- The closure re-audit (formerly EXP-8) is SIS.EXP-R1 plus SIS.EXP-CLOSE.
+- **Next:** an owner decision. The recommendation is HR ERP, starting with a
+  read-only HR.EXP-0 audit against the HR reference pack.
 
 ### 2.0e SIS.HARDEN-1 — IMPLEMENTED (2026-10-30)
 

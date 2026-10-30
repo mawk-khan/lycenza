@@ -354,6 +354,19 @@ re-read shows a parent-facing verification and electronic "contract"
 acceptance, with time and IP address, that gates the next year's fee-based
 promotion. Its OD-SIS-5 recommendation is `LEGAL_REVIEW_REQUIRED` (audit §4).
 
+## 5.7 Final state at SIS.EXP-CLOSE (2026-10-30)
+
+The final map is unchanged from §5.6. Recomputed with the §5 formula from
+Table A plus the recorded class changes (SR-36, SR-21, SR-41, SR-12, SR-06):
+- 42 families, 318 screens;
+- EE 0, EDA 12 (11 scored + SR-42), PARTIAL 7, SIS_BUILD 0,
+  DOMAIN_FUTURE 8, PLATFORM_FUTURE 0, POST_V1 1, DO_NOT_BUILD 4, OWNER 5,
+  LEGAL 5;
+- coverage overall **39.2 % / 29.7 %**, v1 **80.6 % / 61.1 %**;
+- 127 of 298 scored screens are owner- or legal-gated.
+
+Destinations for every remaining family: `SIS-EXPANSION-CLOSURE.md` §3–§6.
+
 ## 6. Re-use
 
 - SIS.EXP checkpoints cite `SR-nn` ids in their records and, where a

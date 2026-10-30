@@ -2147,3 +2147,21 @@ through its own entry points. The generic paths still refuse it.
   Student Document except the Student core retention purge, and the record
   cascades with it.
 - **Guardian:** still deferred.
+
+## Cross-product content-security backlog (transferred at SIS.EXP-CLOSE, 2026-10-30)
+
+Owner: **Documents / platform security**. This is not SIS work, and it
+applies to every owner type (Student, HR, Communications, LMS):
+- **EXIF stripping:** stored images keep their EXIF metadata.
+- **PDF active-content sanitisation:** PDFs are stored byte-for-byte,
+  scripts included.
+- **Malware scanning:** none.
+
+Current mitigations:
+- content-sniffed allow-lists;
+- attachment-only, re-authorized downloads with `nosniff`;
+- Highly Sensitive reads behind current MFA.
+
+Any fix belongs in the one Documents pipeline (ADR 0012) with its own review
+and the pre-production security review. Verification and expiry are also
+Documents-owned (`docs/sis/SIS-EXPANSION-CLOSURE.md` §6).

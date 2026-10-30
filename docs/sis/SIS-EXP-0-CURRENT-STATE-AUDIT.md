@@ -1,5 +1,8 @@
 # SIS.EXP-0 — Student Information System current-state, reference-parity and expansion audit (2026-10-29)
 
+> **Closed 2026-10-30:** the programme this audit opened is closed; see
+> `SIS-EXPANSION-CLOSURE.md` for the final state of every finding.
+
 Status: **audit record, documentation only.** First checkpoint of the SIS
 expansion programme (`SIS.EXP`), after the Organization Control Plane
 closure (ORG.12H, ADR 0080 §13). Nothing was built: no migration, runtime

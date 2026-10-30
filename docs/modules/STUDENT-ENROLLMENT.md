@@ -3316,3 +3316,16 @@ never reach an issued certificate.
   4. the "Reason for leaving" labels;
   5. signatory and seal requirements;
   6. the treatment of non-Latin names (a script-capable renderer).
+
+## Programme closure (SIS.EXP-CLOSE, 2026-10-30)
+
+The SIS expansion is closed (`docs/sis/SIS-EXPANSION-CLOSURE.md`).
+- **Movement register:** final (entry/movement/exit, outside-year semantics,
+  whole-School).
+- **Certificates:** development complete. **Production issuance stays
+  legally gated** (ADR 0081 §7; "Leaving and Transfer certificates" above).
+- **Residual R-14 (LOW, SIS post-v1):** certificate writes re-read only
+  `students.certificates.issue` under the Student lock; whole-School
+  `students.view` is checked once, before the transaction.
+- **Unchanged decisions:** back-dating rules, advisory Section capacity, no
+  cross-School transfer and no merge.

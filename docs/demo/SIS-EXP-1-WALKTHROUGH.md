@@ -244,3 +244,27 @@ fabricate MFA proofs.
 checks passed on a fresh `ddev demo-reset`, including 1280/768/390 widths
 and keyboard order. A second reset restored the world: the walkthrough
 Section is gone, Lakshmi is "Menon" again, and no Guardian audit remains.
+
+## 9. Final owner verification path (SIS.EXP-CLOSE)
+
+Start from a fresh `ddev demo-reset`. Enroll MFA for `gachibowli.admin`
+under *Account security*: documents and certificate history need it.
+
+| # | Step | Expected |
+|---|---|---|
+| 1 | *Learners* (`/app/students`) | 18 Students; Campus, Grade and Section filters over both Campuses |
+| 2 | Aarav Menon → Student 360 | Subjects, Attendance, Fees, Transport, Hostel, Library, Documents and Certificates cards; Guardians Lakshmi (mother) and Vikram (father) |
+| 3 | Aarav → **Family** | Diya Menon through the shared Guardian |
+| 4 | *Student movements* | 24 rows. Exits filter: Meera Iyer (withdrawn, transferred out) and Arjun Mehta (placement completed) |
+| 5 | Aarav → **Documents** | three active documents (one more archived); downloads are attachments |
+| 6 | Meera → **Certificates** | LC-000001 voided and replaced by LC-000002, TC-000001 |
+| 7 | *Import Students*, preview `sis-exp-5-import-valid.csv` | 4 Ready rows (commit only for the §7 walkthrough) |
+| 8 | Sign in as `gachibowli.ey.principal`, `gachibowli.cashier`, `network.manager`, `platform.admin` | the Campus Principal is refused the profile, register and import; the Cashier the directory; the Network Manager and Platform Admin see no Student page |
+
+**Verified on 2026-10-30** (DDEV, real browser, Playwright 1.62.1): 16/16
+on a fresh reset, then reset again.
+
+**Not seeded by design:**
+- an MFA-proved withdrawal or deactivation;
+- a between-years status change (test-proven);
+- certificate MFA evidence.
