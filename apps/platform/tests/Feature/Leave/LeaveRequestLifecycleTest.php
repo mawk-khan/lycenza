@@ -102,10 +102,10 @@ class LeaveRequestLifecycleTest extends TestCase
         $cancelled = $requests->cancel($w['school'], $request->id, 'plans_changed', $w['admin']);
         $this->assertSame(['cancelled', 24], [$cancelled->status, $this->balance($w)], 'the reversal restores the units');
         $this->assertSame('LEAVE_REQUEST_NOT_APPROVED', $this->code(fn () => $requests->cancel($w['school'], $request->id, 'plans_changed', $w['admin'])), 'never reversed twice');
-        $entries = $this->inSchool($w['school'], fn () => DB::table('leave_ledger_entries')->where('leave_request_id', $request->id)->orderBy('created_at')->get(['id', 'kind', 'units', 'reverses_entry_id']));
+        $entries = $this->inSchool($w['school'], fn () => DB::table('leave_ledger_entries')->where('leave_request_id', $request->id)->orderBy('created_at')->orderBy('id')->get(['id', 'kind', 'units', 'reverses_entry_id']));
         $this->assertSame(['consumption', 'reversal'], $entries->pluck('kind')->all());
         $this->assertSame($entries[0]->id, $entries[1]->reverses_entry_id, 'the reversal names the exact consumption');
-        $this->assertSame(['approved', 'cancelled'], $this->inSchool($w['school'], fn () => DB::table('leave_decisions')->where('leave_request_id', $request->id)->orderBy('created_at')->pluck('decision')->all()));
+        $this->assertSame(['approved', 'cancelled'], $this->inSchool($w['school'], fn () => DB::table('leave_decisions')->where('leave_request_id', $request->id)->orderBy('created_at')->orderBy('id')->pluck('decision')->all()));
         $this->assertSame(1, $this->inSchool($w['school'], fn () => DB::table('domain_event_outbox')->where('event_type', 'leave.request.cancelled.v1')->count()));
         $this->assertSame(4, count($this->days($w, $request->id)), 'the approval evidence is preserved after cancellation');
 
