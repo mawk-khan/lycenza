@@ -30,6 +30,7 @@ final class WebRouteParameters
         'check',           // Data Health check code (controller 404; must not 404 before school-context)
         'identifierType',  // statutory identifier type
         'module',          // ORG.5 module key (where [a-z_]{1,64}; the service refuses unknown keys)
+        'report',          // SIS 11.1 Student report key (controller 404 for any key outside StudentReportRegistry; like `check`, must not 404 before school-context)
         'role',            // role key (where)
         'ruleType',        // Automation rule type key
         'selector',        // account-recovery / activation selector (where)
