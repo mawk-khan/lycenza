@@ -72,7 +72,7 @@ Finance, HR, …) that the other module walkthroughs use.
 | Partially configured | **Horizon Academy**, Academic year | a *draft* academic year exists, not yet active (SIS.EXP-1 moved this from Gachibowli) |
 | Blocked | **Horizon Academy**, Grades/sections (and Fees) | waits on an active academic year |
 | Not enabled | **Greenfield** and **Jubilee Hills** (core modules only) | optional modules are not entitled |
-| Needs attention | *not demonstrated* | only arises when an area is configured while its prerequisite is not (e.g. Leave set up with no staff). No demo School reaches it naturally, and a half-configured module would be invented state |
+| Needs attention | **Northstar Gachibowli**, Student records (SIS.EXP-2) | Arjun Mehta completed 2025-26 and has no 2026-27 placement while still marked active: a real leaver the School has not yet marked inactive (that needs a fresh code, which the seeder never fabricates). Resolve it by marking him inactive with a reason |
 
 ## 4. ORG.12C — profiles
 

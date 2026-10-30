@@ -286,6 +286,9 @@ final class CampusScopeCatalogue
         // students.view / enrollments.view.
         'app.students.show' => ['capability' => 'students.view', 'reason' => 'The full Student Profile: date of birth, Guardians, the account link and Enrollment history (Campus readers use the operational overview).'],
         'app.students.history' => ['capability' => 'students.view', 'reason' => 'The Student\'s audit history across every Campus and year.'],
+        // SIS.EXP-2: a declaration that NARROWS (no adoption change): Student
+        // movement history spans every Campus and year (rule 101).
+        'app.students.movements' => ['capability' => 'enrollments.view', 'reason' => 'SIS.EXP-2: the School-wide movement and exit register -- Student placement history across every Campus and year (Campus readers see current placements only).'],
         'api.v1.schools.students.show' => ['capability' => 'students.view', 'reason' => 'The full Student detail, including date of birth (Highly Sensitive).'],
         'api.v1.schools.students.guardians.index' => ['capability' => 'students.view', 'reason' => 'Guardian relationships are relationship-scoped School-wide identity, never Campus data.'],
         'api.v1.schools.students.enrollments.index' => ['capability' => 'enrollments.view', 'reason' => 'A Student\'s full placement history across years and Campuses.'],

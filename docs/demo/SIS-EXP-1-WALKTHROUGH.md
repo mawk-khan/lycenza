@@ -1,4 +1,4 @@
-# SIS.EXP-1 — Student 360 & directory: demo data and owner walkthrough
+# SIS.EXP-1 / SIS.EXP-2 — Student 360, directory and movement register: demo data and owner walkthrough
 
 Status: **canonical SIS demonstration** (SIS.EXP-1, 2026-10-29), inside the
 ORG.12E-D1 Organization world (`ORGANIZATION-DEMO-DATA.md`). Built by
@@ -14,9 +14,10 @@ Password for every account: printed by `ddev demo-reset` (local demo only).
 | Item | Value |
 |---|---|
 | Academic year | 2026-27, **active** (1 Jun 2026 – 31 Mar 2027) |
-| Main Campus | Grade 5 · A (4), Grade 5 · B (3), Grade 3 · A (3) |
-| Early Years Campus | UKG · A (3) |
-| Students | 13, numbers from the School counter; each with one Guardian and contacts |
+| Main Campus | Grade 5 · A (5), Grade 5 · B (3), Grade 4 · A (1), Grade 3 · A (4), Grade 3 · B (0) |
+| Early Years Campus | UKG · A (3), Grade 3 · E (0) |
+| Students | 17 (13 from SIS.EXP-1, 4 from SIS.EXP-2), numbers from the School counter; each with one Guardian and contacts |
+| SIS.EXP-2 history | 2025-26 (now closed) Grade 4 · A/B rolled into 2026-27: **Rohan Pillai** promoted to Grade 5 · A, **Anika Joshi** repeats Grade 4 (4 · A), **Arjun Mehta** excluded and his 2025-26 placement completed (an exit; still marked active, so Setup shows *Student records: Needs attention*). **Kiara Sen**: Grade 3 · E on the Early Years Campus (1 Jun 2026), Campus transfer to Grade 3 · B on the Main Campus (6 Jul 2026), then Section change to Grade 3 · A (3 Aug 2026) |
 | Subjects | English, Mathematics, Environmental Studies (required) per Grade |
 | The Menon family | **Aarav Menon** (Grade 5 · A, Main) with two Guardians, Lakshmi (mother, primary) and Vikram (father); his sister **Diya Menon** (UKG · A, Early Years) shares Lakshmi |
 | Aarav's records | a Term 1 Charge of ₹30,000 with ₹12,000 paid in cash; the Kondapur Route (pick-up Kondapur Junction); one library loan; five first-period English registers on the last five school days before the reset (one absent, one late) |
@@ -34,7 +35,7 @@ the menu label changes, never the access.
 
 | # | Persona | Route | Student | Expected | Must not happen |
 |---|---|---|---|---|---|
-| 1 | `gachibowli.admin` | *Learners* (`/app/students`) | — | 13 Students; **Campus**, **Grade** and **Section** filters (current class). Early Years → Diya, Neel, Tara. Grade 5 → 7. Grade 5 · B → Ishaan, Sara, Vivaan. Sections narrow to the chosen Campus and Grade | a filter that lists Students of a Campus or Section you cannot read |
+| 1 | `gachibowli.admin` | *Learners* (`/app/students`) | — | 17 Students (16 with a current class); **Campus**, **Grade** and **Section** filters (current class). Early Years → Diya, Neel, Tara. Grade 5 → 8. Grade 5 · B → Ishaan, Sara, Vivaan. Sections narrow to the chosen Campus and Grade | a filter that lists Students of a Campus or Section you cannot read |
 | 2 | (same) | open **Aarav Menon** | Aarav | *On this page* navigation; **Family**: Diya Menon (UKG · A · Early Years Campus, shares Lakshmi Menon); **At a glance**: Subjects (3 required), Attendance (latest records, link), Fees (billed ₹30,000, paid ₹12,000, outstanding ₹18,000, fee statement link), Transport (Kondapur Route), Hostel (no current residency), Library (1 book on loan) | an edit control on any summary card; a rate or tally of attendance; family fee totals |
 | 3 | (same) | Aarav → **Edit** in two tabs; save tab 2, then tab 1 | Aarav | tab 2 saves; tab 1 says the details were *changed by someone else after you opened this form* and saves nothing; reload and save works | tab 1 silently overwriting tab 2 |
 | 4 | (same) | Aarav → **History** | Aarav | one "updated" entry per save naming only the field that changed (e.g. last name) | an entry listing unchanged fields; a value of the change |
@@ -66,3 +67,21 @@ Afterwards run `ddev demo-reset` (steps 3–4 change Aarav's name).
   of every Gachibowli Student (number, names, date of birth, placement,
   Guardians, Charges, rides, loans, attendance count) was identical before
   and after the walkthrough plus a reset.
+
+## 4. SIS.EXP-2 — Student movements (owner path)
+
+No withdrawal or "marked inactive" row is seeded: both need a fresh code,
+which the demo never fabricates. Doing step 6 creates them live.
+
+| # | Persona | Route | Expected | Must not happen |
+|---|---|---|---|---|
+| 1 | `gachibowli.admin` | *People* → **Student movements** (`/app/students/movements`) | 22 rows, newest first: 17 entries; Kiara's Section change (3 Aug 2026, Grade 3 · B → Grade 3 · A, Main) and Campus transfer (6 Jul 2026, Grade 3 · E Early Years → Grade 3 · B Main) as one row each; Rohan's **Promotion** and Anika's **Repeated the Grade** (1 Jun 2026, 2025-26 → 2026-27); Arjun's **Placement completed** (31 Mar 2026) | any edit, approve, export or print control; an actor name; a free-text note |
+| 2 | (same) | **Campus** = Early Years | Kiara's Campus transfer (from Early Years), Kiara's first enrollment, Diya's, Neel's and Tara's entries | rows that never touched Early Years |
+| 3 | (same) | **Movement type** = Campus transfer; then **Category** = Movement | 1 row; then 4 rows | — |
+| 4 | (same) | **Exits only** | Arjun Mehta, Placement completed, final placement Grade 4 · A (2025-26) | — |
+| 5 | (same) | click **Arjun Mehta** | his Student profile (the profile re-checks authority); History shows his placements | — |
+| 6 | (same, MFA enrolled) | Arjun → *Mark inactive…* (reason "Left the School", fresh code) → back to Student movements | a new **Marked inactive** exit row with the reason "Left the School"; Setup's *Student records* returns to Configured | — |
+| 7 | `gachibowli.ey.principal` | `/app/students/movements` (no menu entry) | refused (403): movement history is whole-School | Kiara's past on the Early Years Campus |
+| 8 | `network.manager`, `platform.admin`, `gachibowli.cashier` | `/app/students/movements` | refused / back to the dashboard | any Student movement |
+
+Run `ddev demo-reset` after step 6.

@@ -3101,3 +3101,80 @@ Rollover prepares the next Academic Year while it is still draft. Before SIS
 - **Existing data (canonical DDEV demo, 2026-10-27):** 0 plans target a
   non-draft year, 0 executing plans, 0 Sections or Terms created in a closed
   year.
+
+## Student movement and exit register (SIS.EXP-2, 2026-10-30)
+
+`/app/students/movements` (`app.students.movements`) is a read-only
+projection of the canonical history:
+- **Read model:** `App\Domain\Students\Application\Movements\StudentMovementRegister`,
+  with the closed vocabulary `StudentMovementType`.
+- **Not added:** no table, no migration, no capability, no role, no Campus
+  adoption.
+- **Never done:** no write, no approval, no export, no print.
+- **Never used as a source:** the audit ledger.
+
+**Sources and types:**
+
+| Type | Category | Canonical source | Effective date |
+|---|---|---|---|
+| First enrollment / Re-enrollment | entry | a placement that no transfer or executed rollover created (first, or a later one) | `starts_on` |
+| Marked active again | entry | lifecycle event `student_reactivated` | event date (School-local) |
+| Section change / Campus transfer | movement | a `transferred` placement + the placement starting the next day in the same year (`transferPlacement()` writes exactly that pair) | new `starts_on` |
+| Promotion / Repeated the Grade | movement | an executed rollover item (`promote` / `repeat`) linking source → target | target `starts_on` |
+| Withdrawn | exit | a `withdrawn` placement; reason from its `enrollment_withdrawn` event | `ends_on` |
+| Placement completed | exit | a `completed` placement no executed rollover continued | `ends_on` |
+| Marked inactive | exit | lifecycle event `student_deactivated` | event date (School-local) |
+
+**One canonical fact, one row.**
+- A transfer's destination is never also an entry.
+- A rollover target is never also an entry.
+- A completed source that a rollover continued is folded into the
+  promotion/repeat row.
+- A withdrawal's lifecycle event only supplies its reason.
+- Cancelled placements are corrections, never listed.
+- Row ids are derived (`transfer:`, `rollover:`, `entry:`, `withdrawal:`,
+  `completion:`, `lifecycle:` + the canonical id), for presentation only.
+
+**Rejected types:**
+- *Grade change:* a mid-year Grade change is refused; Grades change only by
+  rollover.
+- *Graduation:* there is no graduation state; leaving with
+  `completed_studies` is "Marked inactive" with that reason.
+- *Entry source "via Admissions":* only Admissions links to the placement,
+  and Students must not depend on Admissions.
+
+**History, not today.**
+- From and to are the historical placements' own frozen rows.
+- Labels are the **current** names of those rows (no historical label is
+  stored).
+- Student names are current.
+
+**What is never shown:** an actor (the audit log holds who acted), free
+text, Guardian, contact, date of birth or Finance data.
+
+**Authorization.**
+- The register is a declared whole-School operation of `enrollments.view`
+  (`CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS`). This is a narrowing
+  declaration: no adoption changed.
+- A Campus reader sees current placements only, never history (rule 101),
+  so a Campus-only grant is refused by the route floor.
+- Student lifecycle rows and the Student link also need whole-School
+  `students.view`; the profile re-checks.
+- Teachers (`attendance.teacher`), Guardians, Platform and Network actors
+  hold no `enrollments.view` in the School and are refused.
+
+**Filters, sort and paging.**
+- Filters: academic year (the canonical year; a lifecycle row falls in the
+  year by its date), date range, category, type, Campus, Grade and Section
+  (either end of the movement), and name or number search
+  (`StudentSearch`).
+- Filters only narrow; ids are UUID-validated, and a foreign id matches
+  nothing.
+- Sorts come from a closed map: newest first (default), oldest first,
+  Student name, movement type.
+- Pages of 25, server-side.
+
+**Bounded.** One count, one page query and one eager-loaded placement read
+(plus the page's context). The query count is identical for page 1, a
+later page and a combined filter, whatever the history size
+(`StudentMovementRegisterTest`).

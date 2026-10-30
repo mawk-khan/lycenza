@@ -10,6 +10,7 @@ import MfaCodeField from '../../../Components/MfaCodeField.vue';
 import RelationshipFlags from '../../../Components/RelationshipFlags.vue';
 import StatusBadge from '../../../Components/StatusBadge.vue';
 import { RELATIONSHIP_TYPES } from '../../../relationshipTypes';
+import { LIFECYCLE_REASON_LABELS } from '../../../lifecycleReasons';
 import StudentFamily from '../../../Components/Students/StudentFamily.vue';
 import StudentProfileSummaries from '../../../Components/Students/StudentProfileSummaries.vue';
 import type { StudentProfileSections } from '../../../Components/Students/studentProfileSections';
@@ -174,18 +175,7 @@ async function unlinkAccount(): Promise<void> {
 // explicit confirmation and a fresh authentication code; the server
 // re-checks all of it. Completion stays an ordinary action.
 
-const REASON_LABELS: Record<string, string> = {
-    left_school: 'Left the School',
-    transferred_out: 'Transferred to another school',
-    completed_studies: 'Completed studies',
-    duplicate_record: 'Duplicate record',
-    entered_in_error: 'Entered in error',
-    returned_to_school: 'Returned to the School',
-    deactivated_in_error: 'Deactivated in error',
-    guardian_request: 'Guardian request',
-    did_not_join: 'Did not join',
-    duplicate_placement: 'Duplicate placement',
-};
+const REASON_LABELS = LIFECYCLE_REASON_LABELS;
 
 function reasonsFor(action: string): string[] {
     return props.lifecycleReasons[action] ?? [];

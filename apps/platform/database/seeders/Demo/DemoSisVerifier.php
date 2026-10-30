@@ -3,6 +3,7 @@
 namespace Database\Seeders\Demo;
 
 use App\Domain\Guardians\Application\StudentSiblingReader;
+use App\Domain\Students\Application\Movements\StudentMovementRegister;
 use App\Domain\Students\Application\StudentAccess;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\School;
@@ -39,8 +40,18 @@ final class DemoSisVerifier
             $placements = DB::table('student_enrollments as e')->join('campuses as c', 'c.id', '=', 'e.campus_id')
                 ->where('e.school_id', $school->id)->where('e.status', 'active')
                 ->selectRaw('c.code, count(*) as n')->groupBy('c.code')->pluck('n', 'code')->all();
-            $check(Student::query()->count() === 13, 'Gachibowli does not have exactly 13 Students');
-            $check(($placements['GCB-MAIN'] ?? 0) === 10 && ($placements['GCB-EY'] ?? 0) === 3, 'Gachibowli placements are not 10 on the Main Campus and 3 on Early Years');
+            $check(Student::query()->count() === 17, 'Gachibowli does not have exactly 17 Students');
+            $check(($placements['GCB-MAIN'] ?? 0) === 13 && ($placements['GCB-EY'] ?? 0) === 3, 'Gachibowli current placements are not 13 on the Main Campus and 3 on Early Years');
+
+            // SIS.EXP-2: the movement history, read through the register itself.
+            $register = app(StudentMovementRegister::class);
+            $of = fn (string $type): array => array_map(fn (array $r) => $r['student']['name'], $register->page($school, ['type' => $type], true)->items());
+            $check($of('promotion') === ['Rohan Pillai'], 'the 2025-26 rollover does not show Rohan Pillai promoted');
+            $check($of('retention') === ['Anika Joshi'], 'the 2025-26 rollover does not show Anika Joshi repeating');
+            $check($of('placement_completed') === ['Arjun Mehta'], 'Arjun Mehta is not the one completed exit');
+            $check($of('campus_transfer') === ['Kiara Sen'] && $of('section_change') === ['Kiara Sen'], 'Kiara Sen does not show one Campus transfer then one Section change');
+            $transfer = $register->page($school, ['type' => 'campus_transfer'], true)->items()[0] ?? null;
+            $check($transfer !== null && [$transfer['from']['campus'], $transfer['to']['campus']] === ['Gachibowli Early Years Campus', 'Gachibowli Main Campus'], 'the Campus transfer does not run Early Years → Main');
 
             $aarav = Student::query()->where('first_name', 'Aarav')->where('last_name', 'Menon')->first();
             $diya = Student::query()->where('first_name', 'Diya')->where('last_name', 'Menon')->first();
@@ -87,6 +98,7 @@ final class DemoSisVerifier
             'gachibowliStudents' => Student::query()->count(),
             'gachibowliGuardians' => DB::table('guardians')->where('school_id', $school->id)->count(),
             'gachibowliActivePlacements' => DB::table('student_enrollments')->where('school_id', $school->id)->where('status', 'active')->count(),
+            'gachibowliMovements' => app(StudentMovementRegister::class)->page($school, [], true)->total(),
         ]);
     }
 }

@@ -151,6 +151,7 @@ use App\Http\Controllers\App\StudentController;
 use App\Http\Controllers\App\StudentDirectoryController;
 use App\Http\Controllers\App\StudentEnrollmentController;
 use App\Http\Controllers\App\StudentGuardianRelationshipController;
+use App\Http\Controllers\App\StudentMovementController;
 use App\Http\Controllers\App\StudentProcessingAuthorizationController;
 use App\Http\Controllers\App\StudentSubjectEnrollmentController;
 use App\Http\Controllers\App\StudentTransferController;
@@ -709,6 +710,10 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         // allocated by the server. Literal path before '/{student}'.
         Route::get('/onboard', [StudentDirectoryController::class, 'onboard'])->name('onboard');
         Route::post('/onboard', [StudentDirectoryController::class, 'storeOnboarding'])->name('onboard.store');
+        // SIS.EXP-2: the School-wide movement and exit register (read only,
+        // a declared whole-School operation of enrollments.view). Literal
+        // path before '/{student}'.
+        Route::get('/movements', [StudentMovementController::class, 'index'])->middleware('capability:enrollments.view')->name('movements');
         Route::get('/create', [StudentController::class, 'create'])->middleware('capability:students.manage')->name('create');
         Route::post('/', [StudentController::class, 'store'])->middleware('capability:students.manage')->name('store');
         Route::get('/{student}', [StudentController::class, 'show'])->middleware('capability:students.view')->name('show');

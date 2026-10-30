@@ -36,9 +36,15 @@ use App\Domain\Payments\Application\ChargeAllocationInput;
 use App\Domain\Payments\Application\ManualPaymentRecordingService;
 use App\Domain\Payments\Application\RecordManualPaymentData;
 use App\Domain\Payments\Domain\ManualPaymentMethod;
+use App\Domain\Students\Application\EnrollmentRolloverDryRunService;
+use App\Domain\Students\Application\EnrollmentRolloverItemExecutionService;
+use App\Domain\Students\Application\EnrollmentRolloverPlanService;
 use App\Domain\Students\Application\StudentEnrollmentService;
 use App\Domain\Students\Application\StudentService;
+use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
+use App\Domain\Students\Infrastructure\EnrollmentRolloverPlan;
 use App\Domain\Students\Infrastructure\Student;
+use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Domain\Timetable\Application\TimetablePeriodService;
 use App\Domain\Timetable\Application\TimetableScheduleService;
 use App\Domain\Transport\Application\TransportStudentAssignmentService;
@@ -94,6 +100,14 @@ final class DemoSisData
 
     private AcademicYear $year;
 
+    private AcademicYear $pastYear;
+
+    /** @var array<string, GradeLevel> */
+    private array $grades = [];
+
+    /** @var array<string, Section> 2025-26 Sections */
+    private array $pastSections = [];
+
     private School $school;
 
     private User $admin;
@@ -108,37 +122,53 @@ final class DemoSisData
 
         $this->academicStructure();
         $this->studentsAndGuardians();
+        // SIS.EXP-2: real movement history through the canonical services.
+        $this->pastYearAndRollover();
+        $this->currentYearMovements();
         $this->finance();
         $this->transportAndLibrary();
         $this->attendance();
         $this->campusPrincipal();
 
-        $this->b->note('SIS demo (SIS.EXP-1): Northstar Gachibowli -- 13 Students on both Campuses; the Menon siblings (Aarav, Grade 5 · A, Main; Diya, UKG · A, Early Years) share a Guardian; Aarav shows every Student 360 card -- see docs/demo/SIS-EXP-1-WALKTHROUGH.md.');
+        $this->b->note('SIS demo (SIS.EXP-1/2): Northstar Gachibowli -- 17 Students on both Campuses; the Menon siblings (Aarav, Grade 5 · A, Main; Diya, UKG · A, Early Years) share a Guardian; Aarav shows every Student 360 card; Student movements show a 2025-26 promotion, a repeat, a completed exit and a Campus transfer then Section change -- see docs/demo/SIS-EXP-1-WALKTHROUGH.md.');
     }
 
     private function academicStructure(): void
     {
         $years = app(AcademicYearService::class);
-        $this->year = $years->activate($years->create($this->school, ['name' => '2026-27', 'code' => 'AY2026', 'starts_on' => '2026-06-01', 'ends_on' => '2027-03-31'], $this->admin), $this->admin);
+        // SIS.EXP-2: 2025-26 (active now, closed when 2026-27 is activated
+        // after its rollover); 2026-27 stays draft until then.
+        $this->pastYear = $years->activate($years->create($this->school, ['name' => '2025-26', 'code' => 'AY2025', 'starts_on' => '2025-06-02', 'ends_on' => '2026-03-31'], $this->admin), $this->admin);
+        $this->year = $years->create($this->school, ['name' => '2026-27', 'code' => 'AY2026', 'starts_on' => '2026-06-01', 'ends_on' => '2027-03-31'], $this->admin);
 
         $this->b->inSchool(function (): void {
             $main = $this->campuses['gachibowli_main'];
             $early = $this->campuses['gachibowli_early'];
 
             $grades = [];
-            foreach (['UKG' => ['UKG', 2], 'G3' => ['Grade 3', 5], 'G5' => ['Grade 5', 7]] as $code => [$name, $sequence]) {
+            foreach (['UKG' => ['UKG', 2], 'G3' => ['Grade 3', 5], 'G4' => ['Grade 4', 6], 'G5' => ['Grade 5', 7]] as $code => [$name, $sequence]) {
                 $grades[$code] = GradeLevel::query()->create(['school_id' => $this->school->id, 'name' => $name, 'code' => $code, 'sequence' => $sequence, 'education_stage' => null, 'status' => 'active']);
             }
+            $this->grades = $grades;
             $department = AcademicDepartment::query()->create(['school_id' => $this->school->id, 'name' => 'Primary', 'code' => 'PRI', 'status' => 'active']);
             $subjects = [];
             foreach (['ENG' => 'English', 'MATH' => 'Mathematics', 'EVS' => 'Environmental Studies'] as $code => $name) {
                 $subjects[$code] = Subject::query()->create(['school_id' => $this->school->id, 'academic_department_id' => $department->id, 'name' => $name, 'code' => $code, 'short_name' => $code, 'subject_type' => 'core', 'status' => 'active']);
             }
-            foreach (['G5-A' => ['G5', 'A', $main], 'G5-B' => ['G5', 'B', $main], 'G3-A' => ['G3', 'A', $main], 'UKG-A' => ['UKG', 'A', $early]] as $key => [$grade, $letter, $campus]) {
+            // SIS.EXP-2 adds Grade 4 · A (repeaters), Grade 3 · B (Main) and Grade 3 · E (Early Years).
+            foreach (['G5-A' => ['G5', 'A', $main], 'G5-B' => ['G5', 'B', $main], 'G3-A' => ['G3', 'A', $main], 'UKG-A' => ['UKG', 'A', $early], 'G4-A' => ['G4', 'A', $main], 'G3-B' => ['G3', 'B', $main], 'G3-E' => ['G3', 'E', $early]] as $key => [$grade, $letter, $campus]) {
                 $this->sections[$key] = Section::query()->create([
                     'school_id' => $this->school->id, 'academic_year_id' => $this->year->id, 'campus_id' => $campus->id,
                     'grade_level_id' => $grades[$grade]->id, 'name' => $letter, 'code' => $letter, 'capacity' => 30, 'status' => 'active',
                 ]);
+            }
+            foreach (['2025-26' => [$this->pastYear, ['P-G4-A' => 'A', 'P-G4-B' => 'B']]] as [$year, $letters]) {
+                foreach ($letters as $key => $letter) {
+                    $this->pastSections[$key] = Section::query()->create([
+                        'school_id' => $this->school->id, 'academic_year_id' => $year->id, 'campus_id' => $main->id,
+                        'grade_level_id' => $grades['G4']->id, 'name' => $letter, 'code' => $letter, 'capacity' => 30, 'status' => 'active',
+                    ]);
+                }
             }
             foreach (['G5' => $main, 'G3' => $main, 'UKG' => $early] as $grade => $campus) {
                 foreach (['ENG', 'MATH', 'EVS'] as $sequence => $code) {
@@ -201,6 +231,75 @@ final class DemoSisData
             $s = $student($key, $first, $last, $dob, $section, $roll);
             $links->link($s, $guardian($guardianFirst, $last, $i + 3), $i % 2 === 0 ? RelationshipType::Mother : RelationshipType::Father, ['is_primary' => true, 'is_legal_guardian' => true, 'is_emergency_contact' => true], $this->admin);
         }
+    }
+
+    /**
+     * SIS.EXP-2: 2025-26 history through the canonical services -- three
+     * Grade 4 Students, a rollover into the (still draft) 2026-27 that
+     * PROMOTES Rohan to Grade 5 · A and makes Anika REPEAT Grade 4, excludes
+     * Arjun, completes every 2025-26 placement on its last day (Arjun leaves
+     * with a completed placement: an exit), then activates 2026-27 (which
+     * closes 2025-26). No proof of fresh MFA is fabricated: withdrawals and
+     * deactivations need one, so they are not seeded.
+     */
+    private function pastYearAndRollover(): void
+    {
+        $student = function (string $key, string $first, string $last, string $dob, string $section, string $roll, string $guardianFirst, int $n): Student {
+            $s = app(StudentService::class)->create($this->school, ['first_name' => $first, 'middle_name' => null, 'last_name' => $last, 'date_of_birth' => $dob], $this->admin);
+            app(StudentEnrollmentService::class)->enroll($s, $this->pastSections[$section], $roll, '2025-06-02', $this->admin);
+            $this->guardianFor($s, $guardianFirst, $last, $n);
+
+            return $this->students[$key] = $s;
+        };
+        $rohan = $student('rohan', 'Rohan', 'Pillai', '2016-02-11', 'P-G4-A', '1', 'Deepak', 14);
+        $arjun = $student('arjun', 'Arjun', 'Mehta', '2016-05-23', 'P-G4-A', '2', 'Neha', 15);
+        $anika = $student('anika', 'Anika', 'Joshi', '2016-09-04', 'P-G4-B', '1', 'Ritu', 16);
+
+        $plans = app(EnrollmentRolloverPlanService::class);
+        $dryRun = app(EnrollmentRolloverDryRunService::class);
+        $plan = $plans->createDraft($this->school, $this->pastYear, $this->year, $this->admin);
+        $fresh = fn (): EnrollmentRolloverPlan => $this->b->inSchool(fn () => EnrollmentRolloverPlan::query()->findOrFail($plan->id), $this->school);
+        $plans->upsertMapping($fresh(), $this->grades['G4'], null, $this->grades['G5'], $this->sections['G5-A'], $this->admin);
+        $plans->upsertMapping($fresh(), $this->grades['G4'], $this->pastSections['P-G4-B'], $this->grades['G4'], $this->sections['G4-A'], $this->admin);
+        $dryRun->run($fresh(), $this->admin);
+        $item = fn (Student $s): EnrollmentRolloverItem => $this->b->inSchool(fn () => EnrollmentRolloverItem::query()->where('plan_id', $plan->id)->where('student_id', $s->id)->firstOrFail(), $this->school);
+        $plans->setItemDecision($fresh(), $item($rohan), 'promote', null, 'explicit', '5', $this->admin);
+        $plans->setItemDecision($fresh(), $item($anika), 'repeat', null, 'explicit', '1', $this->admin);
+        $plans->setItemDecision($fresh(), $item($arjun), 'exclude', null, null, null, $this->admin);
+        if (! $dryRun->run($fresh(), $this->admin)['validated']) {
+            throw new \RuntimeException('SIS demo: the 2025-26 rollover did not validate.');
+        }
+        foreach ([$rohan, $anika] as $s) {
+            app(EnrollmentRolloverItemExecutionService::class)->execute($item($s), $this->admin);
+        }
+
+        foreach ([$rohan, $arjun, $anika] as $s) {
+            $placement = $this->b->inSchool(fn () => StudentEnrollment::query()->where('student_id', $s->id)->where('academic_year_id', $this->pastYear->id)->firstOrFail(), $this->school);
+            app(StudentEnrollmentService::class)->complete($placement, '2026-03-31', $this->admin);
+        }
+        $this->year = app(AcademicYearService::class)->activate($this->year, $this->admin);
+    }
+
+    /** SIS.EXP-2: Kiara moves Campus (Early Years → Main), then Section, within 2026-27. */
+    private function currentYearMovements(): void
+    {
+        $placements = app(StudentEnrollmentService::class);
+        $kiara = app(StudentService::class)->create($this->school, ['first_name' => 'Kiara', 'middle_name' => null, 'last_name' => 'Sen', 'date_of_birth' => '2017-03-14'], $this->admin);
+        $this->students['kiara'] = $kiara;
+        $this->guardianFor($kiara, 'Mohit', 'Sen', 17);
+        $current = fn (): StudentEnrollment => $this->b->inSchool(fn () => StudentEnrollment::query()->where('student_id', $kiara->id)->where('status', 'active')->firstOrFail(), $this->school);
+
+        $placements->enroll($kiara, $this->sections['G3-E'], '1', '2026-06-01', $this->admin);
+        $placements->transferPlacement($current(), $this->sections['G3-B'], '1', '2026-07-06', $this->admin);
+        $placements->transferPlacement($current(), $this->sections['G3-A'], '4', '2026-08-03', $this->admin);
+    }
+
+    private function guardianFor(Student $student, string $first, string $last, int $n): void
+    {
+        $guardian = app(GuardianService::class)->create($this->school, ['first_name' => $first, 'last_name' => $last], $this->admin);
+        app(GuardianContactService::class)->create($guardian, ContactType::Email, sprintf('gcb.guardian%02d@example.test', $n), ['is_primary' => true], $this->admin);
+        app(GuardianContactService::class)->create($guardian, ContactType::Mobile, sprintf('+9198100%05d', $n), [], $this->admin);
+        app(StudentGuardianRelationshipService::class)->link($student, $guardian, $n % 2 === 0 ? RelationshipType::Mother : RelationshipType::Father, ['is_primary' => true, 'is_legal_guardian' => true, 'is_emergency_contact' => true], $this->admin);
     }
 
     private function finance(): void

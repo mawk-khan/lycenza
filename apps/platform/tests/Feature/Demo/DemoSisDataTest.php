@@ -41,7 +41,7 @@ class DemoSisDataTest extends TestCase
         $verifier = new DemoSisVerifier;
 
         $this->assertSame([], $verifier->problems());
-        $this->assertSame(['gachibowliStudents' => 13, 'gachibowliGuardians' => 13, 'gachibowliActivePlacements' => 13], $verifier->summary());
+        $this->assertSame(['gachibowliStudents' => 17, 'gachibowliGuardians' => 17, 'gachibowliActivePlacements' => 16, 'gachibowliMovements' => 22], $verifier->summary());
     }
 
     #[Test]
@@ -103,6 +103,28 @@ class DemoSisDataTest extends TestCase
         $this->assertSame(['partially_configured', 'blocked'], [$horizon['academic.academic_year'], $horizon['academic.structure']]);
         $gachibowli = $states('gachibowli.admin@example.test', DemoSisData::SCHOOL_SLUG);
         $this->assertSame(['configured', 'configured'], [$gachibowli['academic.academic_year'], $gachibowli['academic.structure']]);
-        $this->assertSame('configured', $gachibowli['students.student_records']);
+        // SIS.EXP-2: Arjun completed 2025-26 and has no 2026-27 placement while still
+        // marked active (deactivating needs a fresh code, never fabricated by the seeder):
+        // the first natural "Needs attention" in the demo world.
+        $this->assertSame('attention_required', $gachibowli['students.student_records']);
+    }
+
+    #[Test]
+    public function the_movement_register_shows_the_seeded_history_and_refuses_campus_and_network_personas(): void
+    {
+        app(DemoDataBuilder::class)->build();
+        $this->signIn('gachibowli.admin@example.test');
+        $rows = fn (array $q) => array_map(fn (array $r) => "{$r['type']}|{$r['student']['name']}", $this->get('/app/students/movements?'.http_build_query($q))->assertOk()->viewData('page')['props']['movements']['data']);
+
+        $this->assertSame(['section_change|Kiara Sen', 'campus_transfer|Kiara Sen', 'retention|Anika Joshi', 'promotion|Rohan Pillai'], $rows(['category' => 'movement']));
+        $this->assertSame(['placement_completed|Arjun Mehta'], $rows(['category' => 'exit']));
+
+        // The Early Years Principal reads the Campus directory but never the (whole-School) history.
+        $this->signIn('gachibowli.ey.principal@example.test');
+        $this->get('/app/students/movements')->assertForbidden();
+        foreach (['network.manager@example.test', 'platform.admin@example.test', 'gachibowli.cashier@example.test'] as $email) {
+            $this->actingAs(User::query()->where('email', $email)->firstOrFail());
+            $this->assertNotSame(200, $this->get('/app/students/movements')->status(), $email);
+        }
     }
 }

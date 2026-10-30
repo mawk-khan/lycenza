@@ -129,6 +129,9 @@ final class StaffNavigation
             new E('students', 'people', 'Students', 'app.students.index', all: ['students.view']),
             new E('guardians', 'people', 'Guardians', 'app.guardians.index', all: ['guardians.view']),
             new E('enrollments', 'people', 'Enrollments', 'app.enrollments.index', all: ['enrollments.view']),
+            // SIS.EXP-2: the School-wide movement and exit register (a declared
+            // whole-School operation: never shown for a Campus-only grant).
+            new E('student-movements', 'people', 'Student movements', 'app.students.movements', all: ['enrollments.view']),
             // Phase 1B.7F: both capabilities, as the page requires.
             new E('enrollment-rollovers', 'people', 'Enrollment rollovers', 'app.enrollment-rollovers.index', all: ['enrollments.view', 'enrollments.rollovers.view']),
             // Hub pages: any one view capability shows the entry; the hub

@@ -49,6 +49,22 @@ The brief's candidate order was re-sequenced on repository evidence:
 | **SIS.EXP-7** | House (or Club) Membership | The one named concept a pilot asks for: per-year membership, one House per Student per year, optional responsibility labels from a closed list. No generic group engine, no gender analytics, no badges | *decision-gated* OD-SIS-4 (D-17 revisit) | M | yes (§5) | SR-17 (part) |
 | **SIS.EXP-8** | SIS Parity Closure Re-audit | Re-read the 42-family map; reclassify; rescore; verify the demo world; record the remaining owner/legal gates | after the chosen waves | audit | none | all |
 
+### 2.0 SIS.EXP-2 — IMPLEMENTED (2026-10-30)
+
+The School-wide movement and exit register (`/app/students/movements`) is
+built as a read-only projection, with no migration, capability, role or
+adoption change. See `docs/modules/STUDENT-ENROLLMENT.md` ("Student
+movement and exit register") and the walkthrough §4.
+
+**Recorded differences from §2:**
+- A declared whole-School operation of `enrollments.view`. History is
+  whole-School by rule 101, so a Campus-only reader is refused, not shown
+  a partial history.
+- No Section headcount (OD-SIS-6 stays open).
+- No "via Admissions" entry source (it would invert Students → Admissions).
+- No seeded withdrawal or deactivation: they need a fresh MFA proof, which
+  the seeder never fabricates. Tests cover them.
+
 ### 2.1 SIS.EXP-1 detail — IMPLEMENTED (2026-10-29)
 
 > **Status:** built as designed below, with these recorded differences:

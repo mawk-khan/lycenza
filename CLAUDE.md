@@ -1737,3 +1737,9 @@ once several modules copy it.
      - **Siblings** are Students sharing an ACTIVE Guardian (`StudentSiblingReader`), shown only to a viewer who may view them; never on a Campus surface or a Guardian-facing view.
      - **Directory placement filters** narrow the current placement in SQL under the viewer's `enrollments.view` scope; a forged or out-of-scope id matches nothing.
      - **Student and Guardian `school_id`/`status` are never mass assignable**; identity edits carry `StudentProfileVersion` (KEYED: it digests the date of birth, which a Campus name editor must never be able to recover) and refuse a stale form; `student.updated` names only changed fields.
+
+119. **The Student movement register is a projection of canonical history, never a movement engine (SIS.EXP-2, `docs/modules/STUDENT-ENROLLMENT.md` "Student movement and exit register").**
+     - **One reader:** `App\Domain\Students\Application\Movements\StudentMovementRegister` over `student_enrollments`, executed `enrollment_rollover_items` and `student_lifecycle_events` only -- never the audit ledger, never a `student_movement_events` table.
+     - **Closed vocabulary:** `StudentMovementType`; a type exists only if the history distinguishes it (no Grade change, no graduation state). One canonical fact = one row (a transfer pair is one row; a rollover target or transfer destination is never also an entry; a continued completion folds into its rollover row; cancelled placements are never listed).
+     - **Read only and whole-School:** no write, approval, export or print; a declared whole-School operation of `enrollments.view` (history is whole-School, rule 101); lifecycle rows and Student links also need `students.view`.
+     - **Minimal:** closed reason codes only -- never an actor, free text, Guardian, contact, date of birth or Finance data. Labels are the current names of the historical rows.

@@ -25,7 +25,9 @@ dataset (`docs/demo/ORGANIZATION-DEMO-DATA.md`).
    enabled**. They never count against progress.
 3. Sign in as **school.admin@example.test** (Lycenza Demo School): a strongly
    configured School (core areas 8/8).
-4. **Needs attention** is not demonstrated: no demo School reaches it
+4. **Needs attention** (since SIS.EXP-2): Gachibowli's *Student records*
+   area — an active Student with no current placement (Arjun Mehta, who left
+   after 2025-26). Before SIS.EXP-2 this read: not demonstrated: no demo School reaches it
    naturally (see the manifest, §3).
 
 ## 2. School profile (ORG.12C)

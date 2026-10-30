@@ -257,6 +257,27 @@ classification; none changes class, so every score in §5 is unchanged
 Not reclassified, as required: documents (SR-21), certificates (SR-41),
 import (SR-06), groups (SR-17) and the report families.
 
+## 5.2 After SIS.EXP-2 (2026-10-30)
+
+| SR | Built by SIS.EXP-2 | New class |
+|---|---|---|
+| SR-36 | The School-wide movement register: Section changes and Campus transfers as one row each, the promotion/repeat history, and a per-Student timeline via the search. Read-only, whole-School, closed reasons, no parent contact | **`EXISTING_DIFFERENT_ACCEPTED`** (was PARTIAL) |
+| SR-12 | The exit register (Exits filter): who, when, closed reason, final placement and outcome | stays `PARTIAL`: the leaving-certificate checkpoint waits on OD-SIS-2 (SR-41) |
+| SR-37 | The promotion list now also sits in a School-wide register | unchanged (`EXISTING_DIFFERENT_ACCEPTED`) |
+
+Recomputed with the §5 formula. EDA now counts 9 scored families; PARTIAL
+counts 6.
+
+| Measure | After SIS.EXP-0/1 | After SIS.EXP-2 |
+|---|---|---|
+| Overall weighted / strict | 31.1 % / 21.6 % | **32.4 % / 24.3 %** (12 / 37, 9 / 37) |
+| v1 weighted / strict | 76.7 % / 53.3 % | **80.0 % / 60.0 %** (12 / 15, 9 / 15) |
+| Screen-weighted, overall | 19.8 % / 10.1 % | 20.5 % / 11.4 % (61 / 298, 34 / 298) |
+| Screen-weighted, v1 | 67.0 % / 34.1 % | 69.3 % / 38.6 % (61 / 88, 34 / 88) |
+
+Not reclassified: certificates, documents, import, groups and the
+strength/analytics families.
+
 ## 6. Re-use
 
 - SIS.EXP checkpoints cite `SR-nn` ids in their records and, where a
