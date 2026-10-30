@@ -630,3 +630,13 @@ checks (D-05/D-06).
 - It needs no schema change or owner decision.
 
 SIS 4.1 (placement date validity) is small and should follow immediately.
+
+## Advanced Expansion (added 2026-10-30; the core result above is unchanged)
+
+The core SIS result recorded in this audit and in the final local UAT
+(96/100) is **not rescored**. Advanced work is measured separately:
+
+| Checkpoint | Result | Measure |
+|---|---|---|
+| SIS.EXP programme (closed, `docs/sis/SIS-EXPANSION-CLOSURE.md`) | 318-screen reference coverage 39.2 % / 29.7 % | reference breadth |
+| SIS 11.1 Unified SIS Reporting Foundation (`docs/sis/SIS-11-1-REPORTING-FOUNDATION.md`) | closed report catalogue, Reports hub, lifecycle report | **Advanced SIS Screenshot Coverage (report subset): 0/8 → 5/8 SIS-owned report families governed** |

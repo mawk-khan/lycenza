@@ -1,0 +1,148 @@
+<?php
+
+namespace App\Support\StudentReports;
+
+use App\Domain\Students\Application\Movements\StudentMovementRegister;
+use App\Domain\Students\Application\Reports\StudentLifecycleReport;
+use App\Domain\Students\Application\StudentDirectoryOrder;
+use App\Support\StudentReports\StudentReportColumn as C;
+use App\Support\StudentReports\StudentReportDefinition as D;
+use Illuminate\Contracts\Container\Container;
+
+/**
+ * SIS 11.1: the ONE closed catalogue of SIS operational reports. A report
+ * exists only if it is listed here; keys are unique and never reused.
+ *
+ * - RENDERED reports are StudentReport read models served by the shared
+ *   report page; adding one is a class in RENDERED plus its tests.
+ * - Existing dedicated report pages (the Directory, the Enrollment
+ *   directory, the movement register) are governed entries: their
+ *   authority, filters and sorts are declared here and pinned to the page
+ *   by StudentReportRegistryTest, so the catalogue can never drift from
+ *   what the page actually does.
+ *
+ * Operational listing only ("which records match these conditions"):
+ * never a person count, rate, trend or demographic breakdown (Analytics,
+ * ADR 0040, D-01..D-04, D-15), never an export (D-11), and never Data
+ * Health (integrity conditions, ADR 0075 §10).
+ */
+final class StudentReportRegistry
+{
+    /** @var list<class-string<StudentReport>> */
+    public const array RENDERED = [
+        StudentLifecycleReport::class,
+    ];
+
+    /** @var array<string, D>|null */
+    private ?array $definitions = null;
+
+    /** @var array<string, StudentReport> */
+    private array $reports = [];
+
+    public function __construct(private readonly Container $container) {}
+
+    /** @return array<string, D> every report, in hub order */
+    public function definitions(): array
+    {
+        if ($this->definitions !== null) {
+            return $this->definitions;
+        }
+
+        $all = [...self::pages(), ...array_map(fn (string $class) => $this->report($class)->definition(), self::RENDERED)];
+        $definitions = [];
+        foreach ($all as $definition) {
+            if (isset($definitions[$definition->key])) {
+                throw new \LogicException("Student report {$definition->key} is registered twice.");
+            }
+            $definitions[$definition->key] = $definition;
+        }
+        // By hub category; declaration order within a category (a stable sort).
+        $order = array_flip(array_keys(D::CATEGORIES));
+        uasort($definitions, fn (D $a, D $b) => $order[$a->category] <=> $order[$b->category]);
+
+        return $this->definitions = $definitions;
+    }
+
+    public function find(string $key): ?D
+    {
+        return $this->definitions()[$key] ?? null;
+    }
+
+    /** The read model of a RENDERED report, or null (unknown key, or a dedicated page). */
+    public function rendered(string $key): ?StudentReport
+    {
+        foreach (self::RENDERED as $class) {
+            $report = $this->report($class);
+            if ($report->definition()->key === $key) {
+                return $report;
+            }
+        }
+
+        return null;
+    }
+
+    /** @param  class-string<StudentReport>  $class */
+    private function report(string $class): StudentReport
+    {
+        return $this->reports[$class] ??= $this->container->make($class);
+    }
+
+    /**
+     * The existing dedicated report pages this catalogue governs.
+     *
+     * @return list<D>
+     */
+    public static function pages(): array
+    {
+        $student = new C('student', 'Student', 'student');
+        $number = new C('student_number', 'Student number');
+
+        return [
+            new D(
+                key: 'students.directory',
+                title: 'Student directory',
+                description: 'Students with their current class. Search by name or number; filter by status and by current Campus, Grade or Section.',
+                category: 'students',
+                owner: 'Students',
+                authority: ['students.view'],
+                scope: D::CAMPUS_AWARE,
+                route: 'app.students.index',
+                filters: ['name', 'student_number', 'status', 'campus_id', 'grade_level_id', 'section_id'],
+                columns: [$student, $number, new C('status', 'Status'), new C('current_placement', 'Current class', 'placement', C::RESTRICTED, ['enrollments.view'])],
+                sorts: StudentDirectoryOrder::LABELS,
+                perPage: StudentDirectoryOrder::PER_PAGE,
+                reference: ['SR-03'],
+            ),
+            new D(
+                key: 'students.placements',
+                title: 'Placements by academic year',
+                description: 'Every placement in a chosen academic year, Campus, Grade or Section, with roll number and placement status.',
+                category: 'enrollment',
+                owner: 'Students (Enrollment)',
+                authority: ['enrollments.view'],
+                scope: D::CAMPUS_AWARE,
+                route: 'app.enrollments.index',
+                filters: ['academic_year_id', 'campus_id', 'grade_level_id', 'section_id', 'status', 'student_number', 'student_name', 'roll_number'],
+                columns: [$student, $number, new C('placement', 'Class', 'placement'), new C('roll_number', 'Roll number'), new C('status', 'Placement status'), new C('starts_on', 'Starts', 'date')],
+                sorts: ['recent' => 'Most recent first'],
+                perPage: 20,
+                reference: ['SR-03', 'SR-36'],
+            ),
+            new D(
+                key: 'students.movements',
+                title: 'Student movements',
+                description: 'Entries, Section changes, Campus transfers, promotions and exits from each Student\'s placement history.',
+                category: 'enrollment',
+                owner: 'Students (Enrollment)',
+                authority: ['enrollments.view'],
+                scope: D::WHOLE_SCHOOL,
+                route: 'app.students.movements',
+                filters: ['q', 'category', 'type', 'academic_year_id', 'from', 'to', 'campus_id', 'grade_level_id', 'section_id'],
+                columns: [new C('effective_date', 'Date', 'date'), $student, new C('movement', 'Movement'), new C('from', 'From', 'placement'), new C('to', 'To', 'placement'), new C('reason', 'Reason', 'lifecycle_reason')],
+                sorts: ['date_desc' => 'Newest first', 'date_asc' => 'Oldest first', 'student' => 'Student name', 'type' => 'Movement type'],
+                perPage: StudentMovementRegister::PER_PAGE,
+                reference: ['SR-12', 'SR-36'],
+            ),
+        ];
+    }
+}

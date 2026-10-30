@@ -3102,6 +3102,34 @@ Rollover prepares the next Academic Year while it is still draft. Before SIS
   non-draft year, 0 executing plans, 0 Sections or Terms created in a closed
   year.
 
+## SIS reports catalogue (SIS 11.1, 2026-10-30)
+
+`App\Support\StudentReports\StudentReportRegistry` is the one closed
+catalogue of SIS operational reports (`docs/sis/SIS-11-1-REPORTING-FOUNDATION.md`).
+`GET /app/students/reports` (`app.students.reports.index`) lists the reports
+the viewer may open. `GET /app/students/reports/{report}`
+(`app.students.reports.show`) serves the RENDERED reports.
+
+- **Authority:** every capability in a definition's `authority` (no
+  `reports.view`). CAMPUS_AWARE entries open on a Campus grant and read
+  through `StudentAccess`. WHOLE_SCHOOL entries (movements, lifecycle) need
+  whole-School authority. Decided by `StudentReportAccess` (C3 coverage).
+- **Entries:**
+  - `students.directory` → `/app/students`, with a closed sort
+    (`StudentDirectoryOrder`: name, Student number);
+  - `students.placements` → `/app/enrollments`;
+  - `students.movements` → the register below;
+  - `students.lifecycle` → `StudentLifecycleReport`, which reads
+    `student_lifecycle_events` with School-local recorded dates and labels
+    (`StudentLifecycleReason::LABELS`, kept equal to
+    `resources/js/lifecycleReasons.ts`). Placement events and the Placement
+    column need whole-School `enrollments.view`. No actor, ids or free text.
+    One count plus one page query.
+- **Contracts:** filters come from the closed `StudentReportFilter`
+  vocabulary. Columns carry a privacy class, and prohibited keys are refused.
+  Sorts are closed key → label maps. Every column is `exportable: false`
+  until the governed export contract (D-11).
+
 ## Student movement and exit register (SIS.EXP-2, 2026-10-30)
 
 `/app/students/movements` (`app.students.movements`) is a read-only

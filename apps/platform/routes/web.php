@@ -156,6 +156,7 @@ use App\Http\Controllers\App\StudentGuardianRelationshipController;
 use App\Http\Controllers\App\StudentImportController;
 use App\Http\Controllers\App\StudentMovementController;
 use App\Http\Controllers\App\StudentProcessingAuthorizationController;
+use App\Http\Controllers\App\StudentReportController;
 use App\Http\Controllers\App\StudentSubjectEnrollmentController;
 use App\Http\Controllers\App\StudentTransferController;
 use App\Http\Controllers\App\SubjectOfferingAdminController;
@@ -717,6 +718,12 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         // a declared whole-School operation of enrollments.view). Literal
         // path before '/{student}'.
         Route::get('/movements', [StudentMovementController::class, 'index'])->middleware('capability:enrollments.view')->name('movements');
+        // SIS 11.1: the SIS Reports hub and the shared report page (read only).
+        // Authority per report comes from the closed StudentReportRegistry
+        // through StudentReportAccess (an unknown key is NOT FOUND). Literal
+        // paths before '/{student}'.
+        Route::get('/reports', [StudentReportController::class, 'index'])->name('reports.index');
+        Route::get('/reports/{report}', [StudentReportController::class, 'show'])->name('reports.show');
         // SIS.EXP-5 (OD-SIS-3): the add-only bulk import (whole-School
         // `students.import`; never Campus-adopted). Registered before '/{student}'.
         Route::get('/import', [StudentImportController::class, 'create'])->middleware(['capability:students.import', 'private-no-store'])->name('import.create');

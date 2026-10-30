@@ -30,6 +30,24 @@ final class StudentLifecycleReason
     ];
 
     /** @throws StudentLifecycleReasonException */
+    /**
+     * SIS 11.1: the human label of every code -- the same text as
+     * resources/js/lifecycleReasons.ts (StudentReportRegistryTest keeps the
+     * two equal), so a server-rendered report never shows a raw code.
+     */
+    public const array LABELS = [
+        'left_school' => 'Left the School',
+        'transferred_out' => 'Transferred to another school',
+        'completed_studies' => 'Completed studies',
+        'duplicate_record' => 'Duplicate record',
+        'entered_in_error' => 'Entered in error',
+        'returned_to_school' => 'Returned to the School',
+        'deactivated_in_error' => 'Deactivated in error',
+        'guardian_request' => 'Guardian request',
+        'did_not_join' => 'Did not join',
+        'duplicate_placement' => 'Duplicate placement',
+    ];
+
     public static function require(string $action, string $reasonCode): void
     {
         if (! in_array($reasonCode, self::CODES[$action], true)) {

@@ -46,6 +46,8 @@ interface Props {
         campus_id: string;
         grade_level_id: string;
         section_id: string;
+        // SIS 11.1: the closed sort ('' = by name).
+        sort: string;
     };
     // SIS.EXP-1: current-placement filter options, cut by the server to the
     // viewer's own reach (null without placement read or an active year).
@@ -71,6 +73,7 @@ const status = ref(props.filters.status);
 const campusId = ref(props.filters.campus_id);
 const gradeLevelId = ref(props.filters.grade_level_id);
 const sectionId = ref(props.filters.section_id);
+const sort = ref(props.filters.sort);
 
 // SIS.EXP-1: only Sections that fit the chosen Campus and Grade are offered;
 // choosing a Campus or Grade that excludes the chosen Section clears it (the
@@ -102,6 +105,7 @@ function applyFilters(): void {
             campus_id: campusId.value || undefined,
             grade_level_id: gradeLevelId.value || undefined,
             section_id: sectionId.value || undefined,
+            sort: sort.value || undefined,
         },
         { preserveState: true, preserveScroll: true, replace: true },
     );
@@ -261,6 +265,18 @@ function studentHref(student: StudentRow): string {
                     </select>
                 </div>
             </template>
+            <div>
+                <label class="block text-sm text-slate-600" for="filter-sort">Sort by</label>
+                <select
+                    id="filter-sort"
+                    v-model="sort"
+                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                    @change="applyFilters"
+                >
+                    <option value="">Name</option>
+                    <option value="student_number">Student number</option>
+                </select>
+            </div>
             <button
                 v-if="hasFilters"
                 type="button"

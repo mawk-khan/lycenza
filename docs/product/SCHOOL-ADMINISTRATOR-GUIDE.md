@@ -466,6 +466,29 @@ An inactive Guardian stays linked to their Students and keeps their contacts,
 but has no Guardian portal access and receives no school emails such as fee
 reminders.
 
+**Student reports** (*People → Student reports*, SIS 11.1) groups the
+read-only Student lists you may open:
+
+- **Student directory:** current class; sort by name or Student number.
+- **Placements by academic year:** any year, Campus, Grade or Section, with
+  roll numbers.
+- **Student movements:** entries, Section changes, Campus transfers,
+  promotions and exits.
+- **Student lifecycle:** every Student marked inactive or active again, and
+  every placement withdrawn or cancelled, with the recorded reason and
+  date. A placement cancelled before it started reads *Cancelled before
+  start*.
+
+Each report shows only what your role may see:
+
+- A Campus-only role sees the directory and placements for its Campus(es),
+  never the School-wide history reports.
+- Filters stay in the address bar, so a filtered report can be bookmarked or
+  shared with a colleague who has the same access.
+- Reports change nothing and have no export or print yet. Corrections happen
+  on the Student and Enrollment pages; integrity problems are in **Data
+  health**.
+
 ## 10. Timetable and teaching assignments
 
 - **Timetable** (`Timetable schedule`): schedule an offering for a Section

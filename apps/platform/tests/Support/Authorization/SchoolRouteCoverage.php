@@ -75,6 +75,7 @@ use App\Domain\Timetable\Application\TimetableScheduleAccess;
 use App\Domain\Transport\Application\TransportRiderAccess;
 use App\Domain\Transport\Application\TransportRiderImport;
 use App\Domain\Visitor\Application\VisitorVisitAccess;
+use App\Support\StudentReports\StudentReportAccess;
 use Tests\Feature\Api\V1\SchoolContextTest;
 use Tests\Feature\App\StatutoryPayrollUiTest;
 use Tests\Feature\Identity\InvitationAcceptanceHubTest;
@@ -459,6 +460,10 @@ final class SchoolRouteCoverage
 
             // Http\Controllers\App\StudentController
             Coverage::campus('app.students.index', 'students.view', StudentAccess::class, 'students'),
+            // SIS 11.1: the SIS Reports hub and the shared report page --
+            // per-report authority from the closed StudentReportRegistry.
+            Coverage::service('app.students.reports.index', StudentReportAccess::class, 'authorizeHub'),
+            Coverage::service('app.students.reports.show', StudentReportAccess::class, 'authorizeReport'),
             Coverage::campus('app.students.overview', 'students.view', StudentAccess::class, 'student'),
             // ORG.7F-2 (ADR 0076 §46): the narrow Campus writes.
             Coverage::campus('app.students.names.edit', 'students.manage', StudentAccess::class, 'student'),

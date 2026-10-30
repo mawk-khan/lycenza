@@ -12,6 +12,7 @@ use App\Domain\Students\Application\Exceptions\InvalidEnrollmentRollNumberExcept
 use App\Domain\Students\Application\Exceptions\PossibleDuplicateStudentException;
 use App\Domain\Students\Application\Exceptions\StudentOnboardingUnavailableException;
 use App\Domain\Students\Application\StudentAccess;
+use App\Domain\Students\Application\StudentDirectoryOrder;
 use App\Domain\Students\Application\StudentEnrollmentReadService;
 use App\Domain\Students\Application\StudentNameEditService;
 use App\Domain\Students\Application\StudentProfileVersion;
@@ -70,10 +71,12 @@ class StudentDirectoryController extends Controller
             'campus_id' => ['sometimes', 'nullable', 'uuid'],
             'grade_level_id' => ['sometimes', 'nullable', 'uuid'],
             'section_id' => ['sometimes', 'nullable', 'uuid'],
+            // SIS 11.1: a closed sort (StudentDirectoryOrder, governed by the SIS report catalogue).
+            'sort' => ['sometimes', 'nullable', Rule::in(array_keys(StudentDirectoryOrder::SORTS))],
             'page' => ['sometimes', 'integer', 'min:1'],
         ]);
 
-        $query = $access->students($school, $scope)->orderBy('first_name')->orderBy('last_name')->orderBy('students.id');
+        $query = StudentDirectoryOrder::apply($access->students($school, $scope), $validated['sort'] ?? null);
 
         // UAT-C4 (UAT-SRCH-01): any part of the number; every name word in
         // any name field (StudentSearch, LIKE-escaped).
@@ -95,7 +98,7 @@ class StudentDirectoryController extends Controller
         $placementScope = $access->scopeOf($actor, 'enrollments.view', $school);
         $access->narrowToCurrentPlacement($query, $school, $placementScope, $validated);
 
-        $paginator = $query->paginate(20)->withQueryString();
+        $paginator = $query->paginate(StudentDirectoryOrder::PER_PAGE)->withQueryString();
 
         // V11.2: each row's current class, loaded for the whole page in one query.
         $placements = $access->currentPlacements($school, $placementScope, $paginator->getCollection()->pluck('id')->all());
@@ -114,6 +117,7 @@ class StudentDirectoryController extends Controller
                 'campus_id' => $validated['campus_id'] ?? '',
                 'grade_level_id' => $validated['grade_level_id'] ?? '',
                 'section_id' => $validated['section_id'] ?? '',
+                'sort' => $validated['sort'] ?? '',
             ],
             // SIS.EXP-1: options cut to the viewer's reach (null without placement read).
             'placementFilters' => $this->placementFilterOptions($school, $placementScope->intersect($scope), $years),

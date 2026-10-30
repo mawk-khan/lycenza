@@ -49,6 +49,26 @@ The brief's candidate order was re-sequenced on repository evidence:
 | **SIS.EXP-7** | House (or Club) Membership | The one named concept a pilot asks for: per-year membership, one House per Student per year, optional responsibility labels from a closed list. No generic group engine, no gender analytics, no badges | *decision-gated* OD-SIS-4 (D-17 revisit) | M | yes (§5) | SR-17 (part) |
 | **SIS.EXP-8** | SIS Parity Closure Re-audit | Re-read the 42-family map; reclassify; rescore; verify the demo world; record the remaining owner/legal gates | after the chosen waves | audit | none | all |
 
+### 2.0g SIS 11.x — Advanced SIS expansion: SIS 11.1 IMPLEMENTED (2026-10-30)
+
+An additive programme after SIS.EXP-CLOSE. It does not reopen SIS.EXP or the
+core 96/100. SIS 11.1 was re-scoped by the owner onto `c5e3dd23`
+(`SIS-11-1-REPORTING-FOUNDATION.md` §1):
+
+- a closed SIS report catalogue (`StudentReportRegistry`), a Reports hub
+  (*People → Student reports*) and a shared report page;
+- reusable filter, column (privacy class) and closed-sort contracts;
+- the Directory, placements and movement register registered as governed
+  entries, not rebuilt;
+- one new report, `students.lifecycle` (ORG.8E lifecycle events, "Cancelled
+  before start" for ADR 0078's empty interval);
+- no schema, capability, role, Campus adoption, export or analytics.
+
+The 28 report-bearing reference families are classified (8 SIS-owned,
+5 cross-module, 8 other-ERP, 7 rejected). Advanced SIS Screenshot Coverage
+(report subset) is 0/8 → 5/8. **Next: SIS 11.2 — Operational Student Reports,
+NOT STARTED; owner authorization required; never auto-start.**
+
 ### 2.0f SIS.EXP-CLOSE — PROGRAMME CLOSED (2026-10-30)
 
 **The SIS expansion programme is closed** (`SIS-EXPANSION-CLOSURE.md`).
