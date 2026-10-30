@@ -87,3 +87,57 @@ If file volume/traffic later justifies it, the Documents module's
 Infrastructure layer (not its Application contract) could be optimized
 independently (e.g. a CDN in front of authorized, time-limited URLs)
 without changing how other modules interact with it.
+
+## Amendment — Student owner activation (SIS.EXP-3, 2026-10-30)
+
+**Status:** Accepted (owner decision OD-SIS-1, 2026-10-30, including the
+two new capabilities and their role grants).
+
+Phase 0E deferred the `student` owner arm because no capability named
+Student documents and `students.view`/`students.manage` must not be
+stretched to cover them. That reasoning stands. SIS.EXP-3 activates the arm
+through dedicated authority rather than reinterpretation:
+
+1. **Two new School capabilities:** `students.documents.view` and
+   `students.documents.manage`.
+   - Granted only to the `school_admin` and `principal` system roles.
+   - Whole-School only and never Campus-adopted.
+   - Classed `children`; they map to the core Student Records module through
+     the `students.` prefix.
+   - No Teacher, Guardian, Group, Network or platform role holds them.
+2. **Narrow entry points, never the generic ones:**
+   - `DocumentService::createForStudent()` / `archiveForStudent()` write
+     the file, and `DocumentReadService::studentContent()` reads it.
+   - `DocumentListingService::studentFacts()` reads the file facts.
+   - The generic `create()`, `archive()`, `metadata()`, `content()` and
+     `list()` keep refusing `student`. No generic route, and no API client,
+     can therefore reach a Student file.
+   - Each entry point decides the capability itself. The Students domain
+     decides Student visibility (whole-School `students.view`) first.
+3. **One tier and a narrow type list:**
+   - Every Student-owned Document is `highly_sensitive` (children's data).
+     Reads need current MFA; writes need a fresh code; opened streams and
+     listings are audited.
+   - Accepted types are PDF, JPEG and PNG only, a subset of the Documents
+     allow-list. There is no malware scanning, so no macro-capable format is
+     accepted, and never SVG.
+4. **Domain boundary:**
+   - The Students domain owns `student_documents`: the closed category, a
+     plain title, a document date and the record's archive with its closed
+     reason. It is written inside the Document's own transaction (a
+     `$within` callback), so storage compensation covers both.
+   - A composite key `(document_id, student_id, school_id)` →
+     `documents(id, student_id, school_id)` keeps the record on the
+     Document's own Student and School.
+   - Documents never reads a Student model, and Students never reads the
+     `documents` table.
+5. **Retention:**
+   - The record cascades with its Document and Student inside the Student
+     core purge (E21.2D, D7). It is never removed on its own.
+   - The runtime role cannot DELETE it, and archive is final.
+
+Unchanged: the Guardian arm stays deferred. There is still no generic
+`documents.*` capability, signed or public URL, share link, OCR or AI
+processing. `docs/modules/DOCUMENTS.md` ("Student owner activation") and
+`docs/modules/STUDENT-GUARDIAN-IDENTITY.md` ("Student documents") hold the
+detail.

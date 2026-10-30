@@ -94,11 +94,21 @@ class StudentRetentionPruneTest extends TestCase
     {
         $path = "schools/{$student->school_id}/documents/student/{$student->id}/".Str::uuid7().'.pdf';
         Storage::disk($this->disk)->put($path, 'bytes');
-        $this->inSchool($student->school, fn () => Document::query()->forceCreate([
-            'id' => (string) Str::uuid7(), 'school_id' => $student->school_id, 'student_id' => $student->id, 'classification_tier' => 'internal',
-            'storage_disk' => $this->disk, 'storage_path' => $path, 'original_filename' => 'x.pdf', 'mime_type' => 'application/pdf',
-            'size_bytes' => 5, 'uploaded_at' => now(), 'status' => 'archived',
-        ]));
+        $documentId = (string) Str::uuid7();
+        $uploader = $this->createUser()->id;
+        $this->inSchool($student->school, function () use ($student, $path, $documentId, $uploader): void {
+            Document::query()->forceCreate([
+                'id' => $documentId, 'school_id' => $student->school_id, 'student_id' => $student->id, 'classification_tier' => 'internal',
+                'storage_disk' => $this->disk, 'storage_path' => $path, 'original_filename' => 'x.pdf', 'mime_type' => 'application/pdf',
+                'size_bytes' => 5, 'uploaded_at' => now(), 'status' => 'archived',
+            ]);
+            // SIS.EXP-3: its Student record goes with it (cascade), never on its own.
+            DB::table('student_documents')->insert([
+                'id' => (string) Str::uuid7(), 'school_id' => $student->school_id, 'student_id' => $student->id, 'document_id' => $documentId,
+                'category' => 'prior_school_record', 'title' => 'Record', 'form_key' => (string) Str::uuid7(), 'upload_fingerprint' => str_repeat('0', 64), 'uploaded_by_user_id' => $uploader,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        });
 
         return $path;
     }
@@ -272,7 +282,7 @@ class StudentRetentionPruneTest extends TestCase
         $this->at('2051-10-01');
         $this->prune()->expectsOutputToContain('core record of 1 Student(s) (unresolved exit: 0, dependency-blocked: 2')->assertSuccessful();
 
-        foreach (['students' => 'id', 'student_enrollments' => 'student_id', 'student_subject_enrollments' => 'student_id', 'documents' => 'student_id', 'student_guardian_account_links' => 'student_id'] as $table => $column) {
+        foreach (['students' => 'id', 'student_enrollments' => 'student_id', 'student_subject_enrollments' => 'student_id', 'documents' => 'student_id', 'student_documents' => 'student_id', 'student_guardian_account_links' => 'student_id'] as $table => $column) {
             $this->assertFalse($this->has($w['school'], $table, $column, $free->id), "{$table} goes with the core record");
         }
         Storage::disk($this->disk)->assertMissing($freeDocument);

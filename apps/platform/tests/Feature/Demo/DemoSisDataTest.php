@@ -10,7 +10,10 @@ use App\Support\Tenancy\TenantContext;
 use Database\Seeders\Demo\DemoDataBuilder;
 use Database\Seeders\Demo\DemoSisData;
 use Database\Seeders\Demo\DemoSisVerifier;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -19,6 +22,8 @@ use Tests\TestCase;
  */
 class DemoSisDataTest extends TestCase
 {
+    use ProvidesSensitiveActionMfa;
+
     private function school(): School
     {
         return School::query()->where('slug', DemoSisData::SCHOOL_SLUG)->firstOrFail();
@@ -41,7 +46,7 @@ class DemoSisDataTest extends TestCase
         $verifier = new DemoSisVerifier;
 
         $this->assertSame([], $verifier->problems());
-        $this->assertSame(['gachibowliStudents' => 17, 'gachibowliGuardians' => 17, 'gachibowliActivePlacements' => 16, 'gachibowliMovements' => 22], $verifier->summary());
+        $this->assertSame(['gachibowliStudents' => 17, 'gachibowliGuardians' => 17, 'gachibowliActivePlacements' => 16, 'gachibowliMovements' => 22, 'gachibowliStudentDocuments' => 5], $verifier->summary());
     }
 
     #[Test]
@@ -51,7 +56,8 @@ class DemoSisDataTest extends TestCase
         $this->signIn('gachibowli.admin@example.test');
 
         $props = $this->get("/app/students/{$this->student('Aarav')->id}")->assertOk()->viewData('page')['props'];
-        $this->assertSame(['attendance', 'family', 'fees', 'hostel', 'library', 'subjects', 'transport'], collect($props['sections'])->keys()->sort()->values()->all());
+        $this->assertSame(['attendance', 'documents', 'family', 'fees', 'hostel', 'library', 'subjects', 'transport'], collect($props['sections'])->keys()->sort()->values()->all());
+        $this->assertSame([3, 1], [$props['sections']['documents']['active'], $props['sections']['documents']['archived']]);
         $this->assertSame('Diya Menon', $props['sections']['family']['siblings'][0]['name']);
         $this->assertSame(['30000.00', '12000.00', '18000.00'], [$props['sections']['fees']['billed'], $props['sections']['fees']['paid'], $props['sections']['fees']['outstanding']]);
         $this->assertCount(5, $props['sections']['attendance']['recent']);
@@ -126,5 +132,30 @@ class DemoSisDataTest extends TestCase
             $this->actingAs(User::query()->where('email', $email)->firstOrFail());
             $this->assertNotSame(200, $this->get('/app/students/movements')->status(), $email);
         }
+    }
+
+    #[Test]
+    public function the_demo_documents_are_fictional_and_isolated_by_school(): void
+    {
+        app(DemoDataBuilder::class)->build();
+        $school = $this->school();
+        $records = app(TenantContext::class)->withSchool($school, fn () => DB::table('student_documents as sd')
+            ->join('documents as d', 'd.id', '=', 'sd.document_id')->orderBy('sd.title')->get(['sd.title', 'sd.category', 'd.storage_disk', 'd.storage_path', 'd.mime_type']));
+        $this->assertCount(5, $records);
+        foreach ($records as $record) {
+            $bytes = (string) Storage::disk($record->storage_disk)->get($record->storage_path);
+            $this->assertStringStartsWith('%PDF-1.4', $bytes);
+            $this->assertStringContainsString('DEMO / FICTIONAL', $bytes);
+            $this->assertSame('application/pdf', $record->mime_type);
+        }
+
+        // The Lycenza Demo School's document is never reachable from Gachibowli.
+        $other = School::query()->where('name', 'Lycenza Demo School')->firstOrFail();
+        $foreign = app(TenantContext::class)->withSchool($other, fn () => DB::table('student_documents')->first());
+        $this->assertNotNull($foreign);
+        $this->signIn('gachibowli.admin@example.test');
+        $this->withMfaAssurance(User::query()->where('email', 'gachibowli.admin@example.test')->firstOrFail());
+        $this->get("/app/students/{$foreign->student_id}/documents")->assertNotFound();
+        $this->get("/app/students/{$this->student('Aarav')->id}/documents")->assertOk();
     }
 }

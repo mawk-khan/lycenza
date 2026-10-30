@@ -118,6 +118,37 @@ class DocumentListingService
     /**
      * @return array{column: string, id: string, ownerModel: Employee}
      */
+    /**
+     * SIS.EXP-3: the facts of a Student's Documents by id (one query, no
+     * bytes) -- the Students domain's document list. Decides
+     * `students.documents.view` itself (whole School); audits once per
+     * non-empty call, like listSensitive() (the tier is Highly Sensitive).
+     *
+     * @param  list<string>  $documentIds
+     * @return array<string, DocumentMetadata> by Document id; ids that are not this Student's are absent
+     */
+    public function studentFacts(School $school, string $studentId, array $documentIds, User $actor): array
+    {
+        return $this->context->withSchool($school, function () use ($school, $studentId, $documentIds, $actor) {
+            $this->authorizeCapabilityFor($actor, DocumentService::STUDENT_DOCUMENTS_VIEW, $school);
+            if ($documentIds === []) {
+                return [];
+            }
+
+            $documents = Document::query()->where('school_id', $school->id)->where('student_id', $studentId)
+                ->whereIn('id', $documentIds)->get();
+            if ($documents->isNotEmpty()) {
+                $this->audit->school($school, 'document.sensitive_list_viewed', actor: $actor, metadata: [
+                    'ownerType' => 'student',
+                    'ownerId' => $studentId,
+                    'count' => $documents->count(),
+                ]);
+            }
+
+            return $documents->mapWithKeys(fn (Document $d): array => [$d->id => $this->toMetadata($d)])->all();
+        });
+    }
+
     private function resolveAndAuthorizeOwner(School $school, DocumentOwner $owner, User $actor, bool $sensitive): array
     {
         return match ($owner->type) {

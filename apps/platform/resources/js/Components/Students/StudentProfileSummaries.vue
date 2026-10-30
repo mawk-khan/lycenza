@@ -19,7 +19,8 @@ const hasAny = computed(
         props.sections.fees !== undefined ||
         props.sections.transport !== undefined ||
         props.sections.hostel !== undefined ||
-        props.sections.library !== undefined,
+        props.sections.library !== undefined ||
+        props.sections.documents !== undefined,
 );
 
 const ATTENDANCE_LABELS: Record<string, string> = {
@@ -213,6 +214,35 @@ function money(amount: string | null, currency: string | null): string {
                 </p>
                 <a class="mt-2 inline-block text-sm underline" :href="sections.library.link"
                     >Loans</a
+                >
+            </article>
+
+            <!-- SIS.EXP-3: Student record documents (counts only; the list
+                 and the files need current MFA on their own page). -->
+            <article
+                v-if="sections.documents"
+                class="rounded border border-slate-200 p-4"
+                aria-labelledby="glance-documents"
+            >
+                <h3 id="glance-documents" class="text-sm font-semibold">Documents</h3>
+                <p class="mt-2 text-sm">
+                    {{ sections.documents.active }}
+                    {{ sections.documents.active === 1 ? 'document' : 'documents' }} on record<span
+                        v-if="sections.documents.archived > 0"
+                        class="text-slate-500"
+                        >, {{ sections.documents.archived }} archived</span
+                    >
+                </p>
+                <ul
+                    v-if="sections.documents.categories.length > 0"
+                    class="mt-1 text-xs text-slate-600"
+                >
+                    <li v-for="c in sections.documents.categories" :key="c.value">
+                        {{ c.label }}: {{ c.count }}
+                    </li>
+                </ul>
+                <a class="mt-2 inline-block text-sm underline" :href="sections.documents.link"
+                    >Open documents</a
                 >
             </article>
         </div>

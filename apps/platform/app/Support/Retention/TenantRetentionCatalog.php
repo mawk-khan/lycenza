@@ -147,7 +147,9 @@ final class TenantRetentionCatalog
         ]],
         'student_core' => [self::ADOPTED, 'D7: 25 y after final exit', ['students', 'student_enrollments', 'student_subject_enrollments',
             // ORG.8E (ADR 0076 §63): lifecycle evidence, removed with its Student / Enrollment (cascade).
-            'student_lifecycle_events']],
+            'student_lifecycle_events',
+            // SIS.EXP-3: a Student document record, removed with its Document and Student (cascade).
+            'student_documents']],
         // RES.2 (ADR 0068 §12, §19): StudentMark and its value history. RES-L8 has no answer, so NO period is
         // adopted and nothing expires them; their Student / placement / authorization keys keep the Student core
         // record dependency_blocked until a RES retention participant exists. The one deliberate policy_unresolved.

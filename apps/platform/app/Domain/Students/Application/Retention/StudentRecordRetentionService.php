@@ -71,7 +71,9 @@ final class StudentRecordRetentionService
     /** Dependents the core purge removes itself (or that it verified above). */
     private const CORE_HANDLED = ['student_enrollments', 'student_subject_enrollments', 'documents', 'student_guardian_account_links', 'student_processing_authorizations',
         // ORG.8E (ADR 0076 §63): lifecycle evidence cascades with its Student and Enrollments.
-        'student_lifecycle_events'];
+        'student_lifecycle_events',
+        // SIS.EXP-3: a Student document record cascades with its Document and Student.
+        'student_documents'];
 
     public function __construct(
         private readonly StudentRetentionEligibility $students,
@@ -198,7 +200,7 @@ final class StudentRecordRetentionService
         $blocker = $this->references->first('student_processing_authorizations', $schoolId, DB::table('student_processing_authorizations')->where('school_id', $schoolId)->where('student_id', $studentId)->pluck('id')->all(), $unit)
             ?? $this->references->first('student_enrollments', $schoolId, $enrollmentIds, [...$unit, ...$clearedTables])
             ?? $this->references->first('student_subject_enrollments', $schoolId, DB::table('student_subject_enrollments')->where('student_id', $studentId)->pluck('id')->all())
-            ?? $this->references->first('documents', $schoolId, $this->documents->idsOwnedBy('student', $studentId));
+            ?? $this->references->first('documents', $schoolId, $this->documents->idsOwnedBy('student', $studentId), ['student_documents']);
         if ($blocker !== null) {
             return $blocker;
         }

@@ -91,6 +91,8 @@ final class UserReferenceCatalog
         'communication_thread_participants' => ['user_id' => self::RETAIN_REFERENCE],
         'communication_threads' => ['created_by_user_id' => self::RETAIN_REFERENCE],
         'documents' => ['uploaded_by_user_id' => self::RETAIN_REFERENCE],
+        // SIS.EXP-3: Student document record actors are historical references.
+        'student_documents' => ['uploaded_by_user_id' => self::RETAIN_REFERENCE, 'archived_by_user_id' => self::RETAIN_REFERENCE],
         // TCH-E (ADR 0063 section 45): who granted and who ended elective teaching ownership.
         'elective_teaching_assignments' => ['created_by_user_id' => self::RETAIN_REFERENCE, 'ended_by_user_id' => self::RETAIN_REFERENCE],
         'email_suppressions' => ['released_by_user_id' => self::RETAIN_REFERENCE],

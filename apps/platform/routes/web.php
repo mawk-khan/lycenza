@@ -149,6 +149,7 @@ use App\Http\Controllers\App\StaffAttendance\StaffAttendanceAdminController;
 use App\Http\Controllers\App\StudentAccountLinkController;
 use App\Http\Controllers\App\StudentController;
 use App\Http\Controllers\App\StudentDirectoryController;
+use App\Http\Controllers\App\StudentDocumentController;
 use App\Http\Controllers\App\StudentEnrollmentController;
 use App\Http\Controllers\App\StudentGuardianRelationshipController;
 use App\Http\Controllers\App\StudentMovementController;
@@ -727,6 +728,20 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::post('/{student}/transfer', [StudentTransferController::class, 'store'])->name('transfer.store');
         Route::get('/{student}/edit', [StudentController::class, 'edit'])->middleware('capability:students.manage')->name('edit');
         Route::get('/{student}/history', [StudentController::class, 'history'])->middleware('capability:students.view')->name('history');
+        // SIS.EXP-3 (OD-SIS-1): a Student's record documents. Staff web only
+        // (no API route); whole-School `students.documents.*` (never
+        // Campus-adopted). The files are Highly Sensitive: reads need
+        // current MFA (`mfa-page`), each write a fresh code (controller).
+        Route::get('/{student}/documents', [StudentDocumentController::class, 'index'])->whereUuid('student')
+            ->middleware(['capability:students.documents.view', 'mfa-page', 'private-no-store'])->name('documents.index');
+        Route::post('/{student}/documents', [StudentDocumentController::class, 'store'])->whereUuid('student')
+            ->middleware('capability:students.documents.manage')->name('documents.store');
+        Route::put('/{student}/documents/{document}', [StudentDocumentController::class, 'update'])->whereUuid(['student', 'document'])
+            ->middleware('capability:students.documents.manage')->name('documents.update');
+        Route::post('/{student}/documents/{document}/archive', [StudentDocumentController::class, 'archive'])->whereUuid(['student', 'document'])
+            ->middleware('capability:students.documents.manage')->name('documents.archive');
+        Route::get('/{student}/documents/{document}/download', [StudentDocumentController::class, 'download'])->whereUuid(['student', 'document'])
+            ->middleware(['capability:students.documents.view', 'mfa-page', 'private-no-store'])->name('documents.download');
         Route::put('/{student}', [StudentController::class, 'update'])->middleware('capability:students.manage')->name('update');
         Route::post('/{student}/status', [StudentController::class, 'changeStatus'])->middleware('capability:students.manage')->name('status');
 

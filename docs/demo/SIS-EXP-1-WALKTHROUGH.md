@@ -1,4 +1,4 @@
-# SIS.EXP-1 / SIS.EXP-2 — Student 360, directory and movement register: demo data and owner walkthrough
+# SIS.EXP-1 / 2 / 3 — Student 360, directory, movement register and Student documents: demo data and owner walkthrough
 
 Status: **canonical SIS demonstration** (SIS.EXP-1, 2026-10-29), inside the
 ORG.12E-D1 Organization world (`ORGANIZATION-DEMO-DATA.md`). Built by
@@ -85,3 +85,55 @@ which the demo never fabricates. Doing step 6 creates them live.
 | 8 | `network.manager`, `platform.admin`, `gachibowli.cashier` | `/app/students/movements` | refused / back to the dashboard | any Student movement |
 
 Run `ddev demo-reset` after step 6.
+
+## 5. SIS.EXP-3 — Student documents (owner path)
+
+**What the reset seeds:**
+- Five fictional record documents: synthetic PDFs that each say
+  **DEMO / FICTIONAL** and carry no signature or identifier.
+  - **Aarav Menon:** Admission form (Enrollment paperwork); Transfer
+    certificate from previous school (Previous school record); Field trip
+    consent 2026-27 (Consent or permission form); and one archived *Admission
+    form (first copy)*, reason "Replaced by a newer document".
+  - **Diya Menon:** Letter about Early Years settling-in (Family
+    correspondence).
+- The cross-School negative: one Lycenza Demo School Student (LDS-0001)
+  document.
+- `ddev demo-reset` empties the local document keyspaces first, so repeated
+  resets never accumulate orphan files.
+
+**MFA:** the files are Highly Sensitive.
+- Enroll an authenticator under *Account security*, then sign out and back
+  in with the code; the list and downloads need that current MFA.
+- Each upload, edit and archive asks for a fresh code (or an unused
+  recovery code).
+
+| # | Persona | Route | Expected | Must not happen |
+|---|---|---|---|---|
+| 1 | `gachibowli.admin` | Aarav's profile → *At a glance* → **Documents** | "3 documents on record, 1 archived", one count per category, **Open documents** | a title or file name on the profile |
+| 2 | (same, before MFA) | **Open documents** (`/app/students/{id}/documents`) | the MFA step-up page | the list |
+| 3 | (same, MFA enrolled and signed in with a code) | **Open documents** | the 3 active documents with category, document date, upload time, file (PDF · size), *Active* | any delete, share, export or public-link control |
+| 4 | (same) | **Download** *Transfer certificate…* | a PDF download (attachment) reading DEMO / FICTIONAL | the file opening inline from a storage URL |
+| 5 | (same) | **Status** = Archived | the superseded *Admission form (first copy)*, still downloadable | an Edit or Archive action on it |
+| 6 | (same) | **Upload a document**: Family correspondence, a title, a PDF, a fresh code | "Document uploaded."; 4 active | — |
+| 7 | (same) | upload an HTML file renamed `.pdf` | "Upload a PDF, JPEG or PNG file…" under the file field | a stored file |
+| 8 | (same) | **Archive** the new document, reason *Uploaded in error*, fresh code | it moves to Archived (final) | an un-archive |
+| 9 | `gachibowli.ey.principal` (Campus-scoped) | Aarav's documents URL | 403: whole-School authority only | any file |
+| 10 | `gachibowli.cashier` | (same) | 403 | — |
+| 11 | `network.manager`, `platform.admin` | (same) | back to the dashboard / sign-in | any file |
+| 12 | `gachibowli.admin` | the LDS-0001 Student's documents URL | not found (another School) | that School's file |
+
+**Verified on 2026-10-30** (DDEV, real browser, Playwright 1.62.1): 25/25
+checks passed. Covered:
+- enrollment and step-up;
+- the counts card and the step-up refusal;
+- list, download (attachment, `nosniff`, the fictional PDF) and the archived
+  filter;
+- the spoofed-PDF refusal tied to the file input, upload, and archive;
+- no page overflow at 1280, 768 and 390;
+- keyboard reach to Download;
+- the cross-School 404;
+- Campus Principal, Cashier, Network Manager and Platform Admin refused for
+  both the list and the download.
+
+Run `ddev demo-reset` after steps 6–8.

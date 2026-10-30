@@ -45,7 +45,10 @@ is a historical record. Current facts:*
   Reservations, renewals and Hostel deposits stay deferred. Their browser
   configuration surfaces are SWC.3 (ADR 0073).*
 - *Documents row: production owner activation covers the Employee,
-  `learning_content_id` and `assignment_id` arms, not Employee only.*
+  `learning_content_id` and `assignment_id` arms, not Employee only, and
+  since SIS.EXP-3 (ADR 0012 amendment) the `student` arm through its own
+  narrow entry points. Students -> Documents is one-way: Documents never
+  reads a Student model, and Students never reads the `documents` table.*
 - *AI Platform row: Phase 0M is CLOSED FOR PHASE ZERO, with real providers
   deferred post-v1 (ADR 0061). The reopening gate stays blocked.)*
 

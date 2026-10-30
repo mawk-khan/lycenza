@@ -70,6 +70,15 @@ use Throwable;
  * means "an authorized stream was successfully opened" -- NOT that
  * transport-level delivery to an end user completed (no HTTP exists in
  * this checkpoint to observe that).
+ *
+ * SIS.EXP-3: a Student-owned Document's bytes are read ONLY through
+ * studentContent() (its facts through DocumentListingService::studentFacts())
+ * -- the generic metadata()/content() keep refusing `student`, so no generic
+ * route or API client reaches them. It decides `students.documents.view`
+ * itself (whole School), re-reads the Document under the School AND the
+ * named Student (another Student's or School's id is NOT FOUND), and audits
+ * the opened stream (`document.sensitive_content_accessed`, Highly
+ * Sensitive).
  */
 class DocumentReadService
 {
@@ -102,34 +111,52 @@ class DocumentReadService
         return $this->context->withSchool($school, function () use ($school, $documentId, $actor) {
             $document = $this->resolveAuthorizedDocument($school, $documentId, $actor);
 
-            $stream = null;
+            return $this->open($school, $document, $actor);
+        });
+    }
 
-            try {
-                $stream = Storage::disk($document->storage_disk)->readStream($document->storage_path);
-            } catch (Throwable) {
-                $stream = false;
-            }
+    /** Opens an already-authorized Document's stream (audited when Highly Sensitive). */
+    private function open(School $school, Document $document, User $actor): DocumentContent
+    {
+        $stream = null;
 
-            if ($stream === false || $stream === null) {
-                StorageMetrics::failed('read');
+        try {
+            $stream = Storage::disk($document->storage_disk)->readStream($document->storage_path);
+        } catch (Throwable) {
+            $stream = false;
+        }
 
-                throw new DocumentContentUnavailableException;
-            }
+        if ($stream === false || $stream === null) {
+            StorageMetrics::failed('read');
 
-            if ($document->classification_tier === 'highly_sensitive') {
-                $this->audit->school($school, 'document.sensitive_content_accessed', actor: $actor, subject: $document, metadata: [
-                    'documentId' => $document->id,
-                    'ownerType' => $document->owner_type,
-                ]);
-            }
+            throw new DocumentContentUnavailableException;
+        }
 
-            return new DocumentContent(
-                documentId: $document->id,
-                originalFilename: $document->original_filename,
-                mimeType: $document->mime_type,
-                sizeBytes: $document->size_bytes,
-                stream: $stream,
-            );
+        if ($document->classification_tier === 'highly_sensitive') {
+            $this->audit->school($school, 'document.sensitive_content_accessed', actor: $actor, subject: $document, metadata: [
+                'documentId' => $document->id,
+                'ownerType' => $document->owner_type,
+            ]);
+        }
+
+        return new DocumentContent(
+            documentId: $document->id,
+            originalFilename: $document->original_filename,
+            mimeType: $document->mime_type,
+            sizeBytes: $document->size_bytes,
+            stream: $stream,
+        );
+    }
+
+    /** A Student's Document bytes, re-authorized here on every download. */
+    public function studentContent(School $school, string $studentId, string $documentId, User $actor): DocumentContent
+    {
+        return $this->context->withSchool($school, function () use ($school, $studentId, $documentId, $actor) {
+            $this->authorizeCapabilityFor($actor, DocumentService::STUDENT_DOCUMENTS_VIEW, $school);
+            $document = Document::query()->where('school_id', $school->id)->where('student_id', $studentId)->find($documentId)
+                ?? throw new DocumentNotFoundException($documentId);
+
+            return $this->open($school, $document, $actor);
         });
     }
 

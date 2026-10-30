@@ -28,6 +28,8 @@ class StudentRetentionClassificationTest extends TestCase
         'students' => [
             // ORG.8E (ADR 0076 §63): high-impact lifecycle evidence; part of the core record, cascades with it (handled).
             'student_lifecycle_events' => 'D7 core: lifecycle evidence, removed with its Student (cascade)',
+            // SIS.EXP-3: the Student-record side of a Student-owned Document; part of the core record (handled).
+            'student_documents' => 'D7 core: a Student document record, removed with its Document and Student (cascade)',
             'student_enrollments' => 'D7 core (25 y): placements, purged with the Student',
             'student_subject_enrollments' => 'D7 core (25 y): subject history, purged with the Student',
             'documents' => 'D5 inherits the Student: purged with it (DocumentParentRetention)',
@@ -87,7 +89,10 @@ class StudentRetentionClassificationTest extends TestCase
             'attendance_record_corrections' => 'D7 cascade: correction evidence, removed with its record by the attendance unit',
         ],
         'enrollment_rollover_items' => [],
-        'documents' => [],
+        'documents' => [
+            // SIS.EXP-3: the Student record side of a Student-owned Document cascades with it (handled).
+            'student_documents' => 'D7 core: a Student document record, removed with its Document (cascade)',
+        ],
         // E21.3B: the rows that go with the Student, and what may reference them.
         'student_processing_authorizations' => [
             'student_processing_authorizations' => 'D7 core: terminal events point at their grant; removed together, leaves first',

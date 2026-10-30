@@ -164,6 +164,15 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'students.processing_authorizations.view', 'label' => 'View Student processing-authorization records', 'namespace' => 'school'],
             ['key' => 'students.processing_authorizations.manage', 'label' => 'Record/withdraw/revoke/supersede Student processing-authorization records', 'namespace' => 'school'],
 
+            // SIS.EXP-3 (OD-SIS-1, owner-approved 2026-10-30) -- Student
+            // record documents. Deliberately separate from `students.view`/
+            // `students.manage` (never implied by them): Documents'
+            // recorded decision is that a broad identity capability is not
+            // document authority. Whole-School only, never Campus-adopted;
+            // initial grants are `school_admin`/`principal` only, see below.
+            ['key' => 'students.documents.view', 'label' => 'View and download Student record documents', 'namespace' => 'school'],
+            ['key' => 'students.documents.manage', 'label' => 'Upload, edit and archive Student record documents', 'namespace' => 'school'],
+
             // Phase 5A.1 -- Communication Hub foundation. A single
             // `communications.manage` capability covers thread/
             // participant administration (deliberately not split
@@ -1112,6 +1121,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     // ordinary Student data entry -- deliberately NOT
                     // implied by students.manage alone.
                     'students.processing_authorizations.view', 'students.processing_authorizations.manage',
+                    // SIS.EXP-3 (OD-SIS-1): Student record documents.
+                    'students.documents.view', 'students.documents.manage',
                     'guardians.view', 'guardians.manage',
                     'communications.view', 'communications.send', 'communications.reply',
                     'communications.manage', 'communications.audit.view', 'communications.announce',
@@ -1450,6 +1461,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     // ordinary Student data entry -- deliberately NOT
                     // implied by students.manage alone.
                     'students.processing_authorizations.view', 'students.processing_authorizations.manage',
+                    // SIS.EXP-3 (OD-SIS-1): Student record documents.
+                    'students.documents.view', 'students.documents.manage',
                     'guardians.view', 'guardians.manage',
                     'communications.view', 'communications.send', 'communications.reply',
                     'communications.announce', 'communications.templates.manage', 'communications.approve',

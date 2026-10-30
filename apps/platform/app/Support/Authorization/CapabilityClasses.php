@@ -227,6 +227,8 @@ final class CapabilityClasses
         'school.roles.view' => ['sensitive'],
         'school.settings.manage' => ['authority'],
         'school.settings.view' => ['operational'],
+        'students.documents.manage' => ['children'],
+        'students.documents.view' => ['children'],
         'students.manage' => ['children'],
         'students.processing_authorizations.manage' => ['authority', 'children'],
         'students.processing_authorizations.view' => ['children'],

@@ -49,6 +49,29 @@ The brief's candidate order was re-sequenced on repository evidence:
 | **SIS.EXP-7** | House (or Club) Membership | The one named concept a pilot asks for: per-year membership, one House per Student per year, optional responsibility labels from a closed list. No generic group engine, no gender analytics, no badges | *decision-gated* OD-SIS-4 (D-17 revisit) | M | yes (§5) | SR-17 (part) |
 | **SIS.EXP-8** | SIS Parity Closure Re-audit | Re-read the 42-family map; reclassify; rescore; verify the demo world; record the remaining owner/legal gates | after the chosen waves | audit | none | all |
 
+### 2.0a SIS.EXP-3 — IMPLEMENTED (2026-10-30)
+
+OD-SIS-1 was decided by the owner on 2026-10-30:
+- activate Student documents (not Guardian);
+- two new capabilities, `students.documents.view` and
+  `students.documents.manage`;
+- granted to `school_admin` and `principal`, whole-School only.
+
+The feature is built on the one Documents repository (ADR 0012 amendment;
+`docs/modules/STUDENT-GUARDIAN-IDENTITY.md`, "Student documents").
+
+**Recorded differences from §2:**
+- No per-class checklist, verification or expiry. No approved category needs
+  expiry, and Documents has no verification workflow. Each is a later owner
+  decision.
+- No immunisation or health tier. Health records stay legally gated (no
+  health category exists).
+- No applicant documents (SR-14) and no Guardian owner arm.
+- Highly Sensitive by default (children's data): current MFA to read, a fresh
+  code to write.
+- Demo writes are direct and database-validated, through Documents' real
+  storage pipeline (no fabricated MFA proof).
+
 ### 2.0 SIS.EXP-2 — IMPLEMENTED (2026-10-30)
 
 The School-wide movement and exit register (`/app/students/movements`) is

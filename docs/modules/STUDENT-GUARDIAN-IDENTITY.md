@@ -1802,3 +1802,96 @@ CampusScope:
 - **API residual:** `PATCH /api/v1/.../students/{id}` keeps its contract
   (no version token, so last write wins), with the same lock, authority
   re-read and precise audit.
+
+## Student documents (SIS.EXP-3, 2026-10-30, OD-SIS-1)
+
+A Student's record documents are attachments to the Student record, staff
+only. They are not a file manager, a School-wide drive, a certificate
+generator, a contract engine or a Guardian or Student portal feature.
+
+**Ownership.**
+- Students owns `student_documents`: the category, title, document date and
+  archive.
+- Documents owns the bytes, the content checks, the storage key, the secure
+  read and the file's own status (`docs/modules/DOCUMENTS.md`, "Student
+  owner activation"; ADR 0012 amendment).
+- One writer: `App\Domain\Students\Application\Documents\StudentDocumentService`.
+- One reader: `StudentDocumentReader`.
+
+**Catalogue** (`StudentDocumentCategory`, code-owned, mirrored by a DB CHECK):
+
+| Category | Label | Purpose |
+|---|---|---|
+| `enrollment_support` | Enrollment paperwork | an application or admission form handed in at joining |
+| `prior_school_record` | Previous school record | a leaving or transfer certificate or a report from a previous school (reference SR-21) |
+| `consent_form` | Consent or permission form | a signed trip, activity or photo-use permission. Never a data-processing authorization (that registry is separate) |
+| `correspondence` | Family correspondence | a letter to or from the family about the Student |
+
+- **Deliberately absent:**
+  - government identity documents (Aadhaar, PAN, passport, immigration);
+  - caste, religion and disability certificates;
+  - medical and immunisation records;
+  - photographs and biometrics;
+  - this School's own marks, report cards and results (legally gated);
+  - generated certificates (OD-SIS-2);
+  - contracts;
+  - an `other` category.
+- Labels are display text: every category has the same tier and authority.
+  Schools cannot add a type.
+
+**Authority.** Every read and write needs, independently:
+- whole-School `students.view`, or the Student is NOT FOUND;
+- `students.documents.view` (list, download) or `students.documents.manage`
+  (upload, edit, archive). These are held by `school_admin` and `principal`
+  only, are whole-School, and are never Campus-adopted.
+
+Refused:
+- a Campus-scoped grant (403 at the route floor);
+- Teachers;
+- `students.view` / `students.manage` alone;
+- Guardians, including the Student's own Guardians;
+- platform and Network actors.
+
+**Assurance.**
+- The files are `highly_sensitive`.
+- The list and downloads need current MFA (`mfa-page`).
+- Upload, edit and archive each re-verify a fresh code after the capability
+  floor (`FreshMfaRequirement`; the HR Highly Sensitive document precedent,
+  SR.4).
+
+**Routes** (staff web only; no API route):
+- `GET /app/students/{student}/documents`
+- `POST` (upload)
+- `PUT …/{document}` (title, category and date; versioned)
+- `POST …/{document}/archive`
+- `GET …/{document}/download` (always `attachment`, `nosniff`, re-authorized
+  each time)
+
+There is no DELETE route.
+
+**Lifecycle.**
+- **Upload:** a server-issued form key, unique per School, bound to a
+  content fingerprint. A retry of the same content replays; a reused key with
+  another file or title (for example after Back) is refused, never silently
+  dropped.
+- **Edit:** title, category and date only, with a version (stale form = 409).
+- **Archive:** a closed reason (`uploaded_in_error`, `superseded`,
+  `no_longer_required`), final, and the file stays readable.
+- **Replacement:** a new upload plus archiving the old one as `superseded`.
+  There is no versioning.
+- **Not in v1:** expiry and verification. No approved category needs expiry,
+  and the Documents domain has no verification workflow.
+- **Retention:**
+  - Withdrawal or completion never removes documents.
+  - They go only with the Student core record (E21.2D, cascade).
+  - Uploader and archiver are retained user references.
+
+**Student 360.** The Documents card shows active and archived counts per
+category only, never a title or file. The profile itself carries no MFA
+step-up; the list page does.
+
+**Audit.**
+- `student_document.uploaded` / `.updated` (changed field names) /
+  `.archived` (closed reason).
+- Plus Documents' own `document.*` events.
+- Ids and codes only: never a title, file name or content.

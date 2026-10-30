@@ -278,6 +278,28 @@ counts 6.
 Not reclassified: certificates, documents, import, groups and the
 strength/analytics families.
 
+## 5.3 After SIS.EXP-3 (2026-10-30)
+
+| SR | Built by SIS.EXP-3 | New class |
+|---|---|---|
+| SR-21 | Per-Student record documents: upload (PDF/JPEG/PNG), list, filter, attachment download, metadata edit and final archive, under a closed four-category catalogue (enrollment paperwork, previous-school record, consent form, family correspondence) and a Student 360 count card. Staff only, Highly Sensitive | **`PARTIAL`** (was OWNER_DECISION_REQUIRED). Still open: the reference's per-class checklist grid of required certificates; immunisation (health) and photograph categories stay legally gated; the birth certificate is not a named category |
+| SR-14 | — (applicant documents stay out: no Admissions owner arm) | unchanged (`DOMAIN_FUTURE`) |
+| SR-41 | — (no generated certificate) | unchanged (`OWNER_DECISION_REQUIRED`, OD-SIS-2) |
+
+Recomputed with the §5 formula. EDA stays 9 scored families; PARTIAL now
+counts 7. Moving SR-21 into the v1 denominator LOWERS the v1 percentages,
+because a PARTIAL family enters the denominator but counts only half.
+
+| Measure | After SIS.EXP-2 | After SIS.EXP-3 |
+|---|---|---|
+| Overall weighted / strict | 32.4 % / 24.3 % | **33.8 % / 24.3 %** (12.5 / 37, 9 / 37) |
+| v1 weighted / strict | 80.0 % / 60.0 % | **78.1 % / 56.3 %** (12.5 / 16, 9 / 16) |
+| Screen-weighted, overall | 20.5 % / 11.4 % | 21.1 % / 11.4 % (63 / 298, 34 / 298) |
+| Screen-weighted, v1 | 69.3 % / 38.6 % | 68.5 % / 37.0 % (63 / 92, 34 / 92) |
+
+Not reclassified: certificates (SR-41), contracts, statutory documents,
+bulk import (SR-06), groups and the strength/analytics families.
+
 ## 6. Re-use
 
 - SIS.EXP checkpoints cite `SR-nn` ids in their records and, where a

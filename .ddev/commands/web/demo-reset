@@ -131,6 +131,33 @@ foreach (["default", "cache"] as $connection) {
 }
 '
 
+# SIS.EXP-3: the schema was just dropped, so every object in the managed
+# local keyspaces (`schools/{id}/documents`, `schools/{id}/communications`)
+# is unreferenced. Remove them so a repeated reset never accumulates orphan
+# files. Local disks only -- a non-local disk is never touched here.
+php -r '
+require "vendor/autoload.php";
+$app = require "bootstrap/app.php";
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+$removed = 0;
+foreach (array_unique([config("documents.disk"), config("communications.attachments.disk")]) as $disk) {
+    if (config("filesystems.disks.{$disk}.driver") !== "local") {
+        echo "demo-reset: note -- disk {$disk} is not local; leaving it untouched\n";
+        continue;
+    }
+    $fs = Illuminate\Support\Facades\Storage::disk($disk);
+    foreach ($fs->directories("schools") as $school) {
+        foreach (["documents", "communications"] as $keyspace) {
+            if ($fs->directoryExists("{$school}/{$keyspace}")) {
+                $removed += count($fs->allFiles("{$school}/{$keyspace}"));
+                $fs->deleteDirectory("{$school}/{$keyspace}");
+            }
+        }
+    }
+}
+echo "demo-reset: removed {$removed} unreferenced stored object(s) from the local document/attachment keyspaces\n";
+'
+
 # Empty DDEV's local Mailpit so only this run's invitation e-mails (with
 # links valid for THIS dataset) are shown.
 curl -fsS -o /dev/null -X DELETE http://127.0.0.1:8025/api/v1/messages \

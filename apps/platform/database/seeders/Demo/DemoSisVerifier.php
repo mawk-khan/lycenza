@@ -3,6 +3,7 @@
 namespace Database\Seeders\Demo;
 
 use App\Domain\Guardians\Application\StudentSiblingReader;
+use App\Domain\Students\Application\Documents\StudentDocumentCategory;
 use App\Domain\Students\Application\Movements\StudentMovementRegister;
 use App\Domain\Students\Application\StudentAccess;
 use App\Domain\Students\Infrastructure\Student;
@@ -11,6 +12,7 @@ use App\Models\User;
 use App\Support\Authorization\Campus\CampusScopeResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * SIS.EXP-1: proves the canonical SIS demonstration after every build --
@@ -75,6 +77,19 @@ final class DemoSisVerifier
             $check(! DB::table('student_guardian_relationships as r')->join('students as st', 'st.id', '=', 'r.student_id')->join('guardians as g', 'g.id', '=', 'r.guardian_id')
                 ->whereColumn('st.school_id', '!=', 'g.school_id')->exists(), 'a Student-Guardian link crosses Schools');
 
+            // SIS.EXP-3: the fictional record documents -- approved categories only,
+            // each record on its own Student and School, every file present.
+            $docs = fn (Student $s, bool $active) => DB::table('student_documents')->where('student_id', $s->id)
+                ->when($active, fn ($q) => $q->whereNull('archived_at'), fn ($q) => $q->whereNotNull('archived_at'))->orderBy('category')->pluck('category')->all();
+            $check($docs($aarav, true) === ['consent_form', 'enrollment_support', 'prior_school_record'], 'Aarav Menon does not have his three active documents');
+            $check($docs($aarav, false) === ['enrollment_support'], 'Aarav Menon does not have one archived (superseded) document');
+            $check($docs($diya, true) === ['correspondence'], 'Diya Menon does not have her one document');
+            $check(DB::table('student_documents')->whereNotIn('category', StudentDocumentCategory::values())->doesntExist(), 'a Student document has an unapproved category');
+            $check(! DB::table('student_documents as sd')->join('documents as d', 'd.id', '=', 'sd.document_id')->join('students as st', 'st.id', '=', 'sd.student_id')
+                ->where(fn ($q) => $q->whereColumn('d.school_id', '!=', 'sd.school_id')->orWhereColumn('st.school_id', '!=', 'sd.school_id')->orWhereColumn('d.student_id', '!=', 'sd.student_id'))->exists(), 'a Student document crosses a Student or School');
+            $files = DB::table('student_documents as sd')->join('documents as d', 'd.id', '=', 'sd.document_id')->get(['d.storage_disk', 'd.storage_path', 'd.classification_tier']);
+            $check($files->count() === 5 && $files->every(fn ($f) => $f->classification_tier === 'highly_sensitive' && Storage::disk($f->storage_disk)->exists($f->storage_path)), 'a Gachibowli Student document file is missing or not Highly Sensitive');
+
             // The Early Years Principal reaches exactly the Early Years Students.
             $principal = User::query()->where('email', 'gachibowli.ey.principal@example.test')->first();
             if ($principal === null) {
@@ -99,6 +114,7 @@ final class DemoSisVerifier
             'gachibowliGuardians' => DB::table('guardians')->where('school_id', $school->id)->count(),
             'gachibowliActivePlacements' => DB::table('student_enrollments')->where('school_id', $school->id)->where('status', 'active')->count(),
             'gachibowliMovements' => app(StudentMovementRegister::class)->page($school, [], true)->total(),
+            'gachibowliStudentDocuments' => DB::table('student_documents')->where('school_id', $school->id)->count(),
         ]);
     }
 }

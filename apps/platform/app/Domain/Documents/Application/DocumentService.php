@@ -21,6 +21,7 @@ use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Observability\StorageMetrics;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Tenancy\TenantStoragePath;
+use Closure;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -82,6 +83,20 @@ use Throwable;
  * to LearningContent -- a single fixed `internal` tier, no two-tier
  * split. `submission` is deliberately NOT activated: it remains
  * blocked on ADR 0039 §4's Submission legal-review gate (Phase 0I.4).
+ *
+ * SIS.EXP-3 (OD-SIS-1, owner-approved 2026-10-30) activates the Student
+ * owner type through its OWN narrow entry points -- createForStudent() and
+ * archiveForStudent() -- never through the generic create()/archive(),
+ * which keep refusing `student` (so no generic Documents route, and no API
+ * client, can reach a Student file). The Students domain decides Student
+ * visibility first; these methods still decide document authority
+ * themselves (`students.documents.manage`, whole School) and fix the one
+ * tier: `highly_sensitive` (children's data, DATA-CLASSIFICATION.md). The
+ * Student's existence in the School is guaranteed structurally by the
+ * `documents` composite key (rule 70) -- Documents never reads a Student
+ * model (no Documents -> Students dependency). The caller's `$within`
+ * runs inside the same transaction as the Document row, so its own record
+ * and the bytes share this class's compensation.
  */
 class DocumentService
 {
@@ -102,6 +117,21 @@ class DocumentService
      */
     private const ASSIGNMENT_CLASSIFICATION_TIER = 'internal';
 
+    /** The ONE tier of a Student-owned Document (SIS.EXP-3). */
+    public const STUDENT_CLASSIFICATION_TIER = 'highly_sensitive';
+
+    /** Whole-School Student-document authority (SIS.EXP-3, never Campus-adopted). */
+    public const STUDENT_DOCUMENTS_VIEW = 'students.documents.view';
+
+    public const STUDENT_DOCUMENTS_MANAGE = 'students.documents.manage';
+
+    /**
+     * The Student document types: a narrower subset of `allowed_mime_types`.
+     * There is no malware scanning, so only the formats without macros or
+     * active content are accepted (never Office, never SVG).
+     */
+    public const STUDENT_ALLOWED_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
@@ -114,75 +144,145 @@ class DocumentService
             $ownerColumn = $this->resolveAndAuthorizeOwner($school, $data->owner, $data->classificationTier, $actor);
 
             $this->assertValidClassification($data->classificationTier);
-            [$mimeType, $extension] = $this->assertAllowedType($data->file);
-            $this->assertWithinSizeLimit($data->file);
 
-            $disk = (string) config('documents.disk');
-            $storageKey = (string) new UuidV7;
-            $path = TenantStoragePath::for($school, "documents/{$data->owner->type}/{$data->owner->id}/{$storageKey}.{$extension}");
-
-            $stream = null;
-
-            try {
-                $stream = fopen($data->file->getRealPath(), 'r');
-                $stored = $stream !== false && Storage::disk($disk)->put($path, $stream);
-            } catch (Throwable) {
-                $stored = false;
-            } finally {
-                if (is_resource($stream)) {
-                    fclose($stream);
-                }
-            }
-
-            if ($stored === false) {
-                StorageMetrics::failed('write');
-
-                throw new DocumentStorageException;
-            }
-
-            try {
-                return DB::transaction(function () use ($school, $data, $actor, $ownerColumn, $mimeType, $disk, $path) {
-                    // TCH.5C: an LMS parent's write authority is held for
-                    // this transaction (the owned teacher path locks its
-                    // identity and TeachingAssignments here). A refusal
-                    // rolls back and the compensation below removes the bytes.
-                    $this->holdLmsParent($school, $data->owner->type, $data->owner->id, $actor, new DocumentOwnerNotFoundException($data->owner->type, $data->owner->id));
-
-                    $document = Document::query()->create(array_merge([
-                        'school_id' => $school->id,
-                        'classification_tier' => $data->classificationTier,
-                        'storage_disk' => $disk,
-                        'storage_path' => $path,
-                        'original_filename' => $this->sanitizeDisplayName($data->file->getClientOriginalName()),
-                        'mime_type' => $mimeType,
-                        'size_bytes' => $data->file->getSize(),
-                        'uploaded_by_user_id' => $actor->id,
-                        'uploaded_at' => now(),
-                        'status' => 'active',
-                    ], $ownerColumn));
-
-                    $this->audit->school($school, 'document.created', actor: $actor, subject: $document, metadata: [
-                        'documentId' => $document->id,
-                        'ownerType' => $data->owner->type,
-                        'classificationTier' => $document->classification_tier,
-                        'sizeBytes' => $document->size_bytes,
-                        'mimeType' => $document->mime_type,
-                    ]);
-
-                    return $document;
-                });
-            } catch (Throwable $e) {
-                // Compensation (rule 24/56): the metadata/audit
-                // transaction failed, so the object we already wrote
-                // must not silently remain as an orphan no Document row
-                // references.
-                if (! Storage::disk($disk)->delete($path)) {
-                    StorageMetrics::failed('delete');
-                }
-
-                throw $e;
-            }
+            return $this->store($school, $data, $actor, $ownerColumn, function () use ($school, $data, $actor): void {
+                // TCH.5C: an LMS parent's write authority is held for
+                // this transaction (the owned teacher path locks its
+                // identity and TeachingAssignments here). A refusal
+                // rolls back and the compensation removes the bytes.
+                $this->holdLmsParent($school, $data->owner->type, $data->owner->id, $actor, new DocumentOwnerNotFoundException($data->owner->type, $data->owner->id));
+            }, fn (Document $document) => null);
         });
+    }
+
+    /**
+     * SIS.EXP-3: stores a Student-owned Document. The Students domain has
+     * already resolved the Student under its own whole-School visibility;
+     * `$within` (the Student record row) runs in this Document's
+     * transaction.
+     *
+     * @param  Closure(Document): void  $within
+     */
+    public function createForStudent(School $school, string $studentId, UploadedFile $file, User $actor, Closure $within): Document
+    {
+        return $this->context->withSchool($school, function () use ($school, $studentId, $file, $actor, $within) {
+            $this->authorizeCapabilityFor($actor, self::STUDENT_DOCUMENTS_MANAGE, $school);
+            $data = new CreateDocumentData(DocumentOwner::student($studentId), self::STUDENT_CLASSIFICATION_TIER, $file);
+
+            return $this->store($school, $data, $actor, ['student_id' => $studentId], null, $within, self::STUDENT_ALLOWED_MIME_TYPES);
+        });
+    }
+
+    /**
+     * SIS.EXP-3: archives a Student-owned Document (status only, like
+     * archive()); `$within` (the Student record's archive) runs in the same
+     * transaction. The Document is re-read under the School and the named
+     * Student, so a forged id for another Student or School is NOT FOUND.
+     *
+     * @param  Closure(Document): void  $within
+     */
+    public function archiveForStudent(School $school, string $studentId, string $documentId, User $actor, Closure $within): Document
+    {
+        return $this->context->withSchool($school, function () use ($school, $studentId, $documentId, $actor, $within) {
+            $this->authorizeCapabilityFor($actor, self::STUDENT_DOCUMENTS_MANAGE, $school);
+
+            return DB::transaction(function () use ($school, $studentId, $documentId, $actor, $within) {
+                $document = Document::query()->where('school_id', $school->id)->where('student_id', $studentId)
+                    ->where('status', 'active')->lockForUpdate()->find($documentId)
+                    ?? throw new DocumentNotFoundException($documentId);
+
+                $document->update(['status' => 'archived']);
+                $within($document);
+
+                $this->audit->school($school, 'document.archived', actor: $actor, subject: $document, metadata: [
+                    'documentId' => $document->id,
+                    'ownerType' => 'student',
+                    'classificationTier' => $document->classification_tier,
+                ]);
+
+                return $document;
+            });
+        });
+    }
+
+    /**
+     * Validate, write the object, then persist the row (+ `$within`) with
+     * compensation -- the one pipeline behind every owner type.
+     *
+     * @param  array<string, string>  $ownerColumn
+     * @param  Closure(Document): void  $within
+     * @param  list<string>|null  $mimeSubset  a narrower owner-specific allow-list
+     */
+    private function store(School $school, CreateDocumentData $data, User $actor, array $ownerColumn, ?Closure $before, Closure $within, ?array $mimeSubset = null): Document
+    {
+        [$mimeType, $extension] = $this->assertAllowedType($data->file, $mimeSubset);
+        $this->assertWithinSizeLimit($data->file);
+
+        $disk = (string) config('documents.disk');
+        $storageKey = (string) new UuidV7;
+        $path = TenantStoragePath::for($school, "documents/{$data->owner->type}/{$data->owner->id}/{$storageKey}.{$extension}");
+
+        $stream = null;
+
+        try {
+            $stream = fopen($data->file->getRealPath(), 'r');
+            $stored = $stream !== false && Storage::disk($disk)->put($path, $stream);
+        } catch (Throwable) {
+            $stored = false;
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }
+
+        if ($stored === false) {
+            StorageMetrics::failed('write');
+
+            throw new DocumentStorageException;
+        }
+
+        try {
+            return DB::transaction(function () use ($school, $data, $actor, $ownerColumn, $mimeType, $disk, $path, $before, $within) {
+                if ($before !== null) {
+                    $before();
+                }
+
+                $document = Document::query()->create(array_merge([
+                    'school_id' => $school->id,
+                    'classification_tier' => $data->classificationTier,
+                    'storage_disk' => $disk,
+                    'storage_path' => $path,
+                    'original_filename' => $this->sanitizeDisplayName($data->file->getClientOriginalName()),
+                    'mime_type' => $mimeType,
+                    'size_bytes' => $data->file->getSize(),
+                    'uploaded_by_user_id' => $actor->id,
+                    'uploaded_at' => now(),
+                    'status' => 'active',
+                ], $ownerColumn));
+
+                $this->audit->school($school, 'document.created', actor: $actor, subject: $document, metadata: [
+                    'documentId' => $document->id,
+                    'ownerType' => $data->owner->type,
+                    'classificationTier' => $document->classification_tier,
+                    'sizeBytes' => $document->size_bytes,
+                    'mimeType' => $document->mime_type,
+                ]);
+
+                $within($document);
+
+                return $document;
+            });
+        } catch (Throwable $e) {
+            // Compensation (rule 24/56): the metadata/audit
+            // transaction failed, so the object we already wrote
+            // must not silently remain as an orphan no Document row
+            // references.
+            if (! Storage::disk($disk)->delete($path)) {
+                StorageMetrics::failed('delete');
+            }
+
+            throw $e;
+        }
     }
 
     /**
@@ -360,9 +460,10 @@ class DocumentService
     }
 
     /**
+     * @param  list<string>|null  $mimeSubset
      * @return array{0: string, 1: string} [sniffed mime type, matched extension]
      */
-    private function assertAllowedType(UploadedFile $file): array
+    private function assertAllowedType(UploadedFile $file, ?array $mimeSubset = null): array
     {
         // The REAL, server-inspected content type -- Symfony's
         // mime-type guesser against the file's actual bytes, never the
@@ -373,6 +474,9 @@ class DocumentService
         $declaredExtension = strtolower((string) pathinfo($file->getClientOriginalName(), PATHINFO_EXTENSION));
 
         $allowed = (array) config('documents.allowed_mime_types');
+        if ($mimeSubset !== null) {
+            $allowed = array_intersect_key($allowed, array_flip($mimeSubset));
+        }
 
         if ($mimeType === null || ! array_key_exists($mimeType, $allowed)) {
             throw new DocumentTypeNotAllowedException;
@@ -405,7 +509,9 @@ class DocumentService
     private function sanitizeDisplayName(string $rawName): string
     {
         $name = basename($rawName);
-        $name = preg_replace('/[\x00-\x1F\x7F]/', '', $name) ?? '';
+        // SIS.EXP-3 review: Unicode control and format characters too (a
+        // right-to-left override could disguise the extension on display).
+        $name = preg_replace('/[\p{Cc}\p{Cf}]/u', '', $name) ?? '';
         $name = trim($name);
 
         if ($name === '') {

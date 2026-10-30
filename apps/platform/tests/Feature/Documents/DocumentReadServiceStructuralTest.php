@@ -33,7 +33,8 @@ class DocumentReadServiceStructuralTest extends TestCase
 
         sort($publicMethodNames);
 
-        $this->assertSame(['content', 'metadata'], $publicMethodNames);
+        // SIS.EXP-3: studentContent() is the Student owner's own content path.
+        $this->assertSame(['content', 'metadata', 'studentContent'], $publicMethodNames);
     }
 
     #[Test]

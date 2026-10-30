@@ -8,6 +8,7 @@ use App\Domain\Hostel\Application\HostelStudentSummaryReader;
 use App\Domain\Library\Application\LibraryStudentSummaryReader;
 use App\Domain\Payments\Application\Collections\OutstandingFeeRow;
 use App\Domain\Payments\Application\Collections\OutstandingFeesReadService;
+use App\Domain\Students\Application\Documents\StudentDocumentReader;
 use App\Domain\Students\Application\StudentAccess;
 use App\Domain\Students\Application\SubjectOfferingRosterReadService;
 use App\Domain\Students\Infrastructure\Student;
@@ -71,6 +72,7 @@ final class StudentProfileSections
         private readonly TransportStudentSummaryReader $transport,
         private readonly HostelStudentSummaryReader $hostel,
         private readonly LibraryStudentSummaryReader $library,
+        private readonly StudentDocumentReader $documents,
     ) {}
 
     /**
@@ -116,6 +118,12 @@ final class StudentProfileSections
                 ...$this->library->openLoansFor($library, $student->id),
                 'link' => '/app/library/circulation?'.http_build_query(['student' => $student->student_number]),
             ];
+        }
+
+        // SIS.EXP-3: counts per category only; the list (titles, files) is
+        // its own page behind current MFA.
+        if (($documents = $this->documents->summary($school, $actor, $student)) !== null) {
+            $sections['documents'] = $documents;
         }
 
         return $sections;

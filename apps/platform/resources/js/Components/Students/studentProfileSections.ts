@@ -57,4 +57,12 @@ export interface StudentProfileSections {
         residencies: { hostelName: string; roomCode: string; bedCode: string; startsOn: string }[];
     };
     library?: { scope: SectionScope; activeLoans: number; overdueLoans: number; link: string };
+    // SIS.EXP-3: counts per category only (titles and files are on the
+    // Documents page, behind current MFA).
+    documents?: {
+        active: number;
+        archived: number;
+        categories: { value: string; label: string; count: number }[];
+        link: string;
+    };
 }

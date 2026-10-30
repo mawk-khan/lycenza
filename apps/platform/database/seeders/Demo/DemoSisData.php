@@ -11,6 +11,8 @@ use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\AcademicStructure\Infrastructure\Subject;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Attendance\Application\AttendanceSubmissionService;
+use App\Domain\Documents\Application\DocumentService;
+use App\Domain\Documents\Infrastructure\Document;
 use App\Domain\Fees\Application\AssessChargeData;
 use App\Domain\Fees\Application\ChargeCampusAttribution;
 use App\Domain\Fees\Application\ChargeService;
@@ -56,8 +58,10 @@ use App\Models\User;
 use App\Support\Money\Money;
 use App\Support\Tenancy\SchoolTimezone;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
@@ -81,6 +85,11 @@ use Illuminate\Support\Str;
  * - A Campus-scoped Principal for the Early Years Campus only (an existing
  *   role template on an existing Campus-grant pattern): the Campus
  *   directory and overview, never the whole-School profile.
+ *
+ * - SIS.EXP-3: fictional record documents (synthetic PDFs that say DEMO /
+ *   FICTIONAL): Aarav has three active and one archived, Diya one of another
+ *   category, and one Lycenza Demo School Student one (the cross-School
+ *   negative).
  *
  * Built only through DemoDataBuilder's guard (local DDEV or the verified test
  * database). Verified after every reset by DemoSisVerifier.
@@ -129,8 +138,10 @@ final class DemoSisData
         $this->transportAndLibrary();
         $this->attendance();
         $this->campusPrincipal();
+        // SIS.EXP-3: fictional Student record documents.
+        $this->documents();
 
-        $this->b->note('SIS demo (SIS.EXP-1/2): Northstar Gachibowli -- 17 Students on both Campuses; the Menon siblings (Aarav, Grade 5 · A, Main; Diya, UKG · A, Early Years) share a Guardian; Aarav shows every Student 360 card; Student movements show a 2025-26 promotion, a repeat, a completed exit and a Campus transfer then Section change -- see docs/demo/SIS-EXP-1-WALKTHROUGH.md.');
+        $this->b->note('SIS demo (SIS.EXP-1/2/3): Northstar Gachibowli -- 17 Students on both Campuses; the Menon siblings (Aarav, Grade 5 · A, Main; Diya, UKG · A, Early Years) share a Guardian; Aarav shows every Student 360 card and three fictional record documents (enroll MFA first to open them); Student movements show a 2025-26 promotion, a repeat, a completed exit and a Campus transfer then Section change -- see docs/demo/SIS-EXP-1-WALKTHROUGH.md.');
     }
 
     private function academicStructure(): void
@@ -292,6 +303,91 @@ final class DemoSisData
         $placements->enroll($kiara, $this->sections['G3-E'], '1', '2026-06-01', $this->admin);
         $placements->transferPlacement($current(), $this->sections['G3-B'], '1', '2026-07-06', $this->admin);
         $placements->transferPlacement($current(), $this->sections['G3-A'], '4', '2026-08-03', $this->admin);
+    }
+
+    /**
+     * SIS.EXP-3: fictional Student record documents. The bytes go through
+     * Documents' real Student pipeline (content sniffing, size limit,
+     * generated storage key, Highly Sensitive tier, its own audit) as the
+     * School's own administrator; the record row is written in that same
+     * transaction, directly and database-validated -- the guarded demo never
+     * fabricates a fresh-MFA proof (the product's upload requires one). No
+     * statutory, medical or identity category exists to seed.
+     */
+    private function documents(): void
+    {
+        // A test build (the verified test database) writes its objects to a
+        // fresh fake disk, never the developer's real storage; a DDEV reset
+        // writes the real local disk, which demo-reset empties first.
+        if (app()->environment('testing')) {
+            Storage::fake((string) config('documents.disk'));
+        }
+
+        $store = function (School $school, User $actor, Student $student, string $category, string $title, ?string $date, ?string $archiveReason = null): void {
+            $path = tempnam(sys_get_temp_dir(), 'demo-doc');
+            file_put_contents($path, self::fictionalPdf($school->name, $title));
+            $file = new UploadedFile($path, Str::slug($title).'.pdf', 'application/pdf', null, true);
+
+            app(DocumentService::class)->createForStudent($school, $student->id, $file, $actor, function (Document $document) use ($school, $actor, $student, $category, $title, $date, $archiveReason): void {
+                DB::table('student_documents')->insert([
+                    'id' => (string) Str::uuid7(), 'school_id' => $school->id, 'student_id' => $student->id, 'document_id' => $document->id,
+                    'category' => $category, 'title' => $title, 'document_date' => $date, 'form_key' => (string) Str::uuid7(),
+                    'upload_fingerprint' => hash('sha256', $document->id),
+                    'uploaded_by_user_id' => $actor->id,
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
+                if ($archiveReason !== null) {
+                    $document->update(['status' => 'archived']);
+                    DB::table('student_documents')->where('document_id', $document->id)->update([
+                        'archived_at' => now(), 'archived_by_user_id' => $actor->id, 'archive_reason' => $archiveReason, 'version' => 2,
+                    ]);
+                }
+            });
+            @unlink($path);
+        };
+
+        $aarav = $this->students['aarav'];
+        $store($this->school, $this->admin, $aarav, 'enrollment_support', 'Admission form (first copy)', '2021-05-20', 'superseded');
+        $store($this->school, $this->admin, $aarav, 'enrollment_support', 'Admission form', '2021-05-24');
+        $store($this->school, $this->admin, $aarav, 'prior_school_record', 'Transfer certificate from previous school', '2021-04-30');
+        $store($this->school, $this->admin, $aarav, 'consent_form', 'Field trip consent 2026-27', '2026-07-10');
+        $store($this->school, $this->admin, $this->students['diya'], 'correspondence', 'Letter about Early Years settling-in', '2026-06-20');
+
+        // The cross-School negative: another School's Student document, never reachable from Gachibowli.
+        $other = $this->b->school;
+        $otherAdmin = User::query()->where('email', 'school.admin@example.test')->firstOrFail();
+        $otherStudent = $this->b->inSchool(fn () => Student::query()->where('school_id', $other->id)->where('student_number', 'LDS-0001')->firstOrFail(), $other);
+        $store($other, $otherAdmin, $otherStudent, 'prior_school_record', 'Previous school report', '2025-03-31');
+    }
+
+    /** A small, valid, synthetic PDF that says DEMO / FICTIONAL (no signature, no identifier). */
+    public static function fictionalPdf(string $schoolName, string $title): string
+    {
+        $text = fn (string $t) => str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], iconv('UTF-8', 'ASCII//TRANSLIT', $t) ?: $t);
+        $stream = "BT /F1 18 Tf 72 740 Td (DEMO / FICTIONAL) Tj ET\n"
+            .'BT /F1 12 Tf 72 712 Td ('.$text($title).") Tj ET\n"
+            .'BT /F1 10 Tf 72 692 Td ('.$text($schoolName).") Tj ET\n"
+            ."BT /F1 10 Tf 72 672 Td (Synthetic Lycenza demo record. Not a real document.) Tj ET\n";
+        $objects = [
+            '<< /Type /Catalog /Pages 2 0 R >>',
+            '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+            '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+            '<< /Length '.strlen($stream)." >>\nstream\n".$stream.'endstream',
+            '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+        ];
+        $pdf = "%PDF-1.4\n";
+        $offsets = [];
+        foreach ($objects as $i => $object) {
+            $offsets[] = strlen($pdf);
+            $pdf .= ($i + 1)." 0 obj\n{$object}\nendobj\n";
+        }
+        $xref = strlen($pdf);
+        $pdf .= 'xref'."\n0 ".(count($objects) + 1)."\n0000000000 65535 f \n";
+        foreach ($offsets as $offset) {
+            $pdf .= sprintf("%010d 00000 n \n", $offset);
+        }
+
+        return $pdf.'trailer << /Size '.(count($objects) + 1)." /Root 1 0 R >>\nstartxref\n{$xref}\n%%EOF\n";
     }
 
     private function guardianFor(Student $student, string $first, string $last, int $n): void

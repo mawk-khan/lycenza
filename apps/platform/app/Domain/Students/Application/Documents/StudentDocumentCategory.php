@@ -1,0 +1,58 @@
+<?php
+
+namespace App\Domain\Students\Application\Documents;
+
+/**
+ * SIS.EXP-3 (OD-SIS-1): the closed, code-owned Student document catalogue.
+ * Mirrored by `student_documents_category_check`; changing it is a reviewed
+ * release (both together), never School configuration. A label is display
+ * text only: every category has the same classification (Documents'
+ * `highly_sensitive`) and the same authority.
+ *
+ * Deliberately absent, because their core purpose is legally gated or owned
+ * elsewhere (docs/modules/STUDENT-GUARDIAN-IDENTITY.md, "Student documents"):
+ * government identity documents (Aadhaar, PAN, passport, immigration),
+ * caste, religion or disability certificates, medical and immunisation
+ * records, photographs and biometrics, this School's own marks, report cards
+ * and results (legally gated), generated certificates (OD-SIS-2) and
+ * contracts. There is no `other` category.
+ */
+enum StudentDocumentCategory: string
+{
+    case ENROLLMENT_SUPPORT = 'enrollment_support';
+    case PRIOR_SCHOOL_RECORD = 'prior_school_record';
+    case CONSENT_FORM = 'consent_form';
+    case CORRESPONDENCE = 'correspondence';
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::ENROLLMENT_SUPPORT => 'Enrollment paperwork',
+            self::PRIOR_SCHOOL_RECORD => 'Previous school record',
+            self::CONSENT_FORM => 'Consent or permission form',
+            self::CORRESPONDENCE => 'Family correspondence',
+        };
+    }
+
+    public function description(): string
+    {
+        return match ($this) {
+            self::ENROLLMENT_SUPPORT => 'A completed application or admission form handed in when the Student joined.',
+            self::PRIOR_SCHOOL_RECORD => 'A leaving or transfer certificate or a report from a previous school.',
+            self::CONSENT_FORM => 'A signed permission for a trip, activity or photograph use. It is not a data-processing authorization (those are recorded separately).',
+            self::CORRESPONDENCE => 'A letter to or from the family about this Student.',
+        };
+    }
+
+    /** @return list<array{value: string, label: string, description: string}> */
+    public static function options(): array
+    {
+        return array_map(fn (self $c): array => ['value' => $c->value, 'label' => $c->label(), 'description' => $c->description()], self::cases());
+    }
+
+    /** @return list<string> */
+    public static function values(): array
+    {
+        return array_map(fn (self $c): string => $c->value, self::cases());
+    }
+}

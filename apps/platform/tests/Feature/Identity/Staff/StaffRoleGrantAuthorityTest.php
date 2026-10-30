@@ -270,7 +270,7 @@ class StaffRoleGrantAuthorityTest extends TestCase
         sort($code);
 
         $this->assertSame($database, $code, 'Every school capability is classified, and no unknown key is.');
-        $this->assertCount(182, $code, '174 classified in SR.0 + the three SR.2 grant rights + the three ORG.8C payment correction keys + ORG.9D-3R1 communications.events.view + ORG.9D-1R1 communications.inbox.view.');
+        $this->assertCount(184, $code, '174 classified in SR.0 + the three SR.2 grant rights + the three ORG.8C payment correction keys + ORG.9D-3R1 communications.events.view + ORG.9D-1R1 communications.inbox.view + SIS.EXP-3 students.documents.view/.manage.');
 
         foreach (CapabilityClasses::CLASSES as $capability => $classes) {
             $this->assertNotEmpty($classes, $capability);

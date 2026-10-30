@@ -2093,3 +2093,56 @@ A1): they are deleted only inside the LMS resource purge
 (owners `learning_content`, `assignment`), bytes after commit, a failed byte
 delete left to the orphan run. A retained parent keeps its Documents and
 bytes; no Document carries a period of its own.
+
+## Student owner activation (SIS.EXP-3, 2026-10-30)
+
+ADR 0012 amendment (OD-SIS-1). The `student` arm is now active, but only
+through its own entry points. The generic paths still refuse it.
+
+| Operation | Entry point | Authority (decided here) | Audit |
+|---|---|---|---|
+| Upload | `DocumentService::createForStudent($school, $studentId, $file, $actor, $within)` | `students.documents.manage` | `document.created` |
+| Archive | `DocumentService::archiveForStudent($school, $studentId, $documentId, $actor, $within)` | `students.documents.manage` | `document.archived` |
+| List facts | `DocumentListingService::studentFacts($school, $studentId, $ids, $actor)` | `students.documents.view` | one `document.sensitive_list_viewed` per non-empty call |
+| Download | `DocumentReadService::studentContent($school, $studentId, $documentId, $actor)` | `students.documents.view` | `document.sensitive_content_accessed` |
+
+- **Tier and types:**
+  - The tier is fixed at `highly_sensitive`.
+  - Types are PDF, JPEG and PNG (`STUDENT_ALLOWED_MIME_TYPES`), sniffed from
+    the bytes and checked against the extension, under the canonical size
+    limit (`DOCUMENTS_MAX_FILE_SIZE_MB`).
+  - There is no malware scanning (unchanged); the narrow type list is the
+    mitigation.
+- **Storage path:**
+  - `TenantStoragePath` names the object
+    `schools/{school}/documents/student/{student}/{uuidv7}.{ext}`.
+  - It contains no client file name.
+  - It lives on the private Documents disk and is never a URL.
+- **Same Student:** every read and archive re-reads the Document under the
+  School AND the named Student. Another Student's or School's id is the same
+  NOT FOUND as an unknown one.
+- **Atomicity:**
+  - `$within` runs in the Document's transaction, after its row and audit.
+  - A failure there rolls the row back, and the compensation deletes the
+    bytes, as for every owner type.
+  - The internal pipeline (`store()`) is shared by every owner type.
+- **Generic refusal:**
+  - `create()`, `archive()`, `metadata()`, `content()`, `list()` and
+    `listSensitive()` still throw `DocumentOwnerTypeNotSupportedException`
+    for `student`.
+  - `StudentDocumentTest` proves this, and that no API route exists for
+    Student documents.
+- **Callers:** these four methods decide the document capability, not
+  Student visibility. `StudentDocumentArchitectureTest` keeps their only
+  callers on the Students side (plus the guarded demo seeder).
+- **Not sanitized:** an accepted file is stored byte-for-byte. JPEG EXIF
+  (such as phone GPS) and any PDF script are kept, and there is no malware
+  scan. The narrow type list, attachment-only downloads and `nosniff` are the
+  mitigations.
+- **Display name:** C0/C1 control and Unicode format characters (such as a
+  right-to-left override) are removed from every Document's display name.
+- **Delete:** the runtime role cannot DELETE `student_documents`, but keeps
+  its existing DELETE on `documents` (the purge seam). No code path deletes a
+  Student Document except the Student core retention purge, and the record
+  cascades with it.
+- **Guardian:** still deferred.
