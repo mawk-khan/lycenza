@@ -19,8 +19,9 @@ use Dompdf\Options;
  *   fully but cannot shape other scripts, so a snapshot with any other script
  *   is refused (StudentCertificateUnsupportedScriptException) rather than
  *   printed wrongly.
- * - The wording is GENERIC (no statutory, board or government claim); a
- *   non-production build adds a visible DEMO / GENERIC banner.
+ * - The wording is GENERIC (no statutory, board or government claim); while
+ *   issuing is open (development only, StudentCertificateAvailability) every
+ *   PDF carries a visible DEMO / GENERIC banner.
  */
 final class StudentCertificateRenderer
 {
@@ -61,7 +62,8 @@ final class StudentCertificateRenderer
             'issuedOn' => $issuedOn,
             's' => $snapshot,
             'reason' => StudentCertificateEligibility::reasonLabel((string) $snapshot['exit_reason']),
-            'demo' => ! app()->environment('production'),
+            // The DEMO / GENERIC banner wherever issuing is open (development only).
+            'demo' => StudentCertificateAvailability::isAvailable(),
         ])->render();
 
         $pdf = new Dompdf($options);

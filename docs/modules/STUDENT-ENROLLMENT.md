@@ -3279,8 +3279,8 @@ never reach an issued certificate.
 - **Development wording is generic.**
   - The PDF says it is "not a government-, board- or statute-prescribed
     form" and carries no financial information.
-  - A non-production build adds "DEMO / GENERIC CERTIFICATE TEMPLATE — NOT A
-    STATUTORY DOCUMENT".
+  - While issuing is open (development only), every PDF carries "DEMO /
+    GENERIC CERTIFICATE TEMPLATE — NOT A STATUTORY DOCUMENT".
 - **No jurisdiction-specific template is enabled.** No statutory,
   board-prescribed or government wording exists in the repository.
 - **Production is refused in code** (`StudentCertificateAvailability`: local
