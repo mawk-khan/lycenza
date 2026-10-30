@@ -20,7 +20,8 @@ const hasAny = computed(
         props.sections.transport !== undefined ||
         props.sections.hostel !== undefined ||
         props.sections.library !== undefined ||
-        props.sections.documents !== undefined,
+        props.sections.documents !== undefined ||
+        props.sections.certificates !== undefined,
 );
 
 const ATTENDANCE_LABELS: Record<string, string> = {
@@ -243,6 +244,30 @@ function money(amount: string | null, currency: string | null): string {
                 </ul>
                 <a class="mt-2 inline-block text-sm underline" :href="sections.documents.link"
                     >Open documents</a
+                >
+            </article>
+
+            <!-- SIS.EXP-4: Leaving/Transfer certificates (safe metadata). -->
+            <article
+                v-if="sections.certificates"
+                class="rounded border border-slate-200 p-4"
+                aria-labelledby="glance-certificates"
+            >
+                <h3 id="glance-certificates" class="text-sm font-semibold">Certificates</h3>
+                <p v-if="sections.certificates.items.length === 0" class="mt-2 text-sm">
+                    None issued
+                </p>
+                <ul v-else class="mt-2 space-y-1 text-sm">
+                    <li v-for="c in sections.certificates.items" :key="c.id">
+                        {{ c.number }} · {{ c.typeLabel }} ·
+                        {{ c.status === 'issued' ? 'Issued' : 'Void' }}
+                        <span v-if="c.replacedByNumber" class="text-xs text-slate-500"
+                            >(replaced by {{ c.replacedByNumber }})</span
+                        >
+                    </li>
+                </ul>
+                <a class="mt-2 inline-block text-sm underline" :href="sections.certificates.link"
+                    >Certificates</a
                 >
             </article>
         </div>

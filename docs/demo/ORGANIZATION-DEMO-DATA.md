@@ -189,6 +189,7 @@ The owner path is `docs/demo/ORGANIZATION-OWNER-VERIFICATION.md`.
 | SIS.EXP-1 | Gachibowli: active 2026-27, 13 Students on both Campuses, the Menon siblings, Aarav's Student 360, the Early Years Principal (`SIS-EXP-1-WALKTHROUGH.md`) |
 | SIS.EXP-2 | Gachibowli: 2025-26 promotion, repeat and completed exit; a Campus transfer then Section change (22 movements) |
 | SIS.EXP-3 | Gachibowli: Aarav three active + one archived record document, Diya one; one Lycenza Demo School Student document (cross-School negative); fictional PDFs only |
+| SIS.EXP-4 | Gachibowli: Meera Iyer (transfer withdrawal) with LC-000001 (void, replaced), LC-000002 and TC-000001 (generic demo template); Arjun Mehta ineligible (exit not recorded) |
 | ORG.12C | Gachibowli and Horizon profiles; 11 Campuses with addresses, coordinates and all five services |
 | ORG.12D | Northstar: 2 Regions, 3 Zones, owned/franchise/managed/affiliate, Region-only Warangal, unclassified Mysuru |
 | ORG.12E | Network Manager and Viewers (whole, Region, Zone), shared identity; Access Center with whole-School Accountant, Campus Cashier, disabled former member, Greenfield "module not enabled" |

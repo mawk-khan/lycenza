@@ -7,6 +7,7 @@ use App\Domain\Documents\Infrastructure\Document;
 use App\Domain\Students\Application\Exceptions\StudentDocumentArchivedException;
 use App\Domain\Students\Application\Exceptions\StudentDocumentChangedException;
 use App\Domain\Students\Application\Exceptions\StudentDocumentFormReusedException;
+use App\Domain\Students\Application\Exceptions\StudentDocumentGeneratedException;
 use App\Domain\Students\Application\StudentAccess;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentDocument;
@@ -163,6 +164,9 @@ final class StudentDocumentService
             if ($current->isArchived()) {
                 throw new StudentDocumentArchivedException;
             }
+            if (! $current->category->isUploadable()) {
+                throw new StudentDocumentGeneratedException;
+            }
 
             $record = null;
             // Lock order: the Document (Documents), then this record.
@@ -233,6 +237,9 @@ final class StudentDocumentService
         if ($record->isArchived()) {
             throw new StudentDocumentArchivedException;
         }
+        if (! $record->category->isUploadable()) {
+            throw new StudentDocumentGeneratedException;
+        }
 
         return $record;
     }
@@ -260,8 +267,12 @@ final class StudentDocumentService
 
     private function category(string $value): StudentDocumentCategory
     {
-        return StudentDocumentCategory::tryFrom($value)
-            ?? throw ValidationException::withMessages(['category' => 'Choose a document category.']);
+        $category = StudentDocumentCategory::tryFrom($value);
+        if ($category === null || ! $category->isUploadable()) {
+            throw ValidationException::withMessages(['category' => 'Choose a document category.']);
+        }
+
+        return $category;
     }
 
     private function assertProof(FreshMfaProof $proof, User $actor): void

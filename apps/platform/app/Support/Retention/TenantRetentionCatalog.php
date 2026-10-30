@@ -149,7 +149,9 @@ final class TenantRetentionCatalog
             // ORG.8E (ADR 0076 §63): lifecycle evidence, removed with its Student / Enrollment (cascade).
             'student_lifecycle_events',
             // SIS.EXP-3: a Student document record, removed with its Document and Student (cascade).
-            'student_documents']],
+            'student_documents',
+            // SIS.EXP-4: issued certificates go with the Student core record (cascade), never on their own.
+            'student_certificates']],
         // RES.2 (ADR 0068 §12, §19): StudentMark and its value history. RES-L8 has no answer, so NO period is
         // adopted and nothing expires them; their Student / placement / authorization keys keep the Student core
         // record dependency_blocked until a RES retention participant exists. The one deliberate policy_unresolved.
@@ -213,6 +215,9 @@ final class TenantRetentionCatalog
             // counter -- no personal data; kept with the School so a number is
             // never re-issued.
             'student_number_sequences',
+            // SIS.EXP-4: the forward-only certificate counters, kept with the
+            // School so a certificate number is never re-issued.
+            'student_certificate_sequences',
             // ORG.12F (ADR 0080 §11): School presentation (navigation overrides,
             // branding) -- no personal data, kept with the School.
             'school_navigation_preferences', 'school_brand_profiles',

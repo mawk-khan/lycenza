@@ -29,6 +29,8 @@ class StudentProfileArchitectureTest extends TestCase
         'App\Domain\Library\Application\LibraryStudentSummaryReader',
         'App\Domain\Payments\Application\Collections\OutstandingFeeRow',
         'App\Domain\Payments\Application\Collections\OutstandingFeesReadService',
+        // SIS.EXP-4: certificate history, safe metadata (StudentCertificateReader::historyFor()).
+        'App\Domain\Students\Application\Certificates\StudentCertificateReader',
         // SIS.EXP-3: counts per category only (StudentDocumentReader::summary()).
         'App\Domain\Students\Application\Documents\StudentDocumentReader',
         'App\Domain\Students\Application\StudentAccess',

@@ -147,6 +147,7 @@ use App\Http\Controllers\App\Staff\AccessCenterController;
 use App\Http\Controllers\App\Staff\StaffAccountController;
 use App\Http\Controllers\App\StaffAttendance\StaffAttendanceAdminController;
 use App\Http\Controllers\App\StudentAccountLinkController;
+use App\Http\Controllers\App\StudentCertificateController;
 use App\Http\Controllers\App\StudentController;
 use App\Http\Controllers\App\StudentDirectoryController;
 use App\Http\Controllers\App\StudentDocumentController;
@@ -742,6 +743,18 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
             ->middleware('capability:students.documents.manage')->name('documents.archive');
         Route::get('/{student}/documents/{document}/download', [StudentDocumentController::class, 'download'])->whereUuid(['student', 'document'])
             ->middleware(['capability:students.documents.view', 'mfa-page', 'private-no-store'])->name('documents.download');
+        // SIS.EXP-4 (OD-SIS-2): Leaving/Transfer certificates. Staff web only;
+        // whole-School `students.certificates.issue` (never Campus-adopted) for
+        // every write, each with a fresh MFA code; the PDF downloads through the
+        // Student document route above.
+        Route::get('/{student}/certificates', [StudentCertificateController::class, 'index'])->whereUuid('student')
+            ->middleware(['capability:students.certificates.issue|students.documents.view', 'private-no-store'])->name('certificates.index');
+        Route::post('/{student}/certificates', [StudentCertificateController::class, 'store'])->whereUuid('student')
+            ->middleware('capability:students.certificates.issue')->name('certificates.store');
+        Route::post('/{student}/certificates/{certificate}/void', [StudentCertificateController::class, 'void'])->whereUuid(['student', 'certificate'])
+            ->middleware('capability:students.certificates.issue')->name('certificates.void');
+        Route::post('/{student}/certificates/{certificate}/reissue', [StudentCertificateController::class, 'reissue'])->whereUuid(['student', 'certificate'])
+            ->middleware('capability:students.certificates.issue')->name('certificates.reissue');
         Route::put('/{student}', [StudentController::class, 'update'])->middleware('capability:students.manage')->name('update');
         Route::post('/{student}/status', [StudentController::class, 'changeStatus'])->middleware('capability:students.manage')->name('status');
 

@@ -38,6 +38,9 @@ use App\Domain\Payments\Application\ChargeAllocationInput;
 use App\Domain\Payments\Application\ManualPaymentRecordingService;
 use App\Domain\Payments\Application\RecordManualPaymentData;
 use App\Domain\Payments\Domain\ManualPaymentMethod;
+use App\Domain\Students\Application\Certificates\StudentCertificateEligibility;
+use App\Domain\Students\Application\Certificates\StudentCertificateRenderer;
+use App\Domain\Students\Application\Certificates\StudentCertificateType;
 use App\Domain\Students\Application\EnrollmentRolloverDryRunService;
 use App\Domain\Students\Application\EnrollmentRolloverItemExecutionService;
 use App\Domain\Students\Application\EnrollmentRolloverPlanService;
@@ -86,6 +89,9 @@ use Illuminate\Support\Str;
  *   role template on an existing Campus-grant pattern): the Campus
  *   directory and overview, never the whole-School profile.
  *
+ * - SIS.EXP-4: Meera Iyer, a recorded transfer exit, with LC-000001 (voided,
+ *   replaced), its replacement LC-000002 and TC-000001; Arjun stays
+ *   ineligible (no exit recorded).
  * - SIS.EXP-3: fictional record documents (synthetic PDFs that say DEMO /
  *   FICTIONAL): Aarav has three active and one archived, Diya one of another
  *   category, and one Lycenza Demo School Student one (the cross-School
@@ -140,8 +146,10 @@ final class DemoSisData
         $this->campusPrincipal();
         // SIS.EXP-3: fictional Student record documents.
         $this->documents();
+        // SIS.EXP-4: a recorded transfer exit and its certificates.
+        $this->certificates();
 
-        $this->b->note('SIS demo (SIS.EXP-1/2/3): Northstar Gachibowli -- 17 Students on both Campuses; the Menon siblings (Aarav, Grade 5 · A, Main; Diya, UKG · A, Early Years) share a Guardian; Aarav shows every Student 360 card and three fictional record documents (enroll MFA first to open them); Student movements show a 2025-26 promotion, a repeat, a completed exit and a Campus transfer then Section change -- see docs/demo/SIS-EXP-1-WALKTHROUGH.md.');
+        $this->b->note('SIS demo (SIS.EXP-1..4): Northstar Gachibowli -- 18 Students on both Campuses; the Menon siblings (Aarav, Grade 5 · A, Main; Diya, UKG · A, Early Years) share a Guardian; Aarav shows every Student 360 card and three fictional record documents (enroll MFA first to open them); Student movements show a 2025-26 promotion, a repeat, a completed exit, a transfer withdrawal and a Campus transfer then Section change; Meera Iyer has LC-000001 (void, replaced), LC-000002 and TC-000001 (generic demo template) -- see docs/demo/SIS-EXP-1-WALKTHROUGH.md.');
     }
 
     private function academicStructure(): void
@@ -358,6 +366,102 @@ final class DemoSisData
         $otherAdmin = User::query()->where('email', 'school.admin@example.test')->firstOrFail();
         $otherStudent = $this->b->inSchool(fn () => Student::query()->where('school_id', $other->id)->where('student_number', 'LDS-0001')->firstOrFail(), $other);
         $store($other, $otherAdmin, $otherStudent, 'prior_school_record', 'Previous school report', '2025-03-31');
+    }
+
+    /**
+     * SIS.EXP-4: Leaving/Transfer certificates for one fictional leaver.
+     *
+     * Meera Iyer joins Grade 5 · B (Main) on 1 June 2026 and is withdrawn on
+     * 30 September 2026 as transferred to another School -- a canonical
+     * transfer exit, so both certificate types are eligible. Her first
+     * Leaving Certificate (LC-000001) carried a misspelt surname; the School
+     * corrected the record and reissued it (LC-000002 replaces LC-000001,
+     * which stays on record, voided). TC-000001 is her Transfer Certificate.
+     *
+     * Arjun Mehta is deliberately NOT given one: his placement completed but
+     * no exit was recorded, so he is canonically ineligible (the page says
+     * so). The PDFs come from the real eligibility snapshot, renderer and
+     * Documents pipeline; the withdrawal, certificate rows, void and counter
+     * are direct, database-validated writes -- the guarded demo never
+     * fabricates a fresh-MFA proof, so no `student_certificate.*` audit event
+     * (which carries one) is written for them.
+     */
+    private function certificates(): void
+    {
+        $meera = app(StudentService::class)->create($this->school, ['first_name' => 'Meera', 'middle_name' => null, 'last_name' => 'Iyr', 'date_of_birth' => '2015-04-02'], $this->admin);
+        app(StudentEnrollmentService::class)->enroll($meera, $this->sections['G5-B'], '9', '2026-06-01', $this->admin);
+        $this->guardianFor($meera, 'Ramesh', 'Iyer', 18);
+        $this->students['meera'] = $meera;
+
+        $this->b->inSchool(function () use ($meera): void {
+            DB::transaction(function () use ($meera): void {
+                $placement = DB::table('student_enrollments')->where('student_id', $meera->id)->where('status', 'active')->first();
+                DB::table('student_lifecycle_events')->insert([
+                    'id' => (string) Str::uuid7(), 'school_id' => $this->school->id, 'student_id' => $meera->id, 'student_enrollment_id' => $placement->id,
+                    'action' => 'enrollment_withdrawn', 'reason_code' => 'transferred_out', 'acted_by_user_id' => $this->admin->id,
+                ]);
+                DB::table('student_enrollments')->where('id', $placement->id)->update(['status' => 'withdrawn', 'ends_on' => '2026-09-30', 'updated_at' => now()]);
+            });
+        }, $this->school);
+
+        $original = $this->demoCertificate($meera, StudentCertificateType::LEAVING, null);
+        // The correction: the surname was misspelt on the record.
+        $this->b->inSchool(fn () => DB::table('students')->where('id', $meera->id)->update(['last_name' => 'Iyer', 'updated_at' => now()]), $this->school);
+        $this->b->inSchool(function () use ($original): void {
+            DB::transaction(function () use ($original): void {
+                DB::table('student_certificates')->where('id', $original)->update([
+                    'status' => 'voided', 'voided_at' => now(), 'voided_by_user_id' => $this->admin->id, 'void_reason' => 'replaced_by_corrected_certificate', 'updated_at' => now(),
+                ]);
+                $documentId = DB::table('student_certificates')->where('id', $original)->value('document_id');
+                DB::table('documents')->where('id', $documentId)->update(['status' => 'archived', 'updated_at' => now()]);
+                DB::table('student_documents')->where('document_id', $documentId)->update([
+                    'archived_at' => now(), 'archived_by_user_id' => $this->admin->id, 'archive_reason' => 'certificate_voided', 'version' => 2, 'updated_at' => now(),
+                ]);
+            });
+        }, $this->school);
+        $this->demoCertificate($meera, StudentCertificateType::LEAVING, $original);
+        $this->demoCertificate($meera, StudentCertificateType::TRANSFER, null);
+    }
+
+    /** One certificate from the Student's CURRENT canonical facts; returns its id. */
+    private function demoCertificate(Student $student, StudentCertificateType $type, ?string $supersedes): string
+    {
+        $student = $this->b->inSchool(fn () => Student::query()->findOrFail($student->id), $this->school);
+        $result = $this->b->inSchool(fn () => app(StudentCertificateEligibility::class)->evaluate($this->school, $student), $this->school);
+        if (! $result['eligible'] || ! in_array($type, $result['types'], true)) {
+            throw new \LogicException('The demo certificate Student is not eligible: '.$result['refusal']);
+        }
+        $serial = (int) $this->b->inSchool(function () use ($type): int {
+            DB::insert('INSERT INTO student_certificate_sequences (school_id, certificate_type, last_serial, created_at, updated_at) VALUES (?, ?, 0, now(), now()) ON CONFLICT (school_id, certificate_type) DO NOTHING', [$this->school->id, $type->value]);
+            DB::update('UPDATE student_certificate_sequences SET last_serial = last_serial + 1, updated_at = now() WHERE school_id = ? AND certificate_type = ?', [$this->school->id, $type->value]);
+
+            return (int) DB::table('student_certificate_sequences')->where('school_id', $this->school->id)->where('certificate_type', $type->value)->value('last_serial');
+        }, $this->school);
+        $number = $type->displayNumber($serial);
+        $issuedOn = SchoolTimezone::today($this->school);
+        $path = tempnam(sys_get_temp_dir(), 'demo-cert');
+        file_put_contents($path, app(StudentCertificateRenderer::class)->render($type, $number, $issuedOn, $result['snapshot']));
+        $id = (string) Str::uuid7();
+
+        app(DocumentService::class)->createCertificateForStudent($this->school, $student->id, new UploadedFile($path, strtolower($type->label()).'-'.$number.'.pdf', 'application/pdf', null, true), $this->admin,
+            function (Document $document) use ($student, $type, $serial, $number, $issuedOn, $result, $supersedes, $id): void {
+                DB::table('student_documents')->insert([
+                    'id' => (string) Str::uuid7(), 'school_id' => $this->school->id, 'student_id' => $student->id, 'document_id' => $document->id,
+                    'category' => 'issued_certificate', 'title' => $type->label().' '.$number, 'document_date' => $issuedOn,
+                    'form_key' => (string) Str::uuid7(), 'upload_fingerprint' => hash('sha256', 'certificate|'.$document->id),
+                    'uploaded_by_user_id' => $this->admin->id, 'created_at' => now(), 'updated_at' => now(),
+                ]);
+                DB::table('student_certificates')->insert([
+                    'id' => $id, 'school_id' => $this->school->id, 'student_id' => $student->id, 'certificate_type' => $type->value,
+                    'serial' => $serial, 'display_number' => $number, 'status' => 'issued', 'source_enrollment_id' => $result['sourceEnrollmentId'],
+                    'document_id' => $document->id, 'supersedes_certificate_id' => $supersedes, ...$result['snapshot'],
+                    'issued_on' => $issuedOn, 'form_key' => (string) Str::uuid7(), 'request_fingerprint' => hash('sha256', 'demo|'.$id),
+                    'issued_by_user_id' => $this->admin->id, 'created_at' => now(), 'updated_at' => now(),
+                ]);
+            });
+        @unlink($path);
+
+        return $id;
     }
 
     /** A small, valid, synthetic PDF that says DEMO / FICTIONAL (no signature, no identifier). */

@@ -1,4 +1,4 @@
-# SIS.EXP-1 / 2 / 3 — Student 360, directory, movement register and Student documents: demo data and owner walkthrough
+# SIS.EXP-1 / 2 / 3 / 4 — Student 360, directory, movement register, Student documents and certificates: demo data and owner walkthrough
 
 Status: **canonical SIS demonstration** (SIS.EXP-1, 2026-10-29), inside the
 ORG.12E-D1 Organization world (`ORGANIZATION-DEMO-DATA.md`). Built by
@@ -16,7 +16,7 @@ Password for every account: printed by `ddev demo-reset` (local demo only).
 | Academic year | 2026-27, **active** (1 Jun 2026 – 31 Mar 2027) |
 | Main Campus | Grade 5 · A (5), Grade 5 · B (3), Grade 4 · A (1), Grade 3 · A (4), Grade 3 · B (0) |
 | Early Years Campus | UKG · A (3), Grade 3 · E (0) |
-| Students | 17 (13 from SIS.EXP-1, 4 from SIS.EXP-2), numbers from the School counter; each with one Guardian and contacts |
+| Students | 18 (13 from SIS.EXP-1, 4 from SIS.EXP-2, Meera Iyer from SIS.EXP-4), numbers from the School counter; each with one Guardian and contacts |
 | SIS.EXP-2 history | 2025-26 (now closed) Grade 4 · A/B rolled into 2026-27: **Rohan Pillai** promoted to Grade 5 · A, **Anika Joshi** repeats Grade 4 (4 · A), **Arjun Mehta** excluded and his 2025-26 placement completed (an exit; still marked active, so Setup shows *Student records: Needs attention*). **Kiara Sen**: Grade 3 · E on the Early Years Campus (1 Jun 2026), Campus transfer to Grade 3 · B on the Main Campus (6 Jul 2026), then Section change to Grade 3 · A (3 Aug 2026) |
 | Subjects | English, Mathematics, Environmental Studies (required) per Grade |
 | The Menon family | **Aarav Menon** (Grade 5 · A, Main) with two Guardians, Lakshmi (mother, primary) and Vikram (father); his sister **Diya Menon** (UKG · A, Early Years) shares Lakshmi |
@@ -35,7 +35,7 @@ the menu label changes, never the access.
 
 | # | Persona | Route | Student | Expected | Must not happen |
 |---|---|---|---|---|---|
-| 1 | `gachibowli.admin` | *Learners* (`/app/students`) | — | 17 Students (16 with a current class); **Campus**, **Grade** and **Section** filters (current class). Early Years → Diya, Neel, Tara. Grade 5 → 8. Grade 5 · B → Ishaan, Sara, Vivaan. Sections narrow to the chosen Campus and Grade | a filter that lists Students of a Campus or Section you cannot read |
+| 1 | `gachibowli.admin` | *Learners* (`/app/students`) | — | 18 Students (16 with a current class); **Campus**, **Grade** and **Section** filters (current class). Early Years → Diya, Neel, Tara. Grade 5 → 8. Grade 5 · B → Ishaan, Sara, Vivaan. Sections narrow to the chosen Campus and Grade | a filter that lists Students of a Campus or Section you cannot read |
 | 2 | (same) | open **Aarav Menon** | Aarav | *On this page* navigation; **Family**: Diya Menon (UKG · A · Early Years Campus, shares Lakshmi Menon); **At a glance**: Subjects (3 required), Attendance (latest records, link), Fees (billed ₹30,000, paid ₹12,000, outstanding ₹18,000, fee statement link), Transport (Kondapur Route), Hostel (no current residency), Library (1 book on loan) | an edit control on any summary card; a rate or tally of attendance; family fee totals |
 | 3 | (same) | Aarav → **Edit** in two tabs; save tab 2, then tab 1 | Aarav | tab 2 saves; tab 1 says the details were *changed by someone else after you opened this form* and saves nothing; reload and save works | tab 1 silently overwriting tab 2 |
 | 4 | (same) | Aarav → **History** | Aarav | one "updated" entry per save naming only the field that changed (e.g. last name) | an entry listing unchanged fields; a value of the change |
@@ -75,10 +75,10 @@ which the demo never fabricates. Doing step 6 creates them live.
 
 | # | Persona | Route | Expected | Must not happen |
 |---|---|---|---|---|
-| 1 | `gachibowli.admin` | *People* → **Student movements** (`/app/students/movements`) | 22 rows, newest first: 17 entries; Kiara's Section change (3 Aug 2026, Grade 3 · B → Grade 3 · A, Main) and Campus transfer (6 Jul 2026, Grade 3 · E Early Years → Grade 3 · B Main) as one row each; Rohan's **Promotion** and Anika's **Repeated the Grade** (1 Jun 2026, 2025-26 → 2026-27); Arjun's **Placement completed** (31 Mar 2026) | any edit, approve, export or print control; an actor name; a free-text note |
+| 1 | `gachibowli.admin` | *People* → **Student movements** (`/app/students/movements`) | 24 rows, newest first: 18 entries; Meera Iyer's **Withdrawn** (30 Sep 2026, Transferred to another School); Kiara's Section change (3 Aug 2026, Grade 3 · B → Grade 3 · A, Main) and Campus transfer (6 Jul 2026, Grade 3 · E Early Years → Grade 3 · B Main) as one row each; Rohan's **Promotion** and Anika's **Repeated the Grade** (1 Jun 2026, 2025-26 → 2026-27); Arjun's **Placement completed** (31 Mar 2026) | any edit, approve, export or print control; an actor name; a free-text note |
 | 2 | (same) | **Campus** = Early Years | Kiara's Campus transfer (from Early Years), Kiara's first enrollment, Diya's, Neel's and Tara's entries | rows that never touched Early Years |
 | 3 | (same) | **Movement type** = Campus transfer; then **Category** = Movement | 1 row; then 4 rows | — |
-| 4 | (same) | **Exits only** | Arjun Mehta, Placement completed, final placement Grade 4 · A (2025-26) | — |
+| 4 | (same) | **Exits only** | Meera Iyer, Withdrawn (Transferred to another School), Grade 5 · B; Arjun Mehta, Placement completed, final placement Grade 4 · A (2025-26) | — |
 | 5 | (same) | click **Arjun Mehta** | his Student profile (the profile re-checks authority); History shows his placements | — |
 | 6 | (same, MFA enrolled) | Arjun → *Mark inactive…* (reason "Left the School", fresh code) → back to Student movements | a new **Marked inactive** exit row with the reason "Left the School"; Setup's *Student records* returns to Configured | — |
 | 7 | `gachibowli.ey.principal` | `/app/students/movements` (no menu entry) | refused (403): movement history is whole-School | Kiara's past on the Early Years Campus |
@@ -137,3 +137,49 @@ checks passed. Covered:
   both the list and the download.
 
 Run `ddev demo-reset` after steps 6–8.
+
+## 6. SIS.EXP-4 — Leaving and Transfer certificates (owner path)
+
+**What the reset seeds:**
+- **Meera Iyer** (Grade 5 · B, Main): joined 1 June 2026 and withdrawn on
+  30 September 2026, transferred to another School. That is a recorded
+  transfer exit, so both types are eligible.
+  - Her first Leaving Certificate, **LC-000001**, carried a misspelt surname
+    ("Iyr"). The School corrected the record and reissued it.
+  - **LC-000002** replaces LC-000001, which stays on record, voided.
+  - **TC-000001** is her Transfer Certificate.
+- Every PDF is the generic template with the banner **DEMO / GENERIC
+  CERTIFICATE TEMPLATE — NOT A STATUTORY DOCUMENT**.
+- **Arjun Mehta** is deliberately ineligible: his placement completed but no
+  exit was recorded.
+- Issuing in production is refused until the wording is legally approved;
+  the demo is local.
+
+**MFA:** as in §5. Every issue, void and reissue asks for a fresh code.
+
+| # | Persona | Route | Expected | Must not happen |
+|---|---|---|---|---|
+| 1 | `gachibowli.admin` | Meera's profile → *At a glance* → **Certificates** | LC-000002 · Issued; TC-000001 · Issued; LC-000001 · Void (replaced by LC-000002) | a name, date of birth or fee on the card |
+| 2 | (same) | **Certificates** (`/app/students/{id}/certificates`) | preview: the frozen facts; both types "already issued"; reason "Transferred to another School"; "No outstanding fees on record" (Finance holder only) | a fee balance on the certificate |
+| 3 | (same, MFA) | **Download LC-000002** | the PDF: Leaving Certificate LC-000002, Meera Iyer, Grade 5 · Section B, joined 1 June 2026, left 30 September 2026, DEMO banner and generic footer | a statutory or board claim; a QR or verification link |
+| 4 | (same) | **Void and reissue TC-000001** (confirm, fresh code) | TC-000002 issued, replaces TC-000001 (now Void, replaced) | the old number reused; the old file deleted |
+| 5 | (same) | **Void LC-000002**, reason *Issued in error*; then **Issue certificate** → Leaving (confirm, code) | LC-000002 Void; **LC-000003** issued | LC-000002 reused |
+| 6 | (same) | Arjun Mehta → **Certificates** | "Not eligible: … no exit … has been recorded. Record the exit first." No issue form | a certificate for a Student whose exit was never recorded |
+| 7 | (same) | a Student with an unpaid Charge who has left | the issue still succeeds; the fee note is information only | fees blocking issuance |
+| 8 | `gachibowli.ey.principal` (Campus-scoped) | Meera's certificates URL | 403: whole-School authority only | — |
+| 9 | `gachibowli.cashier` | (same) | 403 | — |
+| 10 | `network.manager`, `platform.admin` | (same) | back to the dashboard | any certificate |
+
+**Verified on 2026-10-30** (DDEV, real browser, Playwright 1.62.1): 18/18
+checks passed. Covered:
+- the seeded history and replacement links, the preview and the attachment
+  download;
+- void and reissue (TC-000002), void then issue (LC-000003);
+- Arjun's explained refusal and the Student 360 card;
+- no page overflow at 1280, 768 and 390, and keyboard reach;
+- Campus Principal, Cashier, Network Manager and Platform Admin refused.
+
+Steps 7 and the Teacher refusal are covered by `StudentCertificateTest`;
+there is no Gachibowli Teacher persona.
+
+Run `ddev demo-reset` after steps 4–5.

@@ -3178,3 +3178,119 @@ text, Guardian, contact, date of birth or Finance data.
 (plus the page's context). The query count is identical for page 1, a
 later page and a combined filter, whatever the history size
 (`StudentMovementRegisterTest`).
+
+## Leaving and Transfer certificates (SIS.EXP-4, 2026-10-30, ADR 0081)
+
+An immutable, numbered issuance record of a Student's recorded exit, with its
+generated PDF stored as a Student Document. It is not a cross-School transfer:
+nothing is created in another School, and no record or file moves.
+
+- **Writer:** `App\Domain\Students\Application\Certificates\StudentCertificateService`
+  (issue, void, reissue).
+- **Readers:** `StudentCertificateEligibility` (eligibility and the snapshot)
+  and `StudentCertificateReader` (history).
+- **Page:** `/app/students/{student}/certificates`.
+- **Student 360:** a Certificates card with type, number, issue date, state
+  and replacement links.
+
+**Eligibility** (canonical history only). Required:
+- no `active` placement;
+- the final non-cancelled placement `withdrawn` or `completed`;
+- the exit recorded with a closed reason. Withdrawal reasons: `left_school`,
+  `transferred_out`, `guardian_request`. Deactivation reasons: `left_school`,
+  `transferred_out`, `completed_studies`.
+
+Refusals, each a closed code:
+
+| Code | Meaning |
+|---|---|
+| `still_placed` | an active placement exists |
+| `no_placement` | the Student was never placed |
+| `exit_not_recorded` | a completed placement, but the Student is still active and no exit was recorded |
+| `not_an_exit` | deactivated for a duplicate or an error |
+| `returned` | marked active again since |
+| `not_transferred_out` | a Transfer Certificate asked for an exit that is not `transferred_out` |
+
+Exit-date rules are unchanged; there are no back-dated exits.
+
+**Snapshot.** The frozen columns are:
+- Student name and number;
+- School name, legal name, affiliation and registration reference;
+- the final placement's Campus, academic year, Grade and Section;
+- joined (first placement) and left (final placement end);
+- the closed exit reason and the issue date (School-local).
+
+Never included: date of birth, Guardian, statutory identifiers, caste,
+religion, health or Finance. Later edits to the Student, School or placement
+never reach an issued certificate.
+
+**Numbering.**
+- One forward-only counter per School and type.
+- Allocated under its row lock inside the issuing transaction.
+- `LC-000001` / `TC-000001`; never reused; a void keeps its number.
+- Proven with two real OS processes (`StudentCertificateConcurrencyTest`).
+
+**Issue.**
+- Preconditions: the legal production gate, a fresh MFA code, explicit
+  confirmation, whole-School `students.view`, and
+  `students.certificates.issue`, re-read fresh under the Student lock
+  (FOR NO KEY UPDATE).
+- Eligibility is re-evaluated under the lock, and the preview fingerprint
+  must still match; otherwise the issue is refused as changed.
+- One issued certificate per exit and type.
+- The form key is bound to the request: a retry replays the first
+  certificate; anything else is refused.
+- **Outstanding fees never block issuance.** An issuer who holds whole-School
+  `finance.charges.view` and `finance.payments.view` sees the balance as
+  information only; nobody else receives it; it is never printed.
+
+**Void and reissue.**
+- **Void:** a closed reason (`data_error` or `issued_in_error`), a fresh
+  code, explicit confirmation and final. The row and PDF are retained, and
+  the PDF's Student document is archived as `certificate_voided`.
+- **Reissue:** voids as `replaced_by_corrected_certificate` and issues the
+  linked replacement (a new number and snapshot) in one transaction.
+- **A replacement always certifies the SAME exit** (service and trigger). A
+  certificate of an earlier exit is voided, never "replaced" by a later
+  exit's.
+- **A double submit of the same form** waits on the Student lock and then
+  replays the first certificate (proven with two real processes).
+- **Known trade-off:** the PDF is rendered and stored while the Student and
+  counter locks are held, because the number is printed on it. Issuance in
+  one School is therefore serialized for about 0.1 s plus the object write.
+
+**Output.**
+- One code-owned generic template, rendered by locked-down dompdf (ADR 0081
+  §8), Latin script only.
+- A `highly_sensitive` `issued_certificate` Student document. It is never
+  uploadable, never re-categorized, and never edited or archived from the
+  document list.
+- Downloaded through the Student document route (current MFA, attachment).
+
+**Audit.**
+- `student_certificate.issued`: certificate, Student, type, serial, source
+  placement, document, replaced certificate and MFA time.
+- `student_certificate.voided`: the reason and the MFA time.
+- Plus Documents' `document.*` events.
+- Never a snapshot value.
+
+### Legal review record (OD-SIS-2.2)
+
+- **Development wording is generic.**
+  - The PDF says it is "not a government-, board- or statute-prescribed
+    form" and carries no financial information.
+  - A non-production build adds "DEMO / GENERIC CERTIFICATE TEMPLATE — NOT A
+    STATUTORY DOCUMENT".
+- **No jurisdiction-specific template is enabled.** No statutory,
+  board-prescribed or government wording exists in the repository.
+- **Production is refused in code** (`StudentCertificateAvailability`: local
+  and testing only, no flag).
+- **Before production, legal review must approve:**
+  1. the jurisdiction(s) and whether a state/board-prescribed format applies;
+  2. the certificate title and certifying statement;
+  3. the field list — in particular whether date of birth, Guardian names,
+     admission register number, conduct or "dues cleared" wording are
+     required or prohibited (none are printed today);
+  4. the "Reason for leaving" labels;
+  5. signatory and seal requirements;
+  6. the treatment of non-Latin names (a script-capable renderer).

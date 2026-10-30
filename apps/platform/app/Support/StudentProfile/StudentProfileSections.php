@@ -8,6 +8,7 @@ use App\Domain\Hostel\Application\HostelStudentSummaryReader;
 use App\Domain\Library\Application\LibraryStudentSummaryReader;
 use App\Domain\Payments\Application\Collections\OutstandingFeeRow;
 use App\Domain\Payments\Application\Collections\OutstandingFeesReadService;
+use App\Domain\Students\Application\Certificates\StudentCertificateReader;
 use App\Domain\Students\Application\Documents\StudentDocumentReader;
 use App\Domain\Students\Application\StudentAccess;
 use App\Domain\Students\Application\SubjectOfferingRosterReadService;
@@ -73,6 +74,7 @@ final class StudentProfileSections
         private readonly HostelStudentSummaryReader $hostel,
         private readonly LibraryStudentSummaryReader $library,
         private readonly StudentDocumentReader $documents,
+        private readonly StudentCertificateReader $certificates,
     ) {}
 
     /**
@@ -124,6 +126,10 @@ final class StudentProfileSections
         // its own page behind current MFA.
         if (($documents = $this->documents->summary($school, $actor, $student)) !== null) {
             $sections['documents'] = $documents;
+        }
+        // SIS.EXP-4: certificate history (safe metadata; one query).
+        if (($certificates = $this->certificates->historyFor($school, $actor, $student)) !== null) {
+            $sections['certificates'] = ['items' => $certificates, 'link' => "/app/students/{$student->id}/certificates"];
         }
 
         return $sections;

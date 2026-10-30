@@ -61,6 +61,7 @@ class StudentDocumentController extends Controller
             ],
             'options' => [
                 'categories' => StudentDocumentCategory::options(),
+                'filterCategories' => StudentDocumentCategory::filterOptions(),
                 'archiveReasons' => StudentDocumentArchiveReason::options(),
             ],
             'canManage' => Gate::forUser($actor)->allows('capability', [DocumentService::STUDENT_DOCUMENTS_MANAGE, $school]),
@@ -79,7 +80,7 @@ class StudentDocumentController extends Controller
         $actor = $context->actor();
         $validated = $request->validate([
             'file' => ['required', 'file', 'max:'.((int) config('documents.max_file_size_mb') * 1024)],
-            'category' => ['required', Rule::in(StudentDocumentCategory::values())],
+            'category' => ['required', Rule::in(StudentDocumentCategory::uploadableValues())],
             'title' => ['required', 'string', 'max:255'],
             'document_date' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:'.SchoolTimezone::today($school)],
             'form_key' => ['required', 'uuid'],
@@ -104,7 +105,7 @@ class StudentDocumentController extends Controller
         $school = $context->requireSchool();
         $actor = $context->actor();
         $validated = $request->validate([
-            'category' => ['required', Rule::in(StudentDocumentCategory::values())],
+            'category' => ['required', Rule::in(StudentDocumentCategory::uploadableValues())],
             'title' => ['required', 'string', 'max:255'],
             'document_date' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:'.SchoolTimezone::today($school)],
             'version' => ['required', 'integer', 'min:1'],
@@ -121,7 +122,7 @@ class StudentDocumentController extends Controller
         $school = $context->requireSchool();
         $actor = $context->actor();
         $validated = $request->validate([
-            'reason' => ['required', Rule::in(StudentDocumentArchiveReason::values())],
+            'reason' => ['required', Rule::in(StudentDocumentArchiveReason::choosableValues())],
             'version' => ['required', 'integer', 'min:1'],
         ]);
         $proof = $mfa->requireForAction($request, $actor);

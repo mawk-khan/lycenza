@@ -300,6 +300,26 @@ because a PARTIAL family enters the denominator but counts only half.
 Not reclassified: certificates (SR-41), contracts, statutory documents,
 bulk import (SR-06), groups and the strength/analytics families.
 
+## 5.4 After SIS.EXP-4 (2026-10-30)
+
+| SR | Built by SIS.EXP-4 | New class |
+|---|---|---|
+| SR-41 | Leaving and Transfer certificates from the recorded exit: eligibility, preview, an immutable numbered snapshot (`LC-`/`TC-`), a stored PDF Student document, void and linked reissue, Student 360 history. No requisition form and no bank details (never) | **`PARTIAL`** (was OWNER_DECISION_REQUIRED). Still open: production is refused until the wording is legally approved (ADR 0081 §7); Latin script only; no other certificate types (bonafide, character) |
+| SR-12 | The certificate checkpoint now exists: an exit can be certified, and history shows issued, void and replaced | **`EXISTING_DIFFERENT_ACCEPTED`** (was PARTIAL). The dues trail is deliberately not a checkpoint (OD-SIS-2.5), and there is no back-dating (SR-10) |
+
+Recomputed with the §5 formula. EDA now counts 10 scored families; PARTIAL
+counts 7 (SR-12 left PARTIAL; SR-41 joined it).
+
+| Measure | After SIS.EXP-3 | After SIS.EXP-4 |
+|---|---|---|
+| Overall weighted / strict | 33.8 % / 24.3 % | **36.5 % / 27.0 %** (13.5 / 37, 10 / 37) |
+| v1 weighted / strict | 78.1 % / 56.3 % | **79.4 % / 58.8 %** (13.5 / 17, 10 / 17) |
+| Screen-weighted, overall | 21.1 % / 11.4 % | 22.7 % / 14.1 % (67.5 / 298, 42 / 298) |
+| Screen-weighted, v1 | 68.5 % / 37.0 % | 72.6 % / 45.2 % (67.5 / 93, 42 / 93) |
+
+Not reclassified: bulk import (SR-06), groups (SR-17), statutory documents,
+the Student Portal and the strength/analytics families.
+
 ## 6. Re-use
 
 - SIS.EXP checkpoints cite `SR-nn` ids in their records and, where a

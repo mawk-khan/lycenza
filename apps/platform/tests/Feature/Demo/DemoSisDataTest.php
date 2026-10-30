@@ -46,7 +46,7 @@ class DemoSisDataTest extends TestCase
         $verifier = new DemoSisVerifier;
 
         $this->assertSame([], $verifier->problems());
-        $this->assertSame(['gachibowliStudents' => 17, 'gachibowliGuardians' => 17, 'gachibowliActivePlacements' => 16, 'gachibowliMovements' => 22, 'gachibowliStudentDocuments' => 5], $verifier->summary());
+        $this->assertSame(['gachibowliStudents' => 18, 'gachibowliGuardians' => 18, 'gachibowliActivePlacements' => 16, 'gachibowliMovements' => 24, 'gachibowliStudentDocuments' => 8, 'gachibowliCertificates' => 3], $verifier->summary());
     }
 
     #[Test]
@@ -56,7 +56,7 @@ class DemoSisDataTest extends TestCase
         $this->signIn('gachibowli.admin@example.test');
 
         $props = $this->get("/app/students/{$this->student('Aarav')->id}")->assertOk()->viewData('page')['props'];
-        $this->assertSame(['attendance', 'documents', 'family', 'fees', 'hostel', 'library', 'subjects', 'transport'], collect($props['sections'])->keys()->sort()->values()->all());
+        $this->assertSame(['attendance', 'certificates', 'documents', 'family', 'fees', 'hostel', 'library', 'subjects', 'transport'], collect($props['sections'])->keys()->sort()->values()->all());
         $this->assertSame([3, 1], [$props['sections']['documents']['active'], $props['sections']['documents']['archived']]);
         $this->assertSame('Diya Menon', $props['sections']['family']['siblings'][0]['name']);
         $this->assertSame(['30000.00', '12000.00', '18000.00'], [$props['sections']['fees']['billed'], $props['sections']['fees']['paid'], $props['sections']['fees']['outstanding']]);
@@ -123,7 +123,7 @@ class DemoSisDataTest extends TestCase
         $rows = fn (array $q) => array_map(fn (array $r) => "{$r['type']}|{$r['student']['name']}", $this->get('/app/students/movements?'.http_build_query($q))->assertOk()->viewData('page')['props']['movements']['data']);
 
         $this->assertSame(['section_change|Kiara Sen', 'campus_transfer|Kiara Sen', 'retention|Anika Joshi', 'promotion|Rohan Pillai'], $rows(['category' => 'movement']));
-        $this->assertSame(['placement_completed|Arjun Mehta'], $rows(['category' => 'exit']));
+        $this->assertSame(['withdrawal|Meera Iyer', 'placement_completed|Arjun Mehta'], $rows(['category' => 'exit']));
 
         // The Early Years Principal reads the Campus directory but never the (whole-School) history.
         $this->signIn('gachibowli.ey.principal@example.test');
@@ -140,7 +140,7 @@ class DemoSisDataTest extends TestCase
         app(DemoDataBuilder::class)->build();
         $school = $this->school();
         $records = app(TenantContext::class)->withSchool($school, fn () => DB::table('student_documents as sd')
-            ->join('documents as d', 'd.id', '=', 'sd.document_id')->orderBy('sd.title')->get(['sd.title', 'sd.category', 'd.storage_disk', 'd.storage_path', 'd.mime_type']));
+            ->join('documents as d', 'd.id', '=', 'sd.document_id')->where('sd.category', '!=', 'issued_certificate')->orderBy('sd.title')->get(['sd.title', 'sd.category', 'd.storage_disk', 'd.storage_path', 'd.mime_type']));
         $this->assertCount(5, $records);
         foreach ($records as $record) {
             $bytes = (string) Storage::disk($record->storage_disk)->get($record->storage_path);

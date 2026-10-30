@@ -65,4 +65,17 @@ export interface StudentProfileSections {
         categories: { value: string; label: string; count: number }[];
         link: string;
     };
+    // SIS.EXP-4: certificate history (safe metadata).
+    certificates?: {
+        items: {
+            id: string;
+            typeLabel: string;
+            number: string;
+            issuedOn: string;
+            status: 'issued' | 'voided';
+            replacedByNumber: string | null;
+            downloadUrl: string | null;
+        }[];
+        link: string;
+    };
 }

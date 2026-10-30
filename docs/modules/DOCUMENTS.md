@@ -2105,6 +2105,7 @@ through its own entry points. The generic paths still refuse it.
 | Archive | `DocumentService::archiveForStudent($school, $studentId, $documentId, $actor, $within)` | `students.documents.manage` | `document.archived` |
 | List facts | `DocumentListingService::studentFacts($school, $studentId, $ids, $actor)` | `students.documents.view` | one `document.sensitive_list_viewed` per non-empty call |
 | Download | `DocumentReadService::studentContent($school, $studentId, $documentId, $actor)` | `students.documents.view` | `document.sensitive_content_accessed` |
+| Certificate PDF (SIS.EXP-4) | `DocumentService::createCertificateForStudent(...)`; void: `archiveCertificateForStudent(...)` | `students.certificates.issue` | `document.created` / `document.archived` |
 
 - **Tier and types:**
   - The tier is fixed at `highly_sensitive`.

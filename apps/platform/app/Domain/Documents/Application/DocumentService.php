@@ -125,6 +125,9 @@ class DocumentService
 
     public const STUDENT_DOCUMENTS_MANAGE = 'students.documents.manage';
 
+    /** SIS.EXP-4: issuing Leaving/Transfer certificates (whole School). */
+    public const STUDENT_CERTIFICATES_ISSUE = 'students.certificates.issue';
+
     /**
      * The Student document types: a narrower subset of `allowed_mime_types`.
      * There is no malware scanning, so only the formats without macros or
@@ -174,6 +177,26 @@ class DocumentService
     }
 
     /**
+     * SIS.EXP-4: stores a generated Leaving/Transfer certificate PDF as a
+     * Student-owned Document. Same pipeline as createForStudent(), PDF only,
+     * decided by the issuing capability (`students.certificates.issue`) --
+     * the certificate service has already decided Student visibility and
+     * eligibility; `$within` (the certificate and its Student record row)
+     * runs in this Document's transaction.
+     *
+     * @param  Closure(Document): void  $within
+     */
+    public function createCertificateForStudent(School $school, string $studentId, UploadedFile $file, User $actor, Closure $within): Document
+    {
+        return $this->context->withSchool($school, function () use ($school, $studentId, $file, $actor, $within) {
+            $this->authorizeCapabilityFor($actor, self::STUDENT_CERTIFICATES_ISSUE, $school);
+            $data = new CreateDocumentData(DocumentOwner::student($studentId), self::STUDENT_CLASSIFICATION_TIER, $file);
+
+            return $this->store($school, $data, $actor, ['student_id' => $studentId], null, $within, ['application/pdf']);
+        });
+    }
+
+    /**
      * SIS.EXP-3: archives a Student-owned Document (status only, like
      * archive()); `$within` (the Student record's archive) runs in the same
      * transaction. The Document is re-read under the School and the named
@@ -183,8 +206,25 @@ class DocumentService
      */
     public function archiveForStudent(School $school, string $studentId, string $documentId, User $actor, Closure $within): Document
     {
-        return $this->context->withSchool($school, function () use ($school, $studentId, $documentId, $actor, $within) {
-            $this->authorizeCapabilityFor($actor, self::STUDENT_DOCUMENTS_MANAGE, $school);
+        return $this->archiveStudentDocument($school, $studentId, $documentId, $actor, $within, self::STUDENT_DOCUMENTS_MANAGE);
+    }
+
+    /**
+     * SIS.EXP-4: archives a voided certificate's Document (status only; the
+     * file is retained), decided by the issuing capability.
+     *
+     * @param  Closure(Document): void  $within
+     */
+    public function archiveCertificateForStudent(School $school, string $studentId, string $documentId, User $actor, Closure $within): Document
+    {
+        return $this->archiveStudentDocument($school, $studentId, $documentId, $actor, $within, self::STUDENT_CERTIFICATES_ISSUE);
+    }
+
+    /** @param  Closure(Document): void  $within */
+    private function archiveStudentDocument(School $school, string $studentId, string $documentId, User $actor, Closure $within, string $capability): Document
+    {
+        return $this->context->withSchool($school, function () use ($school, $studentId, $documentId, $actor, $within, $capability) {
+            $this->authorizeCapabilityFor($actor, $capability, $school);
 
             return DB::transaction(function () use ($school, $studentId, $documentId, $actor, $within) {
                 $document = Document::query()->where('school_id', $school->id)->where('student_id', $studentId)

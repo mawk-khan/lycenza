@@ -40,7 +40,7 @@ final class WebRouteParameters
         'academicDepartment', 'academicTerm', 'academicYear', 'address', 'adjustment', 'admissionApplication',
         'announcement', 'applicant', 'approvalRequest', 'assessment', 'assignment', 'attachment',
         'attendanceRecord', 'attendanceSession', 'authorization', 'campus', 'canteenItem', 'canteenOrder',
-        'canteenOutlet', 'category', 'certification', 'charge', 'client', 'compensationAssignment',
+        'canteenOutlet', 'category', 'certificate', 'certification', 'charge', 'client', 'compensationAssignment',
         'concession', 'contact', 'correctionRequest', 'curriculumDelivery', 'department', 'document', 'domain', 'electiveGroup',
         'electiveTeachingAssignment', 'employee', 'event', 'employment', 'employmentRecord', 'enrollment', 'examination',
         'examinationPaper', 'experience', 'feeHead', 'feeStructure', 'gradeBand', 'gradeLevel', 'gradeScale',

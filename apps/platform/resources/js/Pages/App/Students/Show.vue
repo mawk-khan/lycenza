@@ -104,7 +104,16 @@ const props = defineProps<Props>();
 // SIS.EXP-1: whether any "At a glance" card is present (for the page navigation).
 const hasGlance = computed(() =>
     (
-        ['subjects', 'attendance', 'fees', 'transport', 'hostel', 'library', 'documents'] as const
+        [
+            'subjects',
+            'attendance',
+            'fees',
+            'transport',
+            'hostel',
+            'library',
+            'documents',
+            'certificates',
+        ] as const
     ).some((key) => props.sections[key] !== undefined),
 );
 

@@ -173,6 +173,12 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'students.documents.view', 'label' => 'View and download Student record documents', 'namespace' => 'school'],
             ['key' => 'students.documents.manage', 'label' => 'Upload, edit and archive Student record documents', 'namespace' => 'school'],
 
+            // SIS.EXP-4 (OD-SIS-2, owner-approved 2026-10-30) -- issuing,
+            // voiding and reissuing Leaving/Transfer certificates: a legal act
+            // of the School, never implied by document management. Whole-School
+            // only, never Campus-adopted; `school_admin`/`principal` only.
+            ['key' => 'students.certificates.issue', 'label' => 'Issue, void and reissue Student Leaving and Transfer certificates', 'namespace' => 'school'],
+
             // Phase 5A.1 -- Communication Hub foundation. A single
             // `communications.manage` capability covers thread/
             // participant administration (deliberately not split
@@ -1123,6 +1129,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     'students.processing_authorizations.view', 'students.processing_authorizations.manage',
                     // SIS.EXP-3 (OD-SIS-1): Student record documents.
                     'students.documents.view', 'students.documents.manage',
+                    // SIS.EXP-4 (OD-SIS-2): Leaving/Transfer certificates.
+                    'students.certificates.issue',
                     'guardians.view', 'guardians.manage',
                     'communications.view', 'communications.send', 'communications.reply',
                     'communications.manage', 'communications.audit.view', 'communications.announce',
@@ -1463,6 +1471,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     'students.processing_authorizations.view', 'students.processing_authorizations.manage',
                     // SIS.EXP-3 (OD-SIS-1): Student record documents.
                     'students.documents.view', 'students.documents.manage',
+                    // SIS.EXP-4 (OD-SIS-2): Leaving/Transfer certificates.
+                    'students.certificates.issue',
                     'guardians.view', 'guardians.manage',
                     'communications.view', 'communications.send', 'communications.reply',
                     'communications.announce', 'communications.templates.manage', 'communications.approve',

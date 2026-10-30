@@ -1750,3 +1750,14 @@ once several modules copy it.
      - **Assurance:** the tier is `highly_sensitive`. Reads use `mfa-page`; upload, edit and archive need `FreshMfaRequirement`. Types are PDF, JPEG and PNG only (no malware scanning). A download is always an `attachment`, re-authorized each time.
      - **Never:** a category for government ID, caste, religion, disability, medical or immunisation records, photographs or biometrics, this School's own marks or results, generated certificates or contracts; a tenant-defined type; an `other` category; a hard delete; a public, signed or share URL; OCR or AI; a School-wide file directory.
      - **Lifecycle:** uploads claim a server-issued form key; edits are versioned; archive is final; replacement = new upload + `superseded`. Records go only with the Student core record (cascade).
+
+121. **Leaving/Transfer certificates are immutable numbered records of a recorded exit, legally gated for production (SIS.EXP-4, ADR 0081).**
+     - **One writer:** `StudentCertificateService`. Eligibility comes only from `StudentCertificateEligibility`: no active placement, a final `withdrawn`/`completed` placement, and an exit RECORDED with a qualifying closed reason. Never a new lifecycle state, a back-dated exit, a cross-School effect or an audit-log read.
+     - **Authority:** `students.certificates.issue` (`school_admin`, `principal`; whole-School, never Campus-adopted) plus whole-School `students.view`, re-read fresh under the Student lock (FOR NO KEY UPDATE). Each issue, void and reissue needs a FreshMfaProof and an explicit confirmation. Never ride on `students.documents.manage`.
+     - **Immutability:** the snapshot is bounded columns (never JSON, DOB, Guardian, statutory ID, caste, religion, health or Finance). Only ISSUED → VOIDED is allowed (trigger); there is no runtime DELETE.
+     - **Numbering:** one forward-only counter per School and type, allocated in the issuing transaction; numbers are never reused or renumbered.
+     - **Correction:** void with a closed reason, then reissue a linked replacement with a new number. One issued certificate per exit and type.
+     - **Output:** the one code-owned template through locked-down dompdf (no remote resources, PHP or JavaScript; Latin script only, else refused), stored only through `createCertificateForStudent()` as a `highly_sensitive` `issued_certificate` Student document.
+     - **Finance:** fees never block issuance. Finance context reaches only whole-School Finance holders, and nothing Financial is printed.
+     - **Never:** a public, QR or verification URL, e-signature, tenant template, API route or no-dues certificate.
+     - **Production gate:** `StudentCertificateAvailability` (local/testing only, no flag) stays closed until the legal review in `docs/modules/STUDENT-ENROLLMENT.md` approves the wording.

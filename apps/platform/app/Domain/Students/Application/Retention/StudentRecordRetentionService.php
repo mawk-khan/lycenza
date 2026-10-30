@@ -73,7 +73,9 @@ final class StudentRecordRetentionService
         // ORG.8E (ADR 0076 §63): lifecycle evidence cascades with its Student and Enrollments.
         'student_lifecycle_events',
         // SIS.EXP-3: a Student document record cascades with its Document and Student.
-        'student_documents'];
+        'student_documents',
+        // SIS.EXP-4: an issued certificate cascades with its Student, placement and Document.
+        'student_certificates'];
 
     public function __construct(
         private readonly StudentRetentionEligibility $students,
@@ -200,7 +202,7 @@ final class StudentRecordRetentionService
         $blocker = $this->references->first('student_processing_authorizations', $schoolId, DB::table('student_processing_authorizations')->where('school_id', $schoolId)->where('student_id', $studentId)->pluck('id')->all(), $unit)
             ?? $this->references->first('student_enrollments', $schoolId, $enrollmentIds, [...$unit, ...$clearedTables])
             ?? $this->references->first('student_subject_enrollments', $schoolId, DB::table('student_subject_enrollments')->where('student_id', $studentId)->pluck('id')->all())
-            ?? $this->references->first('documents', $schoolId, $this->documents->idsOwnedBy('student', $studentId), ['student_documents']);
+            ?? $this->references->first('documents', $schoolId, $this->documents->idsOwnedBy('student', $studentId), ['student_documents', 'student_certificates']);
         if ($blocker !== null) {
             return $blocker;
         }

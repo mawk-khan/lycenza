@@ -34,6 +34,7 @@ interface Props {
     filters: { category: string; status: string; sort: string };
     options: {
         categories: { value: string; label: string; description: string }[];
+        filterCategories: { value: string; label: string }[];
         archiveReasons: { value: string; label: string }[];
     };
     canManage: boolean;
@@ -184,7 +185,7 @@ const selectedCategory = () =>
                     @change="applyFilters"
                 >
                     <option value="">All</option>
-                    <option v-for="c in options.categories" :key="c.value" :value="c.value">
+                    <option v-for="c in options.filterCategories" :key="c.value" :value="c.value">
                         {{ c.label }}
                     </option>
                 </select>
@@ -288,7 +289,13 @@ const selectedCategory = () =>
                                     <a class="underline" :href="`${base}/${d.id}/download`"
                                         >Download<span class="sr-only"> {{ d.title }}</span></a
                                     >
-                                    <template v-if="canManage && !d.archived">
+                                    <template
+                                        v-if="
+                                            canManage &&
+                                            !d.archived &&
+                                            d.category !== 'issued_certificate'
+                                        "
+                                    >
                                         <button
                                             type="button"
                                             class="ml-3 underline"

@@ -3,6 +3,7 @@
 namespace Database\Seeders\Demo;
 
 use App\Domain\Guardians\Application\StudentSiblingReader;
+use App\Domain\Students\Application\Certificates\StudentCertificateEligibility;
 use App\Domain\Students\Application\Documents\StudentDocumentCategory;
 use App\Domain\Students\Application\Movements\StudentMovementRegister;
 use App\Domain\Students\Application\StudentAccess;
@@ -42,7 +43,7 @@ final class DemoSisVerifier
             $placements = DB::table('student_enrollments as e')->join('campuses as c', 'c.id', '=', 'e.campus_id')
                 ->where('e.school_id', $school->id)->where('e.status', 'active')
                 ->selectRaw('c.code, count(*) as n')->groupBy('c.code')->pluck('n', 'code')->all();
-            $check(Student::query()->count() === 17, 'Gachibowli does not have exactly 17 Students');
+            $check(Student::query()->count() === 18, 'Gachibowli does not have exactly 18 Students');
             $check(($placements['GCB-MAIN'] ?? 0) === 13 && ($placements['GCB-EY'] ?? 0) === 3, 'Gachibowli current placements are not 13 on the Main Campus and 3 on Early Years');
 
             // SIS.EXP-2: the movement history, read through the register itself.
@@ -88,7 +89,25 @@ final class DemoSisVerifier
             $check(! DB::table('student_documents as sd')->join('documents as d', 'd.id', '=', 'sd.document_id')->join('students as st', 'st.id', '=', 'sd.student_id')
                 ->where(fn ($q) => $q->whereColumn('d.school_id', '!=', 'sd.school_id')->orWhereColumn('st.school_id', '!=', 'sd.school_id')->orWhereColumn('d.student_id', '!=', 'sd.student_id'))->exists(), 'a Student document crosses a Student or School');
             $files = DB::table('student_documents as sd')->join('documents as d', 'd.id', '=', 'sd.document_id')->get(['d.storage_disk', 'd.storage_path', 'd.classification_tier']);
-            $check($files->count() === 5 && $files->every(fn ($f) => $f->classification_tier === 'highly_sensitive' && Storage::disk($f->storage_disk)->exists($f->storage_path)), 'a Gachibowli Student document file is missing or not Highly Sensitive');
+            $check($files->count() === 8 && $files->every(fn ($f) => $f->classification_tier === 'highly_sensitive' && Storage::disk($f->storage_disk)->exists($f->storage_path)), 'a Gachibowli Student document file is missing or not Highly Sensitive');
+
+            // SIS.EXP-4: Meera's certificates -- LC-000001 voided as replaced by
+            // LC-000002, and TC-000001; each with its own PDF Student document.
+            $meera = Student::query()->where('first_name', 'Meera')->where('last_name', 'Iyer')->first();
+            if ($meera === null) {
+                $problems[] = 'Meera Iyer (the certificate leaver) is missing';
+            } else {
+                $certs = DB::table('student_certificates as c')->join('student_documents as sd', 'sd.document_id', '=', 'c.document_id')->join('documents as d', 'd.id', '=', 'c.document_id')
+                    ->where('c.student_id', $meera->id)->orderBy('c.certificate_type')->orderBy('c.serial')
+                    ->get(['c.id', 'c.display_number', 'c.status', 'c.void_reason', 'c.supersedes_certificate_id', 'c.student_name', 'sd.category', 'd.mime_type', 'd.storage_disk', 'd.storage_path']);
+                $check($certs->map(fn ($c) => "{$c->display_number}:{$c->status}")->all() === ['LC-000001:voided', 'LC-000002:issued', 'TC-000001:issued'], 'Meera Iyer does not have LC-000001 (void), LC-000002 and TC-000001');
+                $check($certs->count() === 3 && $certs[1]->supersedes_certificate_id === $certs[0]->id && $certs[0]->void_reason === 'replaced_by_corrected_certificate', 'LC-000002 does not replace the voided LC-000001');
+                $check($certs->count() === 3 && [$certs[0]->student_name, $certs[1]->student_name] === ['Meera Iyr', 'Meera Iyer'], 'the original keeps its frozen (misspelt) snapshot and the replacement the corrected one');
+                $check($certs->every(fn ($c) => $c->category === 'issued_certificate' && $c->mime_type === 'application/pdf' && Storage::disk($c->storage_disk)->exists($c->storage_path)), 'a certificate PDF is missing or not an issued-certificate Student document');
+            }
+            $arjun = Student::query()->where('first_name', 'Arjun')->where('last_name', 'Mehta')->first();
+            $check($arjun !== null && app(StudentCertificateEligibility::class)->evaluate($school, $arjun)['refusal'] === 'exit_not_recorded', 'Arjun Mehta is not the "exit not recorded" (ineligible) example');
+            $check(DB::table('student_certificates')->count() === 3 && DB::table('student_certificates')->whereColumn('school_id', '!=', DB::raw("'".$school->id."'"))->doesntExist(), 'a certificate exists outside Meera\'s three');
 
             // The Early Years Principal reaches exactly the Early Years Students.
             $principal = User::query()->where('email', 'gachibowli.ey.principal@example.test')->first();
@@ -115,6 +134,7 @@ final class DemoSisVerifier
             'gachibowliActivePlacements' => DB::table('student_enrollments')->where('school_id', $school->id)->where('status', 'active')->count(),
             'gachibowliMovements' => app(StudentMovementRegister::class)->page($school, [], true)->total(),
             'gachibowliStudentDocuments' => DB::table('student_documents')->where('school_id', $school->id)->count(),
+            'gachibowliCertificates' => DB::table('student_certificates')->where('school_id', $school->id)->count(),
         ]);
     }
 }
