@@ -1,0 +1,5 @@
+first_name,middle_name,last_name,date_of_birth,academic_year_code,campus_code,grade_code,section_code,roll_number,start_date,guardian1_key,guardian1_first_name,guardian1_last_name,guardian1_relationship,guardian1_email,guardian1_mobile,guardian1_legal_guardian,guardian1_emergency_contact,guardian1_authorized_pickup,guardian2_key,guardian2_first_name,guardian2_last_name,guardian2_relationship,guardian2_email,guardian2_mobile,guardian2_legal_guardian,guardian2_emergency_contact,guardian2_authorized_pickup
+Riya,,Kapoor,2015-05-18,AY2026,GCB-MAIN,G5,A,41,2026-10-01,KAPOOR,Anil,Kapoor,father,anil.kapoor@example.test,,yes,yes,yes,,Pooja,Kapoor,mother,,+919810000041,yes,,yes
+Dev,,Kapoor,2021-07-02,AY2026,GCB-EY,UKG,A,41,2026-10-01,KAPOOR,Anil,Kapoor,father,anil.kapoor@example.test,,yes,yes,yes,,,,,,,,,
+Ishita,,Nair,2017-11-23,AY2026,GCB-MAIN,G3,A,41,2026-10-01,,Suresh,Nair,father,suresh.nair@example.test,,yes,yes,,,,,,,,,,
+Kabir,,Rao,2016-02-09,AY2026,GCB-MAIN,G4,A,41,2026-10-01,,Lata,Rao,mother,,+919810000044,yes,,yes,,,,,,,,,

@@ -153,6 +153,7 @@ use App\Http\Controllers\App\StudentDirectoryController;
 use App\Http\Controllers\App\StudentDocumentController;
 use App\Http\Controllers\App\StudentEnrollmentController;
 use App\Http\Controllers\App\StudentGuardianRelationshipController;
+use App\Http\Controllers\App\StudentImportController;
 use App\Http\Controllers\App\StudentMovementController;
 use App\Http\Controllers\App\StudentProcessingAuthorizationController;
 use App\Http\Controllers\App\StudentSubjectEnrollmentController;
@@ -716,6 +717,12 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         // a declared whole-School operation of enrollments.view). Literal
         // path before '/{student}'.
         Route::get('/movements', [StudentMovementController::class, 'index'])->middleware('capability:enrollments.view')->name('movements');
+        // SIS.EXP-5 (OD-SIS-3): the add-only bulk import (whole-School
+        // `students.import`; never Campus-adopted). Registered before '/{student}'.
+        Route::get('/import', [StudentImportController::class, 'create'])->middleware(['capability:students.import', 'private-no-store'])->name('import.create');
+        Route::get('/import/template', [StudentImportController::class, 'template'])->middleware('capability:students.import')->name('import.template');
+        Route::post('/import/preview', [StudentImportController::class, 'preview'])->middleware(['capability:students.import', 'throttle:student-import', 'private-no-store'])->name('import.preview');
+        Route::post('/import/commit', [StudentImportController::class, 'commit'])->middleware(['capability:students.import', 'throttle:student-import', 'private-no-store'])->name('import.commit');
         Route::get('/create', [StudentController::class, 'create'])->middleware('capability:students.manage')->name('create');
         Route::post('/', [StudentController::class, 'store'])->middleware('capability:students.manage')->name('store');
         Route::get('/{student}', [StudentController::class, 'show'])->middleware('capability:students.view')->name('show');

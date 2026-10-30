@@ -218,6 +218,9 @@ final class TenantRetentionCatalog
             // SIS.EXP-4: the forward-only certificate counters, kept with the
             // School so a certificate number is never re-issued.
             'student_certificate_sequences',
+            // SIS.EXP-5: committed bulk-import batches -- counts and a digest,
+            // no personal data; operational history kept with the School.
+            'student_import_batches',
             // ORG.12F (ADR 0080 §11): School presentation (navigation overrides,
             // branding) -- no personal data, kept with the School.
             'school_navigation_preferences', 'school_brand_profiles',

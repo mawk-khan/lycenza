@@ -111,8 +111,9 @@ class ElevationRlsIsolationTest extends TestCase
         // + campus_services (ORG.12C, ADR 0080 §8);
         // + school_navigation_preferences and school_brand_profiles (ORG.12F, ADR 0080 §11);
         // + student_documents (SIS.EXP-3, ADR 0012 amendment);
-        // + student_certificates and student_certificate_sequences (SIS.EXP-4).
-        $this->assertSame(222, (int) DB::connection('pgsql_admin')->selectOne(
+        // + student_certificates and student_certificate_sequences (SIS.EXP-4);
+        // + student_import_batches (SIS.EXP-5).
+        $this->assertSame(223, (int) DB::connection('pgsql_admin')->selectOne(
             "select count(*) as c from pg_class where relrowsecurity and relforcerowsecurity and relnamespace = 'public'::regnamespace",
         )->c, 'No tenant table gained or lost RLS in Phase 0N.3.');
     }

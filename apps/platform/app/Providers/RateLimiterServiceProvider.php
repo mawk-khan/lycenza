@@ -106,6 +106,9 @@ class RateLimiterServiceProvider extends ServiceProvider
         // by the signed-in User (rule 61); ample for an operator, a bound on loops.
         RateLimiter::for('transport-rider-import', fn (Request $request) => Limit::perMinute(10)
             ->by('transport-rider-import:'.($request->user()?->getAuthIdentifier() ?? $request->ip())));
+        // SIS.EXP-5: the bulk Student & Guardian import's preview and commit.
+        RateLimiter::for('student-import', fn (Request $request) => Limit::perMinute(30)
+            ->by('student-import:'.($request->user()?->getAuthIdentifier() ?? $request->ip())));
 
         // Webhook administration specifically (section 31): tighter
         // than general School mutations -- creating an endpoint,

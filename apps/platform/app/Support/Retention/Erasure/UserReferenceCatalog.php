@@ -95,6 +95,8 @@ final class UserReferenceCatalog
         'student_documents' => ['uploaded_by_user_id' => self::RETAIN_REFERENCE, 'archived_by_user_id' => self::RETAIN_REFERENCE],
         // SIS.EXP-4: certificate issuer and voider are historical references.
         'student_certificates' => ['issued_by_user_id' => self::RETAIN_REFERENCE, 'voided_by_user_id' => self::RETAIN_REFERENCE],
+        // SIS.EXP-5: the importer of a committed batch.
+        'student_import_batches' => ['committed_by_user_id' => self::RETAIN_REFERENCE],
         // TCH-E (ADR 0063 section 45): who granted and who ended elective teaching ownership.
         'elective_teaching_assignments' => ['created_by_user_id' => self::RETAIN_REFERENCE, 'ended_by_user_id' => self::RETAIN_REFERENCE],
         'email_suppressions' => ['released_by_user_id' => self::RETAIN_REFERENCE],

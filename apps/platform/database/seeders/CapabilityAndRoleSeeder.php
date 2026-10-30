@@ -179,6 +179,13 @@ class CapabilityAndRoleSeeder extends Seeder
             // only, never Campus-adopted; `school_admin`/`principal` only.
             ['key' => 'students.certificates.issue', 'label' => 'Issue, void and reissue Student Leaving and Transfer certificates', 'namespace' => 'school'],
 
+            // SIS.EXP-5 (OD-SIS-3, owner-authorized 2026-10-30) -- the add-only
+            // bulk Student & Guardian import: higher impact than one Student
+            // edit, so never implied by students/guardians/enrollments.manage
+            // (which the import ALSO requires). Whole-School only;
+            // `school_admin` only.
+            ['key' => 'students.import', 'label' => 'Import new Students, Guardians and placements in bulk (add-only)', 'namespace' => 'school'],
+
             // Phase 5A.1 -- Communication Hub foundation. A single
             // `communications.manage` capability covers thread/
             // participant administration (deliberately not split
@@ -1131,6 +1138,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     'students.documents.view', 'students.documents.manage',
                     // SIS.EXP-4 (OD-SIS-2): Leaving/Transfer certificates.
                     'students.certificates.issue',
+                    // SIS.EXP-5 (OD-SIS-3): bulk import, School Admin only.
+                    'students.import',
                     'guardians.view', 'guardians.manage',
                     'communications.view', 'communications.send', 'communications.reply',
                     'communications.manage', 'communications.audit.view', 'communications.announce',

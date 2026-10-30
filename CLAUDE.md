@@ -1761,3 +1761,12 @@ once several modules copy it.
      - **Finance:** fees never block issuance. Finance context reaches only whole-School Finance holders, and nothing Financial is printed.
      - **Never:** a public, QR or verification URL, e-signature, tenant template, API route or no-dues certificate.
      - **Production gate:** `StudentCertificateAvailability` (local/testing only, no flag) stays closed until the legal review in `docs/modules/STUDENT-ENROLLMENT.md` approves the wording.
+
+122. **The bulk Student & Guardian import is add-only onboarding over the canonical services (SIS.EXP-5, OD-SIS-3).**
+     - **One code-owned contract:** `student_guardian_import_v1` in `StudentGuardianImport`. Exactly its columns; a new format is a new version, never configuration. Never a mapping engine, tenant schema or history import.
+     - **Commit:** only through `StudentService::create`, `StudentEnrollmentService::enroll`, `GuardianService::create`, `GuardianContactService::create`, `StudentGuardianRelationshipService::link`/`setPrimary`. Never a raw insert, an update, a status change, a merge or a link to an existing Student or Guardian.
+     - **Identity:** a possible existing Student or Guardian is an acknowledged WARNING that still creates NEW records. Never fuzzy matching. A batch-local Guardian key is never stored.
+     - **Preview:** read-only and signed (School, actor, format, time, rows, result digest), 30-minute expiry.
+     - **Commit transaction:** checks the signature before a FreshMfa code, then in ONE transaction re-reads `students.import` + `students.manage` + `guardians.manage` + `enrollments.manage` fresh, re-evaluates (stale = refused), claims the content digest (unique per School; retries replay) and is all-or-nothing. At most 100 rows.
+     - **Authority:** `students.import` belongs to `school_admin` only, whole-School, never Campus-adopted.
+     - **Never:** storing the upload or rejected rows; PII in the batch row, batch audit or logs; email, SMS, invitations or Portal accounts; Documents, Finance, Attendance, Transport, Library or Hostel data.

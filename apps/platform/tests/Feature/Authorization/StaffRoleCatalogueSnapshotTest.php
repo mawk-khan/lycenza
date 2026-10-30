@@ -155,7 +155,7 @@ class StaffRoleCatalogueSnapshotTest extends TestCase
             'school.roles.grant.hr', 'school.roles.grant.hr_sensitive',
             'school.roles.grant.payroll_sensitive', 'school.roles.manage', 'school.roles.view',
             'school.settings.manage', 'school.settings.view', 'students.certificates.issue',
-            'students.documents.manage', 'students.documents.view', 'students.manage',
+            'students.documents.manage', 'students.documents.view', 'students.import', 'students.manage',
             'students.processing_authorizations.manage', 'students.processing_authorizations.view',
             'students.view', 'syllabus.manage', 'syllabus.view', 'teaching.assignments.manage',
             'teaching.assignments.view', 'timetable.periods.manage', 'timetable.periods.view',

@@ -1,0 +1,6 @@
+first_name,middle_name,last_name,date_of_birth,academic_year_code,campus_code,grade_code,section_code,roll_number,start_date,guardian1_key,guardian1_first_name,guardian1_last_name,guardian1_relationship,guardian1_email,guardian1_mobile,guardian1_legal_guardian,guardian1_emergency_contact,guardian1_authorized_pickup,guardian2_key,guardian2_first_name,guardian2_last_name,guardian2_relationship,guardian2_email,guardian2_mobile,guardian2_legal_guardian,guardian2_emergency_contact,guardian2_authorized_pickup
+Neha,,Verma,2015-03-14,AY2026,GCB-MAIN,G5,Z,42,2026-10-01,,Amit,Verma,father,amit.verma@example.test,,yes,,,,,,,,,,,
+Rahul,,Joshi,2016-08-01,AY2026,GCB-MAIN,G4,A,42,2026-10-01,,Kiran,Joshi,mother,kiran.joshi@example.test,,yes,,,,,,,,,,,
+Rahul,,Joshi,2016-08-01,AY2026,GCB-MAIN,G4,A,43,2026-10-01,,Kiran,Joshi,mother,kiran.joshi@example.test,,yes,,,,,,,,,,,
+Meghna,,Das,2017-01-20,AY2026,GCB-MAIN,G3,A,42,2026-10-01,,Prakash,Das,uncle,prakash.das@example.test,,yes,,,,,,,,,,,
+Sameer,,Ali,31/12/2016,AY2026,GCB-MAIN,G5,B,42,2026-10-01,,Farida,Ali,mother,,+919810000045,yes,,,,,,,,,,,

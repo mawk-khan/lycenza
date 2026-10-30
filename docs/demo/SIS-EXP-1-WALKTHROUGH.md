@@ -1,4 +1,4 @@
-# SIS.EXP-1 / 2 / 3 / 4 — Student 360, directory, movement register, Student documents and certificates: demo data and owner walkthrough
+# SIS.EXP-1 to 5 — Student 360, directory, movement register, Student documents, certificates and bulk import: demo data and owner walkthrough
 
 Status: **canonical SIS demonstration** (SIS.EXP-1, 2026-10-29), inside the
 ORG.12E-D1 Organization world (`ORGANIZATION-DEMO-DATA.md`). Built by
@@ -183,3 +183,38 @@ Steps 7 and the Teacher refusal are covered by `StudentCertificateTest`;
 there is no Gachibowli Teacher persona.
 
 Run `ddev demo-reset` after steps 4–5.
+
+## 7. SIS.EXP-5 — Bulk Student & Guardian import (owner path)
+
+**Nothing is seeded.** The import IS the demonstration; `ddev demo-reset`
+returns the canonical world (18 Gachibowli Students) afterwards.
+
+**Fictional fixtures** in `docs/demo/fixtures/`:
+
+| File | Contents | Expected preview |
+|---|---|---|
+| `sis-exp-5-import-valid.csv` | Riya Kapoor (Grade 5 · A, Main) and her brother Dev Kapoor (UKG · A, Early Years) share ONE new Guardian, Anil Kapoor (key `KAPOOR`); Riya also has Pooja Kapoor. Ishita Nair (Grade 3 · A) has Suresh Nair; Kabir Rao (Grade 4 · A) has Lata Rao. Rolls 41, start 1 October 2026 | 4 Students, 4 Guardians, 5 relationships, both Campuses, all Ready |
+| `sis-exp-5-import-invalid.csv` | an unknown Section (`Z`); the same Student twice; an unknown relationship (`uncle`); a malformed date (`31/12/2016`) | 4 errors and 1 warning; no Import form |
+
+**MFA:** the commit asks for a fresh code (enroll under *Account security*
+first).
+
+| # | Persona | Route | Expected | Must not happen |
+|---|---|---|---|---|
+| 1 | `gachibowli.admin` | *People* → **Import Students** (`/app/students/import`) | the page, the template download (`student_guardian_import_v1`), "How to fill it in" and this School's codes | — |
+| 2 | (same) | upload `sis-exp-5-import-invalid.csv` | each error row names its field and reason; nothing can be imported | any Student created |
+| 3 | (same) | upload `sis-exp-5-import-valid.csv` | 4 Ready rows, "Student numbers will be assigned on import"; still no Riya in the directory | a number reserved; any record before the commit |
+| 4 | (same) | confirm, enter a code, **Import all rows** | "Imported 4 Student(s), 4 Guardian(s) and 4 placement(s)."; one row in Past imports | an email, SMS, invitation or portal account |
+| 5 | (same) | *Learners* → Riya Kapoor (Student 360) | Anil Kapoor (father, primary) and Pooja Kapoor (mother); the Family card shows Dev Kapoor | a link to an existing Guardian |
+| 6 | (same) | *Student movements*, search Riya / Dev | each a **First enrollment** (Main / Early Years) | a fake or historical movement |
+| 7 | (same) | upload the valid file again | "This exact file was already imported…"; no Import form | a second set of Students |
+| 8 | `gachibowli.ey.principal` (Campus-scoped) | `/app/students/import` | 403 | — |
+| 9 | `principal@example.test` (Lycenza Demo School Principal) | (same) | 403: import is School Admin only | — |
+| 10 | `gachibowli.cashier` | (same) | 403 | — |
+| 11 | `network.manager`, `platform.admin` | (same) | back to the dashboard | — |
+
+**Verified on 2026-10-30** (DDEV, real browser, Playwright 1.62.1): 23/23
+checks passed on a fresh `ddev demo-reset`, including 1280/768/390 widths,
+keyboard order and no email sent. Run `ddev demo-reset` afterwards:
+the imported Students disappear, and the verifier confirms the canonical
+world.

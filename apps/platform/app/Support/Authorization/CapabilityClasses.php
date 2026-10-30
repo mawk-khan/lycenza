@@ -229,6 +229,7 @@ final class CapabilityClasses
         'school.settings.view' => ['operational'],
         'students.certificates.issue' => ['children'],
         'students.documents.manage' => ['children'],
+        'students.import' => ['children'],
         'students.documents.view' => ['children'],
         'students.manage' => ['children'],
         'students.processing_authorizations.manage' => ['authority', 'children'],

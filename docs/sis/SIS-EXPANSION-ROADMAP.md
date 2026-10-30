@@ -49,6 +49,22 @@ The brief's candidate order was re-sequenced on repository evidence:
 | **SIS.EXP-7** | House (or Club) Membership | The one named concept a pilot asks for: per-year membership, one House per Student per year, optional responsibility labels from a closed list. No generic group engine, no gender analytics, no badges | *decision-gated* OD-SIS-4 (D-17 revisit) | M | yes (§5) | SR-17 (part) |
 | **SIS.EXP-8** | SIS Parity Closure Re-audit | Re-read the 42-family map; reclassify; rescore; verify the demo world; record the remaining owner/legal gates | after the chosen waves | audit | none | all |
 
+### 2.0c SIS.EXP-5 — IMPLEMENTED (2026-10-30)
+
+OD-SIS-3 was decided by the owner on 2026-10-30. Per the brief's stated
+preference, there is one new capability, `students.import`, held by
+`school_admin` only. Built as described in
+`docs/modules/STUDENT-GUARDIAN-IDENTITY.md`, "Bulk Student & Guardian
+import".
+
+**Recorded differences from §2:**
+- New Guardians only. No existing-Guardian link, because there is no safe
+  explicit reference; a matching contact is a warning.
+- At most 100 rows a file, from measured commit time.
+- The demo resets to the canonical world: the walkthrough imports live, and
+  the fixtures live in `docs/demo/fixtures/`.
+- `admissions_officer` is not granted import (an owner decision if wanted).
+
 ### 2.0b SIS.EXP-4 — IMPLEMENTED FOR DEVELOPMENT (2026-10-30)
 
 Decided by the owner:

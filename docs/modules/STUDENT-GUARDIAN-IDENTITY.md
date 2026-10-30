@@ -1895,3 +1895,121 @@ step-up; the list page does.
   `.archived` (closed reason).
 - Plus Documents' own `document.*` events.
 - Ids and codes only: never a title, file name or content.
+
+## Bulk Student & Guardian import (SIS.EXP-5, 2026-10-30, OD-SIS-3)
+
+An add-only onboarding tool for Students already at the School. One
+code-owned CSV contract, `student_guardian_import_v1`, read by
+`App\Domain\Students\Application\Import\StudentGuardianImport`, an adapter
+over the canonical write paths:
+- `StudentService::create()`;
+- `StudentEnrollmentService::enroll()`;
+- `GuardianService::create()`;
+- `GuardianContactService::create()`;
+- `StudentGuardianRelationshipService::link()` / `setPrimary()`.
+
+It is never an update, a merge, a mapping or schema engine, a history,
+document, Finance, Attendance, Transport, Library or Hostel import, a
+message sender or a Portal-account provisioner. The page is
+`/app/students/import` (template, this School's codes, upload, preview,
+commit, past imports).
+
+**The v1 file** (UTF-8 CSV; header names decide, any order; every column
+present; at most 100 rows and 256 KB):
+
+| Columns | Rule |
+|---|---|
+| `first_name`, `date_of_birth` | required; dates are YYYY-MM-DD; the date of birth is never in the future |
+| `middle_name`, `last_name` | optional |
+| `academic_year_code`, `campus_code`, `grade_code`, `section_code`, `roll_number`, `start_date` | required; codes of THIS School (case-insensitive), the Section of that year, Campus and Grade, active; a year not closed; the start date within the year; the roll free in the Section |
+| `guardianN_first_name`, `guardianN_last_name` | for N = 1, 2; a Guardian slot is used when any of its cells is filled; Guardian 1 becomes the primary Guardian |
+| `guardianN_relationship` | one of RelationshipType: `mother`, `father`, `parent`, `step_parent`, `grandparent`, `legal_guardian`, `foster_guardian`, `sibling`, `relative`, `other` |
+| `guardianN_email`, `guardianN_mobile` | normalized by the canonical normalizers; invalid = error |
+| `guardianN_legal_guardian`, `guardianN_emergency_contact`, `guardianN_authorized_pickup` | `yes` or `no` (blank = no) |
+| `guardianN_key` | batch-local: rows with the same key share ONE new Guardian, and must repeat exactly the same name and contacts. Never stored |
+
+- **Never importable:** a Student number (always allocated), a status, a
+  School, any statutory, health, caste, religion, gender or address field.
+- **An unknown or missing column refuses the file.**
+- **Names:** any Unicode script. Values are kept as typed (a leading `=` is
+  just text) and escaped where shown.
+- **Refused characters:** control and text-direction-override characters.
+- **A quoted cell with a line break** is refused (one row = one line).
+- **An inactive Grade** is refused.
+- **Acknowledged duplicates:** the acknowledgement covers exactly the
+  candidates the preview showed; a new one appearing since makes the commit
+  roll back.
+
+**Identity rules.**
+- Every Student and Guardian is NEW.
+- **Possible existing Student:** the exact StudentDuplicateCandidates rule
+  makes it a WARNING (with that Student's number). If acknowledged, the
+  import creates a NEW Student; it never links, updates or merges.
+- **Same contact as an existing Guardian:** a WARNING. A NEW Guardian is
+  still created, and linking the existing one is a manual step.
+- **Errors:** the same Student twice in one file, or a repeated roll in one
+  Section.
+- **Warning:** no Guardian, or a Guardian without any contact.
+- Any error blocks the whole batch.
+
+**Preview** (read-only).
+- Nothing is written, and no Student number is reserved.
+- The rows round-trip through the page under an HMAC signature binding the
+  School, actor, format, issue time, the normalized rows and the result
+  digest. It expires after 30 minutes (the Transport import value).
+- An identical file already committed is shown as "already imported" and
+  cannot be committed again.
+
+**Commit.**
+1. The route floor is `students.import`. The signature and expiry are
+   checked BEFORE a fresh MFA code is consumed, then the code and an explicit
+   confirmation are required (plus the warnings acknowledgement when any
+   exist).
+2. In ONE transaction:
+   - the School must be operational;
+   - `students.import`, `students.manage`, `guardians.manage` and
+     `enrollments.manage` are each re-read fresh (whole School);
+   - every row is re-evaluated, and the batch is refused if any is an error
+     or the result changed since the preview (stale);
+   - the content digest is claimed (`student_import_batches`, unique per
+     School: a concurrent or later retry replays it);
+   - then the canonical services run, in file order.
+3. Any refusal rolls the whole batch back. There is no partial success.
+4. Proven with two real processes (`StudentGuardianImportConcurrencyTest`).
+
+**Authority.** `students.import` (new; `school_admin` only; whole-School,
+never Campus-adopted), plus the three ordinary manage keys.
+- The page and the preview need all four, because the preview reveals
+  possible existing Students and Guardian contacts.
+- The commit re-reads them fresh before anything, including a replay.
+
+Refused:
+- Principal;
+- Teachers;
+- Campus-scoped grants;
+- Guardians;
+- Network and platform actors.
+
+The `admissions_officer` system role, which does not hold `students.manage`,
+is not granted it (an owner decision if wanted).
+
+**Storage and audit.**
+- The upload is read in its request only and never stored.
+- Rejected rows are never persisted.
+- `student_import_batches` keeps the format, digest, counts, actor and time
+  only (append-only, forced RLS, tenant lifetime).
+- One `student_import.committed` audit carries ids, counts and the MFA time.
+  The canonical per-record audits (`student.created`, `guardian.created`, …)
+  stay. No name, email or phone is in the batch audit or logs.
+
+**Measured** (development stack):
+
+| Rows | Preview | Commit |
+|---|---|---|
+| 10 | ~0.1 s | 0.4 s |
+| 100 | ~0.05 s | 3.9 s (~63 queries a row) |
+| 200 | ~0.05 s | 15 s |
+
+- The preview reads references in a constant ~31 queries.
+- 200 rows grow faster than linearly (nested service transactions), hence the
+  100-row limit.

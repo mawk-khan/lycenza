@@ -320,6 +320,25 @@ counts 7 (SR-12 left PARTIAL; SR-41 joined it).
 Not reclassified: bulk import (SR-06), groups (SR-17), statutory documents,
 the Student Portal and the strength/analytics families.
 
+## 5.5 After SIS.EXP-5 (2026-10-30)
+
+| SR | Built by SIS.EXP-5 | New class |
+|---|---|---|
+| SR-06 | Add-only bulk Student & Guardian import: a template, this School's codes, upload, a signed read-only preview (ready / warning / error per row), an atomic MFA-assured commit through the canonical services (Students, placements, Guardians, contacts, relationships, primary Guardian, sibling sharing), and past imports | **`EXISTING_DIFFERENT_ACCEPTED`** (was OWNER_DECISION_REQUIRED). Different by design: no section-assignment wizard, and no gender, admission type or address (not canonical fields); no update or merge mode; at most 100 rows a file |
+
+Recomputed with the §5 formula. EDA now counts 11 scored families; PARTIAL
+stays 7.
+
+| Measure | After SIS.EXP-4 | After SIS.EXP-5 |
+|---|---|---|
+| Overall weighted / strict | 36.5 % / 27.0 % | **39.2 % / 29.7 %** (14.5 / 37, 11 / 37) |
+| v1 weighted / strict | 79.4 % / 58.8 % | **80.6 % / 61.1 %** (14.5 / 18, 11 / 18) |
+| Screen-weighted, overall | 22.7 % / 14.1 % | 24.3 % / 15.8 % (72.5 / 298, 47 / 298) |
+| Screen-weighted, v1 | 72.6 % / 45.2 % | 74.0 % / 48.0 % (72.5 / 98, 47 / 98) |
+
+Not reclassified: generic data migration, Student update import, groups
+(SR-17), statutory documents and the Student Portal.
+
 ## 6. Re-use
 
 - SIS.EXP checkpoints cite `SR-nn` ids in their records and, where a
