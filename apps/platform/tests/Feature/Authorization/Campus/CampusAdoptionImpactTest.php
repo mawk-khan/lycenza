@@ -50,6 +50,9 @@ class CampusAdoptionImpactTest extends TestCase
      * SIS 11.7 (OD-SIS-4): principal and school_admin gain
      * students.houses.view (the House roster follows the Student's current
      * Campus); House configuration and assignment stay whole-School.
+     * SIS 11.8 (OD-SIS-5A/5B): the same two gain students.communities.view
+     * (Club and Activity rosters); their configuration and assignment stay
+     * whole-School.
      * SIS 11.5 (owner decision 2026-10-31): admissions_officer, principal and
      * school_admin gain admissions.documents.view/.manage, scoped by the
      * application's own Campus like the rest of pre-conversion Admissions;
@@ -64,8 +67,8 @@ class CampusAdoptionImpactTest extends TestCase
         'hostel_warden' => ['hostel.residency.manage', 'hostel.residency.view'],
         'hr_officer' => ['hr.employees.assignments.manage', 'hr.employees.assignments.view', 'hr.employees.manage', 'hr.employees.view'],
         'librarian' => ['library.circulation.manage', 'library.circulation.view'],
-        'principal' => ['admissions.documents.manage', 'admissions.documents.view', 'admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'enrollments.manage', 'enrollments.view', 'examinations.papers.manage', 'examinations.papers.view', 'hostel.residency.manage', 'hostel.residency.view', 'hr.employees.manage', 'hr.employees.view', 'inventory.stock.manage', 'inventory.stock.view', 'library.circulation.manage', 'library.circulation.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'students.houses.view', 'students.manage', 'students.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view', 'visitor.visits.manage', 'visitor.visits.view'],
-        'school_admin' => ['admissions.documents.manage', 'admissions.documents.view', 'admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'enrollments.manage', 'enrollments.view', 'examinations.papers.manage', 'examinations.papers.view', 'finance.charges.view', 'finance.payments.record', 'finance.payments.view', 'hostel.residency.manage', 'hostel.residency.view', 'hr.employees.manage', 'hr.employees.view', 'inventory.stock.manage', 'inventory.stock.view', 'library.circulation.manage', 'library.circulation.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'students.houses.view', 'students.manage', 'students.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view', 'visitor.visits.manage', 'visitor.visits.view'],
+        'principal' => ['admissions.documents.manage', 'admissions.documents.view', 'admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'enrollments.manage', 'enrollments.view', 'examinations.papers.manage', 'examinations.papers.view', 'hostel.residency.manage', 'hostel.residency.view', 'hr.employees.manage', 'hr.employees.view', 'inventory.stock.manage', 'inventory.stock.view', 'library.circulation.manage', 'library.circulation.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'students.communities.view', 'students.houses.view', 'students.manage', 'students.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view', 'visitor.visits.manage', 'visitor.visits.view'],
+        'school_admin' => ['admissions.documents.manage', 'admissions.documents.view', 'admissions.manage', 'admissions.view', 'attendance.manage', 'attendance.view', 'canteen.orders.manage', 'canteen.orders.view', 'curriculum.delivery.manage', 'curriculum.delivery.view', 'enrollments.manage', 'enrollments.view', 'examinations.papers.manage', 'examinations.papers.view', 'finance.charges.view', 'finance.payments.record', 'finance.payments.view', 'hostel.residency.manage', 'hostel.residency.view', 'hr.employees.manage', 'hr.employees.view', 'inventory.stock.manage', 'inventory.stock.view', 'library.circulation.manage', 'library.circulation.view', 'lms.assignments.manage', 'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'students.communities.view', 'students.houses.view', 'students.manage', 'students.view', 'timetable.schedule.manage', 'timetable.schedule.view', 'transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view', 'visitor.visits.manage', 'visitor.visits.view'],
         'stores_officer' => ['inventory.stock.manage', 'inventory.stock.view'],
         'transport_coordinator' => ['transport.assignments.manage', 'transport.assignments.view', 'transport.routes.view'],
     ];
@@ -183,7 +186,7 @@ class CampusAdoptionImpactTest extends TestCase
      * any SIS authority.
      */
     private const SIS_CAMPUS_CONFERRED = [
-        'principal' => ['enrollments.manage', 'enrollments.view', 'students.houses.view', 'students.manage', 'students.view'],
+        'principal' => ['enrollments.manage', 'enrollments.view', 'students.communities.view', 'students.houses.view', 'students.manage', 'students.view'],
     ];
 
     #[Test]
@@ -255,7 +258,7 @@ class CampusAdoptionImpactTest extends TestCase
             fn (string $key) => str_starts_with($key, 'students.') || str_starts_with($key, 'enrollments.') || str_starts_with($key, 'guardians.'),
         ));
         sort($sis);
-        $this->assertSame(['enrollments.manage', 'enrollments.view', 'students.houses.view', 'students.manage', 'students.view'], $sis, 'ORG.7F-1/7F-2 adopt exactly these SIS keys (+ SIS 11.7 students.houses.view, the House roster read).');
+        $this->assertSame(['enrollments.manage', 'enrollments.view', 'students.communities.view', 'students.houses.view', 'students.manage', 'students.view'], $sis, 'ORG.7F-1/7F-2 adopt exactly these SIS keys (+ SIS 11.7 students.houses.view and SIS 11.8 students.communities.view, the community roster reads).');
         $this->assertFalse(StaffRoleCatalog::campusScopable($roles->firstWhere('key', 'school_admin')), 'school_admin stays whole-School only.');
     }
 

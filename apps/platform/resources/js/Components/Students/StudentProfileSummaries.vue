@@ -22,6 +22,7 @@ const hasAny = computed(
         props.sections.library !== undefined ||
         props.sections.documents !== undefined ||
         props.sections.house !== undefined ||
+        props.sections.communities !== undefined ||
         props.sections.certificates !== undefined,
 );
 
@@ -244,6 +245,57 @@ function money(amount: string | null, currency: string | null): string {
                     class="mt-2 inline-block text-sm underline"
                     :href="sections.house.link"
                     >House and history</a
+                >
+            </article>
+
+            <!-- SIS 11.8: current Clubs and Activities (descriptive; never authority). -->
+            <article
+                v-if="sections.communities"
+                class="rounded border border-slate-200 p-4"
+                aria-labelledby="glance-communities"
+            >
+                <h3 id="glance-communities" class="text-sm font-semibold">Clubs and activities</h3>
+                <h4 class="mt-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Clubs
+                </h4>
+                <ul v-if="sections.communities.clubs.length > 0" class="text-sm">
+                    <li v-for="club in sections.communities.clubs" :key="club.name">
+                        {{ club.name }}
+                        <span
+                            v-if="club.responsibilities.length > 0"
+                            class="text-xs text-slate-600"
+                        >
+                            · {{ club.responsibilities.join(', ') }}</span
+                        >
+                    </li>
+                    <li v-if="sections.communities.moreClubs > 0" class="text-xs text-slate-600">
+                        and {{ sections.communities.moreClubs }} more
+                    </li>
+                </ul>
+                <p v-else class="text-sm text-slate-500">No current Club</p>
+                <h4 class="mt-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Activities
+                </h4>
+                <ul v-if="sections.communities.activities.length > 0" class="text-sm">
+                    <li v-for="activity in sections.communities.activities" :key="activity.name">
+                        {{ activity.name }}
+                        <span v-if="activity.category" class="text-xs text-slate-600">
+                            · {{ activity.category }}</span
+                        >
+                    </li>
+                    <li
+                        v-if="sections.communities.moreActivities > 0"
+                        class="text-xs text-slate-600"
+                    >
+                        and {{ sections.communities.moreActivities }} more
+                    </li>
+                </ul>
+                <p v-else class="text-sm text-slate-500">No current Activity</p>
+                <a
+                    v-if="sections.communities.link"
+                    class="mt-2 inline-block text-sm underline"
+                    :href="sections.communities.link"
+                    >Clubs, activities and history</a
                 >
             </article>
 

@@ -3,13 +3,13 @@
 namespace App\Http\Controllers\App;
 
 use App\Domain\Students\Application\Groups\HouseAdministrationService;
+use App\Domain\Students\Application\Groups\StudentGroupType;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
-use Inertia\Inertia;
 use Inertia\Response;
 
 /**
@@ -21,28 +21,15 @@ use Inertia\Response;
  */
 class HouseController extends Controller
 {
-    use AuthorizesCampusScope;
+    use AuthorizesCampusScope, PresentsCommunityDirectory;
 
     public function index(TenantContext $context, HouseAdministrationService $houses): Response
     {
         $school = $context->requireSchool();
         $scope = $this->authorizeCampusScope(HouseAdministrationService::VIEW, $school);
 
-        return Inertia::render('App/Students/Houses', [
-            'houses' => $houses->list($school, $scope)->map(fn (array $row) => [
-                'id' => $row['house']->id,
-                'name' => $row['house']->name,
-                'code' => $row['house']->code,
-                'description' => $row['house']->description,
-                'status' => $row['house']->status,
-                'displayOrder' => $row['house']->display_order,
-                'version' => $row['house']->version,
-                'members' => $row['members'],
-                'rosterUrl' => '/app/students/reports/students.houses?'.http_build_query(['house_id' => $row['house']->id]),
-            ])->values()->all(),
-            'countsScope' => $scope->isWholeSchool() ? 'whole_school' : 'campus',
-            'canManage' => Gate::forUser($context->actor())->allows('capability', [HouseAdministrationService::MANAGE, $school]),
-        ]);
+        return $this->directory(StudentGroupType::HOUSE, $houses->list($school, $scope), $scope,
+            Gate::forUser($context->actor())->allows('capability', [HouseAdministrationService::MANAGE, $school]));
     }
 
     public function store(Request $request, TenantContext $context, HouseAdministrationService $houses): RedirectResponse

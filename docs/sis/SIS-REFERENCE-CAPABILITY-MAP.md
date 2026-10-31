@@ -157,7 +157,7 @@ capability is added by this map.
 | SR-14 | `admissions.*`, `finance.fee_concessions.*` | whole School / per domain | applicant documents = children's documents | Concessions after conversion only | Domain future |
 | SR-15 | `finance.fee_concessions.*` | per Fees | — | — | Domain future |
 | SR-16 | `timetable.*` | Campus | — | Timetable never authority (ADR 0063) | Timetable-owned |
-| SR-17 | `students.houses.view` (Campus-adopted) / `.manage` / `.assign` (SIS 11.7, House only) | Campus (view) / whole School | gender analytics on groups not adopted | House is descriptive, never authority; other group types gated | OD-SIS-4 → SIS 11.7 |
+| SR-17 | `students.houses.*` (SIS 11.7, House) and `students.communities.*` (SIS 11.8, Club and Activity); `.view` Campus-adopted | Campus (view) / whole School | gender analytics on groups not adopted | Communities are descriptive, never authority; Project, Scholarship, Custom, Tag, Segment not authorized | OD-SIS-4 → SIS 11.7; OD-SIS-5A/5B → SIS 11.8 |
 | SR-18 | *(none yet)* | — | assessment of children | — | Examinations/E40 |
 | SR-19 | — | — | — | — | Profiling of children and families |
 | SR-20 | `finance.fee_structures.*` | whole School | — | Fees target by structure | Met |

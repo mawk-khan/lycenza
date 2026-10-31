@@ -64,7 +64,7 @@ interface Props {
     campusView: boolean;
     // ORG.7F-2: atomic Campus onboarding (students.manage AND enrollments.manage).
     canOnboard: boolean;
-    canViewHouses: boolean;
+    canViewCommunities: boolean;
     // SIS 11.4: governed export/print, when this viewer may.
     canExport?: boolean;
 }
@@ -175,11 +175,11 @@ function studentHref(student: StudentRow): string {
             </div>
             <div class="flex shrink-0 flex-wrap justify-end gap-2">
                 <a
-                    v-if="canViewHouses"
-                    href="/app/students/houses"
+                    v-if="canViewCommunities"
+                    href="/app/students/communities"
                     class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
                 >
-                    Houses
+                    Communities
                 </a>
                 <a
                     v-if="canOnboard"

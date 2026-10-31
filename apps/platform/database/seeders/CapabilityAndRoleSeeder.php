@@ -196,6 +196,11 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'students.houses.view', 'label' => 'View Houses, House rosters and Students\' House history', 'namespace' => 'school'],
             ['key' => 'students.houses.manage', 'label' => 'Create, correct and deactivate Houses', 'namespace' => 'school'],
             ['key' => 'students.houses.assign', 'label' => 'Assign Students to Houses and House responsibilities', 'namespace' => 'school'],
+            // SIS 11.8 (OD-SIS-5A, OD-SIS-5B): Clubs and Activities -- separate from
+            // the House keys, so neither grant widens the other.
+            ['key' => 'students.communities.view', 'label' => 'View Clubs, Activities, their rosters and Students\' Club and Activity history', 'namespace' => 'school'],
+            ['key' => 'students.communities.manage', 'label' => 'Create, correct and deactivate Clubs and Activities', 'namespace' => 'school'],
+            ['key' => 'students.communities.assign', 'label' => 'Add Students to Clubs and Activities, end them, and give Club responsibilities', 'namespace' => 'school'],
             ['key' => 'admissions.documents.view', 'label' => 'View and download pre-admission documents', 'namespace' => 'school'],
             ['key' => 'admissions.documents.manage', 'label' => 'Upload and archive pre-admission documents', 'namespace' => 'school'],
 
@@ -1153,6 +1158,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'students.documents.verify', 'admissions.documents.view', 'admissions.documents.manage',
                     // SIS 11.7: Houses (view Campus-adopted; manage and assign whole School).
                     'students.houses.view', 'students.houses.manage', 'students.houses.assign',
+                    'students.communities.view', 'students.communities.manage', 'students.communities.assign',
                     // SIS.EXP-4 (OD-SIS-2): Leaving/Transfer certificates.
                     'students.certificates.issue',
                     // SIS.EXP-5 (OD-SIS-3): bulk import, School Admin only.
@@ -1503,6 +1509,7 @@ class CapabilityAndRoleSeeder extends Seeder
                     'students.documents.verify', 'admissions.documents.view', 'admissions.documents.manage',
                     // SIS 11.7: Houses (view Campus-adopted; manage and assign whole School).
                     'students.houses.view', 'students.houses.manage', 'students.houses.assign',
+                    'students.communities.view', 'students.communities.manage', 'students.communities.assign',
                     // SIS.EXP-4 (OD-SIS-2): Leaving/Transfer certificates.
                     'students.certificates.issue',
                     'guardians.view', 'guardians.manage',

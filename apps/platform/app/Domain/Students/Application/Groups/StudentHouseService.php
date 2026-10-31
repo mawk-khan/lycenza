@@ -17,7 +17,6 @@ use App\Support\Authorization\Campus\CampusScope;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
-use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -54,7 +53,7 @@ use Illuminate\Validation\ValidationException;
  */
 final class StudentHouseService
 {
-    use AuthorizesCapability;
+    use AuthorizesCapability, GuardsStudentGroupWrites;
 
     public const string VIEW = 'students.houses.view';
 
@@ -93,6 +92,7 @@ final class StudentHouseService
                 'current' => $current,
                 'memberships' => $memberships,
                 'responsibilities' => StudentGroupResponsibility::query()->where('student_id', $student->id)
+                    ->whereIn('responsibility', array_map(fn (HouseResponsibility $r) => $r->value, HouseResponsibility::cases()))
                     ->orderByRaw('ends_on IS NOT NULL')->orderByDesc('starts_on')->orderByDesc('id')->get(),
                 'version' => StudentHouseVersion::of($student->id, $current),
             ];
@@ -260,8 +260,10 @@ final class StudentHouseService
         $student = $this->visibleStudent($school, $actor, $studentId);
 
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $actor, $student, $responsibilityId, $expectedVersion): StudentGroupResponsibility {
-            $this->lockStudentRow($school, $actor, $student->id);
-            $row = StudentGroupResponsibility::query()->where('student_id', $student->id)->whereNull('ends_on')->lockForUpdate()->find($responsibilityId)
+            $this->lockStudentRow($school, $actor, $student->id, self::ASSIGN);
+            // SIS 11.8: a House responsibility only (a Club one is StudentCommunityService's).
+            $row = StudentGroupResponsibility::query()->where('student_id', $student->id)->whereNull('ends_on')
+                ->whereIn('responsibility', array_map(fn (HouseResponsibility $r) => $r->value, HouseResponsibility::cases()))->lockForUpdate()->find($responsibilityId)
                 ?? throw (new ModelNotFoundException)->setModel(StudentGroupResponsibility::class, [$responsibilityId]);
             if ($row->version !== $expectedVersion) {
                 throw new StudentHouseChangedException;
@@ -275,31 +277,10 @@ final class StudentHouseService
         }));
     }
 
-    /** The Student when the actor sees them whole-School, else NOT FOUND. */
-    private function visibleStudent(School $school, User $actor, string $studentId): Student
-    {
-        $scope = $this->students->scopeOf($actor, 'students.view', $school);
-        if (! $scope->isWholeSchool()) {
-            throw (new ModelNotFoundException)->setModel(Student::class, [$studentId]);
-        }
-
-        return $this->context->withSchool($school, fn () => $this->students->student($school, $scope, $studentId));
-    }
-
-    private function lockStudentRow(School $school, User $actor, string $studentId): Student
-    {
-        $locked = Student::query()->where('school_id', $school->id)->whereKey($studentId)->lock('for no key update')->firstOrFail();
-        if (! $this->capabilities->holdsInSchoolNow($actor, self::ASSIGN, $school)) {
-            throw new AuthorizationException('This action is unauthorized.');
-        }
-
-        return $locked;
-    }
-
     /** @return array{0: Student, 1: ?StudentGroupMembership} */
     private function lockStudent(School $school, User $actor, string $studentId, string $expectedVersion): array
     {
-        $locked = $this->lockStudentRow($school, $actor, $studentId);
+        $locked = $this->lockStudentRow($school, $actor, $studentId, self::ASSIGN);
         $current = StudentGroupMembership::query()->where('student_id', $locked->id)->where('group_type', StudentGroupType::HOUSE->value)
             ->whereNull('ends_on')->lockForUpdate()->first();
         if (! hash_equals(StudentHouseVersion::of($locked->id, $current), $expectedVersion)) {
@@ -321,16 +302,6 @@ final class StudentHouseService
             'ended_by_user_id' => $actor->id,
             'version' => $membership->version + 1,
         ])->save();
-    }
-
-    private function closeResponsibility(StudentGroupResponsibility $row, User $actor, string $today): void
-    {
-        $row->forceFill(['ends_on' => $this->dayBefore($today), 'ended_by_user_id' => $actor->id, 'version' => $row->version + 1])->save();
-    }
-
-    private function dayBefore(string $today): string
-    {
-        return CarbonImmutable::parse($today)->subDay()->toDateString();
     }
 
     /**

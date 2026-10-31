@@ -10,6 +10,7 @@ use App\Domain\Payments\Application\Collections\OutstandingFeeRow;
 use App\Domain\Payments\Application\Collections\OutstandingFeesReadService;
 use App\Domain\Students\Application\Certificates\StudentCertificateReader;
 use App\Domain\Students\Application\Documents\StudentDocumentReader;
+use App\Domain\Students\Application\Groups\StudentCommunityService;
 use App\Domain\Students\Application\Groups\StudentHouseService;
 use App\Domain\Students\Application\StudentAccess;
 use App\Domain\Students\Application\SubjectOfferingRosterReadService;
@@ -77,6 +78,7 @@ final class StudentProfileSections
         private readonly StudentDocumentReader $documents,
         private readonly StudentCertificateReader $certificates,
         private readonly StudentHouseService $houses,
+        private readonly StudentCommunityService $communities,
     ) {}
 
     /**
@@ -134,6 +136,13 @@ final class StudentProfileSections
         $houseScope = $this->scopes->campusScope($actor, StudentHouseService::VIEW, $school);
         if (($house = $this->houses->summary($school, $houseScope, $student)) !== null) {
             $sections['house'] = [...$house, 'link' => $houseScope->isWholeSchool() ? "/app/students/{$student->id}/house" : null];
+        }
+        // SIS 11.8: current Clubs and Activities, under the viewer's
+        // students.communities.view scope (absent without it); a short list
+        // with "and N more", the full history on its whole-School page.
+        $communityScope = $this->scopes->campusScope($actor, StudentCommunityService::VIEW, $school);
+        if (($communities = $this->communities->summary($school, $communityScope, $student)) !== null) {
+            $sections['communities'] = [...$communities, 'link' => $communityScope->isWholeSchool() ? "/app/students/{$student->id}/communities" : null];
         }
         // SIS.EXP-4: certificate history (safe metadata; one query).
         if (($certificates = $this->certificates->historyFor($school, $actor, $student)) !== null) {

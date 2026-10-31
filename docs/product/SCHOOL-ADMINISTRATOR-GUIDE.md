@@ -407,9 +407,11 @@ Reload, review the latest details, and make your change again.
   - It is for whole-School document viewers, behind MFA. It cannot be
     exported or printed.
 
-### Houses (SIS 11.7)
+### Student communities: Houses, Clubs and Activities (SIS 11.7, 11.8)
 
-- **Students → Houses** (School Administrator, Principal) lists the School's
+- **Students → Communities** opens Houses, Clubs and Activities (each only
+  if you may see it).
+- **Houses** (School Administrator, Principal) lists the School's
   Houses with their current member count. Create a House with a name and a
   short code, both unique in the School; correct them with **Edit**.
   - A Campus Principal sees the list with counts of their own Campus only.
@@ -433,6 +435,32 @@ Reload, review the latest details, and make your change again.
   Campus, Grade and Section. It cannot be exported or printed.
 - A House or a responsibility is a label only: it never gives anyone access
   to anything. Teachers do not see Houses.
+- **Clubs** and **Activities** (School Administrator, Principal) work like
+  Houses, with three differences:
+  - **A Student may be in several Clubs and Activities at once**, but never
+    twice in the same one ("already a member" is refused).
+  - An Activity may have a **category** (Sports, Performing arts, Creative
+    arts, Academic / enrichment, Other).
+  - A Club and an Activity with current members cannot be deactivated: end
+    their memberships first.
+- **A Student's Clubs and activities** (from their page, **Clubs,
+  activities and history**):
+  - **Join Club** / **Add participation** start today.
+  - **Leave Club** / **End participation** ask for a reason and take effect
+    from yesterday. A Student can rejoin later, and both periods stay in the
+    history.
+  - Club **responsibilities**: President, Vice President and Secretary (one
+    each per Club) and Member Representative (several). Activities have no
+    responsibilities.
+  - An inactive Student keeps their Clubs and Activities until you end them,
+    but cannot join new ones.
+- **Student reports → Club roster** and **Activity participants** list
+  current members, with class, responsibility or category. A Campus
+  Principal sees only their Campus's Students, and no roster can be exported
+  or printed.
+- Club membership, Activity participation and responsibilities are labels
+  only and never give anyone access. Mentors, schedules, levels and awards
+  are not part of Lycenza yet.
 
 ## 9. Students and placements
 

@@ -190,6 +190,8 @@ final class CampusScopeCatalogue
         'enrollments.view' => 'students',
         // SIS 11.7: the House roster and counts follow the Student's current Campus (StudentAccess).
         'students.houses.view' => 'students',
+        // SIS 11.8: Club and Activity lists, counts and rosters follow the Student scope.
+        'students.communities.view' => 'students',
         // ORG.7F-2 (ADR 0076 §46, owner decision F2-D10): the narrow writes --
         // Student names, and atomic onboarding (both keys) -- and ORG.7F-3
         // (§47, F3-D11): the dual-scope Campus transfer of the current placement.
@@ -293,6 +295,7 @@ final class CampusScopeCatalogue
         'app.students.history' => ['capability' => 'students.view', 'reason' => 'The Student\'s audit history across every Campus and year.'],
         // SIS.EXP-2: a declaration that NARROWS (no adoption change): Student
         // movement history spans every Campus and year (rule 101).
+        'app.students.communities.show' => ['capability' => 'students.communities.view', 'reason' => 'SIS 11.8: a Student\'s full Club and Activity history and Club responsibilities -- School-wide history (rule 101); Campus readers see current memberships on the rosters and the profile card.'],
         'app.students.house.show' => ['capability' => 'students.houses.view', 'reason' => 'SIS 11.7: a Student\'s full House history and responsibilities -- School-wide history (rule 101); Campus readers see the current House on the roster and the profile card.'],
         'app.students.document-compliance' => ['capability' => 'students.view', 'reason' => 'SIS 11.5: the cohort document checklist -- Highly Sensitive document states School-wide, for whole-School document viewers only (owner decision 2026-10-31).'],
         'app.students.movements' => ['capability' => 'enrollments.view', 'reason' => 'SIS.EXP-2: the School-wide movement and exit register -- Student placement history across every Campus and year (Campus readers see current placements only).'],

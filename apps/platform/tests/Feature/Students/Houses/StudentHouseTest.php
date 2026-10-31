@@ -400,7 +400,7 @@ class StudentHouseTest extends TestCase
             $user = $this->role($key);
             $index = $this->props('/app/students/houses', $user);
             $this->assertSame('whole_school', $index['countsScope']);
-            $this->assertSame([2], array_column($index['houses'], 'members'));
+            $this->assertSame([2], array_column($index['groups'], 'members'));
             $this->assertTrue($index['canManage']);
             $this->assertTrue($this->props($show, $user)['canAssign']);
         }
@@ -410,7 +410,7 @@ class StudentHouseTest extends TestCase
         $campus = $this->role('principal', $this->main->id);
         $index = $this->props('/app/students/houses', $campus);
         $this->assertSame('campus', $index['countsScope']);
-        $this->assertSame([1], array_column($index['houses'], 'members'), 'the School-wide size never leaks through a count');
+        $this->assertSame([1], array_column($index['groups'], 'members'), 'the School-wide size never leaks through a count');
         $this->assertFalse($index['canManage']);
         $this->as($campus)->get($show)->assertForbidden();
         $this->as($campus)->post('/app/students/houses', ['name' => 'Green', 'code' => 'GREEN'])->assertForbidden();
@@ -456,7 +456,7 @@ class StudentHouseTest extends TestCase
         $this->as($otherAdmin, $other);
         $this->get("/app/students/{$this->asha->id}/house")->assertNotFound();
         $this->post("/app/students/{$this->asha->id}/house", ['house_id' => $otherHouse->id, 'version' => str_repeat('0', 64)])->assertNotFound();
-        $this->assertSame([0], array_column($this->get('/app/students/houses')->viewData('page')['props']['houses'], 'members'));
+        $this->assertSame([0], array_column($this->get('/app/students/houses')->viewData('page')['props']['groups'], 'members'));
         $this->assertSame([], $this->get('/app/students/reports/students.houses')->viewData('page')['props']['rows']['data']);
 
         // A foreign House id is unknown to this School's assignment.

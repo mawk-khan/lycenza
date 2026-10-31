@@ -70,6 +70,7 @@ use App\Domain\StaffAttendance\Application\StaffAttendanceReadService;
 use App\Domain\StaffAttendance\Application\StaffAttendanceService;
 use App\Domain\Students\Application\CampusStudentOnboardingService;
 use App\Domain\Students\Application\CampusStudentTransferService;
+use App\Domain\Students\Application\Groups\CommunityAdministrationService;
 use App\Domain\Students\Application\Groups\HouseAdministrationService;
 use App\Domain\Students\Application\StudentAccess;
 use App\Domain\Students\Application\StudentDirectoryQuery;
@@ -469,6 +470,10 @@ final class SchoolRouteCoverage
             // per-report authority from the closed StudentReportRegistry.
             // SIS 11.7: the House list (counts follow the viewer's Student scope).
             Coverage::campus('app.students.houses.index', 'students.houses.view', HouseAdministrationService::class, 'list'),
+            // SIS 11.8: Clubs and Activities (Campus-scoped counts) and the hub.
+            Coverage::campus('app.students.clubs.index', 'students.communities.view', CommunityAdministrationService::class, 'list'),
+            Coverage::campus('app.students.activities.index', 'students.communities.view', CommunityAdministrationService::class, 'list'),
+            Coverage::service('app.students.communities.index', CommunityAdministrationService::class, 'hub'),
             Coverage::service('app.students.reports.index', StudentReportAccess::class, 'authorizeHub'),
             Coverage::service('app.students.reports.show', StudentReportAccess::class, 'authorizeReport'),
             // SIS 11.4 (D-11): export and print -- report authority AND the

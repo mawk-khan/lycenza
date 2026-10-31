@@ -115,6 +115,7 @@ const hasGlance = computed(() =>
             'library',
             'documents',
             'house',
+            'communities',
             'certificates',
         ] as const
     ).some((key) => props.sections[key] !== undefined),

@@ -33,6 +33,7 @@ use App\Http\Controllers\App\Canteen\CanteenItemController;
 use App\Http\Controllers\App\Canteen\CanteenOrderController;
 use App\Http\Controllers\App\Canteen\CanteenOutletController;
 use App\Http\Controllers\App\ClosedYearPlacementController;
+use App\Http\Controllers\App\CommunityController;
 use App\Http\Controllers\App\Compliance\AuditLogController;
 use App\Http\Controllers\App\CurriculumDelivery\CurriculumDeliveryController;
 use App\Http\Controllers\App\CurriculumDelivery\MyCurriculumDeliveryController;
@@ -151,6 +152,7 @@ use App\Http\Controllers\App\Staff\StaffAccountController;
 use App\Http\Controllers\App\StaffAttendance\StaffAttendanceAdminController;
 use App\Http\Controllers\App\StudentAccountLinkController;
 use App\Http\Controllers\App\StudentCertificateController;
+use App\Http\Controllers\App\StudentCommunityController;
 use App\Http\Controllers\App\StudentController;
 use App\Http\Controllers\App\StudentDirectoryController;
 use App\Http\Controllers\App\StudentDocumentController;
@@ -742,6 +744,17 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::post('/houses', [HouseController::class, 'store'])->middleware('capability:students.houses.manage')->name('houses.store');
         Route::put('/houses/{house}', [HouseController::class, 'update'])->whereUuid('house')->middleware('capability:students.houses.manage')->name('houses.update');
         Route::post('/houses/{house}/status', [HouseController::class, 'status'])->whereUuid('house')->middleware('capability:students.houses.manage')->name('houses.status');
+        // SIS 11.8 (OD-SIS-5A, OD-SIS-5B): the Student Communities hub, Clubs
+        // and Activities -- lists on the Campus-adopted
+        // students.communities.view, configuration on whole-School
+        // students.communities.manage. The type is a closed route default.
+        Route::get('/communities', [CommunityController::class, 'hub'])->name('communities.index');
+        foreach (['clubs' => 'club', 'activities' => 'activity'] as $path => $type) {
+            Route::get("/{$path}", [CommunityController::class, 'index'])->defaults('type', $type)->name("{$path}.index");
+            Route::post("/{$path}", [CommunityController::class, 'store'])->defaults('type', $type)->middleware('capability:students.communities.manage')->name("{$path}.store");
+            Route::put("/{$path}/{group}", [CommunityController::class, 'update'])->defaults('type', $type)->whereUuid('group')->middleware('capability:students.communities.manage')->name("{$path}.update");
+            Route::post("/{$path}/{group}/status", [CommunityController::class, 'status'])->defaults('type', $type)->whereUuid('group')->middleware('capability:students.communities.manage')->name("{$path}.status");
+        }
         // SIS 11.5: document requirement rules (whole-School
         // `students.documents.manage`) and the cohort document checklist --
         // states only, whole-School `students.view` + `students.documents.view`,
@@ -805,6 +818,19 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
             ->middleware('capability:students.houses.assign')->name('house.responsibilities.assign');
         Route::post('/{student}/house/responsibilities/{responsibility}/end', [StudentHouseController::class, 'endResponsibility'])->whereUuid(['student', 'responsibility'])
             ->middleware('capability:students.houses.assign')->name('house.responsibilities.end');
+        // SIS 11.8: one Student's Clubs and Activities -- the page is a declared
+        // whole-School operation of students.communities.view; writes need
+        // whole-School students.communities.assign.
+        Route::get('/{student}/communities', [StudentCommunityController::class, 'show'])->whereUuid('student')
+            ->middleware('capability:students.communities.view')->name('communities.show');
+        Route::post('/{student}/communities', [StudentCommunityController::class, 'join'])->whereUuid('student')
+            ->middleware('capability:students.communities.assign')->name('communities.join');
+        Route::post('/{student}/communities/{membership}/end', [StudentCommunityController::class, 'leave'])->whereUuid(['student', 'membership'])
+            ->middleware('capability:students.communities.assign')->name('communities.leave');
+        Route::post('/{student}/communities/{membership}/responsibilities', [StudentCommunityController::class, 'assignResponsibility'])->whereUuid(['student', 'membership'])
+            ->middleware('capability:students.communities.assign')->name('communities.responsibilities.assign');
+        Route::post('/{student}/communities/responsibilities/{responsibility}/end', [StudentCommunityController::class, 'endResponsibility'])->whereUuid(['student', 'responsibility'])
+            ->middleware('capability:students.communities.assign')->name('communities.responsibilities.end');
         // SIS.EXP-4 (OD-SIS-2): Leaving/Transfer certificates. Staff web only;
         // whole-School `students.certificates.issue` (never Campus-adopted) for
         // every write, each with a fresh MFA code; the PDF downloads through the

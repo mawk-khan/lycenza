@@ -155,6 +155,25 @@ is the first authorized Student Group pilot):**
 
 SR-17 → partially met (House). No score change.
 
+**SIS 11.8 IMPLEMENTED (2026-11-01, `SIS-11-8-CLUBS-ACTIVITIES.md`;
+OD-SIS-5A Club approved, OD-SIS-5B Activity approved, constrained):**
+- the SIS 11.7 tables extended (no new table): exactly three closed types
+  (house, club, activity); House rule unchanged; Clubs and Activities any
+  number at once, one current membership per Student per group (partial
+  unique index + trigger); history across leave and rejoin;
+- Club responsibilities (President, Vice President, Secretary unique;
+  Member Representative several); optional closed Activity category;
+  levels, schedules, mentors and badges deferred;
+- new `students.communities.view` (Campus-adopted) / `.manage` / `.assign`
+  for `school_admin` and `principal`; Communities hub; shared directory;
+  Student Clubs-and-activities page; Student 360 card;
+  `students.clubs` / `students.activities` rosters on one shared query;
+  export review A (browser-only);
+- two-process proofs: same Club, same Activity, two Clubs (both), two
+  Presidents, deactivation vs join.
+
+SR-17 → partially met (House + Club + Activity). No score change.
+
 **Next: owner decision; NOT STARTED; never auto-start.**
 
 ### 2.0f SIS.EXP-CLOSE — PROGRAMME CLOSED (2026-10-30)
@@ -353,7 +372,8 @@ queries; directory unchanged at 27 ± 2.
 | OD-SIS-1 | Activate Student (and Guardian?) documents (= OD-SWC-2, PV1-15): categories, who uploads and views, Guardian visibility, verification, expiry, retention class | Activate Student only first; closed category catalogue; staff-only visibility; health-classified tier for immunisation; no applicant documents until Admissions decides | EXP-3 |
 | OD-SIS-2 | Leaving/transfer certificate (CRT-001/002): format, numbering, wording, dues policy | One numbered register per School; output stored as a Document; never withheld for dues without a legal basis; statutory wording via legal review | EXP-4 |
 | OD-SIS-3 | Bulk import (OD-SWC-4 / OD-PPR-20) | Add-only CSV of Students + first placement (+ optional Guardians), whole School only, all-or-nothing | EXP-5 |
-| OD-SIS-4 | Houses/clubs (D-17 revisit) | **DECIDED 2026-10-31: House is the first authorized Student Group pilot** (clubs and other types stay gated) | EXP-7 → SIS 11.7 |
+| OD-SIS-4 | Houses/clubs (D-17 revisit) | **DECIDED 2026-10-31: House is the first authorized Student Group pilot** | EXP-7 → SIS 11.7 |
+| OD-SIS-5A / 5B | Clubs / Activities | **DECIDED 2026-11-01: Club approved; Activity approved (constrained: no schedule, score, level, fee or staff)**; Project, Scholarship, Custom Group, Tag, Segment still not authorized | SIS 11.8 |
 | OD-SIS-5 | Annual record confirmation and Guardian acknowledgement ("contracts") | Confirmation of existing fields + acknowledgement of named, versioned School terms; no IP address stored; legal review before calling it an agreement. **SIS.EXP-R1: `LEGAL_REVIEW_REQUIRED` first** (audit §4) | EXP-6 |
 | OD-SIS-6 | Operational Section headcount vs advisory capacity | Allow an operational, whole-School, no-attribute headcount per Section next to capacity, outside the Analytics gate; no gender/age/fee splits | small read in EXP-2 if approved |
 | OD-SIS-7 | Student home address | Do not add until a named purpose (Transport stop planning, statutory register) is approved; then the ORG.12C address shape | — |

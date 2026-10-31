@@ -129,6 +129,18 @@ migration changed.
   `StudentReportsTest` (hub lists), `StudentReportExportTest`.
 - Organization setup/report architecture tests, when a setup area changes.
 
+## 9a. A Student 360 section or card is added or removed
+Added after SIS 11.7, whose first candidate failed on exactly this.
+- **Demo pin:** `tests/Feature/Demo/DemoSisDataTest.php` (the School
+  Administrator's card list for Aarav).
+- **App pins:** `tests/Feature/App/StudentProfile360Test.php` (the card
+  lists per actor) and `tests/Feature/Students/StudentProfileArchitectureTest.php`
+  (`APPROVED_IMPORTS`).
+- **Frontend:** `studentProfileSections.ts`, `StudentProfileSummaries.vue`
+  and the `hasGlance` list in `Pages/App/Students/Show.vue`.
+- **Run:** `ddev test tests/Feature/Demo tests/Feature/App` before the first
+  candidate.
+
 ## 10. A mutation that can be edited concurrently
 - **Version token:** reuse a version digest of the written fields
   (`StudentProfileVersion`, `GuardianProfileVersion`, `SectionVersion`,

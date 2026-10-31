@@ -1,9 +1,13 @@
 <?php
 
 use App\Domain\Students\Application\Exceptions\StudentException;
+use App\Domain\Students\Application\Groups\ClubResponsibility;
+use App\Domain\Students\Application\Groups\CommunityAdministrationService;
 use App\Domain\Students\Application\Groups\HouseAdministrationService;
 use App\Domain\Students\Application\Groups\HouseMembershipReason;
 use App\Domain\Students\Application\Groups\HouseResponsibility;
+use App\Domain\Students\Application\Groups\StudentCommunityService;
+use App\Domain\Students\Application\Groups\StudentGroupType;
 use App\Domain\Students\Application\Groups\StudentHouseService;
 use App\Models\School;
 use App\Models\User;
@@ -18,6 +22,10 @@ use Tests\Support\Concurrency\HeldTransaction;
 // Usage: php house-op.php assign <schoolId> <studentId> <actorId> <houseId> <reason|-> <version>
 //        php house-op.php responsibility <schoolId> <studentId> <actorId> <responsibility> <version>
 //        php house-op.php deactivate <schoolId> <houseId> <actorId>   (expects House version 1)
+// SIS 11.8 Clubs and Activities (StudentCommunityService / CommunityAdministrationService):
+//        php house-op.php join <schoolId> <studentId> <actorId> <groupId>
+//        php house-op.php club-role <schoolId> <studentId> <actorId> <membershipId> <responsibility>
+//        php house-op.php deactivate-community <schoolId> <groupId> <actorId> <club|activity>   (expects version 1)
 
 require __DIR__.'/../../vendor/autoload.php';
 
@@ -36,6 +44,9 @@ try {
         'assign' => $service->assign($school, $actor, $argv[3], $argv[5], $argv[6] === '-' ? null : HouseMembershipReason::from($argv[6]), $argv[7]),
         'responsibility' => $service->assignResponsibility($school, $actor, $argv[3], HouseResponsibility::from($argv[5]), $argv[6]),
         'deactivate' => $app->make(HouseAdministrationService::class)->setStatus($school, $actor, $argv[3], 'inactive', 1),
+        'join' => $app->make(StudentCommunityService::class)->join($school, $actor, $argv[3], $argv[5]),
+        'club-role' => $app->make(StudentCommunityService::class)->assignResponsibility($school, $actor, $argv[3], $argv[5], ClubResponsibility::from($argv[6])),
+        'deactivate-community' => $app->make(CommunityAdministrationService::class)->setStatus($school, $actor, StudentGroupType::from($argv[5]), $argv[3], 'inactive', 1),
     });
     echo 'done:'.$row->getKey();
 } catch (StudentException $e) {

@@ -33,6 +33,8 @@ class StudentProfileArchitectureTest extends TestCase
         'App\Domain\Students\Application\Certificates\StudentCertificateReader',
         // SIS.EXP-3: counts per category only (StudentDocumentReader::summary()).
         'App\Domain\Students\Application\Documents\StudentDocumentReader',
+        // SIS 11.8: current Clubs and Activities only (StudentCommunityService::summary()).
+        'App\Domain\Students\Application\Groups\StudentCommunityService',
         // SIS 11.7: the current House only (StudentHouseService::summary()).
         'App\Domain\Students\Application\Groups\StudentHouseService',
         'App\Domain\Students\Application\StudentAccess',

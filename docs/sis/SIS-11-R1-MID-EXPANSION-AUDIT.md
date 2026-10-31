@@ -791,6 +791,22 @@ analysis not adopted; C55 stays with Fees. SR-17 is partially met (House);
 the full group-coverage reconciliation is `SIS-11-7-HOUSES.md` §8. The
 headline scores in this audit are not recomputed here.
 
+### SIS 11.8 reconciliation (added 2026-11-01)
+
+SIS 11.8 (OD-SIS-5A Club, OD-SIS-5B Activity) adds the Club and Activity
+types:
+- **C49:** House, Club and Activity are met (School-wide, effective-dated);
+  Project and custom types are still not authorized.
+- **C50:** several memberships at once and per-group uniqueness are met;
+  bulk assign is not adopted.
+- **C51:** Club responsibilities are met.
+- **C52 mentors and C53 badges/schedules:** deferred.
+- **C54:** not adopted.
+
+The rosters improve "Student Group Details" coverage. Student Segment and
+Sub Class Group reports are not covered. Full table:
+`SIS-11-8-CLUBS-ACTIVITIES.md` §11.
+
 ## Appendix A — Capability inventory (114)
 
 Bold in "After 11.5" marks a change since SIS.EXP-CLOSE.

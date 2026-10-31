@@ -7,6 +7,8 @@ use App\Domain\Admissions\Application\Reports\AdmissionApplicationsExporter;
 use App\Domain\Guardians\Application\Reports\SiblingReport;
 use App\Domain\Students\Application\Documents\DocumentComplianceCohort;
 use App\Domain\Students\Application\Movements\StudentMovementRegister;
+use App\Domain\Students\Application\Reports\ActivityRosterReport;
+use App\Domain\Students\Application\Reports\ClubRosterReport;
 use App\Domain\Students\Application\Reports\Exports\StudentDirectoryExporter;
 use App\Domain\Students\Application\Reports\Exports\StudentMovementExporter;
 use App\Domain\Students\Application\Reports\HouseRosterReport;
@@ -45,6 +47,9 @@ final class StudentReportRegistry
         SectionCapacityReport::class,
         // SIS 11.7 (OD-SIS-4): the House roster (browser-only).
         HouseRosterReport::class,
+        // SIS 11.8 (OD-SIS-5A, OD-SIS-5B): Club and Activity rosters (browser-only).
+        ClubRosterReport::class,
+        ActivityRosterReport::class,
     ];
 
     /**

@@ -2141,3 +2141,34 @@ CLAUDE.md rule 128). Students owns it.
   `students.houses` report (browser-only).
 - **Retention:** memberships and responsibilities are part of the Student
   core record (cascade); Houses are School configuration.
+
+## Clubs and Activities (SIS 11.8, 2026-11-01, OD-SIS-5A/5B)
+
+Clubs and Activities extend the House foundation (`docs/sis/SIS-11-8-CLUBS-ACTIVITIES.md`,
+CLAUDE.md rule 128). There are no new tables; the type contract is exactly
+house, club and activity.
+
+- **Cardinality:**
+  - one current House per Student (unchanged);
+  - any number of Clubs and Activities, one current membership per Student
+    per group;
+  - both rules are partial unique indexes plus the no-overlap trigger.
+- **Writers:**
+  - the catalogue: `StudentGroupCatalogue`, through
+    `HouseAdministrationService` and `CommunityAdministrationService`;
+  - memberships: `StudentHouseService` (House) and `StudentCommunityService`
+    (Club and Activity).
+- **Club responsibilities:** President, Vice President and Secretary (one
+  each per Club) and Member Representative (several). Activities have none.
+  The DB trigger keeps kinds per type.
+- **Activity category:** optional and closed (Sports, Performing arts,
+  Creative arts, Academic / enrichment, Other).
+- **Capabilities:** `students.communities.view` (Campus-adopted),
+  `.manage` and `.assign`, for `school_admin` and `principal`. House keys are
+  unchanged and never open Clubs or Activities (and vice versa).
+- **Reads:**
+  - the Communities hub and the shared directory page;
+  - a Student's Clubs and activities page (whole-School);
+  - the Student 360 "Clubs and activities" card;
+  - the `students.clubs` and `students.activities` rosters (browser-only).
+- **Deferred:** levels, schedules (Timetable), mentors (HR), badges.

@@ -72,6 +72,15 @@ export interface StudentProfileSections {
         responsibilities: string[];
         link: string | null;
     };
+    // SIS 11.8: current Clubs and Activities (descriptive, never authority);
+    // at most four names each, then "and N more".
+    communities?: {
+        clubs: { name: string; responsibilities: string[] }[];
+        moreClubs: number;
+        activities: { name: string; category: string | null }[];
+        moreActivities: number;
+        link: string | null;
+    };
     // SIS.EXP-4: certificate history (safe metadata).
     certificates?: {
         items: {

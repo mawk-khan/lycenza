@@ -48,6 +48,10 @@ final class StudentReportFilter
         // SIS 11.7: the House roster.
         'house_id' => ['House', self::ENTITY],
         'responsibility' => ['Responsibility', self::CHOICE],
+        // SIS 11.8: Club and Activity rosters.
+        'club_id' => ['Club', self::ENTITY],
+        'activity_id' => ['Activity', self::ENTITY],
+        'activity_category' => ['Category', self::CHOICE],
         'status' => ['Status', self::CHOICE],
         'category' => ['Category', self::CHOICE],
         'type' => ['Type', self::CHOICE],

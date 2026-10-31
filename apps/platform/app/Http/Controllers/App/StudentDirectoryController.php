@@ -102,7 +102,9 @@ class StudentDirectoryController extends Controller
             'canManage' => ! $campusView && $access->holdsWholeSchool($actor, 'students.manage', $school),
             'canOnboard' => ! $access->scopeOf($actor, 'students.manage', $school)->isNone() && ! $access->scopeOf($actor, 'enrollments.manage', $school)->isNone(),
             // SIS 11.7: the Houses page opens on students.houses.view (any scope).
-            'canViewHouses' => ! $access->scopeOf($actor, 'students.houses.view', $school)->isNone(),
+            // SIS 11.7 / 11.8: the Student Communities hub (Houses, Clubs, Activities).
+            'canViewCommunities' => ! $access->scopeOf($actor, 'students.houses.view', $school)->isNone()
+                || ! $access->scopeOf($actor, 'students.communities.view', $school)->isNone(),
         ]);
     }
 

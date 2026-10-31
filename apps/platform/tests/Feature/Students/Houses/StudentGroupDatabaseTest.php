@@ -90,7 +90,7 @@ class StudentGroupDatabaseTest extends TestCase
     #[Test]
     public function the_group_type_is_closed_and_houses_keep_their_identity(): void
     {
-        $this->refused(fn () => $this->group('CLUB', 'club'), 'student_groups_type_check');
+        $this->refused(fn () => $this->group('PROJ', 'project'), 'student_groups_type_check');
         $this->refused(fn () => $this->group('red'), 'student_groups_code_check');
         $red = $this->group();
         $this->refused(fn () => $this->group(), 'student_groups_school_id_group_type_code_unique');
@@ -121,7 +121,7 @@ class StudentGroupDatabaseTest extends TestCase
         $this->assertSame(3, $this->sql(fn ($db) => $db->table('student_group_memberships')->count()));
         $index = DB::selectOne("SELECT pg_get_indexdef('student_group_memberships_one_current'::regclass) AS def")->def;
         $this->assertStringContainsString('UNIQUE INDEX', $index);
-        $this->assertStringContainsString('(school_id, student_id, group_type) WHERE (ends_on IS NULL)', $index);
+        $this->assertStringContainsString('(school_id, student_id, group_type) WHERE ((ends_on IS NULL) AND ((group_type)::text = \'house\'::text))', $index);
     }
 
     #[Test]
@@ -155,7 +155,9 @@ class StudentGroupDatabaseTest extends TestCase
         $this->responsibility($red, $mine, 'prefect');
         $this->responsibility($red, $theirs, 'prefect', $other);
         $this->refused(fn () => $this->responsibility($red, $mine, 'prefect'), 'student_group_responsibilities_one_per_member');
-        $this->refused(fn () => $this->responsibility($red, $mine, 'head_of_school'), 'student_group_responsibilities_kind_check');
+        // An unknown kind, or a Club kind on a House, never starts (trigger, then CHECK).
+        $this->refused(fn () => $this->responsibility($red, $mine, 'head_of_school'), 'does not exist for the group');
+        $this->refused(fn () => $this->responsibility($red, $mine, 'club_president'), 'does not exist for the group');
         // Bound to the membership's own Student and House.
         $this->refused(fn () => $this->responsibility($red, $mine, 'vice_captain', $other), 'student_group_responsibilities_membership_fk');
         $this->refused(fn () => $this->responsibility($blue, $mine, 'vice_captain'), 'student_group_responsibilities_membership_fk');

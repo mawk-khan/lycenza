@@ -1,18 +1,21 @@
 <script setup lang="ts">
-// SIS 11.7 (OD-SIS-4): Houses -- the first Student community. A House is
+// SIS 11.7 / 11.8: the Student Communities directory -- Houses, Clubs or
+// Activities (a closed type from the server, never chosen here). A group is
 // School-wide, deactivated rather than deleted, and never a permission. The
 // member count is an operational count of the Students this viewer may see.
 import { useForm } from '@inertiajs/vue3';
-import { nextTick, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import ConfirmDialog from '../../../Components/ConfirmDialog.vue';
 import EmptyState from '../../../Components/EmptyState.vue';
 import { useConfirmation } from '../../../useConfirmation';
 
-interface House {
+interface Group {
     id: string;
     name: string;
     code: string;
     description: string | null;
+    category: string | null;
+    categoryLabel: string | null;
     status: 'active' | 'inactive';
     displayOrder: number;
     version: number;
@@ -21,33 +24,63 @@ interface House {
 }
 
 const props = defineProps<{
-    houses: House[];
+    type: { value: 'house' | 'club' | 'activity'; label: string; plural: string; baseUrl: string };
+    groups: Group[];
+    categories: { value: string; label: string }[];
     countsScope: 'whole_school' | 'campus';
     canManage: boolean;
 }>();
 
-const create = useForm({ name: '', code: '', description: '', display_order: 0 });
+const isActivity = computed(() => props.type.value === 'activity');
+const membersLabel = computed(() =>
+    isActivity.value ? 'Current participants' : 'Current members',
+);
+const intro = computed(
+    () =>
+        ({
+            house: 'Houses are School-wide Student communities. A Student is in at most one House at a time.',
+            club: 'Clubs are School-wide Student communities. A Student may belong to several Clubs at once.',
+            activity:
+                'Activities are School-wide extracurricular and co-curricular activities. A Student may take part in several at once.',
+        })[props.type.value],
+);
+
+const create = useForm({
+    name: '',
+    code: '',
+    description: '',
+    display_order: 0,
+    activity_category: '',
+});
 function submitCreate(): void {
-    create.post('/app/students/houses', { preserveScroll: true, onSuccess: () => create.reset() });
+    create.post(props.type.baseUrl, { preserveScroll: true, onSuccess: () => create.reset() });
 }
 
-const editing = ref<House | null>(null);
-const edit = useForm({ name: '', code: '', description: '', display_order: 0, version: 0 });
-function startEdit(h: House): void {
-    editing.value = h;
+const editing = ref<Group | null>(null);
+const edit = useForm({
+    name: '',
+    code: '',
+    description: '',
+    display_order: 0,
+    activity_category: '',
+    version: 0,
+});
+function startEdit(g: Group): void {
+    editing.value = g;
     edit.defaults({
-        name: h.name,
-        code: h.code,
-        description: h.description ?? '',
-        display_order: h.displayOrder,
-        version: h.version,
+        name: g.name,
+        code: g.code,
+        description: g.description ?? '',
+        display_order: g.displayOrder,
+        activity_category: g.category ?? '',
+        version: g.version,
     });
     edit.reset();
     edit.clearErrors();
-    nextTick(() => document.getElementById(`edit-name-${h.id}`)?.focus());
+    nextTick(() => document.getElementById(`edit-name-${g.id}`)?.focus());
 }
-function submitEdit(h: House): void {
-    edit.put(`/app/students/houses/${h.id}`, {
+function submitEdit(g: Group): void {
+    edit.put(`${props.type.baseUrl}/${g.id}`, {
         preserveScroll: true,
         onSuccess: () => (editing.value = null),
     });
@@ -55,155 +88,163 @@ function submitEdit(h: House): void {
 
 const statusForm = useForm({ status: '', version: 0 });
 const { confirmDialog, confirmation, confirmAction, onConfirm, onClose } = useConfirmation();
-async function setStatus(h: House, status: 'active' | 'inactive'): Promise<void> {
+async function setStatus(g: Group, status: 'active' | 'inactive'): Promise<void> {
     if (
         status === 'inactive' &&
         !(await confirmAction({
-            title: `Deactivate ${h.name}?`,
-            body: 'Its history stays on every Student record. A House with current members cannot be deactivated: move or end their memberships first.',
-            confirmLabel: 'Deactivate House',
+            title: `Deactivate ${g.name}?`,
+            body: `Its history stays on every Student record. A ${props.type.label} with current ${isActivity.value ? 'participants' : 'members'} cannot be deactivated: end them first.`,
+            confirmLabel: `Deactivate ${props.type.label}`,
         }))
     ) {
         return;
     }
     statusForm.status = status;
-    statusForm.version = h.version;
-    statusForm.post(`/app/students/houses/${h.id}/status`, { preserveScroll: true });
+    statusForm.version = g.version;
+    statusForm.post(`${props.type.baseUrl}/${g.id}/status`, { preserveScroll: true });
 }
 </script>
 
 <template>
     <main class="mx-auto max-w-5xl px-4 py-6 font-sans text-slate-900 sm:p-8">
-        <a class="text-sm underline" href="/app/students">← Students</a>
-        <h1 class="mt-2 text-xl font-semibold">Houses</h1>
+        <a class="text-sm underline" href="/app/students/communities">← Student communities</a>
+        <h1 class="mt-2 text-xl font-semibold">{{ type.plural }}</h1>
         <p class="mt-1 max-w-3xl text-sm text-slate-600">
-            Houses are School-wide Student communities. Membership and House responsibilities are
-            descriptive: they never change what anyone can see or do in Lycenza.
-            <template v-if="props.countsScope === 'campus'">
-                Member counts include only the Students on your Campuses.</template
+            {{ intro }} Membership and responsibilities are descriptive: they never change what
+            anyone can see or do in Lycenza.
+            <template v-if="countsScope === 'campus'">
+                Counts include only the Students on your Campuses.</template
             >
         </p>
 
         <EmptyState
-            v-if="houses.length === 0"
+            v-if="groups.length === 0"
             class="mt-6"
-            title="No Houses yet"
+            :title="`No ${type.plural} yet`"
             :description="
                 canManage
-                    ? 'Create the first House below.'
-                    : 'Houses appear here once they are created.'
+                    ? `Create the first ${type.label} below.`
+                    : `${type.plural} appear here once they are created.`
             "
         />
         <div v-else class="relative mt-6 overflow-x-auto rounded border border-slate-200">
             <table class="w-full min-w-[40rem] divide-y divide-slate-200 text-sm">
                 <caption class="sr-only">
-                    Houses
+                    {{
+                        type.plural
+                    }}
                 </caption>
                 <thead class="bg-slate-50 text-left text-slate-600">
                     <tr>
-                        <th scope="col" class="px-3 py-2 font-medium">House</th>
+                        <th scope="col" class="px-3 py-2 font-medium">{{ type.label }}</th>
                         <th scope="col" class="px-3 py-2 font-medium">Code</th>
-                        <th scope="col" class="px-3 py-2 font-medium">Current members</th>
+                        <th v-if="isActivity" scope="col" class="px-3 py-2 font-medium">
+                            Category
+                        </th>
+                        <th scope="col" class="px-3 py-2 font-medium">{{ membersLabel }}</th>
                         <th scope="col" class="px-3 py-2 font-medium">Status</th>
                         <th scope="col" class="px-3 py-2 font-medium">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200">
-                    <template v-for="h in houses" :key="h.id">
+                    <template v-for="g in groups" :key="g.id">
                         <tr>
                             <td class="px-3 py-2">
-                                <span class="font-medium">{{ h.name }}</span>
-                                <span v-if="h.description" class="block text-xs text-slate-500">{{
-                                    h.description
+                                <span class="font-medium">{{ g.name }}</span>
+                                <span v-if="g.description" class="block text-xs text-slate-500">{{
+                                    g.description
                                 }}</span>
                             </td>
-                            <td class="px-3 py-2">{{ h.code }}</td>
-                            <td class="px-3 py-2">{{ h.members }}</td>
+                            <td class="px-3 py-2">{{ g.code }}</td>
+                            <td v-if="isActivity" class="px-3 py-2">
+                                {{ g.categoryLabel ?? '—' }}
+                            </td>
+                            <td class="px-3 py-2">{{ g.members }}</td>
                             <td class="px-3 py-2">
-                                {{ h.status === 'active' ? 'Active' : 'Inactive' }}
+                                {{ g.status === 'active' ? 'Active' : 'Inactive' }}
                             </td>
                             <td class="whitespace-nowrap px-3 py-2">
-                                <a class="underline" :href="h.rosterUrl"
-                                    >Roster<span class="sr-only"> of {{ h.name }}</span></a
+                                <a class="underline" :href="g.rosterUrl"
+                                    >Roster<span class="sr-only"> of {{ g.name }}</span></a
                                 >
                                 <template v-if="canManage">
                                     <button
                                         type="button"
                                         class="ml-3 underline"
-                                        :aria-expanded="editing?.id === h.id"
-                                        @click="startEdit(h)"
+                                        :aria-expanded="editing?.id === g.id"
+                                        @click="startEdit(g)"
                                     >
-                                        Edit<span class="sr-only"> {{ h.name }}</span>
+                                        Edit<span class="sr-only"> {{ g.name }}</span>
                                     </button>
                                     <button
-                                        v-if="h.status === 'active'"
+                                        v-if="g.status === 'active'"
                                         type="button"
                                         class="ml-3 text-red-700 underline"
-                                        @click="setStatus(h, 'inactive')"
+                                        @click="setStatus(g, 'inactive')"
                                     >
-                                        Deactivate<span class="sr-only"> {{ h.name }}</span>
+                                        Deactivate<span class="sr-only"> {{ g.name }}</span>
                                     </button>
                                     <button
                                         v-else
                                         type="button"
                                         class="ml-3 underline"
-                                        @click="setStatus(h, 'active')"
+                                        @click="setStatus(g, 'active')"
                                     >
-                                        Reactivate<span class="sr-only"> {{ h.name }}</span>
+                                        Reactivate<span class="sr-only"> {{ g.name }}</span>
                                     </button>
                                 </template>
                             </td>
                         </tr>
-                        <tr v-if="editing?.id === h.id">
-                            <td colspan="5" class="bg-slate-50 px-3 py-3">
+                        <tr v-if="editing?.id === g.id">
+                            <td :colspan="isActivity ? 6 : 5" class="bg-slate-50 px-3 py-3">
                                 <form
                                     class="grid gap-3 sm:grid-cols-2"
-                                    :aria-label="`Edit ${h.name}`"
-                                    @submit.prevent="submitEdit(h)"
+                                    :aria-label="`Edit ${g.name}`"
+                                    @submit.prevent="submitEdit(g)"
                                 >
                                     <div>
-                                        <label class="block text-sm" :for="`edit-name-${h.id}`"
+                                        <label class="block text-sm" :for="`edit-name-${g.id}`"
                                             >Name</label
                                         >
                                         <input
-                                            :id="`edit-name-${h.id}`"
+                                            :id="`edit-name-${g.id}`"
                                             v-model="edit.name"
                                             maxlength="80"
                                             class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                                             :aria-invalid="!!edit.errors.name"
                                             :aria-describedby="
                                                 edit.errors.name
-                                                    ? `edit-name-error-${h.id}`
+                                                    ? `edit-name-error-${g.id}`
                                                     : undefined
                                             "
                                         />
                                         <p
                                             v-if="edit.errors.name"
-                                            :id="`edit-name-error-${h.id}`"
+                                            :id="`edit-name-error-${g.id}`"
                                             class="mt-1 text-sm text-red-700"
                                         >
                                             {{ edit.errors.name }}
                                         </p>
                                     </div>
                                     <div>
-                                        <label class="block text-sm" :for="`edit-code-${h.id}`"
+                                        <label class="block text-sm" :for="`edit-code-${g.id}`"
                                             >Code</label
                                         >
                                         <input
-                                            :id="`edit-code-${h.id}`"
+                                            :id="`edit-code-${g.id}`"
                                             v-model="edit.code"
                                             maxlength="20"
                                             class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                                             :aria-invalid="!!edit.errors.code"
                                             :aria-describedby="
                                                 edit.errors.code
-                                                    ? `edit-code-error-${h.id}`
+                                                    ? `edit-code-error-${g.id}`
                                                     : undefined
                                             "
                                         />
                                         <p
                                             v-if="edit.errors.code"
-                                            :id="`edit-code-error-${h.id}`"
+                                            :id="`edit-code-error-${g.id}`"
                                             class="mt-1 text-sm text-red-700"
                                         >
                                             {{ edit.errors.code }}
@@ -212,22 +253,41 @@ async function setStatus(h: House, status: 'active' | 'inactive'): Promise<void>
                                     <div>
                                         <label
                                             class="block text-sm"
-                                            :for="`edit-description-${h.id}`"
+                                            :for="`edit-description-${g.id}`"
                                             >Description (optional)</label
                                         >
                                         <input
-                                            :id="`edit-description-${h.id}`"
+                                            :id="`edit-description-${g.id}`"
                                             v-model="edit.description"
                                             maxlength="255"
                                             class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                                         />
                                     </div>
+                                    <div v-if="isActivity">
+                                        <label class="block text-sm" :for="`edit-category-${g.id}`"
+                                            >Category (optional)</label
+                                        >
+                                        <select
+                                            :id="`edit-category-${g.id}`"
+                                            v-model="edit.activity_category"
+                                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                        >
+                                            <option value="">No category</option>
+                                            <option
+                                                v-for="c in categories"
+                                                :key="c.value"
+                                                :value="c.value"
+                                            >
+                                                {{ c.label }}
+                                            </option>
+                                        </select>
+                                    </div>
                                     <div>
-                                        <label class="block text-sm" :for="`edit-order-${h.id}`"
+                                        <label class="block text-sm" :for="`edit-order-${g.id}`"
                                             >Display order</label
                                         >
                                         <input
-                                            :id="`edit-order-${h.id}`"
+                                            :id="`edit-order-${g.id}`"
                                             v-model.number="edit.display_order"
                                             type="number"
                                             min="0"
@@ -241,7 +301,7 @@ async function setStatus(h: House, status: 'active' | 'inactive'): Promise<void>
                                             class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
                                             :disabled="edit.processing"
                                         >
-                                            Save House
+                                            Save {{ type.label }}
                                         </button>
                                         <button
                                             type="button"
@@ -260,66 +320,82 @@ async function setStatus(h: House, status: 'active' | 'inactive'): Promise<void>
         </div>
 
         <section v-if="canManage" class="mt-10" aria-labelledby="create-heading">
-            <h2 id="create-heading" class="text-base font-semibold">Create a House</h2>
+            <h2 id="create-heading" class="text-base font-semibold">Create a {{ type.label }}</h2>
             <form class="mt-4 grid max-w-3xl gap-4 sm:grid-cols-2" @submit.prevent="submitCreate">
                 <div>
-                    <label class="block text-sm text-slate-700" for="house-name">Name</label>
+                    <label class="block text-sm text-slate-700" for="group-name">Name</label>
                     <input
-                        id="house-name"
+                        id="group-name"
                         v-model="create.name"
                         maxlength="80"
                         class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                         :aria-invalid="!!create.errors.name"
-                        :aria-describedby="create.errors.name ? 'house-name-error' : undefined"
+                        :aria-describedby="create.errors.name ? 'group-name-error' : undefined"
                     />
                     <p
                         v-if="create.errors.name"
-                        id="house-name-error"
+                        id="group-name-error"
                         class="mt-1 text-sm text-red-700"
                     >
                         {{ create.errors.name }}
                     </p>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-700" for="house-code">Code</label>
+                    <label class="block text-sm text-slate-700" for="group-code">Code</label>
                     <input
-                        id="house-code"
+                        id="group-code"
                         v-model="create.code"
                         maxlength="20"
                         class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                         :aria-invalid="!!create.errors.code"
                         :aria-describedby="
-                            create.errors.code ? 'house-code-error' : 'house-code-help'
+                            create.errors.code ? 'group-code-error' : 'group-code-help'
                         "
                     />
-                    <p id="house-code-help" class="mt-1 text-xs text-slate-500">
+                    <p id="group-code-help" class="mt-1 text-xs text-slate-500">
                         Letters, digits, - or _. Unique in your School.
                     </p>
                     <p
                         v-if="create.errors.code"
-                        id="house-code-error"
+                        id="group-code-error"
                         class="mt-1 text-sm text-red-700"
                     >
                         {{ create.errors.code }}
                     </p>
                 </div>
                 <div>
-                    <label class="block text-sm text-slate-700" for="house-description"
+                    <label class="block text-sm text-slate-700" for="group-description"
                         >Description (optional)</label
                     >
                     <input
-                        id="house-description"
+                        id="group-description"
                         v-model="create.description"
                         maxlength="255"
                         class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                     />
                 </div>
+                <div v-if="isActivity">
+                    <label class="block text-sm text-slate-700" for="group-category"
+                        >Category (optional)</label
+                    >
+                    <select
+                        id="group-category"
+                        v-model="create.activity_category"
+                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        :aria-invalid="!!create.errors.activity_category"
+                    >
+                        <option value="">No category</option>
+                        <option v-for="c in categories" :key="c.value" :value="c.value">
+                            {{ c.label }}
+                        </option>
+                    </select>
+                </div>
                 <div>
-                    <label class="block text-sm text-slate-700" for="house-order"
+                    <label class="block text-sm text-slate-700" for="group-order"
                         >Display order</label
                     >
                     <input
-                        id="house-order"
+                        id="group-order"
                         v-model.number="create.display_order"
                         type="number"
                         min="0"
@@ -333,7 +409,7 @@ async function setStatus(h: House, status: 'active' | 'inactive'): Promise<void>
                         class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
                         :disabled="create.processing"
                     >
-                        Create House
+                        Create {{ type.label }}
                     </button>
                 </div>
             </form>
