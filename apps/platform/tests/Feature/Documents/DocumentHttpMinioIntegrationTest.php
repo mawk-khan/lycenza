@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\RequiresObjectStorage;
 use Tests\TestCase;
 
 /**
@@ -26,6 +27,13 @@ use Tests\TestCase;
 class DocumentHttpMinioIntegrationTest extends TestCase
 {
     use CreatesTenancyFixtures;
+    use RequiresObjectStorage;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->requireObjectStorage();
+    }
 
     private function token($user): string
     {

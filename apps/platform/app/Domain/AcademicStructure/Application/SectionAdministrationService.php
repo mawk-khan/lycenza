@@ -4,6 +4,7 @@ namespace App\Domain\AcademicStructure\Application;
 
 use App\Domain\AcademicStructure\Application\Concerns\AdministersReferenceData;
 use App\Domain\AcademicStructure\Application\Exceptions\AcademicYearClosedForStructureException;
+use App\Domain\AcademicStructure\Application\Exceptions\SectionChangedException;
 use App\Domain\AcademicStructure\Events\SectionCreated;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
@@ -111,7 +112,11 @@ class SectionAdministrationService
                 'code' => ['sometimes', 'string', 'max:32'],
                 'capacity' => ['sometimes', 'nullable', 'integer', 'min:1'],
                 'status' => ['sometimes', 'in:active,inactive'],
+                // SIS 11.H1: the SectionVersion the form/client was opened with (required).
+                'version' => ['required', 'string', 'size:64'],
             ]);
+            $expectedVersion = $validated['version'];
+            unset($validated['version']);
 
             $assertUnique = fn () => array_key_exists('code', $validated)
                 ? $this->assertCodeAvailable($section->academic_year_id, $section->campus_id, $section->grade_level_id, $validated['code'], $section->id)
@@ -120,7 +125,14 @@ class SectionAdministrationService
 
             $before = $section->only(array_keys($validated));
 
-            $this->writeUnique(fn () => DB::transaction(function () use ($school, $section, $validated, $before, $actor): void {
+            $this->writeUnique(fn () => DB::transaction(function () use ($school, $section, $validated, $before, $actor, $expectedVersion): void {
+                // SIS 11.H1: compared under the Section row lock -- a form opened
+                // before another change is refused, never applied over it.
+                $locked = Section::query()->whereKey($section->id)->lockForUpdate()->firstOrFail();
+                if (! SectionVersion::matches($locked, $expectedVersion)) {
+                    throw new SectionChangedException;
+                }
+
                 // SIS 11.3 (OD-SIS-6): capacity is advisory -- it may be set below
                 // the current strength -- but a closed year's is history. The
                 // year is read FOR SHARE so a concurrent close waits or is seen.

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\StudentGuardianIdentity;
 
+use App\Domain\Students\Application\StudentProfileVersion;
 use App\Domain\Students\Infrastructure\Student;
 use App\Models\MembershipRoleAssignment;
 use App\Models\Role;
@@ -351,6 +352,7 @@ class StudentApiTest extends TestCase
 
         $response = $this->asUser($user)->patchJson("/api/v1/schools/{$school->id}/students/{$student->id}", [
             'last_name' => 'Sharma',
+            'version' => app(TenantContext::class)->withSchool($school, fn () => StudentProfileVersion::of($student->fresh())),
         ]);
 
         $response->assertOk();
@@ -383,6 +385,7 @@ class StudentApiTest extends TestCase
             'school_id' => $schoolB->id,
             'created_at' => '2000-01-01T00:00:00Z',
             'last_name' => 'Updated',
+            'version' => app(TenantContext::class)->withSchool($schoolA, fn () => StudentProfileVersion::of($student->fresh())),
         ]);
 
         $response->assertOk();
@@ -434,7 +437,7 @@ class StudentApiTest extends TestCase
         $studentA = $this->createStudent($schoolA, ['student_number' => 'A-1']);
         $studentB = $this->createStudent($schoolB, ['student_number' => 'B-1']);
 
-        $this->asUser($user)->patchJson("/api/v1/schools/{$schoolA->id}/students/{$studentA->id}", ['last_name' => 'X'])->assertOk();
+        $this->asUser($user)->patchJson("/api/v1/schools/{$schoolA->id}/students/{$studentA->id}", ['last_name' => 'X', 'version' => app(TenantContext::class)->withSchool($schoolA, fn () => StudentProfileVersion::of($studentA->fresh()))])->assertOk();
         Auth::forgetGuards();
         $this->asUser($user)->patchJson("/api/v1/schools/{$schoolB->id}/students/{$studentB->id}", ['last_name' => 'X'])->assertForbidden();
     }

@@ -214,7 +214,8 @@ final class StudentDocumentService
 
     /**
      * SIS 11.5: the evidence-quality decision -- `students.documents.verify`
-     * (whole School) and a fresh MFA proof, under the record's lock against
+     * AND `students.documents.view` (both whole School; SIS 11.H1) and a
+     * fresh MFA proof, under the record's lock against
      * the version the decider saw. Only a document awaiting a decision
      * (pending, or one uploaded before verification existed) can be decided;
      * a rejected one is fixed by a replacement upload, never re-decided.
@@ -224,6 +225,9 @@ final class StudentDocumentService
         return $this->context->withSchool($school, function () use ($school, $actor, $studentId, $recordId, $decision, $reason, $expectedVersion, $proof): StudentDocument {
             $this->assertProof($proof, $actor);
             $student = $this->visibleStudent($school, $actor, $studentId);
+            // SIS 11.H1 (SIS 11.R1 L-4): a verifier must also be allowed to
+            // view the document it decides on; verify never implies view.
+            $this->authorizeCapabilityFor($actor, DocumentService::STUDENT_DOCUMENTS_VIEW, $school);
             $this->authorizeCapabilityFor($actor, DocumentService::STUDENT_DOCUMENTS_VERIFY, $school);
             if ($decision === DocumentVerificationStatus::PENDING || ($decision === DocumentVerificationStatus::REJECTED) !== ($reason !== null)) {
                 throw new \InvalidArgumentException('A decision is verified, or rejected with a reason.');

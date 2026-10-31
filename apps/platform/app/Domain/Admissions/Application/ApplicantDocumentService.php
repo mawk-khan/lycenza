@@ -202,7 +202,7 @@ final class ApplicantDocumentService
             }
             $record = null;
             try {
-                $this->documents->archiveForApplicant($school, $application->applicant_id, $current->document_id, function () use ($school, $actor, $application, $recordId, $reason, $expectedVersion, &$record): void {
+                $this->documents->archiveForApplicant($school, $application->applicant_id, $current->document_id, $actor, function () use ($school, $actor, $application, $recordId, $reason, $expectedVersion, &$record): void {
                     $record = $this->locked($application, $recordId);
                     if ($record->version !== $expectedVersion) {
                         throw new StudentDocumentChangedException;
@@ -296,7 +296,7 @@ final class ApplicantDocumentService
         if ($old === null || $old->isFinal() || $old->category !== $category) {
             throw ValidationException::withMessages(['replaces' => 'A replacement keeps the same document type, and replaces a current document.']);
         }
-        $this->documents->archiveForApplicant($school, $application->applicant_id, $old->document_id, function () use ($actor, $application, $replacesId): void {
+        $this->documents->archiveForApplicant($school, $application->applicant_id, $old->document_id, $actor, function () use ($actor, $application, $replacesId): void {
             $this->markArchived($this->locked($application, $replacesId), $actor, StudentDocumentArchiveReason::SUPERSEDED);
         });
     }

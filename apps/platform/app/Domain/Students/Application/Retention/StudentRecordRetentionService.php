@@ -202,7 +202,7 @@ final class StudentRecordRetentionService
         $blocker = $this->references->first('student_processing_authorizations', $schoolId, DB::table('student_processing_authorizations')->where('school_id', $schoolId)->where('student_id', $studentId)->pluck('id')->all(), $unit)
             ?? $this->references->first('student_enrollments', $schoolId, $enrollmentIds, [...$unit, ...$clearedTables])
             ?? $this->references->first('student_subject_enrollments', $schoolId, DB::table('student_subject_enrollments')->where('student_id', $studentId)->pluck('id')->all())
-            ?? $this->references->first('documents', $schoolId, $this->documents->idsOwnedBy('student', $studentId), ['student_documents', 'student_certificates']);
+            ?? $this->references->first('documents', $schoolId, $this->documents->idsOwnedBy('student', $studentId), ['student_documents', 'student_certificates', 'applicant_documents']);
         if ($blocker !== null) {
             return $blocker;
         }

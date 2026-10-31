@@ -143,7 +143,9 @@ class CampusProfileTest extends TestCase
         $this->put($url, ['services' => []])->assertSessionHasNoErrors();
         $this->assertSame([], $this->services($school, $campus));
 
-        $changes = $this->in($school, fn () => DB::table('school_audit_events')->where('school_id', $school->id)->where('event_type', 'campus.services_changed')->orderBy('occurred_at')->pluck('metadata')->map(fn ($m) => json_decode($m, true))->all());
+        $changes = $this->in($school, fn () => DB::table('school_audit_events')->where('school_id', $school->id)->where('event_type', 'campus.services_changed')
+            // SIS 11.H1: occurred_at has one-second precision; the UUIDv7 id is the write order.
+            ->orderBy('id')->pluck('metadata')->map(fn ($m) => json_decode($m, true))->all());
         $this->assertSame([
             ['added' => ['meals', 'transport'], 'removed' => []],
             ['added' => ['boarding'], 'removed' => ['transport']],

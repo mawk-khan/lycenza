@@ -380,6 +380,17 @@ role.
     applicant one year after the decision.
   - The checklist is guidance: it never blocks acceptance or conversion.
 
+### Edits made at the same time (SIS 11.H1)
+
+Some forms reject an edit if someone saved the same record after you
+opened it:
+- a Section;
+- a Student–Guardian relationship;
+- a Student's or Guardian's details.
+
+You see "This record changed after you opened it…" and nothing is saved.
+Reload, review the latest details, and make your change again.
+
 ### Document requirements and the checklist (SIS 11.5)
 
 - **Students → Document requirements** (School Administrator, Principal):

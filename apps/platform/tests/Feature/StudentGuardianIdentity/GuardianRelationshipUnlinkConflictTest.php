@@ -4,6 +4,7 @@ namespace Tests\Feature\StudentGuardianIdentity;
 
 use App\Domain\Guardians\Application\Exceptions\GuardianRelationshipInUseException;
 use App\Domain\Guardians\Application\StudentGuardianRelationshipService;
+use App\Domain\Guardians\Application\StudentGuardianRelationshipVersion;
 use App\Domain\Guardians\Infrastructure\RelationshipType;
 use App\Domain\Guardians\Infrastructure\StudentGuardianRelationship;
 use App\Domain\Students\Application\StudentProcessingAuthorizationReadService;
@@ -12,6 +13,7 @@ use App\Domain\Students\Domain\ProcessingAuthorizationPurpose;
 use App\Domain\Students\Infrastructure\StudentProcessingAuthorization;
 use App\Models\SchoolAuditEvent;
 use App\Models\User;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Testing\TestResponse;
 use PDOException;
@@ -109,7 +111,7 @@ class GuardianRelationshipUnlinkConflictTest extends TestCase
         // The referenced relationship can still be made primary and edited (only destructive unlink is refused).
         $links = app(StudentGuardianRelationshipService::class);
         $this->assertTrue($links->setPrimary($f['r1'], $f['admin'])->is_primary);
-        $this->assertTrue($links->update($f['r1'], ['is_emergency_contact' => true], $f['admin'])->is_emergency_contact);
+        $this->assertTrue($links->update($f['r1'], ['is_emergency_contact' => true], app(TenantContext::class)->withSchool($f['school'], fn () => StudentGuardianRelationshipVersion::of($f['r1']->fresh())), $f['admin'])->is_emergency_contact);
     }
 
     #[Test]

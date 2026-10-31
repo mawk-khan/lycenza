@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\StudentGuardianIdentity;
 
+use App\Domain\Guardians\Application\StudentGuardianRelationshipVersion;
 use App\Domain\Guardians\Infrastructure\RelationshipType;
 use App\Domain\Guardians\Infrastructure\StudentGuardianRelationship;
 use App\Models\MembershipRoleAssignment;
@@ -172,6 +173,7 @@ class StudentGuardianRelationshipApiTest extends TestCase
 
         $response = $this->asUser($user)->patchJson("/api/v1/schools/{$school->id}/student-guardian-relationships/{$relationship->id}", [
             'relationship_type' => 'legal_guardian', 'is_legal_guardian' => true,
+            'version' => app(TenantContext::class)->withSchool($school, fn () => StudentGuardianRelationshipVersion::of($relationship->fresh())),
         ]);
 
         $response->assertOk();

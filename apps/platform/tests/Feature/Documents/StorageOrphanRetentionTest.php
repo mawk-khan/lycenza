@@ -16,6 +16,7 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\RequiresObjectStorage;
 use Tests\TestCase;
 
 /**
@@ -26,7 +27,7 @@ use Tests\TestCase;
  */
 class StorageOrphanRetentionTest extends TestCase
 {
-    use CommitsRetentionFixtures, CreatesCommunicationFixtures, CreatesTenancyFixtures;
+    use CommitsRetentionFixtures, CreatesCommunicationFixtures, CreatesTenancyFixtures, RequiresObjectStorage;
 
     private string $docs;
 
@@ -193,6 +194,7 @@ class StorageOrphanRetentionTest extends TestCase
     #[Test]
     public function the_orphan_run_works_against_real_minio_through_s3_listing(): void
     {
+        $this->requireObjectStorage();
         // The production path: S3 ListObjects with last-modified, real MinIO.
         config(['documents.disk' => 's3']);
         $school = $this->createSchool();

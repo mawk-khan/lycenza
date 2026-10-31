@@ -25,6 +25,7 @@ use Illuminate\Support\Str;
 use Illuminate\Testing\PendingCommand;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CommitsRetentionFixtures;
+use Tests\Concerns\RequiresObjectStorage;
 use Tests\Feature\Attendance\Concerns\CreatesAttendanceFixtures;
 use Tests\TestCase;
 
@@ -41,7 +42,7 @@ use Tests\TestCase;
  */
 class AcademicOperationsRetentionTest extends TestCase
 {
-    use CommitsRetentionFixtures, CreatesAttendanceFixtures;
+    use CommitsRetentionFixtures, CreatesAttendanceFixtures, RequiresObjectStorage;
 
     private string $disk;
 
@@ -518,6 +519,7 @@ class AcademicOperationsRetentionTest extends TestCase
     #[Test]
     public function lms_document_bytes_are_removed_from_real_minio_only_with_their_resource(): void
     {
+        $this->requireObjectStorage();
         config(['documents.disk' => 's3']);
         $this->disk = 's3';
         $w = $this->year(null, '2017-04-01', '2018-03-31', 'AY17');

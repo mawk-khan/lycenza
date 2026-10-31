@@ -99,6 +99,8 @@ class StudentRetentionClassificationTest extends TestCase
             // SIS.EXP-3: the Student record side of a Student-owned Document cascades with it (handled).
             'student_documents' => 'D7 core: a Student document record, removed with its Document (cascade)',
             'student_certificates' => 'D7 core: an issued certificate, removed with its generated Document (cascade)',
+            // SIS 11.H1 (L-1): a moved pre-admission record names its (now Student-owned) Document.
+            'applicant_documents' => 'D7 core: a pre-admission record, removed with its Document (cascade)',
         ],
         // E21.3B: the rows that go with the Student, and what may reference them.
         'student_processing_authorizations' => [

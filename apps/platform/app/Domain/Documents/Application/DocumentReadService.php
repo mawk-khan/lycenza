@@ -88,6 +88,7 @@ class DocumentReadService
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly LmsParentResourceAuthorization $lmsParents,
+        private readonly ApplicantDocumentFloor $applicantFloor,
     ) {}
 
     public function metadata(School $school, string $documentId, User $actor): DocumentMetadata
@@ -161,13 +162,18 @@ class DocumentReadService
     }
 
     /**
-     * SIS 11.5: one Applicant-owned Document's content for an actor the
-     * Admissions caller has already authorized for that application (its
-     * Campus-adopted `admissions.documents.view`). Re-read under the School
-     * and the named Applicant.
+     * SIS 11.5: one Applicant-owned Document's content. Authority is split
+     * (ApplicantDocumentFloor): this entry point refuses an actor who holds
+     * `admissions.documents.view` nowhere (SIS 11.H1, L-2); the Admissions
+     * caller has already resolved the application within the actor's Campus
+     * scope. Re-read under the School and the named Applicant (a moved
+     * Document is the Student's: NOT FOUND here), and the opened stream is
+     * audited.
      */
     public function applicantContent(School $school, string $applicantId, string $documentId, User $actor): DocumentContent
     {
+        $this->applicantFloor->require($actor, DocumentService::ADMISSIONS_DOCUMENTS_VIEW, $school);
+
         return $this->context->withSchool($school, function () use ($school, $applicantId, $documentId, $actor) {
             $document = Document::query()->where('school_id', $school->id)->where('applicant_id', $applicantId)->find($documentId)
                 ?? throw new DocumentNotFoundException($documentId);

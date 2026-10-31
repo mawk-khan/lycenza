@@ -5,6 +5,7 @@ namespace Tests\Feature\StudentGuardianIdentity;
 use App\Domain\Guardians\Application\Exceptions\CrossSchoolRelationshipException;
 use App\Domain\Guardians\Application\Exceptions\DuplicateRelationshipException;
 use App\Domain\Guardians\Application\StudentGuardianRelationshipService;
+use App\Domain\Guardians\Application\StudentGuardianRelationshipVersion;
 use App\Domain\Guardians\Infrastructure\RelationshipType;
 use App\Domain\Guardians\Infrastructure\StudentGuardianRelationship;
 use App\Domain\Students\Infrastructure\Student;
@@ -151,7 +152,7 @@ class StudentGuardianRelationshipServiceTest extends TestCase
         $updated = app(StudentGuardianRelationshipService::class)->update($relationship, [
             'relationship_type' => RelationshipType::LegalGuardian,
             'is_legal_guardian' => true,
-        ]);
+        ], app(TenantContext::class)->withSchool($school, fn () => StudentGuardianRelationshipVersion::of($relationship->fresh())));
 
         $this->assertSame(RelationshipType::LegalGuardian, $updated->relationship_type);
         $this->assertTrue($updated->is_legal_guardian);

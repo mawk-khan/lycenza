@@ -70,7 +70,7 @@ class StaffInvitationAcceptanceTest extends TestCase
         $employees = app(TenantContext::class)->withSchool($school, fn () => Employee::query()->count());
 
         $this->acceptStaff($school, $selector, $secret, ['name' => 'Nia Staff'])
-            ->assertRedirect('http://localhost:8000/login');
+            ->assertRedirect(config('app.url').'/login');
         $this->assertGuest();
 
         $user = User::query()->where('email', 'new.person@example.test')->sole();

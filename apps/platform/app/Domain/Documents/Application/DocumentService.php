@@ -148,6 +148,7 @@ class DocumentService
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly LmsParentResourceAuthorization $lmsParents,
+        private readonly ApplicantDocumentFloor $applicantFloor,
     ) {}
 
     public function create(School $school, CreateDocumentData $data, User $actor): Document
@@ -186,18 +187,19 @@ class DocumentService
     }
 
     /**
-     * SIS 11.5: stores an Applicant-owned (pre-admission) Document. The
-     * Admissions domain has already resolved the application under the
-     * actor's `admissions.documents.manage` Campus scope; `$within` (the
-     * Applicant record row) runs in this Document's transaction. The
-     * capability is re-checked in the actor's scope by that caller (it is
-     * Campus-adopted), so this entry point only refuses an actor holding it
-     * nowhere.
+     * SIS 11.5: stores an Applicant-owned (pre-admission) Document; `$within`
+     * (the Applicant record row) runs in this Document's transaction.
+     * Authority is split (ApplicantDocumentFloor): this entry point refuses an
+     * actor who holds `admissions.documents.manage` nowhere in the School
+     * (SIS 11.H1, L-2); the Admissions caller has already resolved the
+     * application within the actor's Campus scope.
      *
      * @param  Closure(Document): void  $within
      */
     public function createForApplicant(School $school, string $applicantId, UploadedFile $file, User $actor, Closure $within): Document
     {
+        $this->applicantFloor->require($actor, self::ADMISSIONS_DOCUMENTS_MANAGE, $school);
+
         return $this->context->withSchool($school, function () use ($school, $applicantId, $file, $actor, $within) {
             $data = new CreateDocumentData(DocumentOwner::applicant($applicantId), self::STUDENT_CLASSIFICATION_TIER, $file);
 
@@ -208,12 +210,15 @@ class DocumentService
     /**
      * SIS 11.5: archives an Applicant-owned Document (status only); `$within`
      * runs in the same transaction. Re-read under the School and the named
-     * Applicant, so a forged id is NOT FOUND.
+     * Applicant, so a forged id is NOT FOUND. Refuses an actor who holds
+     * `admissions.documents.manage` nowhere (SIS 11.H1, L-2).
      *
      * @param  Closure(Document): void  $within
      */
-    public function archiveForApplicant(School $school, string $applicantId, string $documentId, Closure $within): Document
+    public function archiveForApplicant(School $school, string $applicantId, string $documentId, User $actor, Closure $within): Document
     {
+        $this->applicantFloor->require($actor, self::ADMISSIONS_DOCUMENTS_MANAGE, $school);
+
         return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $applicantId, $documentId, $within) {
             $document = Document::query()->where('school_id', $school->id)->where('applicant_id', $applicantId)
                 ->lockForUpdate()->find($documentId)

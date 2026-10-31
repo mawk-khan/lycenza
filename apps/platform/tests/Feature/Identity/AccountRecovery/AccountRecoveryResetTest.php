@@ -65,7 +65,7 @@ class AccountRecoveryResetTest extends TestCase
     /** @return array{0: string, 1: string} */
     private function linkIn(OutboundEmail $mail): array
     {
-        $this->assertSame(1, preg_match('#http://localhost:8000/account-recovery/([A-Za-z0-9_-]{22})\#([A-Za-z0-9_-]{43})#', $mail->text, $m), 'the link carries the secret in its fragment');
+        $this->assertSame(1, preg_match('#'.preg_quote(config('app.url'), '#').'/account-recovery/([A-Za-z0-9_-]{22})\#([A-Za-z0-9_-]{43})#', $mail->text, $m), 'the link carries the secret in its fragment');
 
         return [$m[1], $m[2]];
     }
@@ -95,7 +95,7 @@ class AccountRecoveryResetTest extends TestCase
         $this->assertSame(30, (int) round($request->created_at->diffInMinutes($request->expires_at)));
 
         $this->reset($selector, $secret)
-            ->assertRedirect('http://localhost:8000/login')
+            ->assertRedirect(config('app.url').'/login')
             ->assertSessionHas('status_message');
 
         $this->assertGuest();
@@ -168,7 +168,7 @@ class AccountRecoveryResetTest extends TestCase
         $this->assertTrue(Hash::check(self::OLD, $user->fresh()->password));
         $this->assertTrue(AccountRecoveryRequest::query()->firstOrFail()->isOpen());
 
-        $this->reset($selector, $secret)->assertRedirect('http://localhost:8000/login');
+        $this->reset($selector, $secret)->assertRedirect(config('app.url').'/login');
     }
 
     #[Test]
@@ -187,7 +187,7 @@ class AccountRecoveryResetTest extends TestCase
         $this->assertSame(3, AccountRecoveryRequest::query()->count());
 
         // The OLDEST still works.
-        $this->reset($firstSelector, $firstSecret)->assertRedirect('http://localhost:8000/login');
+        $this->reset($firstSelector, $firstSecret)->assertRedirect(config('app.url').'/login');
 
         $this->assertSame(['superseded_by_reset'], AccountRecoveryRequest::query()->whereNotNull('invalidated_at')->distinct()->pluck('invalidation_reason')->all());
         $this->assertInvalid($this->reset($secondSelector, $secondSecret));
@@ -216,7 +216,7 @@ class AccountRecoveryResetTest extends TestCase
 
         $versionBefore = (int) DB::table('users')->where('id', $user->id)->value('credential_version');
         [$selector, $secret] = $this->issueLink();
-        $this->reset($selector, $secret)->assertRedirect('http://localhost:8000/login');
+        $this->reset($selector, $secret)->assertRedirect(config('app.url').'/login');
 
         $fresh = $user->fresh();
         $this->assertSame($versionBefore + 1, $fresh->credential_version);

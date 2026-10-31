@@ -4,6 +4,7 @@ namespace Tests\Feature\Guardians;
 
 use App\Domain\Guardians\Application\Exceptions\GuardianSelfAdministrationException;
 use App\Domain\Guardians\Application\StudentGuardianRelationshipService;
+use App\Domain\Guardians\Application\StudentGuardianRelationshipVersion;
 use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Domain\Guardians\Infrastructure\RelationshipType;
 use App\Domain\Guardians\Infrastructure\StudentGuardianRelationship;
@@ -83,7 +84,7 @@ class GuardianSelfAdministrationTest extends TestCase
 
         $this->assertRefused(fn () => $this->service()->unlink($w['relationship'], $w['admin']));
         $this->assertRefused(fn () => $this->service()->link($second, $w['own'], RelationshipType::Mother, [], $w['admin']));
-        $this->assertRefused(fn () => $this->service()->update($w['relationship'], ['is_legal_guardian' => true], $w['admin']));
+        $this->assertRefused(fn () => $this->service()->update($w['relationship'], ['is_legal_guardian' => true], StudentGuardianRelationshipVersion::of($w['relationship']), $w['admin']));
         $this->assertRefused(fn () => $this->service()->setPrimary($w['relationship'], $w['admin']));
 
         $this->assertTrue($this->relationshipExists($w, $w['relationship']), 'the relationship is untouched');

@@ -10,6 +10,7 @@ use App\Domain\AcademicStructure\Application\Exceptions\AcademicTermOverlapExcep
 use App\Domain\AcademicStructure\Application\Exceptions\AcademicYearClosedForStructureException;
 use App\Domain\AcademicStructure\Application\RoomAdministrationService;
 use App\Domain\AcademicStructure\Application\SectionAdministrationService;
+use App\Domain\AcademicStructure\Application\SectionVersion;
 use App\Domain\AcademicStructure\Infrastructure\AcademicDepartment;
 use App\Domain\AcademicStructure\Infrastructure\AcademicTerm;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
@@ -164,6 +165,8 @@ class SchoolSetupStructureController extends Controller
             'selectedYearId' => $selected?->id,
             'sections' => $sections?->through(fn (Section $s) => [
                 'id' => $s->id, 'name' => $s->name, 'code' => $s->code, 'capacity' => $s->capacity, 'status' => $s->status,
+                // SIS 11.H1: the edit form's stale-form token.
+                'version' => SectionVersion::of($s),
                 'campus' => ['id' => $s->campus_id, 'name' => $s->campus?->name],
                 'gradeLevel' => ['id' => $s->grade_level_id, 'name' => $s->gradeLevel?->name],
                 'occupancy' => isset($occupancy[$s->id]) ? $occupancy[$s->id]->toArray() : null,
@@ -192,7 +195,7 @@ class SchoolSetupStructureController extends Controller
         $school = $context->requireSchool();
         $this->authorizeCapability('academics.structure.manage', $school);
 
-        $model = $sections->update($school, $section, $request->only(['name', 'code', 'capacity', 'status']), $context->actor());
+        $model = $sections->update($school, $section, $request->only(['name', 'code', 'capacity', 'status', 'version']), $context->actor());
 
         return redirect()->route('app.school-setup.sections', ['academic_year_id' => $model->academic_year_id])->with('flash', 'Section updated.');
     }

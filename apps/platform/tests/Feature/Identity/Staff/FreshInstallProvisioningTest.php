@@ -117,7 +117,7 @@ class FreshInstallProvisioningTest extends TestCase
         );
         $console->setInput($this->email('admin')."\n");
         $console->mustRun();
-        $this->assertSame(1, preg_match('#http://localhost:8000/account-activation/([A-Za-z0-9_-]{22})\#([A-Za-z0-9_-]{43})#', $console->getOutput(), $link), $console->getOutput());
+        $this->assertSame(1, preg_match('#'.preg_quote(config('app.url'), '#').'/account-activation/([A-Za-z0-9_-]{22})\#([A-Za-z0-9_-]{43})#', $console->getOutput(), $link), $console->getOutput());
         $admin = User::query()->where('email', $this->email('admin'))->sole();
         $this->assertFalse($admin->hasLocalCredential());
         $this->assertSame(0, SchoolMembership::query()->where('user_id', $admin->id)->count());
@@ -140,7 +140,7 @@ class FreshInstallProvisioningTest extends TestCase
         // 4. The administrator activates their account (platform host).
         $this->signOut();
         $this->post("http://localhost/account-activation/{$link[1]}", ['secret' => $link[2], 'password' => self::ADMIN_PASSWORD, 'password_confirmation' => self::ADMIN_PASSWORD])
-            ->assertRedirect('http://localhost:8000/login');
+            ->assertRedirect(config('app.url').'/login');
         $this->assertGuest();
 
         // 5. Root activates the School.

@@ -167,3 +167,19 @@ detail.
 4. **Unchanged:** there is still no generic `documents.*` capability, signed
    or public URL, share link, OCR, AI, content hash or malware scanning. The
    Guardian arm stays deferred.
+
+## Amendment — Applicant arm hardening (SIS 11.H1, 2026-10-31)
+
+1. **Relationship integrity.**
+   - `applicant_documents_document_fk (document_id, school_id)` →
+     `documents (id, school_id)`, ON DELETE CASCADE. A new
+     `documents_id_school_unique` key is its target.
+   - An insert-time trigger requires the Document to be owned by the
+     record's own Applicant.
+   - The unused `documents_id_applicant_school_unique` key is dropped: an
+     owner-specific key cannot survive the conversion move.
+2. **Entry-point floor.** `createForApplicant`, `archiveForApplicant` and
+   `applicantContent` refuse an actor holding `admissions.documents.*`
+   nowhere in the School (`ApplicantDocumentFloor`). Admissions still
+   decides the application's Campus scope before any of them is reached;
+   neither check replaces the other.

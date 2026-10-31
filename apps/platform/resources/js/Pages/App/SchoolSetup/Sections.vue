@@ -18,6 +18,8 @@ interface Section {
     code: string;
     capacity: number | null;
     status: string;
+    // SIS 11.H1: stale-form token, sent back with every edit.
+    version: string;
     campus: { id: string; name: string | null };
     gradeLevel: { id: string; name: string | null };
     // SIS 11.3 (OD-SIS-6): strength against advisory capacity (whole-School
@@ -94,10 +96,11 @@ function submitCreate() {
 }
 
 const editing = ref<Section | null>(null);
-const edit = useForm<{ name: string; code: string; capacity: number | null }>({
+const edit = useForm<{ name: string; code: string; capacity: number | null; version: string }>({
     name: '',
     code: '',
     capacity: null,
+    version: '',
 });
 function startEdit(section: Section) {
     editing.value = section;
@@ -105,6 +108,7 @@ function startEdit(section: Section) {
     edit.name = section.name;
     edit.code = section.code;
     edit.capacity = section.capacity;
+    edit.version = section.version;
     nextTick(() => document.getElementById('edit-section-name')?.focus());
 }
 // SIS 11.3: capacity is advisory -- it may be set below the current strength,
@@ -126,7 +130,7 @@ function submitEdit() {
     });
 }
 
-const statusForm = useForm({ status: '' });
+const statusForm = useForm({ status: '', version: '' });
 const pending = ref<Section | null>(null);
 const dialog = ref<InstanceType<typeof ConfirmDialog> | null>(null);
 function askDeactivate(section: Section) {
@@ -135,6 +139,7 @@ function askDeactivate(section: Section) {
 }
 function setStatus(section: Section, status: 'active' | 'inactive') {
     statusForm.status = status;
+    statusForm.version = section.version;
     statusForm.put(`/app/school-setup/sections/${section.id}`, { preserveScroll: true });
 }
 </script>

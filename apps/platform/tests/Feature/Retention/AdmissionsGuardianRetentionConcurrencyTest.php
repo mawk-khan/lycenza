@@ -181,4 +181,38 @@ class AdmissionsGuardianRetentionConcurrencyTest extends TestCase
         $this->assertStringStartsWith('rejected:', $contender);
         $this->assertSame(0, $this->admin('applicants', 'id', $applicant->id));
     }
+
+    #[Test]
+    public function a_new_application_racing_the_converted_purge_keeps_its_applicant(): void
+    {
+        // SIS 11.H1 (SIS 11.R1 L-3): the converted application goes with its
+        // Student; its applicant would leave too -- unless a new application
+        // appears meanwhile. The purge locks the applicant before re-checking,
+        // so the late application keeps it (never a failed unit, never a delete).
+        $school = $this->school();
+        $campus = $this->createCampus($school);
+        $grade = $this->createGradeLevel($school);
+        $year = $this->createAcademicYear($school);
+        $applicant = $this->createApplicant($school);
+        $student = $this->createStudent($school);
+        $enrollment = $this->createStudentEnrollment($student, $this->createSection($year, $campus, $grade));
+        $converted = (string) Str::uuid7();
+        app(TenantContext::class)->withSchool($school, fn () => DB::table('admission_applications')->insert([
+            'id' => $converted, 'school_id' => $school->id, 'applicant_id' => $applicant->id, 'academic_year_id' => $year->id, 'campus_id' => $campus->id,
+            'grade_level_id' => $grade->id, 'status' => 'converted', 'converted_student_id' => $student->id,
+            'converted_student_enrollment_id' => $enrollment->id, 'converted_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+        ]));
+
+        $this->backdateEndRecording();
+        [$holder, $contender] = $this->raceWithHeldHolder(
+            $this->script('apply', $school->id, $applicant->id, $year->id, $campus->id, $grade->id),
+            $this->script('converted-purge', $school->id, $student->id, $applicant->id),
+        );
+
+        $this->assertSame('applied', $holder);
+        $this->assertSame('purged:applicant-kept', $contender, 'the late application keeps its applicant; the unit does not fail');
+        $this->assertSame(0, $this->admin('admission_applications', 'id', $converted), 'the converted application went with its Student');
+        $this->assertSame(1, $this->admin('applicants', 'id', $applicant->id));
+        $this->assertSame(1, $this->admin('admission_applications', 'applicant_id', $applicant->id));
+    }
 }

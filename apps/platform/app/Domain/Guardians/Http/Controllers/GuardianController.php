@@ -4,6 +4,7 @@ namespace App\Domain\Guardians\Http\Controllers;
 
 use App\Domain\Guardians\Application\GuardianContactService;
 use App\Domain\Guardians\Application\GuardianNameSearch;
+use App\Domain\Guardians\Application\GuardianProfileVersion;
 use App\Domain\Guardians\Application\GuardianService;
 use App\Domain\Guardians\Infrastructure\ContactType;
 use App\Domain\Guardians\Infrastructure\Guardian;
@@ -102,9 +103,14 @@ class GuardianController extends Controller
             'first_name' => ['sometimes', 'string', 'max:255'],
             'middle_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'last_name' => ['sometimes', 'nullable', 'string', 'max:255'],
+            // SIS 11.H1: required -- the GuardianProfileVersion the client read;
+            // a stale write is refused (409 GUARDIAN_PROFILE_CHANGED).
+            'version' => ['required', 'string', 'size:64'],
         ]);
+        $version = $validated['version'];
+        unset($validated['version']);
 
-        $updated = $service->update($model, $validated, $request->user());
+        $updated = $service->update($model, $validated, $request->user(), $version);
 
         return response()->json(['data' => $this->presentSummary($updated)]);
     }
@@ -171,6 +177,8 @@ class GuardianController extends Controller
             'middleName' => $guardian->middle_name,
             'lastName' => $guardian->last_name,
             'status' => $guardian->status,
+            // SIS 11.H1: required back on PATCH (stale-update protection).
+            'version' => GuardianProfileVersion::of($guardian),
         ];
     }
 

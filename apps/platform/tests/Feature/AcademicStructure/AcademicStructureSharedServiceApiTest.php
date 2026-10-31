@@ -3,6 +3,7 @@
 namespace Tests\Feature\AcademicStructure;
 
 use App\Domain\AcademicStructure\Application\Concerns\AdministersReferenceData;
+use App\Domain\AcademicStructure\Application\SectionVersion;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Models\Campus;
@@ -71,7 +72,7 @@ class AcademicStructureSharedServiceApiTest extends TestCase
             ->assertOk()->assertJsonPath('data.academicDepartmentId', $department->id);
         $this->api($user, $school)->patchJson("{$base}/rooms/{$room->id}", ['capacity' => 30, 'status' => 'inactive'])
             ->assertOk()->assertJsonPath('data.capacity', 30);
-        $this->api($user, $school)->patchJson("{$base}/sections/{$section->id}", ['capacity' => 40])
+        $this->api($user, $school)->patchJson("{$base}/sections/{$section->id}", ['capacity' => 40, 'version' => app(TenantContext::class)->withSchool($school, fn () => SectionVersion::of(Section::query()->findOrFail($section->id)))])
             ->assertOk()->assertJsonPath('data.capacity', 40);
         $this->api($user, $school)->patchJson("{$base}/academic-terms/{$term->id}", ['name' => 'Term One'])
             ->assertOk()->assertJsonPath('data.name', 'Term One');
@@ -112,9 +113,9 @@ class AcademicStructureSharedServiceApiTest extends TestCase
         // The old failure: the database alone refuses the duplicate (the PATCH used to reach it unchecked).
         $this->assertThrows(fn () => app(TenantContext::class)->withSchool($school, fn () => DB::transaction(fn () => Section::query()->whereKey($other->id)->update(['code' => 'A']))), UniqueConstraintViolationException::class);
 
-        $this->api($user, $school)->patchJson("/api/v1/schools/{$school->id}/sections/{$other->id}", ['code' => ' a '])
+        $this->api($user, $school)->patchJson("/api/v1/schools/{$school->id}/sections/{$other->id}", ['code' => ' a ', 'version' => app(TenantContext::class)->withSchool($school, fn () => SectionVersion::of(Section::query()->findOrFail($other->id)))])
             ->assertStatus(422)->assertJsonStructure(['error' => ['errors' => ['code']]]);
-        $this->api($user, $school)->patchJson("/api/v1/schools/{$school->id}/sections/{$other->id}", ['code' => 'b'])
+        $this->api($user, $school)->patchJson("/api/v1/schools/{$school->id}/sections/{$other->id}", ['code' => 'b', 'version' => app(TenantContext::class)->withSchool($school, fn () => SectionVersion::of(Section::query()->findOrFail($other->id)))])
             ->assertOk()->assertJsonPath('data.code', 'B');
     }
 

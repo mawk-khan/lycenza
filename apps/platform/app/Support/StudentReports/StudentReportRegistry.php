@@ -30,8 +30,10 @@ use Illuminate\Contracts\Container\Container;
  *
  * Operational listing only ("which records match these conditions"):
  * never a person count, rate, trend or demographic breakdown (Analytics,
- * ADR 0040, D-01..D-04, D-15), never an export (D-11), and never Data
- * Health (integrity conditions, ADR 0075 §10).
+ * ADR 0040, D-01..D-04, D-15), and never Data Health (integrity
+ * conditions, ADR 0075 §10). Export and print exist only for the reports
+ * in EXPORTERS, through StudentReportExportService under the governed D-11
+ * contract (SIS 11.4, rule 125); every other report is browser-only.
  */
 final class StudentReportRegistry
 {

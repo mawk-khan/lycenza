@@ -7,6 +7,7 @@ use App\Domain\Students\Application\Retention\StudentCoreParticipant;
 use App\Models\School;
 use App\Support\Retention\ObjectDeletion;
 use App\Support\Retention\ReferencingRows;
+use App\Support\Retention\RetentionLocks;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -67,9 +68,17 @@ final class ConvertedApplicationRetentionService implements StudentCoreParticipa
         // SIS 11.5: history that stayed with the Applicant (archived, superseded) goes with its application.
         ApplicantDocumentRetention::purgeForApplications($school->id, $this->converted($school->id, $studentId)->pluck('id')->map(fn ($id) => (string) $id)->all());
         $this->converted($school->id, $studentId)->delete();
-        // Re-checked at delete time: an application created meanwhile keeps its
-        // applicant. SIS 11.5: a leaving applicant's own Documents (the history
-        // that stayed with it; current ones moved to the Student) go with it.
+        // SIS 11.H1 (SIS 11.R1 L-3): an application created meanwhile keeps its
+        // applicant -- conservatively, never by failing the unit. The released
+        // applicants are locked first (the lock-only definer, FOR UPDATE): a
+        // concurrent new application (its foreign key takes FOR KEY SHARE on the
+        // applicant) either committed before the lock, and the re-check below
+        // sees it, or waits until this unit has committed. Only then is the
+        // "no other application" re-check read, as a new statement.
+        sort($applicants);
+        RetentionLocks::lock('applicants', $applicants);
+        // A leaving applicant's own Documents (the history that stayed with it;
+        // current ones moved to the Student) go with it (SIS 11.5).
         $leaving = DB::table('applicants')->where('school_id', $school->id)->whereIn('id', $applicants)
             ->whereNotExists(fn (Builder $q) => $q->selectRaw('1')->from(self::TABLE.' as a')->whereColumn('a.applicant_id', 'applicants.id'))
             ->pluck('id')->all();

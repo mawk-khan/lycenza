@@ -1022,6 +1022,9 @@ php artisan serve --no-reload   # --no-reload is REQUIRED in Docker --
                                   # `artisan serve` itself is local-dev-only --
                                   # never the production server.
 
+# Before any candidate push, walk docs/development/CROSS-CUTTING-CHANGE-CHECKLIST.md
+# (capability/role/user-reference/table/route/owner-type pins, SIS 11.H1).
+
 # Quality gates (apps/platform)
 vendor/bin/pint --test
 vendor/bin/phpstan analyse --memory-limit=512M
@@ -1800,3 +1803,10 @@ once several modules copy it.
      - **Verification:** `pending` → `verified`, or `pending` → `rejected` with a closed `DocumentRejectionReason`. It needs whole-School `students.documents.verify`, a fresh MFA code and the current version. It is final; a rejected document is fixed by a superseding replacement.
      - **Pre-admission documents:** `applicant_documents` through `ApplicantDocumentService` only, under `admissions.documents.view`/`.manage` covering the application's Campus (out of scope = NOT FOUND). They are collected only while the application is open. Conversion moves the current ones to the Student (the same Document rows), and admissions staff gain no Student-document access. Everything else follows Admissions retention.
      - **Cohort checklist:** states only, never a file, title, date, id or download. Whole-School `students.view` + `students.documents.view`, current MFA. Browser-only: never an exporter or print view.
+
+127. **Post-expansion hardening contracts (SIS 11.H1, `docs/sis/SIS-11-H1-POST-EXPANSION-HARDENING.md`).**
+     - **Stale edits:** the Section edit, the Student–Guardian relationship edit, and the API `PATCH` of Students, Guardians, Sections and relationships each require the version their client read (`SectionVersion`, `StudentGuardianRelationshipVersion`, `StudentProfileVersion`, `GuardianProfileVersion`). It is compared under the row lock: a stale or forged value is a 409 (web: `refusal`), and a missing one is a 422. Never add a last-save-wins path to these, and never make the token optional again.
+     - **Applicant Documents:** the entry points (`createForApplicant`, `archiveForApplicant`, `applicantContent`) refuse an actor holding `admissions.documents.*` nowhere (`ApplicantDocumentFloor`), and Admissions keeps deciding the application's Campus. `applicant_documents_document_fk (document_id, school_id)` plus the insert-time owner trigger keep a record on its own School's and Applicant's Document.
+     - **Verification:** deciding a Student document needs `students.documents.view` and `.verify`.
+     - **Retention:** a purge that releases applicants locks them (`RetentionLocks`) before its "no other application" re-check, and skips rather than fails.
+     - **Tests:** `phpunit.xml` forces `APP_URL`, so expected URLs come from `config('app.url')`. Real-object-storage tests use `RequiresObjectStorage`: they skip locally and fail in CI when storage is missing. Audit-event order in tests is the UUIDv7 `id`, or the event's content, never `occurred_at` alone.

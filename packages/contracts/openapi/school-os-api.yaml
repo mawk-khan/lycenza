@@ -1087,17 +1087,24 @@ paths:
           application/json:
             schema:
               type: object
+              required: [version]
               properties:
                 name: { type: string }
                 code: { type: string }
                 capacity: { type: integer, nullable: true }
                 status: { type: string, enum: [active, inactive] }
+                version: { type: string, minLength: 64, maxLength: 64, description: "SIS 11.H1: the version read from the resource. Required: a stale or forged value is refused (409 *_CHANGED); a missing one is a 422." }
       responses:
         "200":
           description: OK
           content:
             application/json:
               schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Section" } } }
+        "409":
+          description: The record changed after the client read it (stale version). Nothing was written; read it again and resend.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /schools/{schoolId}/subjects:
     get:
@@ -1416,6 +1423,11 @@ paths:
           content:
             application/json:
               schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/Student" } } }
+        "409":
+          description: The record changed after the client read it (stale version). Nothing was written; read it again and resend.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /schools/{schoolId}/students/{studentId}/status:
     post:
@@ -1509,6 +1521,11 @@ paths:
           content:
             application/json:
               schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/StudentGuardianRelationship" } } }
+        "409":
+          description: The record changed after the client read it (stale version). Nothing was written; read it again and resend.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
     delete:
       operationId: unlinkGuardianFromStudent
       summary: >
@@ -1651,13 +1668,18 @@ paths:
       requestBody:
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/GuardianInput" }
+            schema: { $ref: "#/components/schemas/GuardianUpdateInput" }
       responses:
         "200":
           description: OK
           content:
             application/json:
               schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/GuardianSummary" } } }
+        "409":
+          description: The record changed after the client read it (stale version). Nothing was written; read it again and resend.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /schools/{schoolId}/guardians/{guardianId}/status:
     post:
@@ -16587,7 +16609,7 @@ components:
 
     Section:
       type: object
-      required: [id, academicYearId, campusId, gradeLevelId, name, code, status]
+      required: [id, academicYearId, campusId, gradeLevelId, name, code, status, version]
       description: Belongs to exactly one Academic Year (section 28 -- never reused across years).
       properties:
         id: { type: string, format: uuid }
@@ -16598,6 +16620,7 @@ components:
         code: { type: string }
         capacity: { type: integer, nullable: true, description: "Advisory only (section 27) -- not admission-enforced." }
         status: { type: string, enum: [active, inactive] }
+        version: { type: string, minLength: 64, maxLength: 64, description: "SIS 11.H1: the record version read from this resource; send it back on PATCH. A stale version is a 409." }
 
     SectionInput:
       type: object
@@ -16697,7 +16720,7 @@ components:
 
     Student:
       type: object
-      required: [id, studentNumber, firstName, status, dateOfBirth, createdAt, updatedAt]
+      required: [id, studentNumber, firstName, status, dateOfBirth, version, createdAt, updatedAt]
       description: >
         Full single-record shape (show/create/update responses only --
         never the list response, see StudentSummary).
@@ -16709,6 +16732,7 @@ components:
         lastName: { type: string, nullable: true }
         status: { type: string, enum: [active, inactive] }
         dateOfBirth: { type: string, format: date }
+        version: { type: string, minLength: 64, maxLength: 64, description: "SIS 11.H1: the record version read from this resource; send it back on PATCH. A stale version is a 409." }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
 
@@ -16732,9 +16756,10 @@ components:
 
     StudentInput:
       type: object
-      required: [student_number, first_name, date_of_birth]
+      required: [version]
       description: >
-        Update (PATCH) input: a correction of an existing Student.
+        Update (PATCH) input: a correction of an existing Student; every
+        field but version is optional (only the supplied fields change).
         student_number uniqueness is enforced by StudentService/the
         database (school_id, student_number), not by this contract --
         a duplicate is a 422 with code DUPLICATE_STUDENT_NUMBER.
@@ -16745,6 +16770,7 @@ components:
         middle_name: { type: string, maxLength: 255, nullable: true }
         last_name: { type: string, maxLength: 255, nullable: true }
         date_of_birth: { type: string, format: date }
+        version: { type: string, minLength: 64, maxLength: 64, description: "SIS 11.H1: the version read from the resource. Required: a stale or forged value is refused (409 *_CHANGED); a missing one is a 422." }
 
     GuardianSummary:
       type: object
@@ -16755,6 +16781,11 @@ components:
         middleName: { type: string, nullable: true }
         lastName: { type: string, nullable: true }
         status: { type: string, enum: [active, inactive] }
+        version:
+          type: string
+          minLength: 64
+          maxLength: 64
+          description: "SIS 11.H1: present on the Guardian endpoints' own responses (not on a Guardian embedded in another resource); send it back on PATCH."
 
     Guardian:
       type: object
@@ -16795,6 +16826,16 @@ components:
         first_name: { type: string, maxLength: 255 }
         middle_name: { type: string, maxLength: 255, nullable: true }
         last_name: { type: string, maxLength: 255, nullable: true }
+
+    GuardianUpdateInput:
+      type: object
+      required: [version]
+      description: Update (PATCH) input; only the supplied name fields change.
+      properties:
+        first_name: { type: string, maxLength: 255 }
+        middle_name: { type: string, maxLength: 255, nullable: true }
+        last_name: { type: string, maxLength: 255, nullable: true }
+        version: { type: string, minLength: 64, maxLength: 64, description: "SIS 11.H1: the version read from the resource. Required: a stale or forged value is refused (409 *_CHANGED); a missing one is a 422." }
 
     ContactType:
       type: string
@@ -16845,7 +16886,7 @@ components:
 
     StudentGuardianRelationship:
       type: object
-      required: [id, studentId, guardian, relationshipType, isPrimary, isLegalGuardian, isEmergencyContact, isAuthorizedPickup]
+      required: [id, studentId, guardian, relationshipType, isPrimary, isLegalGuardian, isEmergencyContact, isAuthorizedPickup, version]
       properties:
         id: { type: string, format: uuid }
         studentId: { type: string, format: uuid }
@@ -16855,6 +16896,7 @@ components:
         isLegalGuardian: { type: boolean }
         isEmergencyContact: { type: boolean }
         isAuthorizedPickup: { type: boolean }
+        version: { type: string, minLength: 64, maxLength: 64, description: "SIS 11.H1: the record version read from this resource; send it back on PATCH. A stale version is a 409." }
 
     StudentGuardianRelationshipLinkInput:
       type: object
@@ -16871,7 +16913,9 @@ components:
 
     StudentGuardianRelationshipUpdateInput:
       type: object
+      required: [version]
       properties:
+        version: { type: string, minLength: 64, maxLength: 64, description: "SIS 11.H1: the version read from the resource. Required: a stale or forged value is refused (409 *_CHANGED); a missing one is a 422." }
         relationship_type: { $ref: "#/components/schemas/RelationshipType" }
         is_legal_guardian: { type: boolean }
         is_emergency_contact: { type: boolean }

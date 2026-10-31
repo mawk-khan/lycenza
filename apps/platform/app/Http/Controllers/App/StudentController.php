@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\App;
 
+use App\Domain\Guardians\Application\StudentGuardianRelationshipVersion;
 use App\Domain\Identity\Application\AccountLinkService;
 use App\Domain\Students\Application\Exceptions\DuplicateStudentNumberException;
 use App\Domain\Students\Application\Exceptions\PossibleDuplicateStudentException;
@@ -169,6 +170,8 @@ class StudentController extends Controller
                     'isLegalGuardian' => $r->is_legal_guardian,
                     'isEmergencyContact' => $r->is_emergency_contact,
                     'isAuthorizedPickup' => $r->is_authorized_pickup,
+                    // SIS 11.H1: the relationship edit form's stale-form token.
+                    'version' => StudentGuardianRelationshipVersion::of($r),
                     'guardian' => [
                         'id' => $r->guardian->id,
                         'firstName' => $r->guardian->first_name,

@@ -44,7 +44,8 @@ class TeacherStudentMarkAccessTest extends TestCase
     /** @return list<SchoolAuditEvent> */
     private function audits(array $w, string $type): array
     {
-        return $this->inMarksSchool($w['school'], fn () => SchoolAuditEvent::query()->where('event_type', $type)->orderBy('occurred_at')->get()->all());
+        // SIS 11.H1: occurred_at has one-second precision; the UUIDv7 id is the write order.
+        return $this->inMarksSchool($w['school'], fn () => SchoolAuditEvent::query()->where('event_type', $type)->orderBy('id')->get()->all());
     }
 
     #[Test]
@@ -291,7 +292,10 @@ class TeacherStudentMarkAccessTest extends TestCase
         $this->teacherRecord($w, $teacher, [$this->entry($student, 'present', '48', 1)]);
         $this->teacherRecord($w, $teacher, [$this->entry($student, 'absent', null)], $w['electivePaper']);
         $mark = $this->markOf($w, $student);
-        [$recorded, $electiveRecorded] = $this->audits($w, 'examinations.student_mark.teacher_recorded');
+        // SIS 11.H1: each event chosen by what it records, never by position.
+        $byPaper = collect($this->audits($w, 'examinations.student_mark.teacher_recorded'))->keyBy(fn (SchoolAuditEvent $e) => $e->metadata['examinationPaperId']);
+        $recorded = $byPaper[$w['paper']->id];
+        $electiveRecorded = $byPaper[$w['electivePaper']->id];
         [$changed] = $this->audits($w, 'examinations.student_mark.teacher_changed');
         $this->assertEquals(['studentMarkId' => $mark->id, 'examinationPaperId' => $w['paper']->id, 'studentId' => $student->id, 'version' => 1,
             'employeeId' => $employee->id, 'ownershipSource' => 'teaching_assignment'], $recorded->metadata);

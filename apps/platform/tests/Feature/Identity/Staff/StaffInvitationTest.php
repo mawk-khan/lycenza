@@ -70,7 +70,7 @@ class StaffInvitationTest extends TestCase
         [$selector, $secret] = $this->staffLink($mail);
         $this->assertSame($invitation->selector, $selector);
         $this->assertSame(hash('sha256', $secret), $invitation->secret_hash, 'Only the SHA-256 of the secret is stored.');
-        $this->assertStringContainsString("http://localhost:8000/invitations/{$school->id}/staff/{$selector}#", $mail->text, 'The School canonical origin, never a request Host.');
+        $this->assertStringContainsString(config('app.url')."/invitations/{$school->id}/staff/{$selector}#", $mail->text, 'The School canonical origin, never a request Host.');
         $this->assertStringContainsString($school->name, $mail->text);
 
         $audit = app(TenantContext::class)->withSchool($school, fn () => SchoolAuditEvent::query()->where('event_type', StaffInvitationService::INVITED)->sole());

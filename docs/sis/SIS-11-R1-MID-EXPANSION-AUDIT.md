@@ -760,6 +760,28 @@ In parallel, the owner can decide OD-SIS-4, so that **B (Student Groups)** follo
 | Q34 | Groups (after OD-SIS-4) and the dashboard (after a counts decision) need no other ERP. Leave needs Portal/Attendance; Agreements needs Portal and legal; Activities wait on Groups |
 | Q35 | **G — SIS 11.H1 Post-expansion hardening** |
 
+## 13. Follow-up status (added by SIS 11.H1, 2026-10-31)
+
+The findings above are kept as recorded. SIS 11.H1
+(`SIS-11-H1-POST-EXPANSION-HARDENING.md`) closed each one individually:
+
+| Finding | Status |
+|---|---|
+| L-1 | CLOSED |
+| L-2 | CLOSED |
+| L-3 | CLOSED |
+| L-4 | CLOSED |
+| §8.4 three same-second audit tests | CLOSED (11 others classified) |
+| §8.2 DDEV `APP_URL` | CLOSED |
+| §8.3 object-storage classification | CLOSED |
+| §8.1 checklist | committed (`docs/development/CROSS-CUTTING-CHANGE-CHECKLIST.md`) |
+| §8.5 Section edit | CLOSED |
+| §8.5 relationship edit | CLOSED |
+| §8.5 API Student PATCH | CLOSED |
+| §8.5 API Guardian PATCH | CLOSED |
+| §8.9 docblock drift | CLOSED |
+| L-5 (print audit per load) | informational, unchanged |
+
 ## Appendix A — Capability inventory (114)
 
 Bold in "After 11.5" marks a change since SIS.EXP-CLOSE.

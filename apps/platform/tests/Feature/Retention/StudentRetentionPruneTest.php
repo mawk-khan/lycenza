@@ -20,6 +20,7 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesFeesFixtures;
 use Tests\Concerns\CreatesFinanceFixtures;
+use Tests\Concerns\RequiresObjectStorage;
 use Tests\Feature\Attendance\Concerns\CreatesAttendanceFixtures;
 use Tests\TestCase;
 
@@ -32,7 +33,7 @@ use Tests\TestCase;
  */
 class StudentRetentionPruneTest extends TestCase
 {
-    use CommitsRetentionFixtures, CreatesAttendanceFixtures, CreatesFeesFixtures, CreatesFinanceFixtures;
+    use CommitsRetentionFixtures, CreatesAttendanceFixtures, CreatesFeesFixtures, CreatesFinanceFixtures, RequiresObjectStorage;
 
     private string $disk;
 
@@ -439,6 +440,7 @@ class StudentRetentionPruneTest extends TestCase
     #[Test]
     public function the_core_purge_removes_student_document_bytes_from_real_minio(): void
     {
+        $this->requireObjectStorage();
         config(['documents.disk' => 's3']);
         $w = $this->world();
         $student = $this->leaver($w, '2026-09-30');

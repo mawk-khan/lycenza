@@ -163,10 +163,14 @@ class GuardianEditIntegrityTest extends TestCase
         $this->get("/app/guardians/{$elsewhere->id}/edit")->assertNotFound();
         $this->put("/app/guardians/{$elsewhere->id}", ['first_name' => 'Hacked', 'expected_version' => GuardianProfileVersion::of($elsewhere)])->assertNotFound();
 
-        // The API PATCH gets the lock and the precise audit, with no token (unchanged contract, like Students).
+        // The API PATCH gets the lock and the precise audit. SIS 11.H1: it now
+        // requires the version it read (missing = 422, stale = 409).
         $token = $this->admin->createToken('test-device')->plainTextToken;
-        $this->withHeader('Authorization', "Bearer {$token}")
-            ->patchJson("/api/v1/schools/{$this->school->id}/guardians/{$this->guardian->id}", ['first_name' => 'Lakshmi', 'last_name' => 'Nair'])
+        $api = $this->withHeader('Authorization', "Bearer {$token}");
+        $api->patchJson("/api/v1/schools/{$this->school->id}/guardians/{$this->guardian->id}", ['first_name' => 'Lakshmi', 'last_name' => 'Nair'])
+            ->assertStatus(422)->assertJsonStructure(['error' => ['errors' => ['version']]]);
+        $version = app(TenantContext::class)->withSchool($this->school, fn () => GuardianProfileVersion::of($this->guardian->fresh()));
+        $api->patchJson("/api/v1/schools/{$this->school->id}/guardians/{$this->guardian->id}", ['first_name' => 'Lakshmi', 'last_name' => 'Nair', 'version' => $version])
             ->assertOk()->assertJsonPath('data.lastName', 'Nair');
         $this->assertSame([['last_name']], $this->updateAudits());
     }

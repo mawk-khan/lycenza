@@ -115,9 +115,13 @@ class StudentProfileEditIntegrityTest extends TestCase
         $this->assertSame([['last_name']], $this->audits(), 'no misleading second entry');
         $this->assertEquals($before, $this->fresh()->updated_at);
 
-        // The API (PATCH, no token) gets the same precise audit.
-        $this->withHeader('Authorization', 'Bearer '.$this->admin->createToken('t')->plainTextToken)
-            ->patchJson("/api/v1/schools/{$this->school->id}/students/{$this->student->id}", ['first_name' => 'Asha', 'date_of_birth' => '2015-04-02'])
+        // The API PATCH gets the same precise audit. SIS 11.H1: it now requires
+        // the version it read (a missing one is a 422, a stale one a 409).
+        $api = $this->withHeader('Authorization', 'Bearer '.$this->admin->createToken('t')->plainTextToken);
+        $api->patchJson("/api/v1/schools/{$this->school->id}/students/{$this->student->id}", ['first_name' => 'Asha', 'date_of_birth' => '2015-04-02'])
+            ->assertStatus(422)->assertJsonStructure(['error' => ['errors' => ['version']]]);
+        $version = app(TenantContext::class)->withSchool($this->school, fn () => StudentProfileVersion::of($this->student->fresh()));
+        $api->patchJson("/api/v1/schools/{$this->school->id}/students/{$this->student->id}", ['first_name' => 'Asha', 'date_of_birth' => '2015-04-02', 'version' => $version])
             ->assertOk();
         $this->assertSame([['last_name'], ['date_of_birth']], $this->audits());
     }

@@ -122,6 +122,22 @@ repository.
 - Cohort checklist (`students.document_compliance`, states only,
   browser-only). SR-21 → governed (immunisation and photo stay out).
 
+**SIS 11.R1 AUDIT (2026-10-31, `SIS-11-R1-MID-EXPANSION-AUDIT.md`,
+published docs-only at `c9d9cd9f`):** 114-capability re-audit. Core
+operational coverage is 39/64 = 60.9 % strict. LOW findings L-1 to L-4;
+the recommendation was hardening first.
+
+**SIS 11.H1 IMPLEMENTED (2026-10-31, `SIS-11-H1-POST-EXPANSION-HARDENING.md`):**
+- L-1 to L-4 closed;
+- stale-update protection on the Section edit, the relationship edit, and
+  the API Student and Guardian PATCH;
+- DDEV `APP_URL` parity (Identity suite 199/199 locally);
+- explicit local skips for real-object-storage tests (still required in CI);
+- three same-second audit tests fixed;
+- the cross-cutting change checklist committed.
+
+No capability, feature table or score change.
+
 **Next: owner decision; NOT STARTED; never auto-start.**
 
 ### 2.0f SIS.EXP-CLOSE — PROGRAMME CLOSED (2026-10-30)

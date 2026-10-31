@@ -50,6 +50,11 @@
             platform:test-db-reset).
         -->
         <env name="APP_ENV" value="testing" force="true"/>
+        <!-- SIS 11.H1: one deterministic test URL contract. DDEV exports
+             APP_URL=https://lycenza.ddev.site; CI copies .env.example
+             (http://localhost:8000). Forced so local and CI build the same
+             canonical links; tests derive expected URLs from config('app.url'). -->
+        <env name="APP_URL" value="http://localhost:8000" force="true"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file" force="true"/>
         <env name="BCRYPT_ROUNDS" value="4" force="true"/>
         <env name="BROADCAST_CONNECTION" value="null" force="true"/>

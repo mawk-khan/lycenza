@@ -22,6 +22,8 @@ interface Relationship {
     isLegalGuardian: boolean;
     isEmergencyContact: boolean;
     isAuthorizedPickup: boolean;
+    // SIS 11.H1: stale-form token, sent back with an edit.
+    version: string;
     guardian: {
         id: string;
         firstName: string;
@@ -365,6 +367,7 @@ const relationshipForm = useForm({
     is_legal_guardian: false,
     is_emergency_contact: false,
     is_authorized_pickup: false,
+    version: '',
 });
 
 function startEditRelationship(r: Relationship): void {
@@ -373,6 +376,7 @@ function startEditRelationship(r: Relationship): void {
     relationshipForm.is_legal_guardian = r.isLegalGuardian;
     relationshipForm.is_emergency_contact = r.isEmergencyContact;
     relationshipForm.is_authorized_pickup = r.isAuthorizedPickup;
+    relationshipForm.version = r.version;
     editingRelationshipId.value = r.id;
 }
 

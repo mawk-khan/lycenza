@@ -94,7 +94,7 @@ class TeacherCurriculumDeliveryAccessTest extends TestCase
         $this->assertSame(['completed', 'not_started', 'not_started'], array_column($units, 'state'));
 
         // The ordinary Curriculum Delivery audit, attributed to the User.
-        $audits = $this->inSchool($w, fn () => SchoolAuditEvent::query()->where('subject_id', $id)->orderBy('occurred_at')->pluck('actor_user_id', 'event_type')->all());
+        $audits = $this->inSchool($w, fn () => SchoolAuditEvent::query()->where('subject_id', $id)->orderBy('id')->pluck('actor_user_id', 'event_type')->all()); // SIS 11.H1: id (UUIDv7) is the write order
         $this->assertSame(['curriculum.delivery.created', 'curriculum.delivery.transitioned', 'curriculum.delivery.updated'], array_keys($audits));
         $this->assertSame([$user->id], array_values(array_unique($audits)));
     }

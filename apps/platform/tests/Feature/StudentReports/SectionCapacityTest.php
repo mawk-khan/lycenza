@@ -3,6 +3,7 @@
 namespace Tests\Feature\StudentReports;
 
 use App\Domain\AcademicStructure\Application\SectionAdministrationService;
+use App\Domain\AcademicStructure\Application\SectionVersion;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Section;
@@ -102,19 +103,25 @@ class SectionCapacityTest extends TestCase
         return $this->occupancy()[$section]->strength;
     }
 
+    /** SIS 11.H1: the current SectionVersion a fresh edit form would carry. */
+    private function sectionVersion(string $sectionId): string
+    {
+        return app(TenantContext::class)->withSchool($this->school, fn () => SectionVersion::of(Section::query()->findOrFail($sectionId)));
+    }
+
     #[Test]
     public function capacity_is_null_or_at_least_one_in_the_service_and_the_database(): void
     {
         $service = app(SectionAdministrationService::class);
         foreach ([0, -3] as $bad) {
             try {
-                $service->update($this->school, $this->sections['A']->id, ['capacity' => $bad], $this->admin);
+                $service->update($this->school, $this->sections['A']->id, ['capacity' => $bad, 'version' => $this->sectionVersion($this->sections['A']->id)], $this->admin);
                 $this->fail("capacity {$bad} must be refused");
             } catch (ValidationException) {
                 $this->addToAssertionCount(1);
             }
         }
-        $this->assertNull($service->update($this->school, $this->sections['A']->id, ['capacity' => null], $this->admin)->capacity, 'NULL = not configured');
+        $this->assertNull($service->update($this->school, $this->sections['A']->id, ['capacity' => null, 'version' => $this->sectionVersion($this->sections['A']->id)], $this->admin)->capacity, 'NULL = not configured');
 
         $this->expectException(QueryException::class);
         $this->expectExceptionMessage('sections_capacity_positive_check');
@@ -127,7 +134,7 @@ class SectionCapacityTest extends TestCase
         foreach (['Asha', 'Bilal', 'Chen'] as $n) {
             $this->place($n, 'A');
         }
-        app(SectionAdministrationService::class)->update($this->school, $this->sections['A']->id, ['capacity' => 2], $this->admin);
+        app(SectionAdministrationService::class)->update($this->school, $this->sections['A']->id, ['capacity' => 2, 'version' => app(TenantContext::class)->withSchool($this->school, fn () => SectionVersion::of(Section::query()->findOrFail($this->sections['A']->id)))], $this->admin);
 
         $a = $this->occupancy()['A'];
         $this->assertSame([3, 2, -1, SectionOccupancy::OVER_CAPACITY, '3 / 2 · Over advisory capacity by 1'], [$a->strength, $a->capacity, $a->available(), $a->state(), $a->label()]);
@@ -143,12 +150,12 @@ class SectionCapacityTest extends TestCase
         $service = app(SectionAdministrationService::class);
 
         try {
-            $service->update($this->school, $section->id, ['capacity' => 25], $this->admin);
+            $service->update($this->school, $section->id, ['capacity' => 25, 'version' => $this->sectionVersion($section->id)], $this->admin);
             $this->fail('closed-year capacity must be refused');
         } catch (ValidationException $e) {
             $this->assertSame([SectionAdministrationService::CLOSED_YEAR_CAPACITY], $e->errors()['capacity']);
         }
-        $this->assertSame('Old room', $service->update($this->school, $section->id, ['name' => 'Old room', 'capacity' => 30], $this->admin)->name, 'an unchanged capacity is not a change');
+        $this->assertSame('Old room', $service->update($this->school, $section->id, ['name' => 'Old room', 'capacity' => 30, 'version' => $this->sectionVersion($section->id)], $this->admin)->name, 'an unchanged capacity is not a change');
         $this->assertSame(SectionOccupancy::CLOSED_YEAR, $this->occupancy()['Old room']->state());
 
         $this->expectException(QueryException::class);

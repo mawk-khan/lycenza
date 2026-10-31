@@ -5,6 +5,7 @@ namespace App\Domain\Guardians\Application;
 use App\Domain\Guardians\Application\Exceptions\ConcurrentPrimaryGuardianConflictException;
 use App\Domain\Guardians\Application\Exceptions\CrossSchoolRelationshipException;
 use App\Domain\Guardians\Application\Exceptions\DuplicateRelationshipException;
+use App\Domain\Guardians\Application\Exceptions\GuardianRelationshipChangedException;
 use App\Domain\Guardians\Application\Exceptions\GuardianRelationshipInUseException;
 use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Domain\Guardians\Infrastructure\RelationshipType;
@@ -118,13 +119,22 @@ class StudentGuardianRelationshipService
      *
      * @param  array{relationship_type?: RelationshipType, is_legal_guardian?: bool, is_emergency_contact?: bool, is_authorized_pickup?: bool}  $attributes
      */
-    public function update(StudentGuardianRelationship $relationship, array $attributes, ?User $actor = null): StudentGuardianRelationship
+    public function update(StudentGuardianRelationship $relationship, array $attributes, string $expectedVersion, ?User $actor = null): StudentGuardianRelationship
     {
         $this->selfAdministration->refuseOwnGuardian($actor, $relationship->school, $relationship->guardian_id);
 
-        return $this->context->withSchool($relationship->school, fn () => DB::transaction(function () use ($relationship, $attributes, $actor) {
+        return $this->context->withSchool($relationship->school, fn () => DB::transaction(function () use ($relationship, $attributes, $actor, $expectedVersion) {
             // S5: Student first (ADR 0038 order) -- `is_legal_guardian` decides whether a consent grant qualifies.
             $this->lockOrder->holdStudent($relationship->school, $relationship->student_id);
+            // SIS 11.H1: then the relationship row; a form opened before another
+            // change (including a primary-Guardian change) is refused, never
+            // applied over it. `is_primary` is never written here (setPrimary()).
+            $locked = StudentGuardianRelationship::query()->whereKey($relationship->id)->lockForUpdate()->firstOrFail();
+            if (! StudentGuardianRelationshipVersion::matches($locked, $expectedVersion)) {
+                throw new GuardianRelationshipChangedException;
+            }
+            $attributes = array_intersect_key($attributes, array_flip(['relationship_type', 'is_legal_guardian', 'is_emergency_contact', 'is_authorized_pickup']));
+            $relationship = $locked;
             $relationship->update($attributes);
 
             $this->audit->school($relationship->school, 'student_guardian.updated', actor: $actor, subject: $relationship, metadata: [

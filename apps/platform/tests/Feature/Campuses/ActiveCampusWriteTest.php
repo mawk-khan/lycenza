@@ -4,6 +4,7 @@ namespace Tests\Feature\Campuses;
 
 use App\Domain\AcademicStructure\Application\RoomAdministrationService;
 use App\Domain\AcademicStructure\Application\SectionAdministrationService;
+use App\Domain\AcademicStructure\Application\SectionVersion;
 use App\Domain\AcademicStructure\Application\SubjectOfferingService;
 use App\Domain\AcademicStructure\Infrastructure\Room;
 use App\Domain\AcademicStructure\Infrastructure\Section;
@@ -88,6 +89,12 @@ class ActiveCampusWriteTest extends TestCase
         return app(TenantContext::class)->withSchool($this->school, fn () => $model::query()->where('campus_id', $campusId)->count());
     }
 
+    /** SIS 11.H1: the current SectionVersion a fresh edit form would carry. */
+    private function sectionVersion(string $sectionId): string
+    {
+        return app(TenantContext::class)->withSchool($this->school, fn () => SectionVersion::of(Section::query()->findOrFail($sectionId)));
+    }
+
     #[Test]
     public function the_validator_accepts_only_an_active_campus_of_the_school(): void
     {
@@ -119,7 +126,7 @@ class ActiveCampusWriteTest extends TestCase
         $this->deactivate($this->active);
         $this->assertSame(1, $this->rows(Section::class, $this->active->id));
         $section = app(TenantContext::class)->withSchool($this->school, fn () => Section::query()->where('campus_id', $this->active->id)->firstOrFail());
-        $this->assertSame('Renamed', app(SectionAdministrationService::class)->update($this->school, $section->id, ['name' => 'Renamed'], $actor)->name);
+        $this->assertSame('Renamed', app(SectionAdministrationService::class)->update($this->school, $section->id, ['name' => 'Renamed', 'version' => SectionVersion::of($section)], $actor)->name);
     }
 
     #[Test]
@@ -170,13 +177,13 @@ class ActiveCampusWriteTest extends TestCase
         $moving = $service->create($this->school, $year->id, ['campus_id' => $this->active->id, 'grade_level_id' => $grade->id, 'name' => 'B', 'code' => 'B'], $actor);
 
         // Active Campus: deactivate and reactivate as before.
-        $this->assertSame('inactive', $service->update($this->school, $onActive->id, ['status' => 'inactive'], $actor)->status);
-        $this->assertSame('active', $service->update($this->school, $onActive->id, ['status' => 'active'], $actor)->status);
+        $this->assertSame('inactive', $service->update($this->school, $onActive->id, ['status' => 'inactive', 'version' => $this->sectionVersion($onActive->id)], $actor)->status);
+        $this->assertSame('active', $service->update($this->school, $onActive->id, ['status' => 'active', 'version' => $this->sectionVersion($onActive->id)], $actor)->status);
 
         // Inactive Campus: deactivation works, reactivation is refused and nothing changes.
-        $service->update($this->school, $moving->id, ['status' => 'inactive'], $actor);
+        $service->update($this->school, $moving->id, ['status' => 'inactive', 'version' => $this->sectionVersion($moving->id)], $actor);
         $this->deactivate($this->active);
-        $e = $this->refusal(fn () => $service->update($this->school, $moving->id, ['status' => 'active', 'name' => 'Changed'], $actor));
+        $e = $this->refusal(fn () => $service->update($this->school, $moving->id, ['status' => 'active', 'name' => 'Changed', 'version' => $this->sectionVersion($moving->id)], $actor));
         $this->assertInstanceOf(ValidationException::class, $e);
         $this->assertSame([SectionAdministrationService::INACTIVE_CAMPUS], $e->errors()['status']);
         $kept = app(TenantContext::class)->withSchool($this->school, fn () => Section::query()->findOrFail($moving->id));
@@ -184,8 +191,8 @@ class ActiveCampusWriteTest extends TestCase
         $this->assertSame('inactive', app(TenantContext::class)->withSchool($this->school, fn () => Campus::query()->findOrFail($this->active->id)->status), 'the Campus is never activated as a side effect');
 
         // A Section that is still active stays maintainable (re-sending its status is not a reactivation).
-        $this->assertSame('Renamed', $service->update($this->school, $onActive->id, ['name' => 'Renamed', 'status' => 'active'], $actor)->name);
-        $this->assertSame('inactive', $service->update($this->school, $onActive->id, ['status' => 'inactive'], $actor)->status);
+        $this->assertSame('Renamed', $service->update($this->school, $onActive->id, ['name' => 'Renamed', 'status' => 'active', 'version' => $this->sectionVersion($onActive->id)], $actor)->name);
+        $this->assertSame('inactive', $service->update($this->school, $onActive->id, ['status' => 'inactive', 'version' => $this->sectionVersion($onActive->id)], $actor)->status);
     }
 
     #[Test]

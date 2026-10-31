@@ -218,11 +218,12 @@ class StudentGuardianRelationshipController extends Controller
 
         $model = StudentGuardianRelationship::query()->findOrFail($relationship);
 
-        $validated = $request->validate($this->relationshipRules());
+        // SIS 11.H1: the StudentGuardianRelationshipVersion the form was opened with.
+        $validated = $request->validate([...$this->relationshipRules(), 'version' => ['required', 'string', 'size:64']]);
         $attributes = $this->relationshipAttributes($validated);
         $attributes['relationship_type'] = RelationshipType::from($validated['relationship_type']);
 
-        $service->update($model, $attributes, $context->actor());
+        $service->update($model, $attributes, $validated['version'], $context->actor());
 
         return redirect("/app/students/{$model->student_id}")->with('flash', 'Guardian relationship saved.');
     }

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\App;
 
+use App\Domain\AcademicStructure\Application\SectionVersion;
 use App\Domain\AcademicStructure\Infrastructure\AcademicTerm;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
@@ -224,7 +225,7 @@ class SchoolSetupStructureUiTest extends TestCase
             ->assertSessionHasNoErrors();
         $this->assertSame(1, $this->inSchool($school, fn () => DB::table('student_enrollments')->where('section_id', $section->id)->count()));
 
-        $this->actingAs($user)->put("/app/school-setup/sections/{$section->id}", ['name' => 'Grade 5 Alpha', 'status' => 'inactive'])->assertSessionHasNoErrors();
+        $this->actingAs($user)->put("/app/school-setup/sections/{$section->id}", ['name' => 'Grade 5 Alpha', 'status' => 'inactive', 'version' => app(TenantContext::class)->withSchool($school, fn () => SectionVersion::of(Section::query()->findOrFail($section->id)))])->assertSessionHasNoErrors();
         $this->assertSame(['Grade 5 Alpha', 'inactive'], array_values($this->inSchool($school, fn () => Section::query()->findOrFail($section->id)->only(['name', 'status']))));
     }
 

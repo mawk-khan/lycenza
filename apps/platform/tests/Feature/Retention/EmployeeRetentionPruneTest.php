@@ -28,6 +28,7 @@ use Illuminate\Testing\PendingCommand;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\RequiresObjectStorage;
 use Tests\Feature\Timetable\Concerns\CreatesTimetableFixtures;
 use Tests\TestCase;
 
@@ -40,7 +41,7 @@ use Tests\TestCase;
  */
 class EmployeeRetentionPruneTest extends TestCase
 {
-    use CommitsRetentionFixtures, CreatesTenancyFixtures, CreatesTimetableFixtures;
+    use CommitsRetentionFixtures, CreatesTenancyFixtures, CreatesTimetableFixtures, RequiresObjectStorage;
 
     private string $disk;
 
@@ -355,6 +356,7 @@ class EmployeeRetentionPruneTest extends TestCase
     #[Test]
     public function employee_documents_bytes_are_removed_from_real_minio(): void
     {
+        $this->requireObjectStorage();
         config(['documents.disk' => 's3']);
         $this->disk = 's3';
         $school = $this->createSchool();

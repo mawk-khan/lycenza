@@ -39,7 +39,7 @@ class BootstrapAccountActivationTest extends TestCase
     private function provisioned(string $email = 'first.admin@example.test'): array
     {
         $issued = app(BootstrapAccountProvisioningService::class)->provision($email, 'First Admin', null);
-        $this->assertSame(1, preg_match('#^http://localhost:8000/account-activation/([A-Za-z0-9_-]{22})\#([A-Za-z0-9_-]{43})$#', $issued->link, $m));
+        $this->assertSame(1, preg_match('#^'.preg_quote(config('app.url'), '#').'/account-activation/([A-Za-z0-9_-]{22})\#([A-Za-z0-9_-]{43})$#', $issued->link, $m));
 
         return [$issued->user, $issued->link, $m[1], $m[2]];
     }
@@ -60,7 +60,7 @@ class BootstrapAccountActivationTest extends TestCase
         $this->artisan('platform:provision-school-admin-account', ['email' => 'First.Admin@Example.test', '--name' => 'First Admin', '--school' => $school->slug])
             ->expectsQuestion('Type the account\'s email address exactly to confirm', $email)
             ->expectsOutputToContain('ONE-TIME ACTIVATION LINK')
-            ->expectsOutputToContain('http://localhost:8000/account-activation/')
+            ->expectsOutputToContain(config('app.url').'/account-activation/')
             ->assertSuccessful();
 
         $user = User::query()->where('email', $email)->sole();
@@ -117,7 +117,7 @@ class BootstrapAccountActivationTest extends TestCase
         $this->activate($selector, $secret, 'short')->assertSessionHasErrors('password');
         $this->assertTrue(AccountActivationCredential::query()->where('selector', $selector)->sole()->isOpen(), 'A rejected password consumes nothing.');
 
-        $this->activate($selector, $secret)->assertRedirect('http://localhost:8000/login');
+        $this->activate($selector, $secret)->assertRedirect(config('app.url').'/login');
         $this->assertGuest();
 
         $fresh = $user->fresh();

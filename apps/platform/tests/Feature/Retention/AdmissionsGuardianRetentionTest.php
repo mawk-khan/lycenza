@@ -26,6 +26,7 @@ use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CommitsRetentionFixtures;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\RequiresObjectStorage;
 use Tests\TestCase;
 
 /**
@@ -44,7 +45,7 @@ use Tests\TestCase;
  */
 class AdmissionsGuardianRetentionTest extends TestCase
 {
-    use CommitsRetentionFixtures, CreatesTenancyFixtures;
+    use CommitsRetentionFixtures, CreatesTenancyFixtures, RequiresObjectStorage;
 
     private string $disk;
 
@@ -426,6 +427,7 @@ class AdmissionsGuardianRetentionTest extends TestCase
     #[Test]
     public function the_guardian_purge_removes_document_bytes_from_real_minio(): void
     {
+        $this->requireObjectStorage();
         config(['documents.disk' => 's3']);
         $school = $this->createSchool();
         $guardian = $this->guardian($school, '2020-01-01 00:00:00');

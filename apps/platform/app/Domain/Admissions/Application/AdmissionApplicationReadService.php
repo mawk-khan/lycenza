@@ -47,12 +47,6 @@ class AdmissionApplicationReadService
      */
     private const array KNOWN_STATUSES = ['draft', 'submitted', 'accepted', 'rejected', 'withdrawn', 'converted'];
 
-    /**
-     * SIS 11.1/11.2: the closed sort contract of the application list
-     * (governed by the SIS report catalogue, StudentReportRegistry). Request
-     * input only ever picks a key (the first is the default); each ends in
-     * `id` so pagination is stable.
-     */
     /** SIS 11.4: the list's request contract, shared by the page and its governed export. */
     public static function listRules(): array
     {
@@ -69,6 +63,12 @@ class AdmissionApplicationReadService
         ];
     }
 
+    /**
+     * SIS 11.1/11.2: the closed sort contract of the application list
+     * (governed by the SIS report catalogue, StudentReportRegistry). Request
+     * input only ever picks a key (the first is the default); each ends in
+     * `id` so pagination is stable.
+     */
     public const array SORTS = [
         'created_desc' => 'Newest first',
         'created_asc' => 'Oldest first',

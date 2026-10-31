@@ -115,6 +115,7 @@ class GuardianApiTest extends TestCase
 
         $update = $this->asUser($user)->patchJson("/api/v1/schools/{$school->id}/guardians/{$create->json('data.id')}", [
             'first_name' => 'Sunita Devi',
+            'version' => $create->json('data.version'),
         ]);
         $update->assertOk();
         $this->assertSame('Sunita Devi', $update->json('data.firstName'));

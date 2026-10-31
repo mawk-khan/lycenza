@@ -3,6 +3,7 @@
 namespace App\Domain\Guardians\Http\Controllers;
 
 use App\Domain\Guardians\Application\StudentGuardianRelationshipService;
+use App\Domain\Guardians\Application\StudentGuardianRelationshipVersion;
 use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Domain\Guardians\Infrastructure\RelationshipType;
 use App\Domain\Guardians\Infrastructure\StudentGuardianRelationship;
@@ -110,13 +111,17 @@ class StudentGuardianRelationshipController extends Controller
             'is_legal_guardian' => ['sometimes', 'boolean'],
             'is_emergency_contact' => ['sometimes', 'boolean'],
             'is_authorized_pickup' => ['sometimes', 'boolean'],
+            // SIS 11.H1: required -- the version the client read (stale-update protection).
+            'version' => ['required', 'string', 'size:64'],
         ]);
+        $version = $validated['version'];
+        unset($validated['version']);
 
         if (isset($validated['relationship_type'])) {
             $validated['relationship_type'] = RelationshipType::from($validated['relationship_type']);
         }
 
-        $updated = $service->update($model, $validated, $request->user());
+        $updated = $service->update($model, $validated, $version, $request->user());
 
         return response()->json(['data' => $this->present($updated)]);
     }
@@ -169,6 +174,8 @@ class StudentGuardianRelationshipController extends Controller
             'isLegalGuardian' => $relationship->is_legal_guardian,
             'isEmergencyContact' => $relationship->is_emergency_contact,
             'isAuthorizedPickup' => $relationship->is_authorized_pickup,
+            // SIS 11.H1: required back on PATCH (stale-update protection).
+            'version' => StudentGuardianRelationshipVersion::of($relationship),
         ];
     }
 }

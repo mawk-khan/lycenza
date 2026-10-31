@@ -4,6 +4,7 @@ namespace Tests\Feature\Students;
 
 use App\Domain\Examinations\Application\Marks\StudentMarkTelemetry;
 use App\Domain\Guardians\Application\StudentGuardianRelationshipService;
+use App\Domain\Guardians\Application\StudentGuardianRelationshipVersion;
 use App\Domain\Guardians\Infrastructure\RelationshipType;
 use App\Domain\Guardians\Infrastructure\StudentGuardianRelationship;
 use App\Domain\Students\Application\StudentProcessingAuthorizationService;
@@ -130,7 +131,7 @@ class GuardianProcessingAuthorizationLockOrderTest extends TestCase
     {
         $f = $this->family();
         // r2 stops being a legal guardian: the seam locks r2 (newest grant), finds it does not qualify, then locks r1.
-        $this->inMarksSchool($f['school'], fn () => app(StudentGuardianRelationshipService::class)->update($f['r2'], ['is_legal_guardian' => false], $f['admin']));
+        $this->inMarksSchool($f['school'], fn () => app(StudentGuardianRelationshipService::class)->update($f['r2'], ['is_legal_guardian' => false], StudentGuardianRelationshipVersion::of($f['r2']->fresh()), $f['admin']));
 
         [$seam, $setPrimary] = $this->steppedRace(
             $this->op('seam-steps', $f['school']->id, $f['student']->id, $f['g1']->id.','.$f['g2']->id, $f['r2']->id, $f['r1']->id),

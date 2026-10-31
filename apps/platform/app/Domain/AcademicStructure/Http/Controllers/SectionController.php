@@ -3,6 +3,7 @@
 namespace App\Domain\AcademicStructure\Http\Controllers;
 
 use App\Domain\AcademicStructure\Application\SectionAdministrationService;
+use App\Domain\AcademicStructure\Application\SectionVersion;
 use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\Section;
 use App\Http\Controllers\Controller;
@@ -75,6 +76,8 @@ class SectionController extends Controller
             'code' => $section->code,
             'capacity' => $section->capacity,
             'status' => $section->status,
+            // SIS 11.H1: required back on PATCH (stale-update protection).
+            'version' => SectionVersion::of($section),
         ];
     }
 }

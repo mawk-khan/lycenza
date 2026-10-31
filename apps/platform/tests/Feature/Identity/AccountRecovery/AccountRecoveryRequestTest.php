@@ -50,7 +50,7 @@ class AccountRecoveryRequestTest extends TestCase
     #[Test]
     public function the_login_page_offers_recovery_only_when_it_is_enabled(): void
     {
-        $this->get('/login')->assertInertia(fn (AssertableInertia $page) => $page->where('recoveryUrl', 'http://localhost:8000/account-recovery'));
+        $this->get('/login')->assertInertia(fn (AssertableInertia $page) => $page->where('recoveryUrl', config('app.url').'/account-recovery'));
 
         config(['account_recovery.enabled' => false]);
         $this->get('/login')->assertInertia(fn (AssertableInertia $page) => $page->where('recoveryUrl', null));
@@ -73,7 +73,7 @@ class AccountRecoveryRequestTest extends TestCase
         }
 
         $this->assertCount(1, array_unique(array_map('serialize', $shapes)), 'identical for every case');
-        $this->assertSame([302, 'http://localhost:8000/account-recovery', AccountRecoveryController::GENERIC_STATUS, null], $shapes['nobody@example.test']);
+        $this->assertSame([302, config('app.url').'/account-recovery', AccountRecoveryController::GENERIC_STATUS, null], $shapes['nobody@example.test']);
 
         // Only the eligible account received anything.
         $this->assertEmailAcceptedCount(1);
@@ -212,7 +212,7 @@ class AccountRecoveryRequestTest extends TestCase
         $school = $this->createSchool();
         $this->createSchoolDomain($school, 'erp.northfield.org');
 
-        $this->get('http://localhost:8000/account-recovery')->assertOk();
+        $this->get(config('app.url').'/account-recovery')->assertOk();
 
         $this->get('http://erp.northfield.org/account-recovery')->assertNotFound();
         $this->post('http://erp.northfield.org/account-recovery', ['email' => 'a@example.test'])->assertNotFound();

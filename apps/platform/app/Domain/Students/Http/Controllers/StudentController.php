@@ -3,6 +3,7 @@
 namespace App\Domain\Students\Http\Controllers;
 
 use App\Domain\Students\Application\StudentLifecycleReason;
+use App\Domain\Students\Application\StudentProfileVersion;
 use App\Domain\Students\Application\StudentService;
 use App\Domain\Students\Infrastructure\Student;
 use App\Http\Controllers\Controller;
@@ -96,9 +97,14 @@ class StudentController extends Controller
             'middle_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'last_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'date_of_birth' => DateOfBirth::rules($school, required: false),
+            // SIS 11.H1 (SIS 11.R1, SIS.EXP-R1 R-2): required -- the StudentProfileVersion
+            // the client read; a stale write is refused (409 STUDENT_PROFILE_CHANGED).
+            'version' => ['required', 'string', 'size:64'],
         ], DateOfBirth::messages());
+        $version = $validated['version'];
+        unset($validated['version']);
 
-        $updated = $service->update($model, $validated, $request->user());
+        $updated = $service->update($model, $validated, $request->user(), $version);
 
         return response()->json(['data' => $this->presentDetail($updated)]);
     }
@@ -154,6 +160,8 @@ class StudentController extends Controller
         return [
             ...$this->presentSummary($student),
             'dateOfBirth' => $student->date_of_birth->toDateString(),
+            // SIS 11.H1: required back on PATCH (stale-update protection).
+            'version' => StudentProfileVersion::of($student),
             'createdAt' => $student->created_at->toIso8601String(),
             'updatedAt' => $student->updated_at->toIso8601String(),
         ];

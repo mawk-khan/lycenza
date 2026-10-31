@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\App;
 
+use App\Domain\Guardians\Application\StudentGuardianRelationshipVersion;
 use App\Domain\Guardians\Infrastructure\ContactType;
 use App\Domain\Guardians\Infrastructure\Guardian;
 use App\Domain\Guardians\Infrastructure\StudentGuardianRelationship;
@@ -151,6 +152,7 @@ class StudentGuardianLinkUiTest extends TestCase
 
         $this->put("/app/relationships/{$relB->id}", [
             'relationship_type' => 'legal_guardian', 'is_legal_guardian' => true,
+            'version' => app(TenantContext::class)->withSchool($school, fn () => StudentGuardianRelationshipVersion::of($relB->fresh())),
         ])->assertRedirect("/app/students/{$student->id}");
         $freshB = app(TenantContext::class)->withSchool($school, fn () => $relB->fresh());
         $this->assertSame('legal_guardian', $freshB->relationship_type->value);

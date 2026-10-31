@@ -8103,6 +8103,8 @@ export interface components {
             capacity?: number | null;
             /** @enum {string} */
             status: "active" | "inactive";
+            /** @description SIS 11.H1: the record version read from this resource; send it back on PATCH. A stale version is a 409. */
+            version: string;
         };
         SectionInput: {
             /** Format: uuid */
@@ -8202,6 +8204,8 @@ export interface components {
             status: "active" | "inactive";
             /** Format: date */
             dateOfBirth: string;
+            /** @description SIS 11.H1: the record version read from this resource; send it back on PATCH. A stale version is a 409. */
+            version: string;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -8217,14 +8221,16 @@ export interface components {
             /** @description The acknowledgement from a 409 POSSIBLE_DUPLICATE_STUDENT; valid only for that exact identity and candidate set. */
             duplicate_acknowledgement?: string | null;
         };
-        /** @description Update (PATCH) input: a correction of an existing Student. student_number uniqueness is enforced by StudentService/the database (school_id, student_number), not by this contract -- a duplicate is a 422 with code DUPLICATE_STUDENT_NUMBER. date_of_birth may not be after the School's today (SIS 2.3). */
+        /** @description Update (PATCH) input: a correction of an existing Student; every field but version is optional (only the supplied fields change). student_number uniqueness is enforced by StudentService/the database (school_id, student_number), not by this contract -- a duplicate is a 422 with code DUPLICATE_STUDENT_NUMBER. date_of_birth may not be after the School's today (SIS 2.3). */
         StudentInput: {
-            student_number: string;
-            first_name: string;
+            student_number?: string;
+            first_name?: string;
             middle_name?: string | null;
             last_name?: string | null;
             /** Format: date */
-            date_of_birth: string;
+            date_of_birth?: string;
+            /** @description SIS 11.H1: the version read from the resource. Required: a stale or forged value is refused (409 *_CHANGED); a missing one is a 422. */
+            version: string;
         };
         GuardianSummary: {
             /** Format: uuid */
@@ -8234,6 +8240,8 @@ export interface components {
             lastName?: string | null;
             /** @enum {string} */
             status: "active" | "inactive";
+            /** @description SIS 11.H1: present on the Guardian endpoints' own responses (not on a Guardian embedded in another resource); send it back on PATCH. */
+            version?: string;
         };
         /** @description Full single-record shape (show response only). */
         Guardian: {
@@ -8266,6 +8274,14 @@ export interface components {
             first_name: string;
             middle_name?: string | null;
             last_name?: string | null;
+        };
+        /** @description Update (PATCH) input; only the supplied name fields change. */
+        GuardianUpdateInput: {
+            first_name?: string;
+            middle_name?: string | null;
+            last_name?: string | null;
+            /** @description SIS 11.H1: the version read from the resource. Required: a stale or forged value is refused (409 *_CHANGED); a missing one is a 422. */
+            version: string;
         };
         /** @enum {string} */
         ContactType: "email" | "mobile";
@@ -8306,6 +8322,8 @@ export interface components {
             isLegalGuardian: boolean;
             isEmergencyContact: boolean;
             isAuthorizedPickup: boolean;
+            /** @description SIS 11.H1: the record version read from this resource; send it back on PATCH. A stale version is a 409. */
+            version: string;
         };
         /** @description Deliberately excludes is_primary -- see the .../primary action (StudentGuardianRelationshipService.link() never auto-promotes). */
         StudentGuardianRelationshipLinkInput: {
@@ -8320,6 +8338,8 @@ export interface components {
             is_authorized_pickup: boolean;
         };
         StudentGuardianRelationshipUpdateInput: {
+            /** @description SIS 11.H1: the version read from the resource. Required: a stale or forged value is refused (409 *_CHANGED); a missing one is a 422. */
+            version: string;
             relationship_type?: components["schemas"]["RelationshipType"];
             is_legal_guardian?: boolean;
             is_emergency_contact?: boolean;
@@ -12438,6 +12458,8 @@ export interface operations {
                     capacity?: number | null;
                     /** @enum {string} */
                     status?: "active" | "inactive";
+                    /** @description SIS 11.H1: the version read from the resource. Required: a stale or forged value is refused (409 *_CHANGED); a missing one is a 422. */
+                    version: string;
                 };
             };
         };
@@ -12451,6 +12473,15 @@ export interface operations {
                     "application/json": {
                         data: components["schemas"]["Section"];
                     };
+                };
+            };
+            /** @description The record changed after the client read it (stale version). Nothing was written; read it again and resend. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };
@@ -12960,6 +12991,15 @@ export interface operations {
                     };
                 };
             };
+            /** @description The record changed after the client read it (stale version). Nothing was written; read it again and resend. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     changeStudentStatus: {
@@ -13120,6 +13160,15 @@ export interface operations {
                     "application/json": {
                         data: components["schemas"]["StudentGuardianRelationship"];
                     };
+                };
+            };
+            /** @description The record changed after the client read it (stale version). Nothing was written; read it again and resend. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };
@@ -13297,7 +13346,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["GuardianInput"];
+                "application/json": components["schemas"]["GuardianUpdateInput"];
             };
         };
         responses: {
@@ -13310,6 +13359,15 @@ export interface operations {
                     "application/json": {
                         data: components["schemas"]["GuardianSummary"];
                     };
+                };
+            };
+            /** @description The record changed after the client read it (stale version). Nothing was written; read it again and resend. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };
