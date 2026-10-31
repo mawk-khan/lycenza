@@ -3132,6 +3132,17 @@ the viewer may open. `GET /app/students/reports/{report}`
     current class only);
   - `admissions.applications` → `/app/admissions` (Campus-aware, closed sort
     `AdmissionApplicationReadService::SORTS`, School-local created dates).
+- **SIS 11.3 (OD-SIS-6):**
+  - **Strength:** `StudentEnrollmentRosterReadService::sectionStrengthQuery()`
+    counts distinct Students by the roster's temporal predicate on the
+    School-local today, clamped into the year (draft = its first day, closed =
+    no row).
+  - **Readers:** `SectionOccupancyReader` / `SectionOccupancy` (states and
+    labels); `StudentAccess::capacitySections()` (Campus scope: the active
+    year only).
+  - **Report:** `students.section_capacity` (`Reports\SectionCapacityReport`).
+  - **Rollover:** `RolloverCapacityAdvisory` (rollover warning only).
+  - **Advisory:** nothing refuses a placement.
 - **Contracts:** filters come from the closed `StudentReportFilter`
   vocabulary. Columns carry a privacy class, and prohibited keys are refused.
   Sorts are closed key → label maps. Every column is `exportable: false`

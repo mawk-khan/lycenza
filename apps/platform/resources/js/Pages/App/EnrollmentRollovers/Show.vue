@@ -128,13 +128,16 @@ interface Props {
     canManage: boolean;
     gradeLevels: Ref[];
     sourceSections: Array<Ref & { label: string; gradeLevelId: string }>;
-    targetSections: Array<Ref & { label: string; gradeLevelId: string }>;
+    targetSections: Array<Ref & { label: string; gradeLevelId: string; occupancy?: string | null }>;
     sourceSubjectOfferings: SubjectOfferingRef[];
     targetSubjectOfferings: SubjectOfferingRef[];
     perPage: number;
     bulkMax: number;
     bulkResult: InstanceType<typeof ItemsPanel>['$props']['bulkResult'];
     yearStatus: { source: string; target: string; targetStartsOn: string };
+    // SIS 11.3 (OD-SIS-6): target Sections this plan would take over their
+    // advisory capacity -- a warning, never a blocker.
+    capacityWarnings: Array<{ sectionId: string; message: string }>;
 }
 
 const props = defineProps<Props>();
@@ -286,6 +289,23 @@ function reload(): void {
         </p>
 
         <!-- Validation summary -->
+        <section
+            v-if="capacityWarnings.length > 0"
+            class="mt-6 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+            aria-labelledby="capacity-warnings-heading"
+        >
+            <h2 id="capacity-warnings-heading" class="font-semibold">
+                Advisory capacity (warning only)
+            </h2>
+            <p class="mt-1">
+                These target Sections would go over their advisory capacity. Validation and
+                execution are not blocked; adjust target Sections if you want to.
+            </p>
+            <ul class="mt-2 list-disc space-y-1 pl-5">
+                <li v-for="w in capacityWarnings" :key="w.sectionId">{{ w.message }}</li>
+            </ul>
+        </section>
+
         <section class="mt-8">
             <div class="flex items-center justify-between">
                 <h2 class="text-sm font-semibold text-slate-700">Validation</h2>

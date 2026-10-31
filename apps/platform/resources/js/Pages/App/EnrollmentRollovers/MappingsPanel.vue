@@ -17,6 +17,8 @@ interface Mapping {
 }
 
 interface SectionOption {
+    // SIS 11.3 (OD-SIS-6): advisory occupancy, e.g. "28 / 30 · 2 seats available" (information only).
+    occupancy?: string | null;
     id: string;
     label: string;
     gradeLevelId: string;
@@ -211,7 +213,7 @@ watch(editTargetSections, (options) => {
                         >
                             <option value="">No default Section</option>
                             <option v-for="s in editTargetSections" :key="s.id" :value="s.id">
-                                {{ s.label }}
+                                {{ s.occupancy ? `${s.label} — ${s.occupancy}` : s.label }}
                             </option>
                         </select>
                     </div>
@@ -274,7 +276,7 @@ watch(editTargetSections, (options) => {
                     >
                         <option value="">Grade-level default</option>
                         <option v-for="s in addSourceSections" :key="s.id" :value="s.id">
-                            {{ s.label }}
+                            {{ s.occupancy ? `${s.label} — ${s.occupancy}` : s.label }}
                         </option>
                     </select>
                 </div>
@@ -308,7 +310,7 @@ watch(editTargetSections, (options) => {
                     >
                         <option value="">No default Section</option>
                         <option v-for="s in addTargetSections" :key="s.id" :value="s.id">
-                            {{ s.label }}
+                            {{ s.occupancy ? `${s.label} — ${s.occupancy}` : s.label }}
                         </option>
                     </select>
                 </div>

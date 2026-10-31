@@ -5,6 +5,7 @@ namespace Tests\Feature\StudentReports;
 use App\Domain\Admissions\Application\AdmissionApplicationReadService;
 use App\Domain\Guardians\Application\Reports\SiblingReport;
 use App\Domain\Students\Application\Movements\StudentMovementRegister;
+use App\Domain\Students\Application\Reports\SectionCapacityReport;
 use App\Domain\Students\Application\Reports\StudentLifecycleReport;
 use App\Domain\Students\Application\StudentDirectoryOrder;
 use App\Domain\Students\Application\StudentLifecycleReason;
@@ -43,7 +44,7 @@ class StudentReportRegistryTest extends TestCase
     public function every_report_is_unique_owned_and_authorized_by_existing_school_capabilities(): void
     {
         $definitions = $this->definitions();
-        $this->assertSame(['students.directory', 'students.siblings', 'students.placements', 'students.movements', 'students.lifecycle', 'admissions.applications'], array_keys($definitions), 'the closed catalogue, in hub order');
+        $this->assertSame(['students.directory', 'students.siblings', 'students.placements', 'students.movements', 'students.section_capacity', 'students.lifecycle', 'admissions.applications'], array_keys($definitions), 'the closed catalogue, in hub order');
 
         $capabilities = DB::table('capabilities')->pluck('namespace', 'key')->all();
         foreach ($definitions as $key => $definition) {
@@ -92,6 +93,7 @@ class StudentReportRegistryTest extends TestCase
         $this->assertSame(array_keys(StudentMovementRegister::SORTS), array_keys($definitions['students.movements']->sorts));
         $this->assertSame(array_keys(StudentLifecycleReport::SORTS), array_keys($definitions['students.lifecycle']->sorts));
         $this->assertSame(array_keys(SiblingReport::SORTS), array_keys($definitions['students.siblings']->sorts));
+        $this->assertSame(array_keys(SectionCapacityReport::SORTS), array_keys($definitions['students.section_capacity']->sorts));
         $this->assertSame(array_keys(AdmissionApplicationReadService::SORTS), array_keys($definitions['admissions.applications']->sorts));
         foreach (StudentReportRegistry::RENDERED as $class) {
             $this->assertTrue(is_subclass_of($class, StudentReport::class));

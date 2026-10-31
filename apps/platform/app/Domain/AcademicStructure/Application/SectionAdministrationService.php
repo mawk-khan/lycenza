@@ -37,6 +37,9 @@ class SectionAdministrationService
 
     public const string INACTIVE_CAMPUS = 'This Section is on an inactive Campus and cannot be reactivated.';
 
+    /** SIS 11.3: a closed year's Section capacity is history (sections_capacity_closed_year_guard). */
+    public const string CLOSED_YEAR_CAPACITY = 'This Section belongs to a closed academic year, so its capacity is history and cannot be changed.';
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
@@ -118,6 +121,14 @@ class SectionAdministrationService
             $before = $section->only(array_keys($validated));
 
             $this->writeUnique(fn () => DB::transaction(function () use ($school, $section, $validated, $before, $actor): void {
+                // SIS 11.3 (OD-SIS-6): capacity is advisory -- it may be set below
+                // the current strength -- but a closed year's is history. The
+                // year is read FOR SHARE so a concurrent close waits or is seen.
+                if (array_key_exists('capacity', $validated) && $validated['capacity'] !== $section->capacity
+                    && AcademicYear::query()->whereKey($section->academic_year_id)->sharedLock()->value('status') === 'closed') {
+                    throw ValidationException::withMessages(['capacity' => [self::CLOSED_YEAR_CAPACITY]]);
+                }
+
                 // ORG.7D-1 D1-2 (ADR 0076 §37): reactivating puts the Section
                 // back into operation, so its Campus must be active. Data
                 // validity only; an already-active Section is unaffected.

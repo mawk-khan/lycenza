@@ -11,6 +11,7 @@ use App\Domain\Students\Application\Exceptions\IntraYearGradeChangeException;
 use App\Domain\Students\Application\Exceptions\InvalidEnrollmentDateRangeException;
 use App\Domain\Students\Application\Exceptions\InvalidEnrollmentRollNumberException;
 use App\Domain\Students\Application\Exceptions\InvalidEnrollmentTransitionException;
+use App\Domain\Students\Application\SectionOccupancyReader;
 use App\Domain\Students\Application\StudentEnrollmentReadService;
 use App\Domain\Students\Application\StudentEnrollmentService;
 use App\Domain\Students\Application\StudentLifecycleReason;
@@ -289,7 +290,12 @@ class StudentEnrollmentController extends Controller
         // oldest first, then closed; within a year by Grade order and name.
         $yearRank = ['active' => 0, 'draft' => 1, 'closed' => 2];
 
-        return $query->get()
+        $sections = $query->get();
+        // SIS 11.3 (OD-SIS-6): placement choices carry the Section's advisory
+        // occupancy -- information only, never a refusal.
+        $occupancy = $onlyEligible ? app(SectionOccupancyReader::class)->forSections($school, $sections) : [];
+
+        return $sections
             ->sortBy(fn (Section $s) => sprintf('%d|%s|%06d|%s', $yearRank[$s->academicYear->status] ?? 3, $s->academicYear->starts_on->toDateString(), $s->gradeLevel->sequence, mb_strtolower($s->name)))
             ->map(fn (Section $s) => [
                 'id' => $s->id,
@@ -297,6 +303,7 @@ class StudentEnrollmentController extends Controller
                 'academicYearId' => $s->academic_year_id,
                 'campusId' => $s->campus_id,
                 'gradeLevelId' => $s->grade_level_id,
+                'occupancy' => isset($occupancy[$s->id]) ? $occupancy[$s->id]->label() : null,
             ])
             ->values()
             ->all();

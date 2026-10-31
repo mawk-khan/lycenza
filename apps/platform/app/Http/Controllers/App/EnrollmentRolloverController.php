@@ -21,6 +21,8 @@ use App\Domain\Students\Application\Exceptions\RolloverPlanNotExecutionReadyExce
 use App\Domain\Students\Application\Exceptions\RolloverPlanNotResumableException;
 use App\Domain\Students\Application\Exceptions\RolloverTargetYearNotDraftException;
 use App\Domain\Students\Application\Exceptions\StaleRolloverConfigurationException;
+use App\Domain\Students\Application\RolloverCapacityAdvisory;
+use App\Domain\Students\Application\SectionOccupancyReader;
 use App\Domain\Students\Application\StudentAccess;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverItem;
 use App\Domain\Students\Infrastructure\EnrollmentRolloverMapping;
@@ -182,7 +184,10 @@ class EnrollmentRolloverController extends Controller
             'canManage' => $this->canManageRollovers($capabilities, $context->actor(), $school),
             'gradeLevels' => $this->gradeLevelOptions(),
             'sourceSections' => $this->sectionOptionsForYear($plan->source_academic_year_id),
-            'targetSections' => $this->sectionOptionsForYear($plan->target_academic_year_id),
+            'targetSections' => $this->sectionOptionsForYear($plan->target_academic_year_id, $school),
+            // SIS 11.3 (OD-SIS-6): target Sections the plan would take over their
+            // advisory capacity -- a warning only, never a blocker.
+            'capacityWarnings' => app(RolloverCapacityAdvisory::class)->warnings($school, $plan),
             'sourceSubjectOfferings' => $this->subjectOfferingOptionsForYear($plan->source_academic_year_id),
             'targetSubjectOfferings' => $this->subjectOfferingOptionsForYear($plan->target_academic_year_id),
         ]);
@@ -280,16 +285,21 @@ class EnrollmentRolloverController extends Controller
     /**
      * @return array<int, array<string, mixed>>
      */
-    private function sectionOptionsForYear(string $academicYearId): array
+    private function sectionOptionsForYear(string $academicYearId, ?School $withOccupancy = null): array
     {
-        return Section::query()
+        $sections = Section::query()
             ->where('academic_year_id', $academicYearId)
             ->with(['gradeLevel', 'campus'])
-            ->get()
+            ->get();
+        // SIS 11.3: a target Section choice shows its advisory occupancy (information only).
+        $occupancy = $withOccupancy === null ? [] : app(SectionOccupancyReader::class)->forSections($withOccupancy, $sections);
+
+        return $sections
             ->map(fn (Section $s) => [
                 'id' => $s->id,
                 'label' => "{$s->gradeLevel->name} · Section {$s->name} · {$s->campus->name}",
                 'gradeLevelId' => $s->grade_level_id,
+                'occupancy' => isset($occupancy[$s->id]) ? $occupancy[$s->id]->label() : null,
             ])
             ->values()
             ->all();

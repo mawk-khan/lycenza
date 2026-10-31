@@ -21,7 +21,8 @@ interface Props {
         section: string | null;
         rollNumber: string | null;
     };
-    destinations: Array<{ id: string; label: string }>;
+    // SIS 11.3: the advisory occupancy of each destination (information only).
+    destinations: Array<{ id: string; label: string; occupancy?: string | null }>;
 }
 
 const props = defineProps<Props>();
@@ -67,7 +68,7 @@ function submit(): void {
                 >
                     <option value="" disabled>Choose a class</option>
                     <option v-for="d in destinations" :key="d.id" :value="d.id">
-                        {{ d.label }}
+                        {{ d.occupancy ? `${d.label} — ${d.occupancy}` : d.label }}
                     </option>
                 </select>
                 <p v-if="form.errors.target_section_id" class="mt-1 text-sm text-red-700">

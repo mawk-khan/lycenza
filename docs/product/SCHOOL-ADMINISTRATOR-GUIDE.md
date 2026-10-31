@@ -480,6 +480,14 @@ read-only Student lists you may open:
 - **Admission applications** (SIS 11.2): the Admissions list, filtered by
   status, year, Campus, Grade and created date, and sortable. A converted
   application links to its Student only if you may open Student profiles.
+- **Section capacity** (SIS 11.3): each Section's advisory capacity
+  against the Students in it today, with seats available or the overage.
+  - Capacity is advice only: a full Section still accepts a placement.
+  - Set or correct it on *School setup → Sections*. It may go below the
+    current number, with a warning.
+  - A closed year's capacity cannot change.
+  - Placement, transfer, conversion and rollover screens show the same
+    "28 / 30 · 2 seats available".
 - **Student lifecycle:** every Student marked inactive or active again, and
   every placement withdrawn or cancelled, with the recorded reason and
   date. A placement cancelled before it started reads *Cancelled before

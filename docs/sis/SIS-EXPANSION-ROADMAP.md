@@ -79,6 +79,19 @@ The 28 report-bearing reference families are classified (8 SIS-owned,
 - the SIS-owned subset is 6/8 governed and 8/8 dispositioned;
 - no schema, capability, route, export or analytics.
 
+**SIS 11.3 IMPLEMENTED (2026-10-31, `SIS-11-3-SECTION-CAPACITY.md`):** OD-SIS-6
+was approved.
+
+- The existing advisory `sections.capacity` is reused and guarded in the
+  database (≥ 1 or NULL; frozen in a closed year).
+- Strength comes from the one placement predicate, on the School-local
+  today clamped into the year.
+- New `students.section_capacity` report (Campus-aware).
+- Occupancy shows on Sections setup, enrolment, Campus transfer, Admissions
+  conversion and rollover targets.
+- An advisory rollover warning, never a blocker.
+- Not built: hard cap, Data Health finding, percentage or trend.
+
 **Next: owner decision; NOT STARTED; never auto-start.**
 
 ### 2.0f SIS.EXP-CLOSE — PROGRAMME CLOSED (2026-10-30)

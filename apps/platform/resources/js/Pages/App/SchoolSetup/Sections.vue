@@ -20,6 +20,15 @@ interface Section {
     status: string;
     campus: { id: string; name: string | null };
     gradeLevel: { id: string; name: string | null };
+    // SIS 11.3 (OD-SIS-6): strength against advisory capacity (whole-School
+    // enrollments.view only; null otherwise or for a closed year's history).
+    occupancy: {
+        capacity: number | null;
+        strength: number | null;
+        asOf: string | null;
+        state: string;
+        label: string;
+    } | null;
 }
 
 interface Year {
@@ -39,6 +48,7 @@ const props = defineProps<{
     campuses: Array<{ id: string; name: string; code: string }>;
     gradeLevels: Array<{ id: string; name: string; code: string }>;
     canManage: boolean;
+    canSeeStrength: boolean;
 }>();
 
 const yearOptions = computed(() =>
@@ -97,6 +107,17 @@ function startEdit(section: Section) {
     edit.capacity = section.capacity;
     nextTick(() => document.getElementById('edit-section-name')?.focus());
 }
+// SIS 11.3: capacity is advisory -- it may be set below the current strength,
+// with a plain warning before saving (the save is not refused).
+const capacityHint = computed(() => {
+    const strength = editing.value?.occupancy?.strength ?? null;
+    const proposed =
+        edit.capacity === null || `${edit.capacity}` === '' ? null : Number(edit.capacity);
+    if (strength !== null && proposed !== null && proposed >= 1 && proposed < strength) {
+        return `${editing.value?.gradeLevel.name} · ${editing.value?.name} currently has ${strength} Students. A capacity of ${proposed} is allowed because capacity is advisory; the Section will show as over advisory capacity by ${strength - proposed}.`;
+    }
+    return 'Advisory: a full Section still accepts placements. Leave empty if not configured.';
+});
 function submitEdit() {
     if (!editing.value) return;
     edit.put(`/app/school-setup/sections/${editing.value.id}`, {
@@ -166,6 +187,9 @@ function setStatus(section: Section, status: 'active' | 'inactive') {
                                 <th scope="col" class="pr-3 py-2">Grade level</th>
                                 <th scope="col" class="pr-3 py-2">Campus</th>
                                 <th scope="col" class="pr-3 py-2">Capacity</th>
+                                <th v-if="props.canSeeStrength" scope="col" class="pr-3 py-2">
+                                    Students today
+                                </th>
                                 <th scope="col" class="pr-3 py-2">Status</th>
                                 <th v-if="props.canManage" scope="col" class="pr-3 py-2">
                                     <span class="sr-only">Actions</span>
@@ -178,7 +202,12 @@ function setStatus(section: Section, status: 'active' | 'inactive') {
                                 <td class="pr-3 py-2">{{ section.code }}</td>
                                 <td class="pr-3 py-2">{{ section.gradeLevel.name }}</td>
                                 <td class="pr-3 py-2">{{ section.campus.name }}</td>
-                                <td class="pr-3 py-2">{{ section.capacity ?? '—' }}</td>
+                                <td class="pr-3 py-2">
+                                    {{ section.capacity ?? 'Not configured' }}
+                                </td>
+                                <td v-if="props.canSeeStrength" class="pr-3 py-2">
+                                    {{ section.occupancy?.label ?? '—' }}
+                                </td>
                                 <td class="pr-3 py-2">
                                     {{ section.status === 'active' ? 'Active' : 'Inactive' }}
                                 </td>
@@ -242,13 +271,19 @@ function setStatus(section: Section, status: 'active' | 'inactive') {
                         :error="edit.errors.code"
                     />
                     <TextField
+                        v-if="!selectedYearClosed"
                         id="edit-section-capacity"
                         v-model="edit.capacity"
-                        label="Capacity"
+                        label="Advisory capacity"
                         type="number"
                         :min="1"
+                        :hint="capacityHint"
                         :error="edit.errors.capacity"
                     />
+                    <p v-else class="text-sm text-slate-600">
+                        Capacity {{ editing.capacity ?? 'not configured' }} — this Section belongs
+                        to a closed year, so its capacity is history and cannot be changed.
+                    </p>
                     <div class="flex gap-3 sm:col-span-3">
                         <button
                             type="submit"

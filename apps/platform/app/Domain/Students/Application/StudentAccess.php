@@ -54,6 +54,7 @@ final class StudentAccess
         private readonly CampusScopeResolver $scopes,
         private readonly StudentOperationalEligibility $eligibility,
         private readonly ActiveCampus $campuses,
+        private readonly SectionOccupancyReader $occupancy,
     ) {}
 
     /**
@@ -335,10 +336,39 @@ final class StudentAccess
             ->with(['campus', 'gradeLevel']);
         $scope->restrict($query, 'sections.campus_id');
 
-        return $query->get()
+        $sections = $query->get();
+        // SIS 11.3 (OD-SIS-6): advisory occupancy of each destination (information only).
+        $occupancy = $this->occupancy->forSections($school, $sections);
+
+        return $sections
             ->sortBy(fn (Section $s) => [$s->campus->name, $s->name])
-            ->map(fn (Section $s) => ['id' => (string) $s->id, 'label' => "{$s->gradeLevel->name} · Section {$s->name} · {$s->campus->name}"])
+            ->map(fn (Section $s) => ['id' => (string) $s->id, 'label' => "{$s->gradeLevel->name} · Section {$s->name} · {$s->campus->name}", 'occupancy' => $occupancy[(string) $s->id]->label()])
             ->values()->all();
+    }
+
+    /**
+     * SIS 11.3 (OD-SIS-6): the Sections whose occupancy the `enrollments.view`
+     * scope may see, in SQL. Whole School: every Section of every year (a
+     * closed year's shows capacity only). A Campus set: only the School's
+     * ACTIVE year's Sections on in-scope Campuses -- a Campus reader sees
+     * current placements, never a draft/future or closed year (rule 101).
+     * None: nothing.
+     *
+     * @return Builder<Section>
+     */
+    public function capacitySections(School $school, CampusScope $scope): Builder
+    {
+        /** @var Builder<Section> $query */
+        $query = Section::query()->where('sections.school_id', $school->id);
+        if ($scope->isWholeSchool()) {
+            return $query;
+        }
+        $year = $scope->isNone() ? null : $this->years->tryResolve($school);
+        if ($year === null) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $scope->restrict($query->where('sections.academic_year_id', $year->id), 'sections.campus_id');
     }
 
     /** The actor's scope for a capability (page affordances; every read re-applies it). */

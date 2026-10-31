@@ -16,10 +16,12 @@ use App\Domain\AcademicStructure\Infrastructure\AcademicYear;
 use App\Domain\AcademicStructure\Infrastructure\GradeLevel;
 use App\Domain\AcademicStructure\Infrastructure\Room;
 use App\Domain\AcademicStructure\Infrastructure\Section;
+use App\Domain\Students\Application\SectionOccupancyReader;
 use App\Http\Controllers\App\Concerns\MapsDomainRefusals;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Support\Authorization\AuthorizesCapability;
+use App\Support\Authorization\Campus\CampusScopeResolver;
 use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
@@ -138,28 +140,35 @@ class SchoolSetupStructureController extends Controller
         return redirect()->route('app.school-setup.terms', ['academic_year_id' => $term->academic_year_id])->with('flash', 'Term dates corrected.');
     }
 
-    public function sections(Request $request, TenantContext $context): Response
+    public function sections(Request $request, TenantContext $context, CampusScopeResolver $scopes, SectionOccupancyReader $occupancyReader): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('academics.structure.view', $school);
 
         $years = AcademicYear::query()->orderByDesc('starts_on')->get();
         $selected = $this->selectedYear($request, $years->all());
+        // SIS 11.3 (OD-SIS-6): each Section's strength against its advisory
+        // capacity -- placement data, so only for whole-School enrollments.view.
+        $canSeeStrength = $scopes->campusScope($context->actor(), 'enrollments.view', $school)->isWholeSchool();
+
+        $sections = $selected === null ? null : Section::query()
+            ->where('academic_year_id', $selected->id)
+            ->with(['campus', 'gradeLevel'])
+            ->orderBy('name')
+            ->paginate(50)
+            ->withQueryString();
+        $occupancy = $sections !== null && $canSeeStrength ? $occupancyReader->forSections($school, $sections->getCollection()) : [];
 
         return Inertia::render('App/SchoolSetup/Sections', [
             'academicYears' => $years->map(fn (AcademicYear $y) => $this->presentYear($y))->all(),
             'selectedYearId' => $selected?->id,
-            'sections' => $selected === null ? null : Section::query()
-                ->where('academic_year_id', $selected->id)
-                ->with(['campus', 'gradeLevel'])
-                ->orderBy('name')
-                ->paginate(50)
-                ->withQueryString()
-                ->through(fn (Section $s) => [
-                    'id' => $s->id, 'name' => $s->name, 'code' => $s->code, 'capacity' => $s->capacity, 'status' => $s->status,
-                    'campus' => ['id' => $s->campus_id, 'name' => $s->campus?->name],
-                    'gradeLevel' => ['id' => $s->grade_level_id, 'name' => $s->gradeLevel?->name],
-                ]),
+            'sections' => $sections?->through(fn (Section $s) => [
+                'id' => $s->id, 'name' => $s->name, 'code' => $s->code, 'capacity' => $s->capacity, 'status' => $s->status,
+                'campus' => ['id' => $s->campus_id, 'name' => $s->campus?->name],
+                'gradeLevel' => ['id' => $s->grade_level_id, 'name' => $s->gradeLevel?->name],
+                'occupancy' => isset($occupancy[$s->id]) ? $occupancy[$s->id]->toArray() : null,
+            ]),
+            'canSeeStrength' => $canSeeStrength,
             // New Sections are placed under ACTIVE Campuses and Grade Levels only.
             'campuses' => $this->activeOptions(Campus::query()),
             'gradeLevels' => GradeLevel::query()->where('status', 'active')->orderBy('sequence')->get(['id', 'name', 'code'])->all(),
@@ -185,7 +194,7 @@ class SchoolSetupStructureController extends Controller
 
         $model = $sections->update($school, $section, $request->only(['name', 'code', 'capacity', 'status']), $context->actor());
 
-        return redirect()->route('app.school-setup.sections', ['academic_year_id' => $model->academic_year_id]);
+        return redirect()->route('app.school-setup.sections', ['academic_year_id' => $model->academic_year_id])->with('flash', 'Section updated.');
     }
 
     public function departments(TenantContext $context): Response

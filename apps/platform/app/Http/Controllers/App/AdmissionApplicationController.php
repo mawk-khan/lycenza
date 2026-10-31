@@ -36,10 +36,12 @@ use App\Domain\Students\Application\Exceptions\DuplicateEnrollmentRollNumberExce
 use App\Domain\Students\Application\Exceptions\InvalidEnrollmentDateRangeException;
 use App\Domain\Students\Application\Exceptions\InvalidEnrollmentRollNumberException;
 use App\Domain\Students\Application\Exceptions\PossibleDuplicateStudentException;
+use App\Domain\Students\Application\SectionOccupancyReader;
 use App\Http\Controllers\App\Concerns\PresentsDuplicateStudentWarning;
 use App\Http\Controllers\App\Fees\OperationalFeePanels;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
+use App\Models\School;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Authorization\Campus\CampusScope;
 use App\Support\Authorization\Campus\CampusScopeResolver;
@@ -236,7 +238,7 @@ class AdmissionApplicationController extends Controller
             // authoritative regardless), matching
             // StudentEnrollmentController::sectionOptions()'s
             // `onlyEligible` convenience-filtering precedent.
-            'compatibleSections' => ($canConvert && $model->status === 'accepted') ? $this->compatibleSectionOptions($model) : [],
+            'compatibleSections' => ($canConvert && $model->status === 'accepted') ? $this->compatibleSectionOptions($school, $model) : [],
             // SIS 2.3: the duplicate-risk warning of the last refused conversion.
             'duplicateWarning' => ($canConvert && $model->status === 'accepted') ? $this->duplicateWarningFor($request, $school, $context->actor(), 'admission-convert:'.$model->id) : null,
             // SWC.3 (ADR 0073 section 19): the School's admission fee head and,
@@ -565,18 +567,24 @@ class AdmissionApplicationController extends Controller
      *
      * @return array<int, array<string, mixed>>
      */
-    private function compatibleSectionOptions(AdmissionApplication $application): array
+    private function compatibleSectionOptions(School $school, AdmissionApplication $application): array
     {
-        return Section::query()
+        $sections = Section::query()
             ->with(['academicYear', 'campus', 'gradeLevel'])
             ->where('academic_year_id', $application->academic_year_id)
             ->where('campus_id', $application->campus_id)
             ->where('grade_level_id', $application->grade_level_id)
             ->where('status', 'active')
-            ->get()
+            ->get();
+        // SIS 11.3 (OD-SIS-6): the converter places a Student, so each choice shows
+        // its advisory occupancy (information only; a full Section stays selectable).
+        $occupancy = app(SectionOccupancyReader::class)->forSections($school, $sections);
+
+        return $sections
             ->map(fn (Section $s) => [
                 'id' => $s->id,
                 'label' => "{$s->gradeLevel->name} · Section {$s->name} · {$s->campus->name} · {$s->academicYear->name}",
+                'occupancy' => $occupancy[$s->id]->label(),
             ])
             ->values()
             ->all();

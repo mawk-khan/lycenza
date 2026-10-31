@@ -140,6 +140,8 @@ owner decision. Neither is counted as governed.
 inside **SR-39** (Admission analytics), a cross-module family whose revenue
 and analytics half stays gated (D-14, D-01..D-04).
 
+SIS 11.3 adds `students.section_capacity` (`SIS-11-3-SECTION-CAPACITY.md`).
+
 ## 6. Boundaries
 
 - **Not built:** export, print, analytics, conversion rate, funnel,

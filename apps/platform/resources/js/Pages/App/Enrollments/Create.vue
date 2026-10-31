@@ -2,6 +2,8 @@
 import { useForm } from '@inertiajs/vue3';
 
 interface SectionOption {
+    // SIS 11.3 (OD-SIS-6): advisory occupancy, e.g. "28 / 30 · 2 seats available" (information only).
+    occupancy?: string | null;
     id: string;
     label: string;
     academicYearId: string;
@@ -61,7 +63,9 @@ function submit(): void {
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2"
                 >
                     <option value="" disabled>Select a Section…</option>
-                    <option v-for="s in sections" :key="s.id" :value="s.id">{{ s.label }}</option>
+                    <option v-for="s in sections" :key="s.id" :value="s.id">
+                        {{ s.occupancy ? `${s.label} — ${s.occupancy}` : s.label }}
+                    </option>
                 </select>
                 <p id="section_id-error" class="mt-1 text-sm text-red-600">
                     {{ form.errors.section_id }}

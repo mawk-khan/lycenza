@@ -25,6 +25,8 @@ interface ApplicantRef {
 }
 
 interface SectionOption {
+    // SIS 11.3 (OD-SIS-6): advisory occupancy, e.g. "28 / 30 · 2 seats available" (information only).
+    occupancy?: string | null;
     id: string;
     label: string;
 }
@@ -581,7 +583,7 @@ function switchToLinkExisting(g: GuardianCandidate): void {
                         >
                             <option value="" disabled>Select a Section…</option>
                             <option v-for="s in compatibleSections" :key="s.id" :value="s.id">
-                                {{ s.label }}
+                                {{ s.occupancy ? `${s.label} — ${s.occupancy}` : s.label }}
                             </option>
                         </select>
                         <p id="section_id-error" class="mt-1 text-sm text-red-600">

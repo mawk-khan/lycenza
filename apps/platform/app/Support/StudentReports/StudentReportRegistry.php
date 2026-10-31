@@ -5,6 +5,7 @@ namespace App\Support\StudentReports;
 use App\Domain\Admissions\Application\AdmissionApplicationReadService;
 use App\Domain\Guardians\Application\Reports\SiblingReport;
 use App\Domain\Students\Application\Movements\StudentMovementRegister;
+use App\Domain\Students\Application\Reports\SectionCapacityReport;
 use App\Domain\Students\Application\Reports\StudentLifecycleReport;
 use App\Domain\Students\Application\StudentDirectoryOrder;
 use App\Support\StudentReports\StudentReportColumn as C;
@@ -34,6 +35,7 @@ final class StudentReportRegistry
     public const array RENDERED = [
         StudentLifecycleReport::class,
         SiblingReport::class,
+        SectionCapacityReport::class,
     ];
 
     /** @var array<string, D>|null */

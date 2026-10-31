@@ -133,13 +133,13 @@ class StudentReportsTest extends TestCase
     #[Test]
     public function the_hub_lists_exactly_the_reports_the_viewer_may_open(): void
     {
-        $this->assertSame(['admissions.applications', 'students.directory', 'students.lifecycle', 'students.movements', 'students.placements', 'students.siblings'], $this->hub($this->admin));
+        $this->assertSame(['admissions.applications', 'students.directory', 'students.lifecycle', 'students.movements', 'students.placements', 'students.section_capacity', 'students.siblings'], $this->hub($this->admin));
         $this->assertSame(['students.directory', 'students.lifecycle'], $this->hub($this->holder(['students.view'])), 'lifecycle needs students.view only; placement reports need enrollments.view');
-        $this->assertSame(['students.movements', 'students.placements'], $this->hub($this->holder(['enrollments.view'])));
+        $this->assertSame(['students.movements', 'students.placements', 'students.section_capacity'], $this->hub($this->holder(['enrollments.view'])));
 
         // A Campus grant opens the Campus-aware reports only -- never history.
         $campus = $this->holder(['students.view', 'enrollments.view'], $this->main->id);
-        $this->assertSame(['students.directory', 'students.placements'], $this->hub($campus));
+        $this->assertSame(['students.directory', 'students.placements', 'students.section_capacity'], $this->hub($campus));
         $this->as($campus)->get('/app/students/reports/students.lifecycle')->assertForbidden();
         $this->as($campus)->get('/app/students/movements')->assertForbidden();
 

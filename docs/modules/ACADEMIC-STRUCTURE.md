@@ -415,3 +415,22 @@ takes no new one.
   while a rollover into the year is `executing`, activation is refused with
   `ACADEMIC_YEAR_ACTIVATION_BLOCKED` (409), naming Enrollment rollovers →
   Resume. Academic Structure never reads Students' tables (rule 4).
+
+## Advisory Section capacity (SIS 11.3, 2026-10-31, OD-SIS-6)
+
+`sections.capacity` is the ONE capacity of a Section. It is advisory, and
+nothing refuses a placement because of it
+(`docs/sis/SIS-11-3-SECTION-CAPACITY.md`).
+
+- **Values:** NULL means "not configured"; a configured value is at least 1
+  (`sections_capacity_positive_check`; the service validates `min:1`). No
+  value is ever defaulted or backfilled.
+- **Draft or active year:** `academics.structure.manage` may set or correct
+  it, including below the current strength; the form warns first. The
+  change is audited in `section.updated` (before/after).
+- **Closed year:** capacity is history. `SectionAdministrationService`
+  refuses a change (`CLOSED_YEAR_CAPACITY`) and the database backs it
+  (`sections_capacity_closed_year_guard`, BEFORE UPDATE OF capacity).
+- **Strength and seats are Students/SIS reads**
+  (`SectionOccupancyReader`); Academic Structure gains no dependency on
+  them. Never a second capacity column elsewhere (`SectionCapacityTest`).
