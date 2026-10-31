@@ -66,8 +66,20 @@ core 96/100. SIS 11.1 was re-scoped by the owner onto `c5e3dd23`
 
 The 28 report-bearing reference families are classified (8 SIS-owned,
 5 cross-module, 8 other-ERP, 7 rejected). Advanced SIS Screenshot Coverage
-(report subset) is 0/8 → 5/8. **Next: SIS 11.2 — Operational Student Reports,
-NOT STARTED; owner authorization required; never auto-start.**
+(report subset) is 0/8 → 5/8.
+
+**SIS 11.2 IMPLEMENTED (2026-10-31, `SIS-11-2-OPERATIONAL-REPORTS.md`):**
+
+- `admissions.applications`: the Campus-aware Admissions list, extended
+  with School-local created dates, a closed sort, an inactive-Campus label
+  and a permission-checked converted-Student link, then registered;
+- `students.siblings`: SR-25, owner-approved names-only list, whole School;
+- SR-02: equivalent through Data Health;
+- SR-21: deferred by owner decision;
+- the SIS-owned subset is 6/8 governed and 8/8 dispositioned;
+- no schema, capability, route, export or analytics.
+
+**Next: owner decision; NOT STARTED; never auto-start.**
 
 ### 2.0f SIS.EXP-CLOSE — PROGRAMME CLOSED (2026-10-30)
 

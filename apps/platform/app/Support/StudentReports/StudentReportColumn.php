@@ -24,7 +24,7 @@ final readonly class StudentReportColumn
     public const string RESTRICTED = 'restricted';
 
     /** Closed cell formats the shared report page knows how to render. */
-    public const array FORMATS = ['text', 'date', 'student', 'placement', 'lifecycle_reason'];
+    public const array FORMATS = ['text', 'date', 'student', 'student_list', 'placement', 'lifecycle_reason'];
 
     /**
      * Never a report column, whatever a reference screen shows (D-15, ADR

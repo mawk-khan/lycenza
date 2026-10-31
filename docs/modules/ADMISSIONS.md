@@ -868,3 +868,23 @@ conversion, by the application's Campus.
   accessible ConfirmDialog.
 - **Success messages.** Every transition says what happened ("Application
   accepted. It is not yet a Student: …").
+
+## Application list as a governed report (SIS 11.2, 2026-10-31)
+
+The application list (`/app/admissions`) is the SIS report catalogue entry
+`admissions.applications` (`StudentReportRegistry`,
+`docs/sis/SIS-11-2-OPERATIONAL-REPORTS.md`). It stays Campus-aware through
+`AdmissionApplicationAccess::directory()`.
+
+- **Filters:** applicant name, status, academic year, Campus and Grade, plus
+  **Created from / Created to**. The created dates are School-local calendar
+  days, converted to UTC bounds on `created_at`.
+- **Sort:** a closed `AdmissionApplicationReadService::SORTS` (newest, oldest,
+  Applicant name, status). The sort is never a filter.
+- **Rows:**
+  - the application's own year, Campus and Grade;
+  - an inactive Campus labelled "(inactive)";
+  - a created date;
+  - a converted Student link only for whole-School `students.view` (never
+    the Student's name or number).
+- **Never:** a fee, date of birth, contact, conversion rate or funnel.

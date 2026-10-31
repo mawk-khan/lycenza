@@ -12,6 +12,8 @@ import { formatCalendarDate } from '../../../../datetime';
 interface Option {
     value: string;
     label: string;
+    // An option may name another filter's key (e.g. a Section's campus_id).
+    [dependsOn: string]: string;
 }
 
 interface Filter {
@@ -24,7 +26,15 @@ interface Filter {
 interface Column {
     key: string;
     label: string;
-    format: 'text' | 'date' | 'student' | 'placement' | 'lifecycle_reason';
+    format: 'text' | 'date' | 'student' | 'student_list' | 'placement' | 'lifecycle_reason';
+}
+
+interface ListedStudent {
+    name: string;
+    studentNumber: string;
+    url?: string;
+    inactive?: boolean;
+    placement?: PlacementCell | null;
 }
 
 interface StudentCell {
@@ -56,7 +66,11 @@ const props = defineProps<{
         total: number;
     };
     hasAny: boolean;
+    errors?: Record<string, string>;
 }>();
+
+// End date => start date (StudentReportFilter::DATE_RANGES): the end picker never goes before the start.
+const RANGE_START: Record<string, string> = { to: 'from', created_to: 'created_from' };
 
 const form = ref<Record<string, string>>({ ...props.values });
 const processing = ref(false);
@@ -69,6 +83,21 @@ watch(
     },
 );
 
+// A select filter with no choices for this viewer is not offered at all.
+const shownFilters = computed(() =>
+    props.filters.filter((f) => f.kind === 'search' || f.kind === 'date' || f.options.length > 0),
+);
+
+// Only the choices that fit the other chosen filters (no impossible pair).
+function choices(f: Filter): Option[] {
+    return f.options.filter((o) =>
+        Object.entries(o).every(
+            ([key, value]) =>
+                key === 'value' || key === 'label' || !form.value[key] || form.value[key] === value,
+        ),
+    );
+}
+
 // From the server's values (never the unsubmitted form), so it is never stale.
 const hasFilters = computed(() =>
     Object.entries(props.values).some(([k, v]) => k !== 'sort' && v !== ''),
@@ -78,8 +107,14 @@ function apply(): void {
     if (processing.value) {
         return;
     }
-    if (form.value.from && form.value.to && form.value.to < form.value.from) {
-        form.value.to = '';
+    for (const f of props.filters) {
+        if (
+            form.value[f.key] &&
+            f.options.length > 0 &&
+            !choices(f).some((o) => o.value === form.value[f.key])
+        ) {
+            form.value[f.key] = '';
+        }
     }
     const query = Object.fromEntries(Object.entries(form.value).filter(([, v]) => v !== ''));
     router.get(props.report.url, query, {
@@ -114,6 +149,10 @@ function place(value: unknown): string {
     );
 }
 
+function listed(row: Row, key: string): ListedStudent[] {
+    return (row[key] as ListedStudent[] | null) ?? [];
+}
+
 function year(value: unknown): string | null {
     return (value as PlacementCell | null)?.academicYear ?? null;
 }
@@ -134,7 +173,7 @@ function text(value: unknown): string {
             :aria-busy="processing"
             @submit.prevent="apply"
         >
-            <div v-for="f in filters" :key="f.key">
+            <div v-for="f in shownFilters" :key="f.key">
                 <label class="block text-sm text-slate-600" :for="`rf-${f.key}`">{{
                     f.label
                 }}</label>
@@ -142,6 +181,8 @@ function text(value: unknown): string {
                     v-if="f.kind === 'search'"
                     :id="`rf-${f.key}`"
                     v-model="form[f.key]"
+                    :aria-invalid="!!errors?.[f.key]"
+                    :aria-describedby="errors?.[f.key] ? `rf-${f.key}-error` : undefined"
                     type="search"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                 />
@@ -150,6 +191,9 @@ function text(value: unknown): string {
                     :id="`rf-${f.key}`"
                     v-model="form[f.key]"
                     type="date"
+                    :min="(RANGE_START[f.key] && form[RANGE_START[f.key]]) || undefined"
+                    :aria-invalid="!!errors?.[f.key]"
+                    :aria-describedby="errors?.[f.key] ? `rf-${f.key}-error` : undefined"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                     @change="apply"
                 />
@@ -157,14 +201,23 @@ function text(value: unknown): string {
                     v-else
                     :id="`rf-${f.key}`"
                     v-model="form[f.key]"
+                    :aria-invalid="!!errors?.[f.key]"
+                    :aria-describedby="errors?.[f.key] ? `rf-${f.key}-error` : undefined"
                     class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                     @change="apply"
                 >
                     <option value="">All</option>
-                    <option v-for="o in f.options" :key="o.value" :value="o.value">
+                    <option v-for="o in choices(f)" :key="o.value" :value="o.value">
                         {{ o.label }}
                     </option>
                 </select>
+                <p
+                    v-if="errors?.[f.key]"
+                    :id="`rf-${f.key}-error`"
+                    class="mt-1 text-sm text-red-700"
+                >
+                    {{ errors[f.key] }}
+                </p>
             </div>
             <div v-if="sorts.length > 1">
                 <label class="block text-sm text-slate-600" for="rf-sort">Sort by</label>
@@ -246,6 +299,24 @@ function text(value: unknown): string {
                                     </template>
                                     <span v-else>—</span>
                                 </template>
+                                <ul v-else-if="c.format === 'student_list'" class="space-y-1">
+                                    <li
+                                        v-for="s in listed(row, c.key)"
+                                        :key="s.url ?? s.studentNumber"
+                                    >
+                                        <a v-if="s.url" class="underline" :href="s.url">{{
+                                            s.name
+                                        }}</a>
+                                        <span v-else>{{ s.name }}</span>
+                                        <span class="text-xs text-slate-500">
+                                            · {{ s.studentNumber
+                                            }}<template v-if="s.inactive"> · inactive</template
+                                            ><template v-if="s.placement">
+                                                · {{ place(s.placement) }}</template
+                                            >
+                                        </span>
+                                    </li>
+                                </ul>
                                 <template v-else-if="c.format === 'placement'">
                                     {{ place(row[c.key]) }}
                                     <span

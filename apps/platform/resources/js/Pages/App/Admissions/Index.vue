@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
 import Pagination from '../../../Components/Pagination.vue';
 import StatusBadge from '../../../Components/StatusBadge.vue';
+import { formatDate } from '../../../datetime';
 
 interface Ref {
     id: string;
@@ -25,6 +26,8 @@ interface ApplicationRow {
     campus: Ref;
     gradeLevel: Ref;
     createdAt: string;
+    // SIS 11.2: only for a viewer who may open the whole-School Student Profile.
+    convertedStudentUrl: string | null;
 }
 
 interface PageLink {
@@ -37,6 +40,8 @@ interface Props {
     applications: {
         data: ApplicationRow[];
         links: PageLink[];
+        from: number | null;
+        to: number | null;
         total: number;
     };
     filters: {
@@ -45,7 +50,12 @@ interface Props {
         campus_id: string;
         grade_level_id: string;
         applicant_name: string;
+        // SIS 11.2: School-local created dates and the closed sort ('' = newest first).
+        created_from: string;
+        created_to: string;
+        sort: string;
     };
+    sorts: { value: string; label: string }[];
     academicYears: Ref[];
     campuses: Ref[];
     gradeLevels: Ref[];
@@ -61,6 +71,9 @@ const academicYearId = ref(props.filters.academic_year_id);
 const campusId = ref(props.filters.campus_id);
 const gradeLevelId = ref(props.filters.grade_level_id);
 const applicantName = ref(props.filters.applicant_name);
+const createdFrom = ref(props.filters.created_from);
+const createdTo = ref(props.filters.created_to);
+const sort = ref(props.filters.sort);
 
 let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -73,6 +86,9 @@ function applyFilters(): void {
             campus_id: campusId.value || undefined,
             grade_level_id: gradeLevelId.value || undefined,
             applicant_name: applicantName.value || undefined,
+            created_from: createdFrom.value || undefined,
+            created_to: createdTo.value || undefined,
+            sort: sort.value || undefined,
         },
         { preserveState: true, preserveScroll: true, replace: true },
     );
@@ -95,7 +111,22 @@ function applicationContext(a: ApplicationRow): string {
 
 // SIS 3.2: reactive, from the filters the list was actually loaded with
 // (filtering keeps this component mounted -- preserveState).
-const hasFilters = computed(() => Object.values(props.filters).some((v) => !!v));
+// The sort is not a filter.
+const hasFilters = computed(() =>
+    Object.entries(props.filters).some(([key, v]) => key !== 'sort' && !!v),
+);
+
+function resetFilters(): void {
+    status.value = '';
+    academicYearId.value = '';
+    campusId.value = '';
+    gradeLevelId.value = '';
+    applicantName.value = '';
+    createdFrom.value = '';
+    createdTo.value = '';
+    clearTimeout(debounceTimer);
+    applyFilters();
+}
 </script>
 
 <template>
@@ -188,6 +219,52 @@ const hasFilters = computed(() => Object.values(props.filters).some((v) => !!v))
                     <option v-for="g in gradeLevels" :key="g.id" :value="g.id">{{ g.name }}</option>
                 </select>
             </div>
+            <div>
+                <label class="block text-sm text-slate-600" for="filter-created-from"
+                    >Created from</label
+                >
+                <input
+                    id="filter-created-from"
+                    v-model="createdFrom"
+                    type="date"
+                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                    @change="applyFilters"
+                />
+            </div>
+            <div>
+                <label class="block text-sm text-slate-600" for="filter-created-to"
+                    >Created to</label
+                >
+                <input
+                    id="filter-created-to"
+                    v-model="createdTo"
+                    type="date"
+                    :min="createdFrom || undefined"
+                    class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                    @change="applyFilters"
+                />
+            </div>
+            <div>
+                <label class="block text-sm text-slate-600" for="filter-sort">Sort by</label>
+                <select
+                    id="filter-sort"
+                    v-model="sort"
+                    class="mt-1 w-40 rounded border border-slate-300 px-3 py-2 text-sm"
+                    @change="applyFilters"
+                >
+                    <option v-for="(s, i) in sorts" :key="s.value" :value="i === 0 ? '' : s.value">
+                        {{ s.label }}
+                    </option>
+                </select>
+            </div>
+            <button
+                v-if="hasFilters"
+                type="button"
+                class="pb-2 text-sm underline"
+                @click="resetFilters"
+            >
+                Clear filters
+            </button>
         </form>
 
         <EmptyState
@@ -206,6 +283,7 @@ const hasFilters = computed(() => Object.values(props.filters).some((v) => !!v))
                         <th scope="col" class="py-2 font-medium">Applicant</th>
                         <th scope="col" class="py-2 font-medium">Applying for</th>
                         <th scope="col" class="py-2 font-medium">Status</th>
+                        <th scope="col" class="py-2 font-medium">Created</th>
                         <th scope="col" class="py-2 font-medium">
                             <span class="sr-only">Actions</span>
                         </th>
@@ -226,7 +304,16 @@ const hasFilters = computed(() => Object.values(props.filters).some((v) => !!v))
                         </td>
                         <td class="py-3 text-slate-600">{{ applicationContext(a) }}</td>
                         <td class="py-3"><StatusBadge :status="a.status" /></td>
+                        <td class="whitespace-nowrap py-3 text-slate-600">
+                            {{ formatDate(a.createdAt) }}
+                        </td>
                         <td class="py-3 text-right">
+                            <a
+                                v-if="a.convertedStudentUrl"
+                                class="mr-3 text-sm underline"
+                                :href="a.convertedStudentUrl"
+                                >Student</a
+                            >
                             <a class="text-sm underline" :href="`/app/admissions/${a.id}`">View</a>
                         </td>
                     </tr>
@@ -243,11 +330,25 @@ const hasFilters = computed(() => Object.values(props.filters).some((v) => !!v))
                         applicantName_(a.applicant)
                     }}</a>
                     <p class="mt-1 text-sm text-slate-500">{{ applicationContext(a) }}</p>
-                    <div class="mt-2"><StatusBadge :status="a.status" /></div>
+                    <p class="mt-1 text-sm text-slate-500">Created {{ formatDate(a.createdAt) }}</p>
+                    <div class="mt-2 flex items-center gap-3">
+                        <StatusBadge :status="a.status" />
+                        <a
+                            v-if="a.convertedStudentUrl"
+                            class="text-sm underline"
+                            :href="a.convertedStudentUrl"
+                            >Student</a
+                        >
+                    </div>
                 </li>
             </ul>
 
-            <Pagination :links="applications.links" />
+            <Pagination
+                :links="applications.links"
+                :from="applications.from"
+                :to="applications.to"
+                :total="applications.total"
+            />
         </template>
     </main>
 </template>

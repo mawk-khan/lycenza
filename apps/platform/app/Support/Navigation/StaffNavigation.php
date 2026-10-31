@@ -132,10 +132,10 @@ final class StaffNavigation
             // SIS.EXP-2: the School-wide movement and exit register (a declared
             // whole-School operation: never shown for a Campus-only grant).
             new E('student-movements', 'people', 'Student movements', 'app.students.movements', all: ['enrollments.view']),
-            // SIS 11.1: the SIS Reports hub. Both keys are Campus-adopted, so a
+            // SIS 11.1/11.2: the SIS Reports hub. Every key is Campus-adopted, so a
             // Campus holder sees it; the hub lists only the reports the viewer
             // may open (StudentReportAccess), each re-checked by its page.
-            new E('student-reports', 'people', 'Student reports', 'app.students.reports.index', activeWhen: ['app.students.reports.*'], any: ['students.view', 'enrollments.view']),
+            new E('student-reports', 'people', 'Student reports', 'app.students.reports.index', activeWhen: ['app.students.reports.*'], any: ['students.view', 'enrollments.view', 'admissions.view']),
             new E('student-import', 'people', 'Import Students', 'app.students.import.create', all: ['students.import', 'students.manage', 'guardians.manage', 'enrollments.manage']),
             // Phase 1B.7F: both capabilities, as the page requires.
             new E('enrollment-rollovers', 'people', 'Enrollment rollovers', 'app.enrollment-rollovers.index', all: ['enrollments.view', 'enrollments.rollovers.view']),

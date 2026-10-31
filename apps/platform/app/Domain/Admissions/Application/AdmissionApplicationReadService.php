@@ -3,9 +3,12 @@
 namespace App\Domain\Admissions\Application;
 
 use App\Domain\Admissions\Infrastructure\AdmissionApplication;
+use App\Domain\Admissions\Infrastructure\Applicant;
 use App\Support\Authorization\Campus\CampusScope;
 use App\Support\Search\NameSearch;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * Phase 1D.4: the canonical read layer for AdmissionApplication --
@@ -44,6 +47,19 @@ class AdmissionApplicationReadService
     private const array KNOWN_STATUSES = ['draft', 'submitted', 'accepted', 'rejected', 'withdrawn', 'converted'];
 
     /**
+     * SIS 11.1/11.2: the closed sort contract of the application list
+     * (governed by the SIS report catalogue, StudentReportRegistry). Request
+     * input only ever picks a key (the first is the default); each ends in
+     * `id` so pagination is stable.
+     */
+    public const array SORTS = [
+        'created_desc' => 'Newest first',
+        'created_asc' => 'Oldest first',
+        'applicant' => 'Applicant name',
+        'status' => 'Status',
+    ];
+
+    /**
      * Paginated, filtered AdmissionApplication listing for the current
      * School. Every filter is applied to already tenant-scoped query
      * state (`AdmissionApplication`'s own SchoolScope/RLS, and
@@ -71,9 +87,10 @@ class AdmissionApplicationReadService
      * applications of the actor's Campuses; a request `campus_id` filter then
      * only narrows. Null keeps the whole-School list unchanged.
      *
-     * @param  array{status?: string, academic_year_id?: string, campus_id?: string, grade_level_id?: string, applicant_name?: string}  $filters
+     * @param  array{status?: string, academic_year_id?: string, campus_id?: string, grade_level_id?: string, applicant_name?: string, created_from?: string, created_to?: string, sort?: string}  $filters
+     * @param  ?\DateTimeZone  $timezone  the School's zone for the created-date bounds (UTC when omitted)
      */
-    public function directory(array $filters = [], int $perPage = self::DEFAULT_PER_PAGE, ?CampusScope $scope = null): LengthAwarePaginator
+    public function directory(array $filters = [], int $perPage = self::DEFAULT_PER_PAGE, ?CampusScope $scope = null, ?\DateTimeZone $timezone = null): LengthAwarePaginator
     {
         $perPage = max(1, min($perPage, self::MAX_PER_PAGE));
 
@@ -86,9 +103,8 @@ class AdmissionApplicationReadService
             ->with([
                 'applicant:id,school_id,first_name,middle_name,last_name',
                 'academicYear', 'campus', 'gradeLevel',
-            ])
-            ->orderByDesc('created_at')
-            ->orderByDesc('id');
+            ]);
+        $this->order($query, (string) ($filters['sort'] ?? 'created_desc'));
         $scope?->restrict($query);
 
         if (isset($filters['status']) && in_array($filters['status'], self::KNOWN_STATUSES, true)) {
@@ -108,8 +124,34 @@ class AdmissionApplicationReadService
             // field, any order); LIKE wildcards stay literal (ORG.7D-3 R8).
             $query->whereHas('applicant', fn ($q) => NameSearch::everyWord($q, $filters['applicant_name'], ['applicants.first_name', 'applicants.middle_name', 'applicants.last_name']));
         }
+        // SIS 11.2: the School-local calendar day the application was created
+        // (created_at is stored in UTC; the bounds are that day's UTC instants,
+        // so the column's index still serves the range).
+        $zone = $timezone ?? new \DateTimeZone('UTC');
+        if (isset($filters['created_from']) && $filters['created_from'] !== '') {
+            $query->where('created_at', '>=', CarbonImmutable::parse($filters['created_from'], $zone)->startOfDay()->utc()->toDateTimeString());
+        }
+        if (isset($filters['created_to']) && $filters['created_to'] !== '') {
+            $query->where('created_at', '<', CarbonImmutable::parse($filters['created_to'], $zone)->addDay()->startOfDay()->utc()->toDateTimeString());
+        }
 
         return $query->paginate($perPage);
+    }
+
+    /**
+     * @param  Builder<AdmissionApplication>  $query
+     */
+    private function order(Builder $query, string $sort): void
+    {
+        match (array_key_exists($sort, self::SORTS) ? $sort : 'created_desc') {
+            'created_asc' => $query->orderBy('created_at')->orderBy('id'),
+            // The Applicant's name, read by a correlated sub-select on the same School.
+            'applicant' => $query->orderBy(Applicant::query()->select('last_name')->whereColumn('applicants.id', 'admission_applications.applicant_id'))
+                ->orderBy(Applicant::query()->select('first_name')->whereColumn('applicants.id', 'admission_applications.applicant_id'))
+                ->orderBy('id'),
+            'status' => $query->orderBy('status')->orderByDesc('created_at')->orderByDesc('id'),
+            default => $query->orderByDesc('created_at')->orderByDesc('id'),
+        };
     }
 
     /**

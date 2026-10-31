@@ -43,6 +43,7 @@ use App\Models\Campus;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Authorization\Campus\CampusScope;
 use App\Support\Authorization\Campus\CampusScopeResolver;
+use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
@@ -111,20 +112,39 @@ class AdmissionApplicationController extends Controller
             'campus_id' => ['sometimes', 'uuid'],
             'grade_level_id' => ['sometimes', 'uuid'],
             'applicant_name' => ['sometimes', 'string', 'max:255'],
+            // SIS 11.2: the School-local day the application was created, and a
+            // closed sort (governed by the SIS report catalogue).
+            'created_from' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
+            'created_to' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'after_or_equal:created_from'],
+            'sort' => ['sometimes', 'nullable', Rule::in(array_keys(AdmissionApplicationReadService::SORTS))],
+            'page' => ['sometimes', 'integer', 'min:1'],
         ]);
 
         /** @var LengthAwarePaginator<int, AdmissionApplication> $paginator */
-        $paginator = $access->directory($scope, $validated, 20)->withQueryString();
+        $paginator = $access->directory($scope, array_filter($validated, fn ($v) => $v !== null), 20, SchoolTimezone::resolve($school))->withQueryString();
+        // SIS 11.2: a converted application links to its Student only for a
+        // viewer who may open the whole-School Profile (which re-checks); the
+        // list never carries the Student's name or number.
+        $canOpenStudents = $scopes->campusScope($context->actor(), 'students.view', $school)->isWholeSchool();
 
         return Inertia::render('App/Admissions/Index', [
-            'applications' => $paginator->through(fn (AdmissionApplication $a) => $this->presentSummary($a)),
+            'applications' => $paginator->through(fn (AdmissionApplication $a) => [
+                ...$this->presentSummary($a),
+                // History keeps its Campus; an inactive one is labelled, never hidden.
+                'campus' => [...$this->presentRef($a->campus), 'name' => $a->campus->status === 'active' ? $a->campus->name : "{$a->campus->name} (inactive)"],
+                'convertedStudentUrl' => $canOpenStudents && $a->converted_student_id !== null ? "/app/students/{$a->converted_student_id}" : null,
+            ]),
             'filters' => [
                 'status' => $validated['status'] ?? '',
                 'academic_year_id' => $validated['academic_year_id'] ?? '',
                 'campus_id' => $validated['campus_id'] ?? '',
                 'grade_level_id' => $validated['grade_level_id'] ?? '',
                 'applicant_name' => $validated['applicant_name'] ?? '',
+                'created_from' => $validated['created_from'] ?? '',
+                'created_to' => $validated['created_to'] ?? '',
+                'sort' => $validated['sort'] ?? '',
             ],
+            'sorts' => array_map(fn (string $k, string $l) => ['value' => $k, 'label' => $l], array_keys(AdmissionApplicationReadService::SORTS), AdmissionApplicationReadService::SORTS),
             'academicYears' => $this->academicYearOptions(),
             'campuses' => $access->campusOptions($scope),
             'gradeLevels' => $this->gradeLevelOptions(),

@@ -474,6 +474,12 @@ read-only Student lists you may open:
   roll numbers.
 - **Student movements:** entries, Section changes, Campus transfers,
   promotions and exits.
+- **Siblings** (SIS 11.2): Students who share an active Guardian, one row
+  per Guardian, with names and current class only. Needs both Student and
+  Guardian access for the whole School.
+- **Admission applications** (SIS 11.2): the Admissions list, filtered by
+  status, year, Campus, Grade and created date, and sortable. A converted
+  application links to its Student only if you may open Student profiles.
 - **Student lifecycle:** every Student marked inactive or active again, and
   every placement withdrawn or cancelled, with the recorded reason and
   date. A placement cancelled before it started reads *Cancelled before

@@ -106,6 +106,10 @@ fixed `ORDER BY`. Undeclared parameters are ignored.
 | `students.movements` | Enrollment | Students (Enrollment) | `enrollments.view` | whole School | `/app/students/movements` |
 | `students.lifecycle` | Lifecycle | Students | `students.view` (+ `enrollments.view` for placement events/column) | whole School | `/app/students/reports/students.lifecycle` |
 
+SIS 11.2 adds `students.siblings` (whole School, `students.view` +
+`guardians.view`) and `admissions.applications` (Campus-aware,
+`admissions.view`, `/app/admissions`) — `SIS-11-2-OPERATIONAL-REPORTS.md`.
+
 `StudentReportRegistryTest` checks that each dedicated page entry declares
 exactly the filters the page reads and the sorts its read model maps. It
 also checks that a Campus-aware entry is a C6 Campus route and a
@@ -182,7 +186,7 @@ reads **"Cancelled before start"**.
 
 | Item | Decision |
 |---|---|
-| Admissions report (`admissions.applications`) | **Deferred to SIS 11.2.** The Admissions list already filters by year, Campus, Grade and status. Registering it needs its own Campus-scope review of `admissions.view`. |
+| Admissions report (`admissions.applications`) | **Deferred to SIS 11.2** (delivered there). The Admissions list already filters by year, Campus, Grade and status. Registering it needs its own Campus-scope review of `admissions.view`. |
 | Saved views | **Option B: later enhancement.** No preference store exists for report filters, and no schema is added. URL filters already cover copy and bookmark. |
 | Export | **None.** `exportable` is false on every column (pinned). Before any CSV/XLSX export (D-11): a governed export contract, then **formula-injection escaping**. Any cell starting with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with `'` (and quoted), on every column including names. Rules 103–104 stay authoritative. |
 | Print / PDF | None. Browser print is not an official report. |

@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\StudentReports;
 
+use App\Domain\Admissions\Application\AdmissionApplicationReadService;
+use App\Domain\Guardians\Application\Reports\SiblingReport;
 use App\Domain\Students\Application\Movements\StudentMovementRegister;
 use App\Domain\Students\Application\Reports\StudentLifecycleReport;
 use App\Domain\Students\Application\StudentDirectoryOrder;
@@ -41,7 +43,7 @@ class StudentReportRegistryTest extends TestCase
     public function every_report_is_unique_owned_and_authorized_by_existing_school_capabilities(): void
     {
         $definitions = $this->definitions();
-        $this->assertSame(['students.directory', 'students.placements', 'students.movements', 'students.lifecycle'], array_keys($definitions), 'the closed catalogue, in hub order');
+        $this->assertSame(['students.directory', 'students.siblings', 'students.placements', 'students.movements', 'students.lifecycle', 'admissions.applications'], array_keys($definitions), 'the closed catalogue, in hub order');
 
         $capabilities = DB::table('capabilities')->pluck('namespace', 'key')->all();
         foreach ($definitions as $key => $definition) {
@@ -89,6 +91,8 @@ class StudentReportRegistryTest extends TestCase
         $this->assertSame(array_keys(StudentDirectoryOrder::SORTS), array_keys($definitions['students.directory']->sorts));
         $this->assertSame(array_keys(StudentMovementRegister::SORTS), array_keys($definitions['students.movements']->sorts));
         $this->assertSame(array_keys(StudentLifecycleReport::SORTS), array_keys($definitions['students.lifecycle']->sorts));
+        $this->assertSame(array_keys(SiblingReport::SORTS), array_keys($definitions['students.siblings']->sorts));
+        $this->assertSame(array_keys(AdmissionApplicationReadService::SORTS), array_keys($definitions['admissions.applications']->sorts));
         foreach (StudentReportRegistry::RENDERED as $class) {
             $this->assertTrue(is_subclass_of($class, StudentReport::class));
             $this->assertTrue(app($class)->definition()->isRendered(), $class);
@@ -144,12 +148,16 @@ class StudentReportRegistryTest extends TestCase
         $this->assertSame(['app.students.reports.index' => ['GET', 'HEAD'], 'app.students.reports.show' => ['GET', 'HEAD']],
             $routes->mapWithKeys(fn (Route $r) => [$r->getName() => $r->methods()])->sortKeys()->all(), 'no export, print or write route');
 
-        $entry = collect(StaffNavigation::entries())->firstWhere('key', 'student-reports');
-        $authorities = array_values(array_unique(array_merge(...array_values(array_map(fn (StudentReportDefinition $d) => $d->authority, $this->definitions())))));
-        sort($authorities);
-        $any = $entry->any;
-        sort($any);
-        $this->assertSame($authorities, $any, 'the entry shows for exactly the capabilities that open some report');
+        // The entry shows for a capability that opens some report, and every
+        // report is reachable through one of its keys. All of them are
+        // Campus-adopted, so a Campus holder of a Campus-aware report sees it.
+        $any = collect(StaffNavigation::entries())->firstWhere('key', 'student-reports')->any;
+        $authorities = array_merge(...array_values(array_map(fn (StudentReportDefinition $d) => $d->authority, $this->definitions())));
+        $this->assertSame([], array_values(array_diff($any, $authorities)));
+        foreach ($this->definitions() as $definition) {
+            $this->assertNotSame([], array_intersect($definition->authority, $any), "{$definition->key} is reachable from the menu entry");
+        }
+        $this->assertSame($any, CampusScopeCatalogue::adoptedAmong($any));
     }
 
     #[Test]

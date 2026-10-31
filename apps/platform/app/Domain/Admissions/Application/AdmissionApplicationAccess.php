@@ -31,9 +31,9 @@ final class AdmissionApplicationAccess
     public function __construct(private readonly AdmissionApplicationReadService $reads) {}
 
     /** @param  array<string, mixed>  $filters */
-    public function directory(CampusScope $scope, array $filters, int $perPage): LengthAwarePaginator
+    public function directory(CampusScope $scope, array $filters, int $perPage, ?\DateTimeZone $timezone = null): LengthAwarePaginator
     {
-        return $this->reads->directory($filters, $perPage, $scope);
+        return $this->reads->directory($filters, $perPage, $scope, $timezone);
     }
 
     public function detail(CampusScope $scope, string $id): AdmissionApplication

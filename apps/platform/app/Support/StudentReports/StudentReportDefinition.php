@@ -32,6 +32,7 @@ final readonly class StudentReportDefinition
         'students' => 'Students',
         'enrollment' => 'Enrollment',
         'lifecycle' => 'Lifecycle',
+        'admissions' => 'Admissions',
     ];
 
     public const int MAX_PER_PAGE = 50;

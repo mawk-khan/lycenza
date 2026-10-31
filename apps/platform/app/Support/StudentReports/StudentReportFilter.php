@@ -17,7 +17,10 @@ use Illuminate\Validation\Rule;
  *   viewer (its options()); anything else is a validation error, never a
  *   query error.
  * - `date` filters are School-local calendar dates (Y-m-d, no UTC
- *   conversion); `to` must not be before `from`.
+ *   conversion); an end (DATE_RANGES) is never before its start.
+ * - An option may name another filter's key (e.g. a Section option's
+ *   `campus_id`); the page then offers it only for that choice, so no
+ *   impossible combination is offered.
  * - `search` uses the shared StudentSearch matching (number or name words).
  */
 final class StudentReportFilter
@@ -37,6 +40,7 @@ final class StudentReportFilter
         'student_name' => ['Student name', self::SEARCH],
         'student_number' => ['Student number', self::SEARCH],
         'roll_number' => ['Roll number', self::SEARCH],
+        'applicant_name' => ['Applicant name', self::SEARCH],
         'academic_year_id' => ['Academic year', self::ENTITY],
         'campus_id' => ['Campus', self::ENTITY],
         'grade_level_id' => ['Grade', self::ENTITY],
@@ -48,6 +52,8 @@ final class StudentReportFilter
         'reason' => ['Reason', self::CHOICE],
         'from' => ['From date', self::DATE],
         'to' => ['To date', self::DATE],
+        'created_from' => ['Created from', self::DATE],
+        'created_to' => ['Created to', self::DATE],
     ];
 
     public static function exists(string $key): bool
@@ -59,6 +65,9 @@ final class StudentReportFilter
     {
         return self::FILTERS[$key][1];
     }
+
+    /** End date => start date: an end is never before its start. */
+    public const array DATE_RANGES = ['to' => 'from', 'created_to' => 'created_from'];
 
     /**
      * Validation rules for exactly the declared filters (plus sort and page).
@@ -79,8 +88,8 @@ final class StudentReportFilter
                 self::SEARCH => ['sometimes', 'nullable', 'string', 'max:255'],
                 self::ENTITY => ['sometimes', 'nullable', 'uuid'],
                 self::CHOICE => ['sometimes', 'nullable', 'string', Rule::in(array_column($options[$key] ?? [], 'value'))],
-                default => $key === 'to' && in_array('from', $filters, true)
-                    ? ['sometimes', 'nullable', 'date_format:Y-m-d', 'after_or_equal:from']
+                default => isset(self::DATE_RANGES[$key]) && in_array(self::DATE_RANGES[$key], $filters, true)
+                    ? ['sometimes', 'nullable', 'date_format:Y-m-d', 'after_or_equal:'.self::DATE_RANGES[$key]]
                     : ['sometimes', 'nullable', 'date_format:Y-m-d'],
             };
         }

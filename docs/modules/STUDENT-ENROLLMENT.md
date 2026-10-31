@@ -3125,6 +3125,13 @@ the viewer may open. `GET /app/students/reports/{report}`
     `resources/js/lifecycleReasons.ts`). Placement events and the Placement
     column need whole-School `enrollments.view`. No actor, ids or free text.
     One count plus one page query.
+- **SIS 11.2:**
+  - `students.siblings` (`App\Domain\Guardians\Application\Reports\SiblingReport`,
+    whole-School `students.view` + `guardians.view`; an active Guardian with two
+    or more Students; names, numbers and, with whole-School `enrollments.view`,
+    current class only);
+  - `admissions.applications` → `/app/admissions` (Campus-aware, closed sort
+    `AdmissionApplicationReadService::SORTS`, School-local created dates).
 - **Contracts:** filters come from the closed `StudentReportFilter`
   vocabulary. Columns carry a privacy class, and prohibited keys are refused.
   Sorts are closed key → label maps. Every column is `exportable: false`

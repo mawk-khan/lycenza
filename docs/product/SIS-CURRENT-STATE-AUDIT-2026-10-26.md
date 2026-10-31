@@ -640,3 +640,4 @@ The core SIS result recorded in this audit and in the final local UAT
 |---|---|---|
 | SIS.EXP programme (closed, `docs/sis/SIS-EXPANSION-CLOSURE.md`) | 318-screen reference coverage 39.2 % / 29.7 % | reference breadth |
 | SIS 11.1 Unified SIS Reporting Foundation (`docs/sis/SIS-11-1-REPORTING-FOUNDATION.md`) | closed report catalogue, Reports hub, lifecycle report | **Advanced SIS Screenshot Coverage (report subset): 0/8 → 5/8 SIS-owned report families governed** |
+| SIS 11.2 Operational Student Reports (`docs/sis/SIS-11-2-OPERATIONAL-REPORTS.md`) | Admissions application report, sibling list (SR-25), SR-02/SR-21 dispositioned | **6/8 governed, 8/8 dispositioned** |

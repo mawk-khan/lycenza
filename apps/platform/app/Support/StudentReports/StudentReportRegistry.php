@@ -2,6 +2,8 @@
 
 namespace App\Support\StudentReports;
 
+use App\Domain\Admissions\Application\AdmissionApplicationReadService;
+use App\Domain\Guardians\Application\Reports\SiblingReport;
 use App\Domain\Students\Application\Movements\StudentMovementRegister;
 use App\Domain\Students\Application\Reports\StudentLifecycleReport;
 use App\Domain\Students\Application\StudentDirectoryOrder;
@@ -31,6 +33,7 @@ final class StudentReportRegistry
     /** @var list<class-string<StudentReport>> */
     public const array RENDERED = [
         StudentLifecycleReport::class,
+        SiblingReport::class,
     ];
 
     /** @var array<string, D>|null */
@@ -142,6 +145,32 @@ final class StudentReportRegistry
                 sorts: ['date_desc' => 'Newest first', 'date_asc' => 'Oldest first', 'student' => 'Student name', 'type' => 'Movement type'],
                 perPage: StudentMovementRegister::PER_PAGE,
                 reference: ['SR-12', 'SR-36'],
+            ),
+            // SIS 11.2: the Campus-aware Admissions application list (ORG.7D-3),
+            // with School-local created dates and a closed sort. Applicant !=
+            // Application != Student: context is the application's own year,
+            // Campus and Grade; a converted Student is a link only for a
+            // whole-School `students.view` holder. No fee, date of birth or contact.
+            new D(
+                key: 'admissions.applications',
+                title: 'Admission applications',
+                description: 'Applications by status, academic year, Campus, Grade and created date, with a link to the Student once converted.',
+                category: 'admissions',
+                owner: 'Admissions',
+                authority: ['admissions.view'],
+                scope: D::CAMPUS_AWARE,
+                route: 'app.admissions.index',
+                filters: ['applicant_name', 'status', 'academic_year_id', 'campus_id', 'grade_level_id', 'created_from', 'created_to'],
+                columns: [
+                    new C('applicant', 'Applicant'),
+                    new C('applying_for', 'Applying for', 'placement'),
+                    new C('status', 'Status'),
+                    new C('created_on', 'Created', 'date'),
+                    new C('converted_student', 'Student', 'student', C::RESTRICTED, ['students.view']),
+                ],
+                sorts: AdmissionApplicationReadService::SORTS,
+                perPage: 20,
+                reference: ['SR-39'],
             ),
         ];
     }
