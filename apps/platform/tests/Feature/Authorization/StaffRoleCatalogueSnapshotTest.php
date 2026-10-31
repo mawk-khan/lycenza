@@ -35,7 +35,7 @@ class StaffRoleCatalogueSnapshotTest extends TestCase
             'finance.payments.record', 'finance.payments.view',
         ],
         'admissions_officer' => [
-            'admissions.manage', 'admissions.view', 'communications.events.view', 'communications.inbox.view',
+            'admissions.documents.manage', 'admissions.documents.view', 'admissions.manage', 'admissions.view', 'communications.events.view', 'communications.inbox.view',
         ],
         'canteen_operator' => [
             'canteen.directory.manage', 'canteen.directory.view', 'canteen.orders.manage',
@@ -81,7 +81,8 @@ class StaffRoleCatalogueSnapshotTest extends TestCase
         ],
         'principal' => [
             'academics.structure.manage', 'academics.structure.view', 'academics.subjects.manage',
-            'academics.subjects.view', 'academics.years.manage', 'academics.years.view', 'admissions.manage',
+            'academics.subjects.view', 'academics.years.manage', 'academics.years.view', 'admissions.documents.manage',
+            'admissions.documents.view', 'admissions.manage',
             'admissions.view', 'analytics.view', 'attendance.manage', 'attendance.view', 'automation.view',
             'canteen.directory.manage', 'canteen.directory.view', 'canteen.orders.manage',
             'canteen.orders.view', 'communications.announce', 'communications.approve',
@@ -102,7 +103,7 @@ class StaffRoleCatalogueSnapshotTest extends TestCase
             'library.circulation.manage', 'library.circulation.view', 'lms.assignments.manage',
             'lms.assignments.view', 'lms.content.manage', 'lms.content.view', 'school.audit.view',
             'school.campuses.view', 'school.members.view', 'school.profile.view', 'school.settings.view',
-            'students.certificates.issue', 'students.documents.manage', 'students.documents.view',
+            'students.certificates.issue', 'students.documents.manage', 'students.documents.verify', 'students.documents.view',
             'students.manage', 'students.processing_authorizations.manage',
             'students.processing_authorizations.view', 'students.view', 'syllabus.manage', 'syllabus.view',
             'teaching.assignments.manage', 'teaching.assignments.view', 'timetable.periods.manage',
@@ -114,7 +115,8 @@ class StaffRoleCatalogueSnapshotTest extends TestCase
         ],
         'school_admin' => [
             'academics.structure.manage', 'academics.structure.view', 'academics.subjects.manage',
-            'academics.subjects.view', 'academics.years.manage', 'academics.years.view', 'admissions.export', 'admissions.manage',
+            'academics.subjects.view', 'academics.years.manage', 'academics.years.view', 'admissions.documents.manage',
+            'admissions.documents.view', 'admissions.export', 'admissions.manage',
             'admissions.view', 'analytics.view', 'attendance.manage', 'attendance.teacher',
             'attendance.view', 'automation.manage', 'automation.view', 'canteen.directory.manage',
             'canteen.directory.view', 'canteen.orders.manage', 'canteen.orders.view',
@@ -155,7 +157,7 @@ class StaffRoleCatalogueSnapshotTest extends TestCase
             'school.roles.grant.hr', 'school.roles.grant.hr_sensitive',
             'school.roles.grant.payroll_sensitive', 'school.roles.manage', 'school.roles.view',
             'school.settings.manage', 'school.settings.view', 'students.certificates.issue',
-            'students.documents.manage', 'students.documents.view', 'students.export', 'students.import', 'students.manage',
+            'students.documents.manage', 'students.documents.verify', 'students.documents.view', 'students.export', 'students.import', 'students.manage',
             'students.processing_authorizations.manage', 'students.processing_authorizations.view',
             'students.view', 'syllabus.manage', 'syllabus.view', 'teaching.assignments.manage',
             'teaching.assignments.view', 'timetable.periods.manage', 'timetable.periods.view',

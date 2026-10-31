@@ -2,7 +2,9 @@
 
 namespace App\Domain\Admissions\Application\Retention;
 
+use App\Domain\Documents\Application\Retention\DocumentParentRetention;
 use App\Models\School;
+use App\Support\Retention\ObjectDeletion;
 use App\Support\Retention\ReferencingRows;
 use App\Support\Retention\RetentionAnchors;
 use App\Support\Retention\RetentionExpiry;
@@ -117,22 +119,28 @@ final class TerminalApplicationRetentionService
         $expired = $this->expired(DB::table(self::TABLE.' as a')->where('a.applicant_id', $applicantId), $at)->orderBy('a.id')->pluck('a.id')->all();
         $released = ! DB::table(self::TABLE)->where('applicant_id', $applicantId)->whereNotIn('id', $expired)->exists();
 
-        return $this->references->first(self::TABLE, $schoolId, $expired)
-            ?? ($released ? $this->references->first('applicants', $schoolId, [$applicantId], [self::TABLE]) : null);
+        // SIS 11.5: the unit removes its pre-admission documents itself.
+        return $this->references->first(self::TABLE, $schoolId, $expired, ApplicantDocumentRetention::HANDLED)
+            ?? ($released ? $this->references->first('applicants', $schoolId, [$applicantId], [self::TABLE, ...ApplicantDocumentRetention::HANDLED]) : null);
     }
 
     /** @return list<object>|null */
     private function purge(string $schoolId, string $applicantId, string $at): ?array
     {
-        $deleted = $this->expired(DB::table(self::TABLE.' as a')->where('a.school_id', $schoolId)->where('a.applicant_id', $applicantId), $at)->delete();
-        if ($deleted === 0) {
+        $expired = $this->expired(DB::table(self::TABLE.' as a')->where('a.school_id', $schoolId)->where('a.applicant_id', $applicantId), $at)->orderBy('a.id')->pluck('a.id')->map(fn ($id) => (string) $id)->all();
+        if ($expired === []) {
             return null;
         }
+        // SIS 11.5: the documents collected through these applications go with them.
+        ApplicantDocumentRetention::purgeForApplications($schoolId, $expired);
+        DB::table(self::TABLE)->where('school_id', $schoolId)->whereIn('id', $expired)->delete();
 
-        // The applicant leaves only once no application of it remains.
-        DB::table('applicants as p')->where('p.school_id', $schoolId)->where('p.id', $applicantId)
-            ->whereNotExists(fn (Builder $q) => $q->selectRaw('1')->from(self::TABLE.' as a')->whereColumn('a.applicant_id', 'p.id'))
-            ->delete();
+        // The applicant leaves only once no application of it remains -- and
+        // (SIS 11.5) its pre-admission Documents with it, bytes after commit.
+        if (! DB::table(self::TABLE)->where('school_id', $schoolId)->where('applicant_id', $applicantId)->exists()) {
+            ObjectDeletion::afterCommit(app(DocumentParentRetention::class)->purgeWithOwner('applicant', $applicantId));
+            DB::table('applicants')->where('school_id', $schoolId)->where('id', $applicantId)->delete();
+        }
 
         return [];
     }

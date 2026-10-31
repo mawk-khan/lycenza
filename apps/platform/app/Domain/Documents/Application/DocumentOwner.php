@@ -56,4 +56,10 @@ final class DocumentOwner
     {
         return new self('assignment', $assignmentId);
     }
+
+    /** SIS 11.5: a pre-admission document (narrow Admissions entry points only). */
+    public static function applicant(string $applicantId): self
+    {
+        return new self('applicant', $applicantId);
+    }
 }

@@ -60,6 +60,8 @@ class Document extends Model
         'guardian_id',
         'learning_content_id',
         'assignment_id',
+        // SIS 11.5: the pre-admission (Applicant) owner arm.
+        'applicant_id',
         'classification_tier',
         'storage_disk',
         'storage_path',
@@ -139,6 +141,8 @@ class Document extends Model
                 $this->guardian_id !== null => 'guardian',
                 $this->learning_content_id !== null => 'learning_content',
                 $this->assignment_id !== null => 'assignment',
+                // SIS 11.5: pre-admission documents (Admissions entry points only).
+                $this->applicant_id !== null => 'applicant',
                 default => throw new \LogicException('Document has no owner set -- violates the exactly-one-owner database constraint.'),
             };
         });

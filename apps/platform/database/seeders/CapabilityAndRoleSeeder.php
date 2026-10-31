@@ -190,6 +190,10 @@ class CapabilityAndRoleSeeder extends Seeder
             // whole School only (not Campus-adopted), audited per export.
             ['key' => 'students.export', 'label' => 'Export and print Student reports (CSV, print view)', 'namespace' => 'school'],
             ['key' => 'admissions.export', 'label' => 'Export and print the Admission applications report', 'namespace' => 'school'],
+            // SIS 11.5 (owner decisions 2026-10-31): document compliance.
+            ['key' => 'students.documents.verify', 'label' => 'Verify or reject Student and Applicant documents', 'namespace' => 'school'],
+            ['key' => 'admissions.documents.view', 'label' => 'View and download pre-admission documents', 'namespace' => 'school'],
+            ['key' => 'admissions.documents.manage', 'label' => 'Upload and archive pre-admission documents', 'namespace' => 'school'],
 
             // Phase 5A.1 -- Communication Hub foundation. A single
             // `communications.manage` capability covers thread/
@@ -1141,6 +1145,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     'students.processing_authorizations.view', 'students.processing_authorizations.manage',
                     // SIS.EXP-3 (OD-SIS-1): Student record documents.
                     'students.documents.view', 'students.documents.manage',
+                    // SIS 11.5: verify Student/Applicant documents; pre-admission documents.
+                    'students.documents.verify', 'admissions.documents.view', 'admissions.documents.manage',
                     // SIS.EXP-4 (OD-SIS-2): Leaving/Transfer certificates.
                     'students.certificates.issue',
                     // SIS.EXP-5 (OD-SIS-3): bulk import, School Admin only.
@@ -1487,6 +1493,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     'students.processing_authorizations.view', 'students.processing_authorizations.manage',
                     // SIS.EXP-3 (OD-SIS-1): Student record documents.
                     'students.documents.view', 'students.documents.manage',
+                    // SIS 11.5: verify Student/Applicant documents; pre-admission documents.
+                    'students.documents.verify', 'admissions.documents.view', 'admissions.documents.manage',
                     // SIS.EXP-4 (OD-SIS-2): Leaving/Transfer certificates.
                     'students.certificates.issue',
                     'guardians.view', 'guardians.manage',
@@ -1844,6 +1852,8 @@ class CapabilityAndRoleSeeder extends Seeder
                 'scope' => 'school',
                 'capabilities' => [
                     'admissions.view', 'admissions.manage',
+                    // SIS 11.5: pre-admission documents (with the application's Campus); never Student documents.
+                    'admissions.documents.view', 'admissions.documents.manage',
                     'communications.events.view',
                     'communications.inbox.view',
                 ],

@@ -170,6 +170,9 @@ final class CampusScopeCatalogue
         'canteen.orders.manage' => 'canteen',
         'admissions.view' => 'admissions',
         'admissions.manage' => 'admissions',
+        // SIS 11.5 (owner decision 2026-10-31): pre-admission documents follow the application's Campus.
+        'admissions.documents.view' => 'admissions',
+        'admissions.documents.manage' => 'admissions',
         'library.circulation.view' => 'library',
         'library.circulation.manage' => 'library',
         'transport.routes.view' => 'transport',
@@ -288,6 +291,7 @@ final class CampusScopeCatalogue
         'app.students.history' => ['capability' => 'students.view', 'reason' => 'The Student\'s audit history across every Campus and year.'],
         // SIS.EXP-2: a declaration that NARROWS (no adoption change): Student
         // movement history spans every Campus and year (rule 101).
+        'app.students.document-compliance' => ['capability' => 'students.view', 'reason' => 'SIS 11.5: the cohort document checklist -- Highly Sensitive document states School-wide, for whole-School document viewers only (owner decision 2026-10-31).'],
         'app.students.movements' => ['capability' => 'enrollments.view', 'reason' => 'SIS.EXP-2: the School-wide movement and exit register -- Student placement history across every Campus and year (Campus readers see current placements only).'],
         'api.v1.schools.students.show' => ['capability' => 'students.view', 'reason' => 'The full Student detail, including date of birth (Highly Sensitive).'],
         'api.v1.schools.students.guardians.index' => ['capability' => 'students.view', 'reason' => 'Guardian relationships are relationship-scoped School-wide identity, never Campus data.'],

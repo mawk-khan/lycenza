@@ -31,6 +31,7 @@ final class DocumentRetentionEligibility
         'guardian' => 'E21.2G G1 Guardian personal data (E21.3C): purged only with its Guardian, by platform:guardian-retention-prune',
         'learning_content' => 'E21.2G A1 (E21.3D): purged only with its Learning Content, 7 y after its Academic Year and past the E21-D6 owner/audience minimum, by platform:academic-retention-prune',
         'assignment' => 'E21.2G A1 (E21.3D): purged only with its Assignment, 7 y after its Academic Year and past the E21-D6 owner/audience minimum, by platform:academic-retention-prune',
+        'applicant' => 'E21.2G AD1/AD2 (SIS 11.5): purged only with the application it was collected through or its Applicant, by platform:admissions-retention-prune or with the Student core record; moved to the Student on conversion',
     ];
 
     /**

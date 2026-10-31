@@ -895,3 +895,33 @@ The application list (`/app/admissions`) is the SIS report catalogue entry
     `admissions.view`.
   - Columns: Applicant, status, year, Campus, Grade, created on, converted
     Yes/No. Never a date of birth, contact, decision note or fee.
+
+## Pre-admission documents (SIS 11.5, 2026-10-31)
+
+See `docs/sis/SIS-11-5-DOCUMENT-COMPLIANCE.md`. Admissions owns
+`applicant_documents` through `ApplicantDocumentService`, over an
+`applicant`-owned Document in the one repository (ADR 0012 SIS 11.5
+amendment).
+
+- **Authority.** `admissions.documents.view` / `.manage` (school_admin,
+  principal, admissions_officer) are Campus-adopted with the application
+  (ORG.7D-3): out of scope is NOT FOUND. Verifying or rejecting also needs
+  whole-School `students.documents.verify`. Reads need current MFA; each
+  write needs a fresh code.
+- **Bound to one application.** A record names the application it was
+  collected through (database key), so a Campus actor never sees another
+  Campus's application of the same Applicant.
+- **Open applications only.** Documents are collected only for draft,
+  submitted and accepted applications. Types are closed to the requirable
+  four: birth certificate, prior school record, enrollment paperwork and
+  consent form.
+- **Conversion.** Inside the conversion transaction, the current records
+  move to the new Student: the same Document rows, with verification kept.
+  Admissions staff gain no Student-document access. Archived or superseded
+  history stays with the Applicant.
+- **Retention.** Records cascade with their application and Applicant. The
+  existing converted (E21.3B) and terminal (E21.3C) retention services purge
+  the Documents collected through the applications they delete
+  (`ApplicantDocumentRetention`), with objects deleted after commit.
+- **Advisory.** Missing or rejected documents never block submission,
+  acceptance or conversion.

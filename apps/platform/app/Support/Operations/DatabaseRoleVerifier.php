@@ -184,6 +184,8 @@ class DatabaseRoleVerifier
         'communication_approval_requests', 'communication_attachments',
         // The email prune keeps an event a current suppression still rests on (it reads only whether one exists)
         'email_suppressions',
+        // SIS 11.5: which Documents an expiring application's pre-admission records name.
+        'applicant_documents',
     ];
 
     /** E21-RH.6: the database guards against manufactured retention eligibility and the User-erasure hold boundary. */

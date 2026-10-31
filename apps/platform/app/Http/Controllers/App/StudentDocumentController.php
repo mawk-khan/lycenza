@@ -5,6 +5,9 @@ namespace App\Http\Controllers\App;
 use App\Domain\Documents\Application\DocumentService;
 use App\Domain\Documents\Application\Exceptions\DocumentTooLargeException;
 use App\Domain\Documents\Application\Exceptions\DocumentTypeNotAllowedException;
+use App\Domain\Students\Application\Documents\DocumentCompliance;
+use App\Domain\Students\Application\Documents\DocumentRejectionReason;
+use App\Domain\Students\Application\Documents\DocumentVerificationStatus;
 use App\Domain\Students\Application\Documents\StudentDocumentArchiveReason;
 use App\Domain\Students\Application\Documents\StudentDocumentCategory;
 use App\Domain\Students\Application\Documents\StudentDocumentReader;
@@ -44,7 +47,7 @@ class StudentDocumentController extends Controller
             'page' => ['nullable', 'integer', 'min:1'],
         ]);
 
-        ['student' => $model, 'documents' => $documents] = $reader->page($school, $actor, $student, $filters, (int) ($filters['page'] ?? 1));
+        ['student' => $model, 'documents' => $documents, 'compliance' => $compliance] = $reader->page($school, $actor, $student, $filters, (int) ($filters['page'] ?? 1));
 
         return Inertia::render('App/Students/Documents', [
             'student' => [
@@ -54,6 +57,9 @@ class StudentDocumentController extends Controller
                 'status' => $model->status,
             ],
             'documents' => $documents,
+            // SIS 11.5: advisory requirement checklist (never a gate).
+            'compliance' => $compliance,
+            'complianceSummary' => DocumentCompliance::summary($compliance),
             'filters' => [
                 'category' => $filters['category'] ?? '',
                 'status' => $filters['status'] ?? 'active',
@@ -63,8 +69,11 @@ class StudentDocumentController extends Controller
                 'categories' => StudentDocumentCategory::options(),
                 'filterCategories' => StudentDocumentCategory::filterOptions(),
                 'archiveReasons' => StudentDocumentArchiveReason::options(),
+                'rejectionReasons' => DocumentRejectionReason::options(),
+                'requirable' => StudentDocumentCategory::requirableValues(),
             ],
             'canManage' => Gate::forUser($actor)->allows('capability', [DocumentService::STUDENT_DOCUMENTS_MANAGE, $school]),
+            'canVerify' => Gate::forUser($actor)->allows('capability', [DocumentService::STUDENT_DOCUMENTS_VERIFY, $school]),
             'hasMfaFactor' => $mfa->hasActiveFactor($actor),
             'formKey' => (string) new UuidV7,
             'upload' => [
@@ -84,13 +93,15 @@ class StudentDocumentController extends Controller
             'title' => ['required', 'string', 'max:255'],
             'document_date' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:'.SchoolTimezone::today($school)],
             'form_key' => ['required', 'uuid'],
+            // SIS 11.5: a replacement supersedes a current document of the same type.
+            'replaces' => ['nullable', 'uuid'],
         ], [
             'file.max' => 'The file can be at most '.config('documents.max_file_size_mb').' MB.',
         ]);
         $proof = $mfa->requireForAction($request, $actor);
 
         try {
-            $service->upload($school, $actor, $student, $validated['file'], $validated, $validated['form_key'], $proof);
+            $service->upload($school, $actor, $student, $validated['file'], $validated, $validated['form_key'], $proof, $validated['replaces'] ?? null);
         } catch (DocumentTypeNotAllowedException) {
             throw ValidationException::withMessages(['file' => 'Upload a PDF, JPEG or PNG file. The file\'s content must match its extension.']);
         } catch (DocumentTooLargeException) {
@@ -130,6 +141,28 @@ class StudentDocumentController extends Controller
         $service->archive($school, $actor, $student, $document, StudentDocumentArchiveReason::from($validated['reason']), (int) $validated['version'], $proof);
 
         return redirect("/app/students/{$student}/documents")->with('status', 'Document archived.');
+    }
+
+    /**
+     * SIS 11.5: verify, or reject with a closed reason -- whole-School
+     * `students.documents.verify` (route floor; the service re-decides it
+     * under the record lock), a fresh MFA code, and the record version seen.
+     */
+    public function decide(Request $request, TenantContext $context, StudentDocumentService $service, FreshMfaRequirement $mfa, string $student, string $document): RedirectResponse
+    {
+        $school = $context->requireSchool();
+        $actor = $context->actor();
+        $validated = $request->validate([
+            'decision' => ['required', Rule::in([DocumentVerificationStatus::VERIFIED->value, DocumentVerificationStatus::REJECTED->value])],
+            'reason' => ['nullable', 'required_if:decision,rejected', 'prohibited_unless:decision,rejected', Rule::in(DocumentRejectionReason::values())],
+            'version' => ['required', 'integer', 'min:1'],
+        ]);
+        $proof = $mfa->requireForAction($request, $actor);
+
+        $decision = DocumentVerificationStatus::from($validated['decision']);
+        $service->decide($school, $actor, $student, $document, $decision, isset($validated['reason']) ? DocumentRejectionReason::from($validated['reason']) : null, (int) $validated['version'], $proof);
+
+        return redirect("/app/students/{$student}/documents")->with('status', $decision === DocumentVerificationStatus::VERIFIED ? 'Document verified.' : 'Document rejected.');
     }
 
     /**

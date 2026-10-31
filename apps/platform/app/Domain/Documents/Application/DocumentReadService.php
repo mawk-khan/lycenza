@@ -160,6 +160,22 @@ class DocumentReadService
         });
     }
 
+    /**
+     * SIS 11.5: one Applicant-owned Document's content for an actor the
+     * Admissions caller has already authorized for that application (its
+     * Campus-adopted `admissions.documents.view`). Re-read under the School
+     * and the named Applicant.
+     */
+    public function applicantContent(School $school, string $applicantId, string $documentId, User $actor): DocumentContent
+    {
+        return $this->context->withSchool($school, function () use ($school, $applicantId, $documentId, $actor) {
+            $document = Document::query()->where('school_id', $school->id)->where('applicant_id', $applicantId)->find($documentId)
+                ?? throw new DocumentNotFoundException($documentId);
+
+            return $this->open($school, $document, $actor);
+        });
+    }
+
     private function resolveAuthorizedDocument(School $school, string $documentId, User $actor): Document
     {
         $document = Document::query()->where('school_id', $school->id)->find($documentId);

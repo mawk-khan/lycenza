@@ -197,7 +197,7 @@ class StudentDocumentTest extends TestCase
             $this->assertStringNotContainsString($absent, $metadata);
         }
         $uploaded = app(TenantContext::class)->withSchool($this->school, fn () => SchoolAuditEvent::query()->where('event_type', 'student_document.uploaded')->firstOrFail());
-        $this->assertEqualsCanonicalizing(['studentId', 'studentDocumentId', 'documentId', 'category'], array_keys($uploaded->metadata));
+        $this->assertEqualsCanonicalizing(['studentId', 'studentDocumentId', 'documentId', 'category', 'replacesStudentDocumentId'], array_keys($uploaded->metadata));
     }
 
     #[Test]

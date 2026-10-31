@@ -40,6 +40,8 @@ class StudentRetentionClassificationTest extends TestCase
             'student_guardian_relationships' => 'D7 operational (7 y)',
             'student_processing_authorizations' => 'D7 core (25 y): legal-basis evidence, removed with the Student through its core-floored function (E21.3B)',
             'admission_applications' => 'D7 core (25 y): a converted application goes with its Student (Admissions participant, E21.3B)',
+            // SIS 11.5: a moved pre-admission record names its Student; it goes with the converted application.
+            'applicant_documents' => 'D7 core (25 y): a moved pre-admission document record goes with its converted application (Admissions participant, SIS 11.5; SET NULL of the Student reference otherwise)',
             // OPF.3 (ADR 0067 §29): the provenance of the converted Student's Admission-fee selection.
             'admission_fee_selections' => 'retained, blocks: Finance D8 (OPF fee-selection provenance)',
             // OPF.4 (ADR 0067 §30): Library fine evidence, kept with its charge (the D8 unit refuses that charge).
@@ -110,9 +112,14 @@ class StudentRetentionClassificationTest extends TestCase
         'admission_applications' => [
             // OPF.3 (ADR 0067 §29): it keeps the converted application (so its Student), as the selection keeps its Student.
             'admission_fee_selections' => 'retained, blocks: Finance D8 (OPF fee-selection provenance)',
+            // SIS 11.5: pre-admission document records cascade with their application; their Documents go first.
+            'applicant_documents' => 'D7 core: removed with its application (cascade); Documents still owned by the Applicant purged first (ApplicantDocumentRetention)',
         ],
         'applicants' => [
             'admission_applications' => 'D7 core: an applicant goes with its converted application only once no other application remains',
+            // SIS 11.5: the Applicant's pre-admission records and Documents go with it.
+            'applicant_documents' => 'D7 core: removed with its Applicant (cascade)',
+            'documents' => 'D7 core: an Applicant-owned Document is purged with its Applicant (DocumentParentRetention)',
         ],
         'communication_domain_consent_events' => [],
         'communication_domain_preferences' => [],

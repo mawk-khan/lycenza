@@ -22,6 +22,7 @@ use App\Http\Controllers\App\Account\MfaAdminController;
 use App\Http\Controllers\App\AdmissionApplicationController;
 use App\Http\Controllers\App\Analytics\CurriculumCoverageController;
 use App\Http\Controllers\App\ApplicantController;
+use App\Http\Controllers\App\ApplicantDocumentController;
 use App\Http\Controllers\App\Attendance\AttendanceController;
 use App\Http\Controllers\App\Attendance\AttendanceExceptionController;
 use App\Http\Controllers\App\Attendance\AttendanceOperationsController;
@@ -37,6 +38,7 @@ use App\Http\Controllers\App\CurriculumDelivery\CurriculumDeliveryController;
 use App\Http\Controllers\App\CurriculumDelivery\MyCurriculumDeliveryController;
 use App\Http\Controllers\App\DashboardController;
 use App\Http\Controllers\App\DataHealthController;
+use App\Http\Controllers\App\DocumentComplianceController;
 use App\Http\Controllers\App\Domains\SchoolDomainController;
 use App\Http\Controllers\App\ElectiveGroupController;
 use App\Http\Controllers\App\EnrollmentDirectoryController;
@@ -151,6 +153,7 @@ use App\Http\Controllers\App\StudentCertificateController;
 use App\Http\Controllers\App\StudentController;
 use App\Http\Controllers\App\StudentDirectoryController;
 use App\Http\Controllers\App\StudentDocumentController;
+use App\Http\Controllers\App\StudentDocumentRequirementController;
 use App\Http\Controllers\App\StudentEnrollmentController;
 use App\Http\Controllers\App\StudentGuardianRelationshipController;
 use App\Http\Controllers\App\StudentImportController;
@@ -729,6 +732,19 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         // print view -- report authority AND the dataset export capability.
         Route::post('/reports/{report}/export', [StudentReportExportController::class, 'export'])->middleware('private-no-store')->name('reports.export');
         Route::get('/reports/{report}/print', [StudentReportExportController::class, 'print'])->middleware('private-no-store')->name('reports.print');
+        // SIS 11.5: document requirement rules (whole-School
+        // `students.documents.manage`) and the cohort document checklist --
+        // states only, whole-School `students.view` + `students.documents.view`,
+        // behind current MFA; browser-only (no export or print). Literal paths
+        // before '/{student}'.
+        Route::get('/document-requirements', [StudentDocumentRequirementController::class, 'index'])
+            ->middleware(['capability:students.documents.manage', 'private-no-store'])->name('document-requirements.index');
+        Route::post('/document-requirements', [StudentDocumentRequirementController::class, 'store'])
+            ->middleware('capability:students.documents.manage')->name('document-requirements.store');
+        Route::post('/document-requirements/{requirement}/retire', [StudentDocumentRequirementController::class, 'retire'])->whereUuid('requirement')
+            ->middleware('capability:students.documents.manage')->name('document-requirements.retire');
+        Route::get('/document-compliance', [DocumentComplianceController::class, 'index'])
+            ->middleware(['capability:students.view', 'capability:students.documents.view', 'mfa-page', 'private-no-store'])->name('document-compliance');
         // SIS.EXP-5 (OD-SIS-3): the add-only bulk import (whole-School
         // `students.import`; never Campus-adopted). Registered before '/{student}'.
         Route::get('/import', [StudentImportController::class, 'create'])->middleware(['capability:students.import', 'private-no-store'])->name('import.create');
@@ -762,6 +778,10 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
             ->middleware('capability:students.documents.manage')->name('documents.archive');
         Route::get('/{student}/documents/{document}/download', [StudentDocumentController::class, 'download'])->whereUuid(['student', 'document'])
             ->middleware(['capability:students.documents.view', 'mfa-page', 'private-no-store'])->name('documents.download');
+        // SIS 11.5: verify, or reject with a closed reason (whole-School
+        // `students.documents.verify`, fresh MFA code in the controller).
+        Route::post('/{student}/documents/{document}/decision', [StudentDocumentController::class, 'decide'])->whereUuid(['student', 'document'])
+            ->middleware('capability:students.documents.verify')->name('documents.decide');
         // SIS.EXP-4 (OD-SIS-2): Leaving/Transfer certificates. Staff web only;
         // whole-School `students.certificates.issue` (never Campus-adopted) for
         // every write, each with a fresh MFA code; the PDF downloads through the
@@ -1286,6 +1306,18 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::put('/{admissionApplication}', [AdmissionApplicationController::class, 'update'])->name('update');
         Route::post('/{admissionApplication}/discard', [AdmissionApplicationController::class, 'discard'])->name('discard');
         Route::post('/{admissionApplication}/convert', [AdmissionApplicationController::class, 'convert'])->middleware('capability:admissions.manage')->name('convert');
+        // SIS 11.5: pre-admission documents of one application -- Campus-adopted
+        // with the application (admissions.documents.view/.manage, checked in
+        // the controller and ApplicantDocumentService); reads need current MFA
+        // (Highly Sensitive files), each write a fresh code; a decision also
+        // needs whole-School `students.documents.verify`.
+        Route::get('/{admissionApplication}/documents', [ApplicantDocumentController::class, 'index'])->whereUuid('admissionApplication')
+            ->middleware(['mfa-page', 'private-no-store'])->name('documents.index');
+        Route::post('/{admissionApplication}/documents', [ApplicantDocumentController::class, 'store'])->whereUuid('admissionApplication')->name('documents.store');
+        Route::post('/{admissionApplication}/documents/{document}/decision', [ApplicantDocumentController::class, 'decide'])->whereUuid(['admissionApplication', 'document'])->name('documents.decide');
+        Route::post('/{admissionApplication}/documents/{document}/archive', [ApplicantDocumentController::class, 'archive'])->whereUuid(['admissionApplication', 'document'])->name('documents.archive');
+        Route::get('/{admissionApplication}/documents/{document}/download', [ApplicantDocumentController::class, 'download'])->whereUuid(['admissionApplication', 'document'])
+            ->middleware(['mfa-page', 'private-no-store'])->name('documents.download');
     });
 
     // Phase 10A: Library catalogue + circulation administrative UI.

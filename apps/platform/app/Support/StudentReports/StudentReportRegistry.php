@@ -5,6 +5,7 @@ namespace App\Support\StudentReports;
 use App\Domain\Admissions\Application\AdmissionApplicationReadService;
 use App\Domain\Admissions\Application\Reports\AdmissionApplicationsExporter;
 use App\Domain\Guardians\Application\Reports\SiblingReport;
+use App\Domain\Students\Application\Documents\DocumentComplianceCohort;
 use App\Domain\Students\Application\Movements\StudentMovementRegister;
 use App\Domain\Students\Application\Reports\Exports\StudentDirectoryExporter;
 use App\Domain\Students\Application\Reports\Exports\StudentMovementExporter;
@@ -175,6 +176,25 @@ final class StudentReportRegistry
                 sorts: ['date_desc' => 'Newest first', 'date_asc' => 'Oldest first', 'student' => 'Student name', 'type' => 'Movement type'],
                 perPage: StudentMovementRegister::PER_PAGE,
                 reference: ['SR-12', 'SR-36'],
+            ),
+            // SIS 11.5 (owner decision 2026-10-31): the cohort document checklist
+            // -- derived requirement STATES per Student for one academic year,
+            // never a file, title or download. Whole-School document viewers
+            // only, behind current MFA; browser-only (not an exporter).
+            new D(
+                key: 'students.document_compliance',
+                title: 'Document checklist',
+                description: 'Each Student\'s required and optional documents for an academic year: missing, pending verification, verified or rejected.',
+                category: 'students',
+                owner: 'Students (Documents)',
+                authority: ['students.view', 'students.documents.view'],
+                scope: D::WHOLE_SCHOOL,
+                route: 'app.students.document-compliance',
+                filters: ['q', 'academic_year_id', 'campus_id', 'grade_level_id', 'section_id', 'category', 'status'],
+                columns: [$student, $number, new C('placement', 'Class', 'placement'), new C('checklist', 'Documents')],
+                sorts: DocumentComplianceCohort::SORTS,
+                perPage: DocumentComplianceCohort::PER_PAGE,
+                reference: ['SR-21', 'SR-14'],
             ),
             // SIS 11.2: the Campus-aware Admissions application list (ORG.7D-3),
             // with School-local created dates and a closed sort. Applicant !=

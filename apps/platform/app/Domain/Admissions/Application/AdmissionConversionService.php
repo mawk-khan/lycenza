@@ -73,6 +73,7 @@ class AdmissionConversionService
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
         private readonly AdmissionFeeSelectionService $fees,
+        private readonly ApplicantDocumentService $applicantDocuments,
     ) {}
 
     /**
@@ -191,6 +192,12 @@ class AdmissionConversionService
                     'campusId' => $locked->campus_id,
                     'gradeLevelId' => $locked->grade_level_id,
                 ]);
+
+                // SIS 11.5: the Applicant's current pre-admission documents become
+                // the Student's in this same transaction -- the same stored files
+                // (no copy), their verification carried; a failed conversion
+                // moves nothing.
+                $this->applicantDocuments->moveToStudent($locked->school, $locked, $student->id, $actor);
 
                 // OPF.3 (ADR 0067 §16, D1): the converted Student's one-time
                 // Admission-fee intent, in this same transaction (a failed

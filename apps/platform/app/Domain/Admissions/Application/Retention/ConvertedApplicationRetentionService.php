@@ -2,8 +2,10 @@
 
 namespace App\Domain\Admissions\Application\Retention;
 
+use App\Domain\Documents\Application\Retention\DocumentParentRetention;
 use App\Domain\Students\Application\Retention\StudentCoreParticipant;
 use App\Models\School;
+use App\Support\Retention\ObjectDeletion;
 use App\Support\Retention\ReferencingRows;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
@@ -28,7 +30,9 @@ use Illuminate\Support\Facades\DB;
  * - Any other row referencing the application or the released applicant,
  *   and an application converted into another Student that names one of
  *   this Student's placements, keeps the Student (`dependency_blocked`).
- * - No Admissions row owns a Document. The one Finance link is OPF.3's
+ * - SIS 11.5: an application's pre-admission document records cascade with
+ *   it; Documents still owned by the Applicant go with the application
+ *   (moved ones are the Student's). The one Finance link is OPF.3's
  *   insert-only Admission-fee provenance (`admission_fee_selections`, ADR
  *   0067 §29): it references the converted application, so it keeps the
  *   Student (`dependency_blocked`), as the FEE selection already does.
@@ -41,7 +45,9 @@ final class ConvertedApplicationRetentionService implements StudentCoreParticipa
 
     public function tables(): array
     {
-        return [self::TABLE];
+        // SIS 11.5: pre-admission document records go with their application
+        // (and name the Student they moved to, SET NULL).
+        return [self::TABLE, 'applicant_documents'];
     }
 
     public function blocker(string $schoolId, string $studentId, array $enrollmentIds, array $cleared, array $unitTables): ?string
@@ -52,17 +58,25 @@ final class ConvertedApplicationRetentionService implements StudentCoreParticipa
         }
 
         return $this->references->first(self::TABLE, $schoolId, $this->converted($schoolId, $studentId)->pluck('id')->all(), $unitTables)
-            ?? $this->references->first('applicants', $schoolId, $this->released($schoolId, $studentId), [self::TABLE]);
+            ?? $this->references->first('applicants', $schoolId, $this->released($schoolId, $studentId), [self::TABLE, ...ApplicantDocumentRetention::HANDLED]);
     }
 
     public function purge(School $school, string $studentId, string $cutoffDate): void
     {
         $applicants = $this->released($school->id, $studentId);
+        // SIS 11.5: history that stayed with the Applicant (archived, superseded) goes with its application.
+        ApplicantDocumentRetention::purgeForApplications($school->id, $this->converted($school->id, $studentId)->pluck('id')->map(fn ($id) => (string) $id)->all());
         $this->converted($school->id, $studentId)->delete();
-        // Re-checked at delete time: an application created meanwhile keeps its applicant.
-        DB::table('applicants')->where('school_id', $school->id)->whereIn('id', $applicants)
+        // Re-checked at delete time: an application created meanwhile keeps its
+        // applicant. SIS 11.5: a leaving applicant's own Documents (the history
+        // that stayed with it; current ones moved to the Student) go with it.
+        $leaving = DB::table('applicants')->where('school_id', $school->id)->whereIn('id', $applicants)
             ->whereNotExists(fn (Builder $q) => $q->selectRaw('1')->from(self::TABLE.' as a')->whereColumn('a.applicant_id', 'applicants.id'))
-            ->delete();
+            ->pluck('id')->all();
+        foreach ($leaving as $applicantId) {
+            ObjectDeletion::afterCommit(app(DocumentParentRetention::class)->purgeWithOwner('applicant', (string) $applicantId));
+        }
+        DB::table('applicants')->where('school_id', $school->id)->whereIn('id', $leaving)->delete();
     }
 
     private function converted(string $schoolId, string $studentId): Builder

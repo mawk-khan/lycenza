@@ -141,3 +141,29 @@ Unchanged: the Guardian arm stays deferred. There is still no generic
 processing. `docs/modules/DOCUMENTS.md` ("Student owner activation") and
 `docs/modules/STUDENT-GUARDIAN-IDENTITY.md` ("Student documents") hold the
 detail.
+
+## Amendment — Applicant owner and document compliance (SIS 11.5, 2026-10-31)
+
+**Status:** Accepted (owner decisions 2026-10-31).
+
+1. **A sixth owner arm, `applicant`:**
+   - `documents.applicant_id`, with a composite `(applicant_id, school_id)`
+     key, cascading with the Applicant.
+   - Reached only through `createForApplicant()`, `archiveForApplicant()`
+     and `applicantContent()`. Each caller (Admissions'
+     `ApplicantDocumentService`) authorizes the application's Campus scope
+     first. The generic paths and every API keep refusing it.
+   - `highly_sensitive`, with PDF/JPEG/PNG only, like the Student arm.
+2. **Owner re-point, never a copy:**
+   - On admission conversion, `moveApplicantDocumentsToStudent()` moves
+     the Applicant's current Documents to the new Student, inside the
+     conversion transaction: the same row and storage path, with the owner
+     columns swapped.
+   - This is the only owner change the repository allows, and only
+     applicant → Student of the same School.
+3. **Retention:** the Applicant arm inherits Admissions retention (E21.3B/C)
+   through `DocumentParentRetention::purgeWithOwner('applicant')`, with the
+   stored objects deleted after commit.
+4. **Unchanged:** there is still no generic `documents.*` capability, signed
+   or public URL, share link, OCR, AI, content hash or malware scanning. The
+   Guardian arm stays deferred.

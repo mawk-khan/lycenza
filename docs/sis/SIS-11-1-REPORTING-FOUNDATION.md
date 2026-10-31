@@ -45,7 +45,7 @@ filtered search.**
 | SR-16 | Staff workload (part) | periods per teacher | totals | — | Timetable | not built | 6.3 · Timetable ERP |
 | SR-17 | Untagged-student analysis (part) | boys/girls without a group | gender counts | gender | Groups / Analytics | not built | 6.4 · rejected (gender analytics) |
 | SR-19 | Derived system tags | 25 family-circumstance cohorts | members | profiling of children | — | not built | 6.4 · rejected (DNB) |
-| SR-21 | Document checklist grid | per class × document | — | health (immunisation), photo | Students / Documents | per-Student documents (EXP-3); no grid | 6.1 · future, not 11.x scope |
+| SR-21 | Document checklist grid | per class × document | — | health (immunisation), photo | Students / Documents | **`students.document_compliance`** (SIS 11.5; states only, browser-only) + per-Student checklist | **6.1 · implemented** (no immunisation/photo) |
 | SR-23 | Contact details report + column picker | DOB, national id, parent mobiles/emails | — | contact, identity | Students / Guardians | not built (ADR 0041) | **6.4 · privacy-constrained** (SIS-020 needs purpose, permission, review, audit) |
 | SR-24 | Strength reports | opening/closing, gender/age matrices, capacity | person counts | gender, age | Analytics (+ Academic Structure) | not built | 6.2 · gated (ADR 0040, OD-SIS-6) |
 | SR-25 | Sibling report | families, dues this/last year | — | dues | Students / Guardians (+Fees) | profile Family block (EXP-1) | 6.1 · School-wide list waits on its OD; dues D-14 |

@@ -225,6 +225,8 @@ class AdmissionApplicationController extends Controller
             // ORG.7F-1: the converted-Student link opens the full Profile, a
             // declared whole-School-only operation.
             'canViewStudents' => $scopes->campusScope($context->actor(), 'students.view', $school)->isWholeSchool(),
+            // SIS 11.5: the application's pre-admission documents (its Campus).
+            'canViewDocuments' => $scopes->campusScope($context->actor(), 'admissions.documents.view', $school)->covers($model->campus_id),
             // Only the accepted state ever needs a Section picker -- a
             // UI convenience only (AdmissionConversionService remains
             // authoritative regardless), matching

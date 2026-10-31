@@ -104,6 +104,24 @@ was approved.
 - Siblings and placements are not exportable; XLSX and PDF are deferred.
 - No schema, files or jobs.
 
+**SIS 11.5 IMPLEMENTED (2026-10-31, `SIS-11-5-DOCUMENT-COMPLIANCE.md`):**
+Student compliance, documents and verification, on the one Documents
+repository.
+
+- Owner decisions: `students.documents.verify` (school_admin, principal);
+  `admissions.documents.view`/`.manage` (school_admin, principal,
+  admissions_officer), Campus-scoped with the application; a Birth
+  certificate type; applicant documents follow Admissions retention and move
+  to the Student on conversion; the cohort checklist is for whole-School
+  document viewers only, behind MFA.
+- Requirement rules (closed dimensions, immutable terms, retire never delete).
+- Derived compliance (missing, pending, verified, rejected), advisory only.
+- Verify/reject with closed reasons and a fresh code; replacement
+  supersedes.
+- Pre-admission documents per application.
+- Cohort checklist (`students.document_compliance`, states only,
+  browser-only). SR-21 → governed (immunisation and photo stay out).
+
 **Next: owner decision; NOT STARTED; never auto-start.**
 
 ### 2.0f SIS.EXP-CLOSE — PROGRAMME CLOSED (2026-10-30)

@@ -3,6 +3,9 @@
 // (the files are Highly Sensitive). The server decides every permission;
 // this page never builds a storage URL -- a download is an authorized
 // request to the server, which re-checks authority each time.
+// SIS 11.5: the requirement checklist is advisory (never a gate); verifying
+// or rejecting needs its own permission and a fresh code; a rejected or
+// outdated document is fixed by uploading a replacement.
 import { router, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
@@ -20,6 +23,22 @@ interface DocumentRow {
     version: number;
     file: { name: string; mimeType: string; sizeBytes: number } | null;
     archived: { at: string; reason: string | null; reasonLabel: string | null } | null;
+    verification: {
+        status: string;
+        label: string;
+        reason: string | null;
+        reasonLabel: string | null;
+        at: string | null;
+    } | null;
+    fromAdmission: boolean;
+}
+
+interface ChecklistItem {
+    category: string;
+    label: string;
+    required: boolean;
+    state: string;
+    stateLabel: string;
 }
 
 interface Props {
@@ -31,13 +50,24 @@ interface Props {
         to: number | null;
         total: number;
     };
+    compliance: ChecklistItem[];
+    complianceSummary: {
+        required: number;
+        verified: number;
+        missing: number;
+        pending: number;
+        rejected: number;
+    };
     filters: { category: string; status: string; sort: string };
     options: {
         categories: { value: string; label: string; description: string }[];
         filterCategories: { value: string; label: string }[];
         archiveReasons: { value: string; label: string }[];
+        rejectionReasons: { value: string; label: string }[];
+        requirable: string[];
     };
     canManage: boolean;
+    canVerify: boolean;
     hasMfaFactor: boolean;
     formKey: string;
     upload: { maxMb: number; accept: string };
@@ -66,6 +96,7 @@ const uploadForm = useForm<{
     document_date: string;
     file: File | null;
     form_key: string;
+    replaces: string;
     mfa_code: string;
 }>({
     category: '',
@@ -73,8 +104,24 @@ const uploadForm = useForm<{
     document_date: '',
     file: null,
     form_key: props.formKey,
+    replaces: '',
     mfa_code: '',
 });
+
+const replacing = ref<DocumentRow | null>(null);
+
+function startReplace(d: DocumentRow): void {
+    replacing.value = d;
+    uploadForm.category = d.category;
+    uploadForm.replaces = d.id;
+    document.getElementById('upload-heading')?.scrollIntoView();
+    document.getElementById('upload-title')?.focus();
+}
+
+function cancelReplace(): void {
+    replacing.value = null;
+    uploadForm.replaces = '';
+}
 const fileInput = ref<HTMLInputElement | null>(null);
 
 function onFile(event: Event): void {
@@ -87,6 +134,7 @@ function submitUpload(): void {
         preserveScroll: true,
         onSuccess: () => {
             uploadForm.reset();
+            replacing.value = null;
             uploadForm.form_key = props.formKey;
             if (fileInput.value) {
                 fileInput.value.value = '';
@@ -103,6 +151,7 @@ const editForm = useForm({ category: '', title: '', document_date: '', version: 
 
 function startEdit(d: DocumentRow): void {
     archiving.value = null;
+    deciding.value = null;
     editing.value = d.id;
     editForm.defaults({
         category: d.category,
@@ -128,6 +177,7 @@ const archiveForm = useForm({ reason: '', version: 0, mfa_code: '' });
 
 function startArchive(d: DocumentRow): void {
     editing.value = null;
+    deciding.value = null;
     archiving.value = d.id;
     archiveForm.defaults({ reason: '', version: d.version, mfa_code: '' });
     archiveForm.reset();
@@ -141,6 +191,47 @@ function submitArchive(d: DocumentRow): void {
         onFinish: () => (archiveForm.mfa_code = ''),
     });
 }
+
+const deciding = ref<string | null>(null);
+const decisionForm = useForm({ decision: 'verified', reason: '', version: 0, mfa_code: '' });
+
+function decidable(d: DocumentRow): boolean {
+    return (
+        props.canVerify &&
+        !d.archived &&
+        props.options.requirable.includes(d.category) &&
+        (d.verification === null || d.verification.status === 'pending')
+    );
+}
+
+function startDecision(d: DocumentRow): void {
+    editing.value = null;
+    archiving.value = null;
+    deciding.value = d.id;
+    decisionForm.defaults({ decision: 'verified', reason: '', version: d.version, mfa_code: '' });
+    decisionForm.reset();
+    decisionForm.clearErrors();
+}
+
+function submitDecision(d: DocumentRow): void {
+    decisionForm
+        .transform((data) => ({
+            ...data,
+            reason: data.decision === 'rejected' ? data.reason : null,
+        }))
+        .post(`${base}/${d.id}/decision`, {
+            preserveScroll: true,
+            onSuccess: () => (deciding.value = null),
+            onFinish: () => (decisionForm.mfa_code = ''),
+        });
+}
+
+const stateClass: Record<string, string> = {
+    verified: 'text-green-800',
+    pending: 'text-amber-800',
+    rejected: 'text-red-800',
+    missing: 'text-red-800',
+};
 
 function size(bytes: number): string {
     if (bytes < 1024) {
@@ -171,6 +262,45 @@ const selectedCategory = () =>
             access can see them, and each download is recorded. Do not upload government identity
             documents, medical, caste, religion or disability certificates, or photographs.
         </p>
+
+        <!-- SIS 11.5: requirement checklist (advisory) -->
+        <section
+            v-if="compliance.length > 0"
+            class="mt-6 max-w-3xl rounded border border-slate-200 p-4"
+            aria-labelledby="checklist-heading"
+        >
+            <h2 id="checklist-heading" class="text-base font-semibold">Document checklist</h2>
+            <p class="mt-1 text-sm text-slate-600">
+                {{ complianceSummary.verified }} of {{ complianceSummary.required }} required
+                verified<template v-if="complianceSummary.missing > 0">
+                    · {{ complianceSummary.missing }} missing</template
+                ><template v-if="complianceSummary.pending > 0">
+                    · {{ complianceSummary.pending }} pending verification</template
+                ><template v-if="complianceSummary.rejected > 0">
+                    · {{ complianceSummary.rejected }} rejected</template
+                >. The checklist is guidance; it never blocks enrollment.
+                <a v-if="canManage" class="underline" href="/app/students/document-requirements"
+                    >Document requirements</a
+                >
+            </p>
+            <ul class="mt-3 divide-y divide-slate-100 text-sm">
+                <li
+                    v-for="item in compliance"
+                    :key="item.category"
+                    class="flex flex-wrap justify-between gap-2 py-2"
+                >
+                    <span
+                        >{{ item.label }}
+                        <span class="text-xs text-slate-500">{{
+                            item.required ? 'Required' : 'Optional'
+                        }}</span></span
+                    >
+                    <span :class="stateClass[item.state]" class="font-medium">{{
+                        item.stateLabel
+                    }}</span>
+                </li>
+            </ul>
+        </section>
 
         <!-- Filters -->
         <form class="mt-6 flex flex-wrap items-end gap-3" @submit.prevent="applyFilters">
@@ -284,6 +414,20 @@ const selectedCategory = () =>
                                         }}</span></span
                                     >
                                     <span v-else>Active</span>
+                                    <span
+                                        v-if="d.verification"
+                                        class="block text-xs"
+                                        :class="stateClass[d.verification.status]"
+                                        >{{ d.verification.label
+                                        }}<template v-if="d.verification.reasonLabel">
+                                            — {{ d.verification.reasonLabel }}</template
+                                        ></span
+                                    >
+                                    <span
+                                        v-if="d.fromAdmission"
+                                        class="block text-xs text-slate-500"
+                                        >From the admission application</span
+                                    >
                                 </td>
                                 <td class="whitespace-nowrap px-3 py-2">
                                     <a class="underline" :href="`${base}/${d.id}/download`"
@@ -307,12 +451,28 @@ const selectedCategory = () =>
                                         <button
                                             type="button"
                                             class="ml-3 underline"
+                                            @click="startReplace(d)"
+                                        >
+                                            Replace<span class="sr-only"> {{ d.title }}</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="ml-3 underline"
                                             :aria-expanded="archiving === d.id"
                                             @click="startArchive(d)"
                                         >
                                             Archive<span class="sr-only"> {{ d.title }}</span>
                                         </button>
                                     </template>
+                                    <button
+                                        v-if="decidable(d)"
+                                        type="button"
+                                        class="ml-3 underline"
+                                        :aria-expanded="deciding === d.id"
+                                        @click="startDecision(d)"
+                                    >
+                                        Verify or reject<span class="sr-only"> {{ d.title }}</span>
+                                    </button>
                                 </td>
                             </tr>
                             <tr v-if="editing === d.id">
@@ -431,6 +591,101 @@ const selectedCategory = () =>
                                     </form>
                                 </td>
                             </tr>
+                            <tr v-if="deciding === d.id">
+                                <td colspan="6" class="bg-slate-50 px-3 py-3">
+                                    <form
+                                        class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+                                        :aria-label="`Verify or reject ${d.title}`"
+                                        @submit.prevent="submitDecision(d)"
+                                    >
+                                        <p
+                                            class="text-sm text-slate-600 sm:col-span-2 lg:col-span-4"
+                                        >
+                                            Check the file against the original before deciding. A
+                                            decision is final; a rejected document is fixed by
+                                            uploading a replacement.
+                                        </p>
+                                        <fieldset>
+                                            <legend class="text-sm">Decision</legend>
+                                            <label class="mt-1 flex items-center gap-2 text-sm">
+                                                <input
+                                                    v-model="decisionForm.decision"
+                                                    type="radio"
+                                                    value="verified"
+                                                />
+                                                Verified
+                                            </label>
+                                            <label class="mt-1 flex items-center gap-2 text-sm">
+                                                <input
+                                                    v-model="decisionForm.decision"
+                                                    type="radio"
+                                                    value="rejected"
+                                                />
+                                                Rejected
+                                            </label>
+                                        </fieldset>
+                                        <div v-if="decisionForm.decision === 'rejected'">
+                                            <label
+                                                class="block text-sm"
+                                                :for="`decision-reason-${d.id}`"
+                                                >Reason</label
+                                            >
+                                            <select
+                                                :id="`decision-reason-${d.id}`"
+                                                v-model="decisionForm.reason"
+                                                class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                                                :aria-invalid="!!decisionForm.errors.reason"
+                                                :aria-describedby="
+                                                    decisionForm.errors.reason
+                                                        ? `decision-reason-error-${d.id}`
+                                                        : undefined
+                                                "
+                                            >
+                                                <option value="" disabled>Choose a reason</option>
+                                                <option
+                                                    v-for="r in options.rejectionReasons"
+                                                    :key="r.value"
+                                                    :value="r.value"
+                                                >
+                                                    {{ r.label }}
+                                                </option>
+                                            </select>
+                                            <p
+                                                v-if="decisionForm.errors.reason"
+                                                :id="`decision-reason-error-${d.id}`"
+                                                class="mt-1 text-sm text-red-700"
+                                            >
+                                                {{ decisionForm.errors.reason }}
+                                            </p>
+                                        </div>
+                                        <MfaCodeField
+                                            :id="`decision-mfa-${d.id}`"
+                                            v-model="decisionForm.mfa_code"
+                                            :has-mfa-factor="hasMfaFactor"
+                                            action="Verifying or rejecting a document"
+                                            :error="decisionForm.errors.mfa_code"
+                                        />
+                                        <div
+                                            class="flex items-end gap-3 sm:col-span-2 lg:col-span-4"
+                                        >
+                                            <button
+                                                type="submit"
+                                                class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                                                :disabled="decisionForm.processing || !hasMfaFactor"
+                                            >
+                                                Record decision
+                                            </button>
+                                            <button
+                                                type="button"
+                                                class="text-sm underline"
+                                                @click="deciding = null"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </form>
+                                </td>
+                            </tr>
                             <tr v-if="archiving === d.id">
                                 <td colspan="6" class="bg-slate-50 px-3 py-3">
                                     <form
@@ -520,6 +775,17 @@ const selectedCategory = () =>
                 PDF, JPEG or PNG, up to {{ upload.maxMb }} MB. Files are not scanned for malware, so
                 only upload files you trust.
             </p>
+            <p
+                v-if="replacing"
+                class="mt-2 flex flex-wrap items-center gap-3 rounded bg-amber-50 px-3 py-2 text-sm text-amber-900"
+                role="status"
+            >
+                Replacing “{{ replacing.title }}”. The current document is archived as superseded
+                when the new one is uploaded.
+                <button type="button" class="underline" @click="cancelReplace">
+                    Cancel replacement
+                </button>
+            </p>
             <form class="mt-4 grid max-w-3xl gap-4 sm:grid-cols-2" @submit.prevent="submitUpload">
                 <div>
                     <label class="block text-sm text-slate-700" for="upload-category"
@@ -528,6 +794,7 @@ const selectedCategory = () =>
                     <select
                         id="upload-category"
                         v-model="uploadForm.category"
+                        :disabled="replacing !== null"
                         class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                         :aria-invalid="!!uploadForm.errors.category"
                         aria-describedby="upload-category-help upload-category-error"
@@ -621,6 +888,9 @@ const selectedCategory = () =>
                 </div>
                 <p v-if="uploadForm.errors.form_key" class="text-sm text-red-700 sm:col-span-2">
                     {{ uploadForm.errors.form_key }}
+                </p>
+                <p v-if="uploadForm.errors.replaces" class="text-sm text-red-700 sm:col-span-2">
+                    {{ uploadForm.errors.replaces }}
                 </p>
                 <div class="sm:col-span-2">
                     <button

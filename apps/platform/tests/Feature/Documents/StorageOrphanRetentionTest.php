@@ -239,16 +239,20 @@ class StorageOrphanRetentionTest extends TestCase
         $seamCode = (string) file_get_contents($seam);
         $this->assertSame(substr_count($seamCode, "table('documents')"), substr_count($seamCode, "table('documents')->where(\$"), 'every seam query is scoped to one owner');
         // E21.3C: the Guardian (G1); E21.3D: LMS Learning Content and Assignments (A1).
-        $this->assertStringContainsString("private const OWNER_COLUMNS = ['student' => 'student_id', 'employee' => 'employee_id', 'guardian' => 'guardian_id', 'learning_content' => 'learning_content_id', 'assignment' => 'assignment_id'];", $seamCode, 'a closed owner map');
+        $this->assertStringContainsString("private const OWNER_COLUMNS = ['student' => 'student_id', 'employee' => 'employee_id', 'guardian' => 'guardian_id', 'learning_content' => 'learning_content_id', 'assignment' => 'assignment_id', 'applicant' => 'applicant_id'];", $seamCode, 'a closed owner map');
         $callers = [];
         exec('grep -rlF --include=*.php '.escapeshellarg('use App\\Domain\\Documents\\Application\\Retention\\DocumentParentRetention;').' '.escapeshellarg(app_path()), $callers);
         sort($callers);
         $this->assertSame([
+            // SIS 11.5: pre-admission documents with their application or Applicant.
+            app_path('Domain/Admissions/Application/Retention/ApplicantDocumentRetention.php'),
+            app_path('Domain/Admissions/Application/Retention/ConvertedApplicationRetentionService.php'),
+            app_path('Domain/Admissions/Application/Retention/TerminalApplicationRetentionService.php'),
             app_path('Domain/Guardians/Application/Retention/GuardianRecordRetentionService.php'),
             app_path('Domain/HR/Application/Retention/EmployeeRecordRetentionService.php'),
             app_path('Domain/Students/Application/Retention/StudentRecordRetentionService.php'),
             app_path('Support/Retention/LmsResourceRetention.php'),
-        ], $callers, 'only the Student core, Employee evidence, Guardian and LMS purges use the seam');
+        ], $callers, 'only the Student core, Employee evidence, Guardian, LMS and Admissions purges use the seam');
 
         // E21.2E: HR's own `employee_documents` go only with their Employee, in HR's
         // evidence purge. The only other retention files naming the table are

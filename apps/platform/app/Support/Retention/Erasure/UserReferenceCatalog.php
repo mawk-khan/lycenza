@@ -92,7 +92,12 @@ final class UserReferenceCatalog
         'communication_threads' => ['created_by_user_id' => self::RETAIN_REFERENCE],
         'documents' => ['uploaded_by_user_id' => self::RETAIN_REFERENCE],
         // SIS.EXP-3: Student document record actors are historical references.
-        'student_documents' => ['uploaded_by_user_id' => self::RETAIN_REFERENCE, 'archived_by_user_id' => self::RETAIN_REFERENCE],
+        'student_documents' => ['uploaded_by_user_id' => self::RETAIN_REFERENCE, 'archived_by_user_id' => self::RETAIN_REFERENCE,
+            // SIS 11.5: who verified or rejected the evidence.
+            'verified_by_user_id' => self::RETAIN_REFERENCE],
+        // SIS 11.5: pre-admission document actors and requirement-rule authors are historical references.
+        'applicant_documents' => ['uploaded_by_user_id' => self::RETAIN_REFERENCE, 'archived_by_user_id' => self::RETAIN_REFERENCE, 'verified_by_user_id' => self::RETAIN_REFERENCE],
+        'student_document_requirements' => ['created_by_user_id' => self::RETAIN_REFERENCE, 'retired_by_user_id' => self::RETAIN_REFERENCE],
         // SIS.EXP-4: certificate issuer and voider are historical references.
         'student_certificates' => ['issued_by_user_id' => self::RETAIN_REFERENCE, 'voided_by_user_id' => self::RETAIN_REFERENCE],
         // SIS.EXP-5: the importer of a committed batch.

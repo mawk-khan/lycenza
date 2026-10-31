@@ -27,12 +27,38 @@ use LogicException;
 final class DocumentParentRetention
 {
     /** Owner types with a decided parent purge => their owner column. */
-    private const OWNER_COLUMNS = ['student' => 'student_id', 'employee' => 'employee_id', 'guardian' => 'guardian_id', 'learning_content' => 'learning_content_id', 'assignment' => 'assignment_id'];
+    // SIS 11.5: an Applicant's pre-admission documents go with their application or Applicant (Admissions retention, E21.3B/E21.3C).
+    private const OWNER_COLUMNS = ['student' => 'student_id', 'employee' => 'employee_id', 'guardian' => 'guardian_id', 'learning_content' => 'learning_content_id', 'assignment' => 'assignment_id', 'applicant' => 'applicant_id'];
 
     /** @return list<string> ids of the Documents the owner's purge removes */
     public function idsOwnedBy(string $owner, string $ownerId): array
     {
         return DB::table('documents')->where($this->column($owner), $ownerId)->orderBy('id')->pluck('id')->all();
+    }
+
+    /**
+     * SIS 11.5: part of one owner's Documents -- the named ones, still owned
+     * by that owner -- inside the parent purge transaction (an application's
+     * pre-admission documents leave with the application while its Applicant
+     * stays).
+     *
+     * @param  list<string>  $documentIds
+     * @return list<object{storage_disk: string, storage_path: string}>
+     */
+    public function purgeOwnedBy(string $owner, string $ownerId, array $documentIds): array
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new LogicException('A Document is purged only inside its parent purge transaction.');
+        }
+        if ($documentIds === []) {
+            return [];
+        }
+
+        $query = fn () => DB::table('documents')->where($this->column($owner), $ownerId)->whereIn('id', $documentIds);
+        $objects = $query()->orderBy('id')->get(['storage_disk', 'storage_path'])->all();
+        $query()->delete();
+
+        return $objects;
     }
 
     /** @return list<object{storage_disk: string, storage_path: string}> */

@@ -367,6 +367,34 @@ role.
   convert.
 - **Admission fee:** Admissions → Admission fee records a fee *intent*.
   It is not a charge.
+- **Admission documents** (SIS 11.5): on an open application, select
+  **Admission documents**. You can upload a birth certificate, previous
+  school record, enrollment paperwork or consent form (PDF, JPEG or PNG).
+  - You need current MFA to open the page and a fresh code for each upload.
+  - Staff can work only on applications on their own Campus.
+  - A School Administrator or Principal verifies or rejects each document
+    (with a reason). A rejected one is fixed by **Replace**.
+  - On conversion, the current documents move to the Student's record (the
+    same files, never copies). Admissions staff then no longer see them.
+  - Documents of a rejected or withdrawn application are removed with the
+    applicant one year after the decision.
+  - The checklist is guidance: it never blocks acceptance or conversion.
+
+### Document requirements and the checklist (SIS 11.5)
+
+- **Students → Document requirements** (School Administrator, Principal):
+  say which documents are Required or Optional for Students placed in a
+  year, or for Applicants applying for it, optionally for one Campus or
+  Grade, from a date. A rule never changes: retire it and add a new one.
+- **A Student's Documents** page shows their checklist: Missing, Pending
+  verification, Verified, or Rejected — replacement needed.
+  **Verify or reject** needs its own permission and a fresh code, and the
+  decision is final.
+- **Student reports → Document checklist** lists the states for a whole
+  year, filterable by Campus, Grade, Section, document type and state.
+  - It shows states only: no files, titles or downloads.
+  - It is for whole-School document viewers, behind MFA. It cannot be
+    exported or printed.
 
 ## 9. Students and placements
 

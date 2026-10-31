@@ -5,6 +5,7 @@ namespace App\Domain\Students\Application\Documents;
 use App\Domain\Documents\Application\DocumentService;
 use App\Domain\Documents\Application\Exceptions\DocumentArchivedException;
 use App\Domain\Documents\Infrastructure\Document;
+use App\Domain\Students\Application\Exceptions\DocumentVerificationClosedException;
 use App\Domain\Students\Application\Exceptions\StudentDocumentArchivedException;
 use App\Domain\Students\Application\Exceptions\StudentDocumentChangedException;
 use App\Domain\Students\Application\Exceptions\StudentDocumentFormReusedException;
@@ -63,9 +64,9 @@ final class StudentDocumentService
     /**
      * @param  array{category: string, title: string, document_date?: ?string}  $data
      */
-    public function upload(School $school, User $actor, string $studentId, UploadedFile $file, array $data, string $formKey, FreshMfaProof $proof): StudentDocument
+    public function upload(School $school, User $actor, string $studentId, UploadedFile $file, array $data, string $formKey, FreshMfaProof $proof, ?string $replacesId = null): StudentDocument
     {
-        return $this->context->withSchool($school, function () use ($school, $actor, $studentId, $file, $data, $formKey, $proof): StudentDocument {
+        return $this->context->withSchool($school, function () use ($school, $actor, $studentId, $file, $data, $formKey, $proof, $replacesId): StudentDocument {
             $this->assertProof($proof, $actor);
             $student = $this->visibleStudent($school, $actor, $studentId);
             $this->authorizeCapabilityFor($actor, DocumentService::STUDENT_DOCUMENTS_MANAGE, $school);
@@ -83,7 +84,12 @@ final class StudentDocumentService
 
             try {
                 $record = null;
-                $this->documents->createForStudent($school, $student->id, $file, $actor, function (Document $document) use ($school, $actor, $student, $category, $title, $data, $formKey, $fingerprint, &$record): void {
+                $this->documents->createForStudent($school, $student->id, $file, $actor, function (Document $document) use ($school, $actor, $student, $category, $title, $data, $formKey, $fingerprint, $replacesId, &$record): void {
+                    // SIS 11.5: a replacement supersedes the record it replaces in
+                    // this same transaction (history kept: archived, never removed).
+                    if ($replacesId !== null) {
+                        $this->supersede($school, $actor, $student, $replacesId, $category);
+                    }
                     $record = new StudentDocument([
                         'category' => $category,
                         'title' => $title,
@@ -96,6 +102,8 @@ final class StudentDocumentService
                         'form_key' => $formKey,
                         'upload_fingerprint' => $fingerprint,
                         'uploaded_by_user_id' => $actor->id,
+                        // SIS 11.5: a requirable category is verified before it counts.
+                        'verification_status' => $category->isRequirable() ? DocumentVerificationStatus::PENDING : null,
                     ])->save();
 
                     $this->audit->school($school, 'student_document.uploaded', actor: $actor, subject: $student, metadata: [
@@ -103,6 +111,7 @@ final class StudentDocumentService
                         'studentDocumentId' => $record->id,
                         'documentId' => $document->id,
                         'category' => $category->value,
+                        'replacesStudentDocumentId' => $replacesId,
                     ]);
                 });
 
@@ -200,6 +209,111 @@ final class StudentDocumentService
 
             /** @var StudentDocument $record */
             return $record;
+        });
+    }
+
+    /**
+     * SIS 11.5: the evidence-quality decision -- `students.documents.verify`
+     * (whole School) and a fresh MFA proof, under the record's lock against
+     * the version the decider saw. Only a document awaiting a decision
+     * (pending, or one uploaded before verification existed) can be decided;
+     * a rejected one is fixed by a replacement upload, never re-decided.
+     */
+    public function decide(School $school, User $actor, string $studentId, string $recordId, DocumentVerificationStatus $decision, ?DocumentRejectionReason $reason, int $expectedVersion, FreshMfaProof $proof): StudentDocument
+    {
+        return $this->context->withSchool($school, function () use ($school, $actor, $studentId, $recordId, $decision, $reason, $expectedVersion, $proof): StudentDocument {
+            $this->assertProof($proof, $actor);
+            $student = $this->visibleStudent($school, $actor, $studentId);
+            $this->authorizeCapabilityFor($actor, DocumentService::STUDENT_DOCUMENTS_VERIFY, $school);
+            if ($decision === DocumentVerificationStatus::PENDING || ($decision === DocumentVerificationStatus::REJECTED) !== ($reason !== null)) {
+                throw new \InvalidArgumentException('A decision is verified, or rejected with a reason.');
+            }
+
+            return DB::transaction(function () use ($school, $actor, $student, $recordId, $decision, $reason, $expectedVersion): StudentDocument {
+                $record = $this->lockedRecord($school, $student, $recordId);
+                if ($record->version !== $expectedVersion) {
+                    throw new StudentDocumentChangedException;
+                }
+                if (! $record->category->isRequirable() || ! in_array($record->verification_status, [null, DocumentVerificationStatus::PENDING], true)) {
+                    throw new DocumentVerificationClosedException;
+                }
+
+                $record->forceFill([
+                    'verification_status' => $decision,
+                    'verified_by_user_id' => $actor->id,
+                    'verified_at' => now(),
+                    'rejection_reason' => $reason,
+                    'version' => $record->version + 1,
+                ])->save();
+
+                $this->audit->school($school, $decision === DocumentVerificationStatus::VERIFIED ? 'student_document.verified' : 'student_document.rejected', actor: $actor, subject: $student, metadata: [
+                    'studentId' => $student->id,
+                    'studentDocumentId' => $record->id,
+                    'category' => $record->category->value,
+                    'reason' => $reason?->value,
+                ]);
+
+                return $record;
+            });
+        });
+    }
+
+    /**
+     * SIS 11.5: the conversion's Student record for a pre-admission document
+     * that moved with the application (the same Document row, re-pointed by
+     * Documents). Runs inside the conversion transaction; the conversion has
+     * already decided authority. Its verification travels with it. Plain
+     * values (Students never depends on Admissions; Admissions calls in).
+     *
+     * @param  array{id: string, document_id: string, category: StudentDocumentCategory, title: string, document_date: mixed, upload_fingerprint: string, uploaded_by_user_id: string, verification_status: ?DocumentVerificationStatus, verified_by_user_id: ?string, verified_at: mixed, rejection_reason: ?DocumentRejectionReason}  $source
+     */
+    public function adoptFromApplicant(School $school, string $studentId, array $source): StudentDocument
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new \LogicException('A pre-admission document is adopted only inside the conversion transaction.');
+        }
+
+        $record = new StudentDocument(['category' => $source['category'], 'title' => $source['title'], 'document_date' => $source['document_date']]);
+        $record->forceFill([
+            'school_id' => $school->id,
+            'student_id' => $studentId,
+            'document_id' => $source['document_id'],
+            'form_key' => (string) Str::uuid7(),
+            'upload_fingerprint' => $source['upload_fingerprint'],
+            'uploaded_by_user_id' => $source['uploaded_by_user_id'],
+            'verification_status' => $source['verification_status'],
+            'verified_by_user_id' => $source['verified_by_user_id'],
+            'verified_at' => $source['verified_at'],
+            'rejection_reason' => $source['rejection_reason'],
+            'source_applicant_document_id' => $source['id'],
+        ])->save();
+
+        return $record;
+    }
+
+    /** SIS 11.5: archive the replaced record as `superseded` (inside the replacement's transaction). */
+    private function supersede(School $school, User $actor, Student $student, string $replacesId, StudentDocumentCategory $category): void
+    {
+        $old = StudentDocument::query()->where('school_id', $school->id)->where('student_id', $student->id)->find($replacesId)
+            ?? throw ValidationException::withMessages(['replaces' => 'Choose a current document of this Student to replace.']);
+        if ($old->isArchived() || $old->category !== $category) {
+            throw ValidationException::withMessages(['replaces' => 'A replacement keeps the same category, and replaces a current document.']);
+        }
+
+        $this->documents->archiveForStudent($school, $student->id, $old->document_id, $actor, function () use ($school, $actor, $student, $replacesId): void {
+            $record = $this->lockedRecord($school, $student, $replacesId);
+            $record->forceFill([
+                'archived_at' => now(),
+                'archived_by_user_id' => $actor->id,
+                'archive_reason' => StudentDocumentArchiveReason::SUPERSEDED,
+                'version' => $record->version + 1,
+            ])->save();
+            $this->audit->school($school, 'student_document.archived', actor: $actor, subject: $student, metadata: [
+                'studentId' => $student->id,
+                'studentDocumentId' => $record->id,
+                'documentId' => $record->document_id,
+                'reason' => StudentDocumentArchiveReason::SUPERSEDED->value,
+            ]);
         });
     }
 

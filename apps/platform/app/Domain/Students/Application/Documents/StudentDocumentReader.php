@@ -52,11 +52,12 @@ final class StudentDocumentReader
         private readonly StudentDocumentService $records,
         private readonly DocumentReadService $documents,
         private readonly DocumentListingService $listings,
+        private readonly DocumentCompliance $compliance,
     ) {}
 
     /**
      * @param  array{category?: ?string, status?: ?string, sort?: ?string}  $filters  validated by the caller
-     * @return array{student: Student, documents: LengthAwarePaginator<int, array<string, mixed>>}
+     * @return array{student: Student, documents: LengthAwarePaginator<int, array<string, mixed>>, compliance: list<array<string, mixed>>}
      */
     public function page(School $school, User $actor, string $studentId, array $filters, int $page): array
     {
@@ -86,7 +87,12 @@ final class StudentDocumentReader
                 ['path' => $records->path(), 'pageName' => 'page'],
             );
 
-            return ['student' => $student, 'documents' => $rows->withQueryString()];
+            return [
+                'student' => $student,
+                'documents' => $rows->withQueryString(),
+                // SIS 11.5: the Student's derived requirement checklist (advisory).
+                'compliance' => $this->compliance->forStudents($school, [$student->id])[$student->id] ?? [],
+            ];
         });
     }
 
@@ -162,6 +168,15 @@ final class StudentDocumentReader
                 'mimeType' => $file->mimeType,
                 'sizeBytes' => $file->sizeBytes,
             ],
+            // SIS 11.5: verification (null = recorded before verification existed).
+            'verification' => $record->verification_status === null ? null : [
+                'status' => $record->verification_status->value,
+                'label' => $record->verification_status->label(),
+                'reason' => $record->rejection_reason?->value,
+                'reasonLabel' => $record->rejection_reason?->label(),
+                'at' => $record->verified_at?->toIso8601String(),
+            ],
+            'fromAdmission' => $record->source_applicant_document_id !== null,
             'archived' => $record->archived_at === null ? null : [
                 'at' => $record->archived_at->toIso8601String(),
                 'reason' => $record->archive_reason?->value,

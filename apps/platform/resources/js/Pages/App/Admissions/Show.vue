@@ -74,6 +74,8 @@ interface Props {
         } | null;
     } | null;
     canViewStudents: boolean;
+    // SIS 11.5: pre-admission documents (the application's Campus).
+    canViewDocuments: boolean;
     compatibleSections: SectionOption[];
     duplicateWarning: DuplicateWarning | null;
 }
@@ -402,6 +404,23 @@ function switchToLinkExisting(g: GuardianCandidate): void {
             >
                 View converted Student
             </a>
+        </section>
+
+        <section v-if="canViewDocuments" class="mt-6 rounded border border-slate-200 p-4 text-sm">
+            <h2 class="font-medium text-slate-500">Documents</h2>
+            <p class="mt-1">
+                <template v-if="application.status === 'converted'">
+                    Documents collected before admission moved to the Student's record.
+                </template>
+                <template v-else>
+                    Birth certificate, previous school record and other admission documents.
+                </template>
+            </p>
+            <a
+                class="mt-2 inline-block underline"
+                :href="`/app/admissions/${application.id}/documents`"
+                >Admission documents</a
+            >
         </section>
 
         <!-- SIS 3.2: acceptance is a decision; the Student is created only by conversion. -->

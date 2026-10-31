@@ -90,7 +90,7 @@ class ApprovalWorkflowRegistryTest extends TestCase
 
         foreach ($seeded as $key) {
             if (preg_match('/\.(approve|request|decide|review|authori[sz]e|verify|publish|sign_off)(\.|$)/', $key) === 1) {
-                $this->assertContains($key, $registered, "{$key} is an approval capability: classify its workflow in ApprovalWorkflowRegistry");
+                $this->assertContains($key, [...$registered, ...array_keys(ApprovalWorkflowRegistry::NOT_WORKFLOWS)], "{$key} is an approval capability: classify its workflow in ApprovalWorkflowRegistry (or declare it in NOT_WORKFLOWS with the reason)");
             }
         }
         foreach (array_unique($registered) as $key) {

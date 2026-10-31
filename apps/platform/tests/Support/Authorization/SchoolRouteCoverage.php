@@ -3,6 +3,7 @@
 namespace Tests\Support\Authorization;
 
 use App\Domain\Admissions\Application\AdmissionApplicationAccess;
+use App\Domain\Admissions\Application\ApplicantDocumentService;
 use App\Domain\Analytics\Application\AnalyticsReadGate;
 use App\Domain\Attendance\Application\AttendanceAdministrationAccess;
 use App\Domain\Attendance\Application\AttendanceExceptionReadService;
@@ -690,6 +691,12 @@ final class SchoolRouteCoverage
 
             // Http\Controllers\App\AdmissionApplicationController
             Coverage::campus('app.admissions.show', 'admissions.view', AdmissionApplicationAccess::class, 'detail'),
+            // SIS 11.5: pre-admission documents, with the application's Campus.
+            Coverage::campus('app.admissions.documents.index', 'admissions.documents.view', ApplicantDocumentService::class, 'page'),
+            Coverage::campus('app.admissions.documents.store', 'admissions.documents.manage', ApplicantDocumentService::class, 'upload'),
+            Coverage::campus('app.admissions.documents.decide', 'admissions.documents.view', ApplicantDocumentService::class, 'decide'),
+            Coverage::campus('app.admissions.documents.archive', 'admissions.documents.manage', ApplicantDocumentService::class, 'archive'),
+            Coverage::campus('app.admissions.documents.download', 'admissions.documents.view', ApplicantDocumentService::class, 'file'),
             Coverage::campus('app.admissions.submit', 'admissions.manage', AdmissionApplicationAccess::class, 'application'),
             Coverage::campus('app.admissions.accept', 'admissions.manage', AdmissionApplicationAccess::class, 'application'),
             Coverage::campus('app.admissions.reject', 'admissions.manage', AdmissionApplicationAccess::class, 'application'),

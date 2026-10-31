@@ -233,5 +233,12 @@ final class ApprovalWorkflowRegistry
         'fee_assessment_run_items.overlap_decided_by_user_id' => 'the run operator\'s include/exclude review of an overlapping item in their own run (UAT-C6), not a request decided by a second person',
         'fee_assessment_runs.previewed_by_user_id' => 'who previewed an operator run',
         'late_fee_runs.previewed_by_user_id' => 'who previewed an operator run',
+        // SIS 11.5: document verification is one reviewer's evidence-quality
+        // judgement on an uploaded file (verified, or rejected with a closed
+        // reason; final; fixed by a replacement). Nothing is requested, and
+        // nothing executes because of it -- compliance stays advisory.
+        'student_documents.verified_by_user_id' => 'who verified or rejected a Student document (SIS 11.5 evidence review, never a request decided by a second person)',
+        'applicant_documents.verified_by_user_id' => 'who verified or rejected a pre-admission document (SIS 11.5 evidence review, never a request decided by a second person)',
+        'students.documents.verify' => 'the SIS 11.5 evidence-review capability: it decides a document\'s quality, never a request; no effect executes because of it',
     ];
 }

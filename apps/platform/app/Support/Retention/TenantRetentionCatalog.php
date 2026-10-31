@@ -161,7 +161,10 @@ final class TenantRetentionCatalog
             'attendance_record_corrections']],
         'student_rollover_configuration' => [self::TENANT_LIFETIME, 'School configuration', ['enrollment_rollover_plans', 'enrollment_rollover_mappings', 'enrollment_rollover_subject_mappings']],
         'processing_authorizations' => [self::ADOPTED, 'E21.2G P1: legal-basis evidence for the academic record, kept with the Student core record (25 y) and removed in its unit through a core-floored function (E21.3B, implemented)', ['student_processing_authorizations']],
-        'admissions' => [self::ADOPTED, 'E21.2G AD1/AD2: converted applications (and applicants with nothing else) with the Student core record (E21.3B, implemented); rejected/withdrawn 1 y after their canonical terminal_at (platform:admissions-retention-prune, E21.3C, implemented; undated legacy rows unresolved and kept); live applications are working state', ['applicants', 'admission_applications']],
+        'admissions' => [self::ADOPTED, 'E21.2G AD1/AD2: converted applications (and applicants with nothing else) with the Student core record (E21.3B, implemented); rejected/withdrawn 1 y after their canonical terminal_at (platform:admissions-retention-prune, E21.3C, implemented; undated legacy rows unresolved and kept); live applications are working state', ['applicants', 'admission_applications',
+            // SIS 11.5: pre-admission document records go with their Applicant (cascade); on conversion the
+            // current ones become Student documents (the same Document rows), the rest stay with the Applicant.
+            'applicant_documents']],
         'guardians' => [self::ADOPTED, 'E21.2G G1: Guardian personal data 1 y after the Guardian last had a Student relationship (durable guardians.no_relationship_since) and nothing retained needs it (platform:guardian-retention-prune, E21.3C, implemented; unmarked legacy Guardians unresolved and kept)', ['guardians', 'guardian_contacts']],
         'documents' => [self::ADOPTED, 'D5: inherits its owner (Student, Employee); others kept with their parent', ['documents']],
         'academic_operations' => [self::ADOPTED, 'E21.2G A1: year-bound academic operations, 7 y after the end of their authoritative Academic Year (curriculum deliveries; attendance register headers once empty; timetable entries once no header references them; LMS with audiences and Documents, past the D6 owner/audience minimum): platform:academic-retention-prune (E21.3D, implemented)', [
@@ -224,6 +227,9 @@ final class TenantRetentionCatalog
             // ORG.12F (ADR 0080 §11): School presentation (navigation overrides,
             // branding) -- no personal data, kept with the School.
             'school_navigation_preferences', 'school_brand_profiles',
+            // SIS 11.5: document requirement rules -- closed dimensions, no
+            // personal data; kept with the School (retired, never deleted).
+            'student_document_requirements',
         ]],
     ];
 

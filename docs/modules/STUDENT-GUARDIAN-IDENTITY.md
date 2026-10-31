@@ -2078,3 +2078,36 @@ module:
   API consumer exists.
 - **Import:** the contract is frozen as `student_guardian_import_v1` (100
   rows, School Admin only, add-only).
+
+## Document requirements, compliance and verification (SIS 11.5, 2026-10-31)
+
+See `docs/sis/SIS-11-5-DOCUMENT-COMPLIANCE.md` and CLAUDE.md rule 126.
+
+- **Birth certificate** category (proof of age for admission; a civil
+  record, no identifier captured).
+- **Requirable categories:** birth certificate, prior school record,
+  enrollment paperwork and consent form.
+- **Rules** in `student_document_requirements` (one writer, closed
+  dimensions, immutable terms, retired never deleted).
+- **Compliance** derived by `DocumentCompliance` (missing, pending, verified,
+  rejected). It is advisory, never stored and never a gate.
+- **Verification** on `student_documents`, with whole-School
+  `students.documents.verify` (school_admin, principal), a closed rejection
+  reason, a fresh MFA code and the current version. It is final, and a
+  replacement supersedes.
+- **Cohort checklist** `students.document_compliance`: states only,
+  whole-School `students.view` + `students.documents.view`, current MFA,
+  browser-only.
+- **SR-21 sub-capability table:**
+
+| SR-21 element | Status |
+|---|---|
+| Per-Student checklist of required documents | **Built** (Student documents page) |
+| Per-class grid of document states | **Built** (cohort checklist, states only) |
+| Verification state (pending/verified/rejected) | **Built** |
+| Pre-admission documents per application | **Built** (Admissions) |
+| Immunisation / health records | **Not built** (excluded: health data) |
+| Student photo | **Not built** (excluded: biometric-adjacent) |
+| Government identifiers | **Not built** (excluded) |
+| Guardian self-service upload | **Not built** (Portal, not authorized) |
+| Reminders, Data Health findings, percentages | **Not built** (excluded) |

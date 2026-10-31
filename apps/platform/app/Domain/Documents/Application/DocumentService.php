@@ -126,6 +126,14 @@ class DocumentService
 
     public const STUDENT_DOCUMENTS_MANAGE = 'students.documents.manage';
 
+    /** SIS 11.5: verify or reject a Student or Applicant document (evidence quality). */
+    public const STUDENT_DOCUMENTS_VERIFY = 'students.documents.verify';
+
+    /** SIS 11.5: pre-admission documents (Campus-adopted with the application, ORG.7D-3). */
+    public const ADMISSIONS_DOCUMENTS_VIEW = 'admissions.documents.view';
+
+    public const ADMISSIONS_DOCUMENTS_MANAGE = 'admissions.documents.manage';
+
     /** SIS.EXP-4: issuing Leaving/Transfer certificates (whole School). */
     public const STUDENT_CERTIFICATES_ISSUE = 'students.certificates.issue';
 
@@ -175,6 +183,69 @@ class DocumentService
 
             return $this->store($school, $data, $actor, ['student_id' => $studentId], null, $within, self::STUDENT_ALLOWED_MIME_TYPES);
         });
+    }
+
+    /**
+     * SIS 11.5: stores an Applicant-owned (pre-admission) Document. The
+     * Admissions domain has already resolved the application under the
+     * actor's `admissions.documents.manage` Campus scope; `$within` (the
+     * Applicant record row) runs in this Document's transaction. The
+     * capability is re-checked in the actor's scope by that caller (it is
+     * Campus-adopted), so this entry point only refuses an actor holding it
+     * nowhere.
+     *
+     * @param  Closure(Document): void  $within
+     */
+    public function createForApplicant(School $school, string $applicantId, UploadedFile $file, User $actor, Closure $within): Document
+    {
+        return $this->context->withSchool($school, function () use ($school, $applicantId, $file, $actor, $within) {
+            $data = new CreateDocumentData(DocumentOwner::applicant($applicantId), self::STUDENT_CLASSIFICATION_TIER, $file);
+
+            return $this->store($school, $data, $actor, ['applicant_id' => $applicantId], null, $within, self::STUDENT_ALLOWED_MIME_TYPES);
+        });
+    }
+
+    /**
+     * SIS 11.5: archives an Applicant-owned Document (status only); `$within`
+     * runs in the same transaction. Re-read under the School and the named
+     * Applicant, so a forged id is NOT FOUND.
+     *
+     * @param  Closure(Document): void  $within
+     */
+    public function archiveForApplicant(School $school, string $applicantId, string $documentId, Closure $within): Document
+    {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $applicantId, $documentId, $within) {
+            $document = Document::query()->where('school_id', $school->id)->where('applicant_id', $applicantId)
+                ->lockForUpdate()->find($documentId)
+                ?? throw new DocumentNotFoundException($documentId);
+            if ($document->status !== 'active') {
+                throw new DocumentArchivedException;
+            }
+            $document->update(['status' => 'archived']);
+            $within($document);
+
+            return $document;
+        }));
+    }
+
+    /**
+     * SIS 11.5: at conversion, the Applicant's ACTIVE pre-admission Documents
+     * become the new Student's -- the same rows and bytes (no copy), inside
+     * the conversion's own transaction. Returns the moved Document ids.
+     *
+     * @param  list<string>  $documentIds
+     */
+    public function moveApplicantDocumentsToStudent(School $school, string $applicantId, string $studentId, array $documentIds): int
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new \LogicException('Applicant documents move only inside the conversion transaction.');
+        }
+        if ($documentIds === []) {
+            return 0;
+        }
+
+        return DB::table('documents')->where('school_id', $school->id)->where('applicant_id', $applicantId)->whereIn('id', $documentIds)
+            ->update(['applicant_id' => null, 'student_id' => $studentId, 'updated_at' => now()]);
     }
 
     /**

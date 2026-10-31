@@ -2,6 +2,8 @@
 
 namespace App\Domain\Students\Infrastructure;
 
+use App\Domain\Students\Application\Documents\DocumentRejectionReason;
+use App\Domain\Students\Application\Documents\DocumentVerificationStatus;
 use App\Domain\Students\Application\Documents\StudentDocumentArchiveReason;
 use App\Domain\Students\Application\Documents\StudentDocumentCategory;
 use App\Support\Identifiers\GeneratesUuidV7;
@@ -49,6 +51,10 @@ class StudentDocument extends Model
             'document_date' => 'date',
             'archived_at' => 'datetime',
             'version' => 'integer',
+            // SIS 11.5: verification (NULL = uploaded before verification existed).
+            'verification_status' => DocumentVerificationStatus::class,
+            'rejection_reason' => DocumentRejectionReason::class,
+            'verified_at' => 'datetime',
         ];
     }
 
