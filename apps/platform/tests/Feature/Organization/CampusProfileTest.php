@@ -111,8 +111,11 @@ class CampusProfileTest extends TestCase
         $this->put("/app/school-setup/campuses/{$campus->id}", ['status' => 'inactive'])->assertRedirect('/app/school-setup/campuses');
         $this->put("/app/school-setup/campuses/{$campus->id}", ['status' => 'active', 'address_line1' => '1 Secret Lane'])->assertSessionHasNoErrors();
 
-        $audits = $this->in($school, fn () => DB::table('school_audit_events')->where('school_id', $school->id)->where('event_type', 'campus.updated')->orderBy('occurred_at')->pluck('metadata')->all());
-        $last = json_decode(end($audits), true);
+        $audits = $this->in($school, fn () => DB::table('school_audit_events')->where('school_id', $school->id)->where('event_type', 'campus.updated')->pluck('metadata')->all());
+        // The reactivation's own event, by content: both updates can share one
+        // occurred_at second, so "the last by time" was not deterministic.
+        $last = collect($audits)->map(fn (string $m) => json_decode($m, true))->firstWhere('before.status', 'inactive');
+        $this->assertNotNull($last);
         $this->assertEqualsCanonicalizing(['status', 'address_line1'], $last['changed']);
         $this->assertSame(['status' => 'inactive'], $last['before']);
         $this->assertStringNotContainsString('Secret Lane', implode(' ', $audits));
