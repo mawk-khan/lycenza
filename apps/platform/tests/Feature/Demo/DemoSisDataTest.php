@@ -56,7 +56,7 @@ class DemoSisDataTest extends TestCase
         $this->signIn('gachibowli.admin@example.test');
 
         $props = $this->get("/app/students/{$this->student('Aarav')->id}")->assertOk()->viewData('page')['props'];
-        $this->assertSame(['attendance', 'certificates', 'documents', 'family', 'fees', 'hostel', 'library', 'subjects', 'transport'], collect($props['sections'])->keys()->sort()->values()->all());
+        $this->assertSame(['attendance', 'certificates', 'documents', 'family', 'fees', 'hostel', 'house', 'library', 'subjects', 'transport'], collect($props['sections'])->keys()->sort()->values()->all());
         $this->assertSame([3, 1], [$props['sections']['documents']['active'], $props['sections']['documents']['archived']]);
         $this->assertSame('Diya Menon', $props['sections']['family']['siblings'][0]['name']);
         $this->assertSame(['30000.00', '12000.00', '18000.00'], [$props['sections']['fees']['billed'], $props['sections']['fees']['paid'], $props['sections']['fees']['outstanding']]);
