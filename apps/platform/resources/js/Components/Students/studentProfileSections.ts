@@ -65,6 +65,13 @@ export interface StudentProfileSections {
         categories: { value: string; label: string; count: number }[];
         link: string;
     };
+    // SIS 11.7: the current House (descriptive community membership, never authority).
+    house?: {
+        house: string | null;
+        since: string | null;
+        responsibilities: string[];
+        link: string | null;
+    };
     // SIS.EXP-4: certificate history (safe metadata).
     certificates?: {
         items: {

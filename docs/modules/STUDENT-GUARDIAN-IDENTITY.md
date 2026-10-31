@@ -2111,3 +2111,33 @@ See `docs/sis/SIS-11-5-DOCUMENT-COMPLIANCE.md` and CLAUDE.md rule 126.
 | Government identifiers | **Not built** (excluded) |
 | Guardian self-service upload | **Not built** (Portal, not authorized) |
 | Reminders, Data Health findings, percentages | **Not built** (excluded) |
+
+## Houses (SIS 11.7, 2026-10-31, OD-SIS-4)
+
+House is the first authorized Student Group pilot (`docs/sis/SIS-11-7-HOUSES.md`,
+CLAUDE.md rule 128). Students owns it.
+
+- **Tables:** `student_groups` (closed type `house`; School-wide, no
+  Campus), `student_group_memberships` (effective-dated, inclusive
+  `ends_on`, one current per Student, no overlap) and
+  `student_group_responsibilities` (House Captain and Vice Captain unique per
+  House, Prefect multiple). All have forced RLS and same-School composite
+  keys, and none has a runtime DELETE.
+- **Writers:** `HouseAdministrationService` (Houses) and `StudentHouseService`
+  (membership and responsibilities). Explicit only: no bulk, import or
+  automatic allocation.
+- **History:** a change or end closes the row yesterday; the new row starts
+  today (School-local). Stale forms are refused with `StudentHouseVersion`.
+- **Independence:** status changes, Campus transfer, rollover and Admissions
+  conversion never touch a House. Only an active Student gets a new House or
+  responsibility, and a House with current members cannot be deactivated.
+- **Capabilities:** `students.houses.view` (Campus-adopted; counts and roster
+  rows follow the viewer's scope; a Student's full House history is
+  whole-School), `students.houses.manage` and `students.houses.assign` (whole
+  School). Held by `school_admin` and `principal` only.
+- **Never authority:** a House or responsibility grants no capability,
+  scope or visibility.
+- **Reads:** the House directory, the Student 360 House card and the
+  `students.houses` report (browser-only).
+- **Retention:** memberships and responsibilities are part of the Student
+  core record (cascade); Houses are School configuration.

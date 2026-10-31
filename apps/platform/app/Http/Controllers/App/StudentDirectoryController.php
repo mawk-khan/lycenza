@@ -101,6 +101,8 @@ class StudentDirectoryController extends Controller
             // onboarding needs both keys (and re-decides everything itself).
             'canManage' => ! $campusView && $access->holdsWholeSchool($actor, 'students.manage', $school),
             'canOnboard' => ! $access->scopeOf($actor, 'students.manage', $school)->isNone() && ! $access->scopeOf($actor, 'enrollments.manage', $school)->isNone(),
+            // SIS 11.7: the Houses page opens on students.houses.view (any scope).
+            'canViewHouses' => ! $access->scopeOf($actor, 'students.houses.view', $school)->isNone(),
         ]);
     }
 

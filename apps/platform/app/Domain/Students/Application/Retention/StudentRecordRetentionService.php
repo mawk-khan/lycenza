@@ -75,7 +75,9 @@ final class StudentRecordRetentionService
         // SIS.EXP-3: a Student document record cascades with its Document and Student.
         'student_documents',
         // SIS.EXP-4: an issued certificate cascades with its Student, placement and Document.
-        'student_certificates'];
+        'student_certificates',
+        // SIS 11.7: House memberships (and their responsibilities) cascade with their Student.
+        'student_group_memberships'];
 
     public function __construct(
         private readonly StudentRetentionEligibility $students,

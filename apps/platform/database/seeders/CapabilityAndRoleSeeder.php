@@ -192,6 +192,10 @@ class CapabilityAndRoleSeeder extends Seeder
             ['key' => 'admissions.export', 'label' => 'Export and print the Admission applications report', 'namespace' => 'school'],
             // SIS 11.5 (owner decisions 2026-10-31): document compliance.
             ['key' => 'students.documents.verify', 'label' => 'Verify or reject Student and Applicant documents', 'namespace' => 'school'],
+            // SIS 11.7 (OD-SIS-4): Houses, the first Student community.
+            ['key' => 'students.houses.view', 'label' => 'View Houses, House rosters and Students\' House history', 'namespace' => 'school'],
+            ['key' => 'students.houses.manage', 'label' => 'Create, correct and deactivate Houses', 'namespace' => 'school'],
+            ['key' => 'students.houses.assign', 'label' => 'Assign Students to Houses and House responsibilities', 'namespace' => 'school'],
             ['key' => 'admissions.documents.view', 'label' => 'View and download pre-admission documents', 'namespace' => 'school'],
             ['key' => 'admissions.documents.manage', 'label' => 'Upload and archive pre-admission documents', 'namespace' => 'school'],
 
@@ -1147,6 +1151,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     'students.documents.view', 'students.documents.manage',
                     // SIS 11.5: verify Student/Applicant documents; pre-admission documents.
                     'students.documents.verify', 'admissions.documents.view', 'admissions.documents.manage',
+                    // SIS 11.7: Houses (view Campus-adopted; manage and assign whole School).
+                    'students.houses.view', 'students.houses.manage', 'students.houses.assign',
                     // SIS.EXP-4 (OD-SIS-2): Leaving/Transfer certificates.
                     'students.certificates.issue',
                     // SIS.EXP-5 (OD-SIS-3): bulk import, School Admin only.
@@ -1495,6 +1501,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     'students.documents.view', 'students.documents.manage',
                     // SIS 11.5: verify Student/Applicant documents; pre-admission documents.
                     'students.documents.verify', 'admissions.documents.view', 'admissions.documents.manage',
+                    // SIS 11.7: Houses (view Campus-adopted; manage and assign whole School).
+                    'students.houses.view', 'students.houses.manage', 'students.houses.assign',
                     // SIS.EXP-4 (OD-SIS-2): Leaving/Transfer certificates.
                     'students.certificates.issue',
                     'guardians.view', 'guardians.manage',

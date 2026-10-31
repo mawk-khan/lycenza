@@ -10,6 +10,7 @@ use App\Domain\Payments\Application\Collections\OutstandingFeeRow;
 use App\Domain\Payments\Application\Collections\OutstandingFeesReadService;
 use App\Domain\Students\Application\Certificates\StudentCertificateReader;
 use App\Domain\Students\Application\Documents\StudentDocumentReader;
+use App\Domain\Students\Application\Groups\StudentHouseService;
 use App\Domain\Students\Application\StudentAccess;
 use App\Domain\Students\Application\SubjectOfferingRosterReadService;
 use App\Domain\Students\Infrastructure\Student;
@@ -75,6 +76,7 @@ final class StudentProfileSections
         private readonly LibraryStudentSummaryReader $library,
         private readonly StudentDocumentReader $documents,
         private readonly StudentCertificateReader $certificates,
+        private readonly StudentHouseService $houses,
     ) {}
 
     /**
@@ -126,6 +128,12 @@ final class StudentProfileSections
         // its own page behind current MFA.
         if (($documents = $this->documents->summary($school, $actor, $student)) !== null) {
             $sections['documents'] = $documents;
+        }
+        // SIS 11.7: the current House, under the viewer's students.houses.view
+        // scope (absent without it); the history page is whole-School.
+        $houseScope = $this->scopes->campusScope($actor, StudentHouseService::VIEW, $school);
+        if (($house = $this->houses->summary($school, $houseScope, $student)) !== null) {
+            $sections['house'] = [...$house, 'link' => $houseScope->isWholeSchool() ? "/app/students/{$student->id}/house" : null];
         }
         // SIS.EXP-4: certificate history (safe metadata; one query).
         if (($certificates = $this->certificates->historyFor($school, $actor, $student)) !== null) {

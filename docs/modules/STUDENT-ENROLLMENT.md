@@ -3382,3 +3382,13 @@ The SIS expansion is closed (`docs/sis/SIS-EXPANSION-CLOSURE.md`).
   `students.view` is checked once, before the transaction.
 - **Unchanged decisions:** back-dating rules, advisory Section capacity, no
   cross-School transfer and no merge.
+
+## Houses are not placements (SIS 11.7, 2026-10-31)
+
+House membership (`docs/sis/SIS-11-7-HOUSES.md`, rule 128) is School-wide
+and independent of placements. Enrollment, Campus transfer, rollover,
+withdrawal, completion and cancellation never read or write
+`student_group_*`, and a new academic year never copies or ends a House
+(`StudentGroupArchitectureTest`). The `students.houses` roster shows the
+current placement next to the House, read through `StudentAccess` under the
+viewer's `enrollments.view` scope.

@@ -782,6 +782,15 @@ The findings above are kept as recorded. SIS 11.H1
 | §8.9 docblock drift | CLOSED |
 | L-5 (print audit per load) | informational, unchanged |
 
+### SIS 11.7 reconciliation (added 2026-10-31)
+
+SIS 11.7 (OD-SIS-4) delivered the House pilot: C49 (House only), C51 met;
+C50 membership rules met for one current House with history, bulk assign
+not adopted; C52 mentors deferred; C53 badges/schedules and C54 gender
+analysis not adopted; C55 stays with Fees. SR-17 is partially met (House);
+the full group-coverage reconciliation is `SIS-11-7-HOUSES.md` §8. The
+headline scores in this audit are not recomputed here.
+
 ## Appendix A — Capability inventory (114)
 
 Bold in "After 11.5" marks a change since SIS.EXP-CLOSE.
@@ -836,10 +845,10 @@ Bold in "After 11.5" marks a change since SIS.EXP-CLOSE.
 | C46 | SR-16 | Period types with an attendance flag | R9 | R9 | R9 | Timetable | — | Timetable ERP |
 | C47 | SR-16 | Practical batches | R9 | R9 | R9 | Timetable | SIS-022 | Timetable ERP |
 | C48 | SR-16 | Staff workload | R9 | R9 | R9 | Timetable/HR | — | Timetable ERP |
-| C49 | SR-17 | Typed groups per year (house, club, project) with description | R11 | R11 | R11 | Students | OD-SIS-4 / D-17 | owner decision (named concept pilot) |
+| C49 | SR-17 | Typed groups per year (house, club, project) with description | R11 | R11 | R11 | Students | OD-SIS-4 / D-17 | owner decision (named concept pilot) — **House met by SIS 11.7** (School-wide, not per year); other types still gated |
 | C50 | SR-17 | Membership rules and bulk assign | R11 | R11 | R11 | Students | OD-SIS-4 | with C49 |
-| C51 | SR-17 | Student responsibilities (captain, prefect) | R11 | R11 | R11 | Students | OD-SIS-4 | with C49 |
-| C52 | SR-17 | Staff mentors of a group | R11 | R11 | R11 | Students + HR | OD-SIS-4; current-staff seam (rule 108) | with C49 |
+| C51 | SR-17 | Student responsibilities (captain, prefect) | R11 | R11 | R11 | Students | OD-SIS-4 | with C49 — **met by SIS 11.7** (Captain, Vice Captain, Prefect; descriptive) |
+| C52 | SR-17 | Staff mentors of a group | R11 | R11 | R11 | Students + HR | OD-SIS-4; current-staff seam (rule 108) | with C49 — deferred by SIS 11.7 |
 | C53 | SR-17 | Participation badges and schedules | R11 | R11 | R11 | Students | OD-SIS-4 | with C49 |
 | C54 | SR-17 | Gender split / untagged-by-gender analysis of groups | R7 | R7 | R7 | — | gender analytics not adopted | never |
 | C55 | SR-17 | Finance/store "groups" (fee targeting) | R9 | R9 | R9 | Fees | fee structures | Finance |

@@ -45,6 +45,9 @@ final class StudentReportFilter
         'campus_id' => ['Campus', self::ENTITY],
         'grade_level_id' => ['Grade', self::ENTITY],
         'section_id' => ['Section', self::ENTITY],
+        // SIS 11.7: the House roster.
+        'house_id' => ['House', self::ENTITY],
+        'responsibility' => ['Responsibility', self::CHOICE],
         'status' => ['Status', self::CHOICE],
         'category' => ['Category', self::CHOICE],
         'type' => ['Type', self::CHOICE],

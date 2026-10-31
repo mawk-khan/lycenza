@@ -407,6 +407,33 @@ Reload, review the latest details, and make your change again.
   - It is for whole-School document viewers, behind MFA. It cannot be
     exported or printed.
 
+### Houses (SIS 11.7)
+
+- **Students → Houses** (School Administrator, Principal) lists the School's
+  Houses with their current member count. Create a House with a name and a
+  short code, both unique in the School; correct them with **Edit**.
+  - A Campus Principal sees the list with counts of their own Campus only.
+  - **Deactivate** is refused while a House still has current members: move
+    or end their memberships first. A House is never deleted, and its
+    history stays on every Student record.
+- **A Student's House** (from their page, **House**):
+  - **Assign a House** starts today. **Change House** asks for a reason
+    (Moved to another House, or Correction): the old House ends yesterday
+    and the new one starts today, so the history shows both.
+  - **End membership** (School decision, Left the School or Correction)
+    leaves the Student without a House.
+  - **Give a responsibility**: House Captain and Vice Captain (one at a time
+    per House) or Prefect (several). A responsibility ends when its House
+    membership ends.
+  - Only an active Student can be given a House or a responsibility. An
+    inactive Student keeps their House; a transfer, rollover or reactivation
+    never changes it.
+- **Student reports → House roster** lists current members by House, with
+  their class and responsibility, filterable by House, responsibility,
+  Campus, Grade and Section. It cannot be exported or printed.
+- A House or a responsibility is a label only: it never gives anyone access
+  to anything. Teachers do not see Houses.
+
 ## 9. Students and placements
 
 - **Add student** (SIS 2.3) asks for the name and date of birth only:

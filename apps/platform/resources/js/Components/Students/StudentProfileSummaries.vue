@@ -21,6 +21,7 @@ const hasAny = computed(
         props.sections.hostel !== undefined ||
         props.sections.library !== undefined ||
         props.sections.documents !== undefined ||
+        props.sections.house !== undefined ||
         props.sections.certificates !== undefined,
 );
 
@@ -215,6 +216,34 @@ function money(amount: string | null, currency: string | null): string {
                 </p>
                 <a class="mt-2 inline-block text-sm underline" :href="sections.library.link"
                     >Loans</a
+                >
+            </article>
+
+            <!-- SIS 11.7: the current House (descriptive; never authority). -->
+            <article
+                v-if="sections.house"
+                class="rounded border border-slate-200 p-4"
+                aria-labelledby="glance-house"
+            >
+                <h3 id="glance-house" class="text-sm font-semibold">House</h3>
+                <p v-if="sections.house.house" class="mt-2 text-sm">
+                    {{ sections.house.house }}
+                    <span v-if="sections.house.since" class="block text-xs text-slate-500"
+                        >Since {{ formatCalendarDate(sections.house.since) }}</span
+                    >
+                </p>
+                <p v-else class="mt-2 text-sm text-slate-500">No House</p>
+                <p
+                    v-if="sections.house.responsibilities.length > 0"
+                    class="mt-1 text-xs text-slate-600"
+                >
+                    {{ sections.house.responsibilities.join(', ') }}
+                </p>
+                <a
+                    v-if="sections.house.link"
+                    class="mt-2 inline-block text-sm underline"
+                    :href="sections.house.link"
+                    >House and history</a
                 >
             </article>
 

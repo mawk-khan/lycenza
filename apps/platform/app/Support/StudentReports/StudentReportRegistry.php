@@ -9,6 +9,7 @@ use App\Domain\Students\Application\Documents\DocumentComplianceCohort;
 use App\Domain\Students\Application\Movements\StudentMovementRegister;
 use App\Domain\Students\Application\Reports\Exports\StudentDirectoryExporter;
 use App\Domain\Students\Application\Reports\Exports\StudentMovementExporter;
+use App\Domain\Students\Application\Reports\HouseRosterReport;
 use App\Domain\Students\Application\Reports\SectionCapacityReport;
 use App\Domain\Students\Application\Reports\StudentLifecycleReport;
 use App\Domain\Students\Application\StudentDirectoryOrder;
@@ -42,6 +43,8 @@ final class StudentReportRegistry
         StudentLifecycleReport::class,
         SiblingReport::class,
         SectionCapacityReport::class,
+        // SIS 11.7 (OD-SIS-4): the House roster (browser-only).
+        HouseRosterReport::class,
     ];
 
     /**

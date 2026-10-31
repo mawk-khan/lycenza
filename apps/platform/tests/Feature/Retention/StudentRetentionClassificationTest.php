@@ -30,6 +30,8 @@ class StudentRetentionClassificationTest extends TestCase
             'student_lifecycle_events' => 'D7 core: lifecycle evidence, removed with its Student (cascade)',
             // SIS.EXP-3: the Student-record side of a Student-owned Document; part of the core record (handled).
             'student_documents' => 'D7 core: a Student document record, removed with its Document and Student (cascade)',
+            // SIS 11.7: House history goes with the Student (responsibilities with their membership).
+            'student_group_memberships' => 'D7 core: a House membership, removed with its Student (cascade)',
             // SIS.EXP-4: an issued certificate is part of the core record (handled).
             'student_certificates' => 'D7 core: an issued certificate, removed with its Student (cascade)',
             'student_enrollments' => 'D7 core (25 y): placements, purged with the Student',

@@ -46,7 +46,7 @@ The brief's candidate order was re-sequenced on repository evidence:
 | **SIS.EXP-4** | Leaving / Transfer Certificate | Issue a numbered certificate from a leaver's lifecycle facts, with an append-only issue register and the stored output in Documents. Never withheld for dues without a legal basis | *decision-gated* OD-SIS-2 (format, numbering, wording) + legal review; needs EXP-3 | M | yes (§5) | SR-41, SR-12 (certificate checkpoint) |
 | **SIS.EXP-5** | Bulk Student & Guardian Import | An add-only, all-or-nothing import adapter over `StudentService`, `StudentEnrollmentService` and the Guardian services. Preview is read-only and signed; commit is one transaction; no match by name (rule 107 pattern) | *decision-gated* OD-SIS-3 (OD-SWC-4 / OD-PPR-20) | M–L | none expected (server-issued form key) | SR-06 |
 | **SIS.EXP-6** | Annual Record Confirmation & Guardian Acknowledgement | Before a new year, a Guardian confirms the Student's record and acknowledges named School terms. The Portal owns the UX; SIS owns the confirmation record | *decision-gated* OD-SIS-5 + legal review of electronic acceptance; Guardian portal production gates still apply (POR-L1) | M | yes (§5) | SR-13 |
-| **SIS.EXP-7** | House (or Club) Membership | The one named concept a pilot asks for: per-year membership, one House per Student per year, optional responsibility labels from a closed list. No generic group engine, no gender analytics, no badges | *decision-gated* OD-SIS-4 (D-17 revisit) | M | yes (§5) | SR-17 (part) |
+| **SIS.EXP-7** | House (or Club) Membership | The one named concept a pilot asks for: per-year membership, one House per Student per year, optional responsibility labels from a closed list. No generic group engine, no gender analytics, no badges. **Delivered as SIS 11.7** (OD-SIS-4 decided: House); membership is effective-dated across years, not per year (`SIS-11-7-HOUSES.md` §4) | **DONE** (SIS 11.7) | M | yes (§5) | SR-17 (part) |
 | **SIS.EXP-8** | SIS Parity Closure Re-audit | Re-read the 42-family map; reclassify; rescore; verify the demo world; record the remaining owner/legal gates | after the chosen waves | audit | none | all |
 
 ### 2.0g SIS 11.x — Advanced SIS expansion: SIS 11.1 IMPLEMENTED (2026-10-30)
@@ -137,6 +137,23 @@ the recommendation was hardening first.
 - the cross-cutting change checklist committed.
 
 No capability, feature table or score change.
+
+**SIS 11.7 IMPLEMENTED (2026-10-31, `SIS-11-7-HOUSES.md`; OD-SIS-4: House
+is the first authorized Student Group pilot):**
+- School-wide Houses (closed group type `house`, unique name and code,
+  deactivated never deleted, refused while it has current members);
+- effective-dated House membership with full history: at most one current
+  House (partial unique index + no-overlap trigger), stale-safe
+  (`StudentHouseVersion`), independent of status changes, Campus transfer,
+  rollover and conversion;
+- descriptive responsibilities (Captain and Vice Captain unique per House,
+  Prefect multiple), never a permission; staff mentors deferred;
+- Student 360 House card, House directory with Campus-scoped counts, the
+  `students.houses` roster report (browser-only);
+- capabilities `students.houses.view` (Campus-adopted) / `.manage` /
+  `.assign`, `school_admin` and `principal` only.
+
+SR-17 → partially met (House). No score change.
 
 **Next: owner decision; NOT STARTED; never auto-start.**
 
@@ -336,7 +353,7 @@ queries; directory unchanged at 27 ± 2.
 | OD-SIS-1 | Activate Student (and Guardian?) documents (= OD-SWC-2, PV1-15): categories, who uploads and views, Guardian visibility, verification, expiry, retention class | Activate Student only first; closed category catalogue; staff-only visibility; health-classified tier for immunisation; no applicant documents until Admissions decides | EXP-3 |
 | OD-SIS-2 | Leaving/transfer certificate (CRT-001/002): format, numbering, wording, dues policy | One numbered register per School; output stored as a Document; never withheld for dues without a legal basis; statutory wording via legal review | EXP-4 |
 | OD-SIS-3 | Bulk import (OD-SWC-4 / OD-PPR-20) | Add-only CSV of Students + first placement (+ optional Guardians), whole School only, all-or-nothing | EXP-5 |
-| OD-SIS-4 | Houses/clubs (D-17 revisit) | Wait for a pilot to name one concept; model House first if any | EXP-7 |
+| OD-SIS-4 | Houses/clubs (D-17 revisit) | **DECIDED 2026-10-31: House is the first authorized Student Group pilot** (clubs and other types stay gated) | EXP-7 → SIS 11.7 |
 | OD-SIS-5 | Annual record confirmation and Guardian acknowledgement ("contracts") | Confirmation of existing fields + acknowledgement of named, versioned School terms; no IP address stored; legal review before calling it an agreement. **SIS.EXP-R1: `LEGAL_REVIEW_REQUIRED` first** (audit §4) | EXP-6 |
 | OD-SIS-6 | Operational Section headcount vs advisory capacity | Allow an operational, whole-School, no-attribute headcount per Section next to capacity, outside the Analytics gate; no gender/age/fee splits | small read in EXP-2 if approved |
 | OD-SIS-7 | Student home address | Do not add until a named purpose (Transport stop planning, statutory register) is approved; then the ORG.12C address shape | — |

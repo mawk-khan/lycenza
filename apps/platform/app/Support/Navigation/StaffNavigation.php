@@ -135,7 +135,7 @@ final class StaffNavigation
             // SIS 11.1/11.2: the SIS Reports hub. Every key is Campus-adopted, so a
             // Campus holder sees it; the hub lists only the reports the viewer
             // may open (StudentReportAccess), each re-checked by its page.
-            new E('student-reports', 'people', 'Student reports', 'app.students.reports.index', activeWhen: ['app.students.reports.*'], any: ['students.view', 'enrollments.view', 'admissions.view']),
+            new E('student-reports', 'people', 'Student reports', 'app.students.reports.index', activeWhen: ['app.students.reports.*'], any: ['students.view', 'enrollments.view', 'admissions.view', 'students.houses.view']),
             new E('student-import', 'people', 'Import Students', 'app.students.import.create', all: ['students.import', 'students.manage', 'guardians.manage', 'enrollments.manage']),
             // Phase 1B.7F: both capabilities, as the page requires.
             new E('enrollment-rollovers', 'people', 'Enrollment rollovers', 'app.enrollment-rollovers.index', all: ['enrollments.view', 'enrollments.rollovers.view']),

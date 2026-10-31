@@ -83,6 +83,7 @@ use App\Http\Controllers\App\GuardianPortalOffboardingController;
 use App\Http\Controllers\App\HostelController;
 use App\Http\Controllers\App\HostelResidencyController;
 use App\Http\Controllers\App\HostelRoomController;
+use App\Http\Controllers\App\HouseController;
 use App\Http\Controllers\App\HR\HrController;
 use App\Http\Controllers\App\HR\HrDepartmentController;
 use App\Http\Controllers\App\HR\HrEmployeeAccountLinkController;
@@ -156,6 +157,7 @@ use App\Http\Controllers\App\StudentDocumentController;
 use App\Http\Controllers\App\StudentDocumentRequirementController;
 use App\Http\Controllers\App\StudentEnrollmentController;
 use App\Http\Controllers\App\StudentGuardianRelationshipController;
+use App\Http\Controllers\App\StudentHouseController;
 use App\Http\Controllers\App\StudentImportController;
 use App\Http\Controllers\App\StudentMovementController;
 use App\Http\Controllers\App\StudentProcessingAuthorizationController;
@@ -732,6 +734,14 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         // print view -- report authority AND the dataset export capability.
         Route::post('/reports/{report}/export', [StudentReportExportController::class, 'export'])->middleware('private-no-store')->name('reports.export');
         Route::get('/reports/{report}/print', [StudentReportExportController::class, 'print'])->middleware('private-no-store')->name('reports.print');
+        // SIS 11.7 (OD-SIS-4): Houses -- the list on the Campus-adopted
+        // students.houses.view (counts follow the viewer's Student scope);
+        // configuration on whole-School students.houses.manage. Literal paths
+        // before '/{student}'.
+        Route::get('/houses', [HouseController::class, 'index'])->name('houses.index');
+        Route::post('/houses', [HouseController::class, 'store'])->middleware('capability:students.houses.manage')->name('houses.store');
+        Route::put('/houses/{house}', [HouseController::class, 'update'])->whereUuid('house')->middleware('capability:students.houses.manage')->name('houses.update');
+        Route::post('/houses/{house}/status', [HouseController::class, 'status'])->whereUuid('house')->middleware('capability:students.houses.manage')->name('houses.status');
         // SIS 11.5: document requirement rules (whole-School
         // `students.documents.manage`) and the cohort document checklist --
         // states only, whole-School `students.view` + `students.documents.view`,
@@ -782,6 +792,19 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         // `students.documents.verify`, fresh MFA code in the controller).
         Route::post('/{student}/documents/{document}/decision', [StudentDocumentController::class, 'decide'])->whereUuid(['student', 'document'])
             ->middleware('capability:students.documents.verify')->name('documents.decide');
+        // SIS 11.7: one Student's House -- the page is a declared whole-School
+        // operation of students.houses.view; writes need whole-School
+        // students.houses.assign and the StudentHouseVersion the page showed.
+        Route::get('/{student}/house', [StudentHouseController::class, 'show'])->whereUuid('student')
+            ->middleware('capability:students.houses.view')->name('house.show');
+        Route::post('/{student}/house', [StudentHouseController::class, 'assign'])->whereUuid('student')
+            ->middleware('capability:students.houses.assign')->name('house.assign');
+        Route::post('/{student}/house/end', [StudentHouseController::class, 'end'])->whereUuid('student')
+            ->middleware('capability:students.houses.assign')->name('house.end');
+        Route::post('/{student}/house/responsibilities', [StudentHouseController::class, 'assignResponsibility'])->whereUuid('student')
+            ->middleware('capability:students.houses.assign')->name('house.responsibilities.assign');
+        Route::post('/{student}/house/responsibilities/{responsibility}/end', [StudentHouseController::class, 'endResponsibility'])->whereUuid(['student', 'responsibility'])
+            ->middleware('capability:students.houses.assign')->name('house.responsibilities.end');
         // SIS.EXP-4 (OD-SIS-2): Leaving/Transfer certificates. Staff web only;
         // whole-School `students.certificates.issue` (never Campus-adopted) for
         // every write, each with a fresh MFA code; the PDF downloads through the

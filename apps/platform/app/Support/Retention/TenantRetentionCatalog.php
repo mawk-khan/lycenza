@@ -151,7 +151,9 @@ final class TenantRetentionCatalog
             // SIS.EXP-3: a Student document record, removed with its Document and Student (cascade).
             'student_documents',
             // SIS.EXP-4: issued certificates go with the Student core record (cascade), never on their own.
-            'student_certificates']],
+            'student_certificates',
+            // SIS 11.7: House memberships and responsibilities go with the Student core record (cascade).
+            'student_group_memberships', 'student_group_responsibilities']],
         // RES.2 (ADR 0068 §12, §19): StudentMark and its value history. RES-L8 has no answer, so NO period is
         // adopted and nothing expires them; their Student / placement / authorization keys keep the Student core
         // record dependency_blocked until a RES retention participant exists. The one deliberate policy_unresolved.
@@ -230,6 +232,9 @@ final class TenantRetentionCatalog
             // SIS 11.5: document requirement rules -- closed dimensions, no
             // personal data; kept with the School (retired, never deleted).
             'student_document_requirements',
+            // SIS 11.7: Houses -- School communities, no personal data;
+            // kept with the School (deactivated, never deleted).
+            'student_groups',
         ]],
     ];
 
