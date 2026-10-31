@@ -13,10 +13,10 @@ use App\Domain\Students\Application\Exceptions\PossibleDuplicateStudentException
 use App\Domain\Students\Application\Exceptions\StudentOnboardingUnavailableException;
 use App\Domain\Students\Application\StudentAccess;
 use App\Domain\Students\Application\StudentDirectoryOrder;
+use App\Domain\Students\Application\StudentDirectoryQuery;
 use App\Domain\Students\Application\StudentEnrollmentReadService;
 use App\Domain\Students\Application\StudentNameEditService;
 use App\Domain\Students\Application\StudentProfileVersion;
-use App\Domain\Students\Application\StudentSearch;
 use App\Domain\Students\Infrastructure\Student;
 use App\Domain\Students\Infrastructure\StudentEnrollment;
 use App\Http\Controllers\App\Concerns\PresentsDuplicateStudentWarning;
@@ -26,6 +26,7 @@ use App\Models\School;
 use App\Models\User;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Authorization\Campus\CampusScope;
+use App\Support\StudentReports\StudentReportAccess;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Validation\DateOfBirth;
@@ -57,46 +58,19 @@ class StudentDirectoryController extends Controller
 {
     use AuthorizesCampusScope, PresentsDuplicateStudentWarning;
 
-    public function index(Request $request, TenantContext $context, StudentAccess $access, CurrentAcademicYearResolver $years): Response
+    public function index(Request $request, TenantContext $context, StudentAccess $access, CurrentAcademicYearResolver $years, StudentDirectoryQuery $directory, StudentReportAccess $reports): Response
     {
         $school = $context->requireSchool();
         $scope = $this->authorizeCampusScope('students.view', $school);
         $actor = $context->actor();
 
-        $validated = $request->validate([
-            'student_number' => ['sometimes', 'string', 'max:255'],
-            'name' => ['sometimes', 'string', 'max:255'],
-            'status' => ['sometimes', Rule::in(['active', 'inactive'])],
-            // SIS.EXP-1: current-placement filters (they only narrow, in SQL).
-            'campus_id' => ['sometimes', 'nullable', 'uuid'],
-            'grade_level_id' => ['sometimes', 'nullable', 'uuid'],
-            'section_id' => ['sometimes', 'nullable', 'uuid'],
-            // SIS 11.1: a closed sort (StudentDirectoryOrder, governed by the SIS report catalogue).
-            'sort' => ['sometimes', 'nullable', Rule::in(array_keys(StudentDirectoryOrder::SORTS))],
-            'page' => ['sometimes', 'integer', 'min:1'],
-        ]);
-
-        $query = StudentDirectoryOrder::apply($access->students($school, $scope), $validated['sort'] ?? null);
-
-        // UAT-C4 (UAT-SRCH-01): any part of the number; every name word in
-        // any name field (StudentSearch, LIKE-escaped).
-        if (isset($validated['student_number'])) {
-            StudentSearch::number($query, $validated['student_number']);
-        }
-        if (isset($validated['name'])) {
-            StudentSearch::name($query, $validated['name']);
-        }
-        // Narrowing only: a Campus actor's Directory holds active Students
-        // alone, so asking for inactive ones finds nothing.
-        if (isset($validated['status'])) {
-            $query->where('students.status', $validated['status']);
-        }
+        $validated = $request->validate(StudentDirectoryQuery::rules());
         // V11.2 (ADR 0075): the actor's enrollments.view scope (the
         // independent-capability rule) gates both the class column and,
         // SIS.EXP-1, the Campus / Grade / Section filters of the CURRENT
-        // placement (StudentAccess, in SQL; a forged id matches nothing).
+        // placement. SIS 11.4: one query shared with the governed export.
         $placementScope = $access->scopeOf($actor, 'enrollments.view', $school);
-        $access->narrowToCurrentPlacement($query, $school, $placementScope, $validated);
+        $query = $directory->build($school, $scope, $placementScope, $validated);
 
         $paginator = $query->paginate(StudentDirectoryOrder::PER_PAGE)->withQueryString();
 
@@ -110,6 +84,8 @@ class StudentDirectoryController extends Controller
             )),
             'canViewEnrollments' => ! $placementScope->isNone(),
             'campusView' => $campusView,
+            // SIS 11.4 (D-11): governed export/print (re-checked on the request).
+            'canExport' => $reports->mayExport($reports->viewer($actor, $school), 'students.directory'),
             'filters' => [
                 'student_number' => $validated['student_number'] ?? '',
                 'name' => $validated['name'] ?? '',

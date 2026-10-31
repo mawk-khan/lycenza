@@ -6,6 +6,7 @@ use App\Domain\Admissions\Infrastructure\AdmissionApplication;
 use App\Models\Campus;
 use App\Support\Authorization\Campus\CampusScope;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Str;
 
@@ -34,6 +35,17 @@ final class AdmissionApplicationAccess
     public function directory(CampusScope $scope, array $filters, int $perPage, ?\DateTimeZone $timezone = null): LengthAwarePaginator
     {
         return $this->reads->directory($filters, $perPage, $scope, $timezone);
+    }
+
+    /**
+     * SIS 11.4: the same list query, unpaginated, for the governed export.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return Builder<AdmissionApplication>
+     */
+    public function directoryQuery(CampusScope $scope, array $filters, ?\DateTimeZone $timezone = null): Builder
+    {
+        return $this->reads->directoryQuery($filters, $scope, $timezone);
     }
 
     public function detail(CampusScope $scope, string $id): AdmissionApplication

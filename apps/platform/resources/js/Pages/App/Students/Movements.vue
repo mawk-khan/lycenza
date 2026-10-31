@@ -6,6 +6,7 @@
 // Student.
 import { router } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import ReportExportActions from '../../../Components/Reports/ReportExportActions.vue';
 import EmptyState from '../../../Components/EmptyState.vue';
 import Pagination from '../../../Components/Pagination.vue';
 import { formatCalendarDate } from '../../../datetime';
@@ -63,6 +64,8 @@ interface Props {
         canFilterOutsideYear: boolean;
     };
     canOpenStudent: boolean;
+    // SIS 11.4: governed export/print, when this viewer may.
+    canExport?: boolean;
 }
 
 const props = defineProps<Props>();
@@ -147,6 +150,12 @@ function reason(code: string | null): string {
             Entries, movements and exits from each Student's placement and status history. Read
             only: changes happen on the Student and Enrollment pages.
         </p>
+        <ReportExportActions
+            v-if="canExport"
+            class="mt-4"
+            report-key="students.movements"
+            :query="filters"
+        />
 
         <form class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4" @submit.prevent="apply">
             <div>

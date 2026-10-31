@@ -45,6 +45,7 @@ use App\Models\School;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
 use App\Support\Authorization\Campus\CampusScope;
 use App\Support\Authorization\Campus\CampusScopeResolver;
+use App\Support\StudentReports\StudentReportAccess;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -103,24 +104,13 @@ class AdmissionApplicationController extends Controller
 
     // --- Directory ------------------------------------------------------
 
-    public function index(Request $request, TenantContext $context, CampusScopeResolver $scopes, AdmissionApplicationAccess $access): Response
+    public function index(Request $request, TenantContext $context, CampusScopeResolver $scopes, AdmissionApplicationAccess $access, StudentReportAccess $reports): Response
     {
         $school = $context->requireSchool();
         $scope = $this->authorizeCampusScope('admissions.view', $school);
 
-        $validated = $request->validate([
-            'status' => ['sometimes', Rule::in(['draft', 'submitted', 'accepted', 'rejected', 'withdrawn', 'converted'])],
-            'academic_year_id' => ['sometimes', 'uuid'],
-            'campus_id' => ['sometimes', 'uuid'],
-            'grade_level_id' => ['sometimes', 'uuid'],
-            'applicant_name' => ['sometimes', 'string', 'max:255'],
-            // SIS 11.2: the School-local day the application was created, and a
-            // closed sort (governed by the SIS report catalogue).
-            'created_from' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
-            'created_to' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'after_or_equal:created_from'],
-            'sort' => ['sometimes', 'nullable', Rule::in(array_keys(AdmissionApplicationReadService::SORTS))],
-            'page' => ['sometimes', 'integer', 'min:1'],
-        ]);
+        // SIS 11.4: one request contract, shared with the governed export.
+        $validated = $request->validate(AdmissionApplicationReadService::listRules());
 
         /** @var LengthAwarePaginator<int, AdmissionApplication> $paginator */
         $paginator = $access->directory($scope, array_filter($validated, fn ($v) => $v !== null), 20, SchoolTimezone::resolve($school))->withQueryString();
@@ -153,6 +143,8 @@ class AdmissionApplicationController extends Controller
             'canManage' => ! $scopes->campusScope($context->actor(), 'admissions.manage', $school)->isNone(),
             // ORG.7D-3: the Applicant directory stays whole-School.
             'canViewApplicants' => $scope->isWholeSchool(),
+            // SIS 11.4 (D-11): governed export/print (re-checked on the request).
+            'canExport' => $reports->mayExport($reports->viewer($context->actor(), $school), 'admissions.applications'),
         ]);
     }
 

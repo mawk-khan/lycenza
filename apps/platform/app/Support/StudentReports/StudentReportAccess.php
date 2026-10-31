@@ -68,6 +68,40 @@ final class StudentReportAccess
         return $report;
     }
 
+    /**
+     * SIS 11.4 (D-11): the exporter of $key when this viewer may export it --
+     * the report's own authority AND the dataset's export capability, held
+     * for the whole School (never Campus-adopted). Viewing never implies
+     * exporting.
+     *
+     * @return array{0: StudentReportDefinition, 1: Export\StudentReportExporter}
+     *
+     * @throws NotFoundHttpException unknown or not exportable
+     * @throws AuthorizationException
+     */
+    public function authorizeExport(StudentReportViewer $viewer, string $key): array
+    {
+        $definition = $this->registry->find($key);
+        $exporter = $this->registry->exporter($key);
+        if ($definition === null || $exporter === null) {
+            throw new NotFoundHttpException;
+        }
+        if (! $this->mayExport($viewer, $key)) {
+            $this->authorizeNothing();
+        }
+
+        return [$definition, $exporter];
+    }
+
+    public function mayExport(StudentReportViewer $viewer, string $key): bool
+    {
+        $definition = $this->registry->find($key);
+        $exporter = $this->registry->exporter($key);
+
+        return $definition !== null && $exporter !== null && $this->mayOpen($viewer, $definition)
+            && $viewer->holdsWholeSchool($exporter->exportDefinition()->capability);
+    }
+
     public function mayOpen(StudentReportViewer $viewer, StudentReportDefinition $definition): bool
     {
         foreach ($definition->authority as $capability) {

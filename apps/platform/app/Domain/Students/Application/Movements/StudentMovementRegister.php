@@ -12,6 +12,8 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 /**
  * SIS.EXP-2: the School-wide Student movement and exit register -- a
@@ -94,6 +96,69 @@ final class StudentMovementRegister
 
             return $raw->through(fn (object $row): array => $this->present($row, $placements, $years));
         });
+    }
+
+    /**
+     * SIS 11.4: the register's request contract, shared by the page and its
+     * governed export (a lifecycle type and the OUTSIDE_ACADEMIC_YEAR filter
+     * only for a whole-School `students.view` viewer).
+     *
+     * @return array<string, mixed>
+     */
+    public static function rules(bool $canViewStudents): array
+    {
+        $types = array_values(array_filter(StudentMovementType::cases(), fn (StudentMovementType $t) => $canViewStudents || ! $t->isStudentLifecycle()));
+
+        return [
+            // A year id, or (R-4) the events dated in no academic year.
+            'academic_year_id' => ['sometimes', 'nullable', 'bail', 'string', function (string $attribute, mixed $value, \Closure $fail) use ($canViewStudents): void {
+                if (! Str::isUuid($value) && ! ($canViewStudents && $value === self::OUTSIDE_ACADEMIC_YEAR)) {
+                    $fail('Choose one of the listed academic years.');
+                }
+            }],
+            'from' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
+            'to' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'category' => ['sometimes', 'nullable', Rule::in(StudentMovementType::CATEGORIES)],
+            'type' => ['sometimes', 'nullable', Rule::in(array_map(fn (StudentMovementType $t) => $t->value, $types))],
+            'campus_id' => ['sometimes', 'nullable', 'uuid'],
+            'grade_level_id' => ['sometimes', 'nullable', 'uuid'],
+            'section_id' => ['sometimes', 'nullable', 'uuid'],
+            'q' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'sort' => ['sometimes', 'nullable', Rule::in(array_keys(self::SORTS))],
+            'page' => ['sometimes', 'integer', 'min:1'],
+        ];
+    }
+
+    /** SIS 11.4: how many rows page()/rows() would list for these filters. */
+    public function count(School $school, array $filters, bool $includeStudentLifecycle): int
+    {
+        return $this->context->withSchool($school, fn (): int => $this->query($school, $filters, $includeStudentLifecycle)->count());
+    }
+
+    /**
+     * SIS 11.4: every row of the register for these filters, in its sort,
+     * presented exactly as page() presents them -- in bounded chunks (each a
+     * page query plus one eager-loaded placement read).
+     *
+     * @return iterable<array<string, mixed>>
+     */
+    public function rows(School $school, array $filters, bool $includeStudentLifecycle, int $chunk = 500): iterable
+    {
+        $order = self::SORTS[$filters['sort'] ?? 'date_desc'] ?? self::SORTS['date_desc'];
+        for ($page = 1; ; $page++) {
+            $batch = $this->context->withSchool($school, function () use ($school, $filters, $includeStudentLifecycle, $order, $page, $chunk): array {
+                /** @var Collection<int, object> $raw */
+                $raw = $this->query($school, $filters, $includeStudentLifecycle)->orderByRaw($order)->forPage($page, $chunk)->get();
+                $placements = $this->placements($raw);
+                $years = $this->yearsFor($school, $raw);
+
+                return $raw->map(fn (object $row): array => $this->present($row, $placements, $years))->all();
+            });
+            yield from $batch;
+            if (count($batch) < $chunk) {
+                return;
+            }
+        }
     }
 
     /** The projection with its filters (no ORDER BY, no page). */

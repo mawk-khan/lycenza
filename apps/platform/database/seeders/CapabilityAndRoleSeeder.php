@@ -185,6 +185,11 @@ class CapabilityAndRoleSeeder extends Seeder
             // (which the import ALSO requires). Whole-School only;
             // `school_admin` only.
             ['key' => 'students.import', 'label' => 'Import new Students, Guardians and placements in bulk (add-only)', 'namespace' => 'school'],
+            // SIS 11.4 (D-11): the per-dataset export capabilities -- a governed
+            // CSV/print of a report the holder can already view (never more),
+            // whole School only (not Campus-adopted), audited per export.
+            ['key' => 'students.export', 'label' => 'Export and print Student reports (CSV, print view)', 'namespace' => 'school'],
+            ['key' => 'admissions.export', 'label' => 'Export and print the Admission applications report', 'namespace' => 'school'],
 
             // Phase 5A.1 -- Communication Hub foundation. A single
             // `communications.manage` capability covers thread/
@@ -1140,6 +1145,8 @@ class CapabilityAndRoleSeeder extends Seeder
                     'students.certificates.issue',
                     // SIS.EXP-5 (OD-SIS-3): bulk import, School Admin only.
                     'students.import',
+                    // SIS 11.4 (D-11): governed exports, School Administrator only.
+                    'students.export', 'admissions.export',
                     'guardians.view', 'guardians.manage',
                     'communications.view', 'communications.send', 'communications.reply',
                     'communications.manage', 'communications.audit.view', 'communications.announce',

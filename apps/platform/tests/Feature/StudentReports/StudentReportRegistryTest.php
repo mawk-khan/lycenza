@@ -143,12 +143,13 @@ class StudentReportRegistryTest extends TestCase
     }
 
     #[Test]
-    public function the_reports_surface_is_two_read_only_routes_and_one_navigation_entry(): void
+    public function the_reports_surface_is_closed_routes_and_one_navigation_entry(): void
     {
         $routes = collect(app('router')->getRoutes()->getRoutes())
             ->filter(fn (Route $r) => str_starts_with((string) $r->getName(), 'app.students.reports.'));
-        $this->assertSame(['app.students.reports.index' => ['GET', 'HEAD'], 'app.students.reports.show' => ['GET', 'HEAD']],
-            $routes->mapWithKeys(fn (Route $r) => [$r->getName() => $r->methods()])->sortKeys()->all(), 'no export, print or write route');
+        // SIS 11.4 (D-11): the governed export is the one POST (audited, CSRF); print is a read.
+        $this->assertSame(['app.students.reports.export' => ['POST'], 'app.students.reports.index' => ['GET', 'HEAD'], 'app.students.reports.print' => ['GET', 'HEAD'], 'app.students.reports.show' => ['GET', 'HEAD']],
+            $routes->mapWithKeys(fn (Route $r) => [$r->getName() => $r->methods()])->sortKeys()->all(), 'no other write route');
 
         // The entry shows for a capability that opens some report, and every
         // report is reachable through one of its keys. All of them are

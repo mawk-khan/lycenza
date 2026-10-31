@@ -157,6 +157,7 @@ use App\Http\Controllers\App\StudentImportController;
 use App\Http\Controllers\App\StudentMovementController;
 use App\Http\Controllers\App\StudentProcessingAuthorizationController;
 use App\Http\Controllers\App\StudentReportController;
+use App\Http\Controllers\App\StudentReportExportController;
 use App\Http\Controllers\App\StudentSubjectEnrollmentController;
 use App\Http\Controllers\App\StudentTransferController;
 use App\Http\Controllers\App\SubjectOfferingAdminController;
@@ -724,6 +725,10 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         // paths before '/{student}'.
         Route::get('/reports', [StudentReportController::class, 'index'])->name('reports.index');
         Route::get('/reports/{report}', [StudentReportController::class, 'show'])->name('reports.show');
+        // SIS 11.4 (D-11): the governed export (CSV, POST: it is audited) and the
+        // print view -- report authority AND the dataset export capability.
+        Route::post('/reports/{report}/export', [StudentReportExportController::class, 'export'])->middleware('private-no-store')->name('reports.export');
+        Route::get('/reports/{report}/print', [StudentReportExportController::class, 'print'])->middleware('private-no-store')->name('reports.print');
         // SIS.EXP-5 (OD-SIS-3): the add-only bulk import (whole-School
         // `students.import`; never Campus-adopted). Registered before '/{student}'.
         Route::get('/import', [StudentImportController::class, 'create'])->middleware(['capability:students.import', 'private-no-store'])->name('import.create');

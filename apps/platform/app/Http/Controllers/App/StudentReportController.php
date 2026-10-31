@@ -67,6 +67,8 @@ class StudentReportController extends Controller
             'rows' => $rows,
             // "Nothing recorded yet" versus "nothing matches these filters".
             'hasAny' => $filtered ? $read->hasAny($school, $viewer) : $rows->total() > 0,
+            // SIS 11.4 (D-11): governed export/print, only when this viewer may (re-checked on the request).
+            'canExport' => $access->mayExport($viewer, $report),
         ]);
     }
 }

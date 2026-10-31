@@ -471,7 +471,7 @@ class AttendanceRecordsContextIntegrityTest extends TestCase
         $cases = [
             ['timetable_entries', $w['entry']->id, ['attendance_sessions_timetable_entry_fk', $revoked]],
             ['student_enrollments', $own->id, ['attendance_records_enrollment_context_fk', $revoked]],
-            ['sections', $w['section']->id, ['attendance_sessions_section_fk', 'student_enrollments_section_id_school_id_foreign', 'timetable_entries_section_fk']],
+            ['sections', $w['section']->id, ['attendance_sessions_section_fk', 'student_enrollments_section_id_school_id_foreign', 'student_enrollments_section_context_fk', 'timetable_entries_section_fk']],
             ['subject_offerings', $w['offering']->id, ['attendance_sessions_subject_offering_fk', 'timetable_entries_subject_offering_fk']],
             ['employees', $w['teacher']->id, ['attendance_sessions_teacher_fk', 'timetable_entries_teacher_fk', $revoked]],
             ['timetable_periods', $w['period']->id, ['attendance_sessions_period_fk', 'timetable_entries_period_fk']],

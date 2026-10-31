@@ -104,7 +104,7 @@ const accountLinkClass =
             >Skip to content</a
         >
         <header
-            class="border-b border-slate-200 bg-slate-50 font-sans text-sm text-slate-700"
+            class="border-b border-slate-200 bg-slate-50 font-sans text-sm text-slate-700 print:hidden"
             :class="brand ? 'border-t-4' : ''"
             :style="brand ? { borderTopColor: brand.accent } : undefined"
             data-testid="account-bar"
@@ -180,7 +180,8 @@ const accountLinkClass =
                 id="primary-navigation"
                 :class="[
                     menuOpen ? 'block' : 'hidden',
-                    'border-b border-slate-200 bg-slate-50 px-3 py-4 font-sans text-sm md:block md:w-60 md:shrink-0 md:border-r md:border-b-0',
+                    // SIS 11.4: printed pages (the report print view) carry no navigation.
+                    'border-b border-slate-200 bg-slate-50 px-3 py-4 font-sans text-sm md:block md:w-60 md:shrink-0 md:border-r md:border-b-0 print:hidden',
                 ]"
                 data-testid="primary-navigation"
             >

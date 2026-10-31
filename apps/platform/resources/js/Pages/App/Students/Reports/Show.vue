@@ -7,6 +7,7 @@ import { router } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import EmptyState from '../../../../Components/EmptyState.vue';
 import Pagination from '../../../../Components/Pagination.vue';
+import ReportExportActions from '../../../../Components/Reports/ReportExportActions.vue';
 import { formatCalendarDate } from '../../../../datetime';
 
 interface Option {
@@ -67,6 +68,8 @@ const props = defineProps<{
     };
     hasAny: boolean;
     errors?: Record<string, string>;
+    // SIS 11.4: governed export/print, when this viewer may.
+    canExport?: boolean;
 }>();
 
 // End date => start date (StudentReportFilter::DATE_RANGES): the end picker never goes before the start.
@@ -167,6 +170,12 @@ function text(value: unknown): string {
         <a class="text-sm underline" href="/app/students/reports">← Student reports</a>
         <h1 class="mt-2 text-xl font-semibold">{{ report.title }}</h1>
         <p class="mt-1 text-sm text-slate-500">{{ report.description }}</p>
+        <ReportExportActions
+            v-if="canExport"
+            class="mt-4"
+            :report-key="report.key"
+            :query="values"
+        />
 
         <form
             class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"

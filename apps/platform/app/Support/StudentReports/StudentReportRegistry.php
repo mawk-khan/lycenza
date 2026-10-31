@@ -3,8 +3,11 @@
 namespace App\Support\StudentReports;
 
 use App\Domain\Admissions\Application\AdmissionApplicationReadService;
+use App\Domain\Admissions\Application\Reports\AdmissionApplicationsExporter;
 use App\Domain\Guardians\Application\Reports\SiblingReport;
 use App\Domain\Students\Application\Movements\StudentMovementRegister;
+use App\Domain\Students\Application\Reports\Exports\StudentDirectoryExporter;
+use App\Domain\Students\Application\Reports\Exports\StudentMovementExporter;
 use App\Domain\Students\Application\Reports\SectionCapacityReport;
 use App\Domain\Students\Application\Reports\StudentLifecycleReport;
 use App\Domain\Students\Application\StudentDirectoryOrder;
@@ -36,6 +39,23 @@ final class StudentReportRegistry
         StudentLifecycleReport::class,
         SiblingReport::class,
         SectionCapacityReport::class,
+    ];
+
+    /**
+     * SIS 11.4 (D-11): the ONLY exportable reports and their exporter (built
+     * on the report's own query). Every other report -- including
+     * `students.siblings` (family relationships stay on screen) and
+     * `students.placements` (not in the pilot) -- cannot be exported or
+     * printed.
+     *
+     * @var array<string, class-string<Export\StudentReportExporter>>
+     */
+    public const array EXPORTERS = [
+        'students.directory' => StudentDirectoryExporter::class,
+        'students.movements' => StudentMovementExporter::class,
+        'students.lifecycle' => StudentLifecycleReport::class,
+        'students.section_capacity' => SectionCapacityReport::class,
+        'admissions.applications' => AdmissionApplicationsExporter::class,
     ];
 
     /** @var array<string, D>|null */
@@ -84,6 +104,14 @@ final class StudentReportRegistry
         }
 
         return null;
+    }
+
+    /** The exporter of an exportable report, or null (unknown key or not exportable). */
+    public function exporter(string $key): ?Export\StudentReportExporter
+    {
+        $class = self::EXPORTERS[$key] ?? null;
+
+        return $class === null || $this->find($key) === null ? null : $this->container->make($class);
     }
 
     /** @param  class-string<StudentReport>  $class */

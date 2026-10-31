@@ -12,10 +12,9 @@ use App\Domain\Students\Application\StudentAccess;
 use App\Http\Controllers\Controller;
 use App\Models\Campus;
 use App\Models\School;
+use App\Support\StudentReports\StudentReportAccess;
 use App\Support\Tenancy\TenantContext;
-use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -37,7 +36,7 @@ use Inertia\Response;
  */
 class StudentMovementController extends Controller
 {
-    public function index(Request $request, TenantContext $context, StudentAccess $access, StudentMovementRegister $register): Response
+    public function index(Request $request, TenantContext $context, StudentAccess $access, StudentMovementRegister $register, StudentReportAccess $reports): Response
     {
         $school = $context->requireSchool();
         // The route floor is `capability:enrollments.view` (whole-School, declared).
@@ -47,24 +46,8 @@ class StudentMovementController extends Controller
             ? StudentMovementType::cases()
             : array_values(array_filter(StudentMovementType::cases(), fn (StudentMovementType $t) => ! $t->isStudentLifecycle()));
 
-        $validated = $request->validate([
-            // A year id, or (R-4) the events dated in no academic year.
-            'academic_year_id' => ['sometimes', 'nullable', 'bail', 'string', function (string $attribute, mixed $value, Closure $fail) use ($canViewStudents): void {
-                if (! Str::isUuid($value) && ! ($canViewStudents && $value === StudentMovementRegister::OUTSIDE_ACADEMIC_YEAR)) {
-                    $fail('Choose an academic year from the list.');
-                }
-            }],
-            'from' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
-            'to' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'after_or_equal:from'],
-            'category' => ['sometimes', 'nullable', Rule::in(StudentMovementType::CATEGORIES)],
-            'type' => ['sometimes', 'nullable', Rule::in(array_map(fn (StudentMovementType $t) => $t->value, $types))],
-            'campus_id' => ['sometimes', 'nullable', 'uuid'],
-            'grade_level_id' => ['sometimes', 'nullable', 'uuid'],
-            'section_id' => ['sometimes', 'nullable', 'uuid'],
-            'q' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'sort' => ['sometimes', 'nullable', Rule::in(array_keys(StudentMovementRegister::SORTS))],
-            'page' => ['sometimes', 'integer', 'min:1'],
-        ]);
+        // SIS 11.4: one request contract, shared with the governed export.
+        $validated = $request->validate(StudentMovementRegister::rules($canViewStudents));
 
         $rows = $register->page($school, $validated, $canViewStudents, (int) ($validated['page'] ?? 1))->withQueryString();
 
@@ -74,6 +57,8 @@ class StudentMovementController extends Controller
                 ->mapWithKeys(fn (string $k) => [$k => (string) ($validated[$k] ?? '')])->all(),
             'options' => [...$this->options($school, $types), 'canFilterOutsideYear' => $canViewStudents],
             'canOpenStudent' => $canViewStudents,
+            // SIS 11.4 (D-11): governed export/print (re-checked on the request).
+            'canExport' => $reports->mayExport($reports->viewer($context->actor(), $school), 'students.movements'),
         ]);
     }
 

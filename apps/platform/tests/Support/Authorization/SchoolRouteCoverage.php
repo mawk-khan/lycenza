@@ -70,11 +70,13 @@ use App\Domain\StaffAttendance\Application\StaffAttendanceService;
 use App\Domain\Students\Application\CampusStudentOnboardingService;
 use App\Domain\Students\Application\CampusStudentTransferService;
 use App\Domain\Students\Application\StudentAccess;
+use App\Domain\Students\Application\StudentDirectoryQuery;
 use App\Domain\Students\Application\StudentNameEditService;
 use App\Domain\Timetable\Application\TimetableScheduleAccess;
 use App\Domain\Transport\Application\TransportRiderAccess;
 use App\Domain\Transport\Application\TransportRiderImport;
 use App\Domain\Visitor\Application\VisitorVisitAccess;
+use App\Support\StudentReports\Export\StudentReportExportService;
 use App\Support\StudentReports\StudentReportAccess;
 use Tests\Feature\Api\V1\SchoolContextTest;
 use Tests\Feature\App\StatutoryPayrollUiTest;
@@ -459,11 +461,17 @@ final class SchoolRouteCoverage
             Coverage::gate('app.elective-groups.offerings.destroy', 'academics.subjects.manage'),
 
             // Http\Controllers\App\StudentController
-            Coverage::campus('app.students.index', 'students.view', StudentAccess::class, 'students'),
+            // SIS 11.4: the Directory's one query (StudentDirectoryQuery::build -> StudentAccess::students), shared with its export.
+            Coverage::campus('app.students.index', 'students.view', StudentDirectoryQuery::class, 'build'),
             // SIS 11.1: the SIS Reports hub and the shared report page --
             // per-report authority from the closed StudentReportRegistry.
             Coverage::service('app.students.reports.index', StudentReportAccess::class, 'authorizeHub'),
             Coverage::service('app.students.reports.show', StudentReportAccess::class, 'authorizeReport'),
+            // SIS 11.4 (D-11): export and print -- report authority AND the
+            // dataset export capability (StudentReportExportService::prepare
+            // -> StudentReportAccess::authorizeExport).
+            Coverage::service('app.students.reports.export', StudentReportExportService::class, 'prepare')->validatesFirst(),
+            Coverage::service('app.students.reports.print', StudentReportExportService::class, 'prepare'),
             Coverage::campus('app.students.overview', 'students.view', StudentAccess::class, 'student'),
             // ORG.7F-2 (ADR 0076 §46): the narrow Campus writes.
             Coverage::campus('app.students.names.edit', 'students.manage', StudentAccess::class, 'student'),

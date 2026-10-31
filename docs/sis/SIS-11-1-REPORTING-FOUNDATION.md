@@ -188,7 +188,7 @@ reads **"Cancelled before start"**.
 |---|---|
 | Admissions report (`admissions.applications`) | **Deferred to SIS 11.2** (delivered there). The Admissions list already filters by year, Campus, Grade and status. Registering it needs its own Campus-scope review of `admissions.view`. |
 | Saved views | **Option B: later enhancement.** No preference store exists for report filters, and no schema is added. URL filters already cover copy and bookmark. |
-| Export | **None.** `exportable` is false on every column (pinned). Before any CSV/XLSX export (D-11): a governed export contract, then **formula-injection escaping**. Any cell starting with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with `'` (and quoted), on every column including names. Rules 103–104 stay authoritative. |
+| Export | **Delivered by SIS 11.4** (`SIS-11-4-EXPORT-AND-PRINT.md`, D-11): a separate export column contract per exporter; screen columns keep `exportable: false`. Originally: **None.** `exportable` is false on every column (pinned). Before any CSV/XLSX export (D-11): a governed export contract, then **formula-injection escaping**. Any cell starting with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with `'` (and quoted), on every column including names. Rules 103–104 stay authoritative. |
 | Print / PDF | None. Browser print is not an official report. |
 | Analytics | Operational listing only. The only number shown is the paginator total of rows the viewer may see (ADR 0042 §11). No rate, trend, percentage, breakdown or person count (ADR 0040, V11.1 D-01..D-04). |
 | Demographics | None (D-15). Prohibited column keys are refused in code. |

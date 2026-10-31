@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ReportExportActions from '../../../Components/Reports/ReportExportActions.vue';
 import { router } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import EmptyState from '../../../Components/EmptyState.vue';
@@ -63,6 +64,8 @@ interface Props {
     campusView: boolean;
     // ORG.7F-2: atomic Campus onboarding (students.manage AND enrollments.manage).
     canOnboard: boolean;
+    // SIS 11.4: governed export/print, when this viewer may.
+    canExport?: boolean;
 }
 
 const props = defineProps<Props>();
@@ -186,6 +189,13 @@ function studentHref(student: StudentRow): string {
                 </a>
             </div>
         </div>
+
+        <ReportExportActions
+            v-if="props.canExport"
+            class="mt-4"
+            report-key="students.directory"
+            :query="props.filters"
+        />
 
         <form class="mt-6 flex flex-wrap items-end gap-3" @submit.prevent="applyFilters">
             <div>

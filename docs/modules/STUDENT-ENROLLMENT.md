@@ -3143,6 +3143,13 @@ the viewer may open. `GET /app/students/reports/{report}`
   - **Report:** `students.section_capacity` (`Reports\SectionCapacityReport`).
   - **Rollover:** `RolloverCapacityAdvisory` (rollover warning only).
   - **Advisory:** nothing refuses a placement.
+- **SIS 11.4 (D-11):** governed export and print (`docs/sis/SIS-11-4-EXPORT-AND-PRINT.md`).
+  - `StudentReportRegistry::EXPORTERS` lists the only exportable reports.
+  - `StudentReportExportService` runs authority (report + `students.export`
+    / `admissions.export`) → the page's rules → declared columns → ceiling →
+    audit → streamed CSV or print.
+  - The Directory page and its export share `StudentDirectoryQuery`; the
+    movement register shares `rules()` / `rows()`.
 - **Contracts:** filters come from the closed `StudentReportFilter`
   vocabulary. Columns carry a privacy class, and prohibited keys are refused.
   Sorts are closed key → label maps. Every column is `exportable: false`

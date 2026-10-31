@@ -10,9 +10,13 @@ use App\Domain\Students\Application\StudentEnrollmentRosterReadService;
 use App\Models\Campus;
 use App\Models\School;
 use App\Support\Authorization\Campus\CampusScope;
+use App\Support\StudentReports\Export\StudentReportExportColumn as X;
+use App\Support\StudentReports\Export\StudentReportExportDefinition;
+use App\Support\StudentReports\Export\StudentReportExporter;
 use App\Support\StudentReports\StudentReport;
 use App\Support\StudentReports\StudentReportColumn as C;
 use App\Support\StudentReports\StudentReportDefinition;
+use App\Support\StudentReports\StudentReportFilter;
 use App\Support\StudentReports\StudentReportViewer;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
@@ -36,7 +40,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
  * - Bounded: one count and one page query (the strength is a grouped
  *   sub-query joined in SQL, so state filters and sorts stay in SQL).
  */
-final class SectionCapacityReport implements StudentReport
+final class SectionCapacityReport implements StudentReport, StudentReportExporter
 {
     /** The SQL form of SectionOccupancy::state() (pinned equal by SectionCapacityTest). */
     private const string STATE_SQL = "CASE WHEN st.section_id IS NULL THEN 'closed_year'
@@ -121,6 +125,63 @@ final class SectionCapacityReport implements StudentReport
         return $this->context->withSchool($school, fn (): bool => $this->query($school, $viewer->scope('enrollments.view'), [])->exists());
     }
 
+    // --- SIS 11.4 (D-11): the governed export, on the same query ------------
+
+    public function exportDefinition(): StudentReportExportDefinition
+    {
+        return new StudentReportExportDefinition('students.export', [
+            new X('academic_year', 'Academic year'),
+            new X('campus', 'Campus'),
+            new X('section', 'Section'),
+            new X('capacity', 'Advisory capacity'),
+            new X('students', 'Students'),
+            new X('seats', 'Seats'),
+            new X('counted_on', 'Counted on'),
+        ], 'section-capacity');
+    }
+
+    public function filterRules(School $school, StudentReportViewer $viewer): array
+    {
+        return StudentReportFilter::rules($this->definition()->filters, $this->options($school, $viewer), array_keys($this->definition()->sorts));
+    }
+
+    public function exportCount(School $school, StudentReportViewer $viewer, array $filters): int
+    {
+        return $this->context->withSchool($school, fn (): int => $this->query($school, $viewer->scope('enrollments.view'), $this->values($filters))->count());
+    }
+
+    public function exportRows(School $school, StudentReportViewer $viewer, array $filters): iterable
+    {
+        $order = self::SORTS[$filters['sort'] ?? 'section'] ?? self::SORTS['section'];
+        for ($page = 1; ; $page++) {
+            $batch = $this->context->withSchool($school, fn (): array => $this->query($school, $viewer->scope('enrollments.view'), $this->values($filters))
+                ->orderByRaw($order)->forPage($page, 500)->get()->map(fn (object $row): array => $this->present($row))->all());
+            foreach ($batch as $r) {
+                yield [
+                    'academic_year' => $r['academic_year'],
+                    'campus' => $r['campus'],
+                    'section' => $r['section']['name'],
+                    'capacity' => $r['capacity'],
+                    'students' => $r['strength'],
+                    'seats' => $r['seats'],
+                    'counted_on' => $r['as_of'],
+                ];
+            }
+            if (count($batch) < 500) {
+                return;
+            }
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, string>
+     */
+    private function values(array $validated): array
+    {
+        return array_map(fn ($v) => (string) $v, array_filter(array_intersect_key($validated, array_flip($this->definition()->filters)), fn ($v) => $v !== null && $v !== ''));
+    }
+
     /** @param  array<string, string>  $filters */
     private function query(School $school, CampusScope $scope, array $filters): Builder
     {
@@ -181,6 +242,8 @@ final class SectionCapacityReport implements StudentReport
             },
             'as_of' => $occupancy->asOf,
             'state' => $row->state,
+            'capacity' => $occupancy->capacity,
+            'strength' => $occupancy->strength,
         ];
     }
 }

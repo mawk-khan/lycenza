@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { router } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
+import ReportExportActions from '../../../Components/Reports/ReportExportActions.vue';
 import EmptyState from '../../../Components/EmptyState.vue';
 import Pagination from '../../../Components/Pagination.vue';
 import StatusBadge from '../../../Components/StatusBadge.vue';
@@ -62,6 +63,8 @@ interface Props {
     canManage: boolean;
     // ORG.7D-3: the Applicant directory and fee head stay whole-School.
     canViewApplicants: boolean;
+    // SIS 11.4: governed export/print, when this viewer may.
+    canExport?: boolean;
 }
 
 const props = defineProps<Props>();
@@ -149,6 +152,13 @@ function resetFilters(): void {
                 >
             </template>
         </div>
+
+        <ReportExportActions
+            v-if="props.canExport"
+            class="mt-4"
+            report-key="admissions.applications"
+            :query="props.filters"
+        />
 
         <form class="mt-6 flex flex-wrap items-end gap-3" @submit.prevent="applyFilters">
             <div>

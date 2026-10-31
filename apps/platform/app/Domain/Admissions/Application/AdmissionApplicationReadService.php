@@ -9,6 +9,7 @@ use App\Support\Search\NameSearch;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Validation\Rule;
 
 /**
  * Phase 1D.4: the canonical read layer for AdmissionApplication --
@@ -52,6 +53,22 @@ class AdmissionApplicationReadService
      * input only ever picks a key (the first is the default); each ends in
      * `id` so pagination is stable.
      */
+    /** SIS 11.4: the list's request contract, shared by the page and its governed export. */
+    public static function listRules(): array
+    {
+        return [
+            'status' => ['sometimes', Rule::in(self::KNOWN_STATUSES)],
+            'academic_year_id' => ['sometimes', 'uuid'],
+            'campus_id' => ['sometimes', 'uuid'],
+            'grade_level_id' => ['sometimes', 'uuid'],
+            'applicant_name' => ['sometimes', 'string', 'max:255'],
+            'created_from' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
+            'created_to' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'after_or_equal:created_from'],
+            'sort' => ['sometimes', 'nullable', Rule::in(array_keys(self::SORTS))],
+            'page' => ['sometimes', 'integer', 'min:1'],
+        ];
+    }
+
     public const array SORTS = [
         'created_desc' => 'Newest first',
         'created_asc' => 'Oldest first',
@@ -92,8 +109,18 @@ class AdmissionApplicationReadService
      */
     public function directory(array $filters = [], int $perPage = self::DEFAULT_PER_PAGE, ?CampusScope $scope = null, ?\DateTimeZone $timezone = null): LengthAwarePaginator
     {
-        $perPage = max(1, min($perPage, self::MAX_PER_PAGE));
+        return $this->directoryQuery($filters, $scope, $timezone)->paginate(max(1, min($perPage, self::MAX_PER_PAGE)));
+    }
 
+    /**
+     * SIS 11.4: the ONE application-list query (filters, scope, sort), shared
+     * by the list page, its API and the governed export.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return Builder<AdmissionApplication>
+     */
+    public function directoryQuery(array $filters = [], ?CampusScope $scope = null, ?\DateTimeZone $timezone = null): Builder
+    {
         $query = AdmissionApplication::query()
             ->select([
                 'id', 'school_id', 'applicant_id', 'academic_year_id', 'campus_id', 'grade_level_id',
@@ -135,7 +162,7 @@ class AdmissionApplicationReadService
             $query->where('created_at', '<', CarbonImmutable::parse($filters['created_to'], $zone)->addDay()->startOfDay()->utc()->toDateTimeString());
         }
 
-        return $query->paginate($perPage);
+        return $query;
     }
 
     /**

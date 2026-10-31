@@ -92,6 +92,18 @@ was approved.
 - An advisory rollover warning, never a blocker.
 - Not built: hard cap, Data Health finding, percentage or trend.
 
+**SIS 11.4 IMPLEMENTED (2026-10-31, `SIS-11-4-EXPORT-AND-PRINT.md`):** D-11
+(SIS export) is decided and delivered.
+
+- New `students.export` and `admissions.export` capabilities, School
+  Administrator only; they are needed in addition to the report's own
+  authority.
+- Five registered reports export CSV from their own queries, formula-safe,
+  streamed, at most 10,000 rows, and audited without row values.
+- A print-ready view under the same rules (at most 1,000 rows).
+- Siblings and placements are not exportable; XLSX and PDF are deferred.
+- No schema, files or jobs.
+
 **Next: owner decision; NOT STARTED; never auto-start.**
 
 ### 2.0f SIS.EXP-CLOSE — PROGRAMME CLOSED (2026-10-30)

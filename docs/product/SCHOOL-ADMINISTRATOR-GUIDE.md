@@ -488,6 +488,19 @@ read-only Student lists you may open:
   - A closed year's capacity cannot change.
   - Placement, transfer, conversion and rollover screens show the same
     "28 / 30 · 2 seats available".
+- **Download CSV / Print view** (SIS 11.4).
+  - **Where:** Student directory, Student lifecycle, Student movements,
+    Section capacity and Admission applications.
+  - **What you get:** a spreadsheet file or a print-ready page with exactly
+    the rows you filtered (every page of them, up to 10,000; 1,000 for
+    print), in the same order.
+  - **Who can:** School Administrators (`students.export`,
+    `admissions.export`), only for reports they can already open.
+  - **Each download or print is recorded** in the audit log, without the
+    data itself.
+  - **Never included:** dates of birth, contacts, Guardian details, fees or
+    internal ids. Values that look like spreadsheet formulas are made safe.
+  - **Not exportable:** the Siblings list.
 - **Student lifecycle:** every Student marked inactive or active again, and
   every placement withdrawn or cancelled, with the recorded reason and
   date. A placement cancelled before it started reads *Cancelled before

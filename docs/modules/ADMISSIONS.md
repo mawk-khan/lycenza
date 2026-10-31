@@ -888,3 +888,10 @@ The application list (`/app/admissions`) is the SIS report catalogue entry
   - a converted Student link only for whole-School `students.view` (never
     the Student's name or number).
 - **Never:** a fee, date of birth, contact, conversion rate or funnel.
+- **SIS 11.4 (D-11):** the list exports as CSV and prints, on
+  `AdmissionApplicationReadService::directoryQuery()` / `listRules()` (shared
+  with the page).
+  - Needs `admissions.export` (School Administrator) in addition to
+    `admissions.view`.
+  - Columns: Applicant, status, year, Campus, Grade, created on, converted
+    Yes/No. Never a date of birth, contact, decision note or fee.

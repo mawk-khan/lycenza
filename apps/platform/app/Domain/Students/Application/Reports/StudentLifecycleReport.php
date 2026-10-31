@@ -6,9 +6,13 @@ use App\Domain\Students\Application\StudentLifecycleReason;
 use App\Domain\Students\Application\StudentSearch;
 use App\Models\Campus;
 use App\Models\School;
+use App\Support\StudentReports\Export\StudentReportExportColumn as X;
+use App\Support\StudentReports\Export\StudentReportExportDefinition;
+use App\Support\StudentReports\Export\StudentReportExporter;
 use App\Support\StudentReports\StudentReport;
 use App\Support\StudentReports\StudentReportColumn as C;
 use App\Support\StudentReports\StudentReportDefinition;
+use App\Support\StudentReports\StudentReportFilter;
 use App\Support\StudentReports\StudentReportViewer;
 use App\Support\Tenancy\SchoolTimezone;
 use App\Support\Tenancy\TenantContext;
@@ -35,7 +39,7 @@ use Illuminate\Support\Facades\DB;
  *   MFA or audit metadata, Guardian, date of birth or Finance data.
  * - Bounded: one count and one page query (names joined in SQL).
  */
-final class StudentLifecycleReport implements StudentReport
+final class StudentLifecycleReport implements StudentReport, StudentReportExporter
 {
     public const array SORTS = [
         'date_desc' => 'occurred_at desc, id desc',
@@ -116,6 +120,63 @@ final class StudentLifecycleReport implements StudentReport
     public function hasAny(School $school, StudentReportViewer $viewer): bool
     {
         return $this->context->withSchool($school, fn (): bool => $this->query($school, $viewer, [])->exists());
+    }
+
+    // --- SIS 11.4 (D-11): the governed export, on the same query ------------
+
+    public function exportDefinition(): StudentReportExportDefinition
+    {
+        return new StudentReportExportDefinition('students.export', [
+            new X('recorded_on', 'Recorded on'),
+            new X('student_number', 'Student number'),
+            new X('student_name', 'Student name'),
+            new X('action', 'Action'),
+            new X('reason', 'Reason'),
+            new X('placement', 'Placement', ['enrollments.view']),
+        ], 'student-lifecycle');
+    }
+
+    public function filterRules(School $school, StudentReportViewer $viewer): array
+    {
+        return StudentReportFilter::rules($this->definition()->filters, $this->options($school, $viewer), array_keys($this->definition()->sorts));
+    }
+
+    public function exportCount(School $school, StudentReportViewer $viewer, array $filters): int
+    {
+        return $this->context->withSchool($school, fn (): int => $this->query($school, $viewer, $this->filterValues($filters))->count());
+    }
+
+    public function exportRows(School $school, StudentReportViewer $viewer, array $filters): iterable
+    {
+        $placementColumn = $viewer->maySee($this->definition()->columns[4], StudentReportDefinition::WHOLE_SCHOOL);
+        $order = self::SORTS[$filters['sort'] ?? 'date_desc'] ?? self::SORTS['date_desc'];
+        for ($page = 1; ; $page++) {
+            $batch = $this->context->withSchool($school, fn (): array => $this->query($school, $viewer, $this->filterValues($filters))
+                ->orderByRaw($order)->forPage($page, 500)->get()
+                ->map(fn (object $row): array => $this->present($row, $placementColumn))->all());
+            foreach ($batch as $r) {
+                yield [
+                    'recorded_on' => $r['occurred_on'],
+                    'student_number' => $r['student']['studentNumber'],
+                    'student_name' => $r['student']['name'],
+                    'action' => $r['action'],
+                    'reason' => $r['reason'],
+                    'placement' => isset($r['placement']) ? Exports\StudentMovementExporter::place($r['placement']) : null,
+                ];
+            }
+            if (count($batch) < 500) {
+                return;
+            }
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, string>
+     */
+    private function filterValues(array $validated): array
+    {
+        return array_map(fn ($v) => (string) $v, array_filter(array_intersect_key($validated, array_flip($this->definition()->filters)), fn ($v) => $v !== null && $v !== ''));
     }
 
     /** @return list<string> the actions this viewer may see */
