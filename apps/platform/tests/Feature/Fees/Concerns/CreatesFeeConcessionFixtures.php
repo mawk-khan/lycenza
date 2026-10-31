@@ -101,7 +101,9 @@ trait CreatesFeeConcessionFixtures
     /** @return array<string, string> ledger account id => "D:amount" / "C:amount" for one journal entry */
     protected function journalLines(array $w, string $journalEntryId): array
     {
-        return $this->inSchool($w['school'], fn () => JournalLine::query()->where('journal_entry_id', $journalEntryId)->get()
+        return $this->inSchool($w['school'], fn () => JournalLine::query()->where('journal_entry_id', $journalEntryId)
+            // SIS 11.H1 (CI flake): an explicit order -- debits first, then by id -- so the keyed comparison never depends on heap order.
+            ->orderByRaw('debit_amount IS NULL')->orderBy('id')->get()
             ->mapWithKeys(fn (JournalLine $l) => [$l->ledger_account_id => $l->debit_amount !== null ? "D:{$l->debit_amount}" : "C:{$l->credit_amount}"])->all());
     }
 }
