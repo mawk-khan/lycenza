@@ -86,6 +86,11 @@ waived or complete.
   2026-11-13 hard stop no longer applies. Next successor review around
   2026-11-20. The `symfony/mime` Medium is deferred by the owner to its own
   slice.)*
+  *(2026-11-01, **E16-R4**: `symfony/mime` v7.4.22 (Medium CVE-2026-45070)
+  and `league/flysystem` 3.35.3 (Low CVE-2026-102601). Two-package lock
+  update; `composer audit` is clean. E16-S2 is unchanged and stays current
+  through 2026-11-28. The E16-S2 post-publication qualification (run
+  41296953625) is recorded: both images VERIFIED.)*
   *(2026-10-16, E16-R2 HELD (owner): Upstream-fixed remediation has been demonstrated in an unpublished candidate, but Lycenza's authoritative vulnerability scanner continues to classify the app image as blocked. E16-R2 therefore remains held pending a scanner-recognised/Debian-qualified remediation path. Debian trixie nginx is monitored weekly; the nginx.org candidate `fb29aff5` stays unpublished as fallback evidence.)*
   *(Post-POR roadmap audit, 2026-10-09; a fact, not a new decision:* the
   lapse is not confined to final qualification. From 2026-10-29 (UTC) the

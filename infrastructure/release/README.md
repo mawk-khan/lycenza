@@ -261,6 +261,15 @@ still match and still expire on 2026-10-29.
 - **E16-S2:** 17 advisories and 119 records, valid through 2026-11-28
   (expiry 2026-11-29).
 - **Record:** `docs/security/release-remediation/0O-E16-2026-11-01-owner-security-decision.md`.
+- **Post-publication:** run 41296953625 on `af1ca5fa`, both images
+  **VERIFIED**.
+
+**E16-R4 (2026-11-01): `symfony/mime` v7.4.22 and `league/flysystem` 3.35.3.**
+- **What:** the two non-blocking Composer advisories of the E16-S2 review
+  (Medium CVE-2026-45070, Low CVE-2026-102601), remediated with a
+  two-package lock update.
+- **Exceptions:** none changed. E16-S2 stays valid through 2026-11-28.
+- **Record:** `docs/security/release-remediation/E16-R4-DEPENDENCY-REMEDIATION-2026-11-01.md`.
 
 Four **new** Debian advisories have no fix and no exception (krb5, Cyrus
 SASL, and two in libstdc++; 18 matches). Until a fresh owner/security

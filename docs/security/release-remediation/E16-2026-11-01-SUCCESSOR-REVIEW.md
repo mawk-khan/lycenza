@@ -311,3 +311,19 @@ This review does not touch:
 - any SIS, HR, Finance, Transport or Inventory feature.
 
 The `symfony/mime` fix is a separate, owner-deferred slice.
+
+## 10. Post-publication qualification (recorded 2026-11-01, with E16-R4)
+
+After `af1ca5fa` (E16-R3 + E16-S2) reached `main`, *Release qualification*
+run **41296953625** qualified it:
+- **app** `sha256:a94907f19d54b8f70538d9dac8de8a52d039e06b83f4d1d014324183274ccc4f`:
+  **VERIFIED**, 62 excepted, 0 blocking;
+- **ai-gateway** `sha256:e748dfdae3498f1340eff86e330443164c2d19f7af4a29f2f0705e2fc372cc03`:
+  **VERIFIED**, 57 excepted, 0 blocking, 0 Critical;
+- same-run regression passed; `verify-images.sh` exit 0; gitleaks 0 in the
+  source and in each image.
+
+This is the E16-S2 publication's own evidence. It was written down in the
+later E16-R4 change ([record](E16-R4-DEPENDENCY-REMEDIATION-2026-11-01.md)
+§8), because recording it at the time would have needed a further
+publication.

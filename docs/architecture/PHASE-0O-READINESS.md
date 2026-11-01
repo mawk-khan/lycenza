@@ -3354,3 +3354,31 @@ previous hard stop (2026-11-13) no longer applies.
 
 **Deferred (owner):** `symfony/mime` Medium CVE-2026-45070 goes to its own
 slice; `league/flysystem` Low is recommended for the same slice.
+
+## 71. Phase 0O / E16-R4 — `symfony/mime` and `league/flysystem` remediation (2026-11-01)
+
+**Record:** [`E16-R4-DEPENDENCY-REMEDIATION-2026-11-01.md`](../security/release-remediation/E16-R4-DEPENDENCY-REMEDIATION-2026-11-01.md).
+
+**Change (dependency-only):**
+- `symfony/mime` v7.4.16 → **v7.4.22** (Medium CVE-2026-45070);
+- `league/flysystem` 3.35.2 → **3.35.3** (Low CVE-2026-102601).
+
+Both are transitive (`laravel/framework`, `symfony/mailer`, the Flysystem
+adapters). The update was limited to these two packages: 2 lock operations,
+nothing else moved and nothing was downgraded. `composer audit` is now
+clean.
+
+**Image:** the application image built from the fix commit carries both
+fixed versions and has 0 Composer matches in Grype. It evaluates **PASS**
+under the unchanged E16-S2 file (62 excepted).
+
+**E16 unchanged:** `OWNER-0O-E16-2026-11-01` (17 advisories / 119 records)
+stays valid through **2026-11-28**, hard stop **2026-11-29**. The next
+successor review is still planned for about 2026-11-20.
+
+**E16-S2 post-publication qualification (historical evidence; not
+produced by R4).** *Release qualification* run 41296953625 on `main`
+`af1ca5fa`:
+- app `a94907f1` **VERIFIED** (62 excepted, 0 blocking);
+- ai-gateway `e748dfda` **VERIFIED** (57 excepted, 0 blocking, 0 Critical);
+- `verify-images.sh` passed, exit 0; gitleaks 0/0/0.
