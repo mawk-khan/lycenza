@@ -42,7 +42,7 @@ interface Props {
         to: number | null;
         total: number;
     };
-    filters: { date: string; sectionId: string; status: string };
+    filters: { date: string; section_id: string; status: string };
     sectionOptions: {
         id: string;
         name: string | null;
@@ -56,7 +56,7 @@ interface Props {
 const props = defineProps<Props>();
 
 const date = ref(props.filters.date);
-const sectionId = ref(props.filters.sectionId);
+const sectionId = ref(props.filters.section_id);
 const status = ref(props.filters.status);
 
 const statusLabels: Record<ExceptionRow['status'], string> = {
@@ -93,7 +93,7 @@ function clearFilters(): void {
     apply();
 }
 
-const hasNarrowing = computed(() => props.filters.sectionId !== '' || props.filters.status !== '');
+const hasNarrowing = computed(() => props.filters.section_id !== '' || props.filters.status !== '');
 
 function periodLabel(row: ExceptionRow): string {
     const time = row.periodStartTime ? formatTimeRange(row.periodStartTime, row.periodEndTime) : '';

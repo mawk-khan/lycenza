@@ -149,7 +149,9 @@ Logs: `ddev exec tail -f storage/logs/laravel.log`.
 ## 8. Frontend assets
 
 `ddev demo-reset --build` or `ddev exec npm run build` produces
-`apps/platform/public/build`. For hot reload during UI work, `ddev exec npm
+`apps/platform/public/build`. **After changing any Vue page, rebuild before
+reviewing in the browser:** a plain `ddev demo-reset` keeps an existing,
+possibly stale build (cross-cutting checklist §9b). For hot reload during UI work, `ddev exec npm
 run dev` is possible but not configured for DDEV's HTTPS router; the demo
 uses the production build.
 

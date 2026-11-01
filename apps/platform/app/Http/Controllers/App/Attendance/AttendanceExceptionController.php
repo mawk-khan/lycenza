@@ -44,7 +44,7 @@ class AttendanceExceptionController extends Controller
         return Inertia::render('App/Attendance/Exceptions', [
             'records' => $reads->list($school, $date, $sectionId, $status === null ? [] : [$status], (int) ($validated['page'] ?? 1), $actor)
                 ->withQueryString(),
-            'filters' => ['date' => $date, 'sectionId' => $sectionId ?? '', 'status' => $status ?? ''],
+            'filters' => ['date' => $date, 'section_id' => $sectionId ?? '', 'status' => $status ?? ''],
             'sectionOptions' => $reads->sectionOptions($school, $date, $actor),
             'statuses' => AttendanceExceptionReadService::EXCEPTION_STATUSES,
             // A row links to the Student only when the viewer may open it

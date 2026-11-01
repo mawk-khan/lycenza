@@ -33,6 +33,8 @@ final readonly class StudentReportDefinition
         'enrollment' => 'Enrollment',
         'lifecycle' => 'Lifecycle',
         'admissions' => 'Admissions',
+        // SIS 11.10: Attendance operational reports (`attendance.view`).
+        'attendance' => 'Attendance',
     ];
 
     public const int MAX_PER_PAGE = 50;

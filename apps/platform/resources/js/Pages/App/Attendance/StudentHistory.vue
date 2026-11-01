@@ -35,7 +35,8 @@ interface PageLink {
 interface Props {
     student: { id: string; name: string };
     rows: { data: Row[]; links: PageLink[]; total: number; from: number | null; to: number | null };
-    filters: { from: string; to: string };
+    filters: { from: string; to: string; status: string; subjectId: string };
+    subjects: { value: string; label: string }[];
     today: string;
     correctionReasons: string[];
 }
@@ -43,6 +44,9 @@ interface Props {
 const props = defineProps<Props>();
 const from = ref(props.filters.from);
 const to = ref(props.filters.to);
+// SIS 11.10: closed narrowing by recorded status and Subject (server-validated).
+const status = ref(props.filters.status);
+const subjectId = ref(props.filters.subjectId);
 const pageErrors = computed(() => usePage().props.errors as Record<string, string | undefined>);
 
 const statusLabels: Record<Status, string> = {
@@ -60,7 +64,12 @@ const reasonLabels: Record<string, string> = {
 function apply(): void {
     router.get(
         `/app/attendance/students/${props.student.id}`,
-        { from: from.value || undefined, to: to.value || undefined },
+        {
+            from: from.value || undefined,
+            to: to.value || undefined,
+            status: status.value || undefined,
+            subject_id: subjectId.value || undefined,
+        },
         { preserveScroll: true, replace: true },
     );
 }
@@ -96,6 +105,32 @@ function apply(): void {
                     :max="today"
                     class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
                 />
+            </div>
+            <div>
+                <label class="block text-xs text-slate-600" for="history-status">Status</label>
+                <select
+                    id="history-status"
+                    v-model="status"
+                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                >
+                    <option value="">Any status</option>
+                    <option v-for="(label, key) in statusLabels" :key="key" :value="key">
+                        {{ label }}
+                    </option>
+                </select>
+            </div>
+            <div v-if="subjects.length > 0">
+                <label class="block text-xs text-slate-600" for="history-subject">Subject</label>
+                <select
+                    id="history-subject"
+                    v-model="subjectId"
+                    class="mt-1 rounded border border-slate-300 px-2 py-1.5 text-sm"
+                >
+                    <option value="">Any subject</option>
+                    <option v-for="s in subjects" :key="s.value" :value="s.value">
+                        {{ s.label }}
+                    </option>
+                </select>
             </div>
             <button type="submit" class="rounded border border-slate-300 px-3 py-1.5 text-sm">
                 Show

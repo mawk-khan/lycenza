@@ -4,6 +4,10 @@ namespace App\Support\StudentReports;
 
 use App\Domain\Admissions\Application\AdmissionApplicationReadService;
 use App\Domain\Admissions\Application\Reports\AdmissionApplicationsExporter;
+use App\Domain\Attendance\Application\AttendanceExceptionReadService;
+use App\Domain\Attendance\Application\AttendanceOperationsReadService;
+use App\Domain\Attendance\Application\Reports\AttendanceCorrectionReport;
+use App\Domain\Attendance\Application\Reports\AttendanceRegisterHistoryReport;
 use App\Domain\Guardians\Application\Reports\SiblingReport;
 use App\Domain\Students\Application\Documents\DocumentComplianceCohort;
 use App\Domain\Students\Application\Movements\StudentMovementRegister;
@@ -50,6 +54,9 @@ final class StudentReportRegistry
         // SIS 11.8 (OD-SIS-5A, OD-SIS-5B): Club and Activity rosters (browser-only).
         ClubRosterReport::class,
         ActivityRosterReport::class,
+        // SIS 11.10: Attendance register history and corrections (browser-only).
+        AttendanceRegisterHistoryReport::class,
+        AttendanceCorrectionReport::class,
     ];
 
     /**
@@ -231,6 +238,41 @@ final class StudentReportRegistry
                 sorts: AdmissionApplicationReadService::SORTS,
                 perPage: 20,
                 reference: ['SR-39'],
+            ),
+            // SIS 11.10: the existing Attendance operational pages, governed
+            // here unchanged (ORG.9C-1 register status = "registers not
+            // taken"; V11.2 one day's non-present records). Both read
+            // `attendance.view` under the actor's CampusScope; no rate,
+            // percentage or teacher filter.
+            new D(
+                key: 'attendance.register_status',
+                title: 'Registers not taken',
+                description: 'For one School day: every timetabled class with its register submitted, pending or not submitted, with Open and Take links.',
+                category: 'attendance',
+                owner: 'Attendance',
+                authority: ['attendance.view'],
+                scope: D::CAMPUS_AWARE,
+                route: 'app.attendance.registers',
+                filters: ['date', 'grade_level_id', 'section_id', 'status'],
+                columns: [new C('class', 'Class', 'placement'), new C('subject', 'Subject'), new C('period', 'Period'), new C('status', 'Register status')],
+                sorts: ['period' => 'Period order'],
+                perPage: AttendanceOperationsReadService::PER_PAGE,
+                reference: ['SR-29'],
+            ),
+            new D(
+                key: 'attendance.exceptions',
+                title: 'Absent, late and excused',
+                description: 'For one School day: every submitted record that is not Present, with the Student and register.',
+                category: 'attendance',
+                owner: 'Attendance',
+                authority: ['attendance.view'],
+                scope: D::CAMPUS_AWARE,
+                route: 'app.attendance.exceptions',
+                filters: ['date', 'section_id', 'status'],
+                columns: [$student, new C('class', 'Class', 'placement'), new C('subject', 'Subject'), new C('period', 'Period'), new C('status', 'Status')],
+                sorts: ['period' => 'Period order'],
+                perPage: AttendanceExceptionReadService::PER_PAGE,
+                reference: ['SR-29'],
             ),
         ];
     }

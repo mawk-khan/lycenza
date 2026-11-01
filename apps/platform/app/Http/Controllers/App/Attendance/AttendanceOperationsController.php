@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\App\Attendance;
 
+use App\Domain\AcademicStructure\Infrastructure\Subject;
 use App\Domain\Attendance\Application\AttendanceOperationsReadService;
+use App\Domain\Attendance\Infrastructure\AttendanceRecord;
 use App\Domain\Attendance\Infrastructure\AttendanceRecordCorrection;
 use App\Http\Controllers\Controller;
 use App\Support\Authorization\Campus\AuthorizesCampusScope;
@@ -59,7 +61,7 @@ class AttendanceOperationsController extends Controller
             'rows' => $result['rows']->withPath('/app/attendance/registers')->withQueryString(),
             'counts' => $result['counts'],
             'options' => $result['options'],
-            'filters' => array_map(fn (?string $v) => $v ?? '', $filters),
+            'filters' => ['date' => $date, ...array_map(fn (?string $v) => $v ?? '', $filters)],
             'statuses' => AttendanceOperationsReadService::STATUSES,
             // SIS 6.1: a "Take register" link only for someone who may take one (the page re-checks).
             'canTake' => ! app(CampusScopeResolver::class)->campusScope($context->actor(), 'attendance.manage', $school)->isNone(),
@@ -76,6 +78,9 @@ class AttendanceOperationsController extends Controller
             'from' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'before_or_equal:'.$today],
             'to' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'before_or_equal:'.$today],
             'page' => ['sometimes', 'integer', 'min:1'],
+            // SIS 11.10: closed narrowing by recorded status and by Subject.
+            'status' => ['sometimes', 'nullable', Rule::in(AttendanceRecord::STATUSES)],
+            'subject_id' => ['sometimes', 'nullable', 'uuid'],
         ]);
         $to = $validated['to'] ?? $today;
         $from = $validated['from'] ?? CarbonImmutable::parse($to)->subDays(29)->toDateString();
@@ -87,7 +92,8 @@ class AttendanceOperationsController extends Controller
         }
 
         try {
-            $history = $reads->studentHistory($school, $student, $from, $to, (int) ($validated['page'] ?? 1), $context->actor());
+            $history = $reads->studentHistory($school, $student, $from, $to, (int) ($validated['page'] ?? 1), $context->actor(),
+                ['status' => $validated['status'] ?? null, 'subject_id' => $validated['subject_id'] ?? null]);
         } catch (ModelNotFoundException) {
             throw new NotFoundHttpException;
         }
@@ -95,7 +101,9 @@ class AttendanceOperationsController extends Controller
         return Inertia::render('App/Attendance/StudentHistory', [
             'student' => $history['student'],
             'rows' => $history['rows']->withPath("/app/attendance/students/{$history['student']['id']}")->withQueryString(),
-            'filters' => ['from' => $from, 'to' => $to],
+            'filters' => ['from' => $from, 'to' => $to, 'status' => $validated['status'] ?? '', 'subjectId' => $validated['subject_id'] ?? ''],
+            'subjects' => $context->withSchool($school, fn () => Subject::query()->where('school_id', $school->id)->orderBy('name')->get(['id', 'name'])
+                ->map(fn (Subject $s) => ['value' => $s->id, 'label' => $s->name])->all()),
             'today' => $today,
             'correctionReasons' => AttendanceRecordCorrection::REASONS,
         ]);

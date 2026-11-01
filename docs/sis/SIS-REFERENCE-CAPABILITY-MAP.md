@@ -169,7 +169,7 @@ capability is added by this map.
 | SR-26 | — | — | family financial inference | — | D-14 |
 | SR-27 | — | — | cross-School tenant data | Network never reads tenant tables | Analytics architecture decision |
 | SR-28 | — | — | biometric data | — | Legal |
-| SR-29 | `attendance.view` | Campus-adopted | no rates/tallies | Registers are the evidence | Attendance-owned |
+| SR-29 | `attendance.view` (SIS 11.10: register history, corrections, registers not taken, exceptions, Student history) | Campus-adopted | no rates/tallies; recorder name only (OD-SIS-10A) | Registers are the evidence; browser-only | Attendance-owned |
 | SR-30 | — | — | — | — | No evidence |
 | SR-31 | *(none yet)* | — | health remarks | — | D-16 |
 | SR-32 | `teaching.assignments.view` (existing web directory) | per domain | no staff contact on academic lists | — | Met |

@@ -4,6 +4,7 @@ namespace App\Domain\Attendance\Application;
 
 use App\Domain\AcademicStructure\Application\CurrentAcademicYearResolver;
 use App\Domain\AcademicStructure\Application\SectionLabel;
+use App\Domain\AcademicStructure\Infrastructure\SubjectOffering;
 use App\Domain\Attendance\Infrastructure\AttendanceRecord;
 use App\Domain\Attendance\Infrastructure\AttendanceRecordCorrection;
 use App\Domain\Students\Application\StudentPurposeLookup;
@@ -184,13 +185,17 @@ class AttendanceOperationsReadService
      *
      * @throws ModelNotFoundException when the Student has no record the actor may see
      */
-    public function studentHistory(School $school, string $studentId, string $from, string $to, int $page, User $actor): array
+    public function studentHistory(School $school, string $studentId, string $from, string $to, int $page, User $actor, array $filters = []): array
     {
+        // SIS 11.10: optional closed narrowing -- one recorded status and/or one
+        // Subject (the register's own Offering subject), applied in SQL.
+        $status = in_array($filters['status'] ?? null, AttendanceRecord::STATUSES, true) ? $filters['status'] : null;
+        $subjectId = isset($filters['subject_id']) && Str::isUuid((string) $filters['subject_id']) ? (string) $filters['subject_id'] : null;
         $scope = $this->authorizeCampusScopeFor($actor, self::CAPABILITY, $school);
 
         $page = max($page, 1);
         /** @var array{student: array{id: string, name: string}, items: list<array<string, mixed>>, total: int} $data */
-        $data = $this->context->withSchool($school, function () use ($school, $scope, $studentId, $from, $to, $page, $actor): array {
+        $data = $this->context->withSchool($school, function () use ($school, $scope, $studentId, $from, $to, $page, $actor, $status, $subjectId): array {
             $ofStudent = fn () => $this->access->records($scope)
                 ->where('attendance_records.school_id', $school->id)
                 ->whereHas('studentEnrollment', fn ($q) => $q->where('student_id', $studentId));
@@ -217,6 +222,8 @@ class AttendanceOperationsReadService
                 ->join('attendance_sessions', fn ($join) => $join->on('attendance_sessions.id', '=', 'attendance_records.attendance_session_id')
                     ->on('attendance_sessions.school_id', '=', 'attendance_records.school_id'))
                 ->whereBetween('attendance_sessions.attendance_date', [$from, $to])
+                ->when($status !== null, fn ($q) => $q->where('attendance_records.status', $status))
+                ->when($subjectId !== null, fn ($q) => $q->whereIn('attendance_sessions.subject_offering_id', SubjectOffering::query()->select('id')->where('subject_id', $subjectId)))
                 ->with(['session.section.gradeLevel', 'session.subjectOffering.subject', 'session.period'])
                 ->orderByDesc('attendance_sessions.attendance_date')
                 ->orderByDesc('attendance_sessions.period_start_time')
@@ -236,6 +243,8 @@ class AttendanceOperationsReadService
                 'from' => $from,
                 'to' => $to,
                 'resultCount' => $records->count(),
+                ...($status !== null ? ['status' => $status] : []),
+                ...($subjectId !== null ? ['subjectId' => $subjectId] : []),
             ]);
 
             return [

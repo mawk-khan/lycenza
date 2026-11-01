@@ -236,7 +236,7 @@ class AttendanceOperationsReadTest extends TestCase
         $student = $this->at['a']['enrollment']->student_id;
 
         $props = $this->get("/app/attendance/students/{$student}")->assertOk()->viewData('page')['props'];
-        $this->assertSame(['from' => '2026-08-04', 'to' => '2026-09-02'], $props['filters'], 'Default: the last 30 School-local days.');
+        $this->assertSame(['from' => '2026-08-04', 'to' => '2026-09-02', 'status' => '', 'subjectId' => ''], $props['filters'], 'Default: the last 30 School-local days, no status or Subject narrowing (SIS 11.10).');
         $row = $props['rows']['data'][0];
         $this->assertSame([self::MONDAY, 'present', true, 'absent', 'late_information'], [$row['date'], $row['status'], $row['corrected'], $row['originalStatus'], $row['correctionReason']]);
         $this->assertSame(['id', 'sessionId', 'date', 'classLabel', 'subjectName', 'periodName', 'periodStartTime', 'status', 'corrected', 'correctionReason', 'originalStatus', 'correctedAt'], array_keys($row), 'No free text, no health detail, no percentage.');

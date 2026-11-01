@@ -52,6 +52,13 @@ final class StudentReportFilter
         'club_id' => ['Club', self::ENTITY],
         'activity_id' => ['Activity', self::ENTITY],
         'activity_category' => ['Category', self::CHOICE],
+        // SIS 11.10: Attendance reports. The two people filters are closed
+        // choices cut to the registers/records the viewer may see.
+        'subject_id' => ['Subject', self::ENTITY],
+        'recorded_by' => ['Recorded by', self::CHOICE],
+        'corrected_by' => ['Corrected by', self::CHOICE],
+        'corrected' => ['Corrected', self::CHOICE],
+        'date' => ['Date', self::DATE],
         'status' => ['Status', self::CHOICE],
         'category' => ['Category', self::CHOICE],
         'type' => ['Type', self::CHOICE],

@@ -42,6 +42,8 @@ class StudentCampusFoundationArchitectureTest extends TestCase
     private const OUTSIDE_STUDENTS = [
         'app/Domain/Attendance/Application/AttendanceSubmissionService.php' => 'locks the Enrollment rows of the register being written (Section-bound roster)',
         'app/Domain/Attendance/Application/Portal/GuardianAttendanceReadService.php' => 'joins a Student\'s attendance records to their own Enrollments (record history, Guardian-scoped)',
+        // SIS 11.10: never the current placement.
+        'app/Domain/Attendance/Application/Reports/AttendanceCorrectionReport.php' => 'joins each corrected record to its own Enrollment to name the Student (record history, Campus-scoped by the record)',
         'app/Domain/Attendance/Application/Retention/AttendanceRetentionService.php' => 'retention reference checks',
         'app/Domain/Communications/Application/Audience/GradeAudienceResolver.php' => 'a named cohort: the announcement\'s own academic year and Grade',
         'app/Domain/Communications/Application/Audience/SectionAudienceResolver.php' => 'a named cohort: the announcement\'s own academic year and Section',

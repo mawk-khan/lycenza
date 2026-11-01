@@ -174,6 +174,19 @@ OD-SIS-5A Club approved, OD-SIS-5B Activity approved, constrained):**
 
 SR-17 → partially met (House + Club + Activity). No score change.
 
+**SIS 11.10 IMPLEMENTED (2026-11-01, `SIS-11-10-ADVANCED-ATTENDANCE-REPORTING.md`):**
+- Attendance joins the governed report catalogue (category `attendance`);
+  two new reports, `attendance.registers` (register history by class,
+  Subject, period and recorder) and `attendance.corrections`; registers not
+  taken and exceptions governed unchanged; Student history gains Status and
+  Subject filters;
+- OD-SIS-10A: the recorder's display name on Attendance reports (rule 123
+  exception); never a teacher-column filter;
+- no schema, no capability, no rates/trends/demographics, browser-only.
+
+SR-29 → PARTIAL (operational listings complete; rates and the monthly grid
+analytics-gated). No score change.
+
 **Next: owner decision; NOT STARTED; never auto-start.**
 
 ### 2.0f SIS.EXP-CLOSE — PROGRAMME CLOSED (2026-10-30)

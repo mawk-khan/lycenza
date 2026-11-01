@@ -882,3 +882,28 @@ No schema, capability or status change.
   registers", wherever it was opened from.
 - **Wording.** A no-op correction and a closed-year register refusal read in
   plain words; the codes are unchanged.
+
+## Governed Attendance reports (SIS 11.10, 2026-11-01)
+
+Attendance joins the SIS report catalogue (`StudentReportRegistry`,
+category `attendance`, `docs/sis/SIS-11-10-ADVANCED-ATTENDANCE-REPORTING.md`).
+There is no schema or capability change: everything uses `attendance.view`
+under `AttendanceAdministrationAccess`.
+
+- **`attendance.registers` — register history** over any range: year,
+  Campus, Grade, Section, Subject, dates, recorded by, corrected yes/no. Each
+  row shows the period ("09:00–10:00"), who submitted it and when
+  (School-local), and an Open link.
+- **`attendance.corrections`:** one row per append-only correction: Student,
+  register, before → after, the closed reason, who corrected it and when.
+- **Governed unchanged:** registers not taken (`attendance.register_status`)
+  and exceptions (`attendance.exceptions`; its filter key is now
+  `section_id`).
+- **Student history** gains Status and Subject filters (SQL; audited as
+  codes).
+- **OD-SIS-10A:** the recorder's display name is operational accountability.
+  It is never the timetable teacher column (still no `teacher_id` filter or
+  authorization) and never an HR or workload measure.
+- **Not included:** rates, tallies, trends, demographic views, biometrics,
+  messaging, Leave states and export/print (browser-only). Teachers keep My
+  attendance only.

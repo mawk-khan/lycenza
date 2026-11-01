@@ -793,6 +793,14 @@ headline scores in this audit are not recomputed here.
 
 ### SIS 11.8 reconciliation (added 2026-11-01)
 
+SIS 11.10 (2026-11-01) covers SR-29's operational listings:
+- **Implemented:** register history by class, period, Subject and recorder;
+  corrections; Student history filters.
+- **Equivalent:** registers not taken and the exceptions pages.
+- **Still deferred/blocked:** rates, the monthly grid, demographics,
+  biometrics and messaging. Full table:
+  `SIS-11-10-ADVANCED-ATTENDANCE-REPORTING.md` §7.
+
 SIS 11.8 (OD-SIS-5A Club, OD-SIS-5B Activity) adds the Club and Activity
 types:
 - **C49:** House, Club and Activity are met (School-wide, effective-dated);

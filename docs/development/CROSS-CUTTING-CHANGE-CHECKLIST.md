@@ -141,6 +141,14 @@ Added after SIS 11.7, whose first candidate failed on exactly this.
 - **Run:** `ddev test tests/Feature/Demo tests/Feature/App` before the first
   candidate.
 
+## 9b. Vue pages changed before browser journeys
+Added after SIS 11.8, whose first journey run tested stale assets.
+- The DDEV demo serves the production build (`public/build`).
+  `ddev demo-reset` builds only when **no** build exists, so an older build
+  silently wins.
+- **Before any browser journey** after changing `resources/js`, run
+  `ddev exec npm run build` (or `ddev demo-reset --build`).
+
 ## 10. A mutation that can be edited concurrently
 - **Version token:** reuse a version digest of the written fields
   (`StudentProfileVersion`, `GuardianProfileVersion`, `SectionVersion`,

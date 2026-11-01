@@ -3,6 +3,8 @@
 namespace Tests\Feature\StudentReports;
 
 use App\Domain\Admissions\Application\AdmissionApplicationReadService;
+use App\Domain\Attendance\Application\Reports\AttendanceCorrectionReport;
+use App\Domain\Attendance\Application\Reports\AttendanceRegisterHistoryReport;
 use App\Domain\Guardians\Application\Reports\SiblingReport;
 use App\Domain\Students\Application\Documents\DocumentComplianceCohort;
 use App\Domain\Students\Application\Movements\StudentMovementRegister;
@@ -50,7 +52,7 @@ class StudentReportRegistryTest extends TestCase
     public function every_report_is_unique_owned_and_authorized_by_existing_school_capabilities(): void
     {
         $definitions = $this->definitions();
-        $this->assertSame(['students.directory', 'students.document_compliance', 'students.siblings', 'students.houses', 'students.clubs', 'students.activities', 'students.placements', 'students.movements', 'students.section_capacity', 'students.lifecycle', 'admissions.applications'], array_keys($definitions), 'the closed catalogue, in hub order');
+        $this->assertSame(['students.directory', 'students.document_compliance', 'students.siblings', 'students.houses', 'students.clubs', 'students.activities', 'students.placements', 'students.movements', 'students.section_capacity', 'students.lifecycle', 'admissions.applications', 'attendance.register_status', 'attendance.exceptions', 'attendance.registers', 'attendance.corrections'], array_keys($definitions), 'the closed catalogue, in hub order');
 
         $capabilities = DB::table('capabilities')->pluck('namespace', 'key')->all();
         foreach ($definitions as $key => $definition) {
@@ -105,6 +107,8 @@ class StudentReportRegistryTest extends TestCase
         $this->assertSame(array_keys(HouseRosterReport::SORTS), array_keys($definitions['students.houses']->sorts));
         $this->assertSame(array_keys(ClubRosterReport::SORTS), array_keys($definitions['students.clubs']->sorts));
         $this->assertSame(array_keys(ActivityRosterReport::SORTS), array_keys($definitions['students.activities']->sorts));
+        $this->assertSame(array_keys(AttendanceRegisterHistoryReport::SORTS), array_keys($definitions['attendance.registers']->sorts));
+        $this->assertSame(array_keys(AttendanceCorrectionReport::SORTS), array_keys($definitions['attendance.corrections']->sorts));
         foreach (StudentReportRegistry::RENDERED as $class) {
             $this->assertTrue(is_subclass_of($class, StudentReport::class));
             $this->assertTrue(app($class)->definition()->isRendered(), $class);

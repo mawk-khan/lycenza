@@ -462,6 +462,24 @@ Reload, review the latest details, and make your change again.
   only and never give anyone access. Mentors, schedules, levels and awards
   are not part of Lycenza yet.
 
+### Attendance reports (SIS 11.10)
+
+**Student reports → Attendance** (School Administrator, Principal; a Campus
+Principal sees their own Campus only):
+- **Registers not taken:** one day's classes with their register submitted,
+  pending or not submitted, with Open and Take.
+- **Absent, late and excused:** one day's non-present records.
+- **Attendance register history:** every submitted register over any
+  period. You can filter by year, Campus, Grade, Section, Subject, who
+  recorded it, and whether a record was corrected. Each row shows the period,
+  who recorded it and when, and opens the register.
+- **Attendance corrections:** every corrected record, with the Student,
+  before → after, the reason, who corrected it and when.
+- **A Student's attendance** (from their page or any report row) can be
+  narrowed by status and Subject.
+- These reports show records, never percentages or rates, and cannot be
+  exported or printed. Teachers keep using **My attendance**.
+
 ## 9. Students and placements
 
 - **Add student** (SIS 2.3) asks for the name and date of birth only:

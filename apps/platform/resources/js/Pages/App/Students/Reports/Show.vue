@@ -27,7 +27,8 @@ interface Filter {
 interface Column {
     key: string;
     label: string;
-    format: 'text' | 'date' | 'student' | 'student_list' | 'placement' | 'lifecycle_reason';
+    format:
+        'text' | 'date' | 'student' | 'student_list' | 'placement' | 'lifecycle_reason' | 'link';
 }
 
 interface ListedStudent {
@@ -158,6 +159,13 @@ function listed(row: Row, key: string): ListedStudent[] {
 
 function year(value: unknown): string | null {
     return (value as PlacementCell | null)?.academicYear ?? null;
+}
+
+// SIS 11.10: a drill-down link the server built for this viewer (it never
+// bypasses the target page's own authorization).
+function link(row: Row, key: string): { label: string; url: string } | null {
+    const value = row[key] as { label?: string; url?: string } | null | undefined;
+    return value && value.url && value.label ? { label: value.label, url: value.url } : null;
 }
 
 function text(value: unknown): string {
@@ -333,6 +341,15 @@ function text(value: unknown): string {
                                         class="block text-xs text-slate-500"
                                         >{{ year(row[c.key]) }}</span
                                     >
+                                </template>
+                                <template v-else-if="c.format === 'link'">
+                                    <a
+                                        v-if="link(row, c.key)"
+                                        class="underline"
+                                        :href="link(row, c.key)?.url"
+                                        >{{ link(row, c.key)?.label }}</a
+                                    >
+                                    <span v-else>—</span>
                                 </template>
                                 <span v-else-if="c.format === 'date'" class="whitespace-nowrap">{{
                                     formatCalendarDate(row[c.key] as string | null) || '—'
