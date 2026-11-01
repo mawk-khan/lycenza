@@ -77,6 +77,15 @@ waived or complete.
   successor decision is required before 2026-11-13** (the current decision
   is valid through 2026-11-12; publication and qualification refuse from
   2026-11-13). ORG.11-R1 did not create it.)*
+  *(2026-11-01, **E16-R3 + E16-S2**: the fresh qualification of `bbc3cb24`
+  found the 16 known no-fix advisories unchanged and re-verified, one new
+  no-fix glibc High (CVE-2026-84243) and a Gateway Critical with a fix
+  (CPython CVE-2026-115557). **E16-R3** moves the Gateway to CPython 3.14.10.
+  Successor decision **`OWNER-0O-E16-2026-11-01`**: 17 advisories / 119
+  records. **E16 CURRENT through 2026-11-28; hard stop 2026-11-29.** The
+  2026-11-13 hard stop no longer applies. Next successor review around
+  2026-11-20. The `symfony/mime` Medium is deferred by the owner to its own
+  slice.)*
   *(2026-10-16, E16-R2 HELD (owner): Upstream-fixed remediation has been demonstrated in an unpublished candidate, but Lycenza's authoritative vulnerability scanner continues to classify the app image as blocked. E16-R2 therefore remains held pending a scanner-recognised/Debian-qualified remediation path. Debian trixie nginx is monitored weekly; the nginx.org candidate `fb29aff5` stays unpublished as fallback evidence.)*
   *(Post-POR roadmap audit, 2026-10-09; a fact, not a new decision:* the
   lapse is not confined to final qualification. From 2026-10-29 (UTC) the

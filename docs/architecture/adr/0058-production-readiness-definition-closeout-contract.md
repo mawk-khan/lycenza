@@ -1894,3 +1894,17 @@ The E16-S1 note above names E16-R2-a as the nginx route. The owner then
 
 The application image is not VERIFIED. E16 stays current through
 2026-11-12. The register status is unchanged.
+
+## Note — E16-R3 + E16-S2: successor decision `OWNER-0O-E16-2026-11-01` (2026-11-01)
+
+- **Decision.** Owner/security approved `OWNER-0O-E16-2026-11-01` after the
+  fresh successor review of `bbc3cb24`:
+  - the 16 no-fix High advisories (115 records) were re-verified and renewed
+    unchanged;
+  - the new no-fix glibc High CVE-2026-84243 was added (4 records);
+  - 28 days, 119 records in all.
+- **Remediation.** The Gateway Critical CVE-2026-115557 is fixed by
+  **E16-R3** (CPython 3.14.10). It is never excepted.
+- **Dates.** The E16 gate is current through **2026-11-28**. The hard stop
+  is **2026-11-29**.
+- **Register status.** Unchanged. E02 is not satisfied by this decision.

@@ -118,18 +118,25 @@ Since Phase 0O.6F:
 - A new advisory, a new package version, a raised severity, or a fix
   becoming available is **not** covered. It blocks and goes to a separate
   review; it is never folded into an existing approval.
-- **Current approval (since 2026-10-16):** `OWNER-0O-E16-2026-10-16`
-  (`docs/security/release-remediation/0O-E16-2026-10-16-owner-security-decision.md`).
-  - It is the E16 successor (E16-S1), decided after a fresh scan of
-    `78b68d6d`. It covers the same 16 no-fix advisories and 115 records (60
-    application, 55 Gateway), re-verified and renewed unchanged for 28 days.
-  - All records expire **2026-11-13**, so the last passing day is
-    2026-11-12.
-  - No Critical is excepted. The Debian nginx Criticals are **not
-    resolved**. Upstream-fixed remediation has been demonstrated in an unpublished candidate, but Lycenza's authoritative vulnerability scanner continues to classify the app image as blocked. E16-R2 therefore remains held pending a scanner-recognised/Debian-qualified remediation path.
-    The application image cannot be VERIFIED until then.
-  - The superseded `OWNER-0O-E16-2026-10-11`, `OWNER-0O-E16-2026-09-29` and
-    `OWNER-0O6E-2026-09-26` stay history and are no longer in `approvals`.
+- **Current approval (since 2026-11-01):** `OWNER-0O-E16-2026-11-01`
+  (`docs/security/release-remediation/0O-E16-2026-11-01-owner-security-decision.md`).
+  - It is the E16 successor **E16-S2**, decided after the fresh
+    qualification scan of `bbc3cb24` (run 41287488442,
+    `docs/security/release-remediation/E16-2026-11-01-SUCCESSOR-REVIEW.md`).
+  - **What it covers:** 17 no-fix High advisories and 119 records (62
+    application, 57 Gateway).
+    - The 16 advisories of E16-S1 were re-verified and renewed unchanged.
+    - New: the glibc gettext advisory CVE-2026-84243, with `libc6`
+      `accepted_risk` and `libc-bin` `not_affected` in both images.
+  - All records expire **2026-11-29**, so the last passing day is
+    2026-11-28.
+  - **No Critical is excepted.** The Gateway Critical CVE-2026-115557 was
+    remediated by **E16-R3** (CPython 3.14.10).
+  - **History, no longer in `approvals`:** the superseded
+    `OWNER-0O-E16-2026-10-16`, `OWNER-0O-E16-2026-10-11`,
+    `OWNER-0O-E16-2026-09-29` and `OWNER-0O6E-2026-09-26`. The E16-R2
+    nginx hold was retired on 2026-10-26, when Debian's fixed nginx scanned
+    clean.
 - **Whole-file expiry.** One expired record invalidates the whole file,
   so a replacement decision must land **before** the common expiry.
 

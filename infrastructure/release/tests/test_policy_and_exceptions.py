@@ -26,8 +26,8 @@ from lycenza_release.schema import SchemaError, validate
 from lycenza_release.util import ReleaseError
 from support import FIXTURES, TODAY
 
-DECISION = "OWNER-0O-E16-2026-10-16"
-SUPERSEDED = ("OWNER-0O6E-2026-09-26", "OWNER-0O-E16-2026-09-29", "OWNER-0O-E16-2026-10-11")
+DECISION = "OWNER-0O-E16-2026-11-01"
+SUPERSEDED = ("OWNER-0O6E-2026-09-26", "OWNER-0O-E16-2026-09-29", "OWNER-0O-E16-2026-10-11", "OWNER-0O-E16-2026-10-16")
 CONDITIONAL = {"CVE-2026-76642", "CVE-2026-78409", "CVE-2026-78410", "CVE-2026-54369", "CVE-2026-54370"}
 
 
@@ -111,7 +111,7 @@ class ExceptionsTest(unittest.TestCase):
         return validate_exceptions(json.loads((FIXTURES / "exceptions" / f"{name}.json").read_text()), self.policy, TODAY)[1]
 
     def test_the_repository_exception_file_is_exactly_the_owner_decision(self) -> None:
-        """E16 successor (2026-10-16): OWNER-0O-E16-2026-10-16 renews the reviewed 16 no-fix advisories exactly -- same per-package statuses and conditions, 28 days, no broadening."""
+        """E16-S2 (2026-11-01): OWNER-0O-E16-2026-11-01 renews the reviewed 16 no-fix advisories exactly (same per-package statuses and conditions) and adds the reviewed no-fix glibc gettext advisory CVE-2026-84243 -- 28 days, no broadening."""
         util_linux = {"bsdutils", "libblkid1", "liblastlog2-2", "libmount1", "libsmartcols1", "libuuid1", "login", "mount", "util-linux"}
 
         def statuses(accepted: set[str], others: set[str], other: str = "not_affected") -> dict[str, dict[str, str]]:
@@ -138,17 +138,19 @@ class ExceptionsTest(unittest.TestCase):
             "CVE-2026-107161": (28, False, {"app": {"libsasl2-2": "not_affected", "libsasl2-modules-db": "not_affected"}}),
             "CVE-2026-102010": (28, False, statuses({"libstdc++6"}, {"libgcc-s1", "gcc-14-base"})),
             "CVE-2026-95619": (28, False, statuses({"libstdc++6"}, {"libgcc-s1", "gcc-14-base"})),
+            # E16-S2: the gettext code is in libc6 only; no libc-bin program imports gettext.
+            "CVE-2026-84243": (28, False, statuses({"libc6"}, {"libc-bin"})),
         }
         document = json.loads(EXCEPTIONS_FILE.read_text())
-        valid = load_exceptions(self.policy, date(2026, 10, 16))  # the decision date (TODAY is an earlier fixture date)
+        valid = load_exceptions(self.policy, date(2026, 11, 1))  # the decision date (TODAY is an earlier fixture date)
         self.assertEqual(len(valid), len(document["exceptions"]))
         self.assertEqual(list(document["approvals"]), [DECISION], "only the current decision is active")
         approval = document["approvals"][DECISION]
-        self.assertEqual(approval["record"], "docs/security/release-remediation/0O-E16-2026-10-16-owner-security-decision.md")
-        self.assertEqual(approval["decided"], "2026-10-16")
+        self.assertEqual(approval["record"], "docs/security/release-remediation/0O-E16-2026-11-01-owner-security-decision.md")
+        self.assertEqual(approval["decided"], "2026-11-01")
         self.assertEqual(approval["reviewed_digests"], {
-            "app": "sha256:344c9fc1ab165064fe5522b3c24ddc83ef3491609c66cce8adcff2f2577d8087",
-            "ai-gateway": "sha256:db4d88303c8e3787c5039975a26f9857af35ad501c1ed84b35c01b3127d59b17"})
+            "app": "sha256:3c93bf0fc61dcf31f4358c7324efa72599fb819a261e4cc6ca9535adb1a7b4e3",
+            "ai-gateway": "sha256:770fa783114a709f85c41a205a4b8c56ad80c83cea5ab4294eceb31e21d46459"})
         self.assertEqual(set(approval["advisories"]), set(decision), "no other advisory is approved")
 
         seen = set()
@@ -157,20 +159,22 @@ class ExceptionsTest(unittest.TestCase):
             with self.subTest(e.id, image=e.image, package=e.package):
                 self.assertEqual(e.status, packages[e.image][e.package])
                 self.assertEqual((e.severity, e.approved_by), ("high", DECISION))
-                self.assertEqual((e.created.isoformat(), e.expires.isoformat(), (e.expires - e.created).days), ("2026-10-16", "2026-11-13", days))
+                self.assertEqual((e.created.isoformat(), e.expires.isoformat(), (e.expires - e.created).days), ("2026-11-01", "2026-11-29", days))
                 self.assertEqual(e.conditions, ("runtime-hardening",) if conditional else ())
             seen.add((e.id, e.image, e.package))
         expected_records = {(a, image, p) for a, (_, _, packages) in decision.items() for image in packages for p in packages[image]}
         self.assertEqual(seen, expected_records)
-        self.assertEqual(sum(1 for e in valid if e.image == "app"), 60)
-        self.assertEqual(sum(1 for e in valid if e.image == "ai-gateway"), 55)
-        self.assertEqual(Counter(e.status for e in valid), {"accepted_risk": 30, "not_affected": 83, "false_positive": 2})
+        self.assertEqual(sum(1 for e in valid if e.image == "app"), 62)
+        self.assertEqual(sum(1 for e in valid if e.image == "ai-gateway"), 57)
+        self.assertEqual(Counter(e.status for e in valid), {"accepted_risk": 32, "not_affected": 85, "false_positive": 2})
 
     def test_the_activated_records_expire_and_then_fail_every_verification(self) -> None:
-        """One common expiry: valid 2026-10-16 through 2026-11-12, and the WHOLE file fails from 2026-11-13 (and before its creation)."""
-        self.assertEqual(len(load_exceptions(self.policy, date(2026, 10, 16))), 115)
-        self.assertEqual(len(load_exceptions(self.policy, date(2026, 11, 12))), 115)
-        for day in (date(2026, 10, 15), date(2026, 11, 13), date(2026, 11, 15)):
+        """One common expiry: valid 2026-11-01 through 2026-11-28 -- so the previous decision's hard stop (2026-11-13) no
+        longer applies -- and the WHOLE file fails from 2026-11-29 (and before its creation)."""
+        for day in (date(2026, 11, 1), date(2026, 11, 13), date(2026, 11, 28)):
+            with self.subTest(day):
+                self.assertEqual(len(load_exceptions(self.policy, day)), 119)
+        for day in (date(2026, 10, 31), date(2026, 11, 29), date(2026, 12, 1)):
             with self.subTest(day), self.assertRaises(ReleaseError) as caught:
                 load_exceptions(self.policy, day)
             self.assertEqual(caught.exception.code, "exceptions_invalid")
@@ -294,12 +298,12 @@ if __name__ == "__main__":
 
 
 class CurrentDecisionEngineTest(unittest.TestCase):
-    """The engine applied to the REAL current decision records (OWNER-0O-E16-2026-10-16; not fixtures)."""
+    """The engine applied to the REAL current decision records (OWNER-0O-E16-2026-11-01; not fixtures)."""
 
     def setUp(self) -> None:
         self.policy = load_policy()
         self.document = json.loads(EXCEPTIONS_FILE.read_text())
-        self.valid = load_exceptions(self.policy, date(2026, 11, 12))
+        self.valid = load_exceptions(self.policy, date(2026, 11, 28))
 
     def findings(self, **change: str) -> list[Finding]:
         return [Finding("grype", e.image, e.id, e.package, e.version, "high", "not-fixed") if not change
@@ -308,8 +312,8 @@ class CurrentDecisionEngineTest(unittest.TestCase):
 
     def test_the_reviewed_residual_set_passes_exactly_with_no_unused_record(self) -> None:
         result = evaluate(self.findings(), self.valid)
-        self.assertEqual((result["verdict"], len(result["blocking"]), len(result["excepted"]), result["unused_exceptions"]), ("PASS", 0, 115, []))
-        self.assertEqual(Counter(r["image"] for r in result["excepted"]), {"app": 60, "ai-gateway": 55})
+        self.assertEqual((result["verdict"], len(result["blocking"]), len(result["excepted"]), result["unused_exceptions"]), ("PASS", 0, 119, []))
+        self.assertEqual(Counter(r["image"] for r in result["excepted"]), {"app": 62, "ai-gateway": 57})
 
     def test_no_critical_exception_is_active_and_every_record_is_a_high_without_a_fix(self) -> None:
         """E16-D1: the decision governs only High findings with no fix; a Critical finding on any covered package blocks."""
@@ -324,13 +328,13 @@ class CurrentDecisionEngineTest(unittest.TestCase):
                 self.assertNotIn(superseded, json.dumps(self.document))
                 document = copy.deepcopy(self.document)
                 document["exceptions"][0]["approved_by"] = superseded
-                errors = validate_exceptions(document, self.policy, date(2026, 10, 17))[1]
+                errors = validate_exceptions(document, self.policy, date(2026, 11, 2))[1]
                 self.assertIn("$.exceptions[0]: approval reference not recorded in approvals", errors)
 
     def test_a_fix_a_version_change_or_a_severity_change_ends_coverage(self) -> None:
         fixed = evaluate(self.findings(fix_state="fixed"), self.valid)
         self.assertEqual({r["reason"] for r in fixed["blocking"]}, {"high_fix_available"})
-        self.assertEqual(len(fixed["blocking"]), 115)
+        self.assertEqual(len(fixed["blocking"]), 119)
         critical = evaluate(self.findings(severity="critical"), self.valid)
         self.assertEqual({r["reason"] for r in critical["blocking"]}, {"critical"})
         e = self.valid[0]
@@ -345,16 +349,16 @@ class CurrentDecisionEngineTest(unittest.TestCase):
         self.assertEqual(sorted(r["id"] for r in result["blocking"]), ["CVE-2026-99998", "CVE-2026-99999"])
         document = copy.deepcopy(self.document)
         document["exceptions"][0]["id"] = "CVE-2026-99999"
-        self.assertTrue(any("is not approved by" in err for err in validate_exceptions(document, self.policy, date(2026, 10, 17))[1]))
+        self.assertTrue(any("is not approved by" in err for err in validate_exceptions(document, self.policy, date(2026, 11, 2))[1]))
 
     def test_the_reviewed_classifications_cannot_be_broadened(self) -> None:
         document = copy.deepcopy(self.document)
         index = next(i for i, r in enumerate(document["exceptions"]) if r["status"] == "not_affected")
         document["exceptions"][index]["status"] = "accepted_risk"
-        self.assertTrue(any("differs from the approved" in err for err in validate_exceptions(document, self.policy, date(2026, 10, 17))[1]))
+        self.assertTrue(any("differs from the approved" in err for err in validate_exceptions(document, self.policy, date(2026, 11, 2))[1]))
         document = copy.deepcopy(self.document)
-        document["exceptions"][0]["expires"] = "2026-11-14"
-        self.assertTrue(validate_exceptions(document, self.policy, date(2026, 10, 17))[1], "no record may extend past 2026-11-13")
+        document["exceptions"][0]["expires"] = "2026-11-30"
+        self.assertTrue(validate_exceptions(document, self.policy, date(2026, 11, 2))[1], "no record may extend past 2026-11-29")
 
     def test_runtime_hardening_records_are_exactly_the_conditional_advisories_and_are_withdrawn_without_proof(self) -> None:
         self.assertEqual({e.id for e in self.valid if e.conditions}, CONDITIONAL)
@@ -377,15 +381,15 @@ class CriticalNeverExceptionEligibleTest(unittest.TestCase):
     """E16-P1 (ADR 0052 section 3.7 amendment): no exception record can make a Critical pass -- at the
     validator (the file) and, independently, at the one evaluator (every route: audit, rescan, verify, all)."""
 
-    DAY = date(2026, 10, 17)  # inside the live decision's window
+    DAY = date(2026, 11, 2)  # inside the live decision's window
 
     def setUp(self) -> None:
         self.policy = load_policy()
         self.document = json.loads(EXCEPTIONS_FILE.read_text())
 
     @staticmethod
-    def record(status: str = "accepted_risk", severity: str = "critical", created: date = date(2026, 10, 16),
-               expires: date = date(2026, 11, 13)):
+    def record(status: str = "accepted_risk", severity: str = "critical", created: date = date(2026, 11, 1),
+               expires: date = date(2026, 11, 29)):
         from lycenza_release.exceptions import VulnerabilityException
         return VulnerabilityException(id="CVE-2026-99990", status=status, image="app", package="libcrit1", version="1.0-1",
                                       severity=severity, approved_by=DECISION, created=created, expires=expires)
@@ -402,7 +406,7 @@ class CriticalNeverExceptionEligibleTest(unittest.TestCase):
         """Whatever the status, fix state, dates or approval: refused, named, never excepted."""
         for status in ("accepted_risk", "not_affected", "false_positive"):
             for fix_state in ("not-fixed", "wont-fix", "fixed"):
-                for created, expires in ((date(2026, 10, 16), date(2026, 11, 13)), (date(2026, 12, 1), date(2026, 12, 31))):
+                for created, expires in ((date(2026, 11, 1), date(2026, 11, 29)), (date(2026, 12, 1), date(2026, 12, 31))):
                     with self.subTest(status=status, fix_state=fix_state, created=created):
                         result = evaluate([self.finding(fix_state=fix_state)], [self.record(status, created=created, expires=expires)])
                         self.assertEqual(result["verdict"], "FAIL")
@@ -448,4 +452,4 @@ class CriticalNeverExceptionEligibleTest(unittest.TestCase):
 
     def test_the_live_decision_is_unaffected(self) -> None:
         valid = load_exceptions(self.policy, self.DAY)
-        self.assertEqual((len(valid), {e.severity for e in valid}, {e.approved_by for e in valid}), (115, {"high"}, {DECISION}))
+        self.assertEqual((len(valid), {e.severity for e in valid}, {e.approved_by for e in valid}), (119, {"high"}, {DECISION}))

@@ -1696,7 +1696,7 @@ or requested, and no product code changed.**
 | PPR.9 | Not started (parallel; needs OD-PPR-10/-11/-12/-15/-19) | — |
 | PPR.10 | Not started (legal answers outstanding) | — |
 | PPR.11 | Last | — |
-| PPR-E16 | Gate current: OWNER-0O-E16-2026-10-16 (E16-S1, `c638121e`), valid through **2026-11-12**, hard stop **2026-11-13**. **App image NOT VERIFIED**: three Critical and one High Debian-nginx findings with no trixie fix. **E16-R2 HELD** (candidate `fb29aff5` on `integration/e16-r2`, unpublished) | `docs/security/release-remediation/` |
+| PPR-E16 | Gate current: OWNER-0O-E16-2026-11-01 (E16-S2, with E16-R3 CPython 3.14.10), 119 records, valid through **2026-11-28**, hard stop **2026-11-29**. Superseded: OWNER-0O-E16-2026-10-16 (E16-S1, valid through 2026-11-12). E16-R2 retired 2026-10-26 (Debian nginx fixed; `fb29aff5` historical, unmerged) | `docs/security/release-remediation/` |
 
 **Date drift.** §26–§28 and the roadmap row say E16 is valid through
 2026-11-09 with publication blocked from 2026-11-10. E16-S1 superseded

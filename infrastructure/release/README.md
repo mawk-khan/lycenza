@@ -19,7 +19,7 @@ own). Each security tool runs from a digest-pinned container image named in
 | File | Purpose |
 |---|---|
 | `artifact-policy.json` (+ `schema/`) | The one policy manifest: images, required evidence, vulnerability thresholds, scanner-database age, exception limits, signing custody (unconfigured), pinned tool digests, reachable states. `verify-artifact` reads only this. |
-| `vulnerability-exceptions.json` (+ `schema/`) | Time-bounded, exact-match vulnerability exceptions, each linked to a recorded human approval (`approvals`). Since 2026-10-16 (E16-S1): the 115 records of owner decision `OWNER-0O-E16-2026-10-16` (the successor review of `78b68d6d`; the same 16 Debian 13 no-fix advisories, re-verified; all expire 2026-11-13), which replaced `OWNER-0O-E16-2026-10-11` (itself the successor of `OWNER-0O-E16-2026-09-29` and `OWNER-0O6E-2026-09-26`). |
+| `vulnerability-exceptions.json` (+ `schema/`) | Time-bounded, exact-match vulnerability exceptions, each linked to a recorded human approval (`approvals`). Since 2026-11-01 (E16-S2): the 119 records of owner decision `OWNER-0O-E16-2026-11-01` (the successor review of `bbc3cb24`; the 16 Debian 13 no-fix advisories of E16-S1 re-verified, plus the glibc gettext CVE-2026-84243; all expire 2026-11-29), which replaced `OWNER-0O-E16-2026-10-16` (E16-S1; itself the successor of `OWNER-0O-E16-2026-10-11`, `OWNER-0O-E16-2026-09-29` and `OWNER-0O6E-2026-09-26`). |
 | `runtime-security.json` (+ `schema/`) | Phase 0O.6F: the provider-neutral runtime security contract every production container is started with (never privileged, ALL capabilities dropped, none added, no-new-privileges, existing non-root user) and the checks `verify-images.sh` must pass to prove it. |
 | `retained-releases.json` (+ `schema/`) | Releases whose retained SBOMs the scheduled re-scan covers. **Empty** (nothing promoted). |
 | `gitleaks-image.toml`, `../../.gitleaks.toml` | Image-filesystem and source secret-scan configuration: gitleaks' default rules with an **exact-match** allowlist (one path + exact value per entry). |
@@ -202,7 +202,7 @@ base image of the Dockerfile.
 
 Both production images have 0 CRITICAL and 0 HIGH with a fix (application:
 repository-built PHP 8.3.36 on curl 8.23.0 / libxml2 2.15.4; Gateway: CPython
-3.14.7 at the time; 3.14.8 since E16-R1). Their remaining HIGH-without-fix findings — 12 Debian 13
+3.14.7 at the time; 3.14.8 since E16-R1; 3.14.10 since E16-R3). Their remaining HIGH-without-fix findings — 12 Debian 13
 Essential-package advisories, 48 + 49 matches — are covered exactly by owner
 decision `OWNER-0O6E-2026-09-26`
 (`docs/security/release-remediation/0O.6E-owner-security-decision.md`),
@@ -214,7 +214,7 @@ digests and their `verify-artifact` result are recorded in
 `docs/security/release-remediation/0O.6F-RUNTIME-HARDENING-EXCEPTIONS.md`.
 **PUBLISHED = NONE, PROMOTED = NONE**: no registry, no production signing
 identity, no deployment. The pinned tool Python (lock freshness, pip-audit)
-is the Gateway's interpreter, CPython 3.14.8 since E16-R1.
+is the Gateway's interpreter, CPython 3.14.8 since E16-R1 and 3.14.10 since E16-R3.
 
 **E16-R1 (2026-10-11): REMEDIATION COMPLETE / FRESH OWNER DECISION
 REQUIRED.** A fresh scan on 2026-10-11 found new findings that no exception
@@ -247,6 +247,20 @@ still match and still expire on 2026-10-29.
 - **Not excepted:** the Debian `nginx` Criticals (E16-P1). They are
   not resolved: Upstream-fixed remediation has been demonstrated in an unpublished candidate, but Lycenza's authoritative vulnerability scanner continues to classify the app image as blocked. E16-R2 therefore remains held pending a scanner-recognised/Debian-qualified remediation path.
 - **Record:** `docs/security/release-remediation/0O-E16-2026-10-16-owner-security-decision.md`.
+
+**E16-R3 + E16-S2 (2026-11-01): CPython 3.14.10 and successor decision `OWNER-0O-E16-2026-11-01`.**
+- **Scan:** the fresh qualification of `bbc3cb24` (run 41287488442,
+  `docs/security/release-remediation/E16-2026-11-01-SUCCESSOR-REVIEW.md`).
+  It found:
+  - the same 16 no-fix advisories, at the same versions, with the evidence
+    re-verified;
+  - one new no-fix glibc High (CVE-2026-84243);
+  - a Gateway **Critical** with a fix (CVE-2026-115557, CPython 3.14.8).
+- **E16-R3:** the Gateway base moves to `python:3.14.10-slim-trixie`, pinned
+  in the same three places as E16-R1. A Critical is never excepted.
+- **E16-S2:** 17 advisories and 119 records, valid through 2026-11-28
+  (expiry 2026-11-29).
+- **Record:** `docs/security/release-remediation/0O-E16-2026-11-01-owner-security-decision.md`.
 
 Four **new** Debian advisories have no fix and no exception (krb5, Cyrus
 SASL, and two in libstdc++; 18 matches). Until a fresh owner/security

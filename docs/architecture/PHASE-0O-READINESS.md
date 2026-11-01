@@ -3318,3 +3318,39 @@ in 1.30.4-8).
 - the application image is **not VERIFIED**;
 - the Gateway image can be;
 - E16 (`OWNER-0O-E16-2026-10-16`) stays current through 2026-11-12.
+
+## 70. Phase 0O / E16-R3 + E16-S2 — CPython 3.14.10 and successor decision (2026-11-01)
+
+**Review:** [`E16-2026-11-01-SUCCESSOR-REVIEW.md`](../security/release-remediation/E16-2026-11-01-SUCCESSOR-REVIEW.md),
+the fresh *Release qualification* of `bbc3cb24` (run 41287488442; Grype
+database 2026-11-01T06:20Z).
+
+**Findings**
+- **The 16 known no-fix advisories (115 records):** still present at the
+  same versions, the evidence re-verified on fresh images, 0 unused. None
+  can close.
+- **New, no fix:** CVE-2026-84243 (glibc gettext `LANGUAGE` traversal,
+  High, both images).
+- **New, fixable:** CVE-2026-115557 (CPython 3.14.8, **Critical**,
+  Gateway).
+
+**E16-R3.** The Gateway base moves to `python:3.14.10-slim-trixie` (index
+digest `3cabfd7d…`) in `ai.Dockerfile`, `verify-images.sh` and
+`artifact-policy.json`.
+- The remediated Gateway scans with 0 Critical and the same 57 Highs.
+- No lockfile or dependency changes.
+
+**E16-S2 decision:** `OWNER-0O-E16-2026-11-01`
+([record](../security/release-remediation/0O-E16-2026-11-01-owner-security-decision.md)).
+- **Records:** 17 advisories / 119 records (app 62, Gateway 57).
+  - The 115 renewals changed only `approved_by`, `created` and `expires`.
+  - The 4 new records: `libc6` `accepted_risk` and `libc-bin`
+    `not_affected` in both images.
+- **Evaluator:** app **PASS** (62 excepted); E16-R3 Gateway **PASS** (57
+  excepted).
+
+**Dates:** valid through **2026-11-28**; hard stop **2026-11-29**. The
+previous hard stop (2026-11-13) no longer applies.
+
+**Deferred (owner):** `symfony/mime` Medium CVE-2026-45070 goes to its own
+slice; `league/flysystem` Low is recommended for the same slice.
