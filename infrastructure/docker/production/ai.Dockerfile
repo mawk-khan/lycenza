@@ -14,7 +14,7 @@
 #     -t lycenza-ai-gateway:<version> services/ai
 #
 # Phase 0O.6A (ADR 0052 sections 3.2, 3.5): the base is pinned BY DIGEST
-# (Python 3.14 on Debian 13 "trixie" since Phase 0O.6C -- 3.14.8 since E16-R1, 2026-10-11, for CVE-2026-19445/-19553; owner decision
+# (Python 3.14 on Debian 13 "trixie" since Phase 0O.6C -- 3.14.8 since E16-R1, 2026-10-11, for CVE-2026-19445/-19553; 3.14.10 since E16-R3, 2026-11-01, for CVE-2026-115557; owner decision
 # R12: CVE-2026-82049 is fixed only in CPython 3.14; pip from that digest is
 # never upgraded) and
 # dependencies come from the fully resolved, hash-locked requirements.lock:
@@ -22,7 +22,7 @@
 # build hook runs). Tests\Feature\Configuration\SupplyChainGuardTest
 # guards both.
 
-ARG PYTHON_IMAGE=python:3.14.8-slim-trixie@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170
+ARG PYTHON_IMAGE=python:3.14.10-slim-trixie@sha256:3cabfd7d7aaf394e6040e79fa1eec6ca1c52b74ed9188650472695d9a9326999
 
 FROM ${PYTHON_IMAGE} AS deps
 RUN python -m venv /opt/venv
