@@ -105,6 +105,8 @@ class StudentDirectoryController extends Controller
             // SIS 11.7 / 11.8: the Student Communities hub (Houses, Clubs, Activities).
             'canViewCommunities' => ! $access->scopeOf($actor, 'students.houses.view', $school)->isNone()
                 || ! $access->scopeOf($actor, 'students.communities.view', $school)->isNone(),
+            // SIS 11.13: bulk Section change / Campus transfer (enrollments.manage, any scope).
+            'canBulkMove' => ! $access->scopeOf($actor, 'enrollments.manage', $school)->isNone(),
         ]);
     }
 

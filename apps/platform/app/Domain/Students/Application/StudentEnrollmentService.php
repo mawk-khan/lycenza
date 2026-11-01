@@ -296,8 +296,13 @@ class StudentEnrollmentService
      * simply whatever Campus the target Section belongs to; no separate
      * campus-transfer path exists because Section already authoritatively
      * owns its Campus.
+     *
+     * SIS 11.13: `$batchId` is set only by BulkStudentPlacementService, which
+     * repeats this exact move for each Student of a confirmed batch inside
+     * one transaction; it is recorded on this transfer's audit event so every
+     * per-Student event joins its batch event. It changes no rule.
      */
-    public function transferPlacement(StudentEnrollment $sourceEnrollment, Section $targetSection, string $rollNumber, string $effectiveDate, ?User $actor = null, ?StudentTransferCampusGuard $campusGuard = null): StudentEnrollment
+    public function transferPlacement(StudentEnrollment $sourceEnrollment, Section $targetSection, string $rollNumber, string $effectiveDate, ?User $actor = null, ?StudentTransferCampusGuard $campusGuard = null, ?string $batchId = null): StudentEnrollment
     {
         if ($sourceEnrollment->school_id !== $targetSection->school_id) {
             throw new CrossSchoolEnrollmentException;
@@ -311,9 +316,9 @@ class StudentEnrollmentService
 
         $rollNumber = RollNumberNormalizer::normalize($rollNumber);
 
-        return $this->context->withSchool($sourceEnrollment->school, function () use ($sourceEnrollment, $targetSection, $rollNumber, $effectiveDate, $actor, $campusGuard) {
+        return $this->context->withSchool($sourceEnrollment->school, function () use ($sourceEnrollment, $targetSection, $rollNumber, $effectiveDate, $actor, $campusGuard, $batchId) {
             try {
-                return DB::transaction(function () use ($sourceEnrollment, $targetSection, $rollNumber, $effectiveDate, $actor, $campusGuard) {
+                return DB::transaction(function () use ($sourceEnrollment, $targetSection, $rollNumber, $effectiveDate, $actor, $campusGuard, $batchId) {
                     // Section-before-Enrollment, TWO Sections (this
                     // class's docblock): discover the source Section
                     // from an unlocked read, then lock BOTH Sections in
@@ -410,7 +415,7 @@ class StudentEnrollmentService
                         'toSectionId' => $target->section_id,
                         'endsOn' => $sourceEndsOn,
                         'scope' => $campusGuard === null ? 'school' : 'campus',
-                    ]);
+                    ] + ($batchId === null ? [] : ['batchId' => $batchId]));
 
                     return $target;
                 });

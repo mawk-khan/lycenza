@@ -935,3 +935,15 @@ Bold in "After 11.5" marks a change since SIS.EXP-CLOSE.
 | X02 | export | Print view of operational reports | R5 | R5 | **R1** | Students (SIS 11.4) | governed print | — |
 | X03 | export | Excel (XLSX) export | R5 | R5 | **R6** | Students | deferred in D-11 | low value over CSV |
 | X04 | export | Downloadable PDF of reports | R5 | R5 | **R6** | Students | deferred in D-11; print-to-PDF exists | low value over print |
+
+### SIS 11.13 reconciliation (added 2026-11-01)
+
+SIS 11.13 delivers bulk movement (SR-09) as many ordinary transfers:
+- **Implemented:** bulk Campus (branch) transfer and bulk Section change
+  within one Academic Year, with per-Student blockers, capacity advisory,
+  fresh MFA and all-or-nothing execution.
+- **Different, accepted:** a target year other than the source is Rollover;
+  the shuffle log is the movement register plus per-Student history.
+- **Not adopted / unchanged:** bulk inactive/reactivate and approval queues
+  (SR-10), bulk group assignment (SR-17), import (SR-06, existing).
+  Full table: `SIS-11-13-BULK-STUDENT-OPERATIONS.md` §10.

@@ -187,6 +187,21 @@ SR-17 → partially met (House + Club + Activity). No score change.
 SR-29 → PARTIAL (operational listings complete; rates and the monthly grid
 analytics-gated). No score change.
 
+**SIS 11.13 IMPLEMENTED (2026-11-01, `SIS-11-13-BULK-STUDENT-OPERATIONS.md`):**
+- Students → Bulk operations: bulk **Change Section** and bulk **Transfer
+  Campus** of one class (≤ 100 Students), Select → Preview → fresh MFA →
+  revalidate → all-or-nothing execute, over the existing single-Student
+  primitives (`transferPlacement()`, `CampusStudentTransferService`);
+- preview = the real primitives in a rolled-back transaction; per-Student
+  Ready / Blocked / Changed / Already-in-target; SIS 11.3 capacity advisory;
+  per-Student roll numbers (no allocator);
+- ADR 0076 §84: Campus actors transfer only between their own Campuses,
+  today; Section change whole-School; cross-year → Rollover;
+- no schema, no capability, no job subsystem, no CSV input; two-process
+  concurrency proofs.
+
+SR-09 → met for within-year moves (cross-year via Rollover). No score change.
+
 **Next: owner decision; NOT STARTED; never auto-start.**
 
 ### 2.0f SIS.EXP-CLOSE — PROGRAMME CLOSED (2026-10-30)

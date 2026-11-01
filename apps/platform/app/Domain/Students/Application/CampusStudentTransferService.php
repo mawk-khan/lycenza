@@ -49,10 +49,13 @@ final class CampusStudentTransferService
         #[Tag(StudentTransferBlocker::TAG)] private readonly iterable $blockers = [],
     ) {}
 
-    /** @param  string|null  $expectedSourceId  the placement an API caller named (refused unless it is still the current one) */
-    public function transfer(School $school, CampusScope $scope, string $studentId, string $targetSectionId, string $rollNumber, ?User $actor = null, ?string $expectedSourceId = null): StudentEnrollment
+    /**
+     * @param  string|null  $expectedSourceId  the placement an API caller (or a SIS 11.13 bulk batch) named: refused unless it is still the current one
+     * @param  string|null  $batchId  SIS 11.13: the bulk batch this transfer belongs to (audit only)
+     */
+    public function transfer(School $school, CampusScope $scope, string $studentId, string $targetSectionId, string $rollNumber, ?User $actor = null, ?string $expectedSourceId = null, ?string $batchId = null): StudentEnrollment
     {
-        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $scope, $studentId, $targetSectionId, $rollNumber, $actor, $expectedSourceId): StudentEnrollment {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $scope, $studentId, $targetSectionId, $rollNumber, $actor, $expectedSourceId, $batchId): StudentEnrollment {
             $target = $this->access->lockedTransferTarget($school, $scope, $studentId, $targetSectionId, $expectedSourceId);
             if ($target['target'] === null) {
                 throw new StudentTransferUnavailableException;
@@ -66,6 +69,7 @@ final class CampusStudentTransferService
                     SchoolTimezone::today($school),
                     $actor,
                     new StudentTransferCampusGuard($school, $scope, $target['activeYearId'], $this->blockers),
+                    $batchId,
                 );
             } catch (PlacementTargetUnavailableException|CrossAcademicYearTransferException|IntraYearGradeChangeException|CrossSchoolEnrollmentException|InvalidEnrollmentTransitionException|InvalidEnrollmentDateRangeException) {
                 throw new StudentTransferUnavailableException;

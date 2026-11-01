@@ -151,6 +151,7 @@ use App\Http\Controllers\App\Staff\AccessCenterController;
 use App\Http\Controllers\App\Staff\StaffAccountController;
 use App\Http\Controllers\App\StaffAttendance\StaffAttendanceAdminController;
 use App\Http\Controllers\App\StudentAccountLinkController;
+use App\Http\Controllers\App\StudentBulkOperationController;
 use App\Http\Controllers\App\StudentCertificateController;
 use App\Http\Controllers\App\StudentCommunityController;
 use App\Http\Controllers\App\StudentController;
@@ -774,6 +775,15 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::get('/import/template', [StudentImportController::class, 'template'])->middleware('capability:students.import')->name('import.template');
         Route::post('/import/preview', [StudentImportController::class, 'preview'])->middleware(['capability:students.import', 'throttle:student-import', 'private-no-store'])->name('import.preview');
         Route::post('/import/commit', [StudentImportController::class, 'commit'])->middleware(['capability:students.import', 'throttle:student-import', 'private-no-store'])->name('import.commit');
+        // SIS 11.13: bulk Section change and Campus transfer (enrollments.manage,
+        // Campus-aware; the service decides what the scope may move). Select ->
+        // preview (kept, re-evaluated on review) -> fresh MFA -> atomic execute.
+        // Registered before '/{student}'.
+        Route::get('/bulk-operations', [StudentBulkOperationController::class, 'index'])->middleware('private-no-store')->name('bulk-operations.index');
+        Route::post('/bulk-operations/preview', [StudentBulkOperationController::class, 'preview'])->middleware('private-no-store')->name('bulk-operations.preview');
+        Route::get('/bulk-operations/review', [StudentBulkOperationController::class, 'review'])->middleware('private-no-store')->name('bulk-operations.review');
+        Route::post('/bulk-operations/execute', [StudentBulkOperationController::class, 'execute'])->middleware('private-no-store')->name('bulk-operations.execute');
+        Route::get('/bulk-operations/result', [StudentBulkOperationController::class, 'result'])->middleware('private-no-store')->name('bulk-operations.result');
         Route::get('/create', [StudentController::class, 'create'])->middleware('capability:students.manage')->name('create');
         Route::post('/', [StudentController::class, 'store'])->middleware('capability:students.manage')->name('store');
         Route::get('/{student}', [StudentController::class, 'show'])->middleware('capability:students.view')->name('show');

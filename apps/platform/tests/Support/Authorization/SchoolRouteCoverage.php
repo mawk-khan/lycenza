@@ -68,6 +68,7 @@ use App\Domain\Payroll\Statutory\Application\Export\StatutoryEsiContributionWork
 use App\Domain\Payroll\Statutory\Application\Export\StatutoryTdsDraftStatementExportService;
 use App\Domain\StaffAttendance\Application\StaffAttendanceReadService;
 use App\Domain\StaffAttendance\Application\StaffAttendanceService;
+use App\Domain\Students\Application\Bulk\BulkStudentPlacementService;
 use App\Domain\Students\Application\CampusStudentOnboardingService;
 use App\Domain\Students\Application\CampusStudentTransferService;
 use App\Domain\Students\Application\Groups\CommunityAdministrationService;
@@ -490,6 +491,14 @@ final class SchoolRouteCoverage
             // ORG.7F-3 (ADR 0076 §47): the dual-scope Campus transfer.
             Coverage::campus('app.students.transfer.create', 'enrollments.manage', StudentAccess::class, 'transferDestinations'),
             Coverage::campus('app.students.transfer.store', 'enrollments.manage', CampusStudentTransferService::class, 'transfer'),
+            // SIS 11.13: bulk Section change / Campus transfer -- the selection
+            // reads through StudentAccess; preview and execute re-decide the
+            // scope (a Section change is whole-School; execution re-reads it fresh).
+            Coverage::campus('app.students.bulk-operations.index', 'enrollments.manage', StudentAccess::class, 'transferDestinationsFor'),
+            Coverage::campus('app.students.bulk-operations.preview', 'enrollments.manage', BulkStudentPlacementService::class, 'preview'),
+            Coverage::campus('app.students.bulk-operations.review', 'enrollments.manage', BulkStudentPlacementService::class, 'preview'),
+            Coverage::campus('app.students.bulk-operations.execute', 'enrollments.manage', BulkStudentPlacementService::class, 'execute'),
+            Coverage::campusLookup('app.students.bulk-operations.result', 'enrollments.manage', 'Shows the actor\'s own just-completed batch from their session; reads no record.'),
 
             // Http\Controllers\App\StudentGuardianRelationshipController
 

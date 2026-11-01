@@ -65,6 +65,8 @@ interface Props {
     // ORG.7F-2: atomic Campus onboarding (students.manage AND enrollments.manage).
     canOnboard: boolean;
     canViewCommunities: boolean;
+    // SIS 11.13: Students → Bulk operations (bulk Section change / Campus transfer).
+    canBulkMove?: boolean;
     // SIS 11.4: governed export/print, when this viewer may.
     canExport?: boolean;
 }
@@ -180,6 +182,13 @@ function studentHref(student: StudentRow): string {
                     class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
                 >
                     Communities
+                </a>
+                <a
+                    v-if="canBulkMove"
+                    href="/app/students/bulk-operations"
+                    class="rounded border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
+                >
+                    Bulk operations
                 </a>
                 <a
                     v-if="canOnboard"

@@ -324,14 +324,26 @@ final class StudentAccess
      */
     public function transferDestinations(School $school, CampusScope $scope, StudentEnrollment $source): array
     {
+        return $this->transferDestinationsFor($school, $scope, $source->academic_year_id, $source->grade_level_id, $source->campus_id);
+    }
+
+    /**
+     * transferDestinations() for a placement context rather than one
+     * placement -- SIS 11.13's bulk Campus transfer, whose source is one
+     * Section (its year, Grade and Campus). The same query and scope.
+     *
+     * @return list<array{id: string, label: string}>
+     */
+    public function transferDestinationsFor(School $school, CampusScope $scope, string $academicYearId, string $gradeLevelId, string $sourceCampusId): array
+    {
         if ($scope->isNone()) {
             return [];
         }
         $query = Section::query()->where('sections.school_id', $school->id)
-            ->where('sections.academic_year_id', $source->academic_year_id)
-            ->where('sections.grade_level_id', $source->grade_level_id)
+            ->where('sections.academic_year_id', $academicYearId)
+            ->where('sections.grade_level_id', $gradeLevelId)
             ->where('sections.status', 'active')
-            ->where('sections.campus_id', '!=', $source->campus_id)
+            ->where('sections.campus_id', '!=', $sourceCampusId)
             ->whereHas('campus', fn ($q) => $q->where('status', 'active'))
             ->with(['campus', 'gradeLevel']);
         $scope->restrict($query, 'sections.campus_id');

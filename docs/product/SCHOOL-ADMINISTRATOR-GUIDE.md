@@ -540,6 +540,27 @@ Principal sees their own Campus only):
 - **Pickers** list the current year's Sections first. Transfer offers only
   Sections of the same year and Grade.
 
+**Bulk operations** (Students → Bulk operations, SIS 11.13) move several
+Students of one class at once:
+- **Change Section** moves them to another Section of the same year, Campus
+  and Grade (School administrators and principals of the whole School).
+- **Transfer Campus** moves them to a class of the same year and Grade on
+  another Campus. A Campus principal can transfer only between their own
+  Campuses, effective today.
+- Choose the class, tick the Students (or **Select all shown**), the target
+  class and the date, then **Preview**. Nothing moves yet: every Student is
+  shown as Ready, Blocked (with the reason, e.g. a Transport assignment to
+  end first, or a roll number already used), Changed since selection, or
+  Already in the target class. Fix roll numbers or remove Students that are
+  not Ready, then **Check again**.
+- A target class over its capacity is a warning only.
+- Confirm with an authentication code (enrol under Account security first).
+  Either every Student is moved or none is: if anyone changed in the
+  meantime, nothing moves and the review shows what changed.
+- Moving Students into another Academic Year or Grade is done through
+  Academic-Year Rollover. There is no undo: correct a move with another one.
+  At most 100 Students per move.
+
 **Mark inactive is one click, with no confirmation** (§21). Data Health
 then lists an inactive Student who still has a placement.
 

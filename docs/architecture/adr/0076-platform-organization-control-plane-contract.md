@@ -11163,3 +11163,30 @@ verdict (§82) stays valid.
   service gated by the existing `school.profile.view`. No capability, role,
   template, entitlement, Campus adoption, route, table or migration.
 - **Next.** ORG.12B (Setup & Readiness Center) needs owner authorization.
+
+## 84. SIS 11.13 — Bulk Section change and Campus transfer (amendment to §44.14, §44.25, §47.11; as built, 2026-11-01)
+
+§44.14 proposed no Campus bulk operation for v1, and §44.25 left "is a bulk
+Campus transfer wanted?" open (v1: no); §47.11 listed bulk transfer as not
+authorized. The SIS 11.13 owner authorization answers it
+(`docs/sis/SIS-11-13-BULK-STUDENT-OPERATIONS.md`):
+
+- **Adopted:** a bulk Section change and a bulk Campus transfer of one
+  source class to one target class, at most 100 Students, Select → Preview →
+  fresh MFA → revalidate → all-or-nothing execute
+  (`BulkStudentPlacementService`).
+- **Same authority as one Student, never more.** Every Student is moved by
+  the existing primitive: `StudentEnrollmentService::transferPlacement()`
+  for the whole School, `CampusStudentTransferService::transfer()` for a
+  Campus actor (§47: both Campuses in scope, today, the active year, the
+  one generic refusal). A same-Campus Section change stays whole-School
+  (§47), in bulk too. No capability, Campus adoption, role or table was
+  added; `enrollments.manage` is unchanged.
+- **Execution** re-reads authority fresh inside its transaction
+  (`holdsInSchoolNow()`, or `holdsInCampusNow()` over both Campuses), takes
+  every Student FOR SHARE in id order before the per-Student moves (the
+  movement lock order), and rolls the whole batch back on any refusal.
+- **Still not authorized:** bulk rollover, withdrawal, reactivation, status
+  changes, Guardian changes, Admissions conversion, cross-year or cross-School
+  movement, and any automatic Hostel, Transport or elective migration
+  (§47.11 otherwise stands).

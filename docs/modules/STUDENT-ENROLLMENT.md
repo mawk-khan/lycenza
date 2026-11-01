@@ -3394,3 +3394,25 @@ Club or Activity (`StudentGroupArchitectureTest`). The community rosters
 (`students.houses`, `students.clubs`, `students.activities`) show the
 current placement next to the group, read through `StudentAccess` under the
 viewer's `enrollments.view` scope.
+
+## Bulk Section change and Campus transfer (SIS 11.13, 2026-11-01, ADR 0076 §84)
+
+`docs/sis/SIS-11-13-BULK-STUDENT-OPERATIONS.md`. Students → Bulk operations
+moves up to 100 Students of one class to one other class of the same year
+and Grade, **as many ordinary transfers**:
+
+- **Change Section** (same Campus): whole-School `enrollments.manage`, the
+  date rules of `transferPlacement()`.
+- **Transfer Campus** (another Campus): whole School through
+  `transferPlacement()` with its named blockers; a Campus actor through
+  `CampusStudentTransferService` (both Campuses in scope, today).
+- **Never** another year (Rollover) or Grade (promotion), and never another
+  module's record (blockers are resolved in their own module first).
+- **Preview** runs the real primitives in a rolled-back transaction (commits
+  nothing); **execution** needs a signed all-Ready preview and a fresh MFA
+  code, re-reads authority fresh, locks every Student in id order and is
+  all-or-nothing: a Student changed since the preview (placement-id
+  binding) refuses the whole batch.
+- **History:** each move is an ordinary `transferred` + new placement, one
+  movement-register row per Student; per-Student audit carries the batch id,
+  plus one `student_enrollment.bulk_moved` event (ids and counts only).

@@ -101,7 +101,9 @@ class StudentCampusWriteArchitectureTest extends TestCase
             }
         }
         sort($campusWrites);
-        $this->assertSame(['api.v1.schools.enrollments.transfer', 'app.students.names.edit', 'app.students.names.update', 'app.students.onboard', 'app.students.onboard.store', 'app.students.transfer.create', 'app.students.transfer.store'], $campusWrites);
+        // SIS 11.13 (ADR 0076 §84): the bulk Campus transfer -- the same dual-scope
+        // transfer, repeated (a bulk Section change stays whole-School in the service).
+        $this->assertSame(['api.v1.schools.enrollments.transfer', 'app.students.bulk-operations.execute', 'app.students.bulk-operations.index', 'app.students.bulk-operations.preview', 'app.students.bulk-operations.result', 'app.students.bulk-operations.review', 'app.students.names.edit', 'app.students.names.update', 'app.students.onboard', 'app.students.onboard.store', 'app.students.transfer.create', 'app.students.transfer.store'], $campusWrites);
 
         foreach ([
             'app.students.create', 'app.students.store', 'app.students.edit', 'app.students.update', 'app.students.status',
