@@ -202,6 +202,13 @@ analytics-gated). No score change.
 
 SR-09 → met for within-year moves (cross-year via Rollover). No score change.
 
+**SIS 11.R2 CLOSURE RE-AUDIT (2026-11-01, `SIS-11-R2-ADVANCED-SIS-CLOSURE-AUDIT.md`):**
+114 capabilities (unchanged inventory); strict operational coverage 42/64 =
+65.6 % (partial credit 70.3 %); no BLOCKER or MAJOR gap; one R5 (C08
+primary-Guardian column, minor). **Decision A: Advanced SIS closed for now.**
+Next programme: HR ERP, starting with HR.EXP-0R (read-only reference map).
+Core SIS stays 96/100.
+
 **Next: owner decision; NOT STARTED; never auto-start.**
 
 ### 2.0f SIS.EXP-CLOSE — PROGRAMME CLOSED (2026-10-30)
