@@ -1,8 +1,8 @@
 # ADR 0082: UI Design Foundation v3 for the staff web application (DS)
 
-- Status: **Accepted (DS-0, documentation only, 2026-11-03).** No code,
-  route, capability, role, table or migration changes. DS-1 onwards each
-  need owner authorization.
+- Status: **Accepted (DS-0, documentation only, 2026-11-03). DS-1
+  implemented (2026-11-03, §7).** No route, capability, role, table or
+  migration change. Each further slice needs owner authorization.
 - Date: 2026-11-03
 - Programme: **DS — Design Foundation v3 adoption** (`docs/design/README.md`).
 - Owner decision: adopt the owner's "Lycenza Foundation v3" design for the
@@ -146,3 +146,62 @@ repository access (its register item D-01).
   authorization must not change in a DS slice.
 - The three new npm packages (§5) go through the normal lockfile and
   supply-chain rules (rule 87).
+
+## 7. DS-1 implementation (2026-11-03)
+
+Owner authorization: "please proceed" after DS-0 (2026-11-03). OD-DS-1 and
+OD-DS-3 were not answered, so their recommended defaults apply and stay
+reversible: one reserved danger hue (`--ds-danger` `#b42318`), and fonts from
+`@fontsource`. OD-DS-2 (icons) is not needed until DS-3.
+
+1. **Tokens** (`resources/css/app.css`).
+   - The raw values live on `:root` as `--ds-*` custom properties.
+   - `@theme inline` maps them to Tailwind utilities: `ground`, `surface`,
+     `ink`, `ink-muted`, `line`, `control-line`, `graphite-100…900`, `accent`,
+     `accent-strong`, `on-accent`, `accent-100…900`, `danger`,
+     `danger-tint`, and the `font-sans` / `font-heading` families.
+   - The Industry greys are named `graphite`, so Tailwind's own `neutral`
+     palette is not redefined.
+2. **Fonts.**
+   - Barlow 400 (+ italic), 500 and 600, and Barlow Condensed 500 and 600,
+     from `@fontsource/barlow` and `@fontsource/barlow-condensed` 5.3.0
+     (exact, lockfile-pinned, `devDependencies`, SIL OFL 1.1). Vite bundles
+     the files, so the CSP is unchanged.
+   - Barlow is the default family everywhere; `h1`–`h4` use Barlow
+     Condensed. Font weights `font-bold`/`font-light` are unused, so not
+     shipped.
+3. **School accent.**
+   - `BrandColor::strong()` darkens an accent (sRGB channels scaled toward
+     black in 1 % steps, keeping the hue) until it reaches 4.5:1 on the
+     ground (`BrandColor::GROUND`); an accent already that strong is kept.
+   - `BrandResolver` returns it as `accentStrong`, null when neither the
+     School nor its Network supplies an accent. The shared `brand` prop
+     carries it.
+   - `AccountLayout` sets `--ds-accent` and `--ds-accent-strong` on `<html>`
+     through the CSSOM and marks it `data-brand-accent`. The CSS then derives
+     the ramp in OKLCH from the one value (`700` = the strong step; `900` at
+     least 55 % black). With no accent supplied, the Industry steel ramp
+     applies unchanged.
+4. **Deliberately not applied yet: the ground.** The page background stays
+   as it is. Today's ~1,200 `text-slate-500` uses measure 4.25:1 on
+   `#f2f2f3` (4.76:1 on white). The ground arrives with DS-2 (shell) and the
+   DS-4 page migrations, each moving secondary text to `text-ink-muted` in
+   the same change.
+5. **Visible effect of DS-1.** Fonts only. No colour, spacing or layout
+   changes; the accent tokens are unused until DS-2.
+6. **Tests.**
+   - `Tests\Unit\Presentation\BrandColorStrongTest`: any accent's strong
+     step is ≥ 4.5:1 on the ground and under white, and is deterministic.
+   - `Tests\Feature\Configuration\DesignTokensTest`: no remote font or
+     stylesheet, the fontsource imports, exact pins, the CSP's `font-src`
+     and `style-src 'self'`, the AA pairs of the token sheet, and the accent
+     hook.
+   - `PresentationProfileTest`: `accentStrong` in the resolver and the shared
+     prop.
+   - Visual check: a specimen page rendered from the built stylesheet in
+     headless Chromium, default steel and a `#F5D90A` School accent. The
+     shared DDEV site was not used: another session's uncommitted work was
+     running there.
+7. **No engineering rule yet.** A CLAUDE.md rule ("colour comes only from
+   the tokens") lands with the guard of §2.7, once pages are migrated; until
+   then new pages may still use the existing palette classes.

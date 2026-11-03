@@ -87,11 +87,12 @@ class HandleInertiaRequests extends Middleware
             // capability (CLAUDE.md rule 6).
             'navigation' => $user !== null ? fn () => app(NavigationBuilder::class)->forRequest($request) : null,
             // ORG.12F (ADR 0080 §11.6): the active School's effective brand
-            // (label, accent and its derived readable foreground) -- presentation
+            // (label, accent, its derived readable foreground and, since DS-1, its
+            // >= 4.5:1 strong step, ADR 0082 §2.4) -- presentation
             // only; resolved lazily after the School context, never for an
             // elevated session or without a School.
             'brand' => $user !== null ? fn () => ($school = app(TenantContext::class)->school()) !== null && ! app(ElevationContext::class)->isElevated()
-                ? array_intersect_key(app(BrandResolver::class)->forSchool($school), array_flip(['label', 'accent', 'foreground', 'source']))
+                ? array_intersect_key(app(BrandResolver::class)->forSchool($school), array_flip(['label', 'accent', 'foreground', 'accentStrong', 'source']))
                 : null : null,
             // X-01 (OD-V11-7, ADR 0075 section 12): the success message a
             // controller flashed on its redirect. 64 actions flash `flash` or

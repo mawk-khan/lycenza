@@ -24,7 +24,7 @@ final class BrandResolver
     public function __construct(private readonly TenantContext $context) {}
 
     /**
-     * @return array{label: ?string, accent: string, foreground: string, source: string, network: ?array{id: string, name: string}, attention: ?string, school: array{label: ?string, accent: ?string}, networkValues: ?array{label: ?string, accent: ?string}}
+     * @return array{label: ?string, accent: string, foreground: string, accentStrong: ?string, source: string, network: ?array{id: string, name: string}, attention: ?string, school: array{label: ?string, accent: ?string}, networkValues: ?array{label: ?string, accent: ?string}}
      */
     public function forSchool(School $school): array
     {
@@ -66,6 +66,8 @@ final class BrandResolver
             'label' => $label,
             'accent' => $accent ?? BrandColor::SYSTEM_ACCENT,
             'foreground' => BrandColor::foreground($accent ?? BrandColor::SYSTEM_ACCENT),
+            // DS-1 (ADR 0082 §2.4): null when neither the School nor its Network supplies an accent.
+            'accentStrong' => $accent !== null ? BrandColor::strong($accent) : null,
             'source' => $source,
             'network' => $network,
             'attention' => $attention,

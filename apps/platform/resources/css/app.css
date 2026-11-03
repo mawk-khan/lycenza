@@ -1,11 +1,148 @@
 @import 'tailwindcss';
 
+/*
+ * DS-1 (ADR 0082 §2.3, §7): Barlow and Barlow Condensed (SIL OFL 1.1),
+ * self-hosted -- Vite bundles the font files from the lockfile-pinned
+ * @fontsource packages, so the enforced CSP (`font-src 'self'`) needs no
+ * exception and no page view reaches a font CDN. Only the weights the
+ * application uses: body 400/500/600 (+400 italic), headings 500/600.
+ */
+@import '@fontsource/barlow/400.css';
+@import '@fontsource/barlow/400-italic.css';
+@import '@fontsource/barlow/500.css';
+@import '@fontsource/barlow/600.css';
+@import '@fontsource/barlow-condensed/500.css';
+@import '@fontsource/barlow-condensed/600.css';
+
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 
-@theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+/*
+ * DS-1 (ADR 0082): the design tokens. The raw values live on :root as
+ * --ds-* custom properties; `@theme inline` below maps them to Tailwind
+ * utilities (bg-ground, text-ink, text-ink-muted, border-line,
+ * border-control-line, bg-accent-strong, text-danger, font-heading, ...).
+ * Source: docs/design/foundation-v3/reference/industry-styles.css, with the
+ * DS-0 §5 accessibility corrections (ink-muted is graphite-700, never 600;
+ * control borders are graphite-600; text and fills use accent-strong, never
+ * the raw accent).
+ *
+ * The School accent (rule 115): AccountLayout sets --ds-accent and the
+ * server-computed --ds-accent-strong (BrandColor::strong(), >= 4.5:1 on the
+ * ground) on <html> through the CSSOM, and marks it data-brand-accent; the
+ * tonal ramp is then derived from that one value. Without a School accent
+ * the Industry steel ramp applies unchanged.
+ */
+:root {
+    --ds-ground: #f2f2f3;
+    --ds-surface: #e9e9ea;
+    --ds-ink: #1d1f20;
+    --ds-ink-muted: #5d5d60;
+    --ds-line: color-mix(in srgb, #1d1f20 16%, transparent);
+    --ds-control-line: #7a7a7d;
+
+    --ds-graphite-100: #f5f5f8;
+    --ds-graphite-200: #e7e7ea;
+    --ds-graphite-300: #d4d4d7;
+    --ds-graphite-400: #b7b7ba;
+    --ds-graphite-500: #98989b;
+    --ds-graphite-600: #7a7a7d;
+    --ds-graphite-700: #5d5d60;
+    --ds-graphite-800: #424244;
+    --ds-graphite-900: #2b2b2d;
+
+    --ds-accent: #5980a6;
+    --ds-accent-strong: #416180;
+    --ds-on-accent: #ffffff;
+    --ds-accent-100: #eef6ff;
+    --ds-accent-200: #d6ebff;
+    --ds-accent-300: #b5d9fd;
+    --ds-accent-400: #94bce3;
+    --ds-accent-500: #749dc4;
+    --ds-accent-600: #597ea3;
+    --ds-accent-700: #416180;
+    --ds-accent-800: #2c455d;
+    --ds-accent-900: #1d2d3d;
+
+    /* OD-DS-1 (ADR 0082 §5), the recommended default: one reserved danger
+       hue for validation errors and destructive actions only (5.88:1 on the
+       ground). Status families stay graphite/steel with glyph + word. */
+    --ds-danger: #b42318;
+    --ds-danger-tint: #fef3f2;
+
+    --ds-font-body: 'Barlow', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+    --ds-font-heading: 'Barlow Condensed', 'Barlow', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* A School accent: the ramp follows the one stored value. Light steps mix
+   toward white, deep steps toward black (OKLCH); 700 is the server-computed
+   strong step and 900 is 55 % black over it, so light text stays readable
+   on the deep steps for any accent. */
+:root[data-brand-accent] {
+    --ds-accent-100: color-mix(in oklch, var(--ds-accent) 10%, white);
+    --ds-accent-200: color-mix(in oklch, var(--ds-accent) 22%, white);
+    --ds-accent-300: color-mix(in oklch, var(--ds-accent) 40%, white);
+    --ds-accent-400: color-mix(in oklch, var(--ds-accent) 70%, white);
+    --ds-accent-500: var(--ds-accent);
+    --ds-accent-600: color-mix(in oklch, var(--ds-accent) 85%, black);
+    --ds-accent-700: var(--ds-accent-strong);
+    --ds-accent-800: color-mix(in oklch, var(--ds-accent-strong) 70%, black);
+    --ds-accent-900: color-mix(in oklch, var(--ds-accent-strong) 45%, black);
+}
+
+@theme inline {
+    --font-sans: var(--ds-font-body);
+    --font-heading: var(--ds-font-heading);
+
+    --color-ground: var(--ds-ground);
+    --color-surface: var(--ds-surface);
+    --color-ink: var(--ds-ink);
+    --color-ink-muted: var(--ds-ink-muted);
+    --color-line: var(--ds-line);
+    --color-control-line: var(--ds-control-line);
+
+    --color-graphite-100: var(--ds-graphite-100);
+    --color-graphite-200: var(--ds-graphite-200);
+    --color-graphite-300: var(--ds-graphite-300);
+    --color-graphite-400: var(--ds-graphite-400);
+    --color-graphite-500: var(--ds-graphite-500);
+    --color-graphite-600: var(--ds-graphite-600);
+    --color-graphite-700: var(--ds-graphite-700);
+    --color-graphite-800: var(--ds-graphite-800);
+    --color-graphite-900: var(--ds-graphite-900);
+
+    --color-accent: var(--ds-accent);
+    --color-accent-strong: var(--ds-accent-strong);
+    --color-on-accent: var(--ds-on-accent);
+    --color-accent-100: var(--ds-accent-100);
+    --color-accent-200: var(--ds-accent-200);
+    --color-accent-300: var(--ds-accent-300);
+    --color-accent-400: var(--ds-accent-400);
+    --color-accent-500: var(--ds-accent-500);
+    --color-accent-600: var(--ds-accent-600);
+    --color-accent-700: var(--ds-accent-700);
+    --color-accent-800: var(--ds-accent-800);
+    --color-accent-900: var(--ds-accent-900);
+
+    --color-danger: var(--ds-danger);
+    --color-danger-tint: var(--ds-danger-tint);
+}
+
+/*
+ * DS-1 applies only what is contrast-safe on today's pages: the type
+ * families. The ground (#f2f2f3) is NOT applied to the page yet: today's
+ * ~1,200 `text-slate-500` uses fall to 4.25:1 on it (AA needs 4.5). The
+ * ground arrives with DS-2/DS-4, together with the move of secondary text to
+ * text-ink-muted (ADR 0082 §7, DS-1 note).
+ */
+@layer base {
+    h1,
+    h2,
+    h3,
+    h4 {
+        font-family: var(--ds-font-heading);
+    }
 }
 
 /*

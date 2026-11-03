@@ -20,7 +20,7 @@
 // Phase 0N.3: the elevated-access banner is its own component, rendered
 // after the account bar; it never gates the account bar or Log out.
 import { Link as InertiaLink, router, usePage } from '@inertiajs/vue3';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue';
 import ElevationBanner from '../Components/ElevationBanner.vue';
 import FlashMessage from '../Components/FlashMessage.vue';
 import RefusalMessage from '../Components/RefusalMessage.vue';
@@ -37,7 +37,13 @@ const page = usePage<{
     auth?: { user: AuthUser | null };
     product?: { name: string };
     navigation?: Navigation | null;
-    brand?: { label: string | null; accent: string; foreground: string; source: string } | null;
+    brand?: {
+        label: string | null;
+        accent: string;
+        foreground: string;
+        accentStrong: string | null;
+        source: string;
+    } | null;
 }>();
 // ORG.12F (ADR 0080 §11.6): the School's effective brand -- an accent stripe
 // and an optional label chip, nothing else. Set through the DOM (allowed by the
@@ -46,6 +52,25 @@ const page = usePage<{
 const brand = computed(() =>
     page.props.brand && page.props.brand.source !== 'system' ? page.props.brand : null,
 );
+// DS-1 (ADR 0082 §2.4): a School (or chosen Network) accent replaces the
+// design-system accent tokens on <html> -- through the CSSOM, which the CSP
+// allows -- so every accent-* utility follows it; resources/css/app.css
+// derives the ramp. `accentStrong` is computed on the server
+// (BrandColor::strong(), >= 4.5:1 on the ground) and is null when nothing
+// supplies an accent, in which case the Industry steel stays.
+const ACCENT_PROPERTIES = ['--ds-accent', '--ds-accent-strong'] as const;
+watchEffect(() => {
+    const root = document.documentElement;
+    const accent = page.props.brand?.accentStrong ? page.props.brand : null;
+    if (accent?.accentStrong) {
+        root.style.setProperty('--ds-accent', accent.accent);
+        root.style.setProperty('--ds-accent-strong', accent.accentStrong);
+        root.setAttribute('data-brand-accent', '');
+    } else {
+        ACCENT_PROPERTIES.forEach((property) => root.style.removeProperty(property));
+        root.removeAttribute('data-brand-accent');
+    }
+});
 const user = computed(() => page.props.auth?.user ?? null);
 const productName = computed(() => page.props.product?.name ?? '');
 const navigation = computed(() => (user.value ? (page.props.navigation ?? null) : null));

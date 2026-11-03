@@ -18,6 +18,12 @@ final class BrandColor
 
     public const DARK = '#111827';
 
+    /** DS-1 (ADR 0082): the design system's page ground. */
+    public const GROUND = '#F2F2F3';
+
+    /** WCAG 2.x AA for normal-size text. */
+    public const TEXT_CONTRAST = 4.5;
+
     public static function normalize(?string $value): ?string
     {
         $value = $value === null ? null : strtoupper(trim($value));
@@ -35,6 +41,29 @@ final class BrandColor
         $l = self::luminance($accent);
 
         return self::contrast($l, self::luminance(self::LIGHT)) >= self::contrast($l, self::luminance(self::DARK)) ? self::LIGHT : self::DARK;
+    }
+
+    /**
+     * DS-1 (ADR 0082 §2.4): the deep step of an accent, used for accent text
+     * on the ground and as a fill under white text. The accent itself when it
+     * already reaches 4.5:1 on the ground; otherwise the accent darkened
+     * (each sRGB channel scaled toward black in 1 % steps, which keeps its
+     * hue) until it does. Deterministic, so a School accent always yields the
+     * same strong step.
+     */
+    public static function strong(string $accent): string
+    {
+        $channels = array_map(static fn (string $pair): int => (int) hexdec($pair), str_split(substr($accent, 1), 2));
+
+        for ($step = 0; $step <= 100; $step++) {
+            $factor = 1 - $step / 100;
+            $candidate = vsprintf('#%02X%02X%02X', array_map(static fn (int $c): int => (int) round($c * $factor), $channels));
+            if (self::contrastRatio($candidate, self::GROUND) >= self::TEXT_CONTRAST) {
+                return $candidate;
+            }
+        }
+
+        return '#000000';
     }
 
     public static function contrastRatio(string $a, string $b): float

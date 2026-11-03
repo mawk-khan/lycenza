@@ -264,6 +264,7 @@ class PresentationProfileTest extends TestCase
         [$group] = $this->networkWith($school);
 
         $this->assertSame('system', $this->brand($school)['source'], 'franchise membership alone applies nothing');
+        $this->assertNull($this->brand($school)['accentStrong'], 'DS-1: no accent supplied, the design-system steel stays');
 
         $this->saveBrand($admin, $school, $group->id);
         $this->assertSame(['network', 'Northstar', '#1D4E89'], [$this->brand($school)['source'], $this->brand($school)['label'], $this->brand($school)['accent']]);
@@ -271,11 +272,13 @@ class PresentationProfileTest extends TestCase
         $this->saveBrand($admin, $school, $group->id, null, '#F5D90A');
         $mixed = $this->brand($school);
         $this->assertSame(['mixed', 'Northstar', '#F5D90A', BrandColor::DARK], [$mixed['source'], $mixed['label'], $mixed['accent'], $mixed['foreground']], 'a light accent gets dark text');
+        $this->assertSame(BrandColor::strong('#F5D90A'), $mixed['accentStrong'], 'DS-1: the text-safe strong step of the accent');
+        $this->assertGreaterThanOrEqual(BrandColor::TEXT_CONTRAST, BrandColor::contrastRatio($mixed['accentStrong'], BrandColor::GROUND));
         $this->assertNotSame($school->refresh()->name, 'Northstar', 'the School name never changes');
 
         // Shared with the shell, for this School only.
         $this->actingAs($admin)->post("/app/schools/{$school->id}/activate");
-        $this->get('/app')->assertInertia(fn ($p) => $p->where('brand.label', 'Northstar')->where('brand.source', 'mixed'));
+        $this->get('/app')->assertInertia(fn ($p) => $p->where('brand.label', 'Northstar')->where('brand.source', 'mixed')->where('brand.accentStrong', BrandColor::strong('#F5D90A')));
     }
 
     #[Test]
