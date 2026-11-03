@@ -1553,11 +1553,11 @@ function removeNote(id: string): void {
                                 >
                                     <label
                                         class="block text-sm text-slate-600"
-                                        :for="`correct-${r.id}`"
+                                        for="correction-manager-search"
                                         >Correct manager (leave blank to void the line)</label
                                     >
                                     <SearchCombobox
-                                        :id="`correct-${r.id}`"
+                                        id="correction-manager-search"
                                         v-model="correctionQuery"
                                         placeholder="Search for the manager"
                                         class="w-full max-w-md rounded border border-slate-300 px-3 py-2 text-sm"
