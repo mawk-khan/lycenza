@@ -1,12 +1,18 @@
 <?php
 
+use App\Domain\HR\Application\EmploymentService;
 use App\Domain\HR\Application\ReportingHierarchyService;
+use App\Domain\HR\Application\Workforce\StaffType;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
+use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\Leave\Application\Exceptions\LeaveException;
+use App\Domain\Leave\Application\LeaveEligibilityService;
 use App\Domain\Leave\Application\LeaveLedgerService;
+use App\Domain\Leave\Application\LeavePolicyService;
 use App\Domain\Leave\Application\LeaveRequestService;
 use App\Domain\Leave\Application\LeaveYearCloseService;
 use App\Domain\Leave\Application\LeaveYearService;
+use App\Domain\Leave\Application\Policy\LeaveEligibilityCriteria;
 use App\Domain\Leave\Application\StaffCalendarService;
 use App\Models\School;
 use App\Models\User;
@@ -31,6 +37,9 @@ use Tests\Support\Concurrency\HeldTransaction;
 //   php leave-op.php withdraw-own|cancel-own <schoolId> <requestId> <actorId>     (HRX.4 self-service)
 //   php leave-op.php manager-approve <schoolId> <requestId> <actorId>             (HRX.2 manager path)
 //   php leave-op.php set-manager <schoolId> <subordinateAssignmentId> <managerAssignmentId|none> <actorId>   (ORG.8D: HR moves the line)
+//   php leave-op.php eligibility-run <schoolId> <typeId> <asOf> <actorId>                          (HR.9: prints the assigned count)
+//   php leave-op.php version <schoolId> <typeId> <staffType|any> <supersedesPolicyId|none> <actorId> (HR.9: one-rule version)
+//   php leave-op.php end-employment <schoolId> <employmentId> <endsOn> <actorId>                   (HR: the employment ends)
 
 require __DIR__.'/../../vendor/autoload.php';
 
@@ -66,6 +75,11 @@ try {
             $args[2] === 'none' ? null : EmployeeAssignment::query()->findOrFail($args[2]),
             User::query()->findOrFail($args[3]),
         ) !== null ? $args[2] : ''),
+        'eligibility-run' => 'ok:'.$app->make(LeaveEligibilityService::class)->executeRun($school, $args[1], $args[2], User::query()->findOrFail($args[3]))->assigned_count,
+        'version' => 'ok:'.$app->make(LeavePolicyService::class)->create($school, $args[1], [
+            'name' => 'Raced', 'annual_allocation_units' => 24, 'carry_forward_allowed' => false, 'carry_forward_cap_units' => null, 'carry_forward_expiry_days' => null,
+        ], $args[3] === 'none' ? null : $args[3], User::query()->findOrFail($args[4]), [new LeaveEligibilityCriteria($args[2] === 'any' ? null : StaffType::from($args[2]), null, null)])->status,
+        'end-employment' => 'ok:'.$app->make(EmploymentService::class)->end(EmploymentRecord::query()->findOrFail($args[1]), $args[2], User::query()->findOrFail($args[3]))->status,
         'close' => 'ok:'.$app->make(LeaveYearCloseService::class)->execute($school, $args[1], User::query()->findOrFail($args[2]))->item_count,
         'monday' => (function () use ($app, $school, $args) {
             $app->make(StaffCalendarService::class)->setWeeklyPattern($school, [1 => $args[1], 2 => 'full', 3 => 'full', 4 => 'full', 5 => 'full', 6 => 'off', 7 => 'off'], User::query()->findOrFail($args[2]));

@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\DB;
  * triggers take.
  *
  * Every writer acquires them in this order:
+ * 00. eligibility (HR.9; one leave type's rule set, exclusive, right after the School -- policy
+ *     create/supersede/retire and the eligibility run; before any other row lock);
  * 0a. staff employment (HRX.5, shared for HRX writers; exclusive only for a
  *     Payroll evidence capture);
  * 0b. staff days (HRX.3, the cross-domain day lock, ascending);
@@ -56,6 +58,19 @@ final class LeaveLocks
     public static function staffEmployment(School $school, string $employmentRecordId, bool $shared): void
     {
         self::take("hrx.staff_employment:{$school->id}:{$employmentRecordId}", $shared);
+    }
+
+    /**
+     * HR.9 (ADR 0065 §28.5): one leave type's eligibility rule set. Taken
+     * exclusively FIRST (before any Leave or HR row lock) by every writer that
+     * can change which active version an employment resolves to -- creating,
+     * superseding or retiring a policy version -- and by the eligibility run,
+     * so a run resolves against one stable rule set. The database rule guard
+     * (`trg_leave_eligibility_rules_guard`) takes the same key.
+     */
+    public static function eligibility(School $school, string $leaveTypeId): void
+    {
+        self::take("leave.eligibility:{$school->id}:{$leaveTypeId}", shared: false);
     }
 
     /** Exclusive for schedule writers (opening years, start-month changes); shared for readers that must see one schedule. */

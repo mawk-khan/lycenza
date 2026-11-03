@@ -230,6 +230,20 @@ class DatabaseRoleVerifier
     ];
 
     /**
+     * HR.9 (ADR 0065 §28): the leave policy backstops -- a version's
+     * eligibility rules are immutable, never beyond its declared count and
+     * never ambiguous against another active version; the declared count is
+     * complete at commit; an eligibility-run header never changes.
+     * trigger => table.
+     */
+    public const LEAVE_POLICY_GUARDS = [
+        'trg_leave_eligibility_rules_guard' => 'leave_eligibility_rules',
+        'trg_leave_policies_rules_complete' => 'leave_policies',
+        'trg_leave_eligibility_runs_immutable' => 'leave_eligibility_runs',
+        'trg_leave_policies_immutable' => 'leave_policies',
+    ];
+
+    /**
      * HR.2A: the staff-profile backstops -- the archive guard on each ancillary
      * record table, reference codes immutable and never reused, HR document
      * records bound to a governed Document. trigger => table.
@@ -440,6 +454,23 @@ class DatabaseRoleVerifier
         $results[] = CheckResult::of('hr_profile_invariants', $missingProfile === [], $missingProfile === [] ? '' : count($missingProfile).' missing or disabled');
 
         $results[] = CheckResult::of('hr_reporting_invariants', $missingReporting === [], $missingReporting === [] ? '' : count($missingReporting).' missing or disabled');
+
+        // HR.9: the leave policy backstops, forced RLS on the two new tables and their closed checks.
+        $missingLeavePolicy = array_keys(array_filter(self::LEAVE_POLICY_GUARDS, fn (string $table, string $trigger) => DB::selectOne(
+            "select exists (select 1 from pg_trigger where tgrelid = ('public.'||?)::regclass and tgname = ? and tgenabled = 'O') as x", [$table, $trigger],
+        )->x === false, ARRAY_FILTER_USE_BOTH));
+        foreach (['leave_eligibility_rules', 'leave_eligibility_runs'] as $table) {
+            $rls = DB::selectOne('select relrowsecurity and relforcerowsecurity as x from pg_class where oid = (\'public.\'||?)::regclass', [$table]);
+            if ($rls === null || ! $rls->x) {
+                $missingLeavePolicy[] = "{$table}:rls";
+            }
+        }
+        foreach (['leave_policies_rules_check', 'leave_eligibility_rules_staff_type_check', 'leave_policy_assignments_provenance_check', 'leave_eligibility_runs_count_check'] as $constraint) {
+            if (! DB::selectOne('select exists (select 1 from pg_constraint where conname = ?) as x', [$constraint])->x) {
+                $missingLeavePolicy[] = $constraint;
+            }
+        }
+        $results[] = CheckResult::of('leave_policy_invariants', $missingLeavePolicy === [], $missingLeavePolicy === [] ? '' : count($missingLeavePolicy).' missing or disabled');
 
         $defaults = DB::selectOne(
             "select bool_or(defaclobjtype = 'r' and defaclacl::text like '%' || ? || '=arwd/%') as tables,

@@ -110,6 +110,7 @@ use App\Http\Controllers\App\InventoryLocationController;
 use App\Http\Controllers\App\InventoryStockController;
 use App\Http\Controllers\App\Leave\LeaveAdminController;
 use App\Http\Controllers\App\Leave\LeaveApprovalsController;
+use App\Http\Controllers\App\Leave\LeaveEligibilityPageController;
 use App\Http\Controllers\App\LibraryCatalogueController;
 use App\Http\Controllers\App\LibraryCirculationController;
 use App\Http\Controllers\App\LMS\AssignmentController as LmsAssignmentController;
@@ -1993,6 +1994,10 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::post('/types/{leaveType}/status', [LeaveAdminController::class, 'setTypeStatus'])->name('types.status');
         Route::post('/policies', [LeaveAdminController::class, 'storePolicy'])->name('policies.store');
         Route::post('/policies/{leavePolicy}/retire', [LeaveAdminController::class, 'retirePolicy'])->name('policies.retire');
+        // HR.9 (ADR 0065 §28.4): the policy editor's draft preview (JSON, writes nothing), the eligibility page and the additive run.
+        Route::post('/policies/preview', [LeaveEligibilityPageController::class, 'preview'])->middleware('private-no-store')->name('policies.preview');
+        Route::get('/eligibility', [LeaveEligibilityPageController::class, 'show'])->name('eligibility');
+        Route::post('/eligibility-runs', [LeaveEligibilityPageController::class, 'executeRun'])->name('eligibility-runs.store');
         Route::post('/calendar/weekdays', [LeaveAdminController::class, 'updateWeeklyPattern'])->name('calendar.weekdays');
         Route::post('/calendar/holidays', [LeaveAdminController::class, 'storeHoliday'])->name('calendar.holidays.store');
         Route::post('/calendar/holidays/{staffHoliday}/remove', [LeaveAdminController::class, 'destroyHoliday'])->name('calendar.holidays.remove');

@@ -56,12 +56,34 @@ when a request is drafted.
 | HR-L5 | Bank / payment details and disbursement files | Account Details profile tab; bank fields | not raised | D1 bank, Payroll disbursement |
 | HR-L6 | Family, dependants and statutory nominees | Family Details, Nominee Details tabs | not raised (OD-HR-12) | D1 family/dependants |
 | HR-L7 | Government identifiers on the general profile (Aadhaar, passport, driving licence) | Personal Details, transport licence | not raised; D-15 discipline keeps only Payroll's encrypted statutory ids | D1 statutory identifiers outside Payroll |
-| HR-L8 | Sensitive-demographic eligibility (gender, marital status) for leave rules | leave-type eligibility fields | not raised; **gender is not modelled** in HR | D10 gender/marital eligibility |
+| HR-L8 | Sensitive-demographic eligibility (gender, marital status) for leave rules | leave-type eligibility fields | not raised; **gender is not modelled** in HR. **HR.9 kept it closed:** the eligibility dimensions are exactly staff type, Employee Category and Department; `LeaveArchitectureGuardTest::hr_l8_no_leave_table_or_rule_can_use_a_protected_characteristic` fails on any protected column (ADR 0065 §28.3) | D10-07, D10-08 gender/marital eligibility |
 | HR-L9 | Recruitment / candidate data, consent and public forms | resume register, applied-post fields | not raised (OD-HR-6) | recruitment (outside this programme's D-map) |
 | HR-L10 | Disciplinary, complaint and memo records | complaints and memo screens | not raised (OD-HR-8) | XF family (deferred) |
 | HR-L11 | Performance / appraisal data | staff assessment, roles & responsibilities "use in assessment" | not raised (OD-HR-7) | XT and assessment |
 | HR-L12 | Background or police verification | onboarding checks | not raised | onboarding extensions |
 | HR-L13 | Staff photographs | Change Profile Pic | not raised. Media also waits for a governed media pipeline (rule 115) | D1 profile photograph |
+
+## 2a. Owner decision (not legal): OD-HR-15 — non-working days inside leave (HR.9)
+
+- **Status:** raised by HR.9 (2026-11-03). Not decided. **Nothing is built**,
+  and there is no dormant toggle.
+- **Subject:** whether a School's leave policy may count holidays or weekly
+  offs inside a leave (sandwich, D10-13) or next to it (prefix / suffix,
+  D10-14 / D10-15). This is the configurable inclusion of D10-16 / D14-11.
+- **Why a decision first:** ADR 0065 §4.7 counts working half-days only.
+  That count is frozen into every approved request's days (§22.6), the
+  never-negative balance and Payroll's HRX evidence (§26). Changing it
+  changes what Payroll sees as leave.
+- **Questions to decide:**
+  1. Is it allowed at all, and per policy version only?
+  2. Prospective only (never recalculating approved leave)?
+  3. Does a sandwiched non-working day become a leave half for Staff
+     Attendance and for Payroll's classification?
+  4. What is the paid / unpaid effect?
+  5. Is there an HRX-L3 / labour-law interaction for a "statutory" label?
+     (No statutory label is allowed today.)
+- **Then:** an ADR 0065 amendment, then a pure unit calculator and its
+  tests. ADR 0065 §28.9 records the analysis.
 
 ## 3. Proposed owner decision: OD-HR-14 — split HRX-L2
 

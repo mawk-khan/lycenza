@@ -65,6 +65,30 @@ class HrSelfAdministrationGuard
         });
     }
 
+    /**
+     * HR.9: which of these EmploymentRecords belong to the Employee linked to
+     * $actor, in ONE read -- for a batch writer (Leave's eligibility run) that
+     * must skip the actor's own employment rather than ask per row.
+     *
+     * @param  list<string>  $employmentRecordIds
+     * @return list<string>
+     */
+    public function ownedEmploymentIds(User $actor, School $school, array $employmentRecordIds): array
+    {
+        if ($employmentRecordIds === []) {
+            return [];
+        }
+
+        return app(TenantContext::class)->withSchool($school, fn (): array => EmploymentRecord::query()
+            ->where('employment_records.school_id', $school->id)
+            ->whereIn('employment_records.id', $employmentRecordIds)
+            ->join('employees', fn ($j) => $j->on('employees.id', '=', 'employment_records.employee_id')->on('employees.school_id', '=', 'employment_records.school_id'))
+            ->where('employees.user_id', $actor->id)
+            ->pluck('employment_records.id')
+            ->map(fn ($id) => (string) $id)
+            ->all());
+    }
+
     /** The same rule, from an EmploymentRecord (Staff Attendance). @throws HrSelfAdministrationException */
     public function refuseOwnEmployment(User $actor, string $employmentRecordId, string $operation): void
     {

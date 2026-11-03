@@ -352,6 +352,28 @@ reservation.
 
 ### HR.9 — Leave policy
 
+> **HR.9 IMPLEMENTED (2026-11-03).** Contract: ADR 0065 §28. Delivered:
+> - request-timing rules on the version (`min_notice_days`,
+>   `max_backdate_days` in calendar days; `max_units_per_request` in
+>   half-day units), enforced at submission on every path (D10-09/10/11);
+> - `leave_eligibility_rules` on the version (staff type / Employee
+>   Category / Department), never ambiguous between active versions
+>   (database), with no precedence order (D10-03, D10-20, D12-04);
+> - the eligibility resolution: an applicability view (the assigned /
+>   unassigned staff view, D12-05), a draft preview that writes nothing, and
+>   an additive, idempotent run → policy assignments with provenance
+>   (`leave_eligibility_runs`);
+> - a policy-version editor and an eligibility page, both server-driven.
+>
+> **Not built** (discrepancy register: ADR 0065 §28.10):
+> - the sandwich / prefix / suffix calculator and holiday inclusion
+>   (D10-13…16, D14-11) wait for owner decision **OD-HR-15** (gate register
+>   §2a). No dormant toggle exists;
+> - proration and accrual stay HR.10.
+>
+> D10-05 and D10-19 (HR.10) remain MISS, so "Done when" is met for HR.9's
+> own rows only.
+
 1. **Prerequisites:** HR.1 (staff type, terms). HR-L8 is needed only for
    gender / marital rules.
 2. **Scope:** D10-03/09/10/11/13/14/15/16/20; D12-04/05; D14-11.

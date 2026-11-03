@@ -2824,7 +2824,7 @@ paths:
     post:
       operationId: createLeavePolicy
       summary: >
-        HRX.1: creates a policy version (integer half-day units); with supersedes_policy_id it retires that active version of the same type. Requires hr.leave.configure. Idempotency-Key required.
+        HRX.1: creates a policy version (integer half-day units); with supersedes_policy_id it retires that active version of the same type. HR.9: the version also carries its request-timing rules (min_notice_days and max_backdate_days in calendar days, max_units_per_request in half-day units; null = none) and its eligibility rules (staff type / Employee Category / Department; each null = any), frozen with it. Requires hr.leave.configure. Idempotency-Key required.
       parameters:
         - { $ref: "#/components/parameters/SchoolId" }
         - { $ref: "#/components/parameters/IdempotencyKey" }
@@ -2847,7 +2847,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "409":
-          description: LEAVE_POLICY_NOT_SUPERSEDABLE.
+          description: LEAVE_POLICY_NOT_SUPERSEDABLE; HR.9 LEAVE_ELIGIBILITY_OVERLAP (an employment could match these rules and another active version of the type).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -3176,6 +3176,120 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "429": { $ref: "#/components/responses/TooManyRequests" }
 
+  /schools/{schoolId}/leave/eligibility:
+    get:
+      operationId: showLeaveEligibility
+      summary: >
+        HR.9: for one leave type and School-local date (default today), every employment spanning the date and its closed outcome -- assigned (with whether the current rules still resolve to that version), eligible for exactly one active version, ambiguous, no matching rule, employment not eligible, or the caller's own -- with the workforce facts it was judged on. Read-only. Requires hr.leave.view.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { name: leave_type_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: date, in: query, required: false, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveEligibilityResult" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.view in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id (one tenant-safe 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed; LEAVE_DATE_INVALID.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/leave/eligibility/preview:
+    post:
+      operationId: previewLeaveEligibility
+      summary: >
+        HR.9: the same evaluation for a policy version that does not exist yet (it replaces supersedes_policy_id in the evaluation). Writes nothing; reports overlappingPolicyId when the create would be refused. Requires hr.leave.configure.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LeaveEligibilityPreviewInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveEligibilityResult" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.configure in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id (one tenant-safe 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed; LEAVE_DATE_INVALID, LEAVE_ELIGIBILITY_RULE_DUPLICATE or LEAVE_ELIGIBILITY_RULES_TOO_MANY.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
+  /schools/{schoolId}/leave/eligibility-runs:
+    post:
+      operationId: executeLeaveEligibilityRun
+      summary: >
+        HR.9: assigns every ELIGIBLE employment the active version it resolves to, effective from as_of until the employment ends (or the day before a later assignment of the type). Only adds: never ends, extends or repoints an assignment, and never the caller's own employment. A re-run assigns nothing twice. Requires hr.leave.manage. Idempotency-Key required.
+      parameters:
+        - { $ref: "#/components/parameters/SchoolId" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LeaveEligibilityRunInput" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { type: object, required: [data], properties: { data: { $ref: "#/components/schemas/LeaveEligibilityRun" } } }
+        "401":
+          description: Missing/invalid bearer token.
+        "403":
+          description: Authenticated but lacking hr.leave.manage in this School.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Unknown, malformed or other-School id (one tenant-safe 404).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: LEAVE_TYPE_INACTIVE; LEAVE_ASSIGNMENT_OVERLAP (an assignment changed while the run resolved).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: Validation failed; LEAVE_DATE_INVALID.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+
   /schools/{schoolId}/leave/allocation-runs/preview:
     get:
       operationId: previewLeaveAllocationRun
@@ -3418,7 +3532,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "422":
-          description: Validation failed.
+          description: Validation failed; HR.9 LEAVE_NOTICE_TOO_SHORT, LEAVE_BACKDATE_TOO_FAR or LEAVE_REQUEST_TOO_LONG (a request-timing rule of a policy version assigned on the requested dates).
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -17072,6 +17186,97 @@ components:
         carryForwardExpiryDays: { type: integer, nullable: true }
         status: { type: string, enum: [active, retired] }
         supersedesPolicyId: { type: string, format: uuid, nullable: true }
+        minNoticeDays: { type: integer, nullable: true, minimum: 1, maximum: 366, description: "HR.9: calendar days of notice; null = no rule." }
+        maxBackdateDays: { type: integer, nullable: true, minimum: 0, maximum: 366, description: "HR.9: calendar days a request may start in the past; 0 = never; null = no rule." }
+        maxUnitsPerRequest: { type: integer, nullable: true, minimum: 1, maximum: 734, description: "HR.9: chargeable half-day units per request; null = no rule." }
+        eligibilityRules: { type: array, items: { $ref: "#/components/schemas/LeaveEligibilityRule" } }
+        createdAt: { type: string, format: date-time, nullable: true }
+        retiredAt: { type: string, format: date-time, nullable: true }
+    LeaveEligibilityRule:
+      type: object
+      description: "HR.9: one eligibility rule of a policy version; each null dimension means any value, including none."
+      required: [id, staffType, employeeCategoryId, departmentId]
+      properties:
+        id: { type: string, format: uuid, nullable: true, description: "null in a draft preview." }
+        staffType: { type: string, enum: [teaching, non_teaching, outsourced], nullable: true }
+        employeeCategoryId: { type: string, format: uuid, nullable: true }
+        departmentId: { type: string, format: uuid, nullable: true }
+    LeaveEligibilityRuleInput:
+      type: object
+      additionalProperties: false
+      properties:
+        staff_type: { type: string, enum: [teaching, non_teaching, outsourced], nullable: true }
+        employee_category_id: { type: string, format: uuid, nullable: true }
+        department_id: { type: string, format: uuid, nullable: true }
+    LeaveEligibilityPreviewInput:
+      type: object
+      required: [leave_type_id, name, annual_allocation_units]
+      properties:
+        leave_type_id: { type: string, format: uuid }
+        date: { type: string, format: date, description: "School-local; defaults to today." }
+        supersedes_policy_id: { type: string, format: uuid, nullable: true }
+        name: { type: string, maxLength: 120 }
+        annual_allocation_units: { type: integer, minimum: 0, maximum: 1000 }
+        eligibility_rules: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/LeaveEligibilityRuleInput" } }
+    LeaveEligibilityRunInput:
+      type: object
+      required: [leave_type_id, as_of]
+      properties:
+        leave_type_id: { type: string, format: uuid }
+        as_of: { type: string, format: date, description: "School-local; the assignments' effective_from." }
+    LeaveEligibilityRun:
+      type: object
+      required: [id, leaveTypeId, asOf, assignedCount, skippedCount, executedAt]
+      properties:
+        id: { type: string, format: uuid }
+        leaveTypeId: { type: string, format: uuid }
+        asOf: { type: string, format: date }
+        assignedCount: { type: integer, minimum: 0 }
+        skippedCount: { type: integer, minimum: 0 }
+        executedAt: { type: string, format: date-time }
+    LeaveEligibilityRow:
+      type: object
+      required: [employmentRecordId, employeeId, employmentStatus, facts, outcome, matchingPolicyIds]
+      properties:
+        employmentRecordId: { type: string, format: uuid }
+        employeeId: { type: string, format: uuid }
+        employeeNumber: { type: string, nullable: true }
+        fullName: { type: string, nullable: true }
+        employmentStatus: { type: string }
+        facts:
+          type: object
+          required: [staffType, employeeCategoryId, departmentId]
+          properties:
+            staffType: { type: string, enum: [teaching, non_teaching, outsourced], nullable: true }
+            employeeCategoryId: { type: string, format: uuid, nullable: true }
+            departmentId: { type: string, format: uuid, nullable: true }
+        outcome: { type: string, enum: [assigned, eligible, ambiguous, no_matching_rule, employment_not_eligible, own_employment] }
+        policyId: { type: string, nullable: true, description: "The single matching version (\"draft\" in a preview)." }
+        ruleId: { type: string, format: uuid, nullable: true }
+        matchingPolicyIds: { type: array, items: { type: string } }
+        assignmentId: { type: string, format: uuid, nullable: true }
+        assignedPolicyId: { type: string, format: uuid, nullable: true }
+        assignedMatchesRules: { type: boolean, nullable: true }
+        assignmentEndsOn: { type: string, format: date, nullable: true }
+    LeaveEligibilityResult:
+      type: object
+      required: [leaveTypeId, date, versions, rows, counts]
+      properties:
+        leaveTypeId: { type: string, format: uuid }
+        date: { type: string, format: date }
+        versions:
+          type: array
+          items:
+            type: object
+            required: [policyId, name, annualAllocationUnits, rules]
+            properties:
+              policyId: { type: string }
+              name: { type: string }
+              annualAllocationUnits: { type: integer }
+              rules: { type: array, items: { $ref: "#/components/schemas/LeaveEligibilityRule" } }
+        rows: { type: array, items: { $ref: "#/components/schemas/LeaveEligibilityRow" } }
+        counts: { type: object, additionalProperties: { type: integer } }
+        overlappingPolicyId: { type: string, format: uuid, nullable: true, description: "Preview only: an active version these rules would overlap (the create would be refused)." }
     LeavePolicyCreateInput:
       type: object
       required: [leave_type_id, name, annual_allocation_units, carry_forward_allowed]
@@ -17083,6 +17288,10 @@ components:
         carry_forward_cap_units: { type: integer, minimum: 1, nullable: true }
         carry_forward_expiry_days: { type: integer, minimum: 1, nullable: true }
         supersedes_policy_id: { type: string, format: uuid, nullable: true }
+        min_notice_days: { type: integer, minimum: 1, maximum: 366, nullable: true }
+        max_backdate_days: { type: integer, minimum: 0, maximum: 366, nullable: true }
+        max_units_per_request: { type: integer, minimum: 1, maximum: 734, nullable: true }
+        eligibility_rules: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/LeaveEligibilityRuleInput" } }
     StaffWeeklyPattern:
       type: object
       required: [weeklyPattern]
@@ -17134,6 +17343,8 @@ components:
         effectiveFrom: { type: string, format: date }
         effectiveTo: { type: string, format: date, nullable: true }
         ended: { type: boolean }
+        eligibilityRunId: { type: string, format: uuid, nullable: true, description: "HR.9: the eligibility run that created it (null: assigned by hand)." }
+        eligibilityRuleId: { type: string, format: uuid, nullable: true }
     LeavePolicyAssignmentCreateInput:
       type: object
       required: [employment_record_id, leave_policy_id, effective_from]

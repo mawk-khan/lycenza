@@ -65,6 +65,7 @@ use App\Domain\Inventory\Http\Controllers\InventoryItemController;
 use App\Domain\Inventory\Http\Controllers\InventoryLocationController;
 use App\Domain\Inventory\Http\Controllers\InventoryStockController;
 use App\Domain\Leave\Http\Controllers\LeaveConfigurationController;
+use App\Domain\Leave\Http\Controllers\LeaveEligibilityController;
 use App\Domain\Leave\Http\Controllers\LeaveLedgerController;
 use App\Domain\Leave\Http\Controllers\LeaveRequestController;
 use App\Domain\Leave\Http\Controllers\MyLeaveController;
@@ -2454,6 +2455,11 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
                 Route::get('/allocation-runs/preview', [LeaveLedgerController::class, 'previewRun'])->middleware(['private-no-store', 'capability:hr.leave.manage'])->name('allocation-runs.preview');
                 Route::post('/allocation-runs', [LeaveLedgerController::class, 'executeRun'])->middleware([...$manage, 'idempotent'])->name('allocation-runs.store');
                 Route::post('/adjustments', [LeaveLedgerController::class, 'adjust'])->middleware([...$manage, 'idempotent'])->name('adjustments.store');
+                // HR.9 (ADR 0065 §28.4): eligibility -- applicability (view), a draft version's preview (configure; writes
+                // nothing) and the additive resolution run (manage; idempotent, completes inside its transaction).
+                Route::get('/eligibility', [LeaveEligibilityController::class, 'show'])->middleware($view)->name('eligibility.show');
+                Route::post('/eligibility/preview', [LeaveEligibilityController::class, 'preview'])->middleware(['private-no-store', 'capability:hr.leave.configure'])->name('eligibility.preview');
+                Route::post('/eligibility-runs', [LeaveEligibilityController::class, 'executeRun'])->middleware([...$manage, 'idempotent'])->name('eligibility-runs.store');
                 Route::get('/ledger', [LeaveLedgerController::class, 'ledger'])->middleware($view)->name('ledger.index');
                 Route::get('/balances', [LeaveLedgerController::class, 'balances'])->middleware($view)->name('balances.index');
 

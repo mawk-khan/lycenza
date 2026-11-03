@@ -21,6 +21,10 @@
   the HRX implementation programme is **closed**, with HRX.5's legal
   activation still gated (HRX-L1–L4 open). Closure record:
   `docs/modules/HRX-READINESS-AND-CLOSURE.md`.
+  **Amended by HR.9 — Leave policy (2026-11-03, §28):** request-timing
+  rules and eligibility rules on the policy version, the eligibility
+  resolution (applicability, draft preview, additive run). Sandwich /
+  prefix / suffix counting stays out (OD-HR-15, §28.9).
 - Date: 2026-10-03
 - Programme: **HRX — Leave & staff attendance**
   (`docs/roadmap/MASTER-ROADMAP.md`, "Post-foundation product programmes",
@@ -1960,3 +1964,225 @@ retention-role membership. HRX itself stays closed at `dc8b50a`.
   The HRX retention tests now commit their fixtures, because the retention
   identity's connection cannot see an open test transaction, and they
   clean up through `PurgesCommittedHrxFixtures`.
+
+## 28. Amendment — HR.9 Leave policy: rules and eligibility (2026-11-03)
+
+Recorded before coding at baseline `1e4d6ad3` (HR.2A), on the owner's
+explicit HR.9 authorisation. Scope is the roadmap's HR.9 block
+(`docs/hr/HR-EXPANSION-ROADMAP.md`): D10-03/09/10/11/13/14/15/16/20,
+D12-04/05, D14-11, intersected with the owner brief; the discrepancy
+register is §28.10. It **extends** §4.2 (policies and assignment); it
+supersedes nothing.
+
+### 28.1 What stays exactly as it was
+- **The ledger** (§4.5, §22.5): kinds, signs, the never-negative trigger,
+  one allocation per employment × type × year. HR.9 writes no ledger entry.
+- **No reservation:** a balance is checked only at approval (the trigger),
+  never reserved at submission.
+- **Working-half-day counting** (§4.7, §22.4): holidays and weekly offs
+  inside a request consume nothing. There is **no sandwich rule** (§28.9).
+- **No proration and no monthly accrual** (§22.2, §4.5): both remain HR.10
+  work and need their own decisions.
+- **Approval** (§6, §23.5–§23.7, ORG.8D): unchanged. A reporting line grants
+  nothing; OD-HR-5 (who holds `hr.leave.approve`) stays with HR.11.
+- **Leave year** (§22.1a), **Payroll freeze** (§26) and the year close
+  (§23.8): unchanged. HR.9 adds no lock and no bypass.
+
+### 28.2 Request-timing rules on the version
+- Three nullable columns on `leave_policies` (the version), frozen by the
+  existing whole-row immutability trigger:
+  - `min_notice_days` (1..366 **calendar** days, from the School-local
+    submission date to the first requested date);
+  - `max_backdate_days` (0..366 **calendar** days a request may start in
+    the past; 0 = never);
+  - `max_units_per_request` (1..734 chargeable **half-day units**, counted
+    by the existing calculator).
+- NULL = the version has no such rule. Existing versions are all NULL, so
+  nothing changes for them (roadmap "Migration / backfill").
+- **Which versions judge a request:** every version assigned to the
+  employment for the leave type on ANY requested date. Each one's rules must
+  hold. Never "the latest" and never "the most lenient".
+- **When:** at submission, on every path (self-service and on behalf).
+  There is one rule set and no override or free-text exception. Approval
+  does not re-judge timing.
+- **A window never relaxes a stronger lock:** a closed leave year, recorded
+  presence and the Payroll evidence capture still refuse as before.
+- **Refusals:** `LEAVE_NOTICE_TOO_SHORT`, `LEAVE_BACKDATE_TOO_FAR`,
+  `LEAVE_REQUEST_TOO_LONG` (422). The submission audit records the judged
+  version ids (`timingPolicyIds`).
+
+### 28.3 Eligibility rules on the version
+- `leave_eligibility_rules`: per version, up to 20 rules. Each rule has
+  `staff_type` (the closed HR.1A catalogue), `employee_category_id` and
+  `department_id`. NULL = any value, **including none**: an unclassified
+  staff type, or a missing Category or Department, matches only a NULL
+  criterion. A Department matches exactly, never its parents or children.
+- **The facts come only from HR.1A,** read on the evaluation date:
+  - the terms effective that day (staff type, Category);
+  - the primary assignment covering that day (Department);
+  - through `EmploymentRoster` and `WorkforceAsOfReader`.
+
+  No Employee column is duplicated, and nothing is derived from a role,
+  Position or name.
+- **Never** gender, marital status, family, health or any other protected
+  attribute (HR-L8, HRX-L1). The dimensions do not exist, and
+  `LeaveArchitectureGuardTest` fails on such a column.
+- **Rules belong to the version.** `eligibility_rule_count` is fixed at
+  INSERT (frozen by the policy trigger).
+  - A rule beyond the count is refused (`leave_eligibility_rule_count`).
+  - A deferred constraint trigger refuses a commit where the version holds
+    fewer rules.
+  - Rules are append-only (UPDATE and DELETE revoked, the trigger refuses
+    UPDATE).
+  - To change eligibility, create a new version that supersedes the old one.
+- **Never ambiguous; no precedence.** A rule is refused when an employment
+  could match it AND a rule of another ACTIVE version of the same leave type
+  (each dimension NULL on one side, or equal):
+  - the service checks this under the eligibility lock (§28.5);
+  - `trg_leave_eligibility_rules_guard` repeats it under the same key;
+  - `LEAVE_ELIGIBILITY_OVERLAP` (409).
+
+  A retired version's rules are inert. No ordering, specificity or
+  "most recent" precedence was authorised, so none exists.
+- **Validation:** duplicates and more than 20 rules are refused. A Category
+  or Department must be an active one of the same School (HR readers, FOR
+  SHARE). Composite foreign keys repeat the same-School rule.
+- **No draft status** (§4.2, §5 precedent): an unsent version is the form's
+  state. `previewDraft()` shows its effect and writes nothing.
+
+### 28.4 Resolution: applicability, preview, run
+- `LeaveEligibilityResolver` evaluates one leave type on one date for every
+  employment spanning it, in a fixed number of queries. The closed outcomes
+  (`LeaveEligibilityOutcome`) are:
+
+  | Outcome | Meaning |
+  |---|---|
+  | `assigned` | An assignment covers the date. The answer also says whether the rules still resolve to the same version (drift is shown, never acted on: §4.2 never repoints). |
+  | `eligible` | Exactly one active version matches. |
+  | `ambiguous` | Several match (unreachable while §28.3 holds; never guessed). |
+  | `no_matching_rule` | No active version matches. |
+  | `employment_not_eligible` | Not `pre_joining` / `active` / `notice_period`, or the Employee is inactive. Draft employments are never listed. |
+  | `own_employment` | The actor's own employment (G-4). |
+
+- **Applicability** (`hr.leave.view`): the assigned / unassigned staff view
+  (D12-05). Each row explains itself: facts, version, rule. No protected
+  field appears.
+- **Draft preview** (`hr.leave.configure`): the same evaluation, with the
+  draft replacing the version it would supersede. It reports
+  `overlappingPolicyId` when the create would be refused, and writes nothing.
+- **Run** (`hr.leave.manage`, the assignment capability) is additive only:
+  - each ELIGIBLE employment gets an assignment from `as_of` to the
+    employment's end, or to the day before a later assignment of the type;
+  - nothing is ended, extended or repointed;
+  - the provenance is recorded: `leave_policy_assignments.eligibility_run_id`
+    and `eligibility_rule_id` (both or neither; composite keys pin the rule
+    to the assignment's own version and the run to its leave type);
+  - the run writes an append-only `leave_eligibility_runs` header with its
+    counts;
+  - a re-run assigns nothing twice (a covered employment is `assigned`). The
+    API also replays on the Idempotency-Key, inside the transaction (rule 33).
+- **Category, transfer and rehire.** Eligibility follows the facts **on the
+  as-of date**:
+  - an effective-dated Category change moves the answer from its date only;
+  - a transfer never touches the assignment or the ledger;
+  - a rehire is a new employment with no assignment and no balance.
+
+### 28.5 Locks
+- New key `leave.eligibility:{school}:{leave_type}` (`LeaveLocks::
+  eligibility`), taken exclusively right after the School row and before
+  any other row lock by:
+  - creating a version;
+  - superseding a version;
+  - retiring a version;
+  - the eligibility run.
+
+  The rule trigger takes the same key.
+- **The run's order:** School → eligibility → leave type (FOR SHARE) → per
+  employment (ascending) the HR rows (FOR SHARE, `EmploymentCoverage`) →
+  the assignment key (§23.10).
+- **Proven in two real processes** with the contender observed blocked
+  (`LeaveEligibilityConcurrencyTest`):
+  - two runs assign each employment once;
+  - two overlapping versions never both become active;
+  - a run waiting on a supersede resolves against the committed replacement;
+  - a run waiting on an employment end skips it.
+
+- **Security review fixes:**
+  - Every id is lower-cased before it keys a lock or a comparison: one UUID
+    has one spelling. An upper-case type id once took a different eligibility
+    lock than the web form and the trigger (MEDIUM, fixed).
+  - Once the candidates' HR rows are held, the run resolves again and keeps
+    only unchanged answers, so it never assigns on facts that changed just
+    before the locks (LOW, fixed).
+
+### 28.6 Authorization, Campus, self-administration
+- **Capabilities:** existing ones only. Configure for versions and the
+  preview, view for applicability, manage for the run. No new key, no role
+  name.
+- **Campus:** none of these is Campus-adopted. Leave policy configuration is
+  whole-School (`CampusScopeCatalogue` unchanged).
+- **Self-administration:** the run never assigns the actor's own employment
+  (one batched read, `HrSelfAdministrationGuard::ownedEmploymentIds()`).
+  Manual assignment keeps its G-4 refusal.
+
+### 28.7 Audit, retention, verification
+- **Audit:** `leave.policy.created` gains the rule values and the eligibility
+  rules (ids and closed codes). The run records:
+  - `leave.eligibility_run.executed` (type, as-of, counts, closed outcome
+    counts);
+  - one `leave.policy.assigned` per assignment (`source = eligibility_run`,
+    run and rule ids).
+
+  No name, no free text.
+- **Retention:** `leave_eligibility_rules` and `leave_eligibility_runs` are
+  `leave_configuration` (tenant lifetime). Their User references are RETAIN.
+  The provenance columns are links on D9 evidence. The retention anchor
+  trigger on `leave_policy_assignments` now tracks them; a purge deletes the
+  child assignment and never the rule or the run.
+- **Verification:** `platform:verify-database` adds the
+  `leave_policy_invariants` check (four triggers, forced RLS on both
+  tables, four constraints). The forced-RLS table count is 234.
+
+### 28.8 Migration and rollback
+- `2027_01_28_090000_create_leave_policy_rules_and_eligibility` adds
+  nullable columns, two tables and one CHECK, and recreates the anchor
+  trigger. It backfills nothing, so no entitlement is invented.
+- **Rollback refuses** while any rule, run, rule value or provenance exists,
+  so no policy evidence is lost silently. With none, it is lossless.
+
+### 28.9 Sandwich / prefix / suffix (OD-HR-15) — not built
+- The roadmap named "a pure sandwich / prefix / suffix unit calculator"
+  (D10-13/14/15, D10-16 inclusion, D14-11).
+- **Not built**, and no dormant toggle exists. Counting a holiday or weekly
+  off inside (sandwich) or next to (prefix / suffix) a leave would change
+  §4.7's counting contract. That contract is relied on by:
+  - every approved request's frozen days (§22.6);
+  - the never-negative balance;
+  - Payroll's HRX evidence (§26: chargeable halves feed loss-of-pay
+    classification);
+  - Staff Attendance's derived view (§24.3).
+- **Owner decision OD-HR-15** (recorded in the roadmap and the gate
+  register) must decide:
+  - whether a School may count non-working days at all;
+  - prospective only, and per version;
+  - whether such days are leave for Payroll and Attendance;
+  - the paid/unpaid effect.
+
+  That decision becomes a further ADR 0065 amendment before any code.
+- These rows are DEFERRED in the capability map.
+
+### 28.10 Discrepancy register (roadmap / brief / contract)
+
+| # | Item | Roadmap | Brief | Decision |
+|---|---|---|---|---|
+| 1 | Sandwich / prefix / suffix calculator | in HR.9 | "do not implement; propose a decision" | not built; OD-HR-15 (§28.9) |
+| 2 | Proration, joining-date entitlement | HR.10 (D10-19) | §19–§20 | HR.10; §22.2 "no automatic proration" is a final owner decision |
+| 3 | Monthly accrual, opening entries, in-year expiry execution | HR.10 | §25, §28 | HR.10 |
+| 4 | Carry-forward | year close exists (IMP) | §26–§27 | unchanged |
+| 5 | Policy draft status | — | §9 "draft → activate" | no new status (§28.3); draft = form + server preview |
+| 6 | Employment type / service-period eligibility | HR-AD-09 names staff type / category / department | §12 lists them as "potential" | not added (name it or don't add it) |
+| 7 | Per-Campus applicability | — | §65 | whole-School (§28.6) |
+| 8 | Manager approval in practice | OD-HR-5 → HR.11 | §42 | unchanged; HR.11 |
+| 9 | Attendance-period lock | D8-10 → HR.7 | §45 | HR.7 |
+| 10 | Special windows, comp-off, permissions | HR.11 | §48–§50 | HR.11 |
+| 11 | Roadmap "done when: D10 has no MISS" | — | — | D10-05 and D10-19 stay MISS; they belong to HR.10 |

@@ -197,8 +197,9 @@ final class TenantRetentionCatalog
             'employee_experience_records', 'employee_certifications',
         ]],
         'hr_configuration' => [self::TENANT_LIFETIME, 'School configuration', ['employee_categories', 'hr_departments', 'positions', 'hr_employee_number_counters']],
-        'leave_configuration' => [self::TENANT_LIFETIME, 'HRX.1 (ADR 0065 §18): leave settings and prospective start-month changes, materialized leave years, leave types and policies, the staff working calendar and allocation-run headers -- School configuration without per-Employee amounts', [
+        'leave_configuration' => [self::TENANT_LIFETIME, 'HRX.1 (ADR 0065 §18): leave settings and prospective start-month changes, materialized leave years, leave types and policies, the staff working calendar and allocation-run headers; HR.9 (ADR 0065 §28.7): policy-version eligibility rules and eligibility-run headers -- School configuration without per-Employee amounts', [
             'leave_settings', 'leave_year_start_changes', 'leave_years', 'leave_year_closes', 'leave_types', 'leave_policies', 'staff_working_weekdays', 'staff_holidays', 'leave_allocation_runs',
+            'leave_eligibility_rules', 'leave_eligibility_runs',
         ]],
         'leave_evidence' => [self::ADOPTED, 'HRX.1 (ADR 0065 §18, §27): D9 employment evidence, 8 y after the Employee\'s final separation; one Employee\'s unit (assignments, ledger, requests with days and decisions, close items and reconciliations) expires through its narrow, separation-floored function in platform:employee-retention-prune before HR\'s purge (HRX.6, implemented); a decision made as another Employee\'s manager stays with that request', [
             'leave_policy_assignments', 'leave_ledger_entries', 'leave_requests', 'leave_request_days', 'leave_decisions',

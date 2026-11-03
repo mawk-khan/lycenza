@@ -1252,7 +1252,7 @@ export interface paths {
         /** HRX.1: leave policies (immutable versions), optionally for one type. Requires hr.leave.view. */
         get: operations["listLeavePolicies"];
         put?: never;
-        /** HRX.1: creates a policy version (integer half-day units); with supersedes_policy_id it retires that active version of the same type. Requires hr.leave.configure. Idempotency-Key required. */
+        /** HRX.1: creates a policy version (integer half-day units); with supersedes_policy_id it retires that active version of the same type. HR.9: the version also carries its request-timing rules (min_notice_days and max_backdate_days in calendar days, max_units_per_request in half-day units; null = none) and its eligibility rules (staff type / Employee Category / Department; each null = any), frozen with it. Requires hr.leave.configure. Idempotency-Key required. */
         post: operations["createLeavePolicy"];
         delete?: never;
         options?: never;
@@ -1391,6 +1391,57 @@ export interface paths {
         put?: never;
         /** HRX.1: an explicit allocation of exact units (e.g. a mid-year joiner; no proration), at most one per employment, type and year. Requires hr.leave.manage. Idempotency-Key required. */
         post: operations["createLeaveAllocation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/leave/eligibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** HR.9: for one leave type and School-local date (default today), every employment spanning the date and its closed outcome -- assigned (with whether the current rules still resolve to that version), eligible for exactly one active version, ambiguous, no matching rule, employment not eligible, or the caller's own -- with the workforce facts it was judged on. Read-only. Requires hr.leave.view. */
+        get: operations["showLeaveEligibility"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/leave/eligibility/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** HR.9: the same evaluation for a policy version that does not exist yet (it replaces supersedes_policy_id in the evaluation). Writes nothing; reports overlappingPolicyId when the create would be refused. Requires hr.leave.configure. */
+        post: operations["previewLeaveEligibility"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schools/{schoolId}/leave/eligibility-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** HR.9: assigns every ELIGIBLE employment the active version it resolves to, effective from as_of until the employment ends (or the day before a later assignment of the type). Only adds: never ends, extends or repoints an assignment, and never the caller's own employment. A re-run assigns nothing twice. Requires hr.leave.manage. Idempotency-Key required. */
+        post: operations["executeLeaveEligibilityRun"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8469,6 +8520,126 @@ export interface components {
             status: "active" | "retired";
             /** Format: uuid */
             supersedesPolicyId?: string | null;
+            /** @description HR.9: calendar days of notice; null = no rule. */
+            minNoticeDays?: number | null;
+            /** @description HR.9: calendar days a request may start in the past; 0 = never; null = no rule. */
+            maxBackdateDays?: number | null;
+            /** @description HR.9: chargeable half-day units per request; null = no rule. */
+            maxUnitsPerRequest?: number | null;
+            eligibilityRules?: components["schemas"]["LeaveEligibilityRule"][];
+            /** Format: date-time */
+            createdAt?: string | null;
+            /** Format: date-time */
+            retiredAt?: string | null;
+        };
+        /** @description HR.9: one eligibility rule of a policy version; each null dimension means any value, including none. */
+        LeaveEligibilityRule: {
+            /**
+             * Format: uuid
+             * @description null in a draft preview.
+             */
+            id: string | null;
+            /** @enum {string|null} */
+            staffType: "teaching" | "non_teaching" | "outsourced" | null;
+            /** Format: uuid */
+            employeeCategoryId: string | null;
+            /** Format: uuid */
+            departmentId: string | null;
+        };
+        LeaveEligibilityRuleInput: {
+            /** @enum {string|null} */
+            staff_type?: "teaching" | "non_teaching" | "outsourced" | null;
+            /** Format: uuid */
+            employee_category_id?: string | null;
+            /** Format: uuid */
+            department_id?: string | null;
+        };
+        LeaveEligibilityPreviewInput: {
+            /** Format: uuid */
+            leave_type_id: string;
+            /**
+             * Format: date
+             * @description School-local; defaults to today.
+             */
+            date?: string;
+            /** Format: uuid */
+            supersedes_policy_id?: string | null;
+            name: string;
+            annual_allocation_units: number;
+            eligibility_rules?: components["schemas"]["LeaveEligibilityRuleInput"][];
+        };
+        LeaveEligibilityRunInput: {
+            /** Format: uuid */
+            leave_type_id: string;
+            /**
+             * Format: date
+             * @description School-local; the assignments' effective_from.
+             */
+            as_of: string;
+        };
+        LeaveEligibilityRun: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            leaveTypeId: string;
+            /** Format: date */
+            asOf: string;
+            assignedCount: number;
+            skippedCount: number;
+            /** Format: date-time */
+            executedAt: string;
+        };
+        LeaveEligibilityRow: {
+            /** Format: uuid */
+            employmentRecordId: string;
+            /** Format: uuid */
+            employeeId: string;
+            employeeNumber?: string | null;
+            fullName?: string | null;
+            employmentStatus: string;
+            facts: {
+                /** @enum {string|null} */
+                staffType: "teaching" | "non_teaching" | "outsourced" | null;
+                /** Format: uuid */
+                employeeCategoryId: string | null;
+                /** Format: uuid */
+                departmentId: string | null;
+            };
+            /** @enum {string} */
+            outcome: "assigned" | "eligible" | "ambiguous" | "no_matching_rule" | "employment_not_eligible" | "own_employment";
+            /** @description The single matching version ("draft" in a preview). */
+            policyId?: string | null;
+            /** Format: uuid */
+            ruleId?: string | null;
+            matchingPolicyIds: string[];
+            /** Format: uuid */
+            assignmentId?: string | null;
+            /** Format: uuid */
+            assignedPolicyId?: string | null;
+            assignedMatchesRules?: boolean | null;
+            /** Format: date */
+            assignmentEndsOn?: string | null;
+        };
+        LeaveEligibilityResult: {
+            /** Format: uuid */
+            leaveTypeId: string;
+            /** Format: date */
+            date: string;
+            versions: {
+                policyId: string;
+                name: string;
+                annualAllocationUnits: number;
+                rules: components["schemas"]["LeaveEligibilityRule"][];
+            }[];
+            rows: components["schemas"]["LeaveEligibilityRow"][];
+            counts: {
+                [key: string]: number;
+            };
+            /**
+             * Format: uuid
+             * @description Preview only: an active version these rules would overlap (the create would be refused).
+             */
+            overlappingPolicyId?: string | null;
         };
         LeavePolicyCreateInput: {
             /** Format: uuid */
@@ -8480,6 +8651,10 @@ export interface components {
             carry_forward_expiry_days?: number | null;
             /** Format: uuid */
             supersedes_policy_id?: string | null;
+            min_notice_days?: number | null;
+            max_backdate_days?: number | null;
+            max_units_per_request?: number | null;
+            eligibility_rules?: components["schemas"]["LeaveEligibilityRuleInput"][];
         };
         StaffWeeklyPattern: {
             /** @description ISO weekday (1..7) => portion. */
@@ -8530,6 +8705,13 @@ export interface components {
             /** Format: date */
             effectiveTo?: string | null;
             ended: boolean;
+            /**
+             * Format: uuid
+             * @description HR.9: the eligibility run that created it (null: assigned by hand).
+             */
+            eligibilityRunId?: string | null;
+            /** Format: uuid */
+            eligibilityRuleId?: string | null;
         };
         LeavePolicyAssignmentCreateInput: {
             /** Format: uuid */
@@ -15130,7 +15312,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description LEAVE_POLICY_NOT_SUPERSEDABLE. */
+            /** @description LEAVE_POLICY_NOT_SUPERSEDABLE; HR.9 LEAVE_ELIGIBILITY_OVERLAP (an employment could match these rules and another active version of the type). */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -15718,6 +15900,206 @@ export interface operations {
             429: components["responses"]["TooManyRequests"];
         };
     };
+    showLeaveEligibility: {
+        parameters: {
+            query: {
+                leave_type_id: string;
+                date?: string;
+            };
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveEligibilityResult"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.view in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id (one tenant-safe 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed; LEAVE_DATE_INVALID. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    previewLeaveEligibility: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeaveEligibilityPreviewInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveEligibilityResult"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.configure in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id (one tenant-safe 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed; LEAVE_DATE_INVALID, LEAVE_ELIGIBILITY_RULE_DUPLICATE or LEAVE_ELIGIBILITY_RULES_TOO_MANY. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    executeLeaveEligibilityRun: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Required on all unsafe (POST/PATCH/DELETE) mutating requests that are not naturally idempotent, e.g. payment callbacks. See docs/architecture/API.md ("Idempotency"). */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                schoolId: components["parameters"]["SchoolId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeaveEligibilityRunInput"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["LeaveEligibilityRun"];
+                    };
+                };
+            };
+            /** @description Missing/invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authenticated but lacking hr.leave.manage in this School. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unknown, malformed or other-School id (one tenant-safe 404). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description LEAVE_TYPE_INACTIVE; LEAVE_ASSIGNMENT_OVERLAP (an assignment changed while the run resolved). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Validation failed; LEAVE_DATE_INVALID. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
     previewLeaveAllocationRun: {
         parameters: {
             query: {
@@ -16152,7 +16534,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description Validation failed. */
+            /** @description Validation failed; HR.9 LEAVE_NOTICE_TOO_SHORT, LEAVE_BACKDATE_TOO_FAR or LEAVE_REQUEST_TOO_LONG (a request-timing rule of a policy version assigned on the requested dates). */
             422: {
                 headers: {
                     [name: string]: unknown;

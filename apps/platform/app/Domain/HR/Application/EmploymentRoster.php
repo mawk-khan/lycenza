@@ -28,7 +28,7 @@ class EmploymentRoster
      * Employments (any status but `draft`) whose dates contain the date.
      *
      * @param  string  $date  School-local Y-m-d
-     * @return list<array{employmentRecordId: string, employeeId: string, employeeNumber: ?string, fullName: ?string, status: string, current: bool}>
+     * @return list<array{employmentRecordId: string, employeeId: string, employeeNumber: ?string, fullName: ?string, status: string, current: bool, employeeActive: bool}>
      */
     public function on(School $school, string $date): array
     {
@@ -42,7 +42,7 @@ class EmploymentRoster
      *
      * @param  string  $from  School-local Y-m-d
      * @param  string  $to  School-local Y-m-d
-     * @return list<array{employmentRecordId: string, employeeId: string, employeeNumber: ?string, fullName: ?string, status: string, current: bool}>
+     * @return list<array{employmentRecordId: string, employeeId: string, employeeNumber: ?string, fullName: ?string, status: string, current: bool, employeeActive: bool}>
      */
     public function overlapping(School $school, string $from, string $to): array
     {
@@ -71,7 +71,7 @@ class EmploymentRoster
      * The same labels for these EmploymentRecord ids of the School (another School's ids yield nothing).
      *
      * @param  list<string>  $employmentRecordIds
-     * @return list<array{employmentRecordId: string, employeeId: string, employeeNumber: ?string, fullName: ?string, status: string, current: bool}>
+     * @return list<array{employmentRecordId: string, employeeId: string, employeeNumber: ?string, fullName: ?string, status: string, current: bool, employeeActive: bool}>
      */
     public function labels(School $school, array $employmentRecordIds): array
     {
@@ -98,7 +98,7 @@ class EmploymentRoster
 
     /**
      * @param  callable(Builder<EmploymentRecord>): mixed  $filter
-     * @return list<array{employmentRecordId: string, employeeId: string, employeeNumber: ?string, fullName: ?string, status: string, current: bool}>
+     * @return list<array{employmentRecordId: string, employeeId: string, employeeNumber: ?string, fullName: ?string, status: string, current: bool, employeeActive: bool}>
      */
     private function rows(School $school, callable $filter): array
     {
@@ -114,6 +114,8 @@ class EmploymentRoster
                     'fullName' => $r->employee?->full_name,
                     'status' => $r->status,
                     'current' => in_array($r->status, EmploymentCoverage::CURRENT_STATUSES, true) && $r->employee?->isActive() === true,
+                    // HR.9: whether the Employee itself is active (a planned employment of an inactive Employee is not assignable).
+                    'employeeActive' => $r->employee?->isActive() === true,
                 ])
                 ->sortBy(fn (array $row) => [$row['fullName'] ?? '', $row['employmentRecordId']])->values()->all();
         });

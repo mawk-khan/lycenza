@@ -328,25 +328,25 @@ both mean HRX-L2.
 |---|---|---|---|---|---|---|---|---|---|
 | D10-01 | Leave type | `leave_types` (code, paid, tracks balance, half day, status) | IMP | H430–H433 | — | Leave | — | — | — |
 | D10-02 | Leave category (grouping + quota) | policy per type, assigned per employment | ALT | H439–H442 | — | Leave | — | — | — |
-| D10-03 | Category / department eligibility | explicit per-employment policy assignment only | MISS | H443–H448 | rule-based eligibility (department, staff type, category) resolving to policy assignments | Leave | HR.9 | M | — |
+| D10-03 | Category / department eligibility | eligibility rules on the policy version (staff type, Employee Category, primary Department; NULL = any), never ambiguous between active versions (DB); resolved from HR.1A facts on a date; additive idempotent run → policy assignments with provenance (HR.9) | IMP | H443–H448 | — | Leave | HR.9 | M | — |
 | D10-04 | Paid / unpaid | `is_paid` | IMP | H430 | — | Leave | — | — | — |
 | D10-05 | Month-on-month carry-forward | none | MISS | H430 | monthly accrual with in-year carry | Leave | HR.10 | M | — |
 | D10-06 | Year-on-year carry-forward | year close with cap | IMP | H430 | — | Leave | — | — | — |
 | D10-07 | Gender eligibility | none; gender not modelled | DEF | H434 | sensitive-demographic decision first | Leave | after HR-L8 | H | HR-L8, HRX-L3 |
 | D10-08 | Marital-status eligibility | none | DEF | H434 | as D10-07 | Leave | after HR-L8 | H | HR-L8 |
-| D10-09 | Advance-planning (notice) requirement | none | MISS | H435 | `min_notice_days` on the policy version | Leave | HR.9 | L | — |
-| D10-10 | Backdated application window | none (any past date) | MISS | H435 | `max_backdate_days` on the policy version | Leave | HR.9 | M | — |
-| D10-11 | Maximum duration per request | 366-day span only | PART | H435 | `max_units_per_request` | Leave | HR.9 | L | — |
+| D10-09 | Advance-planning (notice) requirement | `min_notice_days` (calendar days) on the policy version, enforced at submission on every path (HR.9) | IMP | H435 | — | Leave | HR.9 | L | — |
+| D10-10 | Backdated application window | `max_backdate_days` (calendar days; 0 = never) on the policy version; never relaxes a closed year, recorded presence or the Payroll capture (HR.9) | IMP | H435 | — | Leave | HR.9 | M | — |
+| D10-11 | Maximum duration per request | `max_units_per_request` (chargeable half-day units) on the policy version (HR.9); the 366-day span CHECK stays | IMP | H435 | — | Leave | HR.9 | L | — |
 | D10-12 | Mandatory attachment | none (no attachment exists) | GATE | H436 | — | — | — | H | HRX-L1 (ADR 0065 §10) |
-| D10-13 | Sandwich policy | none (holidays never count) | MISS | H437 | policy flag; units computed by a pure calculator | Leave | HR.9 | M | — |
-| D10-14 | Prefix holiday / week-off policy | none | MISS | H437 | as D10-13 | Leave | HR.9 | M | — |
-| D10-15 | Suffix holiday / week-off policy | none | MISS | H437 | as D10-13 | Leave | HR.9 | M | — |
-| D10-16 | Holiday / week-off inclusion | fixed exclusion (working time only) | PART | H437 | configurable inclusion (with D10-13) | Leave | HR.9 | M | — |
+| D10-13 | Sandwich policy | none (holidays never count; ADR 0065 §4.7) | DEF | H437 | changes the §4.7 counting contract (frozen days, balances, Payroll HRX evidence): owner decision first, then an ADR 0065 amendment; no dormant toggle | Leave | after OD-HR-15 | M | OD-HR-15 |
+| D10-14 | Prefix holiday / week-off policy | none | DEF | H437 | as D10-13 | Leave | after OD-HR-15 | M | OD-HR-15 |
+| D10-15 | Suffix holiday / week-off policy | none | DEF | H437 | as D10-13 | Leave | after OD-HR-15 | M | OD-HR-15 |
+| D10-16 | Holiday / week-off inclusion | fixed exclusion (working time only) | PART | H437 | configurable inclusion is part of OD-HR-15 | Leave | after OD-HR-15 | M | OD-HR-15 |
 | D10-17 | Academic / payroll year | leave years | IMP | H461 | — | Leave | — | — | — |
 | D10-18 | Start month | prospective start month | IMP | H441 | — | Leave | — | — | — |
 | D10-19 | Joining-date behaviour | none (no proration) | MISS | H466–H471 | proration rule on the policy version | Leave | HR.10 | M | — |
-| D10-20 | Staff-category eligibility | none | MISS | H443 | with D10-03 | Leave | HR.9 | M | — |
-| D10-21 | Policies versioned / effective-dated | `supersedes_policy_id` + `leave_policy_assignments` (effective from/to) + frozen request days | IMP | — | new rule columns must live on the version | Leave | HR.9 | H | — |
+| D10-20 | Staff-category eligibility | eligibility rule on `employee_category_id` (HR.1A terms effective on the date) and the closed staff type (HR.9) | IMP | H443 | — | Leave | HR.9 | M | — |
+| D10-21 | Policies versioned / effective-dated | `supersedes_policy_id` + `leave_policy_assignments` (effective from/to) + frozen request days; HR.9 rule columns and eligibility rules live on the (immutable) version | IMP | — | — | Leave | — | H | — |
 | D10-22 | Statutory leave types (maternity, …) | School policy only | GATE | H433 | — | Leave | — | H | HRX-L3 |
 | D10-23 | Predefined leave remarks | closed reason codes | ALT | H455 | free text stays refused | Leave | — | — | HRX-L1 |
 | D10-24 | Absence → LOP adjustment from paid balance | none | GATE | H430 | — | Leave + Payroll | — | H | HRX-L4 |
@@ -379,8 +379,8 @@ both mean HRX-L2.
 | D12-01 | Monthly allocation | none | MISS | H466–H471 | accrual run per month (idempotent) | Leave | HR.10 | M | — |
 | D12-02 | Annual allocation | `executeRun()` | IMP | — | — | Leave | — | — | — |
 | D12-03 | Entitlement from joining date | none | MISS | H466 | proration (D10-19) | Leave | HR.10 | M | — |
-| D12-04 | Department / category eligibility | none | MISS | H443–H448 | D10-03 | Leave | HR.9 | M | — |
-| D12-05 | Assigned / unassigned staff | run candidates = policy assignments | PART | H467 | "unassigned" view of employments without a policy | Leave | HR.9 | L | — |
+| D12-04 | Department / category eligibility | eligibility rules + the additive run (D10-03) (HR.9) | IMP | H443–H448 | — | Leave | HR.9 | M | — |
+| D12-05 | Assigned / unassigned staff | Leave eligibility page / API: every employment's closed outcome on a date (assigned with drift, eligible, ambiguous, no matching rule, not eligible) (HR.9) | IMP | H467 | — | Leave | HR.9 | L | — |
 | D12-06 | Bulk allocation | allocation run | IMP | — | — | Leave | — | — | — |
 | D12-07 | Carry-forward | year close | IMP | — | — | Leave | — | — | — |
 | D12-08 | Prorating | none | MISS | H466 | D10-19 | Leave | HR.10 | M | — |
@@ -427,7 +427,7 @@ both mean HRX-L2.
 | D14-08 | Effective publication | immediate | MISS | — | draft → published, with recalculation notice | WorkSchedule | HR.4 | M | — |
 | D14-09 | Modifications | remove + add (hard delete, S-16) | PART | — | versioned change, never delete | WorkSchedule | HR.4 | M | — |
 | D14-10 | Attendance impact | derived at read time; conflicting writes refused | IMP | — | — | StaffAttendance | — | — | — |
-| D14-11 | Leave sandwich impact | none | MISS | — | D10-13 | Leave | HR.9 | M | — |
+| D14-11 | Leave sandwich impact | none | DEF | — | D10-13 (OD-HR-15) | Leave | after OD-HR-15 | M | OD-HR-15 |
 | D14-12 | No silent retroactive change | request days frozen; payroll fingerprint differences | ALT | — | controlled recalculation once evaluation exists | Leave | HR.4 | M | — |
 
 ### D15 — Compensatory off
@@ -584,17 +584,17 @@ both mean HRX-L2.
 come from the status column of §4, read mechanically: one row per
 `| Dn-nn |` line. **No capability is dropped because it is deferred.**
 
-| Status | HR.0A baseline | After HR.1A (2026-11-03) | After HR.3A (2026-11-03) | After HR.2A (2026-11-03) |
-|---|---|---|---|---|
-| IMPLEMENTED | 96 | 110 (30.5 %) | 114 (31.6 %) | **116** (32.1 %) |
-| PARTIALLY_IMPLEMENTED | 40 | 29 | 26 | **25** |
-| MISSING | 90 | 87 | 86 | **85** |
-| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 18 | 18 | 18 |
-| CROSS_DOMAIN | 8 | 8 | 8 | 8 |
-| DEFERRED | 16 | 16 | 16 | 16 |
-| BLOCKED_BY_GATE | 87 | 87 | 87 | 87 |
-| NOT_REQUIRED | 6 | 6 | 6 | 6 |
-| **Total** | **361** | **361** | **361** | **361** |
+| Status | HR.0A baseline | After HR.1A (2026-11-03) | After HR.3A (2026-11-03) | After HR.2A (2026-11-03) | After HR.9 (2026-11-03) |
+|---|---|---|---|---|---|
+| IMPLEMENTED | 96 | 110 (30.5 %) | 114 (31.6 %) | 116 (32.1 %) | **123** (34.1 %) |
+| PARTIALLY_IMPLEMENTED | 40 | 29 | 26 | 25 | **23** |
+| MISSING | 90 | 87 | 86 | 85 | **76** |
+| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 18 | 18 | 18 | 18 |
+| CROSS_DOMAIN | 8 | 8 | 8 | 8 | 8 |
+| DEFERRED | 16 | 16 | 16 | 16 | **20** |
+| BLOCKED_BY_GATE | 87 | 87 | 87 | 87 | 87 |
+| NOT_REQUIRED | 6 | 6 | 6 | 6 | 6 |
+| **Total** | **361** | **361** | **361** | **361** | **361** |
 
 HR.1A closed D1-02, D1-11, D1-12, D2-01…D2-04, D2-06, D2-10…D2-13 and
 D18-05…D18-08. It narrowed D1-07, and hardened D3-06 (S-9) and D20-01
@@ -612,6 +612,14 @@ IMPLEMENTED or ALT): archive history, derived experience, stale-form tokens.
 The gated profile families stay BLOCKED_BY_GATE or DEFERRED. The
 per-section table shows the HR.2A figures for D1.
 
+HR.9 closed D10-03, D10-09, D10-10, D10-20 and D12-04 (MISS → IMP) and
+D10-11 and D12-05 (PART → IMP), and re-described D10-21 (rules on the
+version). The sandwich family -- D10-13, D10-14, D10-15 and D14-11 -- moved
+MISS → DEFERRED behind owner decision OD-HR-15 (ADR 0065 §28.9); D10-16
+stays PART (fixed exclusion) behind the same decision. D10-05 and D10-19
+stay MISS for HR.10. The per-section table shows the HR.9 figures for D10,
+D12 and D14.
+
 **Per section:**
 
 | Section | IMP | PART | MISS | ALT | XDOM | DEF | GATE | NR | Rows |
@@ -625,11 +633,11 @@ per-section table shows the HR.2A figures for D1.
 | D7 Evaluation | 6 | 1 | 0 | 2 | 0 | 0 | 7 | 0 | 16 |
 | D8 Attendance operations | 6 | 2 | 3 | 1 | 0 | 2 | 2 | 0 | 16 |
 | D9 Biometric | 0 | 1 | 0 | 1 | 0 | 0 | 15 | 0 | 17 |
-| D10 Leave policy | 6 | 2 | 9 | 2 | 0 | 2 | 3 | 0 | 24 |
+| D10 Leave policy | 11 | 1 | 2 | 2 | 0 | 5 | 3 | 0 | 24 |
 | D11 Ledger | 8 | 2 | 4 | 0 | 0 | 0 | 2 | 0 | 16 |
-| D12 Allocation | 6 | 1 | 4 | 0 | 0 | 0 | 0 | 0 | 11 |
+| D12 Allocation | 8 | 0 | 3 | 0 | 0 | 0 | 0 | 0 | 11 |
 | D13 Workflow | 10 | 1 | 0 | 1 | 0 | 3 | 4 | 1 | 20 |
-| D14 Holidays | 3 | 2 | 5 | 2 | 0 | 0 | 0 | 0 | 12 |
+| D14 Holidays | 3 | 2 | 4 | 2 | 0 | 1 | 0 | 0 | 12 |
 | D15 Comp-off | 0 | 0 | 8 | 1 | 0 | 0 | 2 | 0 | 11 |
 | D16 Permissions | 0 | 0 | 7 | 0 | 0 | 0 | 4 | 0 | 11 |
 | D17 Special windows | 0 | 0 | 10 | 0 | 0 | 0 | 0 | 0 | 10 |

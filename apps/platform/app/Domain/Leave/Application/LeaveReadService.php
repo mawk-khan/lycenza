@@ -4,6 +4,8 @@ namespace App\Domain\Leave\Application;
 
 use App\Domain\HR\Application\ActingEmployee;
 use App\Domain\Leave\Infrastructure\LeaveAllocationRun;
+use App\Domain\Leave\Infrastructure\LeaveEligibilityRule;
+use App\Domain\Leave\Infrastructure\LeaveEligibilityRun;
 use App\Domain\Leave\Infrastructure\LeaveLedgerEntry;
 use App\Domain\Leave\Infrastructure\LeavePolicy;
 use App\Domain\Leave\Infrastructure\LeavePolicyAssignment;
@@ -105,9 +107,16 @@ class LeaveReadService
     {
         $this->authorizeCapabilityFor($actor, LeaveCapabilities::VIEW, $school);
 
-        return $this->read($school, fn () => LeavePolicy::query()->where('school_id', $school->id)
-            ->when($leaveTypeId !== null, fn ($q) => $q->where('leave_type_id', $leaveTypeId))
-            ->orderBy('created_at')->orderBy('id')->get()->map(fn (LeavePolicy $p) => self::policy($p))->all());
+        return $this->read($school, function () use ($school, $leaveTypeId) {
+            $policies = LeavePolicy::query()->where('school_id', $school->id)
+                ->when($leaveTypeId !== null, fn ($q) => $q->where('leave_type_id', $leaveTypeId))
+                ->orderBy('created_at')->orderBy('id')->get();
+            // HR.9: every version's eligibility rules in ONE read.
+            $rules = LeaveEligibilityRule::query()->where('school_id', $school->id)->whereIn('leave_policy_id', $policies->pluck('id')->all())
+                ->orderBy('id')->get()->groupBy('leave_policy_id');
+
+            return $policies->map(fn (LeavePolicy $p) => self::policy($p, ($rules->get($p->id) ?? collect())->values()->all()))->all();
+        });
     }
 
     /** @return array{weeklyPattern: array<int, string>, holidays: list<array<string, mixed>>} */
@@ -225,13 +234,41 @@ class LeaveReadService
         return ['id' => $t->id, 'code' => $t->code, 'name' => $t->name, 'isPaid' => $t->is_paid, 'tracksBalance' => $t->tracks_balance, 'allowsHalfDay' => $t->allows_half_day, 'status' => $t->status];
     }
 
-    /** @return array<string, mixed> */
-    public static function policy(LeavePolicy $p): array
+    /**
+     * @param  list<LeaveEligibilityRule>  $rules
+     * @return array<string, mixed>
+     */
+    public static function policy(LeavePolicy $p, array $rules = []): array
     {
         return [
             'id' => $p->id, 'leaveTypeId' => $p->leave_type_id, 'name' => $p->name, 'annualAllocationUnits' => $p->annual_allocation_units,
             'carryForwardAllowed' => $p->carry_forward_allowed, 'carryForwardCapUnits' => $p->carry_forward_cap_units,
             'carryForwardExpiryDays' => $p->carry_forward_expiry_days, 'status' => $p->status, 'supersedesPolicyId' => $p->supersedes_policy_id,
+            // HR.9 (ADR 0065 §28): the version's request-timing rules (NULL = none) and eligibility rules.
+            'minNoticeDays' => $p->min_notice_days, 'maxBackdateDays' => $p->max_backdate_days, 'maxUnitsPerRequest' => $p->max_units_per_request,
+            'eligibilityRules' => array_map(fn (LeaveEligibilityRule $r) => [
+                'id' => $r->id, 'staffType' => $r->staff_type, 'employeeCategoryId' => $r->employee_category_id, 'departmentId' => $r->department_id,
+            ], $rules),
+            'createdAt' => $p->created_at?->toIso8601String(), 'retiredAt' => $p->retired_at?->toIso8601String(),
+        ];
+    }
+
+    /**
+     * HR.9: one version's eligibility rules (inside its School's context).
+     *
+     * @return list<LeaveEligibilityRule>
+     */
+    public static function rulesOf(LeavePolicy $policy): array
+    {
+        return LeaveEligibilityRule::query()->where('school_id', $policy->school_id)->where('leave_policy_id', $policy->id)->orderBy('id')->get()->all();
+    }
+
+    /** @return array<string, mixed> */
+    public static function eligibilityRun(LeaveEligibilityRun $r): array
+    {
+        return [
+            'id' => $r->id, 'leaveTypeId' => $r->leave_type_id, 'asOf' => $r->as_of->toDateString(),
+            'assignedCount' => $r->assigned_count, 'skippedCount' => $r->skipped_count, 'executedAt' => $r->executed_at->toIso8601String(),
         ];
     }
 
@@ -247,6 +284,8 @@ class LeaveReadService
         return [
             'id' => $a->id, 'employmentRecordId' => $a->employment_record_id, 'leavePolicyId' => $a->leave_policy_id, 'leaveTypeId' => $a->leave_type_id,
             'effectiveFrom' => $a->effective_from->toDateString(), 'effectiveTo' => $a->effective_to?->toDateString(), 'ended' => $a->ended_at !== null,
+            // HR.9: the eligibility run and rule that created it (null: assigned by hand).
+            'eligibilityRunId' => $a->eligibility_run_id, 'eligibilityRuleId' => $a->eligibility_rule_id,
         ];
     }
 

@@ -54,6 +54,9 @@ final class UserReferenceCatalog
         'staff_working_weekdays' => ['updated_by_user_id' => self::RETAIN_REFERENCE],
         'staff_holidays' => ['created_by_user_id' => self::RETAIN_REFERENCE],
         'leave_allocation_runs' => ['executed_by_user_id' => self::RETAIN_REFERENCE],
+        // HR.9 (ADR 0065 §28.7): who wrote a policy version's eligibility rules / executed an eligibility run.
+        'leave_eligibility_rules' => ['created_by_user_id' => self::RETAIN_REFERENCE],
+        'leave_eligibility_runs' => ['executed_by_user_id' => self::RETAIN_REFERENCE],
         'leave_ledger_entries' => ['actor_user_id' => self::RETAIN_REFERENCE],
         // HRX.2 (ADR 0065 §23): submitters, deciders and year-close actors.
         'leave_requests' => ['submitted_by_user_id' => self::RETAIN_REFERENCE],

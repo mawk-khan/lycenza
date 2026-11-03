@@ -1854,3 +1854,21 @@ once several modules copy it.
      - **Stale-form tokens.** Identity and personal edits carry an `EmployeeProfileVersion` token: stale is a 409, missing is a 422.
      - **Experience** is derived (`ExperienceCalculator`), never stored.
      - **HR documents** are uploads through `DocumentService::createForEmployee()` with a closed `EmployeeDocumentCategory`, and reference their Document (`document_id`). Never a raw storage path, never an `other` category. An identity document is always Highly Sensitive. Every download is re-authorized by the Document's tier, and viewing an Employee never implies downloading their files.
+133. **Leave policy rules and eligibility live on the immutable policy version; eligibility is never ambiguous and never guessed (HR.9, ADR 0065 §28).**
+     - **Timing rules.**
+       - `min_notice_days` and `max_backdate_days` are calendar days; `max_units_per_request` is chargeable half-day units; NULL = no rule.
+       - They are enforced at submission on every path, against EVERY version assigned on the requested dates.
+       - There is no override, exception text or approval-time re-judgement, and a window never relaxes a closed year, recorded presence or the Payroll capture.
+     - **Eligibility rules** (`leave_eligibility_rules`):
+       - dimensions are only staff type, Employee Category and primary Department; NULL = any, including none;
+       - facts come from HR.1A on the evaluation date (`EmploymentRoster`, `WorkforceAsOfReader`), never a duplicated column, role, Position or name;
+       - never gender, marital status, family or health (HR-L8; `LeaveArchitectureGuardTest`).
+     - **Rules belong to the version.** They are created with it (`eligibility_rule_count`, deferred completeness check) and never updated, added later or deleted. A change is a new superseding version.
+     - **No ambiguity, no precedence.** Rules overlapping another ACTIVE version of the leave type are refused (service + `trg_leave_eligibility_rules_guard`, under `LeaveLocks::eligibility()`, taken right after the School). Never add an ordering or "most specific wins".
+     - **The run only adds** (`LeaveEligibilityService::executeRun()`, `hr.leave.manage`):
+       - it assigns ELIGIBLE employments from `as_of` to the employment's end, or the day before a later assignment;
+       - it records run and rule provenance;
+       - it never ends, extends or repoints an assignment, never assigns the actor's own employment, and assigns nothing twice on a re-run.
+     - **Drift is shown, never acted on.** A transfer or reclassification never moves an assignment or a balance.
+     - **No draft status.** Preview is server-side and writes nothing.
+     - **No sandwich, prefix or suffix counting,** and no dormant toggle, until owner decision OD-HR-15 and an ADR 0065 amendment.

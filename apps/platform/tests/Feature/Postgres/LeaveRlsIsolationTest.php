@@ -2,8 +2,11 @@
 
 namespace Tests\Feature\Postgres;
 
+use App\Domain\Leave\Application\LeaveEligibilityService;
 use App\Domain\Leave\Application\LeaveLedgerService;
+use App\Domain\Leave\Application\LeavePolicyService;
 use App\Domain\Leave\Application\LeaveRequestService;
+use App\Domain\Leave\Application\Policy\LeaveEligibilityCriteria;
 use App\Support\Tenancy\TenantRls;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -25,6 +28,8 @@ class LeaveRlsIsolationTest extends TestCase
         'leave_settings', 'leave_year_start_changes', 'leave_years', 'leave_types', 'leave_policies', 'leave_policy_assignments',
         'staff_working_weekdays', 'staff_holidays', 'leave_allocation_runs', 'leave_ledger_entries',
         'leave_requests', 'leave_request_days', 'leave_decisions', 'leave_year_closes', 'leave_year_close_items', 'leave_year_close_reconciliations',
+        // HR.9 (ADR 0065 §28)
+        'leave_eligibility_rules', 'leave_eligibility_runs',
     ];
 
     private function context(?string $schoolId): void
@@ -73,6 +78,50 @@ class LeaveRlsIsolationTest extends TestCase
 
         $this->context($a['school']->id);
         $this->assertSame(1, (int) DB::selectOne('select count(*) as c from leave_ledger_entries')->c);
+        $this->context(null);
+    }
+
+    #[Test]
+    public function hr9_eligibility_rules_and_runs_are_isolated_and_bound_to_their_own_school(): void
+    {
+        $a = $this->leaveWorld();
+        $b = $this->leaveWorld();
+        $category = $this->createEmployeeCategory($a['school']);
+        $policy = app(LeavePolicyService::class)->create($a['school'], $a['type']->id, [
+            'name' => 'Ruled', 'annual_allocation_units' => 0, 'carry_forward_allowed' => false, 'carry_forward_cap_units' => null, 'carry_forward_expiry_days' => null,
+        ], $a['policy']->id, $a['admin'], [new LeaveEligibilityCriteria(null, $category->id, null)]);
+        app(LeaveEligibilityService::class)->executeRun($a['school'], $a['type']->id, '2026-06-01', $a['admin']);
+
+        $this->context(null);
+        foreach (['leave_eligibility_rules', 'leave_eligibility_runs'] as $table) {
+            $this->assertSame(0, (int) DB::selectOne("select count(*) as c from {$table}")->c, "{$table}: no context, no rows");
+        }
+        $this->context($b['school']->id);
+        $this->assertSame(0, (int) DB::selectOne('select count(*) as c from leave_eligibility_rules where leave_policy_id = ?', [$policy->id])->c);
+
+        // From School B: a rule on A's version, or B's version naming A's Category, is refused structurally.
+        $rule = fn (string $policyId, string $typeId, ?string $categoryId) => $this->refused(fn () => DB::connection('pgsql')->insert(
+            'insert into leave_eligibility_rules (id, school_id, leave_policy_id, leave_type_id, employee_category_id, created_by_user_id, created_at) values (?, ?, ?, ?, ?, ?, now())',
+            [(string) Str::uuid(), $b['school']->id, $policyId, $typeId, $categoryId, $b['admin']->id],
+        ));
+        // The guard cannot even see A's version from B (refused before the key check).
+        $this->assertMatchesRegularExpression('/leave_eligibility_policy_inactive|leave_eligibility_rules_policy_fk/', $rule($policy->id, $a['type']->id, null));
+        // B's own fresh version declaring one rule, naming A's Category: the composite key refuses it.
+        $this->assertStringContainsString('leave_eligibility_rules_category_fk', $this->refused(function () use ($b, $category) {
+            $version = (string) Str::uuid();
+            DB::connection('pgsql')->insert(
+                'insert into leave_policies (id, school_id, leave_type_id, name, annual_allocation_units, carry_forward_allowed, status, created_by_user_id, eligibility_rule_count, created_at, updated_at) values (?, ?, ?, ?, 0, false, ?, ?, 1, now(), now())',
+                [$version, $b['school']->id, $b['type']->id, 'Raw', 'active', $b['admin']->id],
+            );
+            DB::connection('pgsql')->insert(
+                'insert into leave_eligibility_rules (id, school_id, leave_policy_id, leave_type_id, employee_category_id, created_by_user_id, created_at) values (?, ?, ?, ?, ?, ?, now())',
+                [(string) Str::uuid(), $b['school']->id, $version, $b['type']->id, $category->id, $b['admin']->id],
+            );
+        }));
+        $this->assertStringContainsString('row-level security', $this->refused(fn () => DB::connection('pgsql')->insert(
+            'insert into leave_eligibility_runs (id, school_id, leave_type_id, as_of, executed_by_user_id, assigned_count, skipped_count, executed_at) values (?, ?, ?, ?, ?, 0, 0, now())',
+            [(string) Str::uuid(), $a['school']->id, $a['type']->id, '2026-06-01', $b['admin']->id],
+        )), 'a row for another School is refused by the policy');
         $this->context(null);
     }
 

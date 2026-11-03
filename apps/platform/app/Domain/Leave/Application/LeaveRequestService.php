@@ -9,6 +9,7 @@ use App\Domain\HR\Application\Exceptions\ActingEmployeeUnavailableException;
 use App\Domain\HR\Application\HrSelfAdministrationGuard;
 use App\Domain\HR\Application\ReportingLine;
 use App\Domain\Leave\Application\Exceptions\LeaveException;
+use App\Domain\Leave\Application\Policy\LeaveRequestTimingPolicy;
 use App\Domain\Leave\Events\LeaveRequestApproved;
 use App\Domain\Leave\Events\LeaveRequestCancelled;
 use App\Domain\Leave\Infrastructure\LeaveDecision;
@@ -84,6 +85,11 @@ use Illuminate\Support\Facades\DB;
  * Cancellation reverses each consumption. If its year is closed, the
  * cancellation reconciles it in the same transaction (LeaveYearCloseService).
  *
+ * HR.9 (ADR 0065 §28.2): submission (every path) applies the request-timing
+ * rules -- notice, backdating window, maximum units -- of every policy
+ * version assigned on the requested dates (LeaveRequestTimingPolicy). They
+ * only narrow what may be submitted; nothing relaxes a stronger lock.
+ *
  * HRX.3 (ADR 0065 §24.5): approval refuses a request whose chargeable half
  * is recorded `present` in Staff Attendance, read through Leave's own port
  * (AttendancePresenceConflictReader). Recorded absence never blocks, and
@@ -118,6 +124,7 @@ class LeaveRequestService
         private readonly HrSelfAdministrationGuard $selfAdministration,
         private readonly ApprovalDecisionAuthority $authority,
         private readonly MakerCheckerPolicy $makerChecker,
+        private readonly LeaveRequestTimingPolicy $timing,
     ) {}
 
     /**
@@ -307,6 +314,8 @@ class LeaveRequestService
             if ($units === 0) {
                 throw LeaveException::invalid('LEAVE_REQUEST_NO_WORKING_DAYS', 'The request covers no staff working time.');
             }
+            // HR.9 (ADR 0065 §28.2): notice, backdating and maximum length of every version assigned on the requested dates.
+            $timedBy = $this->timing->enforce($school, $employmentRecordId, $type->id, $shape, $units);
 
             try {
                 $request = LeaveRequest::query()->create([
@@ -326,7 +335,7 @@ class LeaveRequestService
                 'employmentRecordId' => $employmentRecordId, 'leaveTypeId' => $type->id, 'startsOn' => $shape->startsOn,
                 'startPortion' => $shape->startPortion->value, 'endsOn' => $shape->endsOn, 'endPortion' => $shape->endPortion->value,
                 'submittedUnits' => $units, 'reasonCode' => $reasonCode, 'source' => $source,
-            ]);
+            ] + ($timedBy === [] ? [] : ['timingPolicyIds' => $timedBy]));
 
             return $request;
         }));

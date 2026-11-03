@@ -86,4 +86,38 @@ final class DepartmentReference
             && $department->status === 'active'
             && ($department->campus_id === null || $locationCampusId === null || $department->campus_id === $locationCampusId);
     }
+
+    /**
+     * HR.9 (Leave eligibility, ADR 0065 §28.3): every Department a School-wide
+     * configuration may name, active ones only, bounded -- id, code and name.
+     *
+     * @return list<array{id: string, code: string, name: string}>
+     */
+    public function options(School $school): array
+    {
+        return Department::query()
+            ->where('school_id', $school->id)
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->orderBy('id')
+            ->limit(500)
+            ->get(['id', 'code', 'name'])
+            ->map(fn (Department $d) => ['id' => $d->id, 'code' => $d->code, 'name' => $d->name])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * HR.9: inside the caller's write transaction, share-locks the Department
+     * and answers whether it is an active Department of this School.
+     */
+    public function lockActive(School $school, string $departmentId): bool
+    {
+        return Str::isUuid($departmentId) && Department::query()
+            ->where('school_id', $school->id)
+            ->whereKey($departmentId)
+            ->where('status', 'active')
+            ->sharedLock()
+            ->exists();
+    }
 }

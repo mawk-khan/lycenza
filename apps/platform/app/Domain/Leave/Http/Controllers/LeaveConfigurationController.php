@@ -9,6 +9,7 @@ use App\Domain\Leave\Application\LeaveReadService;
 use App\Domain\Leave\Application\LeaveTypeService;
 use App\Domain\Leave\Application\LeaveYearService;
 use App\Domain\Leave\Application\StaffCalendarService;
+use App\Domain\Leave\Http\Requests\LeavePolicyInput;
 use App\Domain\Leave\Infrastructure\StaffWorkingWeekday;
 use App\Http\Controllers\Controller;
 use App\Models\School;
@@ -115,24 +116,11 @@ class LeaveConfigurationController extends Controller
 
     public function storePolicy(Request $request, School $school, LeavePolicyService $policies): JsonResponse
     {
-        $validated = $request->validate([
-            'leave_type_id' => ['required', 'uuid'],
-            'name' => ['required', 'string', 'max:120'],
-            'annual_allocation_units' => ['required', 'integer', 'min:0', 'max:1000'],
-            'carry_forward_allowed' => ['required', 'boolean'],
-            'carry_forward_cap_units' => ['nullable', 'required_if_accepted:carry_forward_allowed', 'integer', 'min:1', 'max:1000'],
-            'carry_forward_expiry_days' => ['nullable', 'integer', 'min:1', 'max:366'],
-            'supersedes_policy_id' => ['sometimes', 'nullable', 'uuid'],
-        ]);
-        $policy = $policies->create($school, $validated['leave_type_id'], [
-            'name' => $validated['name'],
-            'annual_allocation_units' => (int) $validated['annual_allocation_units'],
-            'carry_forward_allowed' => (bool) $validated['carry_forward_allowed'],
-            'carry_forward_cap_units' => isset($validated['carry_forward_cap_units']) ? (int) $validated['carry_forward_cap_units'] : null,
-            'carry_forward_expiry_days' => isset($validated['carry_forward_expiry_days']) ? (int) $validated['carry_forward_expiry_days'] : null,
-        ], $validated['supersedes_policy_id'] ?? null, $request->user());
+        $validated = $request->validate(LeavePolicyInput::rules());
+        $policy = $policies->create($school, $validated['leave_type_id'], LeavePolicyInput::terms($validated), $validated['supersedes_policy_id'] ?? null,
+            $request->user(), LeavePolicyInput::criteria($validated));
 
-        return response()->json(['data' => LeaveReadService::policy($policy)], 201);
+        return response()->json(['data' => LeaveReadService::policy($policy, LeaveReadService::rulesOf($policy))], 201);
     }
 
     public function retirePolicy(Request $request, School $school, string $leavePolicy, LeavePolicyService $policies): JsonResponse

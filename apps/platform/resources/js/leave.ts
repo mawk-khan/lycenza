@@ -97,3 +97,125 @@ export function typeName(types: LeaveTypeRow[], id: string): string {
     const t = types.find((x) => x.id === id);
     return t ? `${t.name} (${t.code})` : '—';
 }
+
+/** HR.9 (ADR 0065 §28) — one policy version as the server presents it. */
+export interface EligibilityRuleRow {
+    id: string | null;
+    staffType: string | null;
+    employeeCategoryId: string | null;
+    departmentId: string | null;
+}
+
+export interface LeavePolicyRow {
+    id: string;
+    leaveTypeId: string;
+    name: string;
+    annualAllocationUnits: number;
+    carryForwardAllowed: boolean;
+    carryForwardCapUnits: number | null;
+    carryForwardExpiryDays: number | null;
+    status: string;
+    supersedesPolicyId: string | null;
+    minNoticeDays: number | null;
+    maxBackdateDays: number | null;
+    maxUnitsPerRequest: number | null;
+    eligibilityRules: EligibilityRuleRow[];
+    createdAt: string | null;
+    retiredAt: string | null;
+}
+
+export interface Option {
+    value: string;
+    label: string;
+}
+
+export interface ReferenceOption {
+    id: string;
+    code: string;
+    name: string;
+}
+
+/** HR.9 — one employment's eligibility answer (LeaveEligibilityRow::toArray()). */
+export interface EligibilityRow {
+    employmentRecordId: string;
+    employeeId: string;
+    employeeNumber: string | null;
+    fullName: string | null;
+    employmentStatus: string;
+    facts: {
+        staffType: string | null;
+        employeeCategoryId: string | null;
+        departmentId: string | null;
+    };
+    outcome: string;
+    policyId: string | null;
+    ruleId: string | null;
+    matchingPolicyIds: string[];
+    assignmentId: string | null;
+    assignedPolicyId: string | null;
+    assignedMatchesRules: boolean | null;
+    assignmentEndsOn: string | null;
+}
+
+export interface EligibilityResult {
+    leaveTypeId: string;
+    date: string;
+    versions: {
+        policyId: string;
+        name: string;
+        annualAllocationUnits: number;
+        rules: EligibilityRuleRow[];
+    }[];
+    rows: EligibilityRow[];
+    counts: Record<string, number>;
+    overlappingPolicyId?: string | null;
+}
+
+export const outcomeLabels: Record<string, string> = {
+    assigned: 'Assigned',
+    eligible: 'Eligible',
+    ambiguous: 'Ambiguous',
+    no_matching_rule: 'No matching rule',
+    employment_not_eligible: 'Employment not eligible',
+    own_employment: 'Your own employment',
+};
+
+export const staffTypeLabels: Record<string, string> = {
+    teaching: 'Teaching',
+    non_teaching: 'Non-teaching',
+    outsourced: 'Outsourced',
+};
+
+/** A rule as words: "Teaching · Category X · any Department"; an all-any rule is "Every employment". */
+export function ruleText(
+    rule: EligibilityRuleRow,
+    categories: Record<string, string>,
+    departments: Record<string, string>,
+): string {
+    const parts = [
+        rule.staffType === null ? null : (staffTypeLabels[rule.staffType] ?? rule.staffType),
+        rule.employeeCategoryId === null
+            ? null
+            : `Category: ${categories[rule.employeeCategoryId] ?? 'unknown'}`,
+        rule.departmentId === null
+            ? null
+            : `Department: ${departments[rule.departmentId] ?? 'unknown'}`,
+    ].filter((p): p is string => p !== null);
+    return parts.length === 0
+        ? 'Every employment (any staff type, category, Department)'
+        : parts.join(' · ');
+}
+
+/** Request-timing rules as words; null means the version sets no such rule. */
+export function timingText(p: LeavePolicyRow): string {
+    const parts = [
+        p.minNoticeDays === null ? null : `${p.minNoticeDays} calendar day(s) notice`,
+        p.maxBackdateDays === null
+            ? null
+            : p.maxBackdateDays === 0
+              ? 'no past dates'
+              : `past dates up to ${p.maxBackdateDays} calendar day(s) back`,
+        p.maxUnitsPerRequest === null ? null : `at most ${units(p.maxUnitsPerRequest)} per request`,
+    ].filter((x): x is string => x !== null);
+    return parts.length === 0 ? 'no request-timing rules' : parts.join(' · ');
+}

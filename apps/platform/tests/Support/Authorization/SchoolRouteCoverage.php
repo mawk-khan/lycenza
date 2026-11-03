@@ -35,6 +35,7 @@ use App\Domain\Identity\Application\Staff\StaffInvitationService;
 use App\Domain\Identity\Application\Staff\StaffRoleCatalog;
 use App\Domain\Inventory\Application\InventoryStockAccess;
 use App\Domain\Inventory\Application\InventoryStockHistory;
+use App\Domain\Leave\Application\LeaveEligibilityService;
 use App\Domain\Leave\Application\LeaveLedgerService;
 use App\Domain\Leave\Application\LeavePolicyAssignmentService;
 use App\Domain\Leave\Application\LeavePolicyService;
@@ -1134,6 +1135,10 @@ final class SchoolRouteCoverage
             Coverage::service('app.leave.types.status', LeaveTypeService::class, 'setStatus')->validatesFirst(),
             Coverage::service('app.leave.policies.store', LeavePolicyService::class, 'create')->validatesFirst(),
             Coverage::service('app.leave.policies.retire', LeavePolicyService::class, 'retire'),
+            // HR.9 (ADR 0065 §28.4): draft preview (configure), the eligibility page (view) and the additive run (manage).
+            Coverage::service('app.leave.policies.preview', LeaveEligibilityService::class, 'previewDraft')->validatesFirst(),
+            Coverage::gate('app.leave.eligibility', 'hr.leave.view'),
+            Coverage::service('app.leave.eligibility-runs.store', LeaveEligibilityService::class, 'executeRun')->validatesFirst(),
             Coverage::service('app.leave.calendar.weekdays', StaffCalendarService::class, 'setWeeklyPattern')->validatesFirst(),
             Coverage::service('app.leave.calendar.holidays.store', StaffCalendarService::class, 'addHoliday')->validatesFirst(),
             Coverage::service('app.leave.calendar.holidays.remove', StaffCalendarService::class, 'removeHoliday'),

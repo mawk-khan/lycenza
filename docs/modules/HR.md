@@ -4747,3 +4747,51 @@ was copied). Every profile field the pack shows has a deliberate place:
 - the eight guard triggers;
 - forced RLS on reference codes;
 - the closed-category, storage-shape, kind and value-unique constraints.
+
+## Leave policy rules and eligibility (HR.9, 2026-11-03)
+
+The contract is ADR 0065 §28 (Leave owns it; HR supplies facts one way).
+This section records what HR provides and what HR.9 changed around HR.
+
+**What Leave reads from HR, and how** (Leave → HR only; HR never reads
+Leave):
+- `EmploymentRoster::on()`: the employments spanning a date. Each row now
+  also says `employeeActive`, so a planned employment of an inactive
+  Employee is never assignable.
+- `WorkforceAsOfReader::placementsOn()`: each employment's staff type and
+  Employee Category (the HR.1A terms effective that day) and its primary
+  Department (the primary assignment covering that day). These are three
+  bounded queries for any number of Employees.
+- `EmployeeCategoryReference` (new): active Categories (id, code, name),
+  names in one read, and `lockActive()` FOR SHARE.
+- `DepartmentReference::options()` / `lockActive()` (new methods): the same
+  for Departments.
+- `HrSelfAdministrationGuard::ownedEmploymentIds()` (new): which of several
+  employments belong to the actor, in one read. A batch writer skips the
+  actor's own employment instead of asking per row.
+
+**Rules that matter to HR data:**
+- **Eligibility never guesses a classification.** An unclassified staff
+  type, or a missing Category or Department, matches only a rule that leaves
+  that dimension open. A staff type is never derived from a Department,
+  Position or role.
+- **Facts are dated.** A reclassification (HR.1A terms) or a transfer
+  (HR.1A placement change) changes the answer from its effective date only.
+  It never moves an existing leave policy assignment, and never touches a
+  balance (ADR 0065 §4.2: assignments are never repointed). The Leave
+  eligibility page shows it as drift for an administrator.
+- **A rehire is a new employment:** no assignment and no balance follow it.
+- **HR-L8 stays closed:** no gender, marital, family or health dimension
+  exists.
+
+**HR.2A residual risks carried forward (not HR.9 work, not closed by it):**
+
+| # | Residual | Owner | Disposition |
+|---|---|---|---|
+| 1 | Legacy path-only HR document rows (pre-HR.2A) keep their path metadata | HR + Documents | pre-staging: inventory per School (0 on the DDEV dev DB at HR.2A); a migration to governed Documents needs its own decision |
+| 2 | HR.2A rollback can lose archive / reference-code evidence (documented as loss-prone) | HR | pre-production: rollback only before any HR.2A evidence exists; otherwise forward-fix |
+| 3 | Highly Sensitive generic Documents API now requires current MFA: API clients must hold an MFA-assured token | Identity + Documents | pre-staging: client/compatibility note in the API changelog; no HR.9 change touches it |
+| 4 | No automated axe audit for the HR.2A profile workspace | HR (UI) | pre-staging accessibility pass (with the HR.9 Leave pages) |
+
+None of these undermines a prerequisite HR.9 relies on: HR.9 reads no
+document, profile record or reference code.

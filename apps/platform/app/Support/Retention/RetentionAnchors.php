@@ -119,7 +119,8 @@ final class RetentionAnchors
         'leave_decisions' => ['created_at', 'decider_employee_id', 'leave_request_id', 'requester_employee_id'],
         'leave_year_close_items' => ['created_at', 'employment_record_id', 'leave_policy_id', 'leave_type_id', 'year_close_id'],
         'leave_year_close_reconciliations' => ['created_at', 'leave_request_id', 'reversal_entry_id', 'year_close_item_id'],
-        'leave_policy_assignments' => ['created_at', 'updated_at', 'ended_at', 'employment_record_id', 'leave_policy_id', 'leave_type_id'],
+        // HR.9 (2027_01_28): + the eligibility run and rule that created the assignment.
+        'leave_policy_assignments' => ['created_at', 'updated_at', 'ended_at', 'employment_record_id', 'leave_policy_id', 'leave_type_id', 'eligibility_run_id', 'eligibility_rule_id'],
         'staff_attendance_records' => ['created_at', 'updated_at', 'employee_id', 'employment_record_id'],
         'staff_attendance_corrections' => ['created_at', 'employment_record_id', 'staff_attendance_record_id'],
         // Finance (D8)

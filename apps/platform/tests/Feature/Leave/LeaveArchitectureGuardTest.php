@@ -27,7 +27,16 @@ class LeaveArchitectureGuardTest extends TestCase
         'leave_settings', 'leave_year_start_changes', 'leave_years', 'leave_types', 'leave_policies', 'leave_policy_assignments',
         'staff_working_weekdays', 'staff_holidays', 'leave_allocation_runs', 'leave_ledger_entries',
         'leave_requests', 'leave_request_days', 'leave_decisions', 'leave_year_closes', 'leave_year_close_items', 'leave_year_close_reconciliations',
+        // HR.9 (ADR 0065 §28)
+        'leave_eligibility_rules', 'leave_eligibility_runs',
     ];
+
+    /**
+     * HR-L8 (sensitive-demographic eligibility) is unresolved: no Leave table
+     * may hold, and no Leave rule may test, gender, sex, marital status,
+     * family relationships, pregnancy or another protected characteristic.
+     */
+    private const HR_L8_COLUMN = '/gender|\bsex\b|_sex|sex_|marital|spouse|married|pregnan|maternity|paternity|family|child|dependent|religion|caste|disab|age_band|date_of_birth|dob/';
 
     /**
      * HRX-L1 / HRX-L2: a column whose name says health, medical evidence,
@@ -68,6 +77,22 @@ class LeaveArchitectureGuardTest extends TestCase
     }
 
     #[Test]
+    public function hr_l8_no_leave_table_or_rule_can_use_a_protected_characteristic(): void
+    {
+        $columns = DB::select('SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = ? AND table_name IN ('.implode(',', array_fill(0, count(self::TABLES), '?')).')', ['public', ...self::TABLES]);
+        $hits = array_values(array_filter(array_map(fn ($c) => "{$c->table_name}.{$c->column_name}", $columns), fn (string $c) => preg_match(self::HR_L8_COLUMN, explode('.', $c)[1]) === 1));
+        $this->assertSame([], $hits, 'HR-L8 is unresolved: leave eligibility never uses gender, marital status, family or another protected characteristic');
+
+        // The eligibility dimensions are exactly the three workforce facts (HR-AD-09).
+        $this->assertSame(['department_id', 'employee_category_id', 'staff_type'], array_values(array_intersect(
+            ['department_id', 'employee_category_id', 'staff_type'],
+            array_column(DB::select("SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'leave_eligibility_rules' ORDER BY column_name"), 'column_name'),
+        )));
+        $criteria = $this->code(app_path('Domain/Leave/Application/Policy/LeaveEligibilityCriteria.php'));
+        $this->assertDoesNotMatchRegularExpression('/gender|marital|spouse|pregnan|religion|caste|date_of_birth/i', $criteria);
+    }
+
+    #[Test]
     public function dependencies_run_one_way_and_leave_never_touches_payroll_finance_or_identity_resolution(): void
     {
         foreach ($this->phpFiles('Domain/Leave') as $file) {
@@ -99,7 +124,7 @@ class LeaveArchitectureGuardTest extends TestCase
             // 'manager' is a decision PATH value here; a role comparison with it stays prohibited.
             $this->assertDoesNotMatchRegularExpression('/->role\b|hasRole\(|role_key|\'teacher\'|role\s*={2,3}\s*\'manager\'|\'school_admin\'|\'principal\'/', $code, "{$file}: no role-name check");
         }
-        foreach (['LeaveYearService', 'LeaveTypeService', 'LeavePolicyService', 'LeavePolicyAssignmentService', 'StaffCalendarService', 'LeaveLedgerService', 'LeaveReadService', 'LeaveRequestService', 'LeaveRequestReadService', 'LeaveYearCloseService'] as $service) {
+        foreach (['LeaveYearService', 'LeaveTypeService', 'LeavePolicyService', 'LeaveEligibilityService', 'LeavePolicyAssignmentService', 'StaffCalendarService', 'LeaveLedgerService', 'LeaveReadService', 'LeaveRequestService', 'LeaveRequestReadService', 'LeaveYearCloseService'] as $service) {
             $this->assertStringContainsString('authorizeCapabilityFor(', $this->code(app_path("Domain/Leave/Application/{$service}.php")), "{$service} authorizes itself");
         }
     }

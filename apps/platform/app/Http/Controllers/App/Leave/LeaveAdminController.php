@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers\App\Leave;
 
+use App\Domain\HR\Application\DepartmentReference;
+use App\Domain\HR\Application\EmployeeCategoryReference;
+use App\Domain\HR\Application\Workforce\StaffType;
 use App\Domain\Leave\Application\DayPortion;
 use App\Domain\Leave\Application\Exceptions\LeaveException;
 use App\Domain\Leave\Application\LeaveCapabilities;
@@ -15,6 +18,7 @@ use App\Domain\Leave\Application\LeaveTypeService;
 use App\Domain\Leave\Application\LeaveYearCloseService;
 use App\Domain\Leave\Application\LeaveYearService;
 use App\Domain\Leave\Application\StaffCalendarService;
+use App\Domain\Leave\Http\Requests\LeavePolicyInput;
 use App\Domain\Leave\Infrastructure\LeaveDecision;
 use App\Domain\Leave\Infrastructure\LeaveLedgerEntry;
 use App\Domain\Leave\Infrastructure\LeaveRequest;
@@ -55,7 +59,7 @@ class LeaveAdminController extends Controller
 
     private const PORTIONS = ['full', 'first_half', 'second_half'];
 
-    public function configuration(TenantContext $context, CapabilityResolver $capabilities, LeaveReadService $reads): Response
+    public function configuration(TenantContext $context, CapabilityResolver $capabilities, LeaveReadService $reads, EmployeeCategoryReference $categories, DepartmentReference $departments): Response
     {
         $school = $context->requireSchool();
         $this->authorizeCapability(LeaveCapabilities::VIEW, $school);
@@ -70,6 +74,11 @@ class LeaveAdminController extends Controller
             'calendar' => $reads->calendar($school, CarbonImmutable::parse($today)->subYear()->toDateString(), CarbonImmutable::parse($today)->addYears(2)->toDateString(), $actor),
             'portions' => self::PORTIONS,
             'canConfigure' => $capabilities->canInSchool($actor, LeaveCapabilities::CONFIGURE, $school),
+            // HR.9: the eligibility dimensions a version's rules may name -- the closed staff types and HR's active reference data.
+            'staffTypes' => StaffType::options(),
+            'employeeCategories' => $context->withSchool($school, fn () => $categories->options($school)),
+            'departments' => $context->withSchool($school, fn () => $departments->options($school)),
+            'today' => SchoolTimezone::today($school),
         ]);
     }
 
@@ -119,16 +128,11 @@ class LeaveAdminController extends Controller
     public function storePolicy(Request $request, TenantContext $context, LeavePolicyService $policies): RedirectResponse
     {
         $school = $context->requireSchool();
-        $validated = $request->validate([
-            'leave_type_id' => ['required', 'uuid'], 'name' => ['required', 'string', 'max:120'],
-            'annual_allocation_units' => ['required', 'integer', 'min:0', 'max:1000'], 'carry_forward_allowed' => ['required', 'boolean'],
-            'carry_forward_cap_units' => ['nullable', 'integer', 'min:1', 'max:1000'], 'carry_forward_expiry_days' => ['nullable', 'integer', 'min:1', 'max:366'],
-            'supersedes_policy_id' => ['nullable', 'uuid'],
-        ]);
-        $terms = ['name' => $validated['name'], 'annual_allocation_units' => (int) $validated['annual_allocation_units'], 'carry_forward_allowed' => (bool) $validated['carry_forward_allowed'],
-            'carry_forward_cap_units' => $validated['carry_forward_cap_units'] ?? null, 'carry_forward_expiry_days' => $validated['carry_forward_expiry_days'] ?? null];
+        // HR.9 (ADR 0065 §28): one input shape with the API -- terms, request-timing rules, eligibility rules.
+        $validated = $request->validate(LeavePolicyInput::rules());
 
-        return $this->command(fn () => $policies->create($school, $validated['leave_type_id'], $terms, $validated['supersedes_policy_id'] ?? null, $request->user()), 'Leave policy created.');
+        return $this->command(fn () => $policies->create($school, $validated['leave_type_id'], LeavePolicyInput::terms($validated), $validated['supersedes_policy_id'] ?? null,
+            $request->user(), LeavePolicyInput::criteria($validated)), 'Leave policy created.');
     }
 
     public function retirePolicy(Request $request, TenantContext $context, LeavePolicyService $policies, string $leavePolicy): RedirectResponse
