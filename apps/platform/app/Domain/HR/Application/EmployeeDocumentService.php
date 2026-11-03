@@ -2,7 +2,14 @@
 
 namespace App\Domain\HR\Application;
 
+use App\Domain\Documents\Application\DocumentContent;
+use App\Domain\Documents\Application\DocumentReadService;
+use App\Domain\Documents\Application\DocumentService;
+use App\Domain\Documents\Infrastructure\Document;
 use App\Domain\HR\Application\Exceptions\EmployeeOwnershipMismatchException;
+use App\Domain\HR\Application\Exceptions\InvalidEmployeeDocumentException;
+use App\Domain\HR\Application\Exceptions\ProfileRecordArchivedException;
+use App\Domain\HR\Application\Profile\EmployeeDocumentCategory;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeDocument;
 use App\Models\School;
@@ -10,13 +17,22 @@ use App\Models\User;
 use App\Support\Audit\AuditRecorder;
 use App\Support\Authorization\AuthorizesCapability;
 use App\Support\Tenancy\TenantContext;
-use App\Support\Tenancy\TenantStoragePath;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
+use LogicException;
 
 /**
  * The only sanctioned write path for an Employee's Restricted-tier
  * document metadata (docs/modules/HR.md "Documents -- narrow scope").
+ *
+ * HR.2A (S-12, D1-26): records now reference a governed platform Document
+ * (`document_id`); the bytes go only through the Documents repository
+ * (createForEmployee(), archiveForEmployee(), employeeContent()), and a new
+ * record never carries a storage path (database trigger). The text below
+ * describes the pre-HR.2A metadata-only records, which keep their legacy
+ * path metadata, untouched.
  *
  * METADATA ONLY -- deliberately, structurally. This service has no
  * `upload()`/`download()`/`delete()`-file-content method and never
@@ -70,94 +86,117 @@ class EmployeeDocumentService
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly HrSelfAdministrationGuard $selfAdministration,
+        private readonly DocumentService $documents,
+        private readonly DocumentReadService $documentReads,
     ) {}
 
     /**
-     * @param  array<string, mixed>  $attributes  Must include a
-     *                                            `storage_path` key holding a RELATIVE fragment (e.g.
-     *                                            "employee-documents/contract.pdf") -- never a final,
-     *                                            already-tenant-prefixed value. The persisted column is
-     *                                            always `TenantStoragePath::for($employee->school,
-     *                                            $fragment)`, never the caller's raw input. `uploaded_at`
-     *                                            defaults to the moment of this call but may be overridden
-     *                                            by the caller (e.g. a future backfill/import process
-     *                                            recording a historical upload time).
+     * HR.2A (S-12, D1-26): registers an HR document record WITH its bytes,
+     * through the platform Documents repository (createForEmployee()): the
+     * record and its Document commit together or not at all, and the record
+     * never carries a storage path. The category is closed
+     * (EmployeeDocumentCategory); an identity document is always Highly
+     * Sensitive. The HR tier maps onto the Documents tier (`restricted` ->
+     * `sensitive`, `highly_sensitive` -> `highly_sensitive`).
+     *
+     * @param  array{issued_on?: string|null, expires_on?: string|null}  $dates
      */
-    public function register(Employee $employee, array $attributes, User $actor): EmployeeDocument
+    public function register(Employee $employee, UploadedFile $file, EmployeeDocumentCategory $category, string $tier, array $dates, User $actor): EmployeeDocument
     {
-        $this->assertClassificationCapability($actor, $employee->school, targetTier: $attributes['classification_tier'] ?? null, currentTier: null);
-
-        unset(
-            $attributes['school_id'], $attributes['employee_id'], $attributes['status'],
-            $attributes['uploaded_by_user_id'],
-        );
-
-        $fragment = $attributes['storage_path'] ?? null;
-        if (! is_string($fragment) || $fragment === '') {
-            throw new InvalidArgumentException('storage_path fragment is required to register an Employee document.');
+        if (! in_array($tier, ['restricted', 'highly_sensitive'], true)) {
+            throw new InvalidArgumentException('An HR document is restricted or highly_sensitive.');
         }
+        if ($category->requiredTier() !== null && $category->requiredTier() !== $tier) {
+            throw new InvalidEmployeeDocumentException('identity_tier', 'An identity document is always Highly Sensitive.');
+        }
+        $this->assertClassificationCapability($actor, $employee->school, targetTier: $tier, currentTier: null);
 
-        return $this->context->withSchool($employee->school, function () use ($employee, $attributes, $fragment, $actor) {
-            return DB::transaction(function () use ($employee, $attributes, $fragment, $actor) {
-                $document = EmployeeDocument::query()->create([
-                    'uploaded_at' => now(),
-                    ...$attributes,
-                    'employee_id' => $employee->id,
+        $record = null;
+        $this->context->withSchool($employee->school, function () use ($employee, $file, $category, $tier, $dates, $actor, &$record): void {
+            // HR.2A (S-3): nobody files documents on their own HR record.
+            DB::transaction(fn () => $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.document'));
+            $this->documents->createForEmployee($employee->school, $employee->id, $file, self::documentsTier($tier), $actor, function (Document $document) use ($employee, $category, $tier, $dates, $actor, &$record): void {
+                $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.document');
+                $record = new EmployeeDocument;
+                $record->forceFill([
                     'school_id' => $employee->school_id,
-                    'storage_path' => TenantStoragePath::for($employee->school, $fragment),
+                    'employee_id' => $employee->id,
+                    'document_id' => $document->id,
+                    'category' => $category->value,
+                    'classification_tier' => $tier,
+                    'original_filename' => $document->original_filename,
+                    'mime_type' => $document->mime_type,
+                    'size_bytes' => $document->size_bytes,
                     'uploaded_by_user_id' => $actor->id,
+                    'uploaded_at' => now(),
+                    'issued_on' => $dates['issued_on'] ?? null,
+                    'expires_on' => $dates['expires_on'] ?? null,
                     'status' => 'active',
-                ]);
+                ])->save();
 
-                $this->audit->school($employee->school, 'hr.employee_document.created', actor: $actor, subject: $document, metadata: [
+                $this->audit->school($employee->school, 'hr.employee_document.created', actor: $actor, subject: $record, metadata: [
                     'employeeId' => $employee->id,
-                    'documentId' => $document->id,
-                    'category' => $document->category,
-                    'classificationTier' => $document->classification_tier,
+                    'documentId' => $record->id,
+                    'category' => $record->category,
+                    'classificationTier' => $record->classification_tier,
                 ]);
-
-                return $document;
             });
         });
+
+        return $record ?? throw new LogicException('The HR document record was not written.');
     }
 
     /**
+     * Corrects a record's category, dates or classification. The file and
+     * the Employee never change. A governed record's reclassification also
+     * reclassifies its Document in the same transaction
+     * (DocumentService::reclassifyForEmployee()), so the Document's tier --
+     * which decides who may download the bytes -- always equals the record's.
+     * An identity document stays Highly Sensitive.
+     *
      * @param  array<string, mixed>  $attributes
      */
     public function update(Employee $employee, EmployeeDocument $document, array $attributes, User $actor): EmployeeDocument
     {
         $this->assertOwnership($employee, $document);
+        $attributes = array_intersect_key($attributes, array_flip(['category', 'classification_tier', 'issued_on', 'expires_on']));
+        if (array_key_exists('category', $attributes) && EmployeeDocumentCategory::tryFrom((string) $attributes['category']) === null) {
+            throw new InvalidEmployeeDocumentException('category', 'Choose a document category from the list.');
+        }
+        $category = EmployeeDocumentCategory::tryFrom((string) ($attributes['category'] ?? $document->category));
+        $targetTier = (string) ($attributes['classification_tier'] ?? $document->classification_tier);
+        if ($category?->requiredTier() !== null && $category->requiredTier() !== $targetTier) {
+            throw new InvalidEmployeeDocumentException('identity_tier', 'An identity document is always Highly Sensitive.');
+        }
         $this->assertClassificationCapability(
             $actor,
             $employee->school,
             targetTier: array_key_exists('classification_tier', $attributes) ? $attributes['classification_tier'] : $document->classification_tier,
             currentTier: $document->classification_tier,
         );
-        unset(
-            $attributes['school_id'], $attributes['employee_id'], $attributes['status'],
-            $attributes['storage_disk'], $attributes['storage_path'], $attributes['uploaded_by_user_id'],
-        );
 
         return $this->context->withSchool($employee->school, function () use ($employee, $document, $attributes, $actor) {
             return DB::transaction(function () use ($employee, $document, $attributes, $actor) {
+                // HR.2A (S-3): nobody administers their own HR documents.
+                $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.document');
+                if ($document->status !== 'active') {
+                    throw new ProfileRecordArchivedException;
+                }
                 $classificationChanged = array_key_exists('classification_tier', $attributes)
                     && $attributes['classification_tier'] !== $document->classification_tier;
 
-                $document->update($attributes);
+                if ($classificationChanged && $document->document_id !== null) {
+                    $this->documents->reclassifyForEmployee($employee->school, $employee->id, $document->document_id, self::documentsTier((string) $attributes['classification_tier']), $actor);
+                }
+                $document->forceFill($attributes)->save();
 
                 $this->audit->school($employee->school, 'hr.employee_document.updated', actor: $actor, subject: $document, metadata: [
                     'employeeId' => $employee->id,
                     'documentId' => $document->id,
                     'fields' => array_keys($attributes),
                     'classificationChanged' => $classificationChanged,
-                    // Phase 8A.11: the resulting (event-time) classification
-                    // tier, purely additive -- lets the Employee Activity
-                    // Timeline determine whether THIS event is itself
-                    // Highly Sensitive from real event-time evidence rather
-                    // than the document's current (possibly since-changed)
-                    // tier. A row written before this fix has no
-                    // classificationTier here and is treated as ambiguous
-                    // (fail closed) by the Timeline read model.
+                    // Phase 8A.11: the resulting (event-time) tier, for the timeline.
                     'classificationTier' => $document->classification_tier,
                 ]);
 
@@ -166,29 +205,62 @@ class EmployeeDocumentService
         });
     }
 
+    /**
+     * Archives the record (final) and, for a governed record, its Document
+     * (status only; the bytes stay until retention), in one transaction.
+     */
     public function archive(Employee $employee, EmployeeDocument $document, User $actor): EmployeeDocument
     {
         $this->assertOwnership($employee, $document);
         $this->assertClassificationCapability($actor, $employee->school, targetTier: $document->classification_tier, currentTier: $document->classification_tier);
 
-        return $this->context->withSchool($employee->school, function () use ($employee, $document, $actor) {
-            return DB::transaction(function () use ($employee, $document, $actor) {
-                $document->update(['status' => 'archived']);
+        $archive = function () use ($employee, $document, $actor): void {
+            $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.document');
+            $locked = EmployeeDocument::query()->where('school_id', $employee->school_id)->whereKey($document->id)->lockForUpdate()->firstOrFail();
+            if ($locked->status !== 'active') {
+                throw new ProfileRecordArchivedException;
+            }
+            $locked->forceFill(['status' => 'archived'])->save();
 
-                $this->audit->school($employee->school, 'hr.employee_document.archived', actor: $actor, subject: $document, metadata: [
-                    'employeeId' => $employee->id,
-                    'documentId' => $document->id,
-                    // Phase 8A.11: event-time classification tier, purely
-                    // additive -- archive() never changes classification_tier
-                    // itself, so this is simply the document's tier at the
-                    // moment of archiving. See update()'s identical field
-                    // for the fail-closed rule on rows written before this fix.
-                    'classificationTier' => $document->classification_tier,
-                ]);
+            $this->audit->school($employee->school, 'hr.employee_document.archived', actor: $actor, subject: $locked, metadata: [
+                'employeeId' => $employee->id,
+                'documentId' => $locked->id,
+                // Phase 8A.11: event-time classification tier.
+                'classificationTier' => $locked->classification_tier,
+            ]);
+        };
 
-                return $document->fresh();
-            });
+        $this->context->withSchool($employee->school, function () use ($employee, $document, $actor, $archive): void {
+            if ($document->document_id !== null) {
+                $this->documents->archiveForEmployee($employee->school, $employee->id, $document->document_id, $actor, fn () => $archive());
+            } else {
+                DB::transaction($archive);
+            }
         });
+
+        return $this->context->withSchool($employee->school, fn () => $document->fresh() ?? $document);
+    }
+
+    /**
+     * HR.2A: the bytes of a governed record, re-authorized by the Document's
+     * own tier on every download (DocumentReadService::employeeContent());
+     * a Highly Sensitive open is audited there. A legacy path-only record has
+     * no governed bytes: NOT FOUND.
+     */
+    public function content(Employee $employee, EmployeeDocument $document, User $actor): DocumentContent
+    {
+        $this->assertOwnership($employee, $document);
+        if ($document->document_id === null) {
+            throw (new ModelNotFoundException)->setModel(EmployeeDocument::class, [$document->id]);
+        }
+
+        return $this->documentReads->employeeContent($employee->school, $employee->id, $document->document_id, $actor);
+    }
+
+    /** HR tier -> Documents tier. */
+    private static function documentsTier(string $tier): string
+    {
+        return $tier === 'highly_sensitive' ? 'highly_sensitive' : 'sensitive';
     }
 
     /**

@@ -82,7 +82,7 @@ class HrEmployeeUserLinkApiTest extends TestCase
         $employee = $this->createEmployee($school, ['user_id' => null, 'full_name' => 'Original']);
 
         $this->as($actor)
-            ->patchJson("/api/v1/schools/{$school->id}/employees/{$employee->id}", ['full_name' => 'Changed', 'user_id' => $this->member($school)->id])
+            ->patchJson("/api/v1/schools/{$school->id}/employees/{$employee->id}", ['version' => $this->employeeIdentityVersion($employee->id), 'full_name' => 'Changed', 'user_id' => $this->member($school)->id])
             ->assertUnprocessable()
             ->assertJsonPath('error.status', 422)
             ->assertJsonStructure(['error' => ['errors' => ['user_id']]]);

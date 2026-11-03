@@ -54,7 +54,7 @@ final class EmployeeRecordRetentionService
     ];
 
     /** HR evidence rows the evidence purge removes itself (ancillary ones included: their period is shorter). */
-    private const EVIDENCE_HANDLED = ['employment_records', 'employee_personal_details', 'employee_documents', 'documents', ...self::ANCILLARY_TABLES];
+    private const EVIDENCE_HANDLED = ['employment_records', 'employee_personal_details', 'employee_documents', 'documents', 'employee_reference_codes', ...self::ANCILLARY_TABLES];
 
     public function __construct(
         private readonly EmployeeRetentionEligibility $employees,
@@ -127,13 +127,15 @@ final class EmployeeRecordRetentionService
             null,
             fn (string $employeeId): array => array_filter([$this->evidenceBlocker($school->id, $employeeId, $cleared)]),
             function (string $employeeId): array {
-                $objects = DB::table('employee_documents')->where('employee_id', $employeeId)->orderBy('id')->get(['storage_disk', 'storage_path'])->all();
-                $objects = [...$objects, ...$this->documents->purgeWithOwner('employee', $employeeId)];
-                $employments = DB::table('employment_records')->where('employee_id', $employeeId)->pluck('id')->all();
-
+                // A pre-HR.2A HR record's own legacy path is collected for the object purge.
+                $objects = DB::table('employee_documents')->where('employee_id', $employeeId)->whereNotNull('storage_path')->orderBy('id')->get(['storage_disk', 'storage_path'])->all();
+                // HR.2A: HR's own rows first -- a governed HR document record references its
+                // Document (`employee_documents.document_id`), so it goes before the Documents purge.
                 foreach ([...self::ANCILLARY_TABLES, 'employee_personal_details', 'employee_documents'] as $table) {
                     DB::table($table)->where('employee_id', $employeeId)->delete();
                 }
+                $objects = [...$objects, ...$this->documents->purgeWithOwner('employee', $employeeId)];
+                $employments = DB::table('employment_records')->where('employee_id', $employeeId)->pluck('id')->all();
                 // HR.1A: employment_terms and employee_placement_changes cascade with these
                 // rows (their own history; the retention identity holds no DELETE on them).
                 DB::table('employee_assignments')->whereIn('employment_record_id', $employments)->delete();
@@ -172,6 +174,7 @@ final class EmployeeRecordRetentionService
             ?? $this->references->first('employee_assignments', $schoolId, $assignments, ['employee_placement_changes'])
             ?? $this->references->first('employee_personal_details', $schoolId, DB::table('employee_personal_details')->where('employee_id', $employeeId)->pluck('id')->all())
             ?? $this->references->first('employee_documents', $schoolId, DB::table('employee_documents')->where('employee_id', $employeeId)->pluck('id')->all())
-            ?? $this->references->first('documents', $schoolId, $this->documents->idsOwnedBy('employee', $employeeId));
+            // HR.2A: the Employee's own HR records reference its Documents and go first.
+            ?? $this->references->first('documents', $schoolId, $this->documents->idsOwnedBy('employee', $employeeId), ['employee_documents']);
     }
 }

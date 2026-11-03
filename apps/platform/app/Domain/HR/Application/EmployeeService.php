@@ -7,9 +7,12 @@ use App\Domain\HR\Application\Exceptions\EmployeeAlreadyLinkedException;
 use App\Domain\HR\Application\Exceptions\EmployeeNotActiveException;
 use App\Domain\HR\Application\Exceptions\EmployeeNotLinkedException;
 use App\Domain\HR\Application\Exceptions\EmployeeNumberConflictException;
+use App\Domain\HR\Application\Exceptions\EmployeeProfileChangedException;
 use App\Domain\HR\Application\Exceptions\EmployeeUserLinkNotEditableException;
 use App\Domain\HR\Application\Exceptions\UnrelatedUserLinkageException;
 use App\Domain\HR\Application\Exceptions\UserAlreadyLinkedException;
+use App\Domain\HR\Application\Profile\EmployeeProfileVersion;
+use App\Domain\HR\Application\Profile\ProfileContactNormalizer;
 use App\Domain\HR\Events\EmployeeArchived;
 use App\Domain\HR\Events\EmployeeCreated;
 use App\Domain\HR\Events\EmployeeUpdated;
@@ -97,6 +100,8 @@ class EmployeeService
      */
     public function createRecord(School $school, array $attributes, User $actor): Employee
     {
+        // HR.2A: one server-side normal form for contact values.
+        $attributes = ProfileContactNormalizer::normalize($attributes);
         if (DB::transactionLevel() === 0) {
             throw new \LogicException('EmployeeService::createRecord() runs only inside the creating transaction.');
         }
@@ -154,7 +159,7 @@ class EmployeeService
      *
      * @param  array<string, mixed>  $attributes
      */
-    public function update(Employee $employee, array $attributes, User $actor): Employee
+    public function update(Employee $employee, array $attributes, User $actor, ?string $expectedVersion = null): Employee
     {
         $school = $employee->school;
         // ORG.7E-1 (ADR 0076 §43): Campus-aware. A Campus-scoped actor edits
@@ -167,11 +172,19 @@ class EmployeeService
         }
 
         unset($attributes['school_id'], $attributes['employee_number'], $attributes['record_status']);
+        // HR.2A: one server-side normal form for contact values.
+        $attributes = ProfileContactNormalizer::normalize($attributes);
 
-        return $this->context->withSchool($school, function () use ($school, $employee, $attributes, $actor, $guard) {
-            return DB::transaction(function () use ($school, $employee, $attributes, $actor, $guard) {
+        return $this->context->withSchool($school, function () use ($school, $employee, $attributes, $actor, $guard, $expectedVersion) {
+            return DB::transaction(function () use ($school, $employee, $attributes, $actor, $guard, $expectedVersion) {
                 $locked = $this->placement->forEmployeeWrite($school, $employee->id);
                 $guard?->beforeEmployeeWrite($locked);
+                // HR.2A (S-3): nobody edits their own HR identity record.
+                $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'employee.update');
+                // HR.2A: the form's token is compared under the Employee lock.
+                if ($expectedVersion !== null && ! EmployeeProfileVersion::matches(EmployeeProfileVersion::identity($locked), $expectedVersion)) {
+                    throw new EmployeeProfileChangedException;
+                }
 
                 try {
                     $employee->update($attributes);

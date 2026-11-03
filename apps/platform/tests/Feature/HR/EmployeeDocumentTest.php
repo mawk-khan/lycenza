@@ -4,13 +4,13 @@ namespace Tests\Feature\HR;
 
 use App\Domain\HR\Application\EmployeeDocumentService;
 use App\Domain\HR\Application\Exceptions\EmployeeOwnershipMismatchException;
+use App\Domain\HR\Application\Exceptions\InvalidEmployeeDocumentException;
 use App\Domain\HR\Infrastructure\EmployeeDocument;
 use App\Models\SchoolAuditEvent;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\Test;
 use ReflectionClass;
 use ReflectionMethod;
@@ -46,7 +46,7 @@ class EmployeeDocumentTest extends TestCase
     {
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
-        $this->createEmployeeDocument($employee, ['category' => 'id_proof']);
+        $this->createEmployeeDocument($employee, ['category' => 'appointment_letter']);
         $this->createEmployeeDocument($employee, ['category' => 'employment_contract']);
 
         app(TenantContext::class)->set($school);
@@ -62,18 +62,20 @@ class EmployeeDocumentTest extends TestCase
 
         app(TenantContext::class)->set($school);
 
-        DB::transaction(function () use ($employee): void {
-            $document = EmployeeDocument::query()->create([
+        $governed = $this->createDocumentForEmployee($employee, ['classification_tier' => 'sensitive']);
+        DB::transaction(function () use ($employee, $governed): void {
+            // HR.2A: a record always references a governed Document.
+            $document = (new EmployeeDocument)->forceFill([
                 'school_id' => $employee->school_id,
                 'employee_id' => $employee->id,
-                'category' => 'other',
-                'storage_disk' => 'local',
-                'storage_path' => 'employee-documents/default-tier.pdf',
+                'document_id' => $governed->id,
+                'category' => 'appointment_letter',
                 'original_filename' => 'file.pdf',
                 'mime_type' => 'application/pdf',
                 'size_bytes' => 1000,
                 'uploaded_at' => now(),
             ]);
+            $document->save();
 
             $this->assertSame('restricted', $document->fresh()->classification_tier);
         });
@@ -191,39 +193,30 @@ class EmployeeDocumentTest extends TestCase
     }
 
     #[Test]
-    public function service_register_derives_a_tenant_prefixed_storage_path_from_the_caller_supplied_fragment(): void
+    public function service_register_stores_the_bytes_through_a_governed_document_never_a_raw_path(): void
     {
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
 
-        $document = app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'id_proof',
-            'storage_disk' => 'local',
-            'storage_path' => 'employee-documents/passport-scan.pdf',
-            'original_filename' => 'passport-scan.pdf',
-            'mime_type' => 'application/pdf',
-            'size_bytes' => 2048,
-        ], $this->fullHrActor($school));
+        $document = $this->registerHrDocument($employee, $this->fullHrActor($school), 'restricted', 'employment_contract');
 
-        $this->assertSame("schools/{$school->id}/employee-documents/passport-scan.pdf", $document->storage_path);
+        // HR.2A (S-12, D1-26): the record names a platform Document; it carries no storage path.
+        $this->assertNull($document->storage_path);
+        $this->assertNull($document->storage_disk);
+        $governed = app(TenantContext::class)->withSchool($school, fn () => DB::table('documents')->where('id', $document->document_id)->first());
+        $this->assertNotNull($governed);
+        $this->assertSame([$employee->id, 'sensitive', 'application/pdf'], [$governed->employee_id, $governed->classification_tier, $governed->mime_type]);
     }
 
     #[Test]
-    public function service_register_rejects_a_traversal_attempt_in_the_storage_path_fragment(): void
+    public function an_identity_document_is_always_highly_sensitive(): void
     {
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
 
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(InvalidEmployeeDocumentException::class);
 
-        app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'id_proof',
-            'storage_disk' => 'local',
-            'storage_path' => '../../etc/passwd',
-            'original_filename' => 'passport-scan.pdf',
-            'mime_type' => 'application/pdf',
-            'size_bytes' => 2048,
-        ], $this->fullHrActor($school));
+        $this->registerHrDocument($employee, $this->fullHrActor($school), 'restricted', 'identity_document');
     }
 
     #[Test]
@@ -233,32 +226,30 @@ class EmployeeDocumentTest extends TestCase
         $employee = $this->createEmployee($school);
         $otherEmployee = $this->createEmployee($school);
 
-        $document = app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'id_proof',
-            'storage_disk' => 'local',
-            'storage_path' => 'employee-documents/doc.pdf',
-            'original_filename' => 'doc.pdf',
-            'mime_type' => 'application/pdf',
-            'size_bytes' => 2048,
-            'employee_id' => $otherEmployee->id,
-        ], $this->fullHrActor($school));
+        $document = $this->registerHrDocument($employee, $this->fullHrActor($school), 'restricted', 'employment_contract');
 
         $this->assertSame($employee->id, $document->employee_id, 'A caller-supplied employee_id in the attributes array must never override the authoritative Employee argument.');
     }
 
     #[Test]
-    public function update_cannot_change_storage_disk_or_storage_path(): void
+    public function update_never_changes_the_file_and_a_reclassification_moves_the_documents_tier(): void
     {
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
-        $document = $this->createEmployeeDocument($employee, ['storage_path' => 'employee-documents/original.pdf']);
+        $document = $this->createEmployeeDocument($employee);
 
         $updated = app(EmployeeDocumentService::class)->update($employee, $document, [
             'storage_path' => 'employee-documents/hacked.pdf',
             'storage_disk' => 's3',
+            'document_id' => (string) Uuid::v7(),
         ], $this->fullHrActor($school));
 
-        $this->assertSame('employee-documents/original.pdf', $updated->storage_path, 'storage_path must be immutable after registration -- update() must never re-point a document at different file content.');
+        $this->assertNull($updated->storage_path);
+        $this->assertSame($document->document_id, $updated->document_id, 'update() never re-points a record at different file content.');
+
+        // A reclassification moves the governed Document's tier with it (who may download).
+        app(EmployeeDocumentService::class)->update($employee, $updated, ['classification_tier' => 'highly_sensitive'], $this->fullHrActor($school));
+        $this->assertSame('highly_sensitive', app(TenantContext::class)->withSchool($school, fn () => DB::table('documents')->where('id', $document->document_id)->value('classification_tier')));
     }
 
     #[Test]
@@ -269,15 +260,7 @@ class EmployeeDocumentTest extends TestCase
         $actualActor = $this->fullHrActor($school);
         $forgedActor = $this->createUser();
 
-        $document = app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'id_proof',
-            'storage_disk' => 'local',
-            'storage_path' => 'employee-documents/doc.pdf',
-            'original_filename' => 'doc.pdf',
-            'mime_type' => 'application/pdf',
-            'size_bytes' => 2048,
-            'uploaded_by_user_id' => $forgedActor->id,
-        ], $actualActor);
+        $document = $this->registerHrDocument($employee, $actualActor, 'restricted', 'employment_contract');
 
         $this->assertSame($actualActor->id, $document->uploaded_by_user_id, 'uploaded_by_user_id must be derived from the trusted $actor argument, never a caller-supplied attribute value.');
         $this->assertNotSame($forgedActor->id, $document->uploaded_by_user_id);
@@ -302,18 +285,11 @@ class EmployeeDocumentTest extends TestCase
         $originalUploader = $this->fullHrActor($school);
         $impersonator = $this->createUser();
 
-        $document = app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'id_proof',
-            'storage_disk' => 'local',
-            'storage_path' => 'employee-documents/doc.pdf',
-            'original_filename' => 'doc.pdf',
-            'mime_type' => 'application/pdf',
-            'size_bytes' => 2048,
-        ], $originalUploader);
+        $document = $this->registerHrDocument($employee, $originalUploader, 'restricted', 'employment_contract');
 
         $updated = app(EmployeeDocumentService::class)->update($employee, $document, [
             'uploaded_by_user_id' => $impersonator->id,
-            'category' => 'other',
+            'category' => 'appointment_letter',
         ], $originalUploader);
 
         $this->assertSame($originalUploader->id, $updated->uploaded_by_user_id, 'uploaded_by_user_id records original registration provenance and must be immutable via update().');
@@ -327,16 +303,9 @@ class EmployeeDocumentTest extends TestCase
         $originalUploader = $this->fullHrActor($school);
         $laterUpdater = $this->fullHrActor($school);
 
-        $document = app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'id_proof',
-            'storage_disk' => 'local',
-            'storage_path' => 'employee-documents/doc.pdf',
-            'original_filename' => 'doc.pdf',
-            'mime_type' => 'application/pdf',
-            'size_bytes' => 2048,
-        ], $originalUploader);
+        $document = $this->registerHrDocument($employee, $originalUploader, 'restricted', 'employment_contract');
 
-        $updated = app(EmployeeDocumentService::class)->update($employee, $document, ['category' => 'other'], $laterUpdater);
+        $updated = app(EmployeeDocumentService::class)->update($employee, $document, ['category' => 'appointment_letter'], $laterUpdater);
 
         $this->assertSame($originalUploader->id, $updated->uploaded_by_user_id, 'Original registration provenance must survive a later update by a different actor.');
 
@@ -356,14 +325,14 @@ class EmployeeDocumentTest extends TestCase
         $schoolA = $this->createSchool();
         $schoolB = $this->createSchool();
         $employeeA = $this->createEmployee($schoolA);
-        $document = $this->createEmployeeDocument($employeeA, ['category' => 'other']);
+        $document = $this->createEmployeeDocument($employeeA, ['category' => 'appointment_letter']);
 
         $updated = app(EmployeeDocumentService::class)->update($employeeA, $document, [
-            'category' => 'id_proof',
+            'category' => 'qualification_evidence',
             'school_id' => $schoolB->id,
         ], $this->fullHrActor($schoolA));
 
-        $this->assertSame('id_proof', $updated->category);
+        $this->assertSame('qualification_evidence', $updated->category);
         $this->assertSame($schoolA->id, $updated->school_id, 'A caller-supplied school_id in the attributes array must never move a record to a different School.');
     }
 
@@ -377,7 +346,7 @@ class EmployeeDocumentTest extends TestCase
 
         $this->expectException(EmployeeOwnershipMismatchException::class);
 
-        app(EmployeeDocumentService::class)->update($employeeA, $documentB, ['category' => 'other'], $this->fullHrActor($school));
+        app(EmployeeDocumentService::class)->update($employeeA, $documentB, ['category' => 'appointment_letter'], $this->fullHrActor($school));
     }
 
     #[Test]
@@ -407,13 +376,13 @@ class EmployeeDocumentTest extends TestCase
     }
 
     #[Test]
-    public function classification_change_is_recorded_in_audit_metadata(): void
+    public function a_category_correction_is_audited_with_field_names_only(): void
     {
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
-        $document = $this->createEmployeeDocument($employee, ['classification_tier' => 'restricted']);
+        $document = $this->createEmployeeDocument($employee, ['category' => 'appointment_letter']);
 
-        app(EmployeeDocumentService::class)->update($employee, $document, ['classification_tier' => 'highly_sensitive'], $this->fullHrActor($school));
+        app(EmployeeDocumentService::class)->update($employee, $document, ['category' => 'employment_contract'], $this->fullHrActor($school));
 
         app(TenantContext::class)->set($school);
         $event = SchoolAuditEvent::query()
@@ -422,7 +391,8 @@ class EmployeeDocumentTest extends TestCase
             ->first();
 
         $this->assertNotNull($event);
-        $this->assertTrue($event->metadata['classificationChanged']);
+        $this->assertSame(['category'], $event->metadata['fields']);
+        $this->assertFalse($event->metadata['classificationChanged']);
     }
 
     #[Test]
@@ -431,14 +401,7 @@ class EmployeeDocumentTest extends TestCase
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
 
-        $document = app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'id_proof',
-            'storage_disk' => 'local',
-            'storage_path' => 'employee-documents/confidential-passport.pdf',
-            'original_filename' => 'confidential-passport.pdf',
-            'mime_type' => 'application/pdf',
-            'size_bytes' => 2048,
-        ], $this->fullHrActor($school));
+        $document = $this->registerHrDocument($employee, $this->fullHrActor($school), 'restricted', 'employment_contract');
 
         app(TenantContext::class)->set($school);
         $event = SchoolAuditEvent::query()
@@ -467,7 +430,7 @@ class EmployeeDocumentTest extends TestCase
         $beforeRoles = DB::table('membership_role_assignments')->count();
         $beforePlatformRoles = DB::table('platform_role_assignments')->count();
 
-        app(EmployeeDocumentService::class)->update($employee, $document, ['classification_tier' => 'highly_sensitive'], $actor);
+        app(EmployeeDocumentService::class)->update($employee, $document, ['category' => 'qualification_evidence'], $actor);
 
         $this->assertSame($beforeRoles, DB::table('membership_role_assignments')->count());
         $this->assertSame($beforePlatformRoles, DB::table('platform_role_assignments')->count());
@@ -483,21 +446,21 @@ class EmployeeDocumentTest extends TestCase
      * URL.
      */
     #[Test]
-    public function employee_document_service_has_no_file_upload_download_or_storage_write_capability(): void
+    public function employee_document_service_handles_bytes_only_through_the_documents_repository(): void
     {
         $reflection = new ReflectionClass(EmployeeDocumentService::class);
-        $publicMethodNames = array_map(
-            fn ($method) => $method->getName(),
-            $reflection->getMethods(ReflectionMethod::IS_PUBLIC),
-        );
-        $publicMethodNames = array_values(array_diff($publicMethodNames, ['__construct']));
-
+        $publicMethodNames = array_values(array_diff(array_map(fn ($method) => $method->getName(), $reflection->getMethods(ReflectionMethod::IS_PUBLIC)), ['__construct']));
         sort($publicMethodNames);
 
-        $this->assertSame(['archive', 'register', 'update'], $publicMethodNames);
+        $this->assertSame(['archive', 'content', 'register', 'update'], $publicMethodNames);
 
-        $source = file_get_contents((new ReflectionClass(EmployeeDocumentService::class))->getFileName());
-        $this->assertStringNotContainsString('Storage::', $source, 'EmployeeDocumentService must never write/read actual file bytes -- Phase 8A.7 is metadata-only (Case C: no shared Documents module exists).');
+        // HR.2A (S-12, D1-26; ADR 0029 HR.2A amendment): the bytes go only through
+        // DocumentService::createForEmployee() / archiveForEmployee() and
+        // DocumentReadService::employeeContent() -- never Storage directly.
+        $source = (string) file_get_contents((string) $reflection->getFileName());
+        $this->assertStringNotContainsString('Storage::', $source);
+        $this->assertStringContainsString('->createForEmployee(', $source);
+        $this->assertStringContainsString('->employeeContent(', $source);
     }
 
     /**
@@ -515,20 +478,12 @@ class EmployeeDocumentTest extends TestCase
      * it is the permanent architectural boundary ADR 0029 fixes.
      */
     #[Test]
-    public function employee_documents_remains_its_own_table_independent_of_the_shared_documents_module(): void
+    public function the_hr_record_references_a_governed_document_and_never_writes_the_documents_table_itself(): void
     {
-        $this->assertTrue(Schema::hasTable('employee_documents'), 'employee_documents must still exist.');
-
-        $source = file_get_contents((new ReflectionClass(EmployeeDocumentService::class))->getFileName());
-        $this->assertStringNotContainsString(
-            "table('documents')",
-            $source,
-            'EmployeeDocumentService must never read/write the shared `documents` table -- ADR 0029 permanently decided the two tables stay independent, never merged.',
-        );
-        $this->assertStringNotContainsString(
-            'Storage::',
-            $source,
-            'ADR 0029: any future real Employee file-upload capability must be built on DocumentService, never by adding a Storage:: call directly into EmployeeDocumentService.',
-        );
+        // ADR 0029 HR.2A amendment: the HR record stays its own table (category, tier,
+        // dates, archive) and references the governed Document by a same-School key.
+        $this->assertTrue(Schema::hasColumn('employee_documents', 'document_id'));
+        $source = (string) file_get_contents((string) (new ReflectionClass(EmployeeDocumentService::class))->getFileName());
+        $this->assertStringNotContainsString("table('documents')", $source, 'Only the Documents domain writes the documents table.');
     }
 }

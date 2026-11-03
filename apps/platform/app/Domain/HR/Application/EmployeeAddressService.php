@@ -3,6 +3,8 @@
 namespace App\Domain\HR\Application;
 
 use App\Domain\HR\Application\Exceptions\EmployeeOwnershipMismatchException;
+use App\Domain\HR\Application\Profile\ArchivesProfileRecords;
+use App\Domain\HR\Application\Profile\ProfileRecordArchiveReason;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAddress;
 use App\Models\User;
@@ -24,11 +26,12 @@ use Illuminate\Support\Facades\DB;
  */
 class EmployeeAddressService
 {
-    use AuthorizesCapability;
+    use ArchivesProfileRecords, AuthorizesCapability;
 
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly HrSelfAdministrationGuard $selfAdministration,
     ) {}
 
     /**
@@ -42,6 +45,8 @@ class EmployeeAddressService
 
         return $this->context->withSchool($employee->school, function () use ($employee, $attributes, $actor) {
             return DB::transaction(function () use ($employee, $attributes, $actor) {
+                // HR.2A (S-3): nobody administers their own HR record.
+                $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.address');
                 $address = EmployeeAddress::query()->create([
                     ...$attributes,
                     'employee_id' => $employee->id,
@@ -65,10 +70,13 @@ class EmployeeAddressService
     {
         $this->authorizeCapabilityFor($actor, 'hr.employees.personal.manage', $employee->school);
         $this->assertOwnership($employee, $address);
+        $this->assertLiveRecord($address);
         unset($attributes['school_id'], $attributes['employee_id']);
 
         return $this->context->withSchool($employee->school, function () use ($employee, $address, $attributes, $actor) {
             return DB::transaction(function () use ($employee, $address, $attributes, $actor) {
+                // HR.2A (S-3): nobody administers their own HR record.
+                $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.address');
                 $address->update($attributes);
 
                 $this->audit->school($employee->school, 'employee.address.updated', actor: $actor, subject: $address, metadata: [
@@ -81,24 +89,16 @@ class EmployeeAddressService
         });
     }
 
-    public function remove(Employee $employee, EmployeeAddress $address, User $actor): void
+    /**
+     * HR.2A (S-16, OD-HR-13): "remove" ARCHIVES the record with a closed
+     * reason -- frozen evidence, never deleted (ArchivesProfileRecords).
+     */
+    public function remove(Employee $employee, EmployeeAddress $address, User $actor, ProfileRecordArchiveReason $reason = ProfileRecordArchiveReason::NO_LONGER_CURRENT): void
     {
         $this->authorizeCapabilityFor($actor, 'hr.employees.personal.manage', $employee->school);
         $this->assertOwnership($employee, $address);
 
-        $this->context->withSchool($employee->school, function () use ($employee, $address, $actor) {
-            DB::transaction(function () use ($employee, $address, $actor) {
-                $addressId = $address->id;
-                $addressType = $address->address_type;
-                $address->delete();
-
-                $this->audit->school($employee->school, 'employee.address.removed', actor: $actor, metadata: [
-                    'employeeId' => $employee->id,
-                    'addressId' => $addressId,
-                    'addressType' => $addressType,
-                ]);
-            });
-        });
+        $this->archiveProfileRecord($employee, $address, $reason, $actor, 'employee.address.archived', ['addressId' => $address->id, 'addressType' => $address->address_type]);
     }
 
     private function assertOwnership(Employee $employee, EmployeeAddress $address): void

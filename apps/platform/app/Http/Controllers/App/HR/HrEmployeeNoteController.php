@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\App\HR;
 
 use App\Domain\HR\Application\EmployeeNoteService;
+use App\Domain\HR\Application\Profile\ProfileRecordArchiveReason;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeNote;
 use App\Http\Controllers\Controller;
@@ -35,7 +36,7 @@ class HrEmployeeNoteController extends Controller
         return redirect("/app/hr/employees/{$model->id}");
     }
 
-    public function destroy(TenantContext $context, EmployeeNoteService $service, string $employee, string $note): RedirectResponse
+    public function destroy(Request $request, TenantContext $context, EmployeeNoteService $service, string $employee, string $note): RedirectResponse
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('hr.employees.notes.manage', $school);
@@ -44,7 +45,9 @@ class HrEmployeeNoteController extends Controller
         $employeeModel = Employee::query()->findOrFail($employee);
         $noteModel = EmployeeNote::query()->findOrFail($note);
 
-        $service->remove($employeeModel, $noteModel, $context->actor());
+        // HR.2A (S-16): an archive, with a closed reason; the record stays as evidence.
+        $reason = ProfileRecordArchiveReason::from((string) $request->validate(['reason_code' => ['required', 'string', Rule::in(ProfileRecordArchiveReason::values())]], ['reason_code.*' => 'Choose why this record is being archived.'])['reason_code']);
+        $service->remove($employeeModel, $noteModel, $context->actor(), $reason);
 
         return redirect("/app/hr/employees/{$employeeModel->id}");
     }

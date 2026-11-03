@@ -5,6 +5,18 @@ Status: **audit record, documentation only** (2026-10-30, baseline
 skip / 0 failed). Nothing was built: no migration, code, capability, role,
 Campus, route, UI or demo change.
 
+> **Later state (2026-11-03).** This audit records the repository at
+> `c5e3dd23`. Since then:
+> - HR.1A changed the workforce model (effective-dated terms, named
+>   placement changes, overlap backstops);
+> - HR.3A changed the reporting hierarchy (dated employment lines; the
+>   assignment pointer is removed);
+> - HR.2A changed the staff profile (reference codes, archive-not-delete,
+>   governed document uploads, self-administration over every profile
+>   write, stale-form tokens).
+>
+> Read `docs/modules/HR.md` for the current contract.
+
 Companion records in `docs/hr/`:
 - `HR-LEGAL-SECURITY-GATE-REGISTER.md`;
 - `HR-DOMAIN-OWNERSHIP-MAP.md`;

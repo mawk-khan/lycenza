@@ -3,6 +3,8 @@
 namespace App\Domain\HR\Application;
 
 use App\Domain\HR\Application\Exceptions\EmployeeOwnershipMismatchException;
+use App\Domain\HR\Application\Profile\ArchivesProfileRecords;
+use App\Domain\HR\Application\Profile\ProfileRecordArchiveReason;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeNote;
 use App\Models\User;
@@ -26,11 +28,12 @@ use Illuminate\Support\Facades\DB;
  */
 class EmployeeNoteService
 {
-    use AuthorizesCapability;
+    use ArchivesProfileRecords, AuthorizesCapability;
 
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly HrSelfAdministrationGuard $selfAdministration,
     ) {}
 
     /**
@@ -44,6 +47,8 @@ class EmployeeNoteService
 
         return $this->context->withSchool($employee->school, function () use ($employee, $attributes, $actor) {
             return DB::transaction(function () use ($employee, $attributes, $actor) {
+                // HR.2A (S-3): nobody administers their own HR record.
+                $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.note');
                 $note = EmployeeNote::query()->create([
                     ...$attributes,
                     'employee_id' => $employee->id,
@@ -68,10 +73,13 @@ class EmployeeNoteService
     {
         $this->authorizeCapabilityFor($actor, 'hr.employees.notes.manage', $employee->school);
         $this->assertOwnership($employee, $note);
+        $this->assertLiveRecord($note);
         unset($attributes['school_id'], $attributes['employee_id'], $attributes['author_user_id']);
 
         return $this->context->withSchool($employee->school, function () use ($employee, $note, $attributes, $actor) {
             return DB::transaction(function () use ($employee, $note, $attributes, $actor) {
+                // HR.2A (S-3): nobody administers their own HR record.
+                $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.note');
                 $note->update($attributes);
 
                 $this->audit->school($employee->school, 'employee.note.updated', actor: $actor, subject: $note, metadata: [
@@ -84,24 +92,16 @@ class EmployeeNoteService
         });
     }
 
-    public function remove(Employee $employee, EmployeeNote $note, User $actor): void
+    /**
+     * HR.2A (S-16, OD-HR-13): "remove" ARCHIVES the record with a closed
+     * reason -- frozen evidence, never deleted (ArchivesProfileRecords).
+     */
+    public function remove(Employee $employee, EmployeeNote $note, User $actor, ProfileRecordArchiveReason $reason = ProfileRecordArchiveReason::NO_LONGER_CURRENT): void
     {
         $this->authorizeCapabilityFor($actor, 'hr.employees.notes.manage', $employee->school);
         $this->assertOwnership($employee, $note);
 
-        $this->context->withSchool($employee->school, function () use ($employee, $note, $actor) {
-            DB::transaction(function () use ($employee, $note, $actor) {
-                $noteId = $note->id;
-                $classificationTier = $note->classification_tier;
-                $note->delete();
-
-                $this->audit->school($employee->school, 'employee.note.removed', actor: $actor, metadata: [
-                    'employeeId' => $employee->id,
-                    'noteId' => $noteId,
-                    'classificationTier' => $classificationTier,
-                ]);
-            });
-        });
+        $this->archiveProfileRecord($employee, $note, $reason, $actor, 'employee.note.archived', ['noteId' => $note->id, 'classificationTier' => $note->classification_tier]);
     }
 
     private function assertOwnership(Employee $employee, EmployeeNote $note): void

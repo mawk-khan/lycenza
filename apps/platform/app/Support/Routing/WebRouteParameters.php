@@ -49,7 +49,7 @@ final class WebRouteParameters
         'inventoryLocation', 'invitation', 'item', 'journalEntry', 'learningContent', 'leavePolicy',
         'leavePolicyAssignment', 'leaveRequest', 'leaveType', 'ledgerAccount', 'libraryCopy', 'libraryFine', 'libraryLoan',
         'libraryTitle', 'line', 'mapping', 'membership', 'note', 'payment', 'payrollPeriod', 'payrollRun',
-        'period', 'position', 'qualification', 'region', 'relationship', 'requirement', 'responsibility', 'rollover', 'room', 'rule', 'run',
+        'period', 'position', 'qualification', 'referenceCode', 'region', 'relationship', 'requirement', 'responsibility', 'rollover', 'room', 'rule', 'run',
         'salaryComponent', 'salaryStructure', 'school', 'schoolGroup', 'section', 'selection',
         'staffAttendanceRecord', 'staffHoliday', 'student', 'studentMark', 'studentMarkCorrection', 'subject',
         'subjectOffering', 'syllabusUnit', 'targetUser', 'teachingAssignment', 'template', 'thread',

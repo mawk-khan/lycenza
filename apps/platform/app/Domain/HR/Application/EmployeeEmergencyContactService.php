@@ -3,6 +3,8 @@
 namespace App\Domain\HR\Application;
 
 use App\Domain\HR\Application\Exceptions\EmployeeOwnershipMismatchException;
+use App\Domain\HR\Application\Profile\ArchivesProfileRecords;
+use App\Domain\HR\Application\Profile\ProfileRecordArchiveReason;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeEmergencyContact;
 use App\Models\User;
@@ -27,11 +29,12 @@ use Illuminate\Support\Facades\DB;
  */
 class EmployeeEmergencyContactService
 {
-    use AuthorizesCapability;
+    use ArchivesProfileRecords, AuthorizesCapability;
 
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly HrSelfAdministrationGuard $selfAdministration,
     ) {}
 
     /**
@@ -44,6 +47,8 @@ class EmployeeEmergencyContactService
 
         return $this->context->withSchool($employee->school, function () use ($employee, $attributes, $actor) {
             return DB::transaction(function () use ($employee, $attributes, $actor) {
+                // HR.2A (S-3): nobody administers their own HR record.
+                $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.emergency_contact');
                 $contact = EmployeeEmergencyContact::query()->create([
                     ...$attributes,
                     'employee_id' => $employee->id,
@@ -68,10 +73,13 @@ class EmployeeEmergencyContactService
     {
         $this->authorizeCapabilityFor($actor, 'hr.employees.personal.manage', $employee->school);
         $this->assertOwnership($employee, $contact);
+        $this->assertLiveRecord($contact);
         unset($attributes['school_id'], $attributes['employee_id'], $attributes['is_primary']);
 
         return $this->context->withSchool($employee->school, function () use ($employee, $contact, $attributes, $actor) {
             return DB::transaction(function () use ($employee, $contact, $attributes, $actor) {
+                // HR.2A (S-3): nobody administers their own HR record.
+                $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.emergency_contact');
                 $contact->update($attributes);
 
                 $this->audit->school($employee->school, 'employee.emergency_contact.updated', actor: $actor, subject: $contact, metadata: [
@@ -85,24 +93,16 @@ class EmployeeEmergencyContactService
         });
     }
 
-    public function remove(Employee $employee, EmployeeEmergencyContact $contact, User $actor): void
+    /**
+     * HR.2A (S-16, OD-HR-13): "remove" ARCHIVES the record with a closed
+     * reason -- frozen evidence, never deleted (ArchivesProfileRecords).
+     */
+    public function remove(Employee $employee, EmployeeEmergencyContact $contact, User $actor, ProfileRecordArchiveReason $reason = ProfileRecordArchiveReason::NO_LONGER_CURRENT): void
     {
         $this->authorizeCapabilityFor($actor, 'hr.employees.personal.manage', $employee->school);
         $this->assertOwnership($employee, $contact);
 
-        $this->context->withSchool($employee->school, function () use ($employee, $contact, $actor) {
-            DB::transaction(function () use ($employee, $contact, $actor) {
-                $contactId = $contact->id;
-                $wasPrimary = $contact->is_primary;
-                $contact->delete();
-
-                $this->audit->school($employee->school, 'employee.emergency_contact.removed', actor: $actor, metadata: [
-                    'employeeId' => $employee->id,
-                    'contactId' => $contactId,
-                    'wasPrimary' => $wasPrimary,
-                ]);
-            });
-        });
+        $this->archiveProfileRecord($employee, $contact, $reason, $actor, 'employee.emergency_contact.archived', ['contactId' => $contact->id, 'wasPrimary' => (bool) $contact->is_primary]);
     }
 
     /**
@@ -117,9 +117,12 @@ class EmployeeEmergencyContactService
     {
         $this->authorizeCapabilityFor($actor, 'hr.employees.personal.manage', $employee->school);
         $this->assertOwnership($employee, $contact);
+        $this->assertLiveRecord($contact);
 
         return $this->context->withSchool($employee->school, function () use ($employee, $contact, $actor) {
             return DB::transaction(function () use ($employee, $contact, $actor) {
+                // HR.2A (S-3): nobody administers their own HR record.
+                $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.emergency_contact');
                 EmployeeEmergencyContact::query()
                     ->where('employee_id', $employee->id)
                     ->where('is_primary', true)

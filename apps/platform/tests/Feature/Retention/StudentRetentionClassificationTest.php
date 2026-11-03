@@ -103,6 +103,9 @@ class StudentRetentionClassificationTest extends TestCase
             'student_certificates' => 'D7 core: an issued certificate, removed with its generated Document (cascade)',
             // SIS 11.H1 (L-1): a moved pre-admission record names its (now Student-owned) Document.
             'applicant_documents' => 'D7 core: a pre-admission record, removed with its Document (cascade)',
+            // HR.2A (ADR 0029 amendment): an HR document record names its Employee-owned Document;
+            // the HR evidence purge removes the record first, then the Document (handled).
+            'employee_documents' => 'D9 evidence: an HR document record, removed by the HR evidence purge before its Document',
         ],
         // E21.3B: the rows that go with the Student, and what may reference them.
         'student_processing_authorizations' => [

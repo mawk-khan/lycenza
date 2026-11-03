@@ -29,15 +29,7 @@ class HrDocumentClassificationAuthorizationTest extends TestCase
         $employee = $this->createEmployee($school);
         $actor = $this->createUserWithCapabilities($school, ['hr.employees.documents.manage']);
 
-        $document = app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'id_proof',
-            'classification_tier' => 'restricted',
-            'storage_disk' => 'local',
-            'storage_path' => 'employee-documents/doc.pdf',
-            'original_filename' => 'doc.pdf',
-            'mime_type' => 'application/pdf',
-            'size_bytes' => 100,
-        ], $actor);
+        $document = $this->registerHrDocument($employee, $actor, 'restricted', 'employment_contract');
 
         $this->assertSame('restricted', $document->classification_tier);
     }
@@ -51,15 +43,7 @@ class HrDocumentClassificationAuthorizationTest extends TestCase
 
         $this->expectException(AuthorizationException::class);
 
-        app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'background_check',
-            'classification_tier' => 'highly_sensitive',
-            'storage_disk' => 'local',
-            'storage_path' => 'employee-documents/doc.pdf',
-            'original_filename' => 'doc.pdf',
-            'mime_type' => 'application/pdf',
-            'size_bytes' => 100,
-        ], $actor);
+        $this->registerHrDocument($employee, $actor, 'highly_sensitive', 'employment_contract');
     }
 
     #[Test]
@@ -69,15 +53,7 @@ class HrDocumentClassificationAuthorizationTest extends TestCase
         $employee = $this->createEmployee($school);
         $actor = $this->createUserWithCapabilities($school, ['hr.employees.sensitive.manage']);
 
-        $document = app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'background_check',
-            'classification_tier' => 'highly_sensitive',
-            'storage_disk' => 'local',
-            'storage_path' => 'employee-documents/doc.pdf',
-            'original_filename' => 'doc.pdf',
-            'mime_type' => 'application/pdf',
-            'size_bytes' => 100,
-        ], $actor);
+        $document = $this->registerHrDocument($employee, $actor, 'highly_sensitive', 'employment_contract');
 
         $this->assertSame('highly_sensitive', $document->classification_tier);
     }
@@ -148,7 +124,7 @@ class HrDocumentClassificationAuthorizationTest extends TestCase
         // No classification_tier key at all -- an ordinary document
         // manager must still be blocked from touching ANY field on an
         // already-highly_sensitive record (section 12).
-        app(EmployeeDocumentService::class)->update($employee, $document, ['category' => 'other'], $actor);
+        app(EmployeeDocumentService::class)->update($employee, $document, ['category' => 'appointment_letter'], $actor);
     }
 
     #[Test]
@@ -194,6 +170,6 @@ class HrDocumentClassificationAuthorizationTest extends TestCase
 
         $this->expectException(AuthorizationException::class);
 
-        app(EmployeeDocumentService::class)->update($employee, $document, ['category' => 'other'], $actor);
+        app(EmployeeDocumentService::class)->update($employee, $document, ['category' => 'appointment_letter'], $actor);
     }
 }

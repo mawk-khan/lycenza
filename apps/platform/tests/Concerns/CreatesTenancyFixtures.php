@@ -26,6 +26,9 @@ use App\Domain\Hostel\Infrastructure\Hostel;
 use App\Domain\Hostel\Infrastructure\HostelBed;
 use App\Domain\Hostel\Infrastructure\HostelResidencyAssignment;
 use App\Domain\Hostel\Infrastructure\HostelRoom;
+use App\Domain\HR\Application\EmployeeDocumentService;
+use App\Domain\HR\Application\Profile\EmployeeDocumentCategory;
+use App\Domain\HR\Application\Profile\EmployeeProfileVersion;
 use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeAddress;
@@ -78,8 +81,10 @@ use App\Support\Authorization\CapabilityResolver;
 use App\Support\Tenancy\TenantContext;
 use App\Support\Testing\LocalCatalogueFixtures;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
@@ -922,14 +927,94 @@ trait CreatesTenancyFixtures
 
     // --- Phase 8A.7: Employee Documents ---------------------------------
 
+    /**
+     * HR.2A: the identity stale-form token an Employee edit must send (read on
+     * the admin connection, so any School's Employee; an unknown id gets a
+     * well-formed token that matches nothing).
+     */
+    protected function employeeIdentityVersion(string $employeeId): string
+    {
+        // The School comes from the admin connection (any School); the row itself is read
+        // in that School's context on the test's own connection, so uncommitted changes count.
+        $school = $this->schoolOfEmployeeFixture($employeeId);
+        $employee = $school === null ? null : app(TenantContext::class)->withSchool($school, fn () => Employee::query()->find($employeeId));
+
+        return $employee === null ? str_repeat('0', 64) : EmployeeProfileVersion::identity($employee);
+    }
+
+    /** The School of a fixture Employee, found on the test's own connection (uncommitted rows count). */
+    private function schoolOfEmployeeFixture(string $employeeId): ?School
+    {
+        if (! Str::isUuid($employeeId)) {
+            return null;
+        }
+        foreach (School::query()->orderByDesc('created_at')->limit(50)->get() as $school) {
+            if (app(TenantContext::class)->withSchool($school, fn () => Employee::query()->whereKey($employeeId)->exists())) {
+                return $school;
+            }
+        }
+
+        return null;
+    }
+
+    /** HR.2A: the personal-details stale-form token (admin read; any School). */
+    protected function employeePersonalVersion(string $employeeId): string
+    {
+        $school = $this->schoolOfEmployeeFixture($employeeId);
+        $detail = $school === null ? null : app(TenantContext::class)->withSchool($school, fn () => EmployeePersonalDetail::query()->where('employee_id', $employeeId)->first());
+
+        return EmployeeProfileVersion::personal($employeeId, $detail);
+    }
+
+    /**
+     * HR.2A: an HR document record is bound to a governed Document (the
+     * database refuses a new path-only record), so the fixture creates the
+     * Employee's Document row first (raw, no bytes) unless one is given.
+     */
     protected function createEmployeeDocument(Employee $employee, array $attributes = []): EmployeeDocument
     {
+        // Pre-HR.2A fixture vocabulary: a free-text category maps onto the closed
+        // catalogue (an identity document only when Highly Sensitive); a raw
+        // storage path is never stored.
+        if (isset($attributes['category']) && EmployeeDocumentCategory::tryFrom((string) $attributes['category']) === null) {
+            $attributes['category'] = in_array($attributes['category'], ['id_proof', 'government_id'], true) && ($attributes['classification_tier'] ?? 'restricted') === 'highly_sensitive'
+                ? 'identity_document' : 'employment_contract';
+        }
+        if (($attributes['category'] ?? null) === 'identity_document' && ($attributes['classification_tier'] ?? 'restricted') !== 'highly_sensitive') {
+            $attributes['category'] = 'employment_contract';
+        }
+        unset($attributes['storage_disk'], $attributes['storage_path']);
+        if (! array_key_exists('document_id', $attributes)) {
+            $tier = ($attributes['classification_tier'] ?? 'restricted') === 'highly_sensitive' ? 'highly_sensitive' : 'sensitive';
+            $attributes['document_id'] = $this->createDocumentForEmployee($employee, ['classification_tier' => $tier])->id;
+        }
+
         return app(TenantContext::class)->withSchool(
             $employee->school,
             fn () => EmployeeDocument::factory()->create(array_merge([
                 'school_id' => $employee->school_id,
                 'employee_id' => $employee->id,
             ], $attributes)),
+        );
+    }
+
+    /**
+     * HR.2A: registers an HR document record through the real upload path
+     * (EmployeeDocumentService -> Documents), on a faked disk.
+     *
+     * @param  array{issued_on?: string|null, expires_on?: string|null}  $dates
+     */
+    protected function registerHrDocument(Employee $employee, User $actor, string $tier = 'restricted', string $category = 'employment_contract', array $dates = []): EmployeeDocument
+    {
+        Storage::fake((string) config('documents.disk'));
+
+        return app(EmployeeDocumentService::class)->register(
+            $employee,
+            UploadedFile::fake()->createWithContent('record.pdf', "%PDF-1.4\n%hr-document fixture\n"),
+            EmployeeDocumentCategory::from($category),
+            $tier,
+            $dates,
+            $actor,
         );
     }
 

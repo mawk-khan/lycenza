@@ -3,6 +3,7 @@
 namespace App\Domain\HR\Http\Controllers;
 
 use App\Domain\HR\Application\EmployeeExperienceService;
+use App\Domain\HR\Application\Profile\ProfileRecordArchiveReason;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeExperience;
 use App\Http\Controllers\Controller;
@@ -10,6 +11,7 @@ use App\Models\School;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 /**
  * Phase 8A closure correction (item 3) -- HTTP mutation transport for
@@ -70,7 +72,9 @@ class EmployeeExperienceController extends Controller
         $employeeModel = Employee::query()->findOrFail($employee);
         $experienceModel = EmployeeExperience::query()->findOrFail($experience);
 
-        $service->remove($employeeModel, $experienceModel, $request->user());
+        // HR.2A (S-16): an archive, with a closed reason; the record stays as evidence.
+        $reason = ProfileRecordArchiveReason::from((string) $request->validate(['reason_code' => ['required', 'string', Rule::in(ProfileRecordArchiveReason::values())]], ['reason_code.*' => 'Choose why this record is being archived.'])['reason_code']);
+        $service->remove($employeeModel, $experienceModel, $request->user(), $reason);
 
         return response()->json(status: 204);
     }

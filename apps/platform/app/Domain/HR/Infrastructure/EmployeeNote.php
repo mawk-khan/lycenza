@@ -9,6 +9,7 @@ use Database\Factories\EmployeeNoteFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * Phase 8A closure correction -- one of an Employee's 1:N HR-authored
@@ -25,6 +26,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $author_user_id
  * @property string $body
  * @property string $classification_tier sensitive|confidential
+ * @property Carbon|null $archived_at
+ * @property string|null $archived_by_user_id
+ * @property string|null $archive_reason
  */
 class EmployeeNote extends Model
 {
@@ -41,6 +45,14 @@ class EmployeeNote extends Model
         'body',
         'classification_tier',
     ];
+
+    /** HR.2A: archived (S-16) rows are frozen evidence; reads show live rows. */
+    protected function casts(): array
+    {
+        return [
+            'archived_at' => 'datetime',
+        ];
+    }
 
     protected static function newFactory(): EmployeeNoteFactory
     {

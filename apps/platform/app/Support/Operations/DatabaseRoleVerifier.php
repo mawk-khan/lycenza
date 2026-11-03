@@ -66,6 +66,10 @@ class DatabaseRoleVerifier
         'employment_terms', 'employee_placement_changes',
         // HR.3A: reporting lines are ended or voided, never deleted; they go only with their subordinate employment.
         'reporting_relationships',
+        // HR.2A (S-16, OD-HR-13): ancillary profile records are archived, never deleted; HR document
+        // records are archived; reference codes are retired. Only retention purges any of them.
+        'employee_addresses', 'employee_emergency_contacts', 'employee_notes', 'employee_qualifications',
+        'employee_experience_records', 'employee_certifications', 'employee_documents', 'employee_reference_codes',
         // E21.3B: Student consent evidence leaves only with its core record, through its retention function.
         'communication_domain_consent_events',
         // E21.3F: posted payroll adjustments and postings leave only through the payroll retention functions.
@@ -170,8 +174,8 @@ class DatabaseRoleVerifier
 
     /** E21-RH.6: where the product (or the framework) deletes too, so the runtime role keeps DELETE. */
     public const RUNTIME_PRODUCT_DELETES = [
-        'student_guardian_relationships', 'employee_addresses', 'employee_emergency_contacts', 'employee_notes',
-        'employee_qualifications', 'employee_experience_records', 'employee_certifications', 'failed_jobs',
+        // HR.2A (S-16): the six HR profile tables left this list -- their records are archived, never deleted.
+        'student_guardian_relationships', 'failed_jobs',
     ];
 
     /** E21-RH.6: tables whose rows only retention removes, in the database since E21-RH.5 (runtime DELETE revoked). */
@@ -223,6 +227,22 @@ class DatabaseRoleVerifier
     public const HR_REPORTING_GUARDS = [
         'trg_reporting_relationships_guard' => 'reporting_relationships',
         'trg_employment_records_reporting_bounds' => 'employment_records',
+    ];
+
+    /**
+     * HR.2A: the staff-profile backstops -- the archive guard on each ancillary
+     * record table, reference codes immutable and never reused, HR document
+     * records bound to a governed Document. trigger => table.
+     */
+    public const HR_PROFILE_GUARDS = [
+        'trg_employee_addresses_archive_guard' => 'employee_addresses',
+        'trg_employee_emergency_contacts_archive_guard' => 'employee_emergency_contacts',
+        'trg_employee_notes_archive_guard' => 'employee_notes',
+        'trg_employee_qualifications_archive_guard' => 'employee_qualifications',
+        'trg_employee_experience_records_archive_guard' => 'employee_experience_records',
+        'trg_employee_certifications_archive_guard' => 'employee_certifications',
+        'trg_employee_reference_codes_guard' => 'employee_reference_codes',
+        'trg_employee_documents_guard' => 'employee_documents',
     ];
 
     /** HR.3A: the indexes the reporting readers rely on (bounded lookups by subordinate, manager and date). */
@@ -404,6 +424,21 @@ class DatabaseRoleVerifier
                 $missingReporting[] = $index;
             }
         }
+        // HR.2A: the staff-profile backstops, forced RLS on reference codes and the closed checks.
+        $missingProfile = array_keys(array_filter(self::HR_PROFILE_GUARDS, fn (string $table, string $trigger) => DB::selectOne(
+            "select exists (select 1 from pg_trigger where tgrelid = ('public.'||?)::regclass and tgname = ? and tgenabled = 'O') as x", [$table, $trigger],
+        )->x === false, ARRAY_FILTER_USE_BOTH));
+        $codesRls = DB::selectOne("select relrowsecurity and relforcerowsecurity as x from pg_class where oid = 'public.employee_reference_codes'::regclass");
+        if ($codesRls === null || ! $codesRls->x) {
+            $missingProfile[] = 'rls';
+        }
+        foreach (['employee_documents_category_check', 'employee_documents_storage_shape_check', 'employee_reference_codes_kind_check', 'employee_reference_codes_value_unique'] as $constraint) {
+            if (! DB::selectOne('select exists (select 1 from pg_constraint where conname = ?) as x', [$constraint])->x) {
+                $missingProfile[] = $constraint;
+            }
+        }
+        $results[] = CheckResult::of('hr_profile_invariants', $missingProfile === [], $missingProfile === [] ? '' : count($missingProfile).' missing or disabled');
+
         $results[] = CheckResult::of('hr_reporting_invariants', $missingReporting === [], $missingReporting === [] ? '' : count($missingReporting).' missing or disabled');
 
         $defaults = DB::selectOne(

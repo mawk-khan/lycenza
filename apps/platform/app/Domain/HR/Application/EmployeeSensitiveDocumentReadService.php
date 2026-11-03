@@ -2,6 +2,7 @@
 
 namespace App\Domain\HR\Application;
 
+use App\Domain\HR\Application\Profile\EmployeeDocumentCategory;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeDocument;
 use App\Models\School;
@@ -80,6 +81,8 @@ class EmployeeSensitiveDocumentReadService
                 issuedOn: $d->issued_on?->toDateString(),
                 expiresOn: $d->expires_on?->toDateString(),
                 status: $d->status,
+                hasFile: $d->document_id !== null,
+                categoryLabel: EmployeeDocumentCategory::labelFor($d->category),
             ))->all();
 
             if ($entries !== []) {

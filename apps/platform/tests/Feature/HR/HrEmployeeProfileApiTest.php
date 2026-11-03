@@ -95,6 +95,8 @@ class HrEmployeeProfileApiTest extends TestCase
             // Phase 8A closure correction: `notes` added as the profile
             // workspace's twelfth section, gated by hr.employees.notes.view.
             'notes',
+            // HR.2A: reference codes, derived experience and the stale-form tokens.
+            'staffProfile',
         ], array_keys($response->json('data')));
     }
 
@@ -237,7 +239,7 @@ class HrEmployeeProfileApiTest extends TestCase
     {
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
-        $this->createEmployeeDocument($employee, ['classification_tier' => 'highly_sensitive', 'category' => 'sentinel-hs-category']);
+        $this->createEmployeeDocument($employee, ['classification_tier' => 'highly_sensitive', 'category' => 'identity_document']);
         $actor = $this->fullHrActor($school);
 
         $raw = $this->withHeader('Authorization', 'Bearer '.$this->token($actor))
@@ -246,7 +248,7 @@ class HrEmployeeProfileApiTest extends TestCase
             ->getContent();
 
         $this->assertStringNotContainsString('highly_sensitive', $raw);
-        $this->assertStringNotContainsString('sentinel-hs-category', $raw);
+        $this->assertStringNotContainsString('identity_document', $raw);
     }
 
     #[Test]

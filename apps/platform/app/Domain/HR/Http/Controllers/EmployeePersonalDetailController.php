@@ -3,6 +3,8 @@
 namespace App\Domain\HR\Http\Controllers;
 
 use App\Domain\HR\Application\EmployeePersonalDetailService;
+use App\Domain\HR\Application\Profile\EmployeeProfileVersion;
+use App\Domain\HR\Application\Profile\ProfileContactNormalizer;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Http\Controllers\Controller;
 use App\Models\School;
@@ -30,11 +32,17 @@ class EmployeePersonalDetailController extends Controller
             'marital_status' => ['sometimes', 'nullable', 'string', 'max:255'],
             'preferred_language' => ['sometimes', 'nullable', 'string', 'max:255'],
             'personal_email' => ['sometimes', 'nullable', 'email', 'max:255'],
-            'personal_phone' => ['sometimes', 'nullable', 'string', 'max:32'],
-            'alternate_phone' => ['sometimes', 'nullable', 'string', 'max:32'],
+            'personal_phone' => ['sometimes', 'nullable', 'string', 'max:32', ProfileContactNormalizer::PHONE_RULE],
+            'alternate_phone' => ['sometimes', 'nullable', 'string', 'max:32', ProfileContactNormalizer::PHONE_RULE],
+            // HR.2A: the version the form was opened with (stale = refused, missing = 422).
+            'version' => ['required', 'string', 'size:64'],
+        ], [
+            'version.*' => 'This form is out of date. Reload the page and try again.',
         ]);
+        $version = (string) $validated['version'];
+        unset($validated['version']);
 
-        $detail = $service->setDetails($model, $validated, $request->user());
+        $detail = $service->setDetails($model, $validated, $request->user(), $version);
 
         return response()->json(['data' => [
             'id' => $detail->id,
@@ -46,6 +54,7 @@ class EmployeePersonalDetailController extends Controller
             'personalEmail' => $detail->personal_email,
             'personalPhone' => $detail->personal_phone,
             'alternatePhone' => $detail->alternate_phone,
+            'version' => EmployeeProfileVersion::personal($model->id, $detail),
         ]]);
     }
 }

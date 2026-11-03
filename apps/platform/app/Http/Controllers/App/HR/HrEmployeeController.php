@@ -13,9 +13,13 @@ use App\Domain\HR\Application\EmployeeProfileWorkspaceService;
 use App\Domain\HR\Application\EmployeeService;
 use App\Domain\HR\Application\Exceptions\DuplicateWorkEmailException;
 use App\Domain\HR\Application\Exceptions\EmployeeNumberConflictException;
+use App\Domain\HR\Application\Exceptions\EmployeeProfileChangedException;
 use App\Domain\HR\Application\Exceptions\HrException;
 use App\Domain\HR\Application\Exceptions\HrWholeSchoolAuthorityRequiredException;
 use App\Domain\HR\Application\HrEmployeeAccess;
+use App\Domain\HR\Application\Profile\EmployeeProfileVersion;
+use App\Domain\HR\Application\Profile\ProfileContactNormalizer;
+use App\Domain\HR\Application\Profile\StaffProfileReader;
 use App\Domain\HR\Application\Reporting\ReportingChangeReason;
 use App\Domain\HR\Application\Workforce\EmploymentTermsChangeReason;
 use App\Domain\HR\Application\Workforce\EmploymentType;
@@ -179,7 +183,7 @@ class HrEmployeeController extends Controller
         $validated = $request->validate([
             'full_name' => ['required', 'string', 'max:255'],
             'work_email' => ['sometimes', 'nullable', 'email', 'max:255'],
-            'work_phone' => ['sometimes', 'nullable', 'string', 'max:32'],
+            'work_phone' => ['sometimes', 'nullable', 'string', 'max:32', ProfileContactNormalizer::PHONE_RULE],
         ]);
 
         try {
@@ -210,8 +214,12 @@ class HrEmployeeController extends Controller
         $canManageAssignments = $access->holdsWholeSchool($actor, 'hr.employees.assignments.manage', $school);
         $canManageEmployees = $access->holdsWholeSchool($actor, 'hr.employees.manage', $school);
 
+        $staffProfile = app(StaffProfileReader::class)->forEmployee($school, $workspace, $actor);
+
         return Inertia::render('App/HR/Employees/Show', [
             'workspace' => $workspace->toArray(),
+            // HR.2A: reference codes, derived experience, stale-form tokens and the closed catalogues.
+            'staffProfile' => $staffProfile,
             'can' => [
                 'manageEmployees' => $canManageEmployees,
                 'managePersonal' => $capabilities->canInSchool($actor, 'hr.employees.personal.manage', $school),
@@ -317,6 +325,8 @@ class HrEmployeeController extends Controller
                 'fullName' => $model->full_name,
                 'workEmail' => $model->work_email,
                 'workPhone' => $model->work_phone,
+                // HR.2A: the stale-form token the save must return.
+                'version' => EmployeeProfileVersion::identity($model),
             ],
         ]);
     }
@@ -332,16 +342,22 @@ class HrEmployeeController extends Controller
         $validated = $request->validate([
             'full_name' => ['required', 'string', 'max:255'],
             'work_email' => ['sometimes', 'nullable', 'email', 'max:255'],
-            'work_phone' => ['sometimes', 'nullable', 'string', 'max:32'],
+            'work_phone' => ['sometimes', 'nullable', 'string', 'max:32', ProfileContactNormalizer::PHONE_RULE],
+            'version' => ['required', 'string', 'size:64'],
+        ], [
+            'work_phone.regex' => 'Enter a phone number using digits, spaces and + - ( ) . only.',
+            'version.*' => 'This form is out of date. Reload the page and try again.',
         ]);
+        $version = (string) $validated['version'];
+        unset($validated['version']);
 
         try {
-            $service->update($model, $validated, $context->actor());
+            $service->update($model, $validated, $context->actor(), $version);
         } catch (DuplicateWorkEmailException) {
             throw ValidationException::withMessages([
                 'work_email' => ['This work email is already in use by another Employee in this School.'],
             ]);
-        } catch (HrWholeSchoolAuthorityRequiredException $e) {
+        } catch (HrWholeSchoolAuthorityRequiredException|EmployeeProfileChangedException $e) {
             throw ValidationException::withMessages(['employee' => [$e->getMessage()]]);
         }
 

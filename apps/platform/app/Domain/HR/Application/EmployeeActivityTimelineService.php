@@ -73,14 +73,20 @@ class EmployeeActivityTimelineService
      */
     public const array EVENT_CATEGORIES = [
         'employee.created' => 'employee',
+        // HR.2A (D1-03): external reference codes (ids and kind only, never the value).
+        'hr.reference_code.recorded' => 'employee',
+        'hr.reference_code.retired' => 'employee',
 
         'employee.personal_details.updated' => 'personal',
         'employee.address.created' => 'personal',
         'employee.address.updated' => 'personal',
         'employee.address.removed' => 'personal',
+        // HR.2A (S-16): records are archived, never deleted; `.removed` stays for older rows.
+        'employee.address.archived' => 'personal',
         'employee.emergency_contact.created' => 'personal',
         'employee.emergency_contact.updated' => 'personal',
         'employee.emergency_contact.removed' => 'personal',
+        'employee.emergency_contact.archived' => 'personal',
         'employee.emergency_contact.primary_changed' => 'personal',
 
         'hr.employment.created' => 'employment',
@@ -104,14 +110,17 @@ class EmployeeActivityTimelineService
         'hr.qualification.created' => 'professional',
         'hr.qualification.updated' => 'professional',
         'hr.qualification.removed' => 'professional',
+        'hr.qualification.archived' => 'professional',
         'hr.qualification.verified' => 'professional',
         'hr.qualification.rejected' => 'professional',
         'hr.experience.created' => 'professional',
         'hr.experience.updated' => 'professional',
         'hr.experience.removed' => 'professional',
+        'hr.experience.archived' => 'professional',
         'hr.certification.created' => 'professional',
         'hr.certification.updated' => 'professional',
         'hr.certification.removed' => 'professional',
+        'hr.certification.archived' => 'professional',
         'hr.certification.verified' => 'professional',
         'hr.certification.rejected' => 'professional',
 

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\App\HR;
 
 use App\Domain\HR\Application\EmployeeCertificationService;
+use App\Domain\HR\Application\Profile\ProfileRecordArchiveReason;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeCertification;
 use App\Http\Controllers\Controller;
@@ -11,6 +12,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class HrEmployeeCertificationController extends Controller
 {
@@ -36,7 +38,7 @@ class HrEmployeeCertificationController extends Controller
         return redirect("/app/hr/employees/{$model->id}");
     }
 
-    public function destroy(TenantContext $context, EmployeeCertificationService $service, string $employee, string $certification): RedirectResponse
+    public function destroy(Request $request, TenantContext $context, EmployeeCertificationService $service, string $employee, string $certification): RedirectResponse
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('hr.employees.qualifications.manage', $school);
@@ -45,7 +47,9 @@ class HrEmployeeCertificationController extends Controller
         $employeeModel = Employee::query()->findOrFail($employee);
         $certificationModel = EmployeeCertification::query()->findOrFail($certification);
 
-        $service->remove($employeeModel, $certificationModel, $context->actor());
+        // HR.2A (S-16): an archive, with a closed reason; the record stays as evidence.
+        $reason = ProfileRecordArchiveReason::from((string) $request->validate(['reason_code' => ['required', 'string', Rule::in(ProfileRecordArchiveReason::values())]], ['reason_code.*' => 'Choose why this record is being archived.'])['reason_code']);
+        $service->remove($employeeModel, $certificationModel, $context->actor(), $reason);
 
         return redirect("/app/hr/employees/{$employeeModel->id}");
     }

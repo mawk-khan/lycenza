@@ -32,7 +32,8 @@ class HrSensitiveDocumentReadServiceTest extends TestCase
         $this->createEmployeeDocument($employee, ['classification_tier' => 'restricted', 'category' => 'id_proof']);
         $this->createEmployeeDocument($employee, [
             'classification_tier' => 'highly_sensitive',
-            'category' => 'background_check',
+            // HR.2A: closed categories (background checks are a gated family).
+            'category' => 'identity_document',
             'original_filename' => 'top-secret.pdf',
             'storage_path' => 'employee-documents/top-secret.pdf',
         ]);
@@ -43,7 +44,7 @@ class HrSensitiveDocumentReadServiceTest extends TestCase
         $this->assertCount(1, $entries);
         $this->assertInstanceOf(EmployeeProfileDocumentEntry::class, $entries[0]);
         $this->assertSame('highly_sensitive', $entries[0]->classificationTier);
-        $this->assertSame('background_check', $entries[0]->category);
+        $this->assertSame('identity_document', $entries[0]->category);
 
         $serialized = json_encode($entries[0]->toArray());
         $this->assertStringNotContainsString('top-secret.pdf', $serialized, 'The safe metadata shape must never include original_filename/storage_path.');

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
+import ArchiveRecordButton from '../../../../Components/HR/ArchiveRecordButton.vue';
 import SearchCombobox from '../../../../Components/Form/SearchCombobox.vue';
 import MfaCodeField from '../../../../Components/MfaCodeField.vue';
 import StatusBadge from '../../../../Components/StatusBadge.vue';
@@ -112,6 +113,36 @@ interface DocumentEntry {
     issued_on: string | null;
     expires_on: string | null;
     status: string;
+    // HR.2A: a governed file can be downloaded; a pre-HR.2A record is metadata only.
+    has_file: boolean;
+    category_label: string;
+}
+
+// HR.2A: reference codes, derived experience, stale-form tokens and the closed catalogues.
+interface Duration {
+    days: number;
+    years: number;
+    months: number;
+}
+interface StaffProfile {
+    referenceCodes: {
+        id: string;
+        kind: string;
+        kindLabel: string;
+        value: string;
+        retired: boolean;
+        retireReasonLabel: string | null;
+        recordedOn: string;
+    }[];
+    experience: { previous?: Duration & { openEnded: number }; service?: Duration };
+    versions: { identity?: string; personal?: string };
+    can: { manageReferenceCodes: boolean };
+    options: {
+        documentCategories: { value: string; label: string; requiredTier: string | null }[];
+        archiveReasons: CodeOption[];
+        referenceKinds: CodeOption[];
+        retireReasons: CodeOption[];
+    };
 }
 
 interface Note {
@@ -214,6 +245,7 @@ interface Props {
     };
     hasMfaFactor: boolean;
     linkedAccountName: string | null;
+    staffProfile: StaffProfile;
 }
 
 interface AccountCandidate {
@@ -256,6 +288,8 @@ const personalForm = useForm({
     personal_email: props.workspace.contact?.personal_email ?? '',
     personal_phone: props.workspace.contact?.personal_phone ?? '',
     alternate_phone: props.workspace.contact?.alternate_phone ?? '',
+    // HR.2A: the stale-form token (the save refuses a form opened before a newer change).
+    version: props.staffProfile.versions.personal ?? '',
 });
 function submitPersonal(): void {
     personalForm.put(`${base}/personal-detail`, {
@@ -284,10 +318,6 @@ function submitAddress(): void {
         },
     });
 }
-function removeAddress(id: string): void {
-    if (!window.confirm('Remove this address?')) return;
-    router.delete(`${base}/addresses/${id}`, { preserveScroll: true });
-}
 
 // --- Emergency contacts ----------------------------------------------------
 
@@ -307,10 +337,6 @@ function submitContact(): void {
             contactForm.reset();
         },
     });
-}
-function removeContact(id: string): void {
-    if (!window.confirm('Remove this emergency contact?')) return;
-    router.delete(`${base}/emergency-contacts/${id}`, { preserveScroll: true });
 }
 function makeContactPrimary(id: string): void {
     router.post(`${base}/emergency-contacts/${id}/primary`, {}, { preserveScroll: true });
@@ -617,10 +643,6 @@ function submitQualification(): void {
         },
     });
 }
-function removeQualification(id: string): void {
-    if (!window.confirm('Remove this qualification?')) return;
-    router.delete(`${base}/qualifications/${id}`, { preserveScroll: true });
-}
 function verifyQualification(id: string): void {
     router.post(`${base}/qualifications/${id}/verify`, {}, { preserveScroll: true });
 }
@@ -647,10 +669,6 @@ function submitExperience(): void {
         },
     });
 }
-function removeExperience(id: string): void {
-    if (!window.confirm('Remove this experience record?')) return;
-    router.delete(`${base}/experience/${id}`, { preserveScroll: true });
-}
 
 // --- Certifications ----------------------------------------------------------
 
@@ -665,10 +683,6 @@ function submitCertification(): void {
         },
     });
 }
-function removeCertification(id: string): void {
-    if (!window.confirm('Remove this certification?')) return;
-    router.delete(`${base}/certifications/${id}`, { preserveScroll: true });
-}
 function verifyCertification(id: string): void {
     router.post(`${base}/certifications/${id}/verify`, {}, { preserveScroll: true });
 }
@@ -676,24 +690,43 @@ function rejectCertification(id: string): void {
     router.post(`${base}/certifications/${id}/reject`, {}, { preserveScroll: true });
 }
 
-// --- Documents (metadata only) ----------------------------------------------
+// --- Documents (governed uploads, HR.2A) ------------------------------------
 
 const showDocumentForm = ref(false);
-const documentForm = useForm({
+// HR.2A (S-12, D1-26): an upload through the platform Documents repository,
+// with a closed category -- never a typed storage path.
+const documentForm = useForm<{
+    file: File | null;
+    category: string;
+    classification_tier: string;
+    issued_on: string;
+    expires_on: string;
+    mfa_code: string;
+}>({
+    file: null,
     category: '',
     classification_tier: 'restricted',
-    storage_disk: 's3',
-    storage_path: '',
-    original_filename: '',
-    mime_type: 'application/pdf',
-    size_bytes: 0,
     issued_on: '',
     expires_on: '',
     // SR.4 (ADR 0071 §26.7): only a highly sensitive record needs a fresh code.
     mfa_code: '',
 });
+// An identity document is always Highly Sensitive (the server enforces it too).
+watch(
+    () => documentForm.category,
+    (category) => {
+        const required = props.staffProfile.options.documentCategories.find(
+            (c) => c.value === category,
+        )?.requiredTier;
+        if (required) documentForm.classification_tier = required;
+    },
+);
+function pickDocumentFile(event: Event): void {
+    documentForm.file = (event.target as HTMLInputElement).files?.[0] ?? null;
+}
 function submitDocument(): void {
     documentForm.post(`${base}/hr-document-records`, {
+        forceFormData: true,
         preserveScroll: true,
         onSuccess: () => {
             showDocumentForm.value = false;
@@ -704,6 +737,45 @@ function submitDocument(): void {
 }
 function archiveDocument(id: string): void {
     router.post(`${base}/hr-document-records/${id}/archive`, {}, { preserveScroll: true });
+}
+
+// --- Reference codes (HR.2A, D1-03) ------------------------------------------
+
+const showReferenceForm = ref(false);
+const referenceForm = useForm({ kind: '', value: '' });
+// A refusal (code taken, kind taken, format) arrives on the form's error bag.
+const referenceError = computed(() => {
+    const errors = referenceForm.errors as Record<string, string | undefined>;
+    return errors.value ?? errors.kind ?? errors.reference_code ?? null;
+});
+function submitReference(): void {
+    referenceForm.post(`${base}/reference-codes`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            showReferenceForm.value = false;
+            referenceForm.reset();
+        },
+    });
+}
+const retiringReferenceId = ref<string | null>(null);
+const retireReferenceForm = useForm({ reason_code: '' });
+function submitRetireReference(id: string): void {
+    retireReferenceForm.post(`${base}/reference-codes/${id}/retire`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            retiringReferenceId.value = null;
+            retireReferenceForm.reset();
+        },
+    });
+}
+function duration(d: Duration | undefined): string {
+    if (!d) return '';
+    if (d.days === 0) return 'None recorded';
+    const parts = [];
+    if (d.years > 0) parts.push(`${d.years} ${d.years === 1 ? 'year' : 'years'}`);
+    if (d.months > 0 || d.years === 0)
+        parts.push(`${d.months} ${d.months === 1 ? 'month' : 'months'}`);
+    return parts.join(' ');
 }
 
 // --- Notes ----------------------------------------------------------------
@@ -718,10 +790,6 @@ function submitNote(): void {
             noteForm.reset();
         },
     });
-}
-function removeNote(id: string): void {
-    if (!window.confirm('Remove this note?')) return;
-    router.delete(`${base}/notes/${id}`, { preserveScroll: true });
 }
 </script>
 
@@ -802,6 +870,24 @@ function removeNote(id: string): void {
                         </template>
                         <template v-else>Not linked</template>
                     </dd>
+                </div>
+                <!-- HR.2A: derived from the dated records, never a stored number. -->
+                <div v-if="staffProfile.experience.previous">
+                    <dt class="text-slate-500">Previous experience</dt>
+                    <dd class="mt-0.5">
+                        {{ duration(staffProfile.experience.previous) }}
+                        <span
+                            v-if="staffProfile.experience.previous.openEnded > 0"
+                            class="text-slate-500"
+                        >
+                            ({{ staffProfile.experience.previous.openEnded }} without an end date,
+                            not counted)
+                        </span>
+                    </dd>
+                </div>
+                <div v-if="staffProfile.experience.service">
+                    <dt class="text-slate-500">Service in this School</dt>
+                    <dd class="mt-0.5">{{ duration(staffProfile.experience.service) }}</dd>
                 </div>
             </dl>
 
@@ -885,8 +971,156 @@ function removeNote(id: string): void {
             </div>
         </section>
 
+        <!-- HR.2A: the Profile's sections. -->
+        <nav aria-label="Profile sections" class="mt-6 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            <a class="underline" href="#profile-reference-codes">Reference codes</a>
+            <a class="underline" href="#profile-personal">Personal &amp; contact</a>
+            <a class="underline" href="#profile-addresses">Addresses</a>
+            <a class="underline" href="#profile-employment">Employment &amp; reporting</a>
+            <a
+                v-if="workspace.qualifications.length > 0 || can.manageQualifications"
+                class="underline"
+                href="#profile-qualifications"
+                >Qualifications &amp; experience</a
+            >
+            <a class="underline" href="#profile-documents">Documents</a>
+        </nav>
+
+        <!-- HR.2A (D1-03): external reference codes -- never the identity, never reused. -->
+        <section id="profile-reference-codes" class="mt-8">
+            <div class="flex items-center justify-between">
+                <h2 class="text-sm font-medium text-slate-500">Reference codes</h2>
+                <button
+                    v-if="staffProfile.can.manageReferenceCodes"
+                    type="button"
+                    class="text-sm font-medium underline"
+                    @click="showReferenceForm = !showReferenceForm"
+                >
+                    {{ showReferenceForm ? 'Cancel' : '+ Add reference code' }}
+                </button>
+            </div>
+            <p v-if="staffProfile.referenceCodes.length === 0" class="mt-3 text-sm text-slate-500">
+                No reference codes recorded.
+            </p>
+            <ul v-else class="mt-3 space-y-2">
+                <li
+                    v-for="r in staffProfile.referenceCodes"
+                    :key="r.id"
+                    class="rounded border border-slate-200 p-3 text-sm"
+                    :class="r.retired ? 'text-slate-500' : ''"
+                >
+                    <div class="flex items-start justify-between gap-3">
+                        <p>
+                            <span class="font-medium">{{ r.kindLabel }}:</span> {{ r.value }}
+                            <span v-if="r.retired">
+                                (retired<template v-if="r.retireReasonLabel"
+                                    >: {{ r.retireReasonLabel }}</template
+                                >)</span
+                            >
+                        </p>
+                        <button
+                            v-if="staffProfile.can.manageReferenceCodes && !r.retired"
+                            type="button"
+                            class="text-red-600 underline"
+                            @click="
+                                retiringReferenceId = retiringReferenceId === r.id ? null : r.id
+                            "
+                        >
+                            Retire
+                        </button>
+                    </div>
+                    <form
+                        v-if="retiringReferenceId === r.id"
+                        class="mt-2 flex flex-wrap items-end gap-3"
+                        @submit.prevent="submitRetireReference(r.id)"
+                    >
+                        <div>
+                            <label
+                                class="block text-sm text-slate-600"
+                                :for="`retire-reference-${r.id}`"
+                                >Reason</label
+                            >
+                            <select
+                                :id="`retire-reference-${r.id}`"
+                                v-model="retireReferenceForm.reason_code"
+                                required
+                                class="mt-1 rounded border border-slate-300 px-3 py-2 text-sm"
+                            >
+                                <option value="" disabled>Select a reason</option>
+                                <option
+                                    v-for="o in staffProfile.options.retireReasons"
+                                    :key="o.value"
+                                    :value="o.value"
+                                >
+                                    {{ o.label }}
+                                </option>
+                            </select>
+                        </div>
+                        <button
+                            type="submit"
+                            :disabled="
+                                retireReferenceForm.processing ||
+                                retireReferenceForm.reason_code === ''
+                            "
+                            class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                        >
+                            Retire code
+                        </button>
+                        <p class="w-full text-sm text-red-600">
+                            {{ retireReferenceForm.errors.reason_code }}
+                        </p>
+                    </form>
+                </li>
+            </ul>
+            <form
+                v-if="showReferenceForm"
+                class="mt-3 grid grid-cols-1 gap-3 rounded border border-slate-200 p-4 sm:grid-cols-2"
+                @submit.prevent="submitReference"
+            >
+                <div>
+                    <label class="block text-sm text-slate-600" for="reference-kind">Kind</label>
+                    <select
+                        id="reference-kind"
+                        v-model="referenceForm.kind"
+                        required
+                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    >
+                        <option value="" disabled>Select a kind</option>
+                        <option
+                            v-for="o in staffProfile.options.referenceKinds"
+                            :key="o.value"
+                            :value="o.value"
+                        >
+                            {{ o.label }}
+                        </option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-600" for="reference-value">Code</label>
+                    <input
+                        id="reference-value"
+                        v-model="referenceForm.value"
+                        type="text"
+                        maxlength="64"
+                        required
+                        class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                    />
+                </div>
+                <p class="text-sm text-red-600 sm:col-span-2">
+                    {{ referenceError }}
+                </p>
+                <button
+                    type="submit"
+                    :disabled="referenceForm.processing"
+                    class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 sm:col-span-2 sm:justify-self-start"
+                >
+                    Save reference code
+                </button>
+            </form>
+        </section>
+
         <!-- Personal & contact -->
-        <section class="mt-8">
+        <section id="profile-personal" class="mt-8">
             <div class="flex items-center justify-between">
                 <h2 class="text-sm font-medium text-slate-500">
                     Personal &amp; contact (Restricted)
@@ -997,7 +1231,7 @@ function removeNote(id: string): void {
         </section>
 
         <!-- Addresses -->
-        <section class="mt-8">
+        <section id="profile-addresses" class="mt-8">
             <div class="flex items-center justify-between">
                 <h2 class="text-sm font-medium text-slate-500">Addresses</h2>
                 <button
@@ -1036,14 +1270,13 @@ function removeNote(id: string): void {
                             }}
                         </p>
                     </div>
-                    <button
+                    <ArchiveRecordButton
                         v-if="can.managePersonal"
-                        type="button"
-                        class="text-red-600 underline"
-                        @click="removeAddress(a.id)"
-                    >
-                        Remove
-                    </button>
+                        :url="`${base}/addresses/${a.id}`"
+                        subject="this address"
+                        :reasons="staffProfile.options.archiveReasons"
+                        :control-id="`archive-address-${a.id}`"
+                    />
                 </li>
             </ul>
 
@@ -1163,13 +1396,12 @@ function removeNote(id: string): void {
                         >
                             Make primary
                         </button>
-                        <button
-                            type="button"
-                            class="text-red-600 underline"
-                            @click="removeContact(c.id)"
-                        >
-                            Remove
-                        </button>
+                        <ArchiveRecordButton
+                            :url="`${base}/emergency-contacts/${c.id}`"
+                            subject="this emergency contact"
+                            :reasons="staffProfile.options.archiveReasons"
+                            :control-id="`archive-contact-${c.id}`"
+                        />
                     </div>
                 </li>
             </ul>
@@ -1226,7 +1458,7 @@ function removeNote(id: string): void {
         </section>
 
         <!-- Employment history -->
-        <section class="mt-8">
+        <section id="profile-employment" class="mt-8">
             <div class="flex items-center justify-between">
                 <h2 class="text-sm font-medium text-slate-500">Employment history</h2>
                 <div v-if="can.manageAssignments" class="flex items-center gap-3">
@@ -2150,7 +2382,7 @@ function removeNote(id: string): void {
         </section>
 
         <!-- Qualifications -->
-        <section class="mt-8">
+        <section id="profile-qualifications" class="mt-8">
             <div class="flex items-center justify-between">
                 <h2 class="text-sm font-medium text-slate-500">Qualifications</h2>
                 <button
@@ -2201,13 +2433,12 @@ function removeNote(id: string): void {
                         >
                             Reject
                         </button>
-                        <button
-                            type="button"
-                            class="text-red-600 underline"
-                            @click="removeQualification(q.id)"
-                        >
-                            Remove
-                        </button>
+                        <ArchiveRecordButton
+                            :url="`${base}/qualifications/${q.id}`"
+                            subject="this qualification"
+                            :reasons="staffProfile.options.archiveReasons"
+                            :control-id="`archive-qualification-${q.id}`"
+                        />
                     </div>
                 </li>
             </ul>
@@ -2300,14 +2531,13 @@ function removeNote(id: string): void {
                             {{ x.starts_on }} – {{ x.ends_on ?? 'present' }}
                         </p>
                     </div>
-                    <button
+                    <ArchiveRecordButton
                         v-if="can.manageQualifications"
-                        type="button"
-                        class="text-red-600 underline"
-                        @click="removeExperience(x.id)"
-                    >
-                        Remove
-                    </button>
+                        :url="`${base}/experience/${x.id}`"
+                        subject="this experience record"
+                        :reasons="staffProfile.options.archiveReasons"
+                        :control-id="`archive-experience-${x.id}`"
+                    />
                 </li>
             </ul>
 
@@ -2410,13 +2640,12 @@ function removeNote(id: string): void {
                         >
                             Reject
                         </button>
-                        <button
-                            type="button"
-                            class="text-red-600 underline"
-                            @click="removeCertification(c.id)"
-                        >
-                            Remove
-                        </button>
+                        <ArchiveRecordButton
+                            :url="`${base}/certifications/${c.id}`"
+                            subject="this certification"
+                            :reasons="staffProfile.options.archiveReasons"
+                            :control-id="`archive-certification-${c.id}`"
+                        />
                     </div>
                 </li>
             </ul>
@@ -2473,25 +2702,24 @@ function removeNote(id: string): void {
         </section>
 
         <!-- Documents -->
-        <section class="mt-8">
+        <section id="profile-documents" class="mt-8">
             <div class="flex items-center justify-between">
-                <h2 class="text-sm font-medium text-slate-500">Documents (Restricted metadata)</h2>
+                <h2 class="text-sm font-medium text-slate-500">Documents</h2>
                 <button
                     v-if="can.manageDocuments"
                     type="button"
                     class="text-sm font-medium underline"
                     @click="showDocumentForm = !showDocumentForm"
                 >
-                    {{ showDocumentForm ? 'Cancel' : '+ Register document' }}
+                    {{ showDocumentForm ? 'Cancel' : '+ Upload document' }}
                 </button>
             </div>
-            <p class="mt-1 text-xs text-slate-400">
-                Metadata only -- file upload is not available yet. Highly Sensitive documents never
-                appear here.
+            <p class="mt-1 text-xs text-slate-500">
+                PDF, JPEG or PNG. Highly Sensitive documents are listed separately and need MFA.
             </p>
 
             <p v-if="workspace.documents.length === 0" class="mt-3 text-sm text-slate-500">
-                No documents visible.
+                No documents recorded.
             </p>
             <ul v-else class="mt-3 space-y-2">
                 <li
@@ -2500,10 +2728,19 @@ function removeNote(id: string): void {
                     class="flex items-start justify-between gap-3 rounded border border-slate-200 p-3 text-sm"
                 >
                     <div>
-                        <p class="font-medium capitalize">{{ d.category.replace(/_/g, ' ') }}</p>
+                        <p class="font-medium">{{ d.category_label }}</p>
                         <p class="mt-0.5 text-slate-600">
                             {{ d.status }} · expires {{ d.expires_on ?? 'never' }}
+                            <template v-if="!d.has_file">
+                                · recorded before uploads (no file)</template
+                            >
                         </p>
+                        <a
+                            v-if="d.has_file"
+                            class="mt-1 inline-block underline"
+                            :href="`${base}/hr-document-records/${d.id}/download`"
+                            >Download</a
+                        >
                     </div>
                     <button
                         v-if="can.manageDocuments && d.status === 'active'"
@@ -2522,19 +2759,47 @@ function removeNote(id: string): void {
                 @submit.prevent="submitDocument"
             >
                 <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div>
-                        <label class="block text-sm text-slate-600">Category</label>
+                    <div class="sm:col-span-2">
+                        <label class="block text-sm text-slate-600" for="hr-document-file"
+                            >File</label
+                        >
                         <input
-                            v-model="documentForm.category"
-                            type="text"
-                            placeholder="id_proof"
+                            id="hr-document-file"
+                            type="file"
+                            accept="application/pdf,image/jpeg,image/png"
                             required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                            class="mt-1 w-full text-sm"
+                            @change="pickDocumentFile"
                         />
+                        <p class="mt-1 text-sm text-red-600">{{ documentForm.errors.file }}</p>
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Classification</label>
+                        <label class="block text-sm text-slate-600" for="hr-document-category"
+                            >Category</label
+                        >
                         <select
+                            id="hr-document-category"
+                            v-model="documentForm.category"
+                            required
+                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                        >
+                            <option value="" disabled>Select a category</option>
+                            <option
+                                v-for="c in staffProfile.options.documentCategories"
+                                :key="c.value"
+                                :value="c.value"
+                            >
+                                {{ c.label }}
+                            </option>
+                        </select>
+                        <p class="mt-1 text-sm text-red-600">{{ documentForm.errors.category }}</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-slate-600" for="hr-document-tier"
+                            >Classification</label
+                        >
+                        <select
+                            id="hr-document-tier"
                             v-model="documentForm.classification_tier"
                             class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                         >
@@ -2543,40 +2808,29 @@ function removeNote(id: string): void {
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Storage path</label>
+                        <label class="block text-sm text-slate-600" for="hr-document-issued"
+                            >Issued on</label
+                        >
                         <input
-                            v-model="documentForm.storage_path"
-                            type="text"
-                            required
+                            id="hr-document-issued"
+                            v-model="documentForm.issued_on"
+                            type="date"
                             class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                         />
                     </div>
                     <div>
-                        <label class="block text-sm text-slate-600">Original filename</label>
+                        <label class="block text-sm text-slate-600" for="hr-document-expires"
+                            >Expires on</label
+                        >
                         <input
-                            v-model="documentForm.original_filename"
-                            type="text"
-                            required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                        />
-                    </div>
-                    <div>
-                        <label class="block text-sm text-slate-600">Size (bytes)</label>
-                        <input
-                            v-model.number="documentForm.size_bytes"
-                            type="number"
-                            min="0"
-                            required
-                            class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
-                        />
-                    </div>
-                    <div>
-                        <label class="block text-sm text-slate-600">Expires on</label>
-                        <input
+                            id="hr-document-expires"
                             v-model="documentForm.expires_on"
                             type="date"
                             class="mt-1 w-full rounded border border-slate-300 px-3 py-2 text-sm"
                         />
+                        <p class="mt-1 text-sm text-red-600">
+                            {{ documentForm.errors.expires_on }}
+                        </p>
                     </div>
                 </div>
                 <div v-if="documentForm.classification_tier === 'highly_sensitive'" class="mt-3">
@@ -2584,7 +2838,7 @@ function removeNote(id: string): void {
                         id="hr-document-mfa"
                         v-model="documentForm.mfa_code"
                         :has-mfa-factor="hasMfaFactor"
-                        action="Registering a highly sensitive record"
+                        action="Uploading a highly sensitive document"
                         :error="documentForm.errors.mfa_code"
                     />
                 </div>
@@ -2592,11 +2846,12 @@ function removeNote(id: string): void {
                     type="submit"
                     :disabled="
                         documentForm.processing ||
+                        documentForm.file === null ||
                         (documentForm.classification_tier === 'highly_sensitive' && !hasMfaFactor)
                     "
                     class="mt-3 rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
                 >
-                    Register document
+                    Upload document
                 </button>
             </form>
         </section>
@@ -2633,14 +2888,13 @@ function removeNote(id: string): void {
                             {{ n.author_display_name ?? 'Unknown author' }} · {{ n.created_at }}
                         </p>
                     </div>
-                    <button
+                    <ArchiveRecordButton
                         v-if="can.manageNotes"
-                        type="button"
-                        class="text-red-600 underline"
-                        @click="removeNote(n.id)"
-                    >
-                        Remove
-                    </button>
+                        :url="`${base}/notes/${n.id}`"
+                        subject="this note"
+                        :reasons="staffProfile.options.archiveReasons"
+                        :control-id="`archive-note-${n.id}`"
+                    />
                 </li>
             </ul>
 

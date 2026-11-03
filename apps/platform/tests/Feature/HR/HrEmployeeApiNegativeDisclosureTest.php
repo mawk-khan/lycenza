@@ -33,7 +33,7 @@ class HrEmployeeApiNegativeDisclosureTest extends TestCase
         'personal_email' => 'sentinel-negdis@example.com',
         'credential_number' => 'SENTINEL-CRED-99887766',
         'storage_path' => 'sentinel/negdis/storage/path.pdf',
-        'document_category' => 'sentinel-negdis-category',
+        'document_category' => 'appointment_letter', // HR.2A: a closed category (its value is the marker)
     ];
 
     #[Test]
@@ -106,7 +106,7 @@ class HrEmployeeApiNegativeDisclosureTest extends TestCase
         [$school, $employee, $setupActor] = $this->populatedEmployee();
         $this->createEmployeeDocument($employee, [
             'classification_tier' => 'highly_sensitive',
-            'category' => 'sentinel-highly-sensitive-category',
+            'category' => 'identity_document',
             'storage_path' => 'sentinel/hs/storage.pdf',
         ]);
         $sensitiveActor = $this->fullHrActor($school);
@@ -116,7 +116,7 @@ class HrEmployeeApiNegativeDisclosureTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        $this->assertStringContainsString('sentinel-highly-sensitive-category', $raw);
+        $this->assertStringContainsString('identity_document', $raw);
         $this->assertStringNotContainsString('sentinel/hs/storage.pdf', $raw);
     }
 

@@ -8,6 +8,7 @@ use Database\Factories\EmployeeEmergencyContactFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * Phase 8A.2 -- one of an Employee's 1:N Restricted-tier emergency
@@ -31,6 +32,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $alternate_phone
  * @property string|null $email
  * @property bool $is_primary
+ * @property Carbon|null $archived_at
+ * @property string|null $archived_by_user_id
+ * @property string|null $archive_reason
  */
 class EmployeeEmergencyContact extends Model
 {
@@ -51,7 +55,8 @@ class EmployeeEmergencyContact extends Model
 
     protected function casts(): array
     {
-        return ['is_primary' => 'boolean'];
+        return [
+            'archived_at' => 'datetime', 'is_primary' => 'boolean'];
     }
 
     protected static function newFactory(): EmployeeEmergencyContactFactory

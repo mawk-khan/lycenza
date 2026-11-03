@@ -125,7 +125,7 @@ class HrRawIsolationTest extends TestCase
     }
 
     #[Test]
-    public function raw_delete_of_an_employee_across_schools_affects_zero_rows(): void
+    public function raw_delete_of_an_employee_is_revoked_for_the_runtime_role(): void
     {
         $schoolA = $this->createSchool();
         $schoolB = $this->createSchool();
@@ -237,7 +237,7 @@ class HrRawIsolationTest extends TestCase
     }
 
     #[Test]
-    public function raw_delete_of_a_personal_detail_across_schools_affects_zero_rows(): void
+    public function raw_delete_of_a_personal_detail_is_revoked_for_the_runtime_role(): void
     {
         $schoolA = $this->createSchool();
         $schoolB = $this->createSchool();
@@ -334,7 +334,7 @@ class HrRawIsolationTest extends TestCase
     }
 
     #[Test]
-    public function raw_delete_of_an_address_across_schools_affects_zero_rows(): void
+    public function raw_delete_of_an_address_is_revoked_for_the_runtime_role(): void
     {
         $schoolA = $this->createSchool();
         $schoolB = $this->createSchool();
@@ -343,9 +343,8 @@ class HrRawIsolationTest extends TestCase
 
         DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
 
-        $affected = DB::connection('pgsql')->delete('delete from employee_addresses where id = ?', [$addressB->id]);
-
-        $this->assertSame(0, $affected);
+        // HR.2A (S-16): the runtime role holds no DELETE at all; only retention purges.
+        $this->assertRuntimeDeleteRevoked('delete from employee_addresses where id = ?', [$addressB->id]);
     }
 
     // --- Phase 8A.2: employee_emergency_contacts -------------------------
@@ -433,7 +432,7 @@ class HrRawIsolationTest extends TestCase
     }
 
     #[Test]
-    public function raw_delete_of_an_emergency_contact_across_schools_affects_zero_rows(): void
+    public function raw_delete_of_an_emergency_contact_is_revoked_for_the_runtime_role(): void
     {
         $schoolA = $this->createSchool();
         $schoolB = $this->createSchool();
@@ -442,9 +441,8 @@ class HrRawIsolationTest extends TestCase
 
         DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
 
-        $affected = DB::connection('pgsql')->delete('delete from employee_emergency_contacts where id = ?', [$contactB->id]);
-
-        $this->assertSame(0, $affected);
+        // HR.2A (S-16): the runtime role holds no DELETE at all; only retention purges.
+        $this->assertRuntimeDeleteRevoked('delete from employee_emergency_contacts where id = ?', [$contactB->id]);
     }
 
     // --- Phase 8A.3: hr_departments --------------------------------------
@@ -527,7 +525,7 @@ class HrRawIsolationTest extends TestCase
     }
 
     #[Test]
-    public function raw_delete_of_a_department_across_schools_affects_zero_rows(): void
+    public function raw_delete_of_a_department_is_revoked_for_the_runtime_role(): void
     {
         $schoolA = $this->createSchool();
         $schoolB = $this->createSchool();
@@ -620,7 +618,7 @@ class HrRawIsolationTest extends TestCase
     }
 
     #[Test]
-    public function raw_delete_of_a_position_across_schools_affects_zero_rows(): void
+    public function raw_delete_of_a_position_is_revoked_for_the_runtime_role(): void
     {
         $schoolA = $this->createSchool();
         $schoolB = $this->createSchool();
@@ -718,7 +716,7 @@ class HrRawIsolationTest extends TestCase
     }
 
     #[Test]
-    public function raw_delete_of_an_employment_record_across_schools_affects_zero_rows(): void
+    public function raw_delete_of_an_employment_record_is_revoked_for_the_runtime_role(): void
     {
         $schoolA = $this->createSchool();
         $schoolB = $this->createSchool();
@@ -825,7 +823,7 @@ class HrRawIsolationTest extends TestCase
     }
 
     #[Test]
-    public function raw_delete_of_an_assignment_across_schools_affects_zero_rows(): void
+    public function raw_delete_of_an_assignment_is_revoked_for_the_runtime_role(): void
     {
         $schoolA = $this->createSchool();
         $schoolB = $this->createSchool();
@@ -972,7 +970,7 @@ class HrRawIsolationTest extends TestCase
     }
 
     #[Test]
-    public function raw_delete_of_a_qualification_across_schools_affects_zero_rows(): void
+    public function raw_delete_of_a_qualification_is_revoked_for_the_runtime_role(): void
     {
         $schoolA = $this->createSchool();
         $schoolB = $this->createSchool();
@@ -981,9 +979,8 @@ class HrRawIsolationTest extends TestCase
 
         DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
 
-        $affected = DB::connection('pgsql')->delete('delete from employee_qualifications where id = ?', [$qualificationB->id]);
-
-        $this->assertSame(0, $affected);
+        // HR.2A (S-16): the runtime role holds no DELETE at all; only retention purges.
+        $this->assertRuntimeDeleteRevoked('delete from employee_qualifications where id = ?', [$qualificationB->id]);
     }
 
     // --- Phase 8A.6: employee_experience_records ----------------------------
@@ -1071,7 +1068,7 @@ class HrRawIsolationTest extends TestCase
     }
 
     #[Test]
-    public function raw_delete_of_an_experience_record_across_schools_affects_zero_rows(): void
+    public function raw_delete_of_an_experience_record_is_revoked_for_the_runtime_role(): void
     {
         $schoolA = $this->createSchool();
         $schoolB = $this->createSchool();
@@ -1080,9 +1077,8 @@ class HrRawIsolationTest extends TestCase
 
         DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
 
-        $affected = DB::connection('pgsql')->delete('delete from employee_experience_records where id = ?', [$experienceB->id]);
-
-        $this->assertSame(0, $affected);
+        // HR.2A (S-16): the runtime role holds no DELETE at all; only retention purges.
+        $this->assertRuntimeDeleteRevoked('delete from employee_experience_records where id = ?', [$experienceB->id]);
     }
 
     // --- Phase 8A.6: employee_certifications --------------------------------
@@ -1170,7 +1166,7 @@ class HrRawIsolationTest extends TestCase
     }
 
     #[Test]
-    public function raw_delete_of_a_certification_across_schools_affects_zero_rows(): void
+    public function raw_delete_of_a_certification_is_revoked_for_the_runtime_role(): void
     {
         $schoolA = $this->createSchool();
         $schoolB = $this->createSchool();
@@ -1179,9 +1175,8 @@ class HrRawIsolationTest extends TestCase
 
         DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
 
-        $affected = DB::connection('pgsql')->delete('delete from employee_certifications where id = ?', [$certificationB->id]);
-
-        $this->assertSame(0, $affected);
+        // HR.2A (S-16): the runtime role holds no DELETE at all; only retention purges.
+        $this->assertRuntimeDeleteRevoked('delete from employee_certifications where id = ?', [$certificationB->id]);
     }
 
     // --- Phase 8A.7: employee_documents -------------------------------------
@@ -1269,7 +1264,7 @@ class HrRawIsolationTest extends TestCase
     }
 
     #[Test]
-    public function raw_delete_of_a_document_across_schools_affects_zero_rows(): void
+    public function raw_delete_of_a_document_is_revoked_for_the_runtime_role(): void
     {
         $schoolA = $this->createSchool();
         $schoolB = $this->createSchool();
@@ -1361,7 +1356,7 @@ class HrRawIsolationTest extends TestCase
     }
 
     #[Test]
-    public function raw_delete_of_a_category_across_schools_affects_zero_rows(): void
+    public function raw_delete_of_a_category_is_revoked_for_the_runtime_role(): void
     {
         $schoolA = $this->createSchool();
         $schoolB = $this->createSchool();
@@ -1460,7 +1455,7 @@ class HrRawIsolationTest extends TestCase
     }
 
     #[Test]
-    public function raw_delete_of_a_note_across_schools_affects_zero_rows(): void
+    public function raw_delete_of_a_note_is_revoked_for_the_runtime_role(): void
     {
         $schoolA = $this->createSchool();
         $schoolB = $this->createSchool();
@@ -1469,8 +1464,7 @@ class HrRawIsolationTest extends TestCase
 
         DB::connection('pgsql')->select('select set_config(?, ?, false)', [TenantRls::SESSION_VAR, $schoolA->id]);
 
-        $affected = DB::connection('pgsql')->delete('delete from employee_notes where id = ?', [$noteB->id]);
-
-        $this->assertSame(0, $affected);
+        // HR.2A (S-16): the runtime role holds no DELETE at all; only retention purges.
+        $this->assertRuntimeDeleteRevoked('delete from employee_notes where id = ?', [$noteB->id]);
     }
 }

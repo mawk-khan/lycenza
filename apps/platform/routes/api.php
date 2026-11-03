@@ -940,8 +940,10 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('/employees/{employee}/documents', [DocumentController::class, 'indexForEmployee'])
                 ->middleware(['throttle:documents-reads', 'private-no-store'])
                 ->name('schools.employees.documents.index');
+            // HR.2A security review: every entry is Highly Sensitive (HR identity documents
+            // included): current MFA assurance, like the HR sensitive list (rule 95).
             Route::get('/employees/{employee}/documents/sensitive', [DocumentController::class, 'sensitiveIndexForEmployee'])
-                ->middleware(['throttle:documents-sensitive-reads', 'private-no-store'])
+                ->middleware(['mfa', 'throttle:documents-sensitive-reads', 'private-no-store'])
                 ->name('schools.employees.documents.sensitive');
 
             // Direct by-id Document routes. `documents-sensitive-reads`

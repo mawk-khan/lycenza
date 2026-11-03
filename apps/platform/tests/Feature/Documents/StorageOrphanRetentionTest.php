@@ -95,12 +95,9 @@ class StorageOrphanRetentionTest extends TestCase
         $commsOrphan = $this->putObject($this->comms, "{$base}/communications/threads/t1/".Str::uuid7().'.pdf');
         $archived = $this->putObject($this->docs, "{$base}/documents/employee/e2/".Str::uuid7().'.pdf');
         $this->documentRow($school, $archived, 'archived');
-        $hr = $this->putObject($this->docs, "{$base}/documents/hr-import/".Str::uuid7().'.pdf');
-        $this->inSchool($school, fn () => DB::table('employee_documents')->insert([
-            'id' => (string) Str::uuid7(), 'school_id' => $school->id, 'employee_id' => $this->createEmployee($school)->id, 'category' => 'other',
-            'storage_disk' => $this->docs, 'storage_path' => $hr, 'original_filename' => 'h.pdf', 'mime_type' => 'application/pdf',
-            'size_bytes' => 5, 'uploaded_at' => now(), 'created_at' => now(), 'updated_at' => now(),
-        ]));
+        // HR.2A: a NEW HR document record can no longer name a raw path (the database
+        // refuses it), so only a pre-HR.2A row could; the reaper's legacy-path check
+        // stays for those, and a governed record's object is its Document's (above).
         // Outside the managed keyspace, or under no existing School: never touched.
         $other = $this->putObject($this->docs, "{$base}/exports/report.csv");
         $root = $this->putObject($this->docs, 'loose-file.txt');
@@ -113,7 +110,7 @@ class StorageOrphanRetentionTest extends TestCase
 
         Storage::disk($this->docs)->assertMissing($orphan);
         Storage::disk($this->comms)->assertMissing($commsOrphan);
-        foreach ([$archived, $hr, $other, $root, $unknownSchool, $young] as $kept) {
+        foreach ([$archived, $other, $root, $unknownSchool, $young] as $kept) {
             Storage::disk($this->docs)->assertExists($kept);
         }
     }

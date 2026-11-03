@@ -13,6 +13,7 @@ use App\Domain\Documents\Application\Exceptions\DocumentNotFoundException;
 use App\Domain\Documents\Infrastructure\Document;
 use App\Http\Controllers\Controller;
 use App\Models\School;
+use App\Support\Auth\Mfa\SensitiveReadAssurance;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -176,6 +177,11 @@ class DocumentController extends Controller
         abort_if(! Str::isUuid($document), 404);
 
         $metadata = app(DocumentReadService::class)->metadata($school, $document, $request->user());
+        // HR.2A security review: Highly Sensitive reads need current MFA assurance on
+        // every path (rule 95) -- HR identity documents now live here.
+        if ($metadata->classificationTier === 'highly_sensitive') {
+            app(SensitiveReadAssurance::class)->requireForJson($request);
+        }
 
         return response()->json(['data' => $metadata->toArray()]);
     }
@@ -206,7 +212,13 @@ class DocumentController extends Controller
     {
         abort_if(! Str::isUuid($document), 404);
 
-        $content = app(DocumentReadService::class)->content($school, $document, $request->user());
+        // HR.2A security review: the tier is known only after the authorized read; a
+        // Highly Sensitive file needs current MFA assurance before any byte is opened.
+        $reads = app(DocumentReadService::class);
+        if ($reads->metadata($school, $document, $request->user())->classificationTier === 'highly_sensitive') {
+            app(SensitiveReadAssurance::class)->requireForJson($request);
+        }
+        $content = $reads->content($school, $document, $request->user());
 
         return response()->streamDownload(function () use ($content) {
             fpassthru($content->stream);

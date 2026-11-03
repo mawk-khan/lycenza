@@ -6,6 +6,7 @@ use App\Domain\Documents\Application\DocumentListingService;
 use App\Domain\Documents\Application\DocumentReadService;
 use App\Domain\Documents\Application\DocumentService;
 use App\Domain\Documents\Http\Controllers\DocumentController;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 use ReflectionClass;
@@ -60,20 +61,21 @@ class DocumentEmployeeDocumentIndependenceTest extends TestCase
     }
 
     /**
-     * ADR 0029's permanent decision: `employee_documents` and
-     * `documents` stay separate, with no shared foreign key between
-     * them. This binds unless a future ADR explicitly supersedes ADR
-     * 0029 -- it is not a placeholder pending a later merge. If ADR
-     * 0029 is ever superseded, that supersession is a deliberate,
-     * reviewed decision recorded in its own ADR, never something that
-     * should already silently exist in the schema.
+     * ADR 0029 HR.2A amendment (the explicit, reviewed supersession this test
+     * always required): the two tables stay separate -- HR keeps its record
+     * (closed category, tier, dates, archive), Documents keeps the bytes --
+     * and a NEW HR record references its governed Document through a
+     * composite same-School key. The tables are never merged.
      */
     #[Test]
-    public function employee_documents_has_no_foreign_key_to_generic_documents(): void
+    public function employee_documents_references_a_governed_document_by_a_same_school_key(): void
     {
-        $this->assertFalse(
-            Schema::hasColumn('employee_documents', 'document_id'),
-            'employee_documents must never gain a document_id FK to documents -- ADR 0029 permanently decided the two tables stay unlinked, and only an ADR that explicitly supersedes ADR 0029 could change that.',
+        $this->assertTrue(Schema::hasTable('employee_documents') && Schema::hasTable('documents'), 'two tables, never merged');
+        $this->assertTrue(Schema::hasColumn('employee_documents', 'document_id'));
+        $definition = DB::connection('pgsql_admin')->selectOne(
+            "select pg_get_constraintdef(oid) as d from pg_constraint where conrelid = 'employee_documents'::regclass and contype = 'f' and pg_get_constraintdef(oid) like '%REFERENCES documents%'",
         );
+        $this->assertNotNull($definition);
+        $this->assertStringContainsString('FOREIGN KEY (document_id, school_id) REFERENCES documents(id, school_id)', $definition->d);
     }
 }

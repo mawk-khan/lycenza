@@ -100,6 +100,7 @@ use App\Http\Controllers\App\HR\HrEmployeeImportController;
 use App\Http\Controllers\App\HR\HrEmployeeNoteController;
 use App\Http\Controllers\App\HR\HrEmployeePersonalDetailController;
 use App\Http\Controllers\App\HR\HrEmployeeQualificationController;
+use App\Http\Controllers\App\HR\HrEmployeeReferenceCodeController;
 use App\Http\Controllers\App\HR\HrEmploymentController;
 use App\Http\Controllers\App\HR\HrPositionController;
 use App\Http\Controllers\App\IntegrationHubController;
@@ -1751,8 +1752,13 @@ Route::middleware(['auth', 'school-context'])->where(WebRouteParameters::uuidPat
         Route::post('/employees/{employee}/certifications/{certification}/verify', [HrEmployeeCertificationController::class, 'verify'])->name('employees.certifications.verify');
         Route::post('/employees/{employee}/certifications/{certification}/reject', [HrEmployeeCertificationController::class, 'reject'])->name('employees.certifications.reject');
 
+        // HR.2A (D1-03): external reference codes; whole-School (declared, CampusScopeCatalogue).
+        Route::post('/employees/{employee}/reference-codes', [HrEmployeeReferenceCodeController::class, 'store'])->middleware('capability:hr.employees.manage')->name('employees.reference-codes.store');
+        Route::post('/employees/{employee}/reference-codes/{referenceCode}/retire', [HrEmployeeReferenceCodeController::class, 'retire'])->middleware('capability:hr.employees.manage')->name('employees.reference-codes.retire');
         Route::post('/employees/{employee}/hr-document-records', [HrEmployeeDocumentController::class, 'store'])->name('employees.hr-document-records.store');
         Route::post('/employees/{employee}/hr-document-records/{document}/archive', [HrEmployeeDocumentController::class, 'archive'])->name('employees.hr-document-records.archive');
+        // HR.2A: the record's governed file, re-authorized by the Document's tier (Highly Sensitive: current MFA, in the controller).
+        Route::get('/employees/{employee}/hr-document-records/{document}/download', [HrEmployeeDocumentController::class, 'download'])->middleware(['capability:hr.employees.documents.view|hr.employees.sensitive.view', 'private-no-store'])->name('employees.hr-document-records.download');
 
         Route::get('/departments', [HrDepartmentController::class, 'index'])->name('departments.index');
         Route::post('/departments', [HrDepartmentController::class, 'store'])->name('departments.store');

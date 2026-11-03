@@ -123,7 +123,7 @@ both mean HRX-L2.
 |---|---|---|---|---|---|---|---|---|---|
 | D1-01 | Staff identity | `employees` (Employee ≠ User) | IMP | H134, H144 → `Employee` | — | HR | — | — | — |
 | D1-02 | Employee / staff code | `employee_number` `EMP-`+6, forward-only counter; immutable in the database (`trg_employees_identity_guard`, HR.1A S-11) | IMP | H060 → `EmployeeNumberAllocator` | — | HR | — | L | — |
-| D1-03 | ERP / reference identifiers | none | MISS | H117, H134, H233 (Staff Ref, ERP, Branch codes) | a closed, School-unique `employee_reference_codes` (kind + value) for imports and integrations; never a second identity | HR | HR.1 | L | — |
+| D1-03 | ERP / reference identifiers | `employee_reference_codes` (closed kinds staff_reference / erp / legacy; School-unique, never reused; exact directory search) (HR.2A) | IMP | H117, H134, H233 (Staff Ref, ERP, Branch codes) | — | HR | HR.2A | L | — |
 | D1-04 | Biometric identity | none (guards) | GATE | H106, H233, H373 | an attendance identity in StaffAttendance; never on Employee | StaffAttendance | HR.8 | H | HRX-L2 (L2b) |
 | D1-05 | Active / inactive state | `record_status` + employment status | IMP | H124, H127 → `EmployeeLifecycleService` | — | HR | — | — | — |
 | D1-06 | Joining date | `employment_records.starts_on` | IMP | H117, H323 | — | HR | — | — | — |
@@ -137,17 +137,17 @@ both mean HRX-L2.
 | D1-14 | Profile photograph | none | DEF | H113 (Change Profilepic) | governed media pipeline (rule 115) + photo privacy | HR + Documents | post-HR.16 | M | HR-L13 (not raised) |
 | D1-15 | Personal information | `employee_personal_details` (DOB, nationality, marital status, language) | IMP | H093, H144 | gender not modelled (see D10-07) | HR | — | — | — |
 | D1-16 | Contact details | work email/phone + personal contacts | IMP | H096 | — | HR | — | — | — |
-| D1-17 | Emergency contacts | `employee_emergency_contacts` | IMP | H144 | hard delete (S-16) | HR | HR.2 | L | — |
+| D1-17 | Emergency contacts | `employee_emergency_contacts` (archived, never deleted; HR.2A) | IMP | H144 | — | HR | HR.2A | L | — |
 | D1-18 | Family information | none | DEF | H098, H182, H247 | third-party personal data | HR | after HR-L6 | H | HR-L6 / OD-HR-12 |
-| D1-19 | Address | `employee_addresses` (4 kinds) | IMP | H109 | hard delete (S-16) | HR | HR.2 | L | — |
+| D1-19 | Address | `employee_addresses` (4 kinds; archived, never deleted; current value + correction history) (HR.2A) | IMP | H109 | — | HR | HR.2A | L | — |
 | D1-20 | Bank / payment information | none | DEF | H114, H329 | Payroll-owned profile, encrypted; disbursement is Payments | Payroll | after HR-L5 | H | HR-L5 |
 | D1-21 | Qualifications | `employee_qualifications` (+ verification) | IMP | H327 | — | HR | — | — | — |
 | D1-22 | Certifications | `employee_certifications` (number, expiry) | IMP | H336 (CTET) | CTET / "trained as" fit as certifications, not new columns | HR | — | — | — |
 | D1-23 | Employment history | `employment_records` (rehire = new row) + assignments | IMP | H124, H351 | — | HR | — | — | — |
-| D1-24 | Previous experience | `employee_experience_records` | IMP | H328 | last-drawn salary is not collected (pay data stays Payroll) | HR | — | — | — |
+| D1-24 | Previous experience | `employee_experience_records`; total experience DERIVED (overlaps merged) (HR.2A) | IMP | H328 | last-drawn salary is not collected (pay data stays Payroll) | HR | HR.2A | — | — |
 | D1-25 | Statutory identifiers | Payroll `employee_statutory_identifiers` (encrypted, HMAC lookup), no production role | GATE | H241–H245, H329 | general-profile Aadhaar / passport / licence not modelled | Payroll | HR.15 | H | ADR 0036; HR-L7 |
-| D1-26 | Staff documents | `employee_documents` + Documents bytes (MFA) | PART | H124 (Staff Documents), H246, H353 | free-text category (S-12); no expiry processing | HR + Documents | HR.2 | M | — |
-| D1-27 | Profile change history | activity timeline + audit (changed field names) | ALT | H361–H368 (Log), H587 | values are never in audit (privacy); history is in versioned evidence | HR + audit | HR.2 (stale-form token) | L | — |
+| D1-26 | Staff documents | `employee_documents` → governed Documents uploads, closed categories, tier-authorized downloads (HR.2A) | IMP | H124 (Staff Documents), H246, H353 | — | HR + Documents | HR.2A | M | — |
+| D1-27 | Profile change history | activity timeline + audit (changed field names) + archived records as correction history + stale-form tokens (HR.2A) | ALT | H361–H368 (Log), H587 | values are never in audit (privacy); history is in archived rows and versioned evidence | HR + audit | HR.2A | L | — |
 | D1-28 | Duplicate check before create | `EmployeeDuplicateDetector` | IMP | H130–H133 | — | HR | — | — | — |
 | D1-29 | Bulk staff import | JSON import (≤ 1,000 rows, create-only) | ALT | H157–H173 (CSV) | CSV adapter is OD-HR-9 | HR | HR.2 (if decided) | L | — |
 | D1-30 | Bulk field grid editor (all classes, inline) | per-section edit with per-section capability | NR | H221–H248 | a mass editor across sensitive classes would bypass section authorization | — | — | H | — |
@@ -584,17 +584,17 @@ both mean HRX-L2.
 come from the status column of §4, read mechanically: one row per
 `| Dn-nn |` line. **No capability is dropped because it is deferred.**
 
-| Status | HR.0A baseline | After HR.1A (2026-11-03) | After HR.3A (2026-11-03) |
-|---|---|---|---|
-| IMPLEMENTED | 96 | 110 (30.5 %) | **114** (31.6 %) |
-| PARTIALLY_IMPLEMENTED | 40 | 29 | **26** |
-| MISSING | 90 | 87 | **86** |
-| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 18 | 18 |
-| CROSS_DOMAIN | 8 | 8 | 8 |
-| DEFERRED | 16 | 16 | 16 |
-| BLOCKED_BY_GATE | 87 | 87 | 87 |
-| NOT_REQUIRED | 6 | 6 | 6 |
-| **Total** | **361** | **361** | **361** |
+| Status | HR.0A baseline | After HR.1A (2026-11-03) | After HR.3A (2026-11-03) | After HR.2A (2026-11-03) |
+|---|---|---|---|---|
+| IMPLEMENTED | 96 | 110 (30.5 %) | 114 (31.6 %) | **116** (32.1 %) |
+| PARTIALLY_IMPLEMENTED | 40 | 29 | 26 | **25** |
+| MISSING | 90 | 87 | 86 | **85** |
+| IMPLEMENTED_DIFFERENTLY_AND_ACCEPTABLE | 18 | 18 | 18 | 18 |
+| CROSS_DOMAIN | 8 | 8 | 8 | 8 |
+| DEFERRED | 16 | 16 | 16 | 16 |
+| BLOCKED_BY_GATE | 87 | 87 | 87 | 87 |
+| NOT_REQUIRED | 6 | 6 | 6 | 6 |
+| **Total** | **361** | **361** | **361** | **361** |
 
 HR.1A closed D1-02, D1-11, D1-12, D2-01…D2-04, D2-06, D2-10…D2-13 and
 D18-05…D18-08. It narrowed D1-07, and hardened D3-06 (S-9) and D20-01
@@ -606,11 +606,17 @@ D4-03 and D4-06 (already IMPLEMENTED) for dated lines. D4-01 (L-depth
 presentation), D4-04 and D20-10 (tree view) and D4-07 (dotted lines) stay
 open. The per-section table shows the HR.3A figures for D2 and D4.
 
+HR.2A closed D1-03 (reference codes, MISS → IMP) and D1-26 (governed
+documents, PART → IMP), and hardened D1-17, D1-19, D1-24 and D1-27 (already
+IMPLEMENTED or ALT): archive history, derived experience, stale-form tokens.
+The gated profile families stay BLOCKED_BY_GATE or DEFERRED. The
+per-section table shows the HR.2A figures for D1.
+
 **Per section:**
 
 | Section | IMP | PART | MISS | ALT | XDOM | DEF | GATE | NR | Rows |
 |---|---|---|---|---|---|---|---|---|---|
-| D1 Workforce master | 18 | 2 | 1 | 2 | 1 | 4 | 4 | 3 | 35 |
+| D1 Workforce master | 20 | 1 | 0 | 2 | 1 | 4 | 4 | 3 | 35 |
 | D2 Assignments | 11 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 13 |
 | D3 Organization | 6 | 0 | 0 | 2 | 0 | 0 | 0 | 0 | 8 |
 | D4 Hierarchy | 8 | 1 | 1 | 2 | 0 | 1 | 0 | 0 | 13 |
@@ -641,7 +647,7 @@ open. The per-section table shows the HR.3A figures for D2 and D4.
   - 2 are ADR 0036 statutory payroll;
   - 1 is HRX-L3;
   - 1 is D-11.
-- **Implemented or acceptably different: 114 (31.6 %) at HR.0A; 128 (35.5 %) after HR.1A; 132 (36.6 %) after HR.3A.**
+- **Implemented or acceptably different: 114 (31.6 %) at HR.0A; 128 (35.5 %) after HR.1A; 132 (36.6 %) after HR.3A; 134 (37.1 %) after HR.2A.**
 - **Buildable now without any gate:** the 90 MISSING and 40 PARTIAL rows.
   These are the substance of HR.1–HR.3 and HR.9–HR.14.
 

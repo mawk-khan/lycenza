@@ -201,6 +201,14 @@ the School-local date (`SchoolTimezone::today()`), and fictional data.
 | `tests/Feature/HR/Reporting/ReportingMigrationTest` | cut-over backfill from the current pointer only (no fabricated history); conflicting pointers refuse and change nothing; rollback keeps current lines as pointers |
 | `tests/Feature/HR/Reporting/ReportingWebTest` | web set-manager needs a closed reason, takes an effective date, removes; API answers the line; correction is whole-School only (Campus and viewer refused, foreign line 404); Profile trail and reasons; Campus officer from today only |
 
+## 2c. Implemented suites (HR.2A)
+
+| Suite | Proves |
+|---|---|
+| `tests/Feature/HR/Profile/StaffProfileDatabaseInvariantsTest` | raw runtime writes: an archived record is frozen, never created archived, closed reason, all-or-none shape; no runtime DELETE on any profile table; an archived address frees its kind, an archived contact is never primary; reference codes closed, normalized, School-unique per kind, never reused, one live per kind, immutable, retired final; HR document records: no new raw path, closed category, identity always Highly Sensitive, same-School Document, file never changes, archived final; reference codes RLS-isolated and fail closed; verifier `hr_profile_invariants` |
+| `tests/Feature/HR/Profile/StaffProfileFoundationTest` | reference codes: normalized, never reused, exact search, retired finds nobody, audit without value, whole-School only, never one's own; archive with a required reason, kept as evidence, frozen; self-administration over identity, personal, address, archive, document; stale/missing version 409/422 (service, API); contact normalization and phone validation; governed upload (closed category, inert formats only), download authorized by tier, foreign record 404, archive archives the Document; derived experience (merge, open-ended), absent parts for a narrower reader; manager, teacher, payroll and platform root get no profile; Employee without a User, rehire keeps one identity; constant queries; Campus officer cannot reach another Campus's Employee |
+| `tests/Unit/HR/ExperienceCalculatorTest` | overlap and adjacency merged, open-ended excluded and reported, future cut at today, service adds rehires without the gap |
+
 ## 3. Regression cadence
 
 - **Per phase:**

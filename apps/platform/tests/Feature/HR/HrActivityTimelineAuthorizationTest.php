@@ -4,7 +4,6 @@ namespace Tests\Feature\HR;
 
 use App\Domain\HR\Application\EmployeeActivityTimelineQuery;
 use App\Domain\HR\Application\EmployeeActivityTimelineService;
-use App\Domain\HR\Application\EmployeeDocumentService;
 use App\Domain\HR\Application\EmployeePersonalDetailService;
 use App\Domain\HR\Application\EmployeeQualificationService;
 use App\Domain\HR\Application\EmployeeService;
@@ -118,14 +117,8 @@ class HrActivityTimelineAuthorizationTest extends TestCase
         $school = $this->createSchool();
         $actor = $this->fullHrActor($school);
         $employee = $this->createEmployee($school);
-        app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'id_proof', 'classification_tier' => 'restricted', 'storage_disk' => 'local',
-            'storage_path' => 'a.pdf', 'original_filename' => 'a.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1,
-        ], $actor);
-        app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'background_check', 'classification_tier' => 'highly_sensitive', 'storage_disk' => 'local',
-            'storage_path' => 'b.pdf', 'original_filename' => 'b.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1,
-        ], $actor);
+        $this->registerHrDocument($employee, $actor, 'restricted', 'employment_contract');
+        $this->registerHrDocument($employee, $actor, 'highly_sensitive', 'employment_contract');
 
         $documentsOnly = $this->createUserWithCapabilities($school, ['hr.employees.personal.view', 'hr.employees.documents.view']);
         $result = app(EmployeeActivityTimelineService::class)->get($school, $employee->id, $documentsOnly, new EmployeeActivityTimelineQuery);
@@ -140,10 +133,7 @@ class HrActivityTimelineAuthorizationTest extends TestCase
         $school = $this->createSchool();
         $actor = $this->fullHrActor($school);
         $employee = $this->createEmployee($school);
-        app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'background_check', 'classification_tier' => 'highly_sensitive', 'storage_disk' => 'local',
-            'storage_path' => 'b.pdf', 'original_filename' => 'b.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1,
-        ], $actor);
+        $this->registerHrDocument($employee, $actor, 'highly_sensitive', 'employment_contract');
 
         $documentsOnly = $this->createUserWithCapabilities($school, ['hr.employees.personal.view', 'hr.employees.documents.view']);
         $result = app(EmployeeActivityTimelineService::class)->get($school, $employee->id, $documentsOnly, new EmployeeActivityTimelineQuery);
@@ -158,10 +148,7 @@ class HrActivityTimelineAuthorizationTest extends TestCase
         $school = $this->createSchool();
         $actor = $this->fullHrActor($school);
         $employee = $this->createEmployee($school);
-        app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'background_check', 'classification_tier' => 'highly_sensitive', 'storage_disk' => 'local',
-            'storage_path' => 'b.pdf', 'original_filename' => 'b.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1,
-        ], $actor);
+        $this->registerHrDocument($employee, $actor, 'highly_sensitive', 'employment_contract');
 
         $fullDocActor = $this->createUserWithCapabilities($school, ['hr.employees.personal.view', 'hr.employees.documents.view', 'hr.employees.sensitive.view']);
         $result = app(EmployeeActivityTimelineService::class)->get($school, $employee->id, $fullDocActor, new EmployeeActivityTimelineQuery);

@@ -191,6 +191,7 @@ class HrUiTest extends TestCase
         $this->memberWith(['hr.employees.personal.view', 'hr.employees.personal.manage'], $school);
 
         $response = $this->put("/app/hr/employees/{$employee->id}/personal-detail", [
+            'version' => $this->employeePersonalVersion($employee->id),
             'date_of_birth' => '1990-01-01',
             'nationality' => 'Indian',
         ]);
@@ -218,7 +219,7 @@ class HrUiTest extends TestCase
         $response->assertInertia(fn ($page) => $page->has('workspace.addresses', 1));
         $addressId = $response->viewData('page')['props']['workspace']['addresses'][0]['id'];
 
-        $this->delete("/app/hr/employees/{$employee->id}/addresses/{$addressId}")->assertRedirect();
+        $this->delete("/app/hr/employees/{$employee->id}/addresses/{$addressId}", ['reason_code' => 'no_longer_current'])->assertRedirect();
 
         $this->get("/app/hr/employees/{$employee->id}")->assertInertia(fn ($page) => $page
             ->has('workspace.addresses', 0)

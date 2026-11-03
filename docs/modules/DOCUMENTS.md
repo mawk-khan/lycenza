@@ -2165,3 +2165,24 @@ Current mitigations:
 Any fix belongs in the one Documents pipeline (ADR 0012) with its own review
 and the pre-production security review. Verification and expiry are also
 Documents-owned (`docs/sis/SIS-EXPANSION-CLOSURE.md` §6).
+
+## Employee HR document records (HR.2A, 2026-11-03)
+
+HR's `employee_documents` records now reference their bytes here (ADR 0029
+HR.2A amendment).
+- **Entry points:**
+  - `DocumentService::createForEmployee()` takes PDF, JPEG or PNG; the
+    record row is written in the Document's transaction;
+  - `reclassifyForEmployee()` keeps the Document's tier equal to the HR
+    record's;
+  - `archiveForEmployee()`;
+  - `DocumentReadService::employeeContent()` re-authorizes by the tier.
+- **No new coupling:** none of them reads an HR model.
+- **The tier map:** HR `restricted` maps to `sensitive`; `highly_sensitive`
+  maps to `highly_sensitive`.
+- **MFA on the generic API.** Every generic Highly Sensitive read now
+  requires current MFA assurance (rule 95). `GET /documents/{document}` and
+  `/content` check it once the tier is known, and
+  `GET /employees/{employee}/documents/sensitive` carries `mfa`. This closes
+  a path the HR.2A security review found: HR identity documents would
+  otherwise have been readable without MFA.

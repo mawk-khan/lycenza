@@ -260,8 +260,8 @@ class HrCampusScopeTest extends TestCase
         foreach (['onlyB', 'schoolWide', 'future', 'ended', 'archived', 'unassigned'] as $key) {
             $this->withSchoolSession($hrA)->get("/app/hr/employees/{$this->id($key)}/overview")->assertNotFound();
             $unknownId = (string) Str::uuid();
-            $outOfScope = $this->api($hrA)->patchJson($this->url("/employees/{$this->id($key)}"), ['full_name' => 'X']);
-            $unknown = $this->api($hrA)->patchJson($this->url("/employees/{$unknownId}"), ['full_name' => 'X']);
+            $outOfScope = $this->api($hrA)->patchJson($this->url("/employees/{$this->id($key)}"), ['version' => $this->employeeIdentityVersion($this->id($key)), 'full_name' => 'X']);
+            $unknown = $this->api($hrA)->patchJson($this->url("/employees/{$unknownId}"), ['version' => $this->employeeIdentityVersion($unknownId), 'full_name' => 'X']);
             $outOfScope->assertNotFound();
             // The same envelope; only the echoed id differs.
             $this->assertSame(
@@ -304,18 +304,18 @@ class HrCampusScopeTest extends TestCase
     public function a_campus_editor_changes_core_fields_only_with_every_current_campus_in_scope(): void
     {
         $hrA = $this->actor('hr_officer', [$this->a->id]);
-        $this->api($hrA)->patchJson($this->url("/employees/{$this->id('onlyA')}"), ['full_name' => 'Asha Renamed', 'work_phone' => '555'])
+        $this->api($hrA)->patchJson($this->url("/employees/{$this->id('onlyA')}"), ['version' => $this->employeeIdentityVersion($this->id('onlyA')), 'full_name' => 'Asha Renamed', 'work_phone' => '555 0100'])
             ->assertOk()->assertJsonPath('data.fullName', 'Asha Renamed')->assertJsonMissingPath('data.userId');
 
-        $both = $this->api($hrA)->patchJson($this->url("/employees/{$this->id('both')}"), ['full_name' => 'Nope']);
+        $both = $this->api($hrA)->patchJson($this->url("/employees/{$this->id('both')}"), ['version' => $this->employeeIdentityVersion($this->id('both')), 'full_name' => 'Nope']);
         $both->assertForbidden()->assertJsonPath('error.code', 'HR_WHOLE_SCHOOL_AUTHORITY_REQUIRED');
         $this->assertStringNotContainsString('South', (string) $both->json('error.message'));
-        $this->api($hrA)->patchJson($this->url("/employees/{$this->id('aPlusWide')}"), ['full_name' => 'Nope'])->assertForbidden();
+        $this->api($hrA)->patchJson($this->url("/employees/{$this->id('aPlusWide')}"), ['version' => $this->employeeIdentityVersion($this->id('aPlusWide')), 'full_name' => 'Nope'])->assertForbidden();
         $this->withSchoolSession($hrA)->get("/app/hr/employees/{$this->id('both')}/edit")->assertForbidden();
         $this->assertSame('Chitra Both', $this->inSchool(fn () => Employee::query()->find($this->id('both'))->full_name));
 
         $hrAB = $this->actor('hr_officer', [$this->a->id, $this->b->id]);
-        $this->api($hrAB)->patchJson($this->url("/employees/{$this->id('both')}"), ['full_name' => 'Chitra Renamed'])->assertOk();
+        $this->api($hrAB)->patchJson($this->url("/employees/{$this->id('both')}"), ['version' => $this->employeeIdentityVersion($this->id('both')), 'full_name' => 'Chitra Renamed'])->assertOk();
         $this->assertTrue($this->inSchool(fn () => DB::table('school_audit_events')->where('event_type', 'employee.updated')->where('subject_id', $this->id('both'))->exists()));
     }
 
@@ -323,7 +323,7 @@ class HrCampusScopeTest extends TestCase
     public function a_campus_principal_edits_core_fields_but_never_onboards_or_sees_sensitive_hr(): void
     {
         $principal = $this->actor('principal', [$this->a->id]);
-        $this->withSchoolSession($principal)->put("/app/hr/employees/{$this->id('onlyA')}", ['full_name' => 'Asha P'])
+        $this->withSchoolSession($principal)->put("/app/hr/employees/{$this->id('onlyA')}", ['version' => $this->employeeIdentityVersion($this->id('onlyA')), 'full_name' => 'Asha P'])
             ->assertRedirect("/app/hr/employees/{$this->id('onlyA')}/overview");
         $this->withSchoolSession($principal)->get('/app/hr/employees/onboard')->assertForbidden();
         $this->withSchoolSession($principal)->get("/app/hr/employees/{$this->id('onlyA')}")->assertForbidden();
@@ -561,7 +561,7 @@ class HrCampusScopeTest extends TestCase
 
         $this->assertSame([], $this->directory($hrA, "?campus_id={$otherCampus->id}"));
         $foreign = app(TenantContext::class)->withSchool($other, fn () => $this->createEmployee($other, ['full_name' => 'Foreign']));
-        $this->api($hrA)->patchJson($this->url("/employees/{$foreign->id}"), ['full_name' => 'X'])->assertNotFound();
+        $this->api($hrA)->patchJson($this->url("/employees/{$foreign->id}"), ['version' => $this->employeeIdentityVersion($foreign->id), 'full_name' => 'X'])->assertNotFound();
     }
 
     /** Guards against a test-order dependent token cache. */

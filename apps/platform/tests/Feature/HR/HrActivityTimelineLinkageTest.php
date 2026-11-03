@@ -8,7 +8,6 @@ use App\Domain\HR\Application\EmployeeActivityTimelineService;
 use App\Domain\HR\Application\EmployeeAddressService;
 use App\Domain\HR\Application\EmployeeAssignmentService;
 use App\Domain\HR\Application\EmployeeCertificationService;
-use App\Domain\HR\Application\EmployeeDocumentService;
 use App\Domain\HR\Application\EmployeePersonalDetailService;
 use App\Domain\HR\Application\EmployeeQualificationService;
 use App\Domain\HR\Application\EmployeeService;
@@ -160,11 +159,7 @@ class HrActivityTimelineLinkageTest extends TestCase
         $actor = $this->fullHrActor($school);
         $employee = $this->createEmployee($school);
 
-        app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'id_proof', 'classification_tier' => 'restricted', 'storage_disk' => 'local',
-            'storage_path' => 'employee-documents/doc.pdf', 'original_filename' => 'doc.pdf',
-            'mime_type' => 'application/pdf', 'size_bytes' => 100,
-        ], $actor);
+        $this->registerHrDocument($employee, $actor, 'restricted', 'employment_contract');
 
         $entries = $this->entries($school, $employee->id, $actor);
         $this->assertTrue(collect($entries)->contains(fn ($e) => $e->eventType === 'hr.employee_document.created'));

@@ -3,6 +3,8 @@
 namespace App\Domain\HR\Http\Controllers;
 
 use App\Domain\HR\Application\EmployeeEmergencyContactService;
+use App\Domain\HR\Application\Profile\ProfileContactNormalizer;
+use App\Domain\HR\Application\Profile\ProfileRecordArchiveReason;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeEmergencyContact;
 use App\Http\Controllers\Controller;
@@ -10,6 +12,7 @@ use App\Models\School;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 /**
  * Phase 8A closure correction (item 3) -- HTTP mutation transport for
@@ -28,8 +31,8 @@ class EmployeeEmergencyContactController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'relationship' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'phone' => ['required', 'string', 'max:32'],
-            'alternate_phone' => ['sometimes', 'nullable', 'string', 'max:32'],
+            'phone' => ['required', 'string', 'max:32', ProfileContactNormalizer::PHONE_RULE],
+            'alternate_phone' => ['sometimes', 'nullable', 'string', 'max:32', ProfileContactNormalizer::PHONE_RULE],
             'email' => ['sometimes', 'nullable', 'email', 'max:255'],
         ]);
 
@@ -48,8 +51,8 @@ class EmployeeEmergencyContactController extends Controller
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
             'relationship' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'phone' => ['sometimes', 'string', 'max:32'],
-            'alternate_phone' => ['sometimes', 'nullable', 'string', 'max:32'],
+            'phone' => ['sometimes', 'string', 'max:32', ProfileContactNormalizer::PHONE_RULE],
+            'alternate_phone' => ['sometimes', 'nullable', 'string', 'max:32', ProfileContactNormalizer::PHONE_RULE],
             'email' => ['sometimes', 'nullable', 'email', 'max:255'],
         ]);
 
@@ -65,7 +68,9 @@ class EmployeeEmergencyContactController extends Controller
         $employeeModel = Employee::query()->findOrFail($employee);
         $contactModel = EmployeeEmergencyContact::query()->findOrFail($contact);
 
-        $service->remove($employeeModel, $contactModel, $request->user());
+        // HR.2A (S-16): an archive, with a closed reason; the record stays as evidence.
+        $reason = ProfileRecordArchiveReason::from((string) $request->validate(['reason_code' => ['required', 'string', Rule::in(ProfileRecordArchiveReason::values())]], ['reason_code.*' => 'Choose why this record is being archived.'])['reason_code']);
+        $service->remove($employeeModel, $contactModel, $request->user(), $reason);
 
         return response()->json(status: 204);
     }

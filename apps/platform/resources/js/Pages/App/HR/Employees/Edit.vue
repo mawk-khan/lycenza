@@ -11,6 +11,8 @@ interface Props {
         fullName: string;
         workEmail: string | null;
         workPhone: string | null;
+        // HR.2A: the stale-form token; the save refuses a form opened before a newer change.
+        version: string;
     };
 }
 
@@ -20,6 +22,7 @@ const form = useForm({
     full_name: props.employee.fullName,
     work_email: props.employee.workEmail ?? '',
     work_phone: props.employee.workPhone ?? '',
+    version: props.employee.version,
 });
 
 // ORG.7E-1: a refusal not tied to one field (e.g. the Employee also works on

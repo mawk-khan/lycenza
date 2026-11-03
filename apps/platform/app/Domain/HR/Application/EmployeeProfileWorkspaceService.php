@@ -2,6 +2,7 @@
 
 namespace App\Domain\HR\Application;
 
+use App\Domain\HR\Application\Profile\EmployeeDocumentCategory;
 use App\Domain\HR\Application\Reporting\ReportingAsOfReader;
 use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\Employee;
@@ -155,6 +156,8 @@ class EmployeeProfileWorkspaceService
             ->first();
 
         $addresses = EmployeeAddress::query()
+            // HR.2A (S-16): archived records are evidence, not current profile data.
+            ->whereNull('archived_at')
             ->where('school_id', $school->id)
             ->where('employee_id', $employee->id)
             ->orderBy('address_type')
@@ -162,6 +165,8 @@ class EmployeeProfileWorkspaceService
             ->get();
 
         $emergencyContacts = EmployeeEmergencyContact::query()
+            // HR.2A (S-16): archived records are evidence, not current profile data.
+            ->whereNull('archived_at')
             ->where('school_id', $school->id)
             ->where('employee_id', $employee->id)
             ->orderByDesc('is_primary')
@@ -210,6 +215,8 @@ class EmployeeProfileWorkspaceService
         // Phase 8A.10: not queried at all without hr.employees.qualifications.view
         // -- see this class's docblock.
         $qualifications = ! $canViewQualifications ? collect() : EmployeeQualification::query()
+            // HR.2A (S-16): archived records are evidence, not current profile data.
+            ->whereNull('archived_at')
             ->where('school_id', $school->id)
             ->where('employee_id', $employee->id)
             ->orderByDesc('starts_on')
@@ -217,6 +224,8 @@ class EmployeeProfileWorkspaceService
             ->get();
 
         $experience = ! $canViewQualifications ? collect() : EmployeeExperience::query()
+            // HR.2A (S-16): archived records are evidence, not current profile data.
+            ->whereNull('archived_at')
             ->where('school_id', $school->id)
             ->where('employee_id', $employee->id)
             ->orderByDesc('starts_on')
@@ -224,6 +233,8 @@ class EmployeeProfileWorkspaceService
             ->get();
 
         $certifications = ! $canViewQualifications ? collect() : EmployeeCertification::query()
+            // HR.2A (S-16): archived records are evidence, not current profile data.
+            ->whereNull('archived_at')
             ->where('school_id', $school->id)
             ->where('employee_id', $employee->id)
             ->orderByDesc('issued_on')
@@ -246,6 +257,8 @@ class EmployeeProfileWorkspaceService
         // hr.employees.notes.view, same "absent, not fetched" shape as
         // qualifications/documents above.
         $notes = ! $canViewNotes ? collect() : EmployeeNote::query()
+            // HR.2A (S-16): archived records are evidence, not current profile data.
+            ->whereNull('archived_at')
             ->where('school_id', $school->id)
             ->where('employee_id', $employee->id)
             ->orderByDesc('created_at')
@@ -378,6 +391,8 @@ class EmployeeProfileWorkspaceService
                 issuedOn: $d->issued_on?->toDateString(),
                 expiresOn: $d->expires_on?->toDateString(),
                 status: $d->status,
+                hasFile: $d->document_id !== null,
+                categoryLabel: EmployeeDocumentCategory::labelFor($d->category),
             ))->all(),
             notes: $notes->map(fn (EmployeeNote $n) => new EmployeeProfileNoteEntry(
                 id: $n->id,

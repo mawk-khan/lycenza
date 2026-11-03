@@ -192,3 +192,29 @@ integration. Alternative 2 names the FK-referencing shape
 but adopting it is a decision for that future ADR to make, informed by
 whatever real requirement triggers it — not something this ADR plans,
 schedules, or treats as the eventual default outcome.
+
+## HR.2A amendment (2026-11-03): HR document records reference a governed Document
+
+**Status:** accepted by the HR.2A checkpoint. This is the explicit
+supersession this ADR required before `employee_documents` could gain a key
+to `documents`.
+
+- **Two tables, never merged.** HR keeps its record (closed category, HR
+  tier, issue and expiry dates, archive); Documents keeps the bytes.
+- **A new HR record is created only through an upload**
+  (`DocumentService::createForEmployee()`, PDF/JPEG/PNG). It references its
+  Document by a composite same-School key
+  (`employee_documents.document_id`).
+  - The database refuses a new path-only record.
+  - Pre-HR.2A rows keep their legacy path metadata.
+- **The tiers stay in step.** A reclassification of the HR record
+  reclassifies the Document in the same transaction
+  (`reclassifyForEmployee()`).
+- **Archive** archives both.
+- **Downloads** go through `DocumentReadService::employeeContent()`,
+  re-authorized by the Document's tier.
+- **No new HR coupling.** The Documents entry points used by HR read no HR
+  model, so no Documents → HR coupling is added (the pre-existing generic
+  `employee` owner check stays as recorded drift).
+- **Retention:** the HR evidence purge removes the HR records before the
+  Employee's Documents.

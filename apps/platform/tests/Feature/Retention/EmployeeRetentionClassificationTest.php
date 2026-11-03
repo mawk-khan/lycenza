@@ -45,6 +45,8 @@ class EmployeeRetentionClassificationTest extends TestCase
             'leave_requests' => 'D9 evidence (8 y): Leave, purged by Leave first (HRX.6, ADR 0065 §27)',
             'leave_decisions' => 'retained, blocks: as the deciding MANAGER of another Employee\'s request, until that request\'s own D9 expiry (its own decisions go with its requests, HRX.6, ADR 0065 §27)',
             'staff_attendance_records' => 'D9 evidence (8 y): Staff Attendance, purged by Staff Attendance first (HRX.6, ADR 0065 §27)',
+            // HR.2A (D1-03): external reference codes go with their Employee (FK cascade).
+            'employee_reference_codes' => 'D9 evidence (8 y): identity references, go with the Employee (cascade)',
         ],
         'employment_records' => [
             'employee_assignments' => 'D9 evidence (8 y): employment history, purged with the Employee',

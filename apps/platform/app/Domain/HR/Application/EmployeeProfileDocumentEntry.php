@@ -35,6 +35,9 @@ final class EmployeeProfileDocumentEntry
         public readonly ?string $issuedOn,
         public readonly ?string $expiresOn,
         public readonly string $status,
+        // HR.2A: the record holds a governed file (a pre-HR.2A record has path metadata only).
+        public readonly bool $hasFile = false,
+        public readonly ?string $categoryLabel = null,
     ) {}
 
     /** @return array<string, mixed> */
@@ -47,6 +50,8 @@ final class EmployeeProfileDocumentEntry
             'issued_on' => $this->issuedOn,
             'expires_on' => $this->expiresOn,
             'status' => $this->status,
+            'has_file' => $this->hasFile,
+            'category_label' => $this->categoryLabel ?? $this->category,
         ];
     }
 }

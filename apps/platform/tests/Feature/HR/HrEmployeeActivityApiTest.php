@@ -105,14 +105,12 @@ class HrEmployeeActivityApiTest extends TestCase
         $employee = $this->createEmployee($school);
         $actor = $this->fullHrActor($school);
 
-        $document = app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'contract', 'classification_tier' => 'restricted', 'storage_path' => 'docs/contract.pdf', 'storage_disk' => 'local', 'original_filename' => 'contract.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1000,
-        ], $actor);
+        $document = $this->registerHrDocument($employee, $actor, 'restricted', 'employment_contract');
         app(EmployeeDocumentService::class)->update($employee, $document, ['classification_tier' => 'highly_sensitive'], $actor);
         app(EmployeeSensitiveDocumentReadService::class)->forEmployee($school, $employee->id, $actor);
         app(TenantContext::class)->set($school);
         $document = $document->fresh();
-        app(EmployeeDocumentService::class)->update($employee, $document, ['category' => 'updated-while-sensitive'], $actor);
+        app(EmployeeDocumentService::class)->update($employee, $document, ['category' => 'qualification_evidence'], $actor);
         app(TenantContext::class)->set($school);
         $document = $document->fresh();
         app(EmployeeDocumentService::class)->update($employee, $document, ['classification_tier' => 'restricted'], $actor);
@@ -135,9 +133,7 @@ class HrEmployeeActivityApiTest extends TestCase
         $employee = $this->createEmployee($school);
         $actor = $this->fullHrActor($school);
 
-        $document = app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'contract', 'classification_tier' => 'restricted', 'storage_path' => 'docs/contract.pdf', 'storage_disk' => 'local', 'original_filename' => 'contract.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1000,
-        ], $actor);
+        $document = $this->registerHrDocument($employee, $actor, 'restricted', 'employment_contract');
         app(EmployeeDocumentService::class)->update($employee, $document, ['classification_tier' => 'highly_sensitive'], $actor);
         app(EmployeeSensitiveDocumentReadService::class)->forEmployee($school, $employee->id, $actor);
 
@@ -156,9 +152,7 @@ class HrEmployeeActivityApiTest extends TestCase
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
         $actor = $this->fullHrActor($school);
-        $document = app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'contract', 'classification_tier' => 'highly_sensitive', 'storage_path' => 'docs/hs.pdf', 'storage_disk' => 'local', 'original_filename' => 'hs.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1000,
-        ], $actor);
+        $document = $this->registerHrDocument($employee, $actor, 'highly_sensitive', 'employment_contract');
 
         $documentsOnlyActor = $this->createUserWithCapabilities($school, ['hr.employees.personal.view', 'hr.employees.documents.view']);
 

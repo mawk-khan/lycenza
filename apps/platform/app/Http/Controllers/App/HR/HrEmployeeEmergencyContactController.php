@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\App\HR;
 
 use App\Domain\HR\Application\EmployeeEmergencyContactService;
+use App\Domain\HR\Application\Profile\ProfileContactNormalizer;
+use App\Domain\HR\Application\Profile\ProfileRecordArchiveReason;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeEmergencyContact;
 use App\Http\Controllers\Controller;
@@ -11,6 +13,7 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class HrEmployeeEmergencyContactController extends Controller
 {
@@ -27,8 +30,8 @@ class HrEmployeeEmergencyContactController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'relationship' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'phone' => ['required', 'string', 'max:32'],
-            'alternate_phone' => ['sometimes', 'nullable', 'string', 'max:32'],
+            'phone' => ['required', 'string', 'max:32', ProfileContactNormalizer::PHONE_RULE],
+            'alternate_phone' => ['sometimes', 'nullable', 'string', 'max:32', ProfileContactNormalizer::PHONE_RULE],
             'email' => ['sometimes', 'nullable', 'email', 'max:255'],
         ]);
 
@@ -37,7 +40,7 @@ class HrEmployeeEmergencyContactController extends Controller
         return redirect("/app/hr/employees/{$model->id}");
     }
 
-    public function destroy(TenantContext $context, EmployeeEmergencyContactService $service, string $employee, string $contact): RedirectResponse
+    public function destroy(Request $request, TenantContext $context, EmployeeEmergencyContactService $service, string $employee, string $contact): RedirectResponse
     {
         $school = $context->requireSchool();
         $this->authorizeCapability('hr.employees.personal.manage', $school);
@@ -46,7 +49,9 @@ class HrEmployeeEmergencyContactController extends Controller
         $employeeModel = Employee::query()->findOrFail($employee);
         $contactModel = EmployeeEmergencyContact::query()->findOrFail($contact);
 
-        $service->remove($employeeModel, $contactModel, $context->actor());
+        // HR.2A (S-16): an archive, with a closed reason; the record stays as evidence.
+        $reason = ProfileRecordArchiveReason::from((string) $request->validate(['reason_code' => ['required', 'string', Rule::in(ProfileRecordArchiveReason::values())]], ['reason_code.*' => 'Choose why this record is being archived.'])['reason_code']);
+        $service->remove($employeeModel, $contactModel, $context->actor(), $reason);
 
         return redirect("/app/hr/employees/{$employeeModel->id}");
     }

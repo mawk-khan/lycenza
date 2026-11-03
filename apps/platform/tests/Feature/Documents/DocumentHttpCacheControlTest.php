@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -23,7 +24,7 @@ use Tests\TestCase;
  */
 class DocumentHttpCacheControlTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, ProvidesSensitiveActionMfa;
 
     protected function setUp(): void
     {
@@ -34,7 +35,8 @@ class DocumentHttpCacheControlTest extends TestCase
 
     private function token($user): string
     {
-        return $user->createToken('test-device')->plainTextToken;
+        // HR.2A: a Highly Sensitive read needs MFA assurance (a token minted after the factor).
+        return $this->mfaToken($user);
     }
 
     private function createDocument($school, $employee, $actor, string $tier = 'internal'): Document

@@ -19,7 +19,9 @@ use App\Models\UserMfaFactor;
 use App\Models\UserMfaRecoveryCode;
 use App\Models\WebhookEndpoint;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesCommunicationFixtures;
 use Tests\Concerns\CreatesFinanceFixtures;
@@ -148,12 +150,14 @@ class SensitiveActionMfaTest extends TestCase
 
         // HR: a highly sensitive record needs the code; a restricted one never does.
         $employee = $this->createEmployee($school);
-        $document = ['category' => 'id_proof', 'storage_disk' => 's3', 'storage_path' => 'x.pdf', 'original_filename' => 'x.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 10];
-        $this->bearer($token)->withHeader('Idempotency-Key', 'sr4-hr-doc-1')->postJson("{$api}/employees/{$employee->id}/hr-document-records", $document + ['classification_tier' => 'highly_sensitive'])
+        // HR.2A: the record is an upload into the governed Documents repository.
+        Storage::fake((string) config('documents.disk'));
+        $document = fn (string $category) => ['file' => UploadedFile::fake()->createWithContent('x.pdf', "%PDF-1.4\n%x\n"), 'category' => $category];
+        $this->bearer($token)->withHeader('Idempotency-Key', 'sr4-hr-doc-1')->postJson("{$api}/employees/{$employee->id}/hr-document-records", $document('identity_document') + ['classification_tier' => 'highly_sensitive'])
             ->assertStatus(422)->assertJsonStructure(['error' => ['errors' => ['mfa_code']]]);
-        $this->bearer($token)->withHeader('Idempotency-Key', 'sr4-hr-doc-2')->postJson("{$api}/employees/{$employee->id}/hr-document-records", $document + ['classification_tier' => 'highly_sensitive'] + $this->mfaBody($token))
+        $this->bearer($token)->withHeader('Idempotency-Key', 'sr4-hr-doc-2')->postJson("{$api}/employees/{$employee->id}/hr-document-records", $document('identity_document') + ['classification_tier' => 'highly_sensitive'] + $this->mfaBody($token))
             ->assertCreated();
-        $this->bearer($token)->withHeader('Idempotency-Key', 'sr4-hr-doc-3')->postJson("{$api}/employees/{$employee->id}/hr-document-records", $document + ['classification_tier' => 'restricted'])
+        $this->bearer($token)->withHeader('Idempotency-Key', 'sr4-hr-doc-3')->postJson("{$api}/employees/{$employee->id}/hr-document-records", $document('employment_contract') + ['classification_tier' => 'restricted'])
             ->assertCreated();
         $this->assertSame(2, $this->inSchool($school, fn () => EmployeeDocument::query()->count()));
     }

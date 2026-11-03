@@ -18538,7 +18538,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Authenticated but lacking hr.employees.sensitive.view in this School. */
+            /** @description Authenticated but lacking hr.employees.sensitive.view in this School, or (HR.2A) the bearer token carries no current MFA assurance. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -18590,7 +18590,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Authenticated but lacking the required capability for this Document's classification tier. */
+            /** @description Authenticated but lacking the required capability for this Document's classification tier, or (HR.2A) the Document is Highly Sensitive and the bearer token carries no current MFA assurance. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -18645,7 +18645,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Authenticated but lacking the required capability for this Document's classification tier. */
+            /** @description Authenticated but lacking the required capability for this Document's classification tier, or (HR.2A) the Document is Highly Sensitive and the bearer token carries no current MFA assurance. */
             403: {
                 headers: {
                     [name: string]: unknown;

@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\Concerns\RequiresObjectStorage;
 use Tests\TestCase;
 
@@ -26,7 +27,7 @@ use Tests\TestCase;
  */
 class DocumentHttpMinioIntegrationTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, ProvidesSensitiveActionMfa;
     use RequiresObjectStorage;
 
     protected function setUp(): void
@@ -37,7 +38,8 @@ class DocumentHttpMinioIntegrationTest extends TestCase
 
     private function token($user): string
     {
-        return $user->createToken('test-device')->plainTextToken;
+        // HR.2A: a Highly Sensitive read needs MFA assurance (a token minted after the factor).
+        return $this->mfaToken($user);
     }
 
     #[Test]

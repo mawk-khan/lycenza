@@ -109,7 +109,14 @@ final class UserReferenceCatalog
         'elective_teaching_assignments' => ['created_by_user_id' => self::RETAIN_REFERENCE, 'ended_by_user_id' => self::RETAIN_REFERENCE],
         'email_suppressions' => ['released_by_user_id' => self::RETAIN_REFERENCE],
         'employee_documents' => ['uploaded_by_user_id' => self::RETAIN_REFERENCE],
-        'employee_notes' => ['author_user_id' => self::RETAIN_REFERENCE],
+        'employee_notes' => ['archived_by_user_id' => self::RETAIN_REFERENCE, 'author_user_id' => self::RETAIN_REFERENCE],
+        // HR.2A (S-16): who archived an ancillary profile record; who recorded or retired a reference code.
+        'employee_addresses' => ['archived_by_user_id' => self::RETAIN_REFERENCE],
+        'employee_emergency_contacts' => ['archived_by_user_id' => self::RETAIN_REFERENCE],
+        'employee_qualifications' => ['archived_by_user_id' => self::RETAIN_REFERENCE],
+        'employee_experience_records' => ['archived_by_user_id' => self::RETAIN_REFERENCE],
+        'employee_certifications' => ['archived_by_user_id' => self::RETAIN_REFERENCE],
+        'employee_reference_codes' => ['recorded_by_user_id' => self::RETAIN_REFERENCE, 'retired_by_user_id' => self::RETAIN_REFERENCE],
         // HR.1A: who recorded an employment-terms change and a named placement change (history, RESTRICT).
         'employee_placement_changes' => ['recorded_by_user_id' => self::RETAIN_REFERENCE],
         // HR.3A: who started, ended or voided a reporting line is HR evidence.

@@ -123,9 +123,10 @@ class RetentionDeleteBoundaryTest extends TestCase
         $this->assertFalse($exists($a, $visitorA));
 
         // An ordinary product delete by the runtime role is not retention: a hold does not freeze the product.
-        $address = $this->createEmployeeAddress($this->createEmployee($a))->id;
+        // (HR.2A: HR profile records are archived, never deleted -- a Guardian unlink is the product delete here.)
+        $relationship = $this->createStudentGuardianRelationship($this->createStudent($a), $this->createGuardian($a))->id;
         $holds->place($a->id, 'litigation', 'RH6-HOLD-3');
-        $this->assertSame('', $this->refusal('pgsql', $a, fn () => DB::table('employee_addresses')->where('id', $address)->delete()));
+        $this->assertSame('', $this->refusal('pgsql', $a, fn () => DB::table('student_guardian_relationships')->where('id', $relationship)->delete()));
     }
 
     #[Test]

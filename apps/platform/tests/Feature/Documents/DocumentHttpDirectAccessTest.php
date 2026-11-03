@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
+use Tests\Concerns\ProvidesSensitiveActionMfa;
 use Tests\TestCase;
 
 /**
@@ -26,7 +27,7 @@ use Tests\TestCase;
  */
 class DocumentHttpDirectAccessTest extends TestCase
 {
-    use CreatesTenancyFixtures;
+    use CreatesTenancyFixtures, ProvidesSensitiveActionMfa;
 
     protected function setUp(): void
     {
@@ -37,7 +38,8 @@ class DocumentHttpDirectAccessTest extends TestCase
 
     private function token($user): string
     {
-        return $user->createToken('test-device')->plainTextToken;
+        // HR.2A: a Highly Sensitive read needs MFA assurance (a token minted after the factor).
+        return $this->mfaToken($user);
     }
 
     private function createDocument($school, $employee, $actor, string $tier, string $filename = 'report.pdf', string $content = 'exact-content-bytes'): Document

@@ -179,7 +179,7 @@ class EmployeeNoteTest extends TestCase
     }
 
     #[Test]
-    public function remove_permanently_deletes_the_row(): void
+    public function remove_archives_the_row_and_keeps_it_as_evidence(): void
     {
         $school = $this->createSchool();
         $employee = $this->createEmployee($school);
@@ -187,8 +187,11 @@ class EmployeeNoteTest extends TestCase
 
         app(EmployeeNoteService::class)->remove($employee, $note, $this->fullHrActor($school));
 
+        // HR.2A (S-16, OD-HR-13): archived, never deleted.
         app(TenantContext::class)->set($school);
-        $this->assertSame(0, EmployeeNote::query()->where('id', $note->id)->count());
+        $archived = EmployeeNote::query()->findOrFail($note->id);
+        $this->assertNotNull($archived->archived_at);
+        $this->assertSame('no_longer_current', $archived->archive_reason);
     }
 
     #[Test]

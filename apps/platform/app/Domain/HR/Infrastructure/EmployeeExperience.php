@@ -35,6 +35,9 @@ use Illuminate\Support\Carbon;
  * @property string|null $description
  * @property string|null $location
  * @property string|null $country_code
+ * @property Carbon|null $archived_at
+ * @property string|null $archived_by_user_id
+ * @property string|null $archive_reason
  */
 class EmployeeExperience extends Model
 {
@@ -57,6 +60,7 @@ class EmployeeExperience extends Model
     protected function casts(): array
     {
         return [
+            'archived_at' => 'datetime',
             'starts_on' => 'date',
             'ends_on' => 'date',
         ];

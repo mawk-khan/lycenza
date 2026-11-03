@@ -3,6 +3,8 @@
 namespace App\Domain\HR\Application;
 
 use App\Domain\HR\Application\Exceptions\EmployeeOwnershipMismatchException;
+use App\Domain\HR\Application\Profile\ArchivesProfileRecords;
+use App\Domain\HR\Application\Profile\ProfileRecordArchiveReason;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeCertification;
 use App\Models\User;
@@ -24,11 +26,12 @@ use Illuminate\Support\Facades\DB;
  */
 class EmployeeCertificationService
 {
-    use AuthorizesCapability;
+    use ArchivesProfileRecords, AuthorizesCapability;
 
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
+        private readonly HrSelfAdministrationGuard $selfAdministration,
     ) {}
 
     /**
@@ -41,6 +44,8 @@ class EmployeeCertificationService
 
         return $this->context->withSchool($employee->school, function () use ($employee, $attributes, $actor) {
             return DB::transaction(function () use ($employee, $attributes, $actor) {
+                // HR.2A (S-3): nobody administers their own HR record.
+                $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.certification');
                 $certification = EmployeeCertification::query()->create([
                     ...$attributes,
                     'employee_id' => $employee->id,
@@ -66,10 +71,13 @@ class EmployeeCertificationService
     {
         $this->authorizeCapabilityFor($actor, 'hr.employees.qualifications.manage', $employee->school);
         $this->assertOwnership($employee, $certification);
+        $this->assertLiveRecord($certification);
         unset($attributes['school_id'], $attributes['employee_id'], $attributes['verification_status'], $attributes['verified_at']);
 
         return $this->context->withSchool($employee->school, function () use ($employee, $certification, $attributes, $actor) {
             return DB::transaction(function () use ($employee, $certification, $attributes, $actor) {
+                // HR.2A (S-3): nobody administers their own HR record.
+                $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.certification');
                 $wasVerified = $certification->verification_status !== 'unverified';
 
                 if ($attributes !== [] && $wasVerified) {
@@ -91,31 +99,28 @@ class EmployeeCertificationService
         });
     }
 
-    public function remove(Employee $employee, EmployeeCertification $certification, User $actor): void
+    /**
+     * HR.2A (S-16, OD-HR-13): "remove" ARCHIVES the record with a closed
+     * reason -- frozen evidence, never deleted (ArchivesProfileRecords).
+     */
+    public function remove(Employee $employee, EmployeeCertification $certification, User $actor, ProfileRecordArchiveReason $reason = ProfileRecordArchiveReason::NO_LONGER_CURRENT): void
     {
         $this->authorizeCapabilityFor($actor, 'hr.employees.qualifications.manage', $employee->school);
         $this->assertOwnership($employee, $certification);
 
-        $this->context->withSchool($employee->school, function () use ($employee, $certification, $actor) {
-            DB::transaction(function () use ($employee, $certification, $actor) {
-                $certificationId = $certification->id;
-                $certification->delete();
-
-                $this->audit->school($employee->school, 'hr.certification.removed', actor: $actor, metadata: [
-                    'employeeId' => $employee->id,
-                    'certificationId' => $certificationId,
-                ]);
-            });
-        });
+        $this->archiveProfileRecord($employee, $certification, $reason, $actor, 'hr.certification.archived', ['certificationId' => $certification->id]);
     }
 
     public function verify(Employee $employee, EmployeeCertification $certification, User $actor): EmployeeCertification
     {
         $this->authorizeCapabilityFor($actor, 'hr.employees.qualifications.manage', $employee->school);
         $this->assertOwnership($employee, $certification);
+        $this->assertLiveRecord($certification);
 
         return $this->context->withSchool($employee->school, function () use ($employee, $certification, $actor) {
             return DB::transaction(function () use ($employee, $certification, $actor) {
+                // HR.2A (S-3): nobody administers their own HR record.
+                $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.certification');
                 $certification->update(['verification_status' => 'verified', 'verified_at' => now()]);
 
                 $this->audit->school($employee->school, 'hr.certification.verified', actor: $actor, subject: $certification, metadata: [
@@ -132,9 +137,12 @@ class EmployeeCertificationService
     {
         $this->authorizeCapabilityFor($actor, 'hr.employees.qualifications.manage', $employee->school);
         $this->assertOwnership($employee, $certification);
+        $this->assertLiveRecord($certification);
 
         return $this->context->withSchool($employee->school, function () use ($employee, $certification, $actor) {
             return DB::transaction(function () use ($employee, $certification, $actor) {
+                // HR.2A (S-3): nobody administers their own HR record.
+                $this->selfAdministration->refuseOwnEmployee($actor, $employee->id, 'profile.certification');
                 $certification->update(['verification_status' => 'rejected', 'verified_at' => null]);
 
                 $this->audit->school($employee->school, 'hr.certification.rejected', actor: $actor, subject: $certification, metadata: [

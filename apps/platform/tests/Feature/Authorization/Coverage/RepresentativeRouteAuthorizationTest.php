@@ -220,21 +220,25 @@ class RepresentativeRouteAuthorizationTest extends TestCase
         $holder = $this->createUserWithCapabilities($school, ['hr.employees.documents.manage']);
         $employee = $this->createEmployee($school);
         $url = "/api/v1/schools/{$school->id}/employees/{$employee->id}/hr-document-records";
-        $record = ['category' => 'id_proof', 'classification_tier' => 'restricted', 'storage_disk' => 's3', 'storage_path' => 'x.pdf', 'original_filename' => 'x.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 10];
+        // HR.2A: an HR document record is a multipart upload through Documents (closed category).
+        Storage::fake((string) config('documents.disk'));
+        $file = UploadedFile::fake()->createWithContent('x.pdf', "%PDF-1.4\n%replay\n");
+        $record = ['category' => 'employment_contract', 'classification_tier' => 'restricted', 'file' => $file];
+        $post = fn (User $user, string $key, array $body) => $this->actingAs($user)->withHeaders(['Idempotency-Key' => $key, 'Accept' => 'application/json'])->post($url, $body);
 
-        $this->actingAs($holder)->withHeader('Idempotency-Key', 'org2-replay-1')->postJson($url, $record)->assertCreated();
-        $this->actingAs($holder)->withHeader('Idempotency-Key', 'org2-replay-1')->postJson($url, $record)->assertCreated();
+        $post($holder, 'org2-replay-1', $record)->assertCreated();
+        $post($holder, 'org2-replay-1', $record)->assertCreated();
 
         app(TenantContext::class)->withSchool($school, fn () => MembershipRoleAssignment::query()
             ->whereHas('membership', fn ($q) => $q->where('user_id', $holder->id))
             ->update(['revoked_at' => now(), 'revoked_by_user_id' => $holder->id, 'revocation_reason' => MembershipRoleAssignment::REASON_REVOKED]));
         app(CapabilityResolver::class)->forgetCache($holder, $school);
 
-        $this->actingAs($holder)->withHeader('Idempotency-Key', 'org2-replay-1')->postJson($url, $record)->assertForbidden();
+        $post($holder, 'org2-replay-1', $record)->assertForbidden();
         // A member holding only the sensitive tier still passes the floor and
         // reaches the tier's own step-up (a fresh MFA code), not a 403.
         $sensitive = $this->createUserWithCapabilities($school, ['hr.employees.sensitive.manage']);
-        $this->actingAs($sensitive)->withHeader('Idempotency-Key', 'org2-replay-2')->postJson($url, ['classification_tier' => 'highly_sensitive'] + $record)
+        $post($sensitive, 'org2-replay-2', ['classification_tier' => 'highly_sensitive'] + $record)
             ->assertStatus(422)->assertJsonStructure(['error' => ['errors' => ['mfa_code']]]);
     }
 }

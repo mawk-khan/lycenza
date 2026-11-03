@@ -6,7 +6,6 @@ use App\Domain\HR\Application\EmployeeActivityTimelineQuery;
 use App\Domain\HR\Application\EmployeeActivityTimelineService;
 use App\Domain\HR\Application\EmployeeAddressService;
 use App\Domain\HR\Application\EmployeeCertificationService;
-use App\Domain\HR\Application\EmployeeDocumentService;
 use App\Domain\HR\Application\EmployeePersonalDetailService;
 use App\Domain\Identity\Application\Minimization\UserMinimizationService;
 use App\Models\SchoolAuditEvent;
@@ -47,11 +46,7 @@ class HrActivityTimelineDisclosureTest extends TestCase
         app(EmployeeCertificationService::class)->add($employee, [
             'name' => 'Sentinel Certificate', 'issuer' => 'Sentinel Issuer', 'credential_number' => 'SENTINEL-CRED-999',
         ], $actor);
-        app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'id_proof', 'classification_tier' => 'restricted', 'storage_disk' => 'local',
-            'storage_path' => 'employee-documents/sentinel-passport-scan.pdf',
-            'original_filename' => 'sentinel-passport-scan.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 2048,
-        ], $actor);
+        $this->registerHrDocument($employee, $actor, 'restricted', 'employment_contract');
 
         $result = app(EmployeeActivityTimelineService::class)->get($school, $employee->id, $actor, new EmployeeActivityTimelineQuery(perPage: 100));
         $serialized = json_encode(array_map(fn ($e) => $e->toArray(), $result->items()));
@@ -72,11 +67,7 @@ class HrActivityTimelineDisclosureTest extends TestCase
         $actor = $this->fullHrActor($school);
         $employee = $this->createEmployee($school);
 
-        app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'id_proof', 'classification_tier' => 'restricted', 'storage_disk' => 's3',
-            'storage_path' => 'employee-documents/x.pdf', 'original_filename' => 'x.pdf',
-            'mime_type' => 'application/pdf', 'size_bytes' => 999999,
-        ], $actor);
+        $this->registerHrDocument($employee, $actor, 'restricted', 'employment_contract');
 
         $result = app(EmployeeActivityTimelineService::class)->get($school, $employee->id, $actor, new EmployeeActivityTimelineQuery);
         $serialized = json_encode(array_map(fn ($e) => $e->toArray(), $result->items()));

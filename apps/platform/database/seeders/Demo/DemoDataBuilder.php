@@ -24,8 +24,13 @@ use App\Domain\HR\Application\EmployeeNumberAllocator;
 use App\Domain\HR\Application\EmployeeNumberFormatter;
 use App\Domain\HR\Infrastructure\Department;
 use App\Domain\HR\Infrastructure\Employee;
+use App\Domain\HR\Infrastructure\EmployeeAddress;
 use App\Domain\HR\Infrastructure\EmployeeAssignment;
 use App\Domain\HR\Infrastructure\EmployeeCategory;
+use App\Domain\HR\Infrastructure\EmployeeCertification;
+use App\Domain\HR\Infrastructure\EmployeeExperience;
+use App\Domain\HR\Infrastructure\EmployeeQualification;
+use App\Domain\HR\Infrastructure\EmployeeReferenceCode;
 use App\Domain\HR\Infrastructure\EmploymentRecord;
 use App\Domain\HR\Infrastructure\Position;
 use App\Domain\Identity\Application\AccountInvitationService;
@@ -687,7 +692,60 @@ final class DemoDataBuilder
 
                 $this->employees[$key] = $employee;
             }
+
+            $this->buildStaffProfiles();
         });
+    }
+
+    /**
+     * HR.2A: synthetic, non-gated profile records for two demo staff, so the
+     * Staff Profile shows reference codes, an address, qualifications, a CTET
+     * certification and overlapping previous experience (derived total). All
+     * values are invented; no gated family (bank, family, statutory identifier,
+     * health, photograph) is seeded. Documents are uploaded in the browser
+     * (they need real bytes in object storage).
+     */
+    private function buildStaffProfiles(): void
+    {
+        $profiles = [
+            'ENG' => ['codes' => ['staff_reference' => 'SR-ENG-01', 'erp' => 'ERP-1001'], 'city' => 'Pune',
+                'qualification' => ['masters', 'M.A. English', 'Demo State University', '2012-05-31'],
+                'experience' => [['Demo Public School', 'English Teacher', '2013-06-01', '2018-05-31'], ['Demo Evening Academy', 'Visiting Faculty', '2017-01-01', '2019-12-31']]],
+            'MATH' => ['codes' => ['staff_reference' => 'SR-MATH-01'], 'city' => 'Nashik',
+                'qualification' => ['masters', 'M.Sc. Mathematics', 'Demo Institute of Science', '2014-05-31'],
+                'experience' => [['Demo Valley School', 'Mathematics Teacher', '2015-06-01', '2023-05-31']],
+                'certification' => ['CTET (Paper II)', 'Central Board (demo)']],
+        ];
+        foreach ($profiles as $key => $profile) {
+            $employee = $this->employees[$key];
+            foreach ($profile['codes'] as $kind => $value) {
+                (new EmployeeReferenceCode)->forceFill([
+                    'school_id' => $this->school->id, 'employee_id' => $employee->id, 'kind' => $kind, 'value' => $value,
+                    'recorded_by_user_id' => $this->admin->id,
+                ])->save();
+            }
+            EmployeeAddress::query()->create([
+                'school_id' => $this->school->id, 'employee_id' => $employee->id, 'address_type' => 'current',
+                'address_line1' => '12 Demo Residency', 'city' => $profile['city'], 'state_region' => 'Maharashtra', 'postal_code' => '411001', 'country_code' => 'IN',
+            ]);
+            [$type, $name, $institution, $completed] = $profile['qualification'];
+            EmployeeQualification::query()->create([
+                'school_id' => $this->school->id, 'employee_id' => $employee->id, 'qualification_type' => $type,
+                'qualification_name' => $name, 'institution' => $institution, 'country_code' => 'IN', 'completed_on' => $completed,
+            ]);
+            foreach ($profile['experience'] as [$organization, $title, $from, $to]) {
+                EmployeeExperience::query()->create([
+                    'school_id' => $this->school->id, 'employee_id' => $employee->id, 'organization' => $organization,
+                    'job_title' => $title, 'starts_on' => $from, 'ends_on' => $to,
+                ]);
+            }
+            if (isset($profile['certification'])) {
+                EmployeeCertification::query()->create([
+                    'school_id' => $this->school->id, 'employee_id' => $employee->id,
+                    'name' => $profile['certification'][0], 'issuer' => $profile['certification'][1], 'issued_on' => '2016-02-15',
+                ]);
+            }
+        }
     }
 
     // ------------------------------------------------------------------

@@ -113,11 +113,19 @@ class EmployeeDirectoryService
 
         $employeeQuery = $this->access->employees($school, $scope)
             ->when(! $query->includeArchived, fn ($q) => $q->where('record_status', 'active'))
-            ->when($query->search !== null && trim($query->search) !== '', function ($q) use ($query) {
+            ->when($query->search !== null && trim($query->search) !== '', function ($q) use ($query, $school) {
                 $needle = addcslashes(trim($query->search), '%_\\');
-                $q->where(function ($w) use ($needle) {
+                $exact = mb_strtoupper(trim((string) $query->search));
+                $q->where(function ($w) use ($needle, $exact, $school) {
                     $w->where('employee_number', 'ilike', $needle.'%')
-                        ->orWhere('full_name', 'ilike', '%'.$needle.'%');
+                        ->orWhere('full_name', 'ilike', '%'.$needle.'%')
+                        // HR.2A (D1-03): an EXACT live reference code (Staff Reference, ERP or
+                        // legacy), normalized the way it is stored; served by the
+                        // (school_id, value) index -- never a `%term%` scan of codes.
+                        ->orWhereIn('employees.id', fn ($codes) => $codes->select('employee_id')->from('employee_reference_codes')
+                            ->where('employee_reference_codes.school_id', $school->id)
+                            ->where('value', $exact)
+                            ->whereNull('retired_at'));
                 });
             })
             // ORG.7E-0: the Campus filter is operational Campus membership --

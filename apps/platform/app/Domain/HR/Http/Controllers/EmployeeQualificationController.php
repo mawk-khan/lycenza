@@ -3,6 +3,7 @@
 namespace App\Domain\HR\Http\Controllers;
 
 use App\Domain\HR\Application\EmployeeQualificationService;
+use App\Domain\HR\Application\Profile\ProfileRecordArchiveReason;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Domain\HR\Infrastructure\EmployeeQualification;
 use App\Http\Controllers\Controller;
@@ -79,7 +80,9 @@ class EmployeeQualificationController extends Controller
         $employeeModel = Employee::query()->findOrFail($employee);
         $qualificationModel = EmployeeQualification::query()->findOrFail($qualification);
 
-        $service->remove($employeeModel, $qualificationModel, $request->user());
+        // HR.2A (S-16): an archive, with a closed reason; the record stays as evidence.
+        $reason = ProfileRecordArchiveReason::from((string) $request->validate(['reason_code' => ['required', 'string', Rule::in(ProfileRecordArchiveReason::values())]], ['reason_code.*' => 'Choose why this record is being archived.'])['reason_code']);
+        $service->remove($employeeModel, $qualificationModel, $request->user(), $reason);
 
         return response()->json(status: 204);
     }

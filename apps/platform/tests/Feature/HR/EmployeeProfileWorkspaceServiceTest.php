@@ -395,7 +395,7 @@ class EmployeeProfileWorkspaceServiceTest extends TestCase
         $workspace = $this->build($school, $employee->id);
 
         $this->assertCount(1, $workspace->documents);
-        $this->assertSame(['id', 'category', 'classification_tier', 'issued_on', 'expires_on', 'status'], array_keys($workspace->documents[0]->toArray()));
+        $this->assertSame(['id', 'category', 'classification_tier', 'issued_on', 'expires_on', 'status', 'has_file', 'category_label'], array_keys($workspace->documents[0]->toArray()), 'HR.2A adds whether a governed file exists and the category label');
         $this->assertSame('restricted', $workspace->documents[0]->classificationTier);
     }
 

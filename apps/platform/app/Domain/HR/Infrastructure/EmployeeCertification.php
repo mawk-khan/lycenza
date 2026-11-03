@@ -31,6 +31,9 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $expires_on
  * @property string $verification_status unverified|verified|rejected
  * @property Carbon|null $verified_at
+ * @property Carbon|null $archived_at
+ * @property string|null $archived_by_user_id
+ * @property string|null $archive_reason
  */
 class EmployeeCertification extends Model
 {
@@ -53,6 +56,7 @@ class EmployeeCertification extends Model
     protected function casts(): array
     {
         return [
+            'archived_at' => 'datetime',
             'issued_on' => 'date',
             'expires_on' => 'date',
             'verified_at' => 'datetime',

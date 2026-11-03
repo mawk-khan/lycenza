@@ -5,7 +5,6 @@ namespace Tests\Feature\HR;
 use App\Domain\HR\Application\EmployeeActivityTimelineQuery;
 use App\Domain\HR\Application\EmployeeActivityTimelineService;
 use App\Domain\HR\Application\EmployeeCertificationService;
-use App\Domain\HR\Application\EmployeeDocumentService;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\CreatesTenancyFixtures;
@@ -134,10 +133,7 @@ class HrActivityTimelinePaginationTest extends TestCase
         $employee = $this->createEmployee($school);
 
         for ($i = 0; $i < 25; $i++) {
-            app(EmployeeDocumentService::class)->register($employee, [
-                'category' => 'id_proof', 'classification_tier' => 'restricted', 'storage_disk' => 'local',
-                'storage_path' => "doc-{$i}.pdf", 'original_filename' => "doc-{$i}.pdf", 'mime_type' => 'application/pdf', 'size_bytes' => 1,
-            ], $actor);
+            $this->registerHrDocument($employee, $actor, 'restricted', 'employment_contract');
         }
 
         DB::enableQueryLog();

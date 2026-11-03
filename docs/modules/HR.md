@@ -4530,3 +4530,220 @@ writers serialize and the second sees the first's committed lines):
 
 **Verifier:** `hr_reporting_invariants` (both triggers enabled, forced RLS,
 the four indexes) in `platform:verify-database`.
+
+## Staff profile foundation (HR.2A, 2026-11-03)
+
+HR.2A makes the existing Staff Profile production-grade rather than adding
+a second profile model. It amends ADR 0028 (HR.2A amendment) and ADR 0029
+(HR.2A amendment), and adds CLAUDE.md rule 132.
+
+**One canonical profile, composed, never one table.** `employees` stays the
+person-within-HR identity. Other facts live with their owners:
+- employment and terms: HR.1A;
+- placement: assignments, read through `WorkforceAsOfReader` and
+  `CurrentEmployeeAssignments`;
+- reporting: HR.3A;
+- contacts, addresses, qualifications, experience, certifications and notes:
+  their 8A tables;
+- files: Documents.
+
+The Profile page is the 8A.9 workspace plus `StaffProfileReader`, whose
+parts are each absent unless the reader holds that section's capability:
+- reference codes;
+- derived experience;
+- stale-form tokens;
+- the closed catalogues for the forms (web only).
+
+The page has section navigation (reference codes, personal and contact,
+addresses, employment and reporting, qualifications and experience,
+documents). No section is a fake tab.
+
+**Reference codes** (D1-03, `employee_reference_codes`):
+- **Kinds:** `staff_reference`, `erp` or `legacy`, a closed
+  `EmployeeReferenceKind`. They are closed because each kind carries one
+  contract that imports and integrations rely on. A biometric code is not a
+  kind: it stays a StaffAttendance identity behind HRX-L2.
+- **Value rules:**
+  - normalized (trimmed, upper-case, `[A-Z0-9][A-Z0-9/._-]*`, at most 64);
+  - School-unique per kind and never reused (the unique key covers retired
+    rows);
+  - at most one live code per kind and Employee;
+  - immutable: a change is retire, with a closed reason, then a new code.
+- **Never an identity.** The Employee is `employees.id`; the Staff Code is
+  `employee_number` (unchanged, `EmployeeNumberAllocator`). HR.2A invents
+  no code generator or prefix.
+- **Writer:** `EmployeeReferenceCodeService`, whole-School
+  `hr.employees.manage`, declared in
+  `CampusScopeCatalogue::WHOLE_SCHOOL_OPERATIONS`; never one's own record.
+  Audit carries ids and the kind, never the value.
+- **Search:** the directory matches an EXACT live code, normalized, through
+  the `(school_id, value)` index. There is no `%term%` scan of codes.
+
+**Archive, never delete** (S-16, OD-HR-13, decided by the HR.2A brief §40):
+- **Scope:** addresses, emergency contacts, notes, qualifications,
+  previous experience and certifications.
+- **How:** each `remove()` (HTTP `DELETE`) archives the row with a closed
+  `ProfileRecordArchiveReason` (`recorded_in_error`, `no_longer_current`,
+  `superseded`), `archived_at` and `archived_by_user_id`. The reason is
+  required over HTTP.
+- **Database guard** (`hr_profile_record_archive_guard`):
+  - archiving changes nothing else;
+  - an archived row is frozen evidence;
+  - rows are never created archived;
+  - a row never changes its Employee.
+- **Runtime role:** holds no DELETE on these tables; only retention purges
+  them.
+- **Uniqueness of live rows:** "one address per kind" and "one primary
+  emergency contact" now count live rows only. An archived contact is
+  never primary.
+- **Reads:** the Profile shows live rows only. Archived rows are the
+  correction history.
+- **Address history choice:** a current value plus auditable correction
+  history, not effective-dated addresses. HR uses addresses as contact
+  data, not as a dated legal fact, and no effective date is ever
+  fabricated.
+
+**Self-administration** (S-3, ADR 0071 §26.13 extended):
+`HrSelfAdministrationGuard::refuseOwnEmployee()` now also guards:
+- the core identity edit;
+- personal details;
+- addresses, emergency contacts and notes;
+- qualifications, experience and certifications, with their verify and
+  reject;
+- HR documents;
+- reference codes.
+
+OD-HR-3 (self-service READ access to one's own record) stays open. HR.2A
+adds no self-service surface.
+
+**Stale-form tokens** (`EmployeeProfileVersion`, keyed HMAC):
+- `identity` (name, work email, work phone) and `personal` (date of birth,
+  nationality, marital status, language, personal contacts).
+- They are compared under the Employee row lock; a stale token is
+  `HR_PROFILE_CHANGED` (409).
+- **Required** on the web identity edit and personal-details form, and on
+  API `PATCH /employees/{employee}` and `PUT …/personal-detail`; missing is
+  a 422.
+- The API profile returns `staffProfile.versions`; the PATCH and PUT
+  responses return the new version.
+
+**Contact values:**
+- **Model:** the existing typed columns stay. Work email and phone are on
+  the Employee; personal email, phone and alternate phone are on
+  `employee_personal_details`; emergency contacts have their own table. A
+  generic `employee_contact_methods` table was considered and rejected:
+  the types are few and fixed, nothing needs more than one of each, and a
+  key/value table would weaken validation (brief §53).
+- **Normalization** (`ProfileContactNormalizer`): emails take the platform
+  canonical form; phones are trimmed and accept digits, spaces and
+  `+ - ( ) .` only (no HTML), local formats allowed.
+- **Never an identity:** a contact value is never unique except the
+  existing School-unique work email. A work email change never touches a
+  User or a login.
+
+**Experience** (`ExperienceCalculator`, derived, never stored):
+- **Previous experience:** the union of live experience records'
+  inclusive ranges. Overlaps and adjacency are merged, so concurrent jobs
+  are counted once. A record with no end date is not counted and is
+  reported as such. A period past today is cut at today.
+- **Service in this School:** the union of the Employee's non-draft
+  employments up to today. Rehires add up; the gap does not.
+- **Precision:** whole days, shown as whole months (days / 30.4375, rounded
+  down) split into years and months.
+- **No second number:** there is no editable "total experience" that could
+  drift.
+
+**HR documents through the platform Documents repository** (S-12, D1-26):
+- **Upload, not path.** A new record is an upload:
+  `EmployeeDocumentService::register()` calls
+  `DocumentService::createForEmployee()`.
+  - Formats: PDF, JPEG, PNG. There is no malware scanning, so no active
+    formats are accepted.
+  - The configured size limit applies.
+  - The record row is written in the Document's transaction.
+- **No raw paths.** `employee_documents.document_id` is a composite
+  same-School key to `documents`. The insert trigger refuses a new
+  path-only record. Pre-HR.2A rows keep their legacy path metadata,
+  untouched.
+- **Closed categories** (`EmployeeDocumentCategory`):
+  `identity_document` (the former `id_proof`, always Highly Sensitive),
+  `employment_contract`, `appointment_letter`, `qualification_evidence`,
+  `experience_evidence`, `certification_evidence`. There is no `other`.
+  Gated families (bank, family, statutory identifier values, medical,
+  photographs, background checks, recruitment, discipline, appraisal) are
+  absent.
+- **Reclassification** moves the Document's tier in the same transaction
+  (`DocumentService::reclassifyForEmployee()`, the 8A.10 rule: Highly
+  Sensitive on either side needs `hr.employees.sensitive.manage`).
+- **Archive** archives the Document too (status only; the bytes stay for
+  retention).
+- **Download** (web
+  `GET …/hr-document-records/{document}/download`, always an attachment):
+  - re-authorized by the Document's own tier on every request
+    (`DocumentReadService::employeeContent()`);
+  - a Highly Sensitive file also needs current MFA assurance, and its open
+    is audited;
+  - viewing the Employee never implies downloading their files;
+  - the API reads bytes through the existing Documents content endpoint by
+    `documentId`.
+- **No new coupling.** Documents never reads an HR model on this path, so
+  no Documents → HR dependency is added.
+- **Security review fix (MEDIUM).** HR identity documents made the generic
+  Documents API's Highly Sensitive reads reachable without MFA. Every
+  generic Highly Sensitive read now needs current MFA assurance (rule 95):
+  `GET /documents/{document}` and `/content` check it once the tier is
+  known, and `GET /employees/{employee}/documents/sensitive` carries `mfa`.
+
+**Field reconciliation** (the 602-screen reference pack; no personal value
+was copied). Every profile field the pack shows has a deliberate place:
+
+| Reference field(s) (screens) | HR.2A treatment |
+|---|---|
+| Name, Staff Code (H093, H221) | `employees.full_name`, `employee_number`; first/middle/last split not adopted (one display name; legal-name history is audit field names) |
+| Staff Reference Code, ERP Staff Code, Branch Code (H093, H106, H232) | `employee_reference_codes` (`staff_reference`, `erp`); Branch = Campus via assignment |
+| Biometric Code / RFID (H093, H106, H233) | **gated** HRX-L2 (StaffAttendance identity), not stored |
+| Email, Personal Email, Mobile, Alternate, Emergency No (H105, H240) | work email/phone; personal email/phone/alternate; emergency contacts table |
+| WhatsApp No, Microsoft / Google account ids (H105, H236, H238, H239) | not adopted: a messaging handle or third-party account id has no HR owner (Communications owns delivery); recorded as declined |
+| Date of birth, Nationality, Marital status, Language (H093, H243, H247) | existing `employee_personal_details`; marital status kept as existing data, NO eligibility use (HR-L8) |
+| Gender, Divorcee, Marriage anniversary (H221, H247) | gender **gated** HR-L8 (not stored); divorcee/anniversary not required (D1-32) |
+| Religion, Caste / Sub caste (H098, H235, H243) | not required (D1-32, special-category, no purpose) |
+| Family details (H107–H109, H222) | **gated** HR-L6 |
+| Health: blood group, height, weight, disabilities, identification marks (H110–H112, H223, H234) | **gated** HRX-L1 / D1-31 |
+| Current / permanent address (H113, H231) | `employee_addresses` (closed kinds, archive history) |
+| Profile picture (H115, H116) | **gated** (D1-14, governed media pipeline) |
+| Joining details: post applied, recruitment type, advertisement, appointment / regularisation dates (H117) | recruitment **gated** (OD-HR-6 / HR-L9); dates to HR.12; joining date = employment start (HR.1A) |
+| Staff type, designation, department, employment status, probation (H094, H106, H225, H227) | HR.1A terms / assignments / employment (read-only on the profile) |
+| Reporting to (H102–H104) | HR.3A reporting relationships |
+| Qualifications: name, institution, subjects, years, grade (H096, H228, H327) | `employee_qualifications` (structured; type closed, name free); verification |
+| CTET qualified, Trained as (H226, H336) | `employee_certifications` (D1-22) -- a credential, never a teaching assignment |
+| Experience: institution, post, from/to, reason for leaving (H327, H328) | `employee_experience_records`; total experience DERIVED |
+| Experience: scale of pay, last drawn salary (H327, H328) | not collected (pay data stays Payroll) |
+| Bank account (H230) | **gated** HR-L5 |
+| UAN / PF / ESI, Aadhaar / PAN / PEN / UDISE, passport / visa, government id (H241–H245) | **gated** HR-L7 / ADR 0036 (Payroll statutory identifiers exist under their own gate) |
+| Staff documents, NOC upload (H124, H246, H353) | `employee_documents` → Documents (closed categories) |
+| Joining security deposit (H237) | Finance (D1-34), not HR |
+| Roles / responsibilities, access level (H100, H101) | Identity role grants (rule 92), never an HR field |
+| Investment declaration, nominees (H093) | **gated** (D1-35) |
+| Transport availed (H093) | Transport rider assignment (not built for staff) |
+
+**Not built in HR.2A** (owner or gate decisions):
+- the self-service record view (OD-HR-3);
+- the CSV import adapter (OD-HR-9; the JSON import is unchanged and
+  already uses the canonical services);
+- every gated family above;
+- photographs;
+- an HR export (D-11).
+
+**Retention:**
+- `employee_reference_codes` cascades with its Employee (HR evidence).
+- Archived rows are purged with their phase (ancillary or evidence)
+  exactly like live ones.
+- The HR evidence purge removes HR document records before the Employee's
+  Documents (the new key).
+- The six archivers and the reference-code recorder and retirer are
+  `RETAIN_REFERENCE` user references.
+
+**Verifier:** `hr_profile_invariants` checks:
+- the eight guard triggers;
+- forced RLS on reference codes;
+- the closed-category, storage-shape, kind and value-unique constraints.

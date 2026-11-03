@@ -39,10 +39,7 @@ class HrActivityTimelineSensitiveHistoryTest extends TestCase
         $employee = $this->createEmployee($school);
 
         // 1. restricted created
-        $document = app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'id_proof', 'classification_tier' => 'restricted', 'storage_disk' => 'local',
-            'storage_path' => 'a.pdf', 'original_filename' => 'a.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1,
-        ], $actor);
+        $document = $this->registerHrDocument($employee, $actor, 'restricted', 'employment_contract');
 
         // 2. restricted -> highly_sensitive
         $document = app(EmployeeDocumentService::class)->update($employee, $document, ['classification_tier' => 'highly_sensitive'], $actor);
@@ -51,7 +48,7 @@ class HrActivityTimelineSensitiveHistoryTest extends TestCase
         app(EmployeeSensitiveDocumentReadService::class)->forEmployee($school, $employee->id, $actor);
 
         // 4. a further highly_sensitive update (non-classification field)
-        $document = app(EmployeeDocumentService::class)->update($employee, $document, ['category' => 'other'], $actor);
+        $document = app(EmployeeDocumentService::class)->update($employee, $document, ['category' => 'appointment_letter'], $actor);
 
         // 5. highly_sensitive -> restricted
         app(EmployeeDocumentService::class)->update($employee, $document, ['classification_tier' => 'restricted'], $actor);
@@ -84,10 +81,7 @@ class HrActivityTimelineSensitiveHistoryTest extends TestCase
         $actor = $this->fullHrActor($school);
         $employee = $this->createEmployee($school);
 
-        $document = app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'id_proof', 'classification_tier' => 'highly_sensitive', 'storage_disk' => 'local',
-            'storage_path' => 'a.pdf', 'original_filename' => 'a.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1,
-        ], $actor);
+        $document = $this->registerHrDocument($employee, $actor, 'highly_sensitive', 'employment_contract');
 
         app(EmployeeDocumentService::class)->update($employee, $document, ['classification_tier' => 'restricted'], $actor);
 
@@ -108,12 +102,9 @@ class HrActivityTimelineSensitiveHistoryTest extends TestCase
         $actor = $this->fullHrActor($school);
         $employee = $this->createEmployee($school);
 
-        $document = app(EmployeeDocumentService::class)->register($employee, [
-            'category' => 'id_proof', 'classification_tier' => 'restricted', 'storage_disk' => 'local',
-            'storage_path' => 'a.pdf', 'original_filename' => 'a.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1,
-        ], $actor);
+        $document = $this->registerHrDocument($employee, $actor, 'restricted', 'employment_contract');
 
-        app(EmployeeDocumentService::class)->update($employee, $document, ['category' => 'other'], $actor);
+        app(EmployeeDocumentService::class)->update($employee, $document, ['category' => 'appointment_letter'], $actor);
 
         $actorA = $this->createUserWithCapabilities($school, ['hr.employees.personal.view', 'hr.employees.documents.view']);
         $result = app(EmployeeActivityTimelineService::class)->get($school, $employee->id, $actorA, new EmployeeActivityTimelineQuery(perPage: 100));

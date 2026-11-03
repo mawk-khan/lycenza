@@ -72,7 +72,7 @@ class HrEmployeeSensitiveDocumentApiTest extends TestCase
             ->assertOk();
 
         $entry = $response->json('data.0');
-        $this->assertSame(['id', 'category', 'classification_tier', 'issued_on', 'expires_on', 'status'], array_keys($entry));
+        $this->assertSame(['id', 'category', 'classification_tier', 'issued_on', 'expires_on', 'status', 'has_file', 'category_label'], array_keys($entry), 'HR.2A adds whether a governed file exists and the category label');
         $this->assertSame('highly_sensitive', $entry['classification_tier']);
     }
 

@@ -103,7 +103,13 @@ class EmployeeRetentionPruneTest extends TestCase
         Storage::disk($this->disk)->put($hrPath, 'bytes');
         Storage::disk($this->disk)->put($docPath, 'bytes');
         $this->inSchool($employee->school, function () use ($employee, $hrPath, $docPath): void {
-            EmployeeDocument::factory()->create(['school_id' => $employee->school_id, 'employee_id' => $employee->id, 'storage_disk' => $this->disk, 'storage_path' => $hrPath]);
+            // HR.2A: an HR document record references its governed Document (which holds the bytes).
+            $governed = Document::query()->forceCreate([
+                'id' => (string) Str::uuid7(), 'school_id' => $employee->school_id, 'employee_id' => $employee->id, 'classification_tier' => 'sensitive',
+                'storage_disk' => $this->disk, 'storage_path' => $hrPath, 'original_filename' => 'record.pdf', 'mime_type' => 'application/pdf',
+                'size_bytes' => 5, 'uploaded_at' => now(), 'status' => 'active',
+            ]);
+            EmployeeDocument::factory()->create(['school_id' => $employee->school_id, 'employee_id' => $employee->id, 'document_id' => $governed->id]);
             Document::query()->forceCreate([
                 'id' => (string) Str::uuid7(), 'school_id' => $employee->school_id, 'employee_id' => $employee->id, 'classification_tier' => 'internal',
                 'storage_disk' => $this->disk, 'storage_path' => $docPath, 'original_filename' => 'contract.pdf', 'mime_type' => 'application/pdf',

@@ -34,6 +34,9 @@ use Illuminate\Support\Carbon;
  * @property string|null $grade_or_result
  * @property string $verification_status unverified|verified|rejected
  * @property Carbon|null $verified_at
+ * @property Carbon|null $archived_at
+ * @property string|null $archived_by_user_id
+ * @property string|null $archive_reason
  */
 class EmployeeQualification extends Model
 {
@@ -60,6 +63,7 @@ class EmployeeQualification extends Model
     protected function casts(): array
     {
         return [
+            'archived_at' => 'datetime',
             'starts_on' => 'date',
             'completed_on' => 'date',
             'verified_at' => 'datetime',

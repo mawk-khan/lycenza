@@ -132,6 +132,28 @@ reservation.
 
 ### HR.2 — Staff profile & records
 
+> **HR.2A IMPLEMENTED (2026-11-03).** Delivered:
+> - `employee_reference_codes` (D1-03; closed kinds, never reused);
+> - archive-not-delete on the six ancillary profile tables (S-16,
+>   OD-HR-13 decided);
+> - the self-administration guard over every profile write (S-3);
+> - stale-form tokens (`EmployeeProfileVersion`);
+> - HR documents as governed uploads with closed categories (S-12, D1-26;
+>   ADR 0029 amendment);
+> - derived experience;
+> - server-side contact normalization;
+> - the composed Staff Profile with section navigation;
+> - the full reference-field reconciliation (`docs/modules/HR.md`).
+>
+> **Not built in HR.2A:**
+> - OD-HR-3 (self-service read);
+> - OD-HR-9 (CSV import adapter);
+> - Staff 360 summaries from Leave, StaffAttendance and Payroll;
+> - every gated family.
+>
+> Record: `docs/modules/HR.md` "Staff profile foundation (HR.2A)"; ADR 0028
+> and ADR 0029 HR.2A amendments; CLAUDE.md rule 132.
+
 1. **Prerequisites:** HR.1; OD-HR-3 (self access); OD-HR-13 (archive vs
    delete); OD-HR-9 (CSV import).
 2. **Scope:**

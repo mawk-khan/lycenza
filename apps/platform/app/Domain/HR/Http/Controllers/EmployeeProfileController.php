@@ -3,6 +3,7 @@
 namespace App\Domain\HR\Http\Controllers;
 
 use App\Domain\HR\Application\EmployeeProfileWorkspaceService;
+use App\Domain\HR\Application\Profile\StaffProfileReader;
 use App\Http\Controllers\Controller;
 use App\Models\School;
 use Illuminate\Http\JsonResponse;
@@ -44,6 +45,7 @@ class EmployeeProfileController extends Controller
 
         abort_if($workspace === null, 404);
 
-        return response()->json(['data' => $workspace->toArray()]);
+        // HR.2A: reference codes, derived experience and the stale-form tokens (each part absent when not authorized).
+        return response()->json(['data' => $workspace->toArray() + ['staffProfile' => app(StaffProfileReader::class)->forEmployee($school, $workspace, $request->user(), withFormOptions: false)]]);
     }
 }

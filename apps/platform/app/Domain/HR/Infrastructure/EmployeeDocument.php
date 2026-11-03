@@ -39,6 +39,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $issued_on
  * @property Carbon|null $expires_on
  * @property string $status active|archived
+ * @property string|null $document_id HR.2A: the governed Document (null for a pre-HR.2A path-only record)
  */
 class EmployeeDocument extends Model
 {

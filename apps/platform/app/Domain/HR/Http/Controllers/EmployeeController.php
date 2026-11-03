@@ -4,6 +4,8 @@ namespace App\Domain\HR\Http\Controllers;
 
 use App\Domain\HR\Application\EmployeeService;
 use App\Domain\HR\Application\HrEmployeeAccess;
+use App\Domain\HR\Application\Profile\EmployeeProfileVersion;
+use App\Domain\HR\Application\Profile\ProfileContactNormalizer;
 use App\Domain\HR\Infrastructure\Employee;
 use App\Http\Controllers\Controller;
 use App\Models\School;
@@ -45,7 +47,7 @@ class EmployeeController extends Controller
             'full_name' => ['required', 'string', 'max:255'],
             'user_id' => ['sometimes', 'nullable', 'uuid'],
             'work_email' => ['sometimes', 'nullable', 'email', 'max:255'],
-            'work_phone' => ['sometimes', 'nullable', 'string', 'max:32'],
+            'work_phone' => ['sometimes', 'nullable', 'string', 'max:32', ProfileContactNormalizer::PHONE_RULE],
         ]);
 
         $employee = $service->create($school, $validated, $request->user());
@@ -70,11 +72,15 @@ class EmployeeController extends Controller
         $validated = $request->validate([
             'full_name' => ['sometimes', 'string', 'max:255'],
             'user_id' => ['prohibited'],
+            // HR.2A: the version this client read (409 when stale, 422 when missing).
+            'version' => ['required', 'string', 'size:64'],
             'work_email' => ['sometimes', 'nullable', 'email', 'max:255'],
-            'work_phone' => ['sometimes', 'nullable', 'string', 'max:32'],
+            'work_phone' => ['sometimes', 'nullable', 'string', 'max:32', ProfileContactNormalizer::PHONE_RULE],
         ]);
 
-        $updated = $service->update($model, $validated, $request->user());
+        $version = (string) $validated['version'];
+        unset($validated['version']);
+        $updated = $service->update($model, $validated, $request->user(), $version);
 
         return response()->json(['data' => $this->present($updated, $scope->isWholeSchool())]);
     }
@@ -137,6 +143,8 @@ class EmployeeController extends Controller
             'fullName' => $employee->full_name,
             'workEmail' => $employee->work_email,
             'workPhone' => $employee->work_phone,
+            // HR.2A: the stale-form token a PATCH must return.
+            'version' => EmployeeProfileVersion::identity($employee),
             // ORG.7E-1: the account link is whole-School data; a Campus-scoped
             // caller is never told which sign-in account an Employee has.
             ...($wholeSchool ? ['userId' => $employee->user_id] : []),

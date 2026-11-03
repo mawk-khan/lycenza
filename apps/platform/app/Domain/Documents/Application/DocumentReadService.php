@@ -149,6 +149,23 @@ class DocumentReadService
         );
     }
 
+    /**
+     * HR.2A: an Employee HR document's bytes, re-authorized here on every
+     * download by the Document's own tier (`hr.employees.documents.view`, or
+     * `.sensitive.view` for Highly Sensitive); a Highly Sensitive open is
+     * audited. Re-read under the School and the named Employee.
+     */
+    public function employeeContent(School $school, string $employeeId, string $documentId, User $actor): DocumentContent
+    {
+        return $this->context->withSchool($school, function () use ($school, $employeeId, $documentId, $actor) {
+            $document = Document::query()->where('school_id', $school->id)->where('employee_id', $employeeId)->find($documentId)
+                ?? throw new DocumentNotFoundException($documentId);
+            $this->authorizeCapabilityFor($actor, $this->employeeReadCapability($document->classification_tier), $school);
+
+            return $this->open($school, $document, $actor);
+        });
+    }
+
     /** A Student's Document bytes, re-authorized here on every download. */
     public function studentContent(School $school, string $studentId, string $documentId, User $actor): DocumentContent
     {

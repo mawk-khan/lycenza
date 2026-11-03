@@ -182,6 +182,8 @@ final class TenantRetentionCatalog
         ]],
         'hr_evidence' => [self::ADOPTED, 'D9: 8 y after final separation', [
             'employees', 'employment_records', 'employee_assignments', 'employee_personal_details', 'employee_documents',
+            // HR.2A (D1-03): external reference codes go with their Employee (cascade).
+            'employee_reference_codes',
             'employee_compensation_assignments', 'compensation_assignment_values', 'employee_statutory_identifiers',
             'employee_tax_profile', 'employee_pf_status', 'employee_esi_coverage',
             // HR.1A: the employment's terms history and named placement changes; they go with

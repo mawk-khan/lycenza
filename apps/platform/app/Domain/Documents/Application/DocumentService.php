@@ -144,6 +144,9 @@ class DocumentService
      */
     public const STUDENT_ALLOWED_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
 
+    /** HR.2A: the Employee HR document formats (the same inert set; no malware scanning). */
+    public const EMPLOYEE_ALLOWED_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
+
     public function __construct(
         private readonly AuditRecorder $audit,
         private readonly TenantContext $context,
@@ -184,6 +187,102 @@ class DocumentService
 
             return $this->store($school, $data, $actor, ['student_id' => $studentId], null, $within, self::STUDENT_ALLOWED_MIME_TYPES);
         });
+    }
+
+    /**
+     * HR.2A (S-12, D1-26): stores the bytes of an Employee HR document record.
+     * HR has already resolved the Employee and decided its own authority; this
+     * entry point re-checks the Employee document capability for the tier
+     * (`hr.employees.documents.manage`, or `.sensitive.manage` for Highly
+     * Sensitive) and accepts only the inert formats (PDF, JPEG, PNG; there is
+     * no malware scanning). `$within` (the HR record row) runs in this
+     * Document's transaction, so neither exists without the other.
+     *
+     * @param  Closure(Document): void  $within
+     */
+    public function createForEmployee(School $school, string $employeeId, UploadedFile $file, string $classificationTier, User $actor, Closure $within): Document
+    {
+        return $this->context->withSchool($school, function () use ($school, $employeeId, $file, $classificationTier, $actor, $within) {
+            $this->assertValidClassification($classificationTier);
+            // Like createForStudent(): the HR caller has resolved the Employee under its own
+            // authority, so this entry point never reads an HR model (no Documents -> HR
+            // dependency from the HR path; the composite key binds the School).
+            $this->authorizeCapabilityFor($actor, $this->employeeDocumentCapability($classificationTier), $school);
+            $data = new CreateDocumentData(DocumentOwner::employee($employeeId), $classificationTier, $file);
+
+            return $this->store($school, $data, $actor, ['employee_id' => $employeeId], null, $within, self::EMPLOYEE_ALLOWED_MIME_TYPES);
+        });
+    }
+
+    /**
+     * HR.2A: reclassifies an Employee HR document record's Document, so the
+     * Document's tier -- which decides who may read the bytes -- always
+     * equals the HR record's. The 8A.10 rule: a Highly Sensitive tier on
+     * either side needs `hr.employees.sensitive.manage`, otherwise
+     * `hr.employees.documents.manage`. Runs in the caller's transaction
+     * (the HR record's update); re-read under the School and the named
+     * Employee.
+     */
+    public function reclassifyForEmployee(School $school, string $employeeId, string $documentId, string $classificationTier, User $actor): Document
+    {
+        if (DB::transactionLevel() === 0) {
+            throw new \LogicException('An Employee Document is reclassified only inside the HR record update.');
+        }
+        $this->assertValidClassification($classificationTier);
+
+        return $this->context->withSchool($school, function () use ($school, $employeeId, $documentId, $classificationTier, $actor) {
+            $document = Document::query()->where('school_id', $school->id)->where('employee_id', $employeeId)
+                ->lockForUpdate()->find($documentId)
+                ?? throw new DocumentNotFoundException($documentId);
+            // The 8A.10 transition rule: Highly Sensitive on EITHER side needs the sensitive capability.
+            $touchesHighlySensitive = $document->classification_tier === 'highly_sensitive' || $classificationTier === 'highly_sensitive';
+            $this->authorizeCapabilityFor($actor, $touchesHighlySensitive ? 'hr.employees.sensitive.manage' : 'hr.employees.documents.manage', $school);
+            if ($document->classification_tier !== $classificationTier) {
+                $previous = $document->classification_tier;
+                $document->update(['classification_tier' => $classificationTier]);
+                $this->audit->school($school, 'document.reclassified', actor: $actor, subject: $document, metadata: [
+                    'documentId' => $document->id,
+                    'ownerType' => 'employee',
+                    'fromTier' => $previous,
+                    'toTier' => $classificationTier,
+                ]);
+            }
+
+            return $document;
+        });
+    }
+
+    /**
+     * HR.2A: archives an Employee HR document record's Document (status only;
+     * the bytes stay for retention). Re-read under the School and the named
+     * Employee (a forged id is NOT FOUND); the tier's manage capability is
+     * re-checked; `$within` (the HR record's archive) runs in the same
+     * transaction.
+     *
+     * @param  Closure(Document): void  $within
+     */
+    public function archiveForEmployee(School $school, string $employeeId, string $documentId, User $actor, Closure $within): Document
+    {
+        return $this->context->withSchool($school, fn () => DB::transaction(function () use ($school, $employeeId, $documentId, $actor, $within) {
+            $document = Document::query()->where('school_id', $school->id)->where('employee_id', $employeeId)
+                ->lockForUpdate()->find($documentId)
+                ?? throw new DocumentNotFoundException($documentId);
+            $this->authorizeCapabilityFor($actor, $this->employeeDocumentCapability($document->classification_tier), $school);
+            if ($document->status !== 'active') {
+                throw new DocumentArchivedException;
+            }
+
+            $document->update(['status' => 'archived']);
+            $within($document);
+
+            $this->audit->school($school, 'document.archived', actor: $actor, subject: $document, metadata: [
+                'documentId' => $document->id,
+                'ownerType' => 'employee',
+                'classificationTier' => $document->classification_tier,
+            ]);
+
+            return $document;
+        }));
     }
 
     /**

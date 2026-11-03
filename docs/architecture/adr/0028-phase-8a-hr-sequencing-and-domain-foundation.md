@@ -267,3 +267,37 @@ only in the audit trail.
 - Reconstructing pre-cut-over history from the audit trail: the audit
   carries ids of overwritten pointers but not every period reliably. A
   partial reconstruction would look authoritative and would not be.
+
+## HR.2A amendment (2026-11-03): staff profile & employment records foundation
+
+**Status:** accepted by the HR.2A checkpoint (owner-authorized HR
+programme; roadmap HR.2; decides OD-HR-13 as written in the HR.2A brief
+§40).
+
+1. **One composed profile.** `employees` stays the person-within-HR
+   identity. Every other profile fact keeps its owner (HR.1A employment and
+   terms, assignments, HR.3A reporting, the 8A ancillary tables, Documents).
+   No profile table duplicates an employment, placement, manager, role or
+   pay fact.
+2. **Reference codes are a closed, School-unique, never-reused record**
+   (`employee_reference_codes`), never an identity and never generated.
+3. **Ancillary profile records are archived, never deleted** (OD-HR-13
+   decided: archive). The runtime role loses DELETE on them, and an archived
+   row is frozen evidence. Addresses keep a current value plus correction
+   history, not effective dates.
+4. **The self-administration guard covers every profile write** (S-3). The
+   self-service read of one's own record (OD-HR-3) stays an owner decision.
+5. **Editable profile records carry a stale-form token**
+   (`EmployeeProfileVersion`), required over HTTP.
+6. **Experience totals are derived** (`ExperienceCalculator`), never stored.
+7. **Contact values stay typed columns.** A generic contact-method or
+   key/value model was rejected: the types are few and fixed, and typed
+   columns validate better.
+
+**Alternatives rejected:**
+- Keep hard deletes: they destroy relied-upon evidence (S-16).
+- Effective-dated addresses: they fabricate dates for legacy rows, and no
+  consumer needs a dated address.
+- School-configurable reference kinds: integrations need a fixed contract
+  per kind.
+- A stored "total experience": it drifts from its components.
